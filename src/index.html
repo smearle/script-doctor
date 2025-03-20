@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="">
+    <meta name="author" content="">
+    <link rel="shortcut icon" type="image/x-icon" href="Documentation/ico/favicon.ico" />
+
+    <title>PuzzleScript - an open-source HTML5 puzzle game engine</title>
+
+    <!-- Bootstrap core CSS -->
+    <link href="Documentation/css/bootstrap.css" rel="stylesheet">
+
+    <!-- Custom styles for this template -->
+<style> 
+  .panel {
+    border:0;
+    margin:0;
+    box-shadow:none;
+  }
+.panel-body {
+  border:0;
+  background-color: transparent;
+  padding:0;
+}
+.panel-footer {
+  border:0;
+  background-color: transparent;
+  padding:0;
+  text-align: center;
+  margin-top: 5px;
+}
+.panel-body img {
+  width:100%;
+  max-height: 320px; 
+  object-fit: contain;
+}
+.gamelinktitle{
+  font-weight: bold;
+}
+/* Large screens ----------- */
+@media only screen and (max-width : 900px) {
+    /* Styles */
+    .jumbotron {
+      background-image: url('images/mascot_64.png');
+      background-position:right top;
+      background-repeat:no-repeat;
+    }
+}
+/* Large screens ----------- */
+@media only screen and (min-width : 900px) {
+    /* Styles */
+    .jumbotron {
+      background-image: url('images/mascot_256.png');
+      background-position:right center;
+      background-repeat:no-repeat;
+    }
+}
+.imgcontainer { width: 100%; height: 320px; overflow: hidden; }
+.imgcontainer img { width: 100%; }
+.center-cropped {
+    height: 100%; 
+    width: 100%;  
+    background-position: center center;
+    background-repeat: no-repeat;
+}​
+
+
+/* custom button :D */
+/*
+.btn-custom {
+  background-color: white;
+  border-color: black;
+  color: black;
+  border-radius: 500px;
+}
+.btn-custom:hover,
+.btn-custom:focus,
+.btn-custom:active,
+.btn-custom.active {
+  background-color: yellow;
+  border-color: black;
+  border-radius: 500px;
+}*/
+
+</style>
+    <!-- HTML5 shim and Respond.js IE8 support of HTML5 elements and media queries -->
+    <!--[if lt IE 9]>
+      <script src="../../assets/js/html5shiv.js"></script>
+      <script src="../../assets/js/respond.min.js"></script>
+    <![endif]-->
+  </head>
+
+  <body>
+
+<p>
+<p>
+<div class="jumbotron" >
+  <div class="container">
+
+    <h1>PuzzleScript!</h1>
+    <p>	
+      <div class="row">
+        <div class="col-lg-6">
+  <p>
+    <p>
+PuzzleScript is an open-source HTML5 puzzle game engine.
+<p>
+    <p>
+    </div>
+    <div class="col-lg-6">    <p>
+    <a href="editor.html" class="btn btn-default btn-lg">Make A Game</a>
+    <a href="Documentation/rules101.html" class="btn btn-default btn-lg">First Steps</a>    
+    <p>
+    </div></div>
+  </div>
+</div>
+
+    <div class="container">
+      <!-- Example row of columns -->
+      <div class="row">
+        <div class="col-xs-4" id = "col_1">         
+        </div>
+        <div class="col-xs-4 " id = "col_2">
+        </div>
+        <div class="col-xs-4" id ="col_3">
+        </div>
+      </div>
+      <p>
+
+  <div class="col-lg-12" style="text-align:center">
+  <p>
+    <a href="./Gallery/index.html" class="btn btn-default btn-lg">Gallery</a>
+    <p>
+  </div>
+    </div> <!-- /container -->
+
+
+<script type="text/javascript" src="games_dat.js"></script>
+
+
+<script>
+
+function shuffle(array) {
+  var currentIndex = array.length
+    , temporaryValue
+    , randomIndex
+    ;
+
+  // While there remain elements to shuffle...
+  while (0 !== currentIndex) {
+
+    // Pick a remaining element...
+    randomIndex = Math.floor(Math.random() * currentIndex);
+    currentIndex -= 1;
+
+    // And swap it with the current element.
+    temporaryValue = array[currentIndex];
+    array[currentIndex] = array[randomIndex];
+    array[randomIndex] = temporaryValue;
+  }
+
+  return array;
+}
+
+function escapeHtml(unsafe) {
+      return unsafe
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&#039;");
+    }
+
+function replaceContent() {
+  var columns = [document.getElementById('col_1'),document.getElementById('col_2'),document.getElementById('col_3')];
+
+
+  var data = [];
+  for (var i=0;i<games_gallery.length;i++) {
+    item=games_gallery[i];
+    item.imgurl = "./Gallery/gifs/"+item.thumb;
+    if (item.hasOwnProperty("homepage")===false){
+      item.homepage=item.url;
+    }
+    if (item.homepage.startsWith("http")===false){
+      item.homepage="https://"+item.homepage
+    }
+    if (item.NSFW==true)
+    { 
+      continue;
+    }
+    data.push(item);
+  }
+  //reverse the array
+  data.reverse();
+  //now the first element is the newest.  
+
+  //Shuffle the first ten elements of data
+  var firstten = data.splice(0,20);
+  shuffle(firstten);
+  //Prepend the first ten back
+  data = firstten.concat(data);
+
+  //take the tail
+  var tail = data.splice(1,data.length);
+  //shuffle the whole tail
+  shuffle(tail);
+  //paste it back
+  data = data.concat(tail);
+  //now the first element of the array is a random taken from the first then, and the rest is shuffled.
+  //swap the first and second elements (so that the new game will be in the middle)
+  var temp = data[0];
+  data[0] = data[1];
+  data[1] = temp;
+  
+  for (var i=0;i<columns.length;i++)
+  {
+    var dat = data[i];
+    columns[i].innerHTML='<div class="panel panel-default"><div class="panel-body"><a href="'+dat.url+'"><img src="'+dat.imgurl+'">​</a></div><div class="panel-footer"><a class="gamelinktitle" href="'+dat.url+'">'+escapeHtml(dat.title)+'</a> by <a href="'+dat.homepage+'" target="_blank">'+escapeHtml(dat.author)+'</a></div></div>';
+  }
+
+}
+
+replaceContent();
+ </script>
+
+    <!-- Bootstrap core JavaScript
+    ================================================== -->
+    <!-- Placed at the end of the document so the pages load faster -->
+    <script src="Documentation/js/jquery.js"></script>
+    <script src="Documentation/js/bootstrap.min.js"></script>
+  </body>
+</html>

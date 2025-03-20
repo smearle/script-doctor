@@ -1,0 +1,14 @@
+einops
+flask
+flax
+jax[cuda]  # or `jax` if no CUDA is not an option
+lark
+Levenshtein
+openai
+opencv-python
+optax
+pandas
+Pillow
+python-dotenv
+tiktoken
+# web-browser

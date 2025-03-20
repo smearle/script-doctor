@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="">
+    <meta name="author" content="">
+    <link rel="shortcut icon" type="image/x-icon" href="ico/favicon.ico" />
+
+    <title>Prelude - PuzzleScript Documentation</title>
+
+    <!-- Bootstrap core CSS -->
+    <link href="css/bootstrap.css" rel="stylesheet">
+
+    <!-- Custom styles for this template -->
+    <link href="css/bootstrap-theme.css" rel="stylesheet">
+
+    <!-- HTML5 shim and Respond.js IE8 support of HTML5 elements and media queries -->
+    <!--[if lt IE 9]>
+      <script src="../../assets/js/html5shiv.js"></script>
+      <script src="../../assets/js/respond.min.js"></script>
+    <![endif]-->
+  </head>
+
+  <body>
+
+    <div class="navbar navbar-inverse navbar-fixed-top">
+      <div class="container">
+        <div class="navbar-header">
+          <button type="button" class="navbar-toggle" data-toggle="collapse" data-target=".navbar-collapse">
+            <span class="icon-bar"></span>
+            <span class="icon-bar"></span>
+            <span class="icon-bar"></span>
+          </button>
+          <a class="navbar-brand" href="../index.html"><img src="../images/mascot_colorful.png"> PuzzleScript</a>
+        </div>
+        <div class="collapse navbar-collapse">
+          <ul class="nav navbar-nav">
+              <li><a href="../editor.html">Make A Game</a></li>
+              
+              <li class="active"><a href="documentation.html">Documentation</a></li>
+          </ul>          
+          <ul class="nav navbar-nav navbar-right">
+            <li><a href="https://groups.google.com/g/puzzlescript">Forum</a></li>
+            <li><a href="https://github.com/increpare/puzzlescript">GitHub</a></li>
+            <li><a href="https://github.com/sponsors/increpare">Sponsor</a></li>
+            <li><a href="about.html">About</a></li>
+          </ul>
+        </div><!--/.nav-collapse -->
+      </div>
+    </div>
+
+    <div class="container">
+
+
+
+<p>
+<ol class="breadcrumb">
+  <li><a href="documentation.html">Documentation</a></li>
+  <li>Bird's-eye View</li>
+  <li class="active">Prelude</li>
+</ol>
+<p>
+
+
+<h1>Bird's-eye view of a PuzzleScript file</h1>
+<p>
+A puzzlescript file is divided into 8 sections:
+<p>
+
+  <ul class="nav nav-pills">
+    <li class="active"><a href="prelude.html">Prelude</a></li>
+    <li><a href="objects.html">Objects</a></li>
+    <li><a href="legend.html">Legend</a></li>
+    <li><a href="sounds.html">Sounds</a></li>
+    <li><a href="collisionlayers.html">CollisionLayers</a></li>
+    <li><a href="rules.html">Rules</a></li>
+    <li><a href="winconditions.html">WinConditions</a></li>
+    <li><a href="levels.html">Levels</a></li>
+  </ul>
+
+
+
+    <h2>Prelude</h2>
+      <p>
+      Before any of the "official" sections are declared, you can give details about your project in this section, and also set some editor options.
+      <p>
+      <pre><code>title 2D Whale World
+author increpare
+homepage www.increpare.com
+
+require_player_movement
+key_repeat_interval 0.12
+</code></pre>
+
+Here are the possible options:
+		<p>
+		<dl>
+			<dt>author increpare</dt>
+			<dd>Your name goes here.  This will appear in the title screen of the game.</dd>
+			<dt>color_palette mastersystem</dt>
+			<dd>By default, when you use colour names, they are pulled from a variation of <a href="http://androidarts.com/palette/16pal.htm">Arne</a>'s 16-Colour palette.  However, there are other palettes to choose from:
+			<p>
+<ul>
+<li>1 - mastersystem </li>
+<li>2 - gameboycolour </li>
+<li>3 - amiga </li>
+<li>4 - arnecolors </li>
+<li>5 - famicom  </li>
+<li>6 - atari </li>
+<li>7 - pastel  </li>
+<li>8 - ega </li>
+<li>9 - amstrad </li>
+<li>10 - proteus_mellow </li>
+<li>11 - proteus_rich </li>
+<li>12 - proteus_night </li>
+<li>13 - c64 </li>
+<li>14 - whitingjp </li>
+</ul>
+<p>
+(you can also refer to them by their numerical index)
+			</dd>
+      <dt>again_interval 0.1</dt>      
+      <dd>The amount of time it takes an 'again' event to trigger.</dd>
+      <dt>background_color blue</dt>
+      <dd>Can accept a color name or hex code (in the form #412bbc). Controls the background color of title/message screens, as well as the background color of the website.  Text_color is its sibling.</dd>
+			<dt><span id="debug"></span>debug</dt>
+			<dd>This outputs the compiled instructions whenever you build your file.  For instance, the line
+			<p>
+			<pre><code><a href="../editor.html?demo=sokoban_basic_debug" target="puzzleScript_EditorWindow" class="btn btn-default pull-right" ><span class="glyphicon glyphicon-cog"> Edit</span></a>[ > Player | Crate ] -> [ > Player | > Crate ]</code></pre>
+			<p>
+			is compiled into four instructions, as the output from debug shows when you hit 'RUN':
+			<pre>===========
+Rule Assembly : (4 rules)
+===========
+  (83) DOWN [ crate | up player ] -> [ up crate | up player ]
++ (83) DOWN [ down player | crate ] -> [ down player | down crate ]
++ (83) RIGHT [ crate | left player ] -> [ left crate | left player ]
++ (83) RIGHT [ right player | crate ] -> [ right player | right crate ]
+===========</pre>
+			Going from left to right:
+      <ul>
+        <li>
+          The number near the left is the line-number the rule came from in the original source code.  You can click on the number to jump to that line in the file.
+        </li>
+        <li>
+          A plus-sign on the left of the line indicates that the rule is grouped with the previous one as part of a rule-group and the engine will loop through the group as a whole trying to apply the rules until no more rules in the group can be applied (See <a href="executionorder.html#zoom3">the rules page</a> for more info).
+        </li>  
+      </ul>
+      <p>
+        The compiler does a lot of stuff to the rules you give to it to 'simplify' them in various ways.  One thing it does for instance is replace all relative directions ( <b>^</b>, <b>v</b>, <b>&lt;</b>, and <b>></b>), with <b>UP</b>, <b>DOWN</b>, <b>LEFT</b>, and <b>RIGHT</b>, which often involves splitting a single rule into many more rules (as above). An other thing you'll notice is that the core engine has rules only going <B>DOWN</B> and  <b>RIGHT</b> - rules in other directions are flipped.  For more information about directions in puzzlescript, see <a href="directions.html">this page</a>.
+      
+			</dd>
+
+			<dt>flickscreen WxH</dt>
+			<dd>
+				Setting flickscreen divides each level into WxH grids, and zooms the camera in so that the player can only see one at a time - the camera does not follow the player around on a move-to-move basis, but if the player moves from one part of this grid to another, the camera <em>flicks</em> to the new position.  See <a href="../editor.html?hack=6880313">Legend of Zokoban</a> for a cute example.
+			</dd>
+			<dt>homepage www.mypage.com</dt>
+			<dd>
+			The homepage of the author.  This doesn't appear directly in the game itself, but is included in the shared game and exported HTML build.
+			</dd>
+			<dt>key_repeat_interval 0.1</dt> 
+			<dd>
+			When you hold down a key, how long is the delay between repeated presses getting sent to the game (in seconds)?  The default value is 1.5.
+			</dd>
+      <dt>noaction</dt>
+      <dd>Changes the action key (X) instruction from the title screen, and does not respond when the player pressed it (outside of menus and cutscenes and the like).</dd>
+      <dt><span id="norepeat_action"></span>norepeat_action</dt>
+      <dd>For many games, you don't want holding action down to retrigger it - games where you're toggling a switch, say.  For these games, set norepeat_action, and the action button will only respond to individual presses.</dd>
+			<dt>noundo</dt>
+			<dd>Disables the undo key (Z) (I generally advise against disabling undo, FWIW).</dd>
+			<dt>norestart</dt>
+			<dd>Disables the restart key (R)</dd>
+      <dt><span id="realtime_interval"></span>realtime_interval</dt> 
+      <dd>The number indicates how long each realtime frame should be.  In the above case, twice a second the game engine will tick, but with no input.  Player input is processed as regular. See <a href="realtime.html">this documentation</a> for more info on making realtime games.</dd>     
+			<dt>require_player_movement</dt>
+			<dd>
+			This is a common requirement in games - if the player doesn't move, cancel the whole move.  This is equivalent, where there's only one player character, to the following:
+			<pre><code>[ Player ]->[ Player Temp ]
+late [ Player Temp ] -> CANCEL
+late [ Temp ] -> [ ]</code></pre>
+			</dd>
+			<dt>run_rules_on_level_start</dt>
+			<dd>
+			For some games you will want, before the player sees the level, for the rules to be applied once.  (Games that have rules that generate level graphics on the fly, for instance, may want this.  Try out <a href="../editor.html?demo=dreizack">this game</a> with and without the prelude option and compare results.</a>)
+			</dd>
+      <dt>scanline</dt>
+      <dd>Applies a scanline visual effect - only draws every other line</dd>      
+      <dt>text_color blue</dt>
+      <dd>Can accept a color name or hex code (in the form #412bbc). Controls the font color of title/message screens, as well as the font color in the website. Background_color is its sibling.</dd>
+			<dt>title My Amazing Puzzle Game</dt>
+			<dd>The name of your game.  Appears on the title screen.</dd>
+      <dt>throttle_movement</dt>
+      <dd>For use in conjunction with realtime_interval - this stops you from moving crazy fast - repeated keypresses of the same movement direction will not increase your speed. This doesn't apply to the action button.  If you can think of an example that requires action be throttled, just let me know and I'll try accommodate you.</dd>
+      <dt><span id="verbose_logging"></span>verbose_logging</dt>
+      <dd>As you play the game, spits out information about all rules applied as you play, and also allows visual inspection of what exactly the rules do with the <a href="visual_debugger.html">visual debugger</a>.</dd>
+			<dt>zoomscreen WxH</dt>
+			<dd>Zooms the camera in to a WxH section of the map around the player, centered on the player.  <a href="../editor.html?demo=sokoban_basic_zoomscreen">Silly example</a>.</dd>
+		</dl>
+
+
+
+
+    </div><!-- /.container -->
+
+
+    <!-- Bootstrap core JavaScript
+    ================================================== -->
+    <!-- Placed at the end of the document so the pages load faster -->
+    <script src="js/jquery.js"></script>
+    <script src="js/bootstrap.min.js"></script>
+  </body>
+</html>

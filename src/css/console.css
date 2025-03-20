@@ -1,0 +1,39 @@
+
+#consoletextarea {
+	  font-family: 'Consolas','Lucida Console',monospace;
+	  color: #428BDD;
+	  background-color:#0F192A;
+	  margin-left:10px;
+	  margin-bottom: 20px;
+	  line-height:1.0;
+}
+
+.errorTextLineNumber {
+	color: yellow;
+	text-decoration: underline;
+}
+.warningText {
+	color: orange;
+}
+.errorText {
+	color: red;
+}
+.betaText {
+	color: orange;
+}
+
+.hoverpreview::before{
+	content: url(../images/eye.svg);
+}
+.hoverpreview:hover {
+	background-color:#374b6c;
+}
+
+.noeye_indent {
+	content: url(../images/eye.svg);
+	visibility:hidden;
+}
+
+svg{
+	overflow: visible;
+}
