@@ -1132,6 +1132,9 @@ BFSClickLink.addEventListener("click", testBFS, false);
 var MCTSClickLink = document.getElementById("MCTSClickLink");
 MCTSClickLink.addEventListener("click", testMCTS, false);
 
+var genDataClickLink = document.getElementById("genDataClickLink");
+genDataClickLink.addEventListener("click", processAllGames, false);
+
 var solveClickLink = document.getElementById("solveClickLink");
 solveClickLink.addEventListener("click", playTest, false);
 

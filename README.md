@@ -1,6 +1,18 @@
 ScriptDoctor
 ============
 
+## Generate data for training a world model
+
+```
+python server.py
+```
+Open up the local web-page, then press `GEN DATA` in the top-left. This will run `processAllGames` in `src/js/ScriptDoctor.js`, which loads games (in random order) and applies A*, saving images of unique level states, as well as a record of which actions led to which transitions between states. This data is stored in `transitions`.
+
+TODO:
+- save symbolic representations of the map instead
+- write a script that converts these symbolic representations to 2D multi-hot arrays
+- train an MLP to predict the next state given a previous state and an action.
+
 ## Scraping and parsing games
 
 ```
