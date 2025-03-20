@@ -20,11 +20,14 @@ function getConsoleText() {
 }
 
 class GameIndividual {
-  constructor(code, fitness, compiledIters, solvedIters, skipped) {
+  constructor(code, minCode, fitness, maxMeanSolComplexity, compiledIters, solvedIters, anySolvedIters, skipped) {
     this.code = code;
+    this.minCode = minCode;
     this.fitness = fitness;
+    this.maxMeanSolComplexity = maxMeanSolComplexity;
     this.compiledIters = compiledIters;
     this.solvedIters = solvedIters;
+    this.anySolvedIters = anySolvedIters;
     this.skipped = skipped;
   }
 }
@@ -195,7 +198,12 @@ async function solveLevelBFS(level) {
 
       new_action_seq = action_seq.slice();
       new_action_seq.push(move);
-      changed = processInputSearch(move);
+      try {
+        changed = processInputSearch(move);
+      } catch (e) {
+        console.log('Error while processing input:', e);
+        return [-2, i];
+      }
       if (winning) {
         console.log(`Winning! Solution:, ${new_action_seq}\n Iterations: ${i}`);
         console.log('FPS:', (i / (Date.now() - start_time) * 1000).toFixed(2));
@@ -233,6 +241,259 @@ async function solveLevelBFS(level) {
     i++;
   }
   return [sol, i];
+}
+
+class MCTSNode{
+  constructor(action, parent, max_children) {
+    this.parent = parent;
+    this.action = action;
+    this.children = [];
+    for(let i=0; i<max_children; i++){
+      this.children.push(null);
+    }
+    this.visits = 0;
+    this.score = 0;
+  }
+
+  ucb_score(c) {
+    if(this.parent == null){
+      return this.score / this.visits;
+    }
+    return this.score / this.visits + c * Math.sqrt(Math.log(this.parent.visits) / this.visits);
+  }
+
+  select(c){
+    if(!this.is_fully_expanded()){
+      return null;
+    }
+    let index = 0;
+    for(let i=0; i<this.children.length; i++){
+      if(this.children[i].ucb_score(c) > this.children[index].ucb_score(c)){
+        index = i;
+      }
+    }
+    return this.children[index];
+  }
+
+  is_fully_expanded(){
+    for(let child of this.children){
+      if(child == null){
+        return false;
+      }
+    }
+    return true;
+  }
+
+  expand(){
+    if(this.is_fully_expanded()){
+      return null;
+    }
+    for(let i=0; i<this.children.length; i++){
+      if(this.children[i] == null){
+        let changed = processInputSearch(i);
+        let level = this.level;
+        if(changed){
+          level = backupLevel();
+        }
+        this.children[i] = new MCTSNode(i, this, this.children.length)
+        return this.children[i];
+      }
+    }
+    return null;
+  }
+
+  backup(score){
+    this.score += score;
+    this.visits += 1;
+    if(this.parent != null){
+      this.parent.backup(score);
+    }
+  }
+
+  simulate(max_length, score_fn, win_bonus){
+    let changes = 0;
+    for(let i=0; i<max_length; i++){
+      let changed = processInputSearch(Math.min(5, Math.floor(Math.random() * 6)));
+      if(changed){
+        changes += 1;
+      }
+      if(winning){
+        return win_bonus;
+      }
+    }
+    if(score_fn){
+      return score_fn();
+    }
+    return (changes / max_length);
+  }
+
+  get_actions(){
+    let sol = [];
+    let current = this;
+    while(current.parent != null){
+      sol.push(current.action);
+      current = current.parent;
+    }
+    return sol.reverse();
+  }
+
+  get_most_visited_action(){
+    let max_action = 0;
+    for(let i=0; i<this.children.length; i++){
+      if(this.children[i].visits > this.children[max_action].visits){
+        max_action = i;
+      }
+    }
+    return max_action;
+  }
+
+  get_best_action(){
+    let max_action = 0;
+    for(let i=0; i<this.children.length; i++){
+      if(this.children[i].score / this.children[i].visited > this.children[max_action].score / this.children[max_action].visited){
+        max_action = i;
+      }
+    }
+    return max_action;
+  }
+}
+
+// level: is the starting level
+// max_sim_length: maximum number of random simulation before stopping and backpropagate
+// score_fn: if you want to use heuristic function which is advisable and make sure the values are always between 0 and 1
+// explore_deadends: if you want to explore deadends by default, the search don't continue in deadends
+// deadend_bonus: bonus when you find a deadend node (usually negative number to avoid)
+// most_visited: decide to return most visited action or best value action
+// win_bonus: bonus when you find a winning node
+// c: is the MCTS constant that balance between exploitation and exploration
+// max_iterations: max number of iterations before you consider the solution is not available
+async function solveLevelMCTS(level, options = {}) {
+  // Load the level
+  if(options == null){
+    options = {};
+  }
+  let defaultOptions = {
+    "max_sim_length": 1000,
+    "score_fn": null, 
+    "explore_deadends": false, 
+    "deadend_bonus": -100, 
+    "win_bonus": 100,
+    "most_visited": true,
+    "c": Math.sqrt(2), 
+    "max_iterations": -1
+  };
+  for(let key in defaultOptions){
+    if(!options.hasOwnProperty(key)){
+      options[key] = defaultOptions[key];
+    }
+  }
+  compile(['loadLevel', level], editor.getValue());
+  init_level = backupLevel();
+  init_level_map = init_level['dat'];
+  let rootNode = new MCTSNode(-1, null, 5);
+  let i = 0;
+  let deadend_nodes = 1;
+  let start_time = Date.now();
+  while(options.max_iterations <= 0 || (options.max_iterations > 0 && i < options.max_iterations)){
+    // start from th root
+    currentNode = rootNode;
+    restoreLevel(init_level);
+    let changed = true;
+    // selecting next node
+    while(currentNode.is_fully_expanded()){
+      currentNode = currentNode.select(options.c);
+      changed = processInputSearch(currentNode.action);
+      if(winning){
+        let sol = current.get_actions();
+        console.log(`Winning! Solution:, ${sol}\n Iterations: ${i}`);
+        console.log('FPS:', (i / (Date.now() - start_time) * 1000).toFixed(2));
+        return [sol, i];
+      }
+      if(!options.explore_deadends && !changed){
+        break;
+      }
+    }
+
+    // if node is deadend, punish it
+    if(!options.explore_deadends && !changed){
+      currentNode.score += options.deadend_bonus;
+      currentNode.backup(0);
+      deadend_nodes += 1;
+    }
+    //otherwise expand
+    else{
+      currentNode = currentNode.expand();
+      changed = processInputSearch(currentNode.action);
+      if(winning){
+        let sol = current.get_actions();
+        console.log(`Winning! Solution:, ${sol}\n Iterations: ${i}`);
+        console.log('FPS:', (i / (Date.now() - start_time) * 1000).toFixed(2));
+        return [sol, i];
+      }
+      // if node is deadend, punish it
+      if(!options.explore_deadends && !changed){
+        currentNode.score += options.deadend_bonus;
+        currentNode.backup(0);
+        deadend_nodes += 1;
+        
+      }
+      //otherwise simulate then backup
+      else{
+        let value = currentNode.simulate(options.max_sim_length, options.score_fn, options.win_bonus);
+        currentNode.backup(value);
+      }
+    }
+    // print progress
+    if (i % 10000 == 0) {
+      now = Date.now();
+      console.log('Iteration:', i);
+      console.log('FPS:', (i / (now - start_time) * 1000).toFixed(2));
+      console.log(`Visited Deadends: ${deadend_nodes}`);
+      // console.log(`Visited states: ${visited.size}`);
+      // await new Promise(resolve => setTimeout(resolve, 1)); // Small delay for live feedback
+      // redraw();
+    }
+    i+= 1;
+  }
+  let actions = [];
+  currentNode = rootNode;
+  while(currentNode.is_fully_expanded()){
+    let action = -1;
+    if(options.most_visited){
+      action = currentNode.get_most_visited_action();
+    }
+    else{
+      action = currentNode.get_best_action();
+    }
+    actions.push(action);
+    currentNode = currentNode.children[action];
+  }
+  return [actions, options.max_iterations];
+}
+
+async function testBFS() {
+  console.log('Testing BFS...');
+  const n_level = 0;
+  compile(['loadLevel', n_level], editor.getValue());
+  console.log('Solving level:', n_level, ' with BFS');
+  var [sol_a, n_search_iters_a] = await solveLevelBFS(n_level);
+  console.log('Solution:', sol_a);
+  console.log('Iterations:', n_search_iters_a);
+  inputHistory = sol_a;
+  makeGIFDoctor();
+}
+
+async function testMCTS() {
+  console.log('Testing MCTS...');
+  const n_level = 0;
+  compile(['loadLevel', n_level], editor.getValue());
+  console.log('Solving level:', n_level, ' with MCTS');
+  let heuristic = getScoreNormalized;
+  if(heuristic != null){
+    precalcDistances();
+  }
+  var [sol_a, n_search_iters_a] = await solveLevelMCTS(level_i=n_level, {"score_fn": heuristic, "max_iterations": 100000});
+  console.log('Solution:', sol_a);
 }
 
 
@@ -419,8 +680,10 @@ async function processStateTransition(gameHash, parentState, childState, action)
 
 
 async function genGame(genMode, parents, saveDir, expSeed, fewshot, cot,
-    fromIdea=false, idea='', fromPlan=false, maxGenAttempts=10) {
+  /* This funciton will recursively call itself to iterate on broken (uncompilable or unsolvable (or too simply solvable)) games. */
+  fromIdea=false, idea='', fromPlan=false, maxGenAttempts=10) {
   consoleText = '';
+  larkError = '';
   nGenAttempts = 0;
   code = '';
   compilationSuccess = false;
@@ -428,8 +691,10 @@ async function genGame(genMode, parents, saveDir, expSeed, fewshot, cot,
   solverText = '';
   compiledIters = [];
   solvedIters = [];
+  anySolvedIters = [];
+  maxMeanSolComplexity = 0;
 
-  bestIndividual = new GameIndividual('', -Infinity, [], [], true);
+  bestIndividual = new GameIndividual('', null, -Infinity, 0, [], [], true);
   while (nGenAttempts < maxGenAttempts & (nGenAttempts == 0 | !compilationSuccess | !solvable)) {
     console.log(`Game ${saveDir}, attempt ${nGenAttempts}.`);
 
@@ -461,6 +726,7 @@ async function genGame(genMode, parents, saveDir, expSeed, fewshot, cot,
           code: code,
           from_idea: fromIdea,
           game_idea: idea,
+          lark_error: larkError,
           console_text: consoleText,
           solver_text: solverText,
           compilation_success: compilationSuccess,
@@ -477,14 +743,21 @@ async function genGame(genMode, parents, saveDir, expSeed, fewshot, cot,
     // for (const line of data.text.split('\n')) {
     //   consolePrint(line);
     // }
-    code = data.min_code;
+    code = data.code;
+    minCode = null;
+    // if min_code is not None, then use this
+    if (data.min_code) {
+      minCode = data.min_code;
+    }
     sols = data.sols;
+    larkError = data.lark_error
     if (data.skip) {
-      return new GameIndividual(code, -1, [], [], true);
+      return new GameIndividual(code, minCode, -1, 0, [], [], true);
     }
     errorLoadingLevel = false;
     try {
-      editor.setValue(code);
+      codeToCompile = minCode ? minCode : code;
+      editor.setValue(codeToCompile);
       editor.clearHistory();
       clearConsole();
       setEditorClean();
@@ -497,7 +770,7 @@ async function genGame(genMode, parents, saveDir, expSeed, fewshot, cot,
     }
     if (!errorLoadingLevel) {
       try {
-        compile(['restart'], code);
+        compile(['restart'], codeToCompile);
       } catch (e) {
         console.log('Error while compiling code:', e);
       }
@@ -507,7 +780,7 @@ async function genGame(genMode, parents, saveDir, expSeed, fewshot, cot,
     if (errorCount > 0) {
       compilationSuccess = false;
       solvable = false;
-        solverText = '';
+      solverText = '';
       // console.log(`Errors: ${errorCount}. Iterating on the game code. Attempt ${nGenAttempts}.`);
       fitness = -errorCount;
       dataURLs = [];
@@ -516,10 +789,13 @@ async function genGame(genMode, parents, saveDir, expSeed, fewshot, cot,
       compilationSuccess = true;
       solverText = '';
       solvable = true;
+      dataURLs = [];
       var anySolvable = false;
       var sol;
-      var n_search_iters;
+      var nSearchIters;
       // console.log('No compilation errors. Performing playtest.');
+      fitness = 0
+      solComplexities = []
       for (level_i in state.levels) {
         // console.log('Levels:', state.levels);
         // Check if type `Level` or dict
@@ -529,14 +805,23 @@ async function genGame(genMode, parents, saveDir, expSeed, fewshot, cot,
         }
         // try {
           // Check if level_i is in sols
-          if (sols.hasOwnProperty(level_i)) {
-            // console.log('Using cached solution.');
-            [sol, n_search_iters] = sols[level_i];
-          } else {
-            console.log(`Solving level ${level_i}...`);
-            [sol, n_search_iters] = await solveLevelBFS(level_i);
+        if (sols.hasOwnProperty(level_i)) {
+          // console.log('Using cached solution.');
+          [sol, nSearchIters] = sols[level_i];
+        } else {
+          clearConsole();
+          console.log(`Solving level ${level_i}...`);
+          [sol, nSearchIters] = await solveLevelBFS(level_i);
+          if (sol.length > 0) {
             console.log(`Solution for level ${level_i}:`, sol);
+            console.log(`Saving gif for level ${level_i}.`);
+            curlevel = level_i;
+            compile(['loadLevel', level_i], editor.getValue());
+            inputHistory = sol;
+            const [ data_url, filename ] = makeGIFDoctor();
+            dataURLs.push([data_url, level_i]);
           }
+        }
         // } catch (e) {
         //   console.log('Error while solving level:', e);
         //   sol = [];
@@ -546,45 +831,48 @@ async function genGame(genMode, parents, saveDir, expSeed, fewshot, cot,
         if (!sol) {
           console.log(`sol undefined`);
         }
-        sols[level_i] = [sol, n_search_iters];
-        fitness = n_search_iters
+        sols[level_i] = [sol, nSearchIters];
         // console.log('Solution:', sol);
         // check if sol is undefined
+        solComplexity = 0;
         if (sol.length > 0) {
+          fitness += nSearchIters;
+          solComplexity = nSearchIters;
           // console.log('Level is solvable.');
-          solverText += `Found solution for level ${level_i} in ${n_search_iters} iterations: ${sol}.\n`
+          // solverText += `Found solution for level ${level_i} in ${n_search_iters} iterations: ${sol}.\n`
+          solverText += `Found solution for level ${level_i} in ${nSearchIters} iterations. Solution is ${sol.length} moves long.\n`
+          if (sol.length > 1) {
+            anySolvable = true;
+          }
           if (sol.length < 10) {
             solverText += `Solution is very short. Please make it a bit more complex.\n`
             solvable = false;
           }
-          else {
-            anySolvable = true;
-          }
         } else if (sol == -1) {
           solvable = false;
           solverText += `Hit maximum search depth of ${i} while attempting to solve ${level_i}. Are you sure it's solvable? If so, please make it a bit simpler.\n`
-        }
-        else {
+        } else if (sol == -2) {
+          solvable = false;
+          consoleText = getConsoleText();
+          solverText += `Error while solving level ${level_i}. Please repair it.\nThe PuzzleScript console output was:\n${consoleText}\n`
+        } else {
           // console.log(`Level ${level_i} is not solvable.`);
           solvable = false;
           solverText += ` Level ${level_i} is not solvable. Please repair it.\n`
         }
+        solComplexities.push(solComplexity);
       }
-      dataURLs = [];
-      for (let level_i in sols) {
-        const [sol, n_search_iters] = sols[level_i];
-        if (sol.length > 0) {
-          console.log(`Saving gif for level ${level_i}.`);
-          curlevel = level_i;
-          compile(['loadLevel', level_i], editor.getValue());
-          inputHistory = sol;
-          const [ data_url, filename ] = makeGIFDoctor();
-          dataURLs.push([data_url, level_i]);
-        }
+      if (solComplexities.length == 0) {
+        solComplexities = [0];
       }
+      meanSolComplexity = solComplexities.reduce((a, b) => a + b, 0) / solComplexities.length;
+      maxMeanSolComplexity = Math.max(maxMeanSolComplexity, meanSolComplexity);
       if (solvable) {
+        // If all levels are solvable
         solvedIters.push(nGenAttempts)
-        // Make a gif of each solution
+      }
+      if (anySolvable) {
+        anySolvedIters.push(nGenAttempts)
       }
     }
     response = await fetch('/log_gen_results', {
@@ -605,7 +893,7 @@ async function genGame(genMode, parents, saveDir, expSeed, fewshot, cot,
     }
 
     nGenAttempts++;
-    individual = new GameIndividual(code, fitness, compiledIters, solvedIters, false);
+    individual = new GameIndividual(code, minCode, fitness, maxMeanSolComplexity, compiledIters, solvedIters, anySolvedIters, false);
     bestIndividual = bestIndividual.fitness < individual.fitness ? individual : bestIndividual;
 
   }
@@ -675,20 +963,50 @@ async function saveStats(saveDir, results) {
   });
 }
 
+async function sweepGeneral() {
+  await fetch('/reset_sweep', {
+    method: 'POST',
+  });
+  isDone = false;
+  while (!isDone) {
+    response = await fetch('/get_sweep_args', {
+      method: 'GET',
+    });
+    args = await response.json();
+    isDone = args.done;
+    if (!isDone) {
+      gameInd = await genGame('init', [], args.gameDir,
+        args.gameIdx, args.fewshot, args.cot, args.fromIdea, args.gameIdea, args.fromPlan);
+      await fetch('/save_game_stats', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          gameDir: args.gameDir,
+          expDir: args.expDir,
+          gameInd: gameInd,
+        }),
+      });
+    }
+  }
+}
+
 async function sweep() {
+  saveDir = `sweep-${expSeed}`
   results = {};
+  for (var gameIdx = 0; gameIdx < 20; gameIdx++) {
     for (var fewshot_i = 0; fewshot_i < 2; fewshot_i++) {
       for (var cot_i = 0; cot_i < 2; cot_i++) {
-        results[`fewshot-${fewshot_i}_cot-${cot_i}`] = [];
-        for (var gameIdx = 0; gameIdx < 20; gameIdx++) {
-          saveDir = `sweep-${expSeed}`
-          gameStr = `${saveDir}/fewshot-${fewshot_i}_cot-${cot_i}/game-${gameIdx}`;
+        expName = `fewshot-${fewshot_i}_cot-${cot_i}`;
+        if (!results.hasOwnProperty(expName)) {
+          results[expName] = [];
+        }
+          gameStr = `${saveDir}/${expName}/game-${gameIdx}`;
           cot = cot_i == 1
           fewshot = fewshot_i == 1
           console.log(`Generating game ${gameStr}`);
           gameInd = await genGame('init', [], gameStr,
             gameIdx, fewshot, cot, fromIdea=false, idea='');
-          results[`fewshot-${fewshot_i}_cot-${cot_i}`].push(gameInd);
+          results[expName].push(gameInd);
         }
       }
   }
@@ -802,11 +1120,17 @@ async function processAllGames() {
     await collectGameData(game);
   }
 }
-var experimentDropdown = document.getElementById("experimentDropdown");
-experimentDropdown.addEventListener("change", experimentDropdownChange, false);
+// var experimentDropdown = document.getElementById("experimentDropdown");
+// experimentDropdown.addEventListener("change", experimentDropdownChange, false);
 
-var generateClickLink = document.getElementById("generateClickLink");
-generateClickLink.addEventListener("click", generateClick, false);
+var sweepClickLink = document.getElementById("sweepClickLink");
+sweepClickLink.addEventListener("click", sweepClick, false);
+
+var BFSClickLink = document.getElementById("BFSClickLink");
+BFSClickLink.addEventListener("click", testBFS, false);
+
+var MCTSClickLink = document.getElementById("MCTSClickLink");
+MCTSClickLink.addEventListener("click", testMCTS, false);
 
 var solveClickLink = document.getElementById("solveClickLink");
 solveClickLink.addEventListener("click", playTest, false);
@@ -830,18 +1154,20 @@ function experimentDropdownChange() {
   }
 }
 
-function generateClick() {
-  console.log('Generate clicked');
-  expFn();
+function sweepClick() {
+  console.log('Sweep clicked');
+  // expFn();
+  sweepGeneral();
 }
 
-const expSeed = 2;
+ const expSeed = 21;
 
+// sweepGeneral();
 // sweep();
 // fromIdeaSweep();
 // fromPlanSweep();
 // playTest();
 // evolve();
-processAllGames();
+// processAllGames();
 
 // genGame('init', [], 'test_99', 99, fewshot=true, cot=true, maxGenAttempts=20);
