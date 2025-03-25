@@ -41,9 +41,13 @@ class Config:
     sweep: str = 'models'
     # Mostly for dev. When we change something client-side about the metrics that we save for a given game.
     recompute_stats: bool = False
+    max_gen_attempts: int = 10
+    model: str = 'gpt-4o'
 
 cs = ConfigStore.instance()
 cs.store(name="config", node=Config)
+
+max_gen_attempts = None
 
 
 load_dotenv()
@@ -158,6 +162,17 @@ def log_gen_results():
 
 import lark
 lark_parser = lark.Lark.open('syntax.lark', start='ps_game')
+
+@app.route('/save_evo_stats', methods=['POST'])
+def save_evo_stats():
+    data = request.json
+    stats = data['results']
+    save_dir = os.path.join('logs', data['save_dir'])
+    if not os.path.exists(save_dir):
+        os.makedirs(save_dir)
+    with open(os.path.join(save_dir, 'evo_stats.json'), 'w') as f:
+        json.dump(stats, f, indent=4)
+    return jsonify({})
 
 @app.route('/gen_game', methods=['POST'])
 def gen_game():
@@ -514,7 +529,7 @@ hypers_i = 0
 hypers_ks, hypers_lst = [], []
 
 class ExpConfig:
-    model = 'gpt-4o'
+    model = 'o1'
     game_i = 0
     inventive_prompt = True
     cot = True
@@ -545,7 +560,7 @@ class FromIdeaSweep2(Sweep):
     game_i = list(range(10))
     model = ['gpt-4o', 'o1', 'o3-mini']
     from_idea = [True, False]
-    context_len = [10_000]
+    context_len = [10_000, 30_000]
 
 class ModelSweep(Sweep):
     game_i = list(range(15))
@@ -554,13 +569,13 @@ class ModelSweep(Sweep):
 
 class DocSweep(Sweep):
     # context_len = [5_000, 10_000, 15_000, 20_000, 25_000, 30_000]
-    context_len = [10_000]
+    context_len = [5_000, 10_000]
     docs = [True, False]
     model = ['o1', 'o3-mini']
 
 class CtxSweep(Sweep):
-    # context_len = [10_000, 20_000, 30_000, 40_000, 50_000, 70_000]
-    context_len = [10_000, 30_000, 50_000, 70_000]
+    context_len = [10_000, 20_000, 30_000, 40_000, 50_000, 70_000]
+    # context_len = [10_000, 30_000, 50_000, 70_000]
 
 class CtxSweep2(Sweep):
     context_len = [10_000, 20_000, 30_000]
@@ -635,8 +650,6 @@ def compute_edit_distances(stats_path, hyper_ks, hypers_lst):
             json.dump(stats, f, indent=4)
         print(f"Saved edit distances to {stats_and_dists_path}")
     eval_sweep(stats_and_dists_path, hypers_ks, hypers_lst)
-
-max_gen_attempts = 10
 
 def eval_sweep(stats_and_dists_path, hyper_ks, hypers_lst):
     stats_dir = os.path.dirname(stats_and_dists_path)
@@ -727,10 +740,11 @@ def eval_sweep(stats_and_dists_path, hyper_ks, hypers_lst):
         'pct_comp': 'Compiles',
     }
 
-    row_index_header_order = ['model', 'from_idea', 'docs', 'fewshot', 'cot']
+    row_index_header_order = ['docs', 'model', 'from_idea', 'fewshot', 'cot']
     row_index_headers_remap = {
         'model': 'Model',
         'cot': 'CoT',
+        'docs': 'Docs',
         'fewshot': 'Fewshot',
         'from_idea': 'From Idea',
         'inventive_prompt': 'Inventive Prompt',
@@ -757,7 +771,6 @@ def eval_sweep(stats_and_dists_path, hyper_ks, hypers_lst):
     # Rename indices
     # index_tuples = [[row_index_rename(n) for n in t] for t in index_tuples]
     index_tuples = [[row_index_remap.get(n, n) for n in t] for t in index_tuples]
-    index_tuples = [[format_row_index(n) for n in t] for t in index_tuples]
     _hyper_ks = [row_index_headers_remap.get(k, k) for k in _hyper_ks]
 
     r_mi = pd.MultiIndex.from_tuples(index_tuples, names=_hyper_ks)
@@ -828,6 +841,9 @@ def eval_sweep(stats_and_dists_path, hyper_ks, hypers_lst):
     # df = df.rename(columns=lambda x: x.replace("_", " ").title())
 
     df = df.sort_index()
+    index_tuples, names = df.index.to_flat_index(), df.index.names
+    index_tuples = [[format_row_index(n) for n in t] for t in index_tuples]
+    df.index = pd.MultiIndex.from_tuples(index_tuples, names=names)
 
     # Save DataFrame to LaTeX
     # latex_path = "/mnt/data/modified_hierarchical_dataframe.tex"
@@ -874,6 +890,7 @@ def get_exp_config(hyper_ks, hyper_vals):
 
 @app.route('/get_sweep_args', methods=['GET'])
 def get_sweep_args():
+    """Sends args to the client-side `genGame` function."""
     global hypers_i, exp_config, sweep_stats
     save_dir = f'sweep-{sweep_i}'
     stats_exist = True
@@ -929,7 +946,8 @@ recompute_stats = Config.recompute_stats
 
 @hydra.main(config_name="config", version_base="1.3")
 def main(cfg: Config):
-    global hypers, hypers_ks, hypers_lst, sweep_name, recompute_stats
+    global hypers, hypers_ks, hypers_lst, sweep_name, recompute_stats, max_gen_attempts
+    max_gen_attempts = cfg.max_gen_attempts
     hypers = all_hypers[cfg.sweep]
     sweep_name = cfg.sweep
     recompute_stats = cfg.recompute_stats
