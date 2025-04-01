@@ -14,7 +14,7 @@ from lark.reconstruct import Reconstructor
 games_to_skip = set({'easyenigma', 'A_Plaid_Puzzle'})
 
 # test_games = ['blockfaker', 'sokoban_match3', 'notsnake', 'sokoban_basic']
-test_games = ['blockfaker', 'sokoban_basic', 'sokoban_match3', 'notsnake']
+TEST_GAMES = ['blockfaker_test', 'blockfaker', 'sokoban_basic', 'sokoban_match3', 'notsnake']
 
 from lark import Lark, Transformer, Tree, Token, Visitor
 import numpy as np
@@ -370,13 +370,13 @@ def strip_comments(text):
             new_text += c
     return new_text
 
-data_dir = 'data'
-games_dir = os.path.join(data_dir, 'scraped_games')
-min_games_dir = os.path.join(data_dir, 'min_games')
-simpd_dir = os.path.join(data_dir, 'simplified_games')
-trees_dir = os.path.join(data_dir, 'game_trees')
-pretty_trees_dir = os.path.join(data_dir, 'pretty_trees')
-parsed_games_filename = os.path.join(data_dir, "parsed_games.txt")
+DATA_DIR = 'data'
+games_dir = os.path.join(DATA_DIR, 'scraped_games')
+min_games_dir = os.path.join(DATA_DIR, 'min_games')
+simpd_dir = os.path.join(DATA_DIR, 'simplified_games')
+TREES_DIR = os.path.join(DATA_DIR, 'game_trees')
+pretty_trees_dir = os.path.join(DATA_DIR, 'pretty_trees')
+parsed_games_filename = os.path.join(DATA_DIR, "parsed_games.txt")
 
 # Usage example
 if __name__ == "__main__":
@@ -390,7 +390,7 @@ if __name__ == "__main__":
 
     # games_dir = os.path.join('script-doctor','games')
 
-    os.makedirs(trees_dir, exist_ok=True)
+    os.makedirs(TREES_DIR, exist_ok=True)
     os.makedirs(pretty_trees_dir, exist_ok=True)
     os.makedirs(min_games_dir, exist_ok=True)
     # min_grammar = os.path.join('syntax_generate.lark')
@@ -404,7 +404,7 @@ if __name__ == "__main__":
     game_files = os.listdir(games_dir)
     # sort them alphabetically
     game_files.sort()
-    test_game_files = [f"{test_game}.txt" for test_game in test_games]
+    test_game_files = [f"{test_game}.txt" for test_game in TEST_GAMES]
     game_files = test_game_files + game_files
 
     if not os.path.isdir(simpd_dir):
@@ -467,7 +467,7 @@ if __name__ == "__main__":
 
 
         min_parse_tree = StripPuzzleScript().transform(parse_tree)
-        min_tree_path = os.path.join(trees_dir, filename[:-3] + 'pkl')
+        min_tree_path = os.path.join(TREES_DIR, filename[:-3] + 'pkl')
         with open(min_tree_path, "wb") as f:
             pickle.dump(min_parse_tree, f)
         pretty_parse_tree_str = min_parse_tree.pretty()

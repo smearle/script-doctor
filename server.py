@@ -30,7 +30,7 @@ import pandas as pd
 import requests
 
 import game_gen
-from parse_lark import PrintPuzzleScript, RepairPuzzleScript, StripPuzzleScript, add_empty_sounds_section, preprocess_ps, test_games
+from parse_lark import PrintPuzzleScript, RepairPuzzleScript, StripPuzzleScript, add_empty_sounds_section, preprocess_ps, TEST_GAMES
 from prompts import *
 from utils import extract_ps_code, gen_fewshot_examples, llm_text_query, num_tokens_from_string, save_prompts, truncate_str_to_token_len
 
@@ -505,7 +505,7 @@ def list_scraped_games():
     games_set = set()
     games = []
     game_files = os.listdir('data/scraped_games')
-    test_game_files = [f"{test_game}.txt" for test_game in test_games]
+    test_game_files = [f"{test_game}.txt" for test_game in TEST_GAMES]
     game_files = test_game_files + game_files
     for filename in game_files:
         if filename.endswith('.txt'):

@@ -1,11 +1,969 @@
+from functools import partial
+from typing import List
+
+from einops import rearrange
+import flax
+import jax
+import jax.numpy as jnp
+import numpy as np
+
+from ps_game import LegendEntry, PSGame
 
 
-from ps_game import PSGame
+# TODO: double check these colors
+color_hex_map = {
+    "black": "#000000",
+    "white": "#FFFFFF",
+    "lightgray": "#D3D3D3",
+    "lightgrey": "#D3D3D3",
+    "gray": "#808080",
+    "grey": "#808080",
+    "darkgray": "#A9A9A9",
+    "darkgrey": "#A9A9A9",
+    "red": "#FF0000",
+    "darkred": "#8B0000",
+    "lightred": "#FF6666",
+    "brown": "#A52A2A",
+    "darkbrown": "#5C4033",
+    "lightbrown": "#C4A484",
+    "orange": "#FFA500",
+    "yellow": "#FFFF00",
+    "green": "#008000",
+    "darkgreen": "#006400",
+    "lightgreen": "#90EE90",
+    "blue": "#0000FF",
+    "lightblue": "#ADD8E6",
+    "darkblue": "#00008B",
+    "purple": "#800080",
+    "pink": "#FFC0CB",
+    "transparent": "#00000000"  # Transparent in RGBA format
+}
+
+def replace_bg_tiles(x):
+    if x == '.':
+        return 0
+    else:
+        return int(x) + 1
+
+def render_solid_color(color):
+    color = color.lower()
+    if color in color_hex_map:
+        c = color_hex_map[color]
+    else:
+        c = '#000000'
+    c = hex_to_rgba(c, 255)
+    im = np.zeros((5, 5, 4), dtype=np.uint8)
+    im[:, :, :] = np.array(c)
+    return im
+
+def render_sprite(colors, sprite):
+    sprite = np.vectorize(replace_bg_tiles)(sprite)
+    colors = np.array(['transparent'] + colors)
+    colors_vec = np.zeros((len(colors), 4), dtype=np.uint8)
+    for i, c in enumerate(colors):
+        c = c.lower()
+        if c in color_hex_map:
+            alpha = 255
+            if c == 'transparent':
+                alpha = 0
+            c = color_hex_map[c]
+        c = hex_to_rgba(c, alpha)
+        colors_vec[i] = np.array(c)
+    im = colors_vec[sprite]
+    return im
+
+def level_to_multihot(level):
+    pass
+
+def assign_vecs_to_objs(collision_layers):
+    n_lyrs = len(collision_layers)
+    n_objs = sum([len(lyr) for lyr in collision_layers])
+    coll_masks = np.zeros((n_lyrs, n_objs), dtype=np.int8)
+    objs_to_idxs = {}
+    # vecs = np.eye(n_objs, dtype=np.uint8)
+    # obj_vec_dict = {}
+    j = 0
+    for i, layer in enumerate(collision_layers):
+        for obj in layer:
+            # obj_vec_dict[obj] = vecs[i]
+            objs_to_idxs[obj] = j
+            coll_masks[i, j] = 1
+            j += 1
+    return objs_to_idxs, coll_masks
+
+def hex_to_rgba(hex_code, alpha):
+    """Converts a hex color code to RGB values."""
+
+    hex_code = hex_code.lstrip('#')
+    rgb = tuple(int(hex_code[i:i+2], 16) for i in (0, 2, 4))
+    return (*rgb, alpha)
+
+def process_legend(legend):
+    char_legend = {}
+    meta_tiles = {}
+    conjoined_tiles = {}
+    for k, v in legend.items():
+        k = k.split(' ')[0]
+        v: LegendEntry
+        if v.operator is None:
+            assert len(v.obj_names) == 1
+            char_legend[v.obj_names[0]] = k.strip()
+        elif v.operator == 'or':
+            meta_tiles[k.strip()] = v.obj_names
+        elif v.operator == 'and':
+            conjoined_tiles[k.strip()] = v.obj_names
+        else: raise Exception('Invalid LegendEntry operator.')
+    return char_legend, meta_tiles, conjoined_tiles
+
+def expand_collision_layers(collision_layers, meta_tiles):
+    # Preprocess collision layers to replace joint objects with their sub-objects
+    for i, l in enumerate(collision_layers):
+        j = 0
+        for o in l:
+            if o in meta_tiles:
+                subtiles = meta_tiles[o]
+                l = l[:j] + subtiles + l[j+1:]
+                collision_layers[i] = l
+                # HACK: we could do this more efficiently
+                expand_collision_layers(collision_layers, meta_tiles=meta_tiles)
+                j += len(subtiles)
+            else:
+                j += 1
+    return collision_layers
+
+def expand_meta_tiles(tile_list, obj_to_idxs, meta_tiles):
+    expanded_meta_tiles = []
+    for mt in tile_list:
+        if mt in obj_to_idxs:
+            expanded_meta_tiles.append(mt)
+        elif mt in tile_list:
+            expanded_meta_tiles += expand_meta_tiles(meta_tiles[mt], obj_to_idxs, meta_tiles)
+    return expanded_meta_tiles
+
+def gen_check_win(win_conditions, obj_to_idxs):
+    def check_all(lvl, src, trg):
+        return jnp.sum((lvl[src] == 1) * (lvl[trg] == 0)) == 0
+
+    def check_some(lvl, src, trg):
+        return jnp.sum((lvl[src] == 1) * (lvl[trg] == 1)) > 0
+
+    def check_none(lvl, src):
+        return jnp.sum(lvl[src] == 1) == 0
+
+    funcs = []
+    for win_condition in win_conditions:
+        src, trg = win_condition.src_obj, win_condition.trg_obj
+        src = obj_to_idxs[src]
+        if trg is not None:
+            trg = obj_to_idxs[trg]
+        if win_condition.quantifier == 'all':
+            func = partial(check_all, src=src, trg=trg)
+        elif win_condition.quantifier == 'some':
+            func = partial(check_some, src=src, trg=trg)
+        elif win_condition.quantifier == 'no':
+            func = partial(check_none, src=src)
+        else:
+            raise Exception('Invalid quantifier.')
+        funcs.append(func)
+
+    def check_win(lvl):
+
+        if len(funcs) == 0:
+            return False
+        
+        def apply_win_condition_func(i, lvl):
+            return jax.lax.switch(i, funcs, lvl)
+
+        func_returns = jax.vmap(apply_win_condition_func, in_axes=(0, None))(jnp.arange(len(funcs)), lvl)
+        return jnp.all(func_returns)
+
+    return check_win
 
 
-class PuzzleScriptEnv():
-    def __init__(self, ps_game: PSGame):
+def gen_subrule(rule, n_objs, obj_to_idxs, meta_tiles):
+    assert len(rule.prefixes) == 0
+    lp = rule.left_patterns
+    rp = rule.right_patterns
+    n_kernels = len(lp)
+    assert n_kernels == 1
+    assert len(rp) == n_kernels
+    lp = lp[0]
+    rp = rp[0]
+    n_cells = len(lp)
+    assert len(rp) == n_cells
+
+    lr_in = np.zeros((n_objs + (n_objs * 4), 1, n_cells), dtype=np.int8)
+    rr_in = np.zeros_like(lr_in)
+    ur_in = np.zeros((n_objs + (n_objs * 4), n_cells, 1), dtype=np.int8)
+    dr_in = np.zeros_like(ur_in)
+    lr_out = np.zeros_like(lr_in)
+    rr_out = np.zeros_like(rr_in)
+    ur_out = np.zeros_like(ur_in)
+    dr_out = np.zeros_like(dr_in)
+    for i, (l_cell, r_cell) in enumerate(zip(lp, rp)):
+        # Left cell
+        if len(l_cell) == 1:
+            l_cell = l_cell[0]
+            l_cell = l_cell.split(' ')
+        l_force = False
+        l_no = False
+        for obj in l_cell:
+            obj = obj.lower()
+            if obj in meta_tiles:
+                return None
+            if obj in obj_to_idxs:
+                fill_val = 1
+                if l_no:
+                    fill_val = -1
+                obj_i = obj_to_idxs[obj]
+                lr_in[obj_i, 0, i] = fill_val
+                rr_in[obj_i, 0, n_cells-1-i] = fill_val
+                ur_in[obj_i, i, 0] = fill_val
+                dr_in[obj_i, n_cells-1-i, 0] = fill_val
+                if l_force:
+                    lr_in[n_objs + (obj_i * 4) + 2, 0, i] = 1
+                    rr_in[n_objs + (obj_i * 4) + 0, 0, n_cells-1-i] = 1
+                    ur_in[n_objs + (obj_i * 4) + 1, i, 0] = 1
+                    dr_in[n_objs + (obj_i * 4) + 3, n_cells-1-i, 0] = 1
+                l_force, l_no = False, False
+            elif obj == '>':
+                l_force = True
+            elif obj == 'no':
+                l_no = True
+            else: raise Exception(f'Invalid object `{obj}` in rule.')
+        # Right cell
+        if len(r_cell) == 1:
+            r_cell = r_cell[0]
+            r_cell = r_cell.split(' ')
+        r_force = False
+        r_no = False
+        for obj in r_cell:
+            obj = obj.lower()
+            # NOTE: Should never have a meta-tile here if we didn't already see one on the left side (?)
+            if obj in obj_to_idxs:
+                fill_val = 1
+                if r_no:
+                    fill_val = -1
+                obj_i = obj_to_idxs[obj]
+                lr_out[obj_i, 0, i] = fill_val
+                rr_out[obj_i, 0, n_cells-1-i] = fill_val
+                ur_out[obj_i, i, 0] = fill_val
+                dr_out[obj_i, n_cells-1-i, 0] = fill_val
+                if r_force:
+                    lr_out[n_objs + (obj_i * 4) + 2, 0, i] = 1
+                    rr_out[n_objs + (obj_i * 4) + 0, 0, n_cells-1-i] = 1
+                    ur_out[n_objs + (obj_i * 4) + 1, i, 0] = 1
+                    dr_out[n_objs + (obj_i * 4) + 3, n_cells-1-i, 0] = 1
+                r_force, r_no = False, False
+            elif obj == '>':
+                r_force = True
+            elif obj == 'no':
+                r_no = True
+            else: raise Exception('Invalid object in rule.')
+    lr_out = lr_out - np.clip(lr_in, 0, 1)
+    rr_out = rr_out - np.clip(rr_in, 0, 1)
+    ur_out = ur_out - np.clip(ur_in, 0, 1)
+    dr_out = dr_out - np.clip(dr_in, 0, 1)
+    lr_rule = np.stack((lr_in, lr_out), axis=0)
+    rr_rule = np.stack((rr_in, rr_out), axis=0)
+    ur_rule = np.stack((ur_in, ur_out), axis=0)
+    dr_rule = np.stack((dr_in, dr_out), axis=0)
+    # TODO: If horizontal/vertical etc. has been specified, filter out unnecessary rules here
+    rules = [lr_rule, rr_rule, ur_rule, dr_rule]
+    rule_names = [f"{rule}_{dir}" for dir in enumerate(['lr', 'rr', 'ur', 'dr'])]
+    rule_fns = [partial(apply_move_rule, move_rule=rule, rule_name=rule_name) 
+                    for rule, rule_name in zip(rules, rule_names)]
+    return rule_fns
+
+
+@flax.struct.dataclass
+class ObjFnReturn:
+    active: bool = False
+    # detected object/force indices
+    force_idx: int = None
+    obj_idx: int = None
+
+
+@flax.struct.dataclass
+class CellFnReturn:
+    # A list of indices of objects that were detected
+    # Return these so that we can remove them in output cells (before projecting output pattern)
+    # (this doesn't include detecting `no` i.e. the absence of an object)
+    detected: np.ndarray
+    # Return the force index so that, in default, non-direction-specific rules, we can project the correct force to output cells
+    force_idx: np.ndarray
+    # A dictionary of the objects detected, mapping meta-object names to sub-object indices
+    meta_objs: dict
+
+
+def gen_subrules_meta(rule, n_objs, obj_to_idxs, meta_tiles):
+    assert len(rule.prefixes) == 0
+
+    # def detect_all_objs_in_cell(objs_vec, m_cell):
+    #     # for detecting overlapping objects (not necessary?)
+    #     return np.all(objs_vec[:, None, None] == m_cell), []
+
+    ### Functions for detecting regular atomic objects
+    @partial(jax.jit, static_argnums=(0,))
+    def detect_obj_in_cell(obj_idx, m_cell):
+        active = m_cell[obj_idx] == 1
+        return ObjFnReturn(active=active, obj_idx=obj_idx)
+
+    @partial(jax.jit, static_argnums=(0,))
+    def detect_no_obj_in_cell(obj_idx, m_cell):
+        active = m_cell[obj_idx] == 0
+        return ObjFnReturn(active=active, obj_idx=obj_idx)
+
+    @partial(jax.jit, static_argnums=(0, 1))
+    def detect_force_on_obj(obj_idx, force_idx, m_cell):
+        obj_is_present = m_cell[obj_idx] == 1
+        force_is_present = m_cell[n_objs + (obj_idx * 4) + force_idx] == 1
+        # force_idx = np.argwhere(m_cell[n_objs + (obj_idx * 4):n_objs + (obj_idx * 4) + 4] == 1)
+        # assert len(force_idx) <= 1
+        active = obj_is_present & force_is_present
+        obj_idx = jax.lax.select(
+            active,
+            obj_idx,
+            -1,
+        )
+        return ObjFnReturn(active=active, obj_idx=obj_idx)
+
+    ### Functions for detecting meta-objects
+    @partial(jax.jit, static_argnums=())
+    def detect_any_objs_in_cell(objs_vec, m_cell):
+        """Given a multi-hot vector indicating a set of objects, return the index of the object contained in this cell."""
+        detected_vec_idx = jnp.argwhere(objs_vec * m_cell > 0, size=1, fill_value=-1)[0, 0]
+        active = detected_vec_idx != -1
+        obj_idx = jax.lax.select(
+            active,
+            detected_vec_idx,
+            -1,
+        )
+        return ObjFnReturn(active=active, obj_idx=obj_idx)
+
+    @partial(jax.jit, static_argnums=())
+    def detect_no_objs_in_cell(objs_vec, m_cell):
+        active = np.sum(objs_vec[:, None, None] * m_cell) == 0
+        return ObjFnReturn(active=active)
+
+    @partial(jax.jit, static_argnums=(0, 1))
+    def detect_force_on_meta(obj_idxs, force_idx, m_cell):
+        force_obj_vecs = []
+        for obj_idx in obj_idxs:
+            force_obj_vec = np.zeros(n_objs + n_objs * 4, dtype=np.int8)
+            force_obj_vec[obj_idx] = 1
+            force_obj_vec[n_objs + obj_idx * 4 + force_idx] = 1
+            force_obj_vecs.append(force_obj_vec)
+        obj_activations = jnp.sum(jnp.array(force_obj_vecs) * m_cell[None], axis=1) 
+        active = jnp.any(obj_activations == 2)
+
+        obj_idx = jax.lax.select(
+            active,
+            jnp.argwhere(obj_activations == 2, size=1)[0][0],
+            -1,
+        )
+        return ObjFnReturn(active=active, obj_idx=obj_idx)
+
+    ### Function for projecting onto cells
+    def project_cell(detect_out: CellFnReturn, m_cell):
+        detected = detect_out.detected
+        force_idx = detect_out.force_idx
+        meta_objs = detect_out.meta_objs
+    
+        assert np.all(detected <= 1) and np.all(detected >= 0)
+        m_cell -= detected
+
+    def gen_cell_detection_fn(l_cell, force_idx):
+        fns = []
+        l_cell = l_cell.split(' ')
+        no, force = False, False
+        obj_names = []
+        for obj in l_cell:
+            obj = obj.lower()
+            if obj == 'no':
+                no = True
+            elif obj == '>':
+                force = True
+            else:
+                obj_names.append(obj)
+                if obj in obj_to_idxs:
+                    obj_idx = obj_to_idxs[obj]
+                    if no:
+                        fns.append(partial(detect_no_obj_in_cell, obj_idx=obj_idx))
+                    elif force:
+                        fns.append(partial(detect_force_on_obj, obj_idx=obj_idx, force_idx=force_idx))
+                    else:
+                        fns.append(partial(detect_obj_in_cell, obj_idx=obj_idx))
+                elif obj in meta_tiles:
+                    sub_objs = expand_meta_tiles([obj], obj_to_idxs, meta_tiles)
+                    sub_obj_idxs = [obj_to_idxs[so] for so in sub_objs]
+                    sub_objs_vec = np.zeros((n_objs + n_objs * 4), dtype=np.int8)
+                    sub_objs_vec[sub_obj_idxs] = 1
+                    if no:
+                        fns.append(partial(detect_no_objs_in_cell, objs_vec=sub_objs_vec))
+                    elif force:
+                        fns.append(partial(detect_force_on_meta, obj_idxs=tuple(sub_obj_idxs), force_idx=force_idx))
+                    else:
+                        fns.append(partial(detect_any_objs_in_cell, objs_vec=sub_objs_vec))
+                else:
+                    raise Exception(f'Invalid object `{obj}` in rule.')
+        
+        @partial(jax.jit, static_argnums=())
+        def cell_detection_fn(m_cell):
+            # TODO: can vmap this
+            fn_outs: List[ObjFnReturn] = [fn(m_cell=m_cell) for fn in fns]
+            activated = jnp.all(jnp.array([f.active for f in fn_outs]))
+            detected = jnp.zeros(m_cell.shape, dtype=np.int8)
+            force_idx = None
+            for i, f in enumerate(fn_outs):
+                if f.obj_idx is not None:
+                    detected = detected.at[f.obj_idx].set(1)
+                if f.force_idx is not None:
+                    detected = detected.at[f.force_idx].set(1)
+                    if force_idx is None:
+                        force_idx = f.force_idx
+            meta_objs = {k: fn_out.obj_idx for k, fn_out in zip(obj_names, fn_outs)}
+            ret = CellFnReturn(
+                detected=detected,
+                force_idx=force_idx,
+                meta_objs=meta_objs,
+            )
+            return activated, ret
+
+        return cell_detection_fn
+
+    @partial(jax.jit, static_argnums=(0))
+    def disambiguate_meta(obj, meta_objs):
+        if obj in obj_to_idxs:
+            return obj_to_idxs[obj]
+        return meta_objs[obj]
+
+    @partial(jax.jit, static_argnums=(2))
+    def project_obj(m_cell, detect_out, obj):
+        meta_objs = detect_out.meta_objs
+        obj_idx = disambiguate_meta(obj, meta_objs)
+        m_cell = m_cell.at[obj_idx].set(1)
+        return m_cell
+
+    @partial(jax.jit, static_argnums=(2))
+    def project_no_obj(m_cell, detect_out, obj):
+        meta_objs = detect_out.meta_objs
+        obj_idx = disambiguate_meta(obj, meta_objs)
+        m_cell[obj_idx] = 0
+        return m_cell
+
+    @partial(jax.jit, static_argnums=(2))
+    def project_force_on_obj(m_cell, detect_out, obj, force_idx):
+        meta_objs = detect_out.meta_objs
+        obj_idx = disambiguate_meta(obj, meta_objs)
+        m_cell = m_cell.at[obj_idx].set(1)
+        m_cell = m_cell.at[n_objs + (obj_idx * 4) + force_idx].set(1)
+        return m_cell
+
+    def gen_cell_projection_fn(r_cell, force_idx):
+        fns = []
+        if r_cell is None:
+            r_cell = []
+        else:
+            r_cell = r_cell.split(' ')
+        no, force = False, False
+        for obj in r_cell:
+            obj = obj.lower()
+            if obj == 'no':
+                no = True
+            elif obj == '>':
+                force = True
+            elif (obj in obj_to_idxs) or (obj in meta_tiles):
+                if no:
+                    fns.append(partial(project_no_obj, obj=obj))
+                elif force:
+                    fns.append(partial(project_force_on_obj, obj=obj, force_idx=force_idx))
+                else:
+                    fns.append(partial(project_obj, obj=obj))
+            else:
+                raise Exception(f'Invalid object `{obj}` in rule.')
+        
+        @partial(jax.jit, static_argnums=())
+        def cell_projection_fn(m_cell, detect_out):
+            m_cell -= detect_out.detected
+            # vmap
+            for proj_fn in fns:
+                m_cell = proj_fn(m_cell=m_cell, detect_out=detect_out)
+            return m_cell
+
+        return jax.jit(cell_projection_fn)
+
+
+    def gen_rotated_rule_fn(lp, rp, rot):
+        lp = np.array(lp)
+        # Here we map force directions to corresponding rule rotations
+        rot_to_force = [1, 2, 0, 3]
+        force_idx = rot_to_force[rot]
+        is_horizontal = lp.shape[0] == 1
+        is_vertical = lp.shape[1] == 1
+        assert is_horizontal ^ is_vertical
+        in_patch_shape = lp.shape
+        # TODO: kernels. We assume just 1 here.
+        if is_horizontal:
+            lp = lp[0, :]
+            rp = rp[0, :]
+        elif is_vertical:
+            lp = lp[:, 0]
+            rp = rp[:, 0]
+        cell_detection_fns = []
+        cell_projection_fns = []
+        for i, l_cell in enumerate(lp):
+            cell_detection_fns.append(gen_cell_detection_fn(l_cell, force_idx))
+        for i, r_cell in enumerate(rp):
+            cell_projection_fns.append(gen_cell_projection_fn(r_cell, force_idx))
+
+        # @jax.jit
+        def rule_fn(lvl):
+            n_chan = lvl.shape[1]
+
+            # @jax.jit
+            def detect_cells(in_patch):
+                cell_outs_patch = []
+                patch_active = True
+                for i, cell_fn in enumerate(cell_detection_fns):
+                    in_patch = in_patch.reshape((n_chan, *in_patch_shape))
+                    if is_vertical:
+                        m_cell = in_patch[:, i, 0]
+                    if is_horizontal:
+                        m_cell = in_patch[:, 0, i]
+                    cell_active, cell_out = cell_fn(m_cell=m_cell)
+                    patch_active = patch_active & cell_active
+                    cell_outs_patch.append(cell_out)
+                return patch_active, cell_outs_patch
+
+            patches = jax.lax.conv_general_dilated_patches(
+                lvl, in_patch_shape, window_strides=(1, 1), padding='VALID',
+            )
+            assert patches.shape[0] == 1
+            patches = patches[0]
+            patches = rearrange(patches, "c h w -> h w c")
+            patch_activations, detect_outs = jax.vmap(jax.vmap(detect_cells))(patches)
+
+            @jax.jit
+            def project_cells(lvl, patch_activations, detect_outs):
+                # print('NONZERO ACTIVATIONS')
+                # print(lp, rp, force_idx)
+                # print(jnp.argwhere(patch_activations, size=1))
+
+                # Mask out everything but the position of the "first" activation
+                first_a = jnp.argwhere(patch_activations == 1, size=1)[0]
+                patch_activations = jnp.zeros_like(patch_activations)
+                patch_activations = patch_activations.at[*first_a].set(1)
+                # detect_outs = detect_outs[first_a[0]][first_a[1]]
+                detect_outs = jax.tree_map(lambda x: x[first_a[0]][first_a[1]], detect_outs)
+
+                # Apply projection functions to the affected cells
+                out_cell_idxs = np.indices(in_patch_shape)
+                out_cell_idxs = rearrange(out_cell_idxs, "xy h w -> h w xy")
+                if is_vertical:
+                    out_cell_idxs = out_cell_idxs[:, 0]
+                elif is_horizontal:
+                    out_cell_idxs = out_cell_idxs[0, :]
+
+                lvl = jnp.array(lvl)
+                # assert len(detect_outs) == len(out_cell_idxs) == len(cell_projection_fns):
+                if not len(detect_outs) == len(out_cell_idxs) == len(cell_projection_fns):
+                    breakpoint()
+                for out_cell_idx, detect_out, cell_proj_fn in zip(out_cell_idxs, detect_outs, cell_projection_fns):
+                    out_cell_idx += first_a
+                    m_cell = lvl[0, :, *out_cell_idx]
+                    m_cell = jnp.array(m_cell)
+                    m_cell = cell_proj_fn(m_cell, detect_out)
+                    lvl = lvl.at[0, :, *out_cell_idx].set(m_cell)
+                return lvl
+
+            # eliminate all but one activation
+            lp_detected = patch_activations.sum() > 0
+            new_lvl = jax.lax.cond(
+                lp_detected,
+                project_cells,
+                lambda lvl, _, __: lvl,
+                lvl, patch_activations, detect_outs
+            )
+            rule_applied = jnp.any(new_lvl != lvl)
+            lvl = new_lvl.astype(np.float32)
+
+            return lvl, rule_applied
+
+        return rule_fn
+    
+    rule_fns = []
+    print('RULE PATTERNS', rule.left_patterns, rule.right_patterns)
+    for lp, rp in zip(rule.left_patterns, rule.right_patterns):
+        # Replace any empty lists in lp and rp with a None
+        lp = [[None] if len(l) == 0 else [' '.join(l)] for l in lp]
+        rp = [[None] if len(l) == 0 else [' '.join(l)] for l in rp]
+        lp, rp = np.array(lp), np.array(rp)
+        if len(lp) > 1 or len(rp) > 1:
+            rots = [0, 1, 2, 3]
+        else:
+            rots = [0]
+        for rot in rots:
+            # rotate the patterns
+            lp = np.rot90(lp, rot)
+            rp = np.rot90(rp, rot)
+            rule_fns.append(gen_rotated_rule_fn(lp, rp, rot))
+
+    return rule_fns
+        
+        
+def gen_rule_fn(obj_to_idxs, coll_mat, tree_rules, meta_tiles):
+    n_objs = len(obj_to_idxs)
+    rule_grps = []
+    if len(tree_rules) == 0:
         pass
+    elif len(tree_rules) == 1:
+        rule_blocks = tree_rules[0]
+        for rule_block in rule_blocks:
+            assert rule_block.looping == False
+            for rule in rule_block.rules:
+                # TODO: rule-block and loop logics
+                sub_rule_fns = gen_subrules_meta(rule, n_objs, obj_to_idxs, meta_tiles)
+                rule_grps.append(sub_rule_fns)
 
-    def render():
-        pass
+    rule_grps.append(gen_move_rules(obj_to_idxs, coll_mat))
+
+
+    @jax.jit
+    def rule_fn(lvl):
+        changed = False
+        lvl = lvl[None].astype(np.float32)
+        for grp_i, rule_grp in enumerate(rule_grps):
+            grp_applied = True
+
+            def apply_rule_grp(carry):
+                lvl, grp_applied = carry
+                grp_applied = False
+                for rule_fn in rule_grp:
+                    lvl, rule_applied = rule_fn(lvl)
+                    grp_applied = jnp.logical_or(grp_applied, rule_applied)
+                jax.debug.print('group {grp_i} applied: {grp_applied}', grp_i=grp_i, grp_applied=grp_applied)
+                # force_is_present = jnp.sum(lvl[0, n_objs:n_objs + (n_objs * 4)]) > 0
+                # jax.debug.print('force is present: {force_is_present}', force_is_present=force_is_present)
+                # jax.debug.print('lvl:\n{lvl}', lvl=lvl)
+                return (lvl, grp_applied)
+
+            lvl, changed = jax.lax.while_loop(
+                cond_fun=lambda x: x[1],
+                body_fun=apply_rule_grp,
+                init_val=(lvl, grp_applied),
+            )
+        return lvl[0], changed
+
+    return rule_fn
+
+def gen_move_rules(obj_to_idxs, coll_mat):
+    n_objs = len(obj_to_idxs)
+    rule_fns = []
+    for obj, idx in obj_to_idxs.items():
+        if obj == 'Background':
+            continue
+        coll_vector = coll_mat[idx]
+
+        left_rule_in = np.zeros((n_objs + (n_objs * 4), 1, 2), dtype=np.int8)
+        # object must be present in right cell
+        left_rule_in[idx, 0, 1] = 1
+        # leftward force
+        left_rule_in[n_objs + (idx * 4) + 0, 0, 1] = 1
+        # absence of collidable tiles in the left cell
+        left_rule_in[:n_objs, 0, 0] = -coll_vector
+        left_rule_out = np.zeros_like(left_rule_in)
+        # object moves to left cell
+        left_rule_out[idx, 0, 0] = 1
+        # remove anything that was present in the input (i.e. the object and force)
+        left_rule_out -= np.clip(left_rule_in, 0, 1)
+        left_rule = np.stack((left_rule_in, left_rule_out), axis=0)
+
+        # FIXME: Actually this is the down rule and vice versa, and we've relabelled actions accordingly. Hack. Can't figure out what's wrong here.
+        # Something to do with flipping output kernel?
+        up_rule_in = np.zeros((n_objs + (n_objs * 4), 2, 1), dtype=np.int8)
+        # object must be present in lower cell
+        up_rule_in[idx, 0] = 1
+        # upward force
+        up_rule_in[n_objs + (idx * 4) + 1, 0] = 1
+        # absence of collidable tiles in the upper cell
+        up_rule_in[:n_objs, 1, 0] = -coll_vector
+        up_rule_out = np.zeros_like(up_rule_in)
+        # object moves to upper cell
+        up_rule_out[idx, 1] = 1
+        # remove anything that was present in the input
+        up_rule_out -= np.clip(up_rule_in, 0, 1)
+        up_rule = np.stack((up_rule_in, up_rule_out), axis=0)
+
+        right_rule_in = np.zeros((n_objs + (n_objs * 4), 1, 2), dtype=np.int8)
+        # object must be present in left cell
+        right_rule_in[idx, 0, 0] = 1
+        # rightward force
+        right_rule_in[n_objs + (idx * 4) + 2, 0, 0] = 1
+        # absence of collidable tiles in the right cell
+        right_rule_in[:n_objs, 0, 1] = -coll_vector
+        right_rule_out = np.zeros_like(right_rule_in)
+        # object moves to right cell
+        right_rule_out[idx, 0, 1] = 1
+        # remove anything that was present in the input
+        right_rule_out -= np.clip(right_rule_in, 0, 1)
+        right_rule = np.stack((right_rule_in, right_rule_out), axis=0)
+
+        down_rule_in = np.zeros((n_objs + (n_objs * 4), 2, 1), dtype=np.int8)
+        # object must be present in upper cell
+        down_rule_in[idx, 1] = 1
+        # downward force
+        down_rule_in[n_objs + (idx * 4) + 3, 1] = 1
+        # absence of collidable tiles in the lower cell
+        down_rule_in[:n_objs, 0, 0] = -coll_vector
+        down_rule_out = np.zeros_like(down_rule_in)
+        # object moves to lower cell
+        down_rule_out[idx, 0] = 1
+        # remove anything that was present in the input
+        down_rule_out -= np.clip(down_rule_in, 0, 1)
+        down_rule = np.stack((down_rule_in, down_rule_out), axis=0)
+
+        # rules += [left_rule, right_rule, up_rule, down_rule]
+        rules = [left_rule, right_rule, up_rule, down_rule]
+        # rule_names = [f"{obj}_move_{j}" for j in ['left', 'right', 'up', 'down']]
+        rule_fns += [partial(apply_move_rule, move_rule=rule)
+                     for rule in rules]
+    return rule_fns
+
+def apply_move_rule(lvl, move_rule):
+    inp = move_rule[0]
+    ink = inp[None]
+    lvl = lvl.astype(np.float32)
+    ink = ink.astype(np.float32)
+    # jax.debug.print('lvl: {lvl}', lvl=(lvl.min(), lvl.max(), lvl.shape))
+    activations = jax.lax.conv(lvl, ink, window_strides=(1,1), padding='VALID')[0, 0]
+    thresh_act = np.sum(np.clip(inp, 0, 1))
+    bin_activations = (activations == thresh_act).astype(np.float32)
+
+    non_zero_activation = jnp.argwhere(bin_activations != 0, size=1, fill_value=-1)[0]
+    # jax.lax.cond(jnp.all(non_zero_activation == -1), lambda _: None, 
+    #              lambda _: jax.debug.print(
+    #                  'Non-zero activation detected: {non_zero_activation}. Rule_i: {rule_name}',
+    #                  non_zero_activation=non_zero_activation, rule_name=rule_name), None)
+    # if non_zero_activations.size > 0:
+    #     print(f"Non-zero activations detected: {non_zero_activations}. Rule_i: {rule_name}")
+        # if rule_i == 1:
+        #     breakpoint()
+
+    outp = move_rule[1]
+    outk = outp[:, None]
+    outk = outk.astype(np.float32)
+    # flip along width and height
+    outk = np.flip(outk, axis=(2, 3))
+    bin_activations = bin_activations[None, None]
+    changed = bin_activations.sum() > 0
+    out = jax.lax.conv_transpose(bin_activations, outk, (1, 1), padding='VALID',
+                                        dimension_numbers=('NCHW', 'OIHW', 'NCHW'))
+    # if out.sum() != 0:
+    #     print('lvl')
+    #     print(lvl[0,2])
+    #     print('out')
+    #     print(out[0,2])
+    #     breakpoint()
+    lvl += out
+
+    return lvl, changed
+
+    
+
+@flax.struct.dataclass
+class PSState:
+    multihot_level: np.ndarray
+    win: bool
+
+class PSEnv:
+    def __init__(self, tree: PSGame, jit: bool = True):
+        self.jit = jit
+        self.title = tree.title
+        self.levels = tree.levels
+        obj_legend, meta_tiles, joint_tiles = process_legend(tree.legend)
+        collision_layers = expand_collision_layers(tree.collision_layers, meta_tiles)
+        self.obj_to_idxs, coll_masks = assign_vecs_to_objs(collision_layers)
+        self.n_objs = len(self.obj_to_idxs)
+        coll_mat = np.einsum('ij,ik->jk', coll_masks, coll_masks, dtype=np.int8)
+        self.rule_fn = gen_rule_fn(self.obj_to_idxs, coll_mat, tree.rules, meta_tiles)
+        self.check_win = gen_check_win(tree.win_conditions, self.obj_to_idxs)
+        self.player_idx = self.obj_to_idxs['player']
+        sprite_stack = []
+        for obj_name in self.obj_to_idxs:
+            obj = tree.objects[obj_name]
+            if obj.sprite is not None:
+                im = render_sprite(obj.colors, obj.sprite)
+            else:
+                assert len(obj.colors) == 1
+                im = render_solid_color(obj.colors[0])
+            sprite_stack.append(im)
+        self.sprite_stack = np.array(sprite_stack)
+        n_objs = len(self.obj_to_idxs)
+        char_legend = {v: k for k, v in obj_legend.items()}
+        self.obj_vecs = np.eye(n_objs, dtype=np.int8)
+        joint_obj_vecs = []
+        self.chars_to_idxs = {obj_legend[k]: v for k, v in self.obj_to_idxs.items()}
+        for jo, subobjects in joint_tiles.items():
+            vec = np.zeros(n_objs, dtype=np.int8)
+            for so in subobjects:
+                vec += self.obj_vecs[self.obj_to_idxs[so]]
+            assert jo not in self.chars_to_idxs
+            self.chars_to_idxs[jo] = len(self.chars_to_idxs)
+            self.obj_vecs = np.concatenate((self.obj_vecs, vec[None]), axis=0)
+
+    def char_level_to_multihot(self, level):
+        int_level = np.vectorize(lambda x: self.chars_to_idxs[x])(level)
+        multihot_level = self.obj_vecs[int_level]
+        bg_idx = self.obj_to_idxs['background']
+        multihot_level = rearrange(multihot_level, "h w c -> c h w")
+        multihot_level[bg_idx] = 1
+        multihot_level = multihot_level.astype(np.float32)
+        return multihot_level
+
+    def render(self, state: PSState, cv2=True):
+        lvl = state.multihot_level
+        level_height, level_width = lvl.shape[1:]
+        sprite_height, sprite_width = self.sprite_stack.shape[1:3]
+        im = np.zeros((level_height * sprite_height, level_width * sprite_width, 4), dtype=np.int8)
+        im_lyrs = []
+        for i, sprite in enumerate(self.sprite_stack):
+            sprite_stack_i = np.stack(
+                (np.zeros_like(sprite), sprite)
+            )
+            lyr = lvl[i]
+            im_lyr = jnp.array(sprite_stack_i)[lyr.astype(int)]
+            im_lyr = rearrange(im_lyr, "lh lw sh sw c -> (lh sh) (lw sw) c")
+            overwrite_mask = im_lyr[:, :, 3] == 255
+            im = jnp.where(jnp.repeat(overwrite_mask[:, :, None], 4, 2), im_lyr, im)
+
+        if cv2:
+            # swap the red and blue channels
+            im = im[:, :, [2, 1, 0, 3]]
+
+        return im
+
+    def reset(self, lvl_i):
+        lvl = self.get_level(lvl_i)
+        return PSState(
+            multihot_level=lvl,
+            win = jnp.array(False),
+        )
+
+    @partial(jax.jit, static_argnums=(0))
+    def apply_player_force(self, action, state: PSState):
+        multihot_level = state.multihot_level
+        player_pos = jnp.argwhere(multihot_level[self.player_idx] == 1, size=1)[0]
+        force_map = jnp.zeros((4 * multihot_level.shape[0], *multihot_level.shape[1:]), dtype=np.int8)
+
+        def place_force(force_map, action):
+            action = jnp.array([0, 1, 2, 3])[action]
+            force_map = force_map.at[self.player_idx * 4 + action, player_pos[0], player_pos[1]].set(1)
+            return force_map
+
+        force_map = jax.lax.cond(
+            action < 4, 
+            place_force,
+            lambda force_map, action: force_map,
+            force_map, action
+        )
+
+        lvl = jnp.concatenate((multihot_level, force_map), axis=0)
+        lvl = lvl.astype(np.float32)
+        return lvl
+
+    # @partial(jax.jit, static_argnums=(0))
+    def step(self, action, state: PSState):
+        lvl = self.apply_player_force(action, state)
+        
+        def cond_fun(loop_state):
+            lvl, lvl_changed, n_apps = loop_state
+            return jax.numpy.logical_and(lvl_changed, n_apps < 100)
+            
+        def body_fun(loop_state):
+            lvl, lvl_changed_last, n_apps = loop_state
+            new_lvl, lvl_changed = self.rule_fn(lvl)
+            return (new_lvl, lvl_changed, n_apps + 1)
+        
+        # Initial state for the while loop
+        init_state = (lvl, True, 0)
+        
+        final_lvl, _, _ = jax.lax.while_loop(cond_fun, body_fun, init_state)
+        
+        multihot_level = final_lvl[:self.n_objs]
+        
+        win = self.check_win(multihot_level)
+        state = PSState(
+            multihot_level=multihot_level,
+            win=win,
+        )
+        return state
+
+    def get_level(self, level_idx):
+        level = self.levels[level_idx][0]
+        # Convert the level to a multihot representation and render it
+        multihot_level = self.char_level_to_multihot(level)
+        return multihot_level
+
+def multihot_to_desc(multihot_level, obj_to_idxs):
+    """Converts a multihot array to a 2D list of descriptions.
+    
+    Args:
+        multihot_level: A multihot array of shape [n_objects + n_forces, height, width].
+        obj_to_idxs: Dictionary mapping object names to their indices.
+    
+    Returns:
+        A 2D list where each cell contains a string describing all objects and forces present.
+    """
+    n_objs = len(obj_to_idxs)
+    height, width = multihot_level.shape[1:]
+    
+    # Create a reverse mapping from indices to object names
+    idxs_to_obj = {idx: obj for obj, idx in obj_to_idxs.items()}
+    
+    # Create the description grid
+    desc_grid = []
+    for h in range(height):
+        row = []
+        for w in range(width):
+            cell_desc = []
+            
+            # Check which objects are active in this cell
+            for obj_idx in range(n_objs):
+                if multihot_level[obj_idx, h, w] > 0:
+                    obj_name = idxs_to_obj[obj_idx]
+                    obj_desc = obj_name
+                    
+                    # Check if there's a force applied to this object
+                    force_names = ["left", "up", "right", "down"]
+                    forces = []
+                    for f_idx, force_name in enumerate(force_names):
+                        force_channel = n_objs + (obj_idx * 4) + f_idx
+                        if force_channel < multihot_level.shape[0] and multihot_level[force_channel, h, w] > 0:
+                            forces.append(f"force {force_name}")
+                    
+                    if forces:
+                        obj_desc += f" ({', '.join(forces)})"
+                    
+                    cell_desc.append(obj_desc)
+            
+            row.append(", ".join(cell_desc) if cell_desc else "empty")
+        desc_grid.append(row)
+    
+    # Find the maximum width for each column
+    column_widths = []
+    for w in range(width):
+        max_width = 0
+        for h in range(height):
+            max_width = max(max_width, len(desc_grid[h][w]))
+        column_widths.append(max_width)
+    
+    # Add padding to each cell
+    for h in range(height):
+        for w in range(width):
+            desc_grid[h][w] = desc_grid[h][w].ljust(column_widths[w])
+    
+    # Join rows with consistent spacing
+    desc_str = "\n".join([" || ".join(row) for row in desc_grid])
+    
+    return desc_str
