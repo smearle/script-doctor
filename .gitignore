@@ -4,6 +4,7 @@ bin/
 .vscode
 .build
 logs*
+sols/
 
 *.swp
 src - Kopie

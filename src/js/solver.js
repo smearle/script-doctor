@@ -134,13 +134,14 @@ async function solve() {
 }
 
 function MakeSolution(state) {
-	var sol = "";
+	var sol = [];
 	while (true) {
 		var p = exploredStates[state];
 		if (p[1] == -1) {
 			break;
 		} else {
-			sol = act2str[p[1]] + sol;
+			// sol = act2str[p[1]] + sol;
+			sol.unshift(p[1]);
 			state = p[0];
 		}
 	}
