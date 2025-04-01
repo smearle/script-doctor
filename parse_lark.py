@@ -477,6 +477,7 @@ if __name__ == "__main__":
             file.write(pretty_parse_tree_str)
         # print(min_parse_tree.pretty())
         ps_str = PrintPuzzleScript().transform(min_parse_tree)
+        ps_str = add_empty_sounds_section(ps_str)
         min_filename = os.path.join(min_games_dir, filename)
         print(f"Writing minified game to {min_filename}")
         with open(min_filename, "w", encoding='utf-8') as file:

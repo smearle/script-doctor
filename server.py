@@ -29,7 +29,7 @@ import pandas as pd
 import requests
 
 import game_gen
-from parse_lark import PrintPuzzleScript, RepairPuzzleScript, StripPuzzleScript, add_empty_sounds_section, preprocess_ps
+from parse_lark import PrintPuzzleScript, RepairPuzzleScript, StripPuzzleScript, add_empty_sounds_section, preprocess_ps, test_games
 from prompts import *
 from utils import extract_ps_code, gen_fewshot_examples, llm_text_query, num_tokens_from_string, save_prompts, truncate_str_to_token_len
 
@@ -97,11 +97,10 @@ def load_ideas():
 def load_game_from_file():
     data = request.json
     game = data['game']
-    # game_path = os.path.join('misc', game)
-    # game_path = os.path.join('src', 'demo', f'{game}.txt')
-    game_path = os.path.join('scraped_games', f'{game}.txt')
+    game_path = os.path.join('data', 'min_games', f'{game}.txt')
     with open(game_path, 'r') as f:
         code = f.read()
+    print(code)
     return code
 
 
@@ -445,12 +444,25 @@ def gen_game_from_plan():
 
 TRANSITIONS_DIR = 'transitions'
 
+games_to_skip = set({'Broken Rigid Body'})
+
 @app.route('/list_scraped_games')
 def list_scraped_games():
+    games_set = set()
     games = []
-    for filename in os.listdir('scraped_games'):
+    game_files = os.listdir('data/min_games')
+    test_game_files = [f"{test_game}.txt" for test_game in test_games]
+    game_files = test_game_files + game_files
+
+    for filename in game_files:
         if filename.endswith('.txt'):
-            games.append(filename[:-4])
+            filename = filename[:-4]
+            if filename not in games_set:
+                if filename in games_to_skip:
+                    print(f"Skipping {filename}")
+                    continue
+                games_set.add(filename)
+                games.append(filename)
     return jsonify(games)
 
 @app.route('/save_init_state', methods=['POST'])
@@ -845,6 +857,21 @@ def save_game_stats():
     exp_dir, game_dir, stats = data['expDir'], data['gameDir'], data['gameInd']
     return _save_game_stats(exp_dir, game_dir, stats)
 
+@app.route('/save_sol', methods=['POST'])
+def save_sol():
+    data = request.json
+    sol_dir, level_i, sol, gif_url = data['solDir'], data['levelIdx'], data['sol'], data['dataURL']
+    os.makedirs(sol_dir, exist_ok=True)
+    sol_path = os.path.join(sol_dir, f'level-{level_i}.json')
+    with open(sol_path, 'w') as f:
+        json.dump(sol, f, indent=4)
+    print(f"Saved solution to {sol_path}")
+    gif_data = base64.b64decode(gif_url.split(',')[1])
+    gif_path = os.path.join(sol_dir, f'level-{level_i}_sol.gif')
+    with open(gif_path, 'wb') as f:
+        f.write(gif_data)
+    return jsonify({})
+
 def _save_game_stats(exp_dir, game_dir, stats):
     global sweep_stats
     game_dir = os.path.join('logs', game_dir)
@@ -907,7 +934,6 @@ def get_sweep_args():
     if done:
         _save_sweep_stats(save_dir, sweep_stats)
         return jsonify({'done': True})
-
 
     hypers_i += 1
     return jsonify({
