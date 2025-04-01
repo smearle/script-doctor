@@ -8,11 +8,19 @@ game_gen_system_prompt = (
     """Recall that comments in PuzzleScript are enclosed in parentheses. (E.g. this is a comment.) """
     """{docs_prompt}"""
 )
+evo_meta_prompt = (
+    "You are a creative and resourceful indie puzzle game designer, familiar with the PuzzleScript game description language. "
+    """Recall that comments in PuzzleScript are enclosed in parentheses. (E.g. this is a comment.) """
+    """{docs_prompt}"""
+    """You are inside an evolutionary loop, in which we are trying to evolve a diverse set of games which recombine the following two games in various novel and interesting ways:\n\n{meta_parents}\n\n"""
+    """Though you may be asked to mutate and recombine other games during evolution, any outputted game should effectively be an attempt to recombine the games above in one way or another.\n\n"""
+)
 docs_prompt = (
     f"""Here are the docs: {open('all_documentation.txt', 'r').read()}\n"""
 )
 fewshow_examples_prompt = (
     "Here are some example games, for inspiration (do not reproduce these games exactly):"""
+    # "Here are some example games. You may take inspiration or remix pieces of them with each other if you like."""
 )
 inventive_prompt = (
     """The game should be unique and slightly unconventional, with inventive mechanics. """

@@ -7,6 +7,7 @@ import inspect
 import itertools
 import json
 import os
+from pathlib import Path
 import random
 import re
 import traceback
@@ -43,9 +44,18 @@ class Config:
     recompute_stats: bool = False
     max_gen_attempts: int = 10
     model: str = 'gpt-4o'
+    viz_feedback: bool = True
+
+
+@dataclass
+class EvoConfig(Config):
+    seed: int = 0
+    port: int = 8000
+
 
 cs = ConfigStore.instance()
 cs.store(name="config", node=Config)
+cs.store(name="evo", node=EvoConfig)
 
 max_gen_attempts = None
 
@@ -163,16 +173,36 @@ def log_gen_results():
 import lark
 lark_parser = lark.Lark.open('syntax.lark', start='ps_game')
 
-@app.route('/save_evo_stats', methods=['POST'])
-def save_evo_stats():
+@app.route('/save_evo_gen_stats', methods=['POST'])
+def save_evo_gen_stats():
     data = request.json
-    stats = data['results']
-    save_dir = os.path.join('logs', data['save_dir'])
-    if not os.path.exists(save_dir):
-        os.makedirs(save_dir)
-    with open(os.path.join(save_dir, 'evo_stats.json'), 'w') as f:
+    stats = data['stats']
+    stats_path = os.path.join('logs', data['save_dir'])
+    stats_dir = Path(stats_path).parent
+    if not os.path.exists(stats_dir):
+        os.makedirs(stats_dir)
+    with open(stats_path, 'w') as f:
         json.dump(stats, f, indent=4)
     return jsonify({})
+
+def viz_evo_stats(exp_seed=21):
+    stats_dir = f'logs/evo-{exp_seed}/stats'
+    gen_i = 0
+    stats_exist = True
+    fits = []
+    while stats_exist:
+        gen_i += 1
+        stats_path = os.path.join(stats_dir, f'gen-{gen_i}.json')
+        with open(stats_path, 'r') as f:
+            stats = json.load(f)
+            pop_fits = stats['pop_fits']
+            fits.append(pop_fits)
+        stats_exist = os.path.exists(os.path.join(stats_dir, f'gen-{gen_i+1}.json'))
+    breakpoint()
+
+@app.route('/get_viz_feedback', methods=['POST'])
+def get_viz_feedback():
+    breakpoint()
 
 @app.route('/gen_game', methods=['POST'])
 def gen_game():
@@ -195,6 +225,7 @@ def gen_game():
     solver_text = data['solver_text']
     lark_error = data['lark_error']
     n_iter = data['n_iter']
+    meta_parents = data['meta_parents']
     curr_docs_prompt = docs_prompt if exp_config.docs else ''
     curr_inventive_prompt = inventive_prompt if exp_config.inventive_prompt else ''
     gen_game_output_path = os.path.join(save_dir, f'{n_iter}b_code.txt')
@@ -202,7 +233,15 @@ def gen_game():
     print(f"Saving code at {gen_game_code_output_path}")
     if not os.path.isfile(gen_game_code_output_path):
         gen_game_prompt_output_path = os.path.join(save_dir, f'{n_iter}a_prompt.txt')
-        system_prompt = game_gen_system_prompt.format(docs_prompt=curr_docs_prompt)
+        if meta_parents is None:
+            system_prompt = game_gen_system_prompt.format(docs_prompt=curr_docs_prompt)
+        else:
+            # Load the meta-parents from the scraped_games directory
+            meta_parent_txt = ''
+            for parent in meta_parents:
+                with open(os.path.join('data/scraped_games', f'{parent}.txt'), 'r') as f:
+                    meta_parent_txt += f.read() + '\n\n'
+            system_prompt = evo_meta_prompt.format(docs_prompt=curr_docs_prompt, meta_parents=meta_parent_txt)
         from_idea_prompt_i = from_idea_prompt.format(game_idea=game_idea) if from_idea else ''
         if n_iter == 0:
             parents_text = '/n/n'.join([p['code'] for p in parents])
@@ -460,10 +499,10 @@ def gen_game_from_plan():
 
 TRANSITIONS_DIR = 'transitions'
 
-@app.route('/list_scraped_games')
+@app.route('/list_scraped_games', methods=['GET'])
 def list_scraped_games():
     games = []
-    for filename in os.listdir('scraped_games'):
+    for filename in os.listdir('data/scraped_games'):
         if filename.endswith('.txt'):
             games.append(filename[:-4])
     return jsonify(games)
@@ -529,41 +568,42 @@ hypers_i = 0
 hypers_ks, hypers_lst = [], []
 
 class ExpConfig:
+    seed = 0
     model = 'o1'
-    game_i = 0
     inventive_prompt = True
     cot = True
     fewshot = True
     docs = False
     from_idea = False
     context_len = 30_000
+    viz_feedback = False
 
 class Sweep:
-    game_i = list(range(10))
+    seed = list(range(10))
     context_len = [30_000]
 
 class InventiveSweep(Sweep):
-    game_i = list(range(20))
+    seed = list(range(20))
     inventive_prompt = [True, False]
 
 class FewshotSweep(Sweep):
-    game_i = list(range(20))
+    seed = list(range(20))
     fewshot = [True, False]
     cot = [True, False]
 
 class FromIdeaSweep(Sweep):
-    game_i = list(range(20))
+    seed = list(range(20))
     from_idea = [True, False]
     cot = [True, False]
 
 class FromIdeaSweep2(Sweep):
-    game_i = list(range(10))
+    seed = list(range(10))
     model = ['gpt-4o', 'o1', 'o3-mini']
     from_idea = [True, False]
     context_len = [10_000, 30_000]
 
 class ModelSweep(Sweep):
-    game_i = list(range(15))
+    seed = list(range(15))
     model = ['gpt-4o', 'o1', 'o3-mini']
     context_len = [10_000]
 
@@ -580,6 +620,9 @@ class CtxSweep(Sweep):
 class CtxSweep2(Sweep):
     context_len = [10_000, 20_000, 30_000]
     model = ['o3-mini']
+
+class VizSweep(Sweep):
+    viz_feedback = [True, False]
 
 exp_config = ExpConfig()
 
@@ -879,6 +922,7 @@ def get_exp_name(exp_config):
         (f'fromIdea-{int(exp_config.from_idea)}_' if exp_config.from_idea else '') + \
         f'fewshot-{int(exp_config.fewshot)}_cot-{int(exp_config.cot)}' + \
         (f'_{exp_config.model}' if exp_config.model != 'gpt-4o' else '') + \
+        (f'_{exp_config.viz_feedback}' if exp_config.viz_feedback else '') + \
         (f'_docs' if exp_config.docs else '') + \
         (f'_ctx-{exp_config.context_len}' if exp_config.context_len != 30_000 else '')
 
@@ -908,7 +952,7 @@ def get_sweep_args():
             save_dir, 
             get_exp_name(exp_config)
         )
-        game_dir = os.path.join(exp_dir, f'game-{exp_config.game_i}')
+        game_dir = os.path.join(exp_dir, f'game-{exp_config.seed}')
         stats_path = os.path.join('logs', game_dir, 'stats.json')
         if os.path.exists(stats_path) and not recompute_stats:
             with open(stats_path, 'r') as f:
@@ -933,7 +977,7 @@ def get_sweep_args():
         'gameDir': game_dir,
         'fewshot': exp_config.fewshot,
         'cot': exp_config.cot,
-        'gameIdx': exp_config.game_i,
+        'gameIdx': exp_config.seed,
         'fromIdea': exp_config.from_idea,
         'fromPlan': False,
     })
@@ -964,6 +1008,8 @@ def main(cfg: Config):
         os.makedirs(stats_dir, exist_ok=True)
         stats_path = os.path.join(stats_dir, 'sweep_stats_and_dists.json')
         eval_sweep(stats_path, hypers_ks, hypers_lst)
+    elif cfg.mode == 'viz_evo':
+        viz_evo_stats()
     elif cfg.mode == 'generate':
         app.run(port=cfg.port)
 

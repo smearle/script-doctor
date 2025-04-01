@@ -679,9 +679,11 @@ async function processStateTransition(gameHash, parentState, childState, action)
 }
 
 
-async function genGame(genMode, parents, saveDir, expSeed, fewshot, cot,
-  /* This funciton will recursively call itself to iterate on broken (uncompilable or unsolvable (or too simply solvable)) games. */
-  fromIdea=false, idea='', fromPlan=false, maxGenAttempts=10) {
+async function genGame(config) {
+  /* This function will recursively call itself to iterate on broken
+   * (uncompilable or unsolvable (or too simply solvable)) games.
+   */
+
   consoleText = '';
   larkError = '';
   nGenAttempts = 0;
@@ -695,19 +697,19 @@ async function genGame(genMode, parents, saveDir, expSeed, fewshot, cot,
   maxMeanSolComplexity = 0;
 
   bestIndividual = new GameIndividual('', null, -Infinity, 0, [], [], true);
-  while (nGenAttempts < maxGenAttempts & (nGenAttempts == 0 | !compilationSuccess | !solvable)) {
-    console.log(`Game ${saveDir}, attempt ${nGenAttempts}.`);
+  while (nGenAttempts < config.maxGenAttempts & (nGenAttempts == 0 | !compilationSuccess | !solvable)) {
+    console.log(`Game ${config.saveDir}, attempt ${nGenAttempts}.`);
 
     var response;
 
-    if (fromPlan & nGenAttempts == 0) {
+    if (config.fromPlan & nGenAttempts == 0) {
       response = await fetch('/gen_game_from_plan', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
-          seed: expSeed,
-          save_dir: saveDir,
-          game_idea: idea,
+          seed: config.expSeed,
+          save_dir: config.saveDir,
+          game_idea: config.idea,
           n_iter: nGenAttempts,
         }),
       });
@@ -717,20 +719,21 @@ async function genGame(genMode, parents, saveDir, expSeed, fewshot, cot,
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
-          seed: expSeed,
-          fewshot: fewshot,
-          cot: cot,
-          save_dir: saveDir,
-          gen_mode: genMode,
-          parents: parents,
+          seed: config.expSeed,
+          fewshot: config.fewshot,
+          cot: config.cot,
+          save_dir: config.saveDir,
+          gen_mode: config.genMode,
+          parents: config.parents,
           code: code,
-          from_idea: fromIdea,
-          game_idea: idea,
+          from_idea: config.fromIdea,
+          game_idea: config.idea,
           lark_error: larkError,
           console_text: consoleText,
           solver_text: solverText,
           compilation_success: compilationSuccess,
           n_iter: nGenAttempts,
+          meta_parents: config.metaParents,
         }),
       });
     }
@@ -740,10 +743,11 @@ async function genGame(genMode, parents, saveDir, expSeed, fewshot, cot,
     }
   
     const data = await response.json();
-    // for (const line of data.text.split('\n')) {
-    //   consolePrint(line);
-    // }
+    // ...existing code...
+
+    // Rest of the function remains the same, just replacing direct references to parameters with config.paramName
     code = data.code;
+    vizFeedback = data.viz_feedback;
     minCode = null;
     // if min_code is not None, then use this
     if (data.min_code) {
@@ -879,7 +883,7 @@ async function genGame(genMode, parents, saveDir, expSeed, fewshot, cot,
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ 
-        save_dir: saveDir,
+        save_dir: config.saveDir,
         sols: sols,
         n_iter: nGenAttempts,
         gif_urls: dataURLs,
@@ -895,34 +899,114 @@ async function genGame(genMode, parents, saveDir, expSeed, fewshot, cot,
     nGenAttempts++;
     individual = new GameIndividual(code, minCode, fitness, maxMeanSolComplexity, compiledIters, solvedIters, anySolvedIters, false);
     bestIndividual = bestIndividual.fitness < individual.fitness ? individual : bestIndividual;
-
   }
   return bestIndividual;
+}
+
+async function interactiveEvo() {
+  /** The main function to initiate interactive evolution. Currently triggered by clicking the "GARDEN" button
+   * in the top-left of the PS Editor page (doctor.html), but should happen automatically on a separate garden.html.
+   */
+  const response = await fetch('/get_evo_args', {
+    method: 'GET',
+  });
+  const data = await response.json();
+  const evoSeed = data.seed;
+  const seed_games = await displayGameSeeds();
+  // const metaParents = await userSelectParentsDummy(seed_games);
+  const metaParents = ['midas', 'i am two']
+  await evolve(evoSeed, metaParents);
+}
+
+async function displayGameSeeds(){
+  /** Fetch all games in our dataset, to display as "seeds" for potential recombination or mutation by the user. */
+  const response = await fetch('/list_scraped_games', {
+    method: 'GET',
+  });
+  const data = await response.json();
+  // TODO: Display the seed garden in the UI
+  // For now, log the length of the seed garden
+  console.log(`Seed garden length: ${data.length}`);
+  return data
+}
+
+async function userSelectParentsDummy(seed_games) {
+  /** Dummy function for user to select parents from seed garden.
+  For now, just return to random games. Make sure the games are different.
+  */
+  const firstIndex = Math.floor(Math.random() * seed_games.length); 
+  const first = seed_games.splice(firstIndex, 1)[0];
+  const secondIndex = Math.floor(Math.random() * seed_games.length);
+  const second = seed_games.splice(secondIndex, 1)[0];  
+  return [first, second];
 }
 
 
 const popSize = 3;
 const nGens = 20;
 
-async function evolve() {
+async function evolve(evoSeed, metaParents=null) {
+  /** The main loop for evolving games.
+   * Maybe move this to python eventually?
+   */
   // Create an initial population of 10 games
   pop = [];
   gen = 0
+  if (!metaParents) {
+    evoDir = `evo-${evoSeed}`;
+  }
+  else {
+    evoDir = `evo-${evoSeed}_meta`
+  }
+  
+  // Create a base config for this experiment
+  const baseConfig = new GameConfig({
+    expSeed: evoSeed,
+    fewshot: true,
+    cot: true,
+    metaParents: metaParents
+  });
+  
   for (indIdx = 0; indIdx < (popSize*2); indIdx++) {
-    saveDir = `evo-${expSeed}/gen${gen}/game${indIdx}`;
-    game_i = await genGame('init', [], saveDir, expSeed, fewshot=true, cot=true, fromIdea=false, idea='');
+    genDir = `${evoDir}/gen${gen}`;
+    saveDir = `${genDir}/game${indIdx}`;
+    
+    // Create a config for this specific game
+    const gameConfig = baseConfig.extend({
+      genMode: 'init',
+      saveDir: saveDir,
+      maxGenAttempts: 10
+    });
+    
+    game_i = await genGame(gameConfig);
     pop.push(game_i);
   }
+  
   for (gen = 1; gen < nGens; gen++) {
     // Sort the population by fitness, in descending order
     pop = pop.sort((a, b) => b.fitness - a.fitness);
+    // Get rid of the bottom half
+    pop = pop.slice(0, popSize);
     // Print list of fitnesses
     popFits = pop.map(game => game.fitness);
     meanPopFit = popFits.reduce((acc, fit) => acc + fit, 0) / popFits.length;
+    genDir = `${evoDir}/gen${gen}`;
+    stats = {
+      'pop_fits': popFits,
+      'mean_pop_fit': meanPopFit,
+    }
+    await fetch('/save_evo_gen_stats', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ 
+        save_dir: `${evoDir}/stats/gen-${gen}.json`,
+        stats: stats,
+      }),
+    });
     console.log(`Generation ${gen}. Fitnesses: ${popFits}`);
     console.log(`Generation ${gen}. Mean fitness: ${meanPopFit}`);
     // Select the top half of the population as parents
-    ancestors = pop.slice(0, popSize);
+    ancestors = pop;
     // Get mean fitness of elites
     eliteFits =  ancestors.map(game => game.fitness);
     meanEliteFit = eliteFits.reduce((acc, fit) => acc + fit, 0) / eliteFits.length;
@@ -932,21 +1016,32 @@ async function evolve() {
     newPop = [];
     for (indIdx = 0; indIdx < popSize; indIdx++) {
       doCrossOver = Math.random() < 0.5;
+      let gameConfig;
+      
       if (doCrossOver) {
-        genMode = 'crossover';
         // Get two random games from list without replacement
         parent1 = ancestors[Math.floor(Math.random() * popSize)];
         // Create copy of array without parent1
         remainingAncestors = ancestors.filter(parent => parent != parent1);
         parent2 = remainingAncestors[Math.floor(Math.random() * (popSize - 1))];
         parents = [parent1, parent2];
+        
+        gameConfig = baseConfig.extend({
+          genMode: 'crossover',
+          parents: parents,
+          saveDir: `${genDir}/game${indIdx}`
+        });
       } else {
-        genMode = 'mutate';
         parents = [ancestors[Math.floor(Math.random() * popSize)]];
+        
+        gameConfig = baseConfig.extend({
+          genMode: 'mutate',
+          parents: parents,
+          saveDir: `${genDir}/game${indIdx}`
+        });
       }
-      // console.log(`Parents: ${parents}. genMode: ${genMode}`);
-      saveDir = `evo-${expSeed}/gen${gen}/game${indIdx}`;
-      newPop.push(await genGame('mutate', parents, saveDir, expSeed, fewshot=fewshot, cot=cot));
+      
+      newPop.push(await genGame(gameConfig));
     }
     pop = pop.concat(newPop);
   }
@@ -975,8 +1070,18 @@ async function sweepGeneral() {
     args = await response.json();
     isDone = args.done;
     if (!isDone) {
-      gameInd = await genGame('init', [], args.gameDir,
-        args.gameIdx, args.fewshot, args.cot, args.fromIdea, args.gameIdea, args.fromPlan);
+      const gameConfig = new GameConfig({
+        genMode: 'init',
+        saveDir: args.gameDir,
+        expSeed: args.gameIdx,
+        fewshot: args.fewshot,
+        cot: args.cot,
+        fromIdea: args.fromIdea,
+        idea: args.gameIdea,
+        fromPlan: args.fromPlan
+      });
+      
+      gameInd = await genGame(gameConfig);
       await fetch('/save_game_stats', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -1000,15 +1105,20 @@ async function sweep() {
         if (!results.hasOwnProperty(expName)) {
           results[expName] = [];
         }
-          gameStr = `${saveDir}/${expName}/game-${gameIdx}`;
-          cot = cot_i == 1
-          fewshot = fewshot_i == 1
-          console.log(`Generating game ${gameStr}`);
-          gameInd = await genGame('init', [], gameStr,
-            gameIdx, fewshot, cot, fromIdea=false, idea='');
-          results[expName].push(gameInd);
-        }
+        gameStr = `${saveDir}/${expName}/game-${gameIdx}`;
+        const gameConfig = new GameConfig({
+          genMode: 'init',
+          saveDir: gameStr,
+          expSeed: gameIdx,
+          fewshot: fewshot_i == 1,
+          cot: cot_i == 1
+        });
+        
+        console.log(`Generating game ${gameStr}`);
+        gameInd = await genGame(gameConfig);
+        results[expName].push(gameInd);
       }
+    }
   }
   saveStats(saveDir, results);
 }
@@ -1032,14 +1142,21 @@ async function fromIdeaSweep() {
     for (var gameIdx = 0; gameIdx < 20; gameIdx++) {
       saveDir = `sweep-${expSeed}`
       gameStr = `${saveDir}/${hypStr}/game-${gameIdx}`;
-      fewshot = fewshot_i == 1
-      cot = cot_i == 1
-      fromIdea = fromIdea_i == 1
-      console.log(`Generating game ${gameStr}`);
       ideaIdx = gameIdx % ideas.length;
       idea = ideas[ideaIdx];
-      gameInd = await genGame('init', [], gameStr,
-        gameIdx, fewshot, cot, fromIdea, idea);
+      
+      const gameConfig = new GameConfig({
+        genMode: 'init',
+        saveDir: gameStr,
+        expSeed: gameIdx,
+        fewshot: fewshot_i == 1,
+        cot: cot_i == 1,
+        fromIdea: fromIdea_i == 1,
+        idea: idea
+      });
+      
+      console.log(`Generating game ${gameStr}`);
+      gameInd = await genGame(gameConfig);
       results[hypStr].push(gameInd);
     }
   }
@@ -1064,15 +1181,22 @@ async function fromPlanSweep() {
   for (var gameIdx = 0; gameIdx < 20; gameIdx++) {
     saveDir = `sweep-${expSeed}`
     gameStr = `${saveDir}/${hypStr}/game-${gameIdx}`;
-    fewshot = fewshot_i == 1
-    cot = cot_i == 1
-    fromPlan = fromPlan_i == 1
-    fromIdea = fromIdea_i == 1
-    console.log(`Generating game ${gameStr}`);
     ideaIdx = gameIdx % ideas.length;
     idea = ideas[ideaIdx];
-    gameInd = await genGame('init', [], gameStr,
-      gameIdx, fewshot, cot, fromIdea, idea, fromPlan);
+    
+    const gameConfig = new GameConfig({
+      genMode: 'init',
+      saveDir: gameStr,
+      expSeed: gameIdx,
+      fewshot: fewshot_i == 1,
+      cot: cot_i == 1,
+      fromIdea: fromIdea_i == 1,
+      idea: idea,
+      fromPlan: fromPlan_i == 1
+    });
+    
+    console.log(`Generating game ${gameStr}`);
+    gameInd = await genGame(gameConfig);
     results[hypStr].push(gameInd);
   }
   saveStats(saveDir + '/fromPlan', results);
@@ -1137,6 +1261,12 @@ genDataClickLink.addEventListener("click", processAllGames, false);
 
 var solveClickLink = document.getElementById("solveClickLink");
 solveClickLink.addEventListener("click", playTest, false);
+
+var evolveClickLink = document.getElementById("evolveClickLink");
+evolveClickLink.addEventListener("click", evolve, false);
+
+var interactiveEvoClickLink = document.getElementById("interactiveEvoClickLink");
+interactiveEvoClickLink.addEventListener("click", interactiveEvo, false);
 
 var expFn = evolve;
 
