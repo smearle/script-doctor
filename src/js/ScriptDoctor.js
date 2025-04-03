@@ -65,7 +65,7 @@ async function playTest() {
   console.log('Playtesting...');
   compile(['loadLevel', n_level], editor.getValue());
   console.log('Solving level:', n_level, ' with A*');
-  var [sol_a, n_search_iters_a] = await solveLevelAStar(level_i=n_level);
+  var [sol_a, n_search_iters_a] = await solveLevelBestFirst(level_i=n_level);
 
 
   editor.setValue(code);
@@ -520,7 +520,7 @@ async function testMCTS() {
 }
 
 
-async function solveLevelAStar(captureStates=false, gameHash=0, levelI=0, maxIters=100_000_000) {
+async function solveLevelBestFirst(captureStates=false, gameHash=0, levelI=0, maxIters=100_000_000) {
 	// if (levelEditorOpened) return;
 	// if (showingSolution) return;
 	// if (solving) return;
