@@ -500,6 +500,15 @@ TRANSITIONS_DIR = 'transitions'
 
 games_to_skip = set({'Broken Rigid Body'})
 
+@app.route('/get_player_action', methods=['POST'])
+def get_player_action():
+    data = request.json
+    obs = data['obs']
+    # TODO
+    # action = ...
+    action = random.randint(0, 5)
+    return jsonify({'action': action})
+
 @app.route('/list_scraped_games', methods=['GET'])
 def list_scraped_games():
     games_set = set()
