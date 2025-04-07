@@ -28,7 +28,7 @@ def human_loop(env: PSEnv):
     lvl_i = 0 
     state = env.reset(lvl_i)
     im = env.render(state)
-    print(multihot_to_desc(state.multihot_level, env.obj_to_idxs))
+    # print(multihot_to_desc(state.multihot_level, env.obj_to_idxs))
     im = np.array(im, dtype=np.uint8)
     
     # Resize the image by a factor of 5
@@ -92,7 +92,7 @@ def human_loop(env: PSEnv):
 
         elif do_reset:
             state = env.reset(lvl_i)
-            print(multihot_to_desc(state.multihot_level, env.obj_to_idxs))
+            # print(multihot_to_desc(state.multihot_level, env.obj_to_idxs))
             state_hist.append(state)
             im = env.render(state)
             im = np.array(im, dtype=np.uint8)
@@ -105,7 +105,7 @@ def human_loop(env: PSEnv):
             lvl_changed = True
             n_vis_apps = 0
             state = env.step(action, state)
-            print(multihot_to_desc(state.multihot_level, env.obj_to_idxs))
+            # print(multihot_to_desc(state.multihot_level, env.obj_to_idxs))
             im = env.render(state)
             im = np.array(im, dtype=np.uint8)
             im = cv2.resize(im, (new_w, new_h), interpolation=cv2.INTER_NEAREST)
