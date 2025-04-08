@@ -316,6 +316,11 @@ def gen_subrules_meta(rule, n_objs, obj_to_idxs, meta_tiles, rule_name, jit=True
     # @partial(jax.jit, static_argnums=(0,))
     def detect_obj_in_cell(obj_idx, m_cell):
         active = m_cell[obj_idx] == 1 & is_obj_forceless(obj_idx, m_cell)
+        jax.lax.cond(
+            active,
+            lambda: jax.debug.print('detected obj_idx: {obj_idx}', obj_idx=obj_idx),
+            lambda: None,
+        )
         return ObjFnReturn(active=active, obj_idx=obj_idx)
 
     # @partial(jax.jit, static_argnums=(0,))
@@ -354,6 +359,11 @@ def gen_subrules_meta(rule, n_objs, obj_to_idxs, meta_tiles, rule_name, jit=True
             active,
             detected_vec_idx,
             -1,
+        )
+        jax.lax.cond(
+            active,
+            lambda: jax.debug.print('detected obj_idx: {obj_idx}', obj_idx=obj_idx),
+            lambda: None,
         )
         return ObjFnReturn(active=active, obj_idx=obj_idx)
 
@@ -451,7 +461,7 @@ def gen_subrules_meta(rule, n_objs, obj_to_idxs, meta_tiles, rule_name, jit=True
                 # if f.obj_idx != -1:
                 #     jax.debug.print('obj_idx: {obj_idx}', obj_idx=f.obj_idx)
                 #     detected = detected.at[f.obj_idx].set(1)
-                jax.lax.cond(
+                detected = jax.lax.cond(
                     f.obj_idx != -1,
                     lambda x, detected: detected.at[x].set(1),
                     lambda x, detected: detected,
@@ -538,6 +548,13 @@ def gen_subrules_meta(rule, n_objs, obj_to_idxs, meta_tiles, rule_name, jit=True
             # vmap
             for proj_fn in fns:
                 m_cell = proj_fn(m_cell=m_cell, detect_out=detect_out)
+            removed_something = jnp.sum(detect_out.detected) > 0
+            jax.lax.cond(
+                removed_something,
+                lambda: jax.debug.print('removing detected: {det}', det=detect_out.detected),
+                lambda: None
+            )
+            jax.debug.print('removing detected: {det}', det=detect_out.detected)
             return m_cell
 
         return cell_projection_fn
