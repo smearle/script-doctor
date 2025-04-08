@@ -335,10 +335,11 @@ def gen_subrules_meta(rule, n_objs, obj_to_idxs, meta_tiles, rule_name, jit=True
             obj_idx,
             -1,
         )
-        jax.lax.cond(
-            active,
-            lambda x, obj_idx: jax.debug.print('detected force_idx {force_idx} on obj_idx: {obj_idx}', obj_idx=obj_idx, force_idx=force_idx),
-        )
+        # jax.lax.cond(
+        #     active,
+        #     lambda: jax.debug.print('detected force_idx {force_idx} on obj_idx: {obj_idx}', obj_idx=obj_idx, force_idx=force_idx),
+        #     lambda: None,
+        # )
         return ObjFnReturn(active=active, obj_idx=obj_idx)
 
     ### Functions for detecting meta-objects
@@ -386,13 +387,13 @@ def gen_subrules_meta(rule, n_objs, obj_to_idxs, meta_tiles, rule_name, jit=True
         active = ((obj_idx != -1) & active)
 
         # Why does this print out so much, even when apparently non-active??
-        jax.lax.cond(
-            active,
-            lambda captured_selected_obj_idx=captured_selected_obj_idx: jax.debug.print(
-                "B) detected force_idx {force_idx} on meta-obj_idx: {obj_idx}",
-                force_idx=force_idx, obj_idx=captured_selected_obj_idx),
-            lambda: None
-        )
+        # jax.lax.cond(
+        #     active,
+        #     lambda captulevel-{level_i}level-{level_i}__red_selected_obj_idx=captured_selected_obj_idx: jax.debug.print(
+        #         "B) detected force_idx {force_idx} on meta-obj_idx: {obj_idx}",
+        #         force_idx=force_idx, obj_idx=captured_selected_obj_idx),
+        #     lambda: None
+        # )
         return ObjFnReturn(active=active, obj_idx=obj_idx)
 
     ### Function for projecting onto cells
@@ -549,6 +550,7 @@ def gen_subrules_meta(rule, n_objs, obj_to_idxs, meta_tiles, rule_name, jit=True
         force_idx = rot_to_force[rot]
         is_horizontal = lp.shape[0] == 1
         is_vertical = lp.shape[1] == 1
+        is_single = lp.shape[0] == 1 and lp.shape[1] == 1
         assert is_horizontal ^ is_vertical
         in_patch_shape = lp.shape
         # TODO: kernels. We assume just 1 here.
@@ -558,6 +560,9 @@ def gen_subrules_meta(rule, n_objs, obj_to_idxs, meta_tiles, rule_name, jit=True
         elif is_vertical:
             lp = lp[:, 0]
             rp = rp[:, 0]
+        elif is_single:
+            lp = lp[0, 0]
+            rp = rp[0, 0]
         cell_detection_fns = []
         cell_projection_fns = []
         for i, l_cell in enumerate(lp):
@@ -579,6 +584,8 @@ def gen_subrules_meta(rule, n_objs, obj_to_idxs, meta_tiles, rule_name, jit=True
                         m_cell = in_patch[:, i, 0]
                     if is_horizontal:
                         m_cell = in_patch[:, 0, i]
+                    if is_single:
+                        m_cell = in_patch[:, 0, 0]
                     cell_active, cell_out = cell_fn(m_cell=m_cell)
                     patch_active = patch_active & cell_active
                     cell_outs_patch.append(cell_out)
@@ -626,6 +633,8 @@ def gen_subrules_meta(rule, n_objs, obj_to_idxs, meta_tiles, rule_name, jit=True
                     out_cell_idxs = out_cell_idxs[:, 0]
                 elif is_horizontal:
                     out_cell_idxs = out_cell_idxs[0, :]
+                elif is_single:
+                    out_cell_idxs = out_cell_idxs[0, 0]
 
                 lvl = jnp.array(lvl)
                 # assert len(detect_outs) == len(out_cell_idxs) == len(cell_projection_fns):
@@ -680,6 +689,8 @@ def gen_subrules_meta(rule, n_objs, obj_to_idxs, meta_tiles, rule_name, jit=True
             rots = [0, 1, 2, 3]
         else:
             rots = [0]
+        if lp.shape[0] == 1 and lp.shape[1] == 1:
+            rule_fns.append(gen_rotated_rule_fn(lp, rp, 0))
         for rot in rots:
             # rotate the patterns
             lp = np.rot90(lp, rot)
@@ -918,8 +929,8 @@ class PSEnv:
             self.obj_vecs = np.concatenate((self.obj_vecs, vec[None]), axis=0)
 
         if self.jit:
-            self.step = jax.jit(self._step, static_argnums=(0,))
-            self.apply_player_force = jax.jit(self._apply_player_force, static_argnums=(0,))
+            self.step = jax.jit(self._step)
+            self.apply_player_force = jax.jit(self._apply_player_force)
         else:
             self.step = self._step
             self.apply_player_force = self._apply_player_force
