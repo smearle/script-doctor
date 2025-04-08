@@ -15,13 +15,16 @@ data_dir = 'data'
 scraped_games_dir = os.path.join('data', 'scraped_games')
 os.makedirs(scraped_games_dir, exist_ok = True)
 
+# Collect games already in the repo
 example_games_dir = os.path.join('src', 'demo')
+custom_games_dir = os.path.join('data', 'custom_games')
+for game_dir in [custom_games_dir, example_games_dir]:
+    games = glob.glob(os.path.join(game_dir, '*.txt'))
+    for eg in games:
+        shutil.copy(eg, os.path.join(scraped_games_dir, os.path.basename(eg)))
+        print(f"Copied {eg} from PuzzleScript.net gallery.")
 
-example_games = glob.glob(os.path.join(example_games_dir, '*.txt'))
-for eg in example_games:
-    shutil.copy(eg, os.path.join(scraped_games_dir, os.path.basename(eg)))
-    print(f"Copied {eg} from PuzzleScript.net gallery.")
-
+# Load github token to scrape gists
 load_dotenv()
 
 def return_keyval(d, key):

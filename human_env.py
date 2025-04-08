@@ -1,11 +1,13 @@
 
 from dataclasses import dataclass
+from typing import Optional
 import hydra
 from hydra.core.config_store import ConfigStore
 import glob
 import os
 import pickle
 import cv2
+import jax
 import numpy as np
 
 from env import PSEnv, multihot_to_desc
@@ -18,6 +20,7 @@ from ps_game import PSGame
 @dataclass
 class Config:
     jit: bool = True
+    game: Optional[str] = None
 
 
 cs = ConfigStore.instance()
@@ -79,8 +82,8 @@ def human_loop(env: PSEnv):
                 state_hist.pop()
                 state = state_hist[-1]
             im = env.render(state)
-            im = cv2.resize(im, (new_w, new_h), interpolation=cv2.INTER_NEAREST)
             im = np.array(im, dtype=np.uint8)
+            im = cv2.resize(im, (new_w, new_h), interpolation=cv2.INTER_NEAREST)
             cv2.imshow(env.title, im)
 
         else:
@@ -123,32 +126,40 @@ def human_loop(env: PSEnv):
             lvl_i += 1
             state = env.reset(lvl_i)
             im = env.render(state)
+            im = np.array(im, dtype=np.uint8)
             im = cv2.resize(im, (new_w, new_h), interpolation=cv2.INTER_NEAREST)
             cv2.imshow(env.title, im)
     # Close the image window
     cv2.destroyAllWindows()
 
 
+def play_game(tree_path: str, jit: bool = False):
+    og_game_path = os.path.join(DATA_DIR, 'scraped_games', os.path.basename(tree_path)[:-3] + 'txt')
+    print(f"Playing game: {og_game_path}")
+    with open(tree_path, 'rb') as f:
+        tree = pickle.load(f)
+    tree: PSGame = GenPSTree().transform(tree)
+
+    env = PSEnv(tree, jit=jit)
+    human_loop(env)
+
 @hydra.main(config_name="config", version_base="1.3")
 def main(cfg: Config):
-    tree_paths = glob.glob(os.path.join(TREES_DIR, '*'))
-    trees = []
-    tree_paths = sorted(tree_paths, reverse=True)
-    test_game_paths = [os.path.join(TREES_DIR, tg + '.pkl') for tg in TEST_GAMES]
-    tree_paths = test_game_paths + tree_paths
-    for tree_path in tree_paths:
-        print(tree_path)
-        og_game_path = os.path.join(DATA_DIR, 'scraped_games', os.path.basename(tree_path)[:-3] + 'txt')
-        print(f"Parsing {og_game_path}")
-        with open(tree_path, 'rb') as f:
-            tree = pickle.load(f)
-        trees.append(tree)
 
-        tree: PSGame = GenPSTree().transform(tree)
+    if cfg.game is not None:
+        tree_path = os.path.join(TREES_DIR, cfg.game + '.pkl')
+        play_game(tree_path, jit=cfg.jit)
 
-        env = PSEnv(tree, jit=cfg.jit)
-        human_loop(env)
+    else:
+        tree_paths = glob.glob(os.path.join(TREES_DIR, '*'))
+        tree_paths = sorted(tree_paths, reverse=True)
+        test_game_paths = [os.path.join(TREES_DIR, tg + '.pkl') for tg in TEST_GAMES]
+        tree_paths = test_game_paths + tree_paths
+        for tree_path in tree_paths:
+            play_game(tree_path, jit=cfg.jit)
+    
 
 
 if __name__ == '__main__':
+    jax.config.update('jax_platform_name', 'cpu')
     main()
