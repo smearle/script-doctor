@@ -92,11 +92,16 @@ class GenPSTree(Transformer):
         out = str(items[0])
         if out.lower().startswith('sfx'):
             return None
+        else:
+            return out.lower()
 
     def rule_data(self, items):
         ps = []
         l = []
         for i, item in enumerate(items):
+            if item == 'late':
+                ps.append('late')
+                continue
             if isinstance(item, Token) and item.type == 'RULE':
                 breakpoint()
             if isinstance(item, Token) and item.type == 'THEN':

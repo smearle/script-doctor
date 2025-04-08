@@ -316,11 +316,11 @@ def gen_subrules_meta(rule, n_objs, obj_to_idxs, meta_tiles, rule_name, jit=True
     # @partial(jax.jit, static_argnums=(0,))
     def detect_obj_in_cell(obj_idx, m_cell):
         active = m_cell[obj_idx] == 1 & is_obj_forceless(obj_idx, m_cell)
-        jax.lax.cond(
-            active,
-            lambda: jax.debug.print('detected obj_idx: {obj_idx}', obj_idx=obj_idx),
-            lambda: None,
-        )
+        # jax.lax.cond(
+        #     active,
+        #     lambda: jax.debug.print('detected obj_idx: {obj_idx}', obj_idx=obj_idx),
+        #     lambda: None,
+        # )
         return ObjFnReturn(active=active, obj_idx=obj_idx)
 
     # @partial(jax.jit, static_argnums=(0,))
@@ -360,11 +360,11 @@ def gen_subrules_meta(rule, n_objs, obj_to_idxs, meta_tiles, rule_name, jit=True
             detected_vec_idx,
             -1,
         )
-        jax.lax.cond(
-            active,
-            lambda: jax.debug.print('detected obj_idx: {obj_idx}', obj_idx=obj_idx),
-            lambda: None,
-        )
+        # jax.lax.cond(
+        #     active,
+        #     lambda: jax.debug.print('detected obj_idx: {obj_idx}', obj_idx=obj_idx),
+        #     lambda: None,
+        # )
         return ObjFnReturn(active=active, obj_idx=obj_idx)
 
     # @partial(jax.jit, static_argnums=())
