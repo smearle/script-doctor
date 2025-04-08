@@ -302,7 +302,7 @@ class CellFnReturn:
 
 def gen_subrules_meta(rule, n_objs, obj_to_idxs, meta_tiles, rule_name, jit=True):
     idxs_to_objs = {v: k for k, v in obj_to_idxs.items()}
-    assert len(rule.prefixes) == 0
+    # assert len(rule.prefixes) == 0
 
     # def detect_all_objs_in_cell(objs_vec, m_cell):
     #     # for detecting overlapping objects (not necessary?)
@@ -720,18 +720,24 @@ def gen_subrules_meta(rule, n_objs, obj_to_idxs, meta_tiles, rule_name, jit=True
 def gen_rule_fn(obj_to_idxs, coll_mat, tree_rules, meta_tiles, jit=True):
     n_objs = len(obj_to_idxs)
     rule_grps = []
+    late_rule_grps = []
     if len(tree_rules) == 0:
         pass
     elif len(tree_rules) == 1:
+        # TODO: Extend to multiple rule blocks
         rule_blocks = tree_rules[0]
         for rule_block in rule_blocks:
             assert rule_block.looping == False
             for rule in rule_block.rules:
                 # TODO: rule-block and loop logics
                 sub_rule_fns = gen_subrules_meta(rule, n_objs, obj_to_idxs, meta_tiles, rule_name=str(rule), jit=jit)
-                rule_grps.append(sub_rule_fns)
+                if not 'late' in rule.prefixes:
+                    rule_grps.append(sub_rule_fns)
+                else:
+                    late_rule_grps.append(sub_rule_fns)
 
     rule_grps.append(gen_move_rules(obj_to_idxs, coll_mat, jit=jit))
+    rule_grps += late_rule_grps
 
 
     def rule_fn(lvl):

@@ -96,11 +96,11 @@ class GenPSTree(Transformer):
             return out.lower()
 
     def rule_data(self, items):
-        ps = []
+        prefixes = []
         l = []
         for i, item in enumerate(items):
             if item == 'late':
-                ps.append('late')
+                prefixes.append('late')
                 continue
             if isinstance(item, Token) and item.type == 'RULE':
                 breakpoint()
@@ -111,6 +111,7 @@ class GenPSTree(Transformer):
         l = [it for it in l if it is not None]
         r = [it for it in r if it is not None]
         rule = Rule(
+            prefixes=prefixes,
             left_patterns = l,
             right_patterns = r,
         )
