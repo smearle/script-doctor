@@ -14,7 +14,7 @@ from lark.reconstruct import Reconstructor
 games_to_skip = set({'easyenigma', 'A_Plaid_Puzzle'})
 
 # TEST_GAMES = ['blockfaker', 'sokoban_match3', 'notsnake', 'sokoban_basic']
-TEST_GAMES = ['sokoban_match3', 'notsnake']
+TEST_GAMES = ['blockfaker_test']
 
 from lark import Lark, Transformer, Tree, Token, Visitor
 import numpy as np

@@ -18,7 +18,7 @@ import numpy as np
 from PIL import Image
 
 from parse_lark import TEST_GAMES
-from ps_game import LegendEntry, PSGame, PSObject, Rule, RuleBlock, WinCondition
+from ps_game import LegendEntry, PSGame, PSObject, Prelude, Rule, RuleBlock, WinCondition
 
 class GenPSTree(Transformer):
     """
@@ -149,6 +149,7 @@ class GenPSTree(Transformer):
         title, author, homepage = None, None, None
         flickscreen = False
         verbose_logging = False
+        require_player_movement = False
         for pi in prelude_items:
             pi_items = pi.children
             keyword = pi_items[0].lower()
@@ -165,12 +166,19 @@ class GenPSTree(Transformer):
                 flickscreen = True
             elif keyword == 'verbose_logging':
                 verbose_logging = value
+            elif keyword == 'require_player_movement':
+                require_player_movement = True
         # assert title is not None
         return PSGame(
-            title=title,
+            prelude=Prelude(
+                title=title,
+                author=author,
+                homepage=homepage,
+                flickscreen=flickscreen,
+                verbose_logging=verbose_logging,
+                require_player_movement=require_player_movement,
+            ),
             objects = items[1],
-            flickscreen=flickscreen,
-            verbose_logging=verbose_logging,
             legend=items[2],
             collision_layers=items[3],
             rules=items[4],

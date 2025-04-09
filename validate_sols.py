@@ -11,7 +11,7 @@ import jax.numpy as jnp
 import numpy as np
 
 from env import PSEnv
-from gen_trees import GenPSTree
+from gen_tree import GenPSTree
 from parse_lark import TREES_DIR, DATA_DIR, TEST_GAMES
 from ps_game import PSGame
 

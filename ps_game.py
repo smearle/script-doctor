@@ -1,3 +1,4 @@
+from dataclasses import dataclass
 import os
 import pickle
 from typing import List, Dict, Optional, Any, Set, Tuple, Type, Union
@@ -74,20 +75,26 @@ class WinCondition:
     def __repr__(self):
         return f"{self.quantifier} {self.src_obj}" + (f" on {self.trg_obj}" if self.trg_obj is not None else "")
 
+@dataclass
+class Prelude:
+    title: str
+    author: Optional[str] = None
+    homepage: Optional[str] = None
+    flickscreen: bool = False
+    verbose_logging: bool = False
+    require_player_movement: bool = False
+
+
 class PSGame:
     def __init__(self,
-                 title: str,
-                 flickscreen: Optional[str],
-                 verbose_logging: bool,
+                 prelude: Prelude,
                  objects: Dict[str, PSObject],
                  legend: List[LegendEntry],
                  collision_layers: List[List[str]],
                  rules: List[Rule],
                  win_conditions: List[WinCondition],
                  levels: List[List[List[str]]]):
-        self.title = title
-        self.flickscreen = flickscreen
-        self.verbose_logging = verbose_logging
+        self.prelude = prelude
 
         self.objects = objects               # Dict[object_name -> PSObject]
         self.legend = legend               # List[LegendEntry]

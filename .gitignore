@@ -11,7 +11,8 @@ src - Kopie
 node_modules/
 __pycache__
 
-data
+data*
+!data/custom_games/
 scraped_puzzles
 scraped_games
 scrape_logs

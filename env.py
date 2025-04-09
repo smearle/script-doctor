@@ -406,16 +406,11 @@ def gen_subrules_meta(rule, n_objs, obj_to_idxs, meta_tiles, rule_name, jit=True
         # )
         return ObjFnReturn(active=active, obj_idx=obj_idx)
 
-    ### Function for projecting onto cells
-    def project_cell(detect_out: CellFnReturn, m_cell):
-        detected = detect_out.detected
-        force_idx = detect_out.force_idx
-        meta_objs = detect_out.meta_objs
-    
-        assert np.all(detected <= 1) and np.all(detected >= 0)
-        m_cell -= detected
-
     def gen_cell_detection_fn(l_cell, force_idx):
+        """Produce a function to detect whether all objects/conditions in a cell (within a kernel, within the left pattern of a rule) are present.
+        So for the rule `[> Player | Crate] -> [> Player | > Crate]`, this will return a function that detects, for the first cell in the left pattern,
+        if the player is present, and has a force applied to it.
+        """
         fns = []
         l_cell = l_cell.split(' ')
         no, force = False, False
@@ -559,7 +554,6 @@ def gen_subrules_meta(rule, n_objs, obj_to_idxs, meta_tiles, rule_name, jit=True
 
         return cell_projection_fn
 
-
     def gen_rotated_rule_fn(lp, rp, rot):
         lp = np.array(lp)
         # Here we map force directions to corresponding rule rotations
@@ -580,15 +574,22 @@ def gen_subrules_meta(rule, n_objs, obj_to_idxs, meta_tiles, rule_name, jit=True
         elif is_single:
             lp = lp[0, 0]
             rp = rp[0, 0]
+        is_line_detector = False
         cell_detection_fns = []
         cell_projection_fns = []
         for i, l_cell in enumerate(lp):
+            if l_cell == '...':
+                is_line_detector = True
+                cell_detection_fns.append('...')
             cell_detection_fns.append(gen_cell_detection_fn(l_cell, force_idx))
         for i, r_cell in enumerate(rp):
+            if r_cell == '...':
+                assert is_line_detector, f"`...` not found in left pattern of rule {rule_name}"
+                cell_projection_fns.append('...')
             cell_projection_fns.append(gen_cell_projection_fn(r_cell, force_idx))
 
         # @jax.jit
-        def rule_fn(lvl):
+        def rot_rule_fn(lvl):
             n_chan = lvl.shape[1]
 
             # @jax.jit
@@ -608,27 +609,37 @@ def gen_subrules_meta(rule, n_objs, obj_to_idxs, meta_tiles, rule_name, jit=True
                     cell_outs_patch.append(cell_out)
                 return patch_active, cell_outs_patch
 
-            patches = jax.lax.conv_general_dilated_patches(
-                lvl, in_patch_shape, window_strides=(1, 1), padding='VALID',
-            )
-            assert patches.shape[0] == 1
-            patches = patches[0]
-            patches = rearrange(patches, "c h w -> h w c")
+            def detect_line(in_line):
+                for i, cell_fn in enumerate(cell_detection_fns):
+                    cell_fn_activs, cell_fn_rets = jax.vmap(cell_fn)(in_line)
+                    breakpoint()
 
-            if jit:
-                patch_activations, detect_outs = jax.vmap(jax.vmap(detect_cells))(patches)
+            if not is_line_detector:
+
+                patches = jax.lax.conv_general_dilated_patches(
+                    lvl, in_patch_shape, window_strides=(1, 1), padding='VALID',
+                )
+                assert patches.shape[0] == 1
+                patches = patches[0]
+                patches = rearrange(patches, "c h w -> h w c")
+
+                if jit:
+                    patch_activations, detect_outs = jax.vmap(jax.vmap(detect_cells))(patches)
+
+                else:
+                    patch_activations = jnp.zeros((patches.shape[0], patches.shape[1]), dtype=bool)
+                    # What's up with this???
+                    detect_outs = [[None for _ in range(patches.shape[0])] for _ in range(patches.shape[1])]
+                    for i in range(patches.shape[0]):
+                        for j in range(patches.shape[1]):
+                            patch = patches[i, j]
+                            patch_active, cell_out = detect_cells(patch)
+                            patch_activations = patch_activations.at[i, j].set(patch_active)
+                            detect_outs[j][i] = cell_out
+                    detect_outs = stack_leaves(stack_leaves(detect_outs))
 
             else:
-                patch_activations = jnp.zeros((patches.shape[0], patches.shape[1]), dtype=bool)
-                # What's up with this???
-                detect_outs = [[None for _ in range(patches.shape[0])] for _ in range(patches.shape[1])]
-                for i in range(patches.shape[0]):
-                    for j in range(patches.shape[1]):
-                        patch = patches[i, j]
-                        patch_active, cell_out = detect_cells(patch)
-                        patch_activations = patch_activations.at[i, j].set(patch_active)
-                        detect_outs[j][i] = cell_out
-                detect_outs = stack_leaves(stack_leaves(detect_outs))
+                breakpoint()
 
             # @jax.jit
             def project_cells(lvl, patch_activations, detect_outs):
@@ -691,9 +702,9 @@ def gen_subrules_meta(rule, n_objs, obj_to_idxs, meta_tiles, rule_name, jit=True
             return lvl, rule_applied
         
         if jit:
-            rule_fn = jax.jit(rule_fn)
+            rot_rule_fn = jax.jit(rot_rule_fn)
 
-        return rule_fn
+        return rot_rule_fn
     
     rule_fns = []
     print('RULE PATTERNS', rule.left_patterns, rule.right_patterns)
@@ -716,6 +727,11 @@ def gen_subrules_meta(rule, n_objs, obj_to_idxs, meta_tiles, rule_name, jit=True
 
     return rule_fns
         
+def player_has_moved(lvl_0, lvl_1, obj_to_idxs):
+    player_idx = obj_to_idxs['player']
+    player_moved = jnp.sum(lvl_0[player_idx] != lvl_1[player_idx]) > 0
+    jax.debug.print('player moved: {player_moved}', player_moved=player_moved)
+    return player_moved
         
 def gen_rule_fn(obj_to_idxs, coll_mat, tree_rules, meta_tiles, jit=True):
     n_objs = len(obj_to_idxs)
@@ -739,7 +755,6 @@ def gen_rule_fn(obj_to_idxs, coll_mat, tree_rules, meta_tiles, jit=True):
     rule_grps.append(gen_move_rules(obj_to_idxs, coll_mat, jit=jit))
     rule_grps += late_rule_grps
 
-
     def rule_fn(lvl):
         changed = False
         lvl = lvl[None].astype(np.float32)
@@ -754,7 +769,13 @@ def gen_rule_fn(obj_to_idxs, coll_mat, tree_rules, meta_tiles, jit=True):
                 lvl, grp_applied = carry
                 grp_applied = False
                 for rule_fn in rule_grp:
-                    lvl, rule_applied = rule_fn(lvl)
+                    rule_applied = True
+                    lvl, rule_applied = jax.lax.while_loop(
+                        cond_fun=lambda x: x[1],
+                        body_fun=lambda x: rule_fn(x[0]),
+                        init_val=(lvl, rule_applied),
+                    )
+                    # lvl, rule_applied = rule_fn(lvl)
                     grp_applied = jnp.logical_or(grp_applied, rule_applied)
                 jax.debug.print('group {grp_i} applied: {grp_applied}', grp_i=grp_i, grp_applied=grp_applied)
                 if not jit:
@@ -774,6 +795,7 @@ def gen_rule_fn(obj_to_idxs, coll_mat, tree_rules, meta_tiles, jit=True):
             else:
                 while grp_applied:
                     lvl, grp_applied = apply_rule_grp((lvl, grp_applied))
+
         return lvl[0], changed
 
     if jit:
@@ -917,9 +939,9 @@ class PSState:
 class PSEnv:
     def __init__(self, tree: PSGame, jit: bool = True):
         self.jit = jit
-        print(f'jitted: {jit}')
-        self.title = tree.title
+        self.title = tree.prelude.title
         self.levels = tree.levels
+        self.require_player_movement = tree.prelude.require_player_movement
         obj_legend, meta_tiles, joint_tiles = process_legend(tree.legend)
         collision_layers = expand_collision_layers(tree.collision_layers, meta_tiles)
         self.obj_to_idxs, coll_masks = assign_vecs_to_objs(collision_layers)
@@ -1022,6 +1044,7 @@ class PSEnv:
     # @partial(jax.jit, static_argnums=(0))
     def _step(self, action, state: PSState):
         lvl = self.apply_player_force(action, state)
+        init_lvl = lvl.copy()
         
         def cond_fun(loop_state):
             lvl, lvl_changed, n_apps = loop_state
@@ -1044,8 +1067,12 @@ class PSEnv:
             final_lvl = init_state[0]
 
         
+        final_lvl = jax.lax.select(
+            (not self.require_player_movement) or player_has_moved(init_lvl, final_lvl, self.obj_to_idxs),
+            final_lvl,
+            lvl,
+        )
         multihot_level = final_lvl[:self.n_objs]
-        
         win = self.check_win(multihot_level)
         state = PSState(
             multihot_level=multihot_level,
