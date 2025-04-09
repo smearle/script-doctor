@@ -99,14 +99,22 @@ class GenPSTree(Transformer):
         prefixes = []
         l = []
         for i, item in enumerate(items):
-            if item == 'late':
-                prefixes.append('late')
-                continue
             if isinstance(item, Token) and item.type == 'RULE':
                 breakpoint()
-            if isinstance(item, Token) and item.type == 'THEN':
+            elif isinstance(item, Token) and item.type == 'THEN':
                 r = items[i+1:]
                 break
+            elif item == 'late':
+                prefixes.append('late')
+                continue
+            elif item == 'horizontal' and i == 0:
+                prefixes.append('horizontal')
+                continue
+            elif item == 'vertical' and i == 0:
+                prefixes.append('vertical')
+                continue
+            # else:
+            #     raise Exception(f'Unrecognized item in rule data: {item}')
             l.append(item)
         l = [it for it in l if it is not None]
         r = [it for it in r if it is not None]

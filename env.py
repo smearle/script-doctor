@@ -302,11 +302,6 @@ class CellFnReturn:
 
 def gen_subrules_meta(rule, n_objs, obj_to_idxs, meta_tiles, rule_name, jit=True):
     idxs_to_objs = {v: k for k, v in obj_to_idxs.items()}
-    # assert len(rule.prefixes) == 0
-
-    # def detect_all_objs_in_cell(objs_vec, m_cell):
-    #     # for detecting overlapping objects (not necessary?)
-    #     return np.all(objs_vec[:, None, None] == m_cell), []
 
     def is_obj_forceless(obj_idx, m_cell):
         # return jnp.sum(m_cell[n_objs + (obj_idx * 4):n_objs + (obj_idx * 4) + 4]) == 0
@@ -479,6 +474,9 @@ def gen_subrules_meta(rule, n_objs, obj_to_idxs, meta_tiles, rule_name, jit=True
 
     # @partial(jax.jit, static_argnums=(0))
     def disambiguate_meta(obj, meta_objs):
+        """In the right pattern of rules, we may have a meta-object (mapping to a corresponding meta-object in the 
+        left pattern). This function uses the `meta_objs` dictionary returned by the detection function to project
+        the correct object during rule application."""
         if obj in obj_to_idxs:
             return obj_to_idxs[obj]
         return meta_objs[obj]
@@ -557,7 +555,9 @@ def gen_subrules_meta(rule, n_objs, obj_to_idxs, meta_tiles, rule_name, jit=True
     def gen_rotated_rule_fn(lp, rp, rot):
         lp = np.array(lp)
         # Here we map force directions to corresponding rule rotations
-        rot_to_force = [1, 2, 0, 3]
+        # if rot == 1:
+        #     breakpoint()
+        rot_to_force = [1, 2, 3, 0]
         force_idx = rot_to_force[rot]
         is_horizontal = lp.shape[0] == 1
         is_vertical = lp.shape[1] == 1
@@ -713,7 +713,11 @@ def gen_subrules_meta(rule, n_objs, obj_to_idxs, meta_tiles, rule_name, jit=True
         lp = [[None] if len(l) == 0 else [' '.join(l)] for l in lp]
         rp = [[None] if len(l) == 0 else [' '.join(l)] for l in rp]
         lp, rp = np.array(lp), np.array(rp)
-        if len(lp) > 1 or len(rp) > 1:
+        if 'horizontal' in rule.prefixes:
+            rots = [1, 3]
+        elif 'vertical' in rule.prefixes:
+            rots = [0, 2]
+        elif len(lp) > 1 or len(rp) > 1:
             rots = [0, 1, 2, 3]
         else:
             rots = [0]
@@ -721,9 +725,9 @@ def gen_subrules_meta(rule, n_objs, obj_to_idxs, meta_tiles, rule_name, jit=True
             rule_fns.append(gen_rotated_rule_fn(lp, rp, 0))
         for rot in rots:
             # rotate the patterns
-            lp = np.rot90(lp, rot)
-            rp = np.rot90(rp, rot)
-            rule_fns.append(gen_rotated_rule_fn(lp, rp, rot))
+            lp_rot = np.rot90(lp, rot)
+            rp_rot = np.rot90(rp, rot)
+            rule_fns.append(gen_rotated_rule_fn(lp_rot, rp_rot, rot))
 
     return rule_fns
         
@@ -766,16 +770,26 @@ def gen_rule_fn(obj_to_idxs, coll_mat, tree_rules, meta_tiles, jit=True):
             grp_applied = True
 
             def apply_rule_grp(carry):
-                lvl, grp_applied = carry
+                lvl, grp_applied, grp_app_i = carry
+                grp_app_i += 1
                 grp_applied = False
+
                 for rule_fn in rule_grp:
+
+                    def apply_rule_fn(carry):
+                        lvl, rule_applied, i = carry
+                        lvl, rule_applied = rule_fn(lvl)
+                        i += 1
+                        return lvl, rule_applied, i
+
                     rule_applied = True
-                    lvl, rule_applied = jax.lax.while_loop(
+                    rule_app_i = 0
+                    lvl, rule_applied, rule_app_i = jax.lax.while_loop(
                         cond_fun=lambda x: x[1],
-                        body_fun=lambda x: rule_fn(x[0]),
-                        init_val=(lvl, rule_applied),
+                        body_fun=lambda x: apply_rule_fn(x),
+                        init_val=(lvl, rule_applied, rule_app_i),
                     )
-                    # lvl, rule_applied = rule_fn(lvl)
+                    rule_applied = rule_app_i > 1
                     grp_applied = jnp.logical_or(grp_applied, rule_applied)
                 jax.debug.print('group {grp_i} applied: {grp_applied}', grp_i=grp_i, grp_applied=grp_applied)
                 if not jit:
@@ -784,19 +798,23 @@ def gen_rule_fn(obj_to_idxs, coll_mat, tree_rules, meta_tiles, jit=True):
                 # force_is_present = jnp.sum(lvl[0, n_objs:n_objs + (n_objs * 4)]) > 0
                 # jax.debug.print('force is present: {force_is_present}', force_is_present=force_is_present)
                 # jax.debug.print('lvl:\n{lvl}', lvl=lvl)
-                return (lvl, grp_applied)
+                return lvl, grp_applied, grp_app_i
 
+            grp_app_i = 0
             if jit:
-                lvl, changed = jax.lax.while_loop(
+                lvl, grp_applied, grp_app_i = jax.lax.while_loop(
                     cond_fun=lambda x: x[1],
                     body_fun=apply_rule_grp,
-                    init_val=(lvl, grp_applied),
+                    init_val=(lvl, grp_applied, grp_app_i),
                 )
             else:
                 while grp_applied:
                     lvl, grp_applied = apply_rule_grp((lvl, grp_applied))
+                    grp_app_i += 1
 
-        return lvl[0], changed
+            grp_applied = grp_app_i > 1
+
+        return lvl[0], grp_applied
 
     if jit:
         rule_fn = jax.jit(rule_fn)
@@ -1050,8 +1068,8 @@ class PSEnv:
             lvl, lvl_changed, n_apps = loop_state
             return jax.numpy.logical_and(lvl_changed, n_apps < 100)
             
-        def body_fun(loop_state):
-            lvl, lvl_changed_last, n_apps = loop_state
+        def body_fun(carry):
+            lvl, lvl_changed_last, n_apps = carry
             new_lvl, lvl_changed = self.rule_fn(lvl)
             return (new_lvl, lvl_changed, n_apps + 1)
         
