@@ -468,7 +468,7 @@ def list_scraped_games():
 @app.route('/save_init_state', methods=['POST'])
 def save_init_state():
     data = request.json
-
+    game_rep = data['state_repr']
     game_hash = data['game_hash']
     game_level = data['game_level']
     state_hash = data['state_hash']
@@ -480,13 +480,20 @@ def save_init_state():
     if not os.path.isfile(im_path):
         with open(im_path, 'wb') as f:
             f.write(im_data)
-    return jsonify({'status': 'success'})
+    return jsonify({
+        'status': 'success',
+        'game_hash': game_hash,
+        'state_hash': state_hash,
+        'game_rep': game_rep,
+        'im_dir':im_dir
+    })
+    # feed my python code the game state
 
 
 @app.route('/save_transition', methods=['POST'])
 def save_transition():
     data = request.json
-
+    game_rep = data['state_repr']
     game_hash = data['game_hash']
     game_level = data['game_level']
     trans_dir = os.path.join(TRANSITIONS_DIR, game_hash, str(game_level))
@@ -974,6 +981,67 @@ def main(cfg: Config):
         eval_sweep(stats_path, hypers_ks, hypers_lst)
     elif cfg.mode == 'generate':
         app.run(port=cfg.port)
+
+#LLM agents
+# 
+@app.route('/llm_action', methods=['POST'])
+def llm_action():
+    data = request.json
+    state_repr = data['state']           # 例如字符地图、状态文本等
+    level_goal = data.get('goal', '')    # 可选：游戏目标
+    history = data.get('history', [])    # 可选：之前动作历史
+    custom_prompt = data.get('prompt')  # 客户端传了 prompt 就用
+    if custom_prompt:
+        prompt = custom_prompt
+    else:
+        prompt = f"""Current Game State:
+            {state_repr}
+
+            Game Objective: {level_goal}
+
+            Valid Actions: up,  left, down, right, use
+
+            What should the next action be? Just reply with a single word.
+
+            """
+
+
+    # 构造 prompt
+    system_prompt = "You are an agent playing a puzzle game. Given the current state of the game, decide the best action."
+
+
+    if history:
+        prompt = "Previous steps:\n" + "\n".join(f"{i+1}. {a}" for i, a in enumerate(history)) + "\n\n" + prompt
+
+    # 调用 LLM 获取动作
+    action = llm_text_query(system_prompt, prompt, seed=42, model=exp_config.model)
+    action = action.strip().lower().split()[0]  # 只取第一个词作为动作
+
+    return jsonify({'action': action})
+ 
+@app.route('/get_state', methods=['GET'])
+def get_state():
+    game_hash = request.args.get('game_hash')
+    state_hash = request.args.get('state_hash')
+    game_level = request.args.get('game_level', '0')  # default to 0
+
+    if not game_hash or not state_hash:
+        return jsonify({'error': 'Missing parameters'}), 400
+
+    # 尝试在 init 里找
+    init_path = os.path.join('transitions', game_hash, str(game_level), 'images', f'{state_hash}.txt')
+    if os.path.isfile(init_path):
+        with open(init_path, 'r', encoding='utf-8') as f:
+            return jsonify({'state': f.read()})
+
+    # 尝试在 transition 中找（可以拓展）
+    # 你可以把 transition 状态文本也存在 images 里或单独的路径
+    trans_path = os.path.join('transitions', game_hash, str(game_level), 'images', f'{state_hash}.txt')
+    if os.path.isfile(trans_path):
+        with open(trans_path, 'r', encoding='utf-8') as f:
+            return jsonify({'state': f.read()})
+
+    return jsonify({'error': 'State not found'}), 404
 
 
 if __name__ == '__main__':

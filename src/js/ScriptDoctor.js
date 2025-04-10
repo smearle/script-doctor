@@ -560,10 +560,12 @@ async function solveLevelAStar(captureStates=false, gameHash=0, levelI=0, maxIte
   if (captureStates) {
     const canvas = document.getElementById('gameCanvas');
     const imageData = canvas.toDataURL('image/png');
+    const stateText = backupLevel()['dat'].map(row => row.join('')).join('\n');
     await fetch('/save_init_state', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
+        state_repr: stateText,
         game_hash: gameHash,
         game_level: levelI,
         state_hash: hashStateObjects(level.objects),
@@ -697,12 +699,13 @@ async function processStateTransition(gameHash, parentState, childState, action)
   const img2 = await captureGameState();
   const hash2 = hashStateObjects(childState);
   // const hash2 = state2
-
+  const stateText = backupLevel()['dat'].map(row => row.join('')).join('\n');
   // Save transition
   await fetch('/save_transition', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
+      state_repr: stateText,
       game_hash: gameHash,
       game_level: curlevel,
       state1_hash: hash1,
