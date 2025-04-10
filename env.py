@@ -40,6 +40,15 @@ color_hex_map = {
     "transparent": "#00000000"  # Transparent in RGBA format
 }
 
+# @partial(jax.jit, static_argnums=(0))
+def disambiguate_meta(obj, meta_objs, obj_to_idxs):
+    """In the right pattern of rules, we may have a meta-object (mapping to a corresponding meta-object in the 
+    left pattern). This function uses the `meta_objs` dictionary returned by the detection function to project
+    the correct object during rule application."""
+    if obj in obj_to_idxs:
+        return obj_to_idxs[obj]
+    return meta_objs[obj]
+
 def replace_bg_tiles(x):
     if x == '.':
         return 0
@@ -487,33 +496,24 @@ def gen_subrules_meta(rule, n_objs, obj_to_idxs, meta_tiles, rule_name, jit=True
 
         return cell_detection_fn
 
-    # @partial(jax.jit, static_argnums=(0))
-    def disambiguate_meta(obj, meta_objs):
-        """In the right pattern of rules, we may have a meta-object (mapping to a corresponding meta-object in the 
-        left pattern). This function uses the `meta_objs` dictionary returned by the detection function to project
-        the correct object during rule application."""
-        if obj in obj_to_idxs:
-            return obj_to_idxs[obj]
-        return meta_objs[obj]
-
     # @partial(jax.jit, static_argnums=(2))
     def project_obj(m_cell, detect_out, obj):
         meta_objs = detect_out.meta_objs
-        obj_idx = disambiguate_meta(obj, meta_objs)
+        obj_idx = disambiguate_meta(obj, meta_objs, obj_to_idxs)
         m_cell = m_cell.at[obj_idx].set(1)
         return m_cell
 
     # @partial(jax.jit, static_argnums=(2))
     def project_no_obj(m_cell, detect_out, obj):
         meta_objs = detect_out.meta_objs
-        obj_idx = disambiguate_meta(obj, meta_objs)
+        obj_idx = disambiguate_meta(obj, meta_objs, obj_to_idxs)
         m_cell[obj_idx] = 0
         return m_cell
 
     # @partial(jax.jit, static_argnums=(2))
     def project_force_on_obj(m_cell, detect_out, obj, force_idx):
         meta_objs = detect_out.meta_objs
-        obj_idx = disambiguate_meta(obj, meta_objs)
+        obj_idx = disambiguate_meta(obj, meta_objs, obj_to_idxs)
         m_cell = m_cell.at[obj_idx].set(1)
         m_cell = m_cell.at[n_objs + (obj_idx * 4) + force_idx].set(1)
 
@@ -1017,7 +1017,7 @@ class PSEnv:
         coll_mat = np.einsum('ij,ik->jk', coll_masks, coll_masks, dtype=np.int8)
         self.rule_fn = gen_rule_fn(self.obj_to_idxs, coll_mat, tree.rules, meta_tiles, jit=self.jit)
         self.check_win = gen_check_win(tree.win_conditions, self.obj_to_idxs, jit=self.jit)
-        self.player_idx = self.obj_to_idxs['player']
+        self.player_idx = self.obj_to_idxs[disambiguate_meta('player', meta_tiles, self.obj_to_idxs)]
         sprite_stack = []
         for obj_name in self.obj_to_idxs:
             obj = tree.objects[obj_name]
