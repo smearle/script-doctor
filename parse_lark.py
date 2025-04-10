@@ -11,10 +11,13 @@ from typing import Optional
 import lark
 from lark.reconstruct import Reconstructor
 
+from gen_tree import GenPSTree
+from ps_game import PSGame
+
 games_to_skip = set({'easyenigma', 'A_Plaid_Puzzle'})
 
 # TEST_GAMES = ['blockfaker', 'sokoban_match3', 'notsnake', 'sokoban_basic']
-TEST_GAMES = ['blockfaker_test']
+TEST_GAMES = []
 
 from lark import Lark, Transformer, Tree, Token, Visitor
 import numpy as np
@@ -370,9 +373,100 @@ def strip_comments(text):
             new_text += c
     return new_text
 
+def get_tree_from_txt(parser, game, log_dir: str = None, overwrite: bool = True):
+    filepath = os.path.join(games_dir, game + '.txt')
+    if not os.path.exists(filepath):
+        filepath = os.path.join(custom_games_dir, game + '.txt')
+    with open(filepath, 'r', encoding='utf-8') as f:
+        ps_text = f.read()
+    simp_filename = game[:-4] + '_simplified.txt' 
+    # if game in parsed_games or os.path.basename(game) in games_to_skip:
+    #     print(f"Skipping {filepath}")
+    #     return
+
+    # print(f"Parsing game {filepath} ({i+1}/{len(game_files)})")
+    simp_filepath = os.path.join(simpd_dir, simp_filename)
+    if overwrite or not (simp_filename in simpd_games):
+        # Now save the simplified version of the file
+        content = preprocess_ps(ps_text)
+        with open(simp_filepath, "w", encoding='utf-8') as file:
+            file.write(content)
+    else:
+        with open(simp_filepath, "r", encoding='utf-8') as file:
+            content = file.read()
+    print(f"Parsing {simp_filepath}")
+    
+    log_filename = None
+    if log_dir:
+        log_filename = os.path.join(log_dir, game + '.log')
+
+    # This timeout functionality only works on Unix
+    if os.name != 'nt':
+        def parse_attempt_fn():
+            with timeout_handler(10):
+                parse_tree = parser.parse(content)
+            return parse_tree
+    else:
+        def parse_attempt_fn():
+            return parser.parse(content)
+
+    try:
+        parse_tree = parse_attempt_fn()
+
+    except TimeoutError:
+        print(f"Timeout parsing {simp_filepath}")
+        if log_filename:
+            with open(log_filename, 'w') as file:
+                file.write("timeout")
+            print(f"Timeout parsing {simp_filepath}")
+            with open(parsed_games_filename, 'a') as file:
+                file.write(game + "\n")
+        return
+    except Exception as e:
+        print(traceback.format_exc())
+        if log_filename:
+            with open(log_filename, 'w') as file:
+                traceback.print_exc(file=file)
+
+            print(f"Error parsing {simp_filepath}:\n{e}")
+            with open(parsed_games_filename, 'a') as file:
+                file.write(game + "\n")
+        return
+
+
+    min_parse_tree = StripPuzzleScript().transform(parse_tree)
+    min_tree_path = os.path.join(TREES_DIR, game[:-3] + 'pkl')
+    with open(min_tree_path, "wb") as f:
+        pickle.dump(min_parse_tree, f)
+    pretty_parse_tree_str = min_parse_tree.pretty()
+    pretty_tree_filename = os.path.join(pretty_trees_dir, game)
+    print(f"Writing pretty tree to {pretty_tree_filename}")
+    with open(pretty_tree_filename, "w", encoding='utf-8') as file:
+        file.write(pretty_parse_tree_str)
+    # print(min_parse_tree.pretty())
+    ps_str = PrintPuzzleScript().transform(min_parse_tree)
+    ps_str = add_empty_sounds_section(ps_str)
+    min_filename = os.path.join(min_games_dir, game)
+    print(f"Writing minified game to {min_filename}")
+    with open(min_filename, "w", encoding='utf-8') as file:
+        file.write(ps_str)
+
+    with open(parsed_games_filename, 'a') as file:
+        file.write(game + "\n")
+
+    try:
+        tree: PSGame = GenPSTree().transform(min_parse_tree)
+    except Exception as e:
+        traceback.print_exc()
+        print(f"Error parsing tree: {game}")
+        return
+
+    return tree
+
 DATA_DIR = 'data'
 games_dir = os.path.join(DATA_DIR, 'scraped_games')
 min_games_dir = os.path.join(DATA_DIR, 'min_games')
+custom_games_dir = os.path.join(DATA_DIR, 'custom_games')
 simpd_dir = os.path.join(DATA_DIR, 'simplified_games')
 TREES_DIR = os.path.join(DATA_DIR, 'game_trees')
 pretty_trees_dir = os.path.join(DATA_DIR, 'pretty_trees')
@@ -414,77 +508,7 @@ if __name__ == "__main__":
         os.makedirs(scrape_log_dir)
     simpd_games = set(os.listdir(simpd_dir))
     for i, filename in enumerate(game_files):
-        filepath = os.path.join(games_dir, filename)
-        with open(filepath, 'r', encoding='utf-8') as f:
-            ps_text = f.read()
-        simp_filename = filename[:-4] + '_simplified.txt' 
-        if filename in parsed_games or os.path.basename(filename) in games_to_skip:
-            print(f"Skipping {filepath}")
-            continue
-
-        print(f"Parsing game {filepath} ({i+1}/{len(game_files)})")
-        simp_filepath = os.path.join(simpd_dir, simp_filename)
-        if args.overwrite or not (simp_filename in simpd_games):
-            # Now save the simplified version of the file
-            content = preprocess_ps(ps_text)
-            with open(simp_filepath, "w", encoding='utf-8') as file:
-                file.write(content)
-        else:
-            with open(simp_filepath, "r", encoding='utf-8') as file:
-                content = file.read()
-        print(f"Parsing {simp_filepath}")
-
-        log_filename = os.path.join(scrape_log_dir, filename + '.log')
-
-        # This timeout functionality only works on Unix
-        if os.name != 'nt':
-            def parse_attempt_fn():
-                with timeout_handler(10):
-                    parse_tree = parser.parse(content)
-                return parse_tree
-        else:
-            def parse_attempt_fn():
-                return parser.parse(content)
-
-        try:
-            parse_tree = parse_attempt_fn()
-
-        except TimeoutError:
-            with open(log_filename, 'w') as file:
-                file.write("timeout")
-            print(f"Timeout parsing {simp_filepath}")
-            with open(parsed_games_filename, 'a') as file:
-                file.write(filename + "\n")
-            continue
-        except Exception as e:
-            with open(log_filename, 'w') as file:
-                traceback.print_exc(file=file)
-
-            print(f"Error parsing {simp_filepath}:\n{e}")
-            with open(parsed_games_filename, 'a') as file:
-                file.write(filename + "\n")
-            continue
-
-
-        min_parse_tree = StripPuzzleScript().transform(parse_tree)
-        min_tree_path = os.path.join(TREES_DIR, filename[:-3] + 'pkl')
-        with open(min_tree_path, "wb") as f:
-            pickle.dump(min_parse_tree, f)
-        pretty_parse_tree_str = min_parse_tree.pretty()
-        pretty_tree_filename = os.path.join(pretty_trees_dir, filename)
-        print(f"Writing pretty tree to {pretty_tree_filename}")
-        with open(pretty_tree_filename, "w", encoding='utf-8') as file:
-            file.write(pretty_parse_tree_str)
-        # print(min_parse_tree.pretty())
-        ps_str = PrintPuzzleScript().transform(min_parse_tree)
-        ps_str = add_empty_sounds_section(ps_str)
-        min_filename = os.path.join(min_games_dir, filename)
-        print(f"Writing minified game to {min_filename}")
-        with open(min_filename, "w", encoding='utf-8') as file:
-            file.write(ps_str)
-
-        with open(parsed_games_filename, 'a') as file:
-            file.write(filename + "\n")
+        tree = get_tree_from_txt(parser, filename[:-4], log_dir=scrape_log_dir, overwrite=args.overwrite)
 
     # Count the number of games in `min_gmes`
     n_min_games = len(min_games_dir)

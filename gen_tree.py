@@ -17,7 +17,6 @@ from lark import Token, Transformer, Tree
 import numpy as np
 from PIL import Image
 
-from parse_lark import TEST_GAMES
 from ps_game import LegendEntry, PSGame, PSObject, Prelude, Rule, RuleBlock, WinCondition
 
 class GenPSTree(Transformer):
@@ -99,19 +98,13 @@ class GenPSTree(Transformer):
         prefixes = []
         l = []
         for i, item in enumerate(items):
-            if isinstance(item, Token) and item.type == 'RULE':
-                breakpoint()
-            elif isinstance(item, Token) and item.type == 'THEN':
+            # if isinstance(item, Token) and item.type == 'RULE':
+            #     breakpoint()
+            if isinstance(item, Token) and item.type == 'THEN':
                 r = items[i+1:]
                 break
-            elif item == 'late':
-                prefixes.append('late')
-                continue
-            elif item == 'horizontal' and i == 0:
-                prefixes.append('horizontal')
-                continue
-            elif item == 'vertical' and i == 0:
-                prefixes.append('vertical')
+            elif isinstance(item, Token) and item.type == 'PREFIX':
+                prefixes.append(str(item))
                 continue
             # else:
             #     raise Exception(f'Unrecognized item in rule data: {item}')

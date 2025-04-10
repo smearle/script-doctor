@@ -110,7 +110,7 @@ class PSGame:
         return copy.deepcopy(self)
     
     def __repr__(self):
-        return (f"PSGame(title={self.title!r}, objects={self.objects}, "
+        return (f"PSGame(title={self.prelude.title!r}, objects={self.objects}, "
                 f"legends={self.legend}, layers={self.collision_layers}, "
                 f"rules={self.rules}, wcs={self.win_conditions}, "
                 f"levels=...)")

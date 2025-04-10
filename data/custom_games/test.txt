@@ -78,7 +78,7 @@ Player, Wall, Block
 RULES
 ======
 
-vertical [ > Moveable | Moveable ] -> [ > Moveable | > Moveable ] 
+down [ > Moveable | Moveable ] -> [ > Moveable | > Moveable ] 
 
 ==============
 WINCONDITIONS

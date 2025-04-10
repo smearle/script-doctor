@@ -717,6 +717,14 @@ def gen_subrules_meta(rule, n_objs, obj_to_idxs, meta_tiles, rule_name, jit=True
             rots = [1, 3]
         elif 'vertical' in rule.prefixes:
             rots = [0, 2]
+        elif 'left' in rule.prefixes:
+            rots = [3]
+        elif 'right' in rule.prefixes:
+            rots = [1]
+        elif 'up' in rule.prefixes:
+            rots = [2]
+        elif 'down' in rule.prefixes:
+            rots = [0]
         elif len(lp) > 1 or len(rp) > 1:
             rots = [0, 1, 2, 3]
         else:

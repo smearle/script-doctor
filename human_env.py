@@ -8,12 +8,11 @@ import os
 import pickle
 import cv2
 import jax
+from lark import Lark
 import numpy as np
 
 from env import PSEnv, multihot_to_desc
-from gen_tree import GenPSTree
-from parse_lark import TREES_DIR, DATA_DIR, TEST_GAMES
-from ps_game import PSGame
+from parse_lark import TREES_DIR, DATA_DIR, TEST_GAMES, get_tree_from_txt
 
 
 
@@ -133,13 +132,13 @@ def human_loop(env: PSEnv):
     cv2.destroyAllWindows()
 
 
-def play_game(tree_path: str, jit: bool = False):
-    og_game_path = os.path.join(DATA_DIR, 'scraped_games', os.path.basename(tree_path)[:-3] + 'txt')
-    print(f"Playing game: {og_game_path}")
-    with open(tree_path, 'rb') as f:
-        tree = pickle.load(f)
-    tree: PSGame = GenPSTree().transform(tree)
-
+def play_game(game: str, jit: bool = False):
+    with open("syntax.lark", "r", encoding='utf-8') as file:
+        puzzlescript_grammar = file.read()
+    # Initialize the Lark parser with the PuzzleScript grammar
+    parser = Lark(puzzlescript_grammar, start="ps_game", maybe_placeholders=False)
+    # min_parser = Lark(min_puzzlescript_grammar, start="ps_game")
+    tree = get_tree_from_txt(parser, game)
     env = PSEnv(tree, jit=jit)
     human_loop(env)
 
@@ -147,8 +146,7 @@ def play_game(tree_path: str, jit: bool = False):
 def main(cfg: Config):
 
     if cfg.game is not None:
-        tree_path = os.path.join(TREES_DIR, cfg.game + '.pkl')
-        play_game(tree_path, jit=cfg.jit)
+        play_game(cfg.game, jit=cfg.jit)
 
     else:
         tree_paths = glob.glob(os.path.join(TREES_DIR, '*'))

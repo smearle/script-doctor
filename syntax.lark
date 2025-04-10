@@ -63,7 +63,7 @@ STARTLOOP: "startloop"i
 ENDLOOP: "endloop"i
 
 // Rule Data
-rule_data: PLUS? (prefix | rule_part)+ THEN (prefix | command | rule_part)* message? NEWLINES
+rule_data: PLUS? (PREFIX | rule_part)+ THEN (PREFIX | command | rule_part)* message? NEWLINES
 
 THEN: "->"
 PLUS: "+"
@@ -119,7 +119,7 @@ legend_key: PIXEL+
 DIRECTIONAL: /[\^v<>]/
 
 KEYWORD_ID: /[a-z0-9.A-Z_]+/
-prefix: ID
+PREFIX: "late"i | "horizontal"i | "vertical"i | "left"i | "right"i | "up"i | "down"i | ID
 
 prelude_data: PRELUDE_KEYWORD (" " STRING)* NEWLINES
 
