@@ -310,7 +310,9 @@ def gen_subrules_meta(rule, n_objs, obj_to_idxs, meta_tiles, rule_name, jit=True
     ### Functions for detecting regular atomic objects
     # @partial(jax.jit, static_argnums=(0,))
     def detect_obj_in_cell(obj_idx, m_cell):
-        active = m_cell[obj_idx] == 1 & is_obj_forceless(obj_idx, m_cell)
+        # active = m_cell[obj_idx] == 1 & is_obj_forceless(obj_idx, m_cell)
+        active = m_cell[obj_idx] == 1
+
         # jax.lax.cond(
         #     active,
         #     lambda: jax.debug.print('detected obj_idx: {obj_idx}', obj_idx=obj_idx),
@@ -401,6 +403,13 @@ def gen_subrules_meta(rule, n_objs, obj_to_idxs, meta_tiles, rule_name, jit=True
         # )
         return ObjFnReturn(active=active, obj_idx=obj_idx)
 
+    dirs_to_force_idx = {
+        'up': 3,
+        'right': 2,
+        'down': 1,
+        'left': 0,
+    }
+
     def gen_cell_detection_fn(l_cell, force_idx):
         """Produce a function to detect whether all objects/conditions in a cell (within a kernel, within the left pattern of a rule) are present.
         So for the rule `[> Player | Crate] -> [> Player | > Crate]`, this will return a function that detects, for the first cell in the left pattern,
@@ -408,7 +417,7 @@ def gen_subrules_meta(rule, n_objs, obj_to_idxs, meta_tiles, rule_name, jit=True
         """
         fns = []
         l_cell = l_cell.split(' ')
-        no, force = False, False
+        no, force, directional_force = False, False, False
         obj_names = []
         for obj in l_cell:
             obj = obj.lower()
@@ -416,16 +425,20 @@ def gen_subrules_meta(rule, n_objs, obj_to_idxs, meta_tiles, rule_name, jit=True
                 no = True
             elif obj == '>':
                 force = True
+            elif obj in ['up', 'down', 'left', 'right']:
+                directional_force = True
+                dir_force_idx = dirs_to_force_idx[obj]
             else:
                 obj_names.append(obj)
                 if obj in obj_to_idxs:
-                    obj_idx = obj_to_idxs[obj]
-                    if no:
-                        fns.append(partial(detect_no_obj_in_cell, obj_idx=obj_idx))
-                    elif force:
-                        fns.append(partial(detect_force_on_obj, obj_idx=obj_idx, force_idx=force_idx))
-                    else:
-                        fns.append(partial(detect_obj_in_cell, obj_idx=obj_idx))
+                    pass
+                    # obj_idx = obj_to_idxs[obj]
+                    # if no:
+                    #     fns.append(partial(detect_no_obj_in_cell, obj_idx=obj_idx))
+                    # elif force:
+                    #     fns.append(partial(detect_force_on_obj, obj_idx=obj_idx, force_idx=force_idx))
+                    # else:
+                    #     fns.append(partial(detect_obj_in_cell, obj_idx=obj_idx))
                 elif obj in meta_tiles:
                     sub_objs = expand_meta_tiles([obj], obj_to_idxs, meta_tiles)
                     sub_obj_idxs = [obj_to_idxs[so] for so in sub_objs]
@@ -435,6 +448,8 @@ def gen_subrules_meta(rule, n_objs, obj_to_idxs, meta_tiles, rule_name, jit=True
                         fns.append(partial(detect_no_objs_in_cell, objs_vec=sub_objs_vec))
                     elif force:
                         fns.append(partial(detect_force_on_meta, obj_idxs=tuple(sub_obj_idxs), force_idx=force_idx))
+                    elif directional_force:
+                        fns.append(partial(project_force_on_obj, obj=obj, force_idx=dir_force_idx))
                     else:
                         fns.append(partial(detect_any_objs_in_cell, objs_vec=sub_objs_vec))
                 else:
@@ -518,18 +533,23 @@ def gen_subrules_meta(rule, n_objs, obj_to_idxs, meta_tiles, rule_name, jit=True
             r_cell = []
         else:
             r_cell = r_cell.split(' ')
-        no, force = False, False
+        no, force, directional_force = False, False, False
         for obj in r_cell:
             obj = obj.lower()
             if obj == 'no':
                 no = True
             elif obj == '>':
                 force = True
+            elif obj in ['up', 'down', 'left', 'right']:
+                directional_force = True
+                dir_force_idx = dirs_to_force_idx[obj]
             elif (obj in obj_to_idxs) or (obj in meta_tiles):
                 if no:
                     fns.append(partial(project_no_obj, obj=obj))
                 elif force:
                     fns.append(partial(project_force_on_obj, obj=obj, force_idx=force_idx))
+                elif directional_force:
+                    fns.append(partial(project_force_on_obj, obj=obj, force_idx=dir_force_idx))
                 else:
                     fns.append(partial(project_obj, obj=obj))
             else:
@@ -563,18 +583,19 @@ def gen_subrules_meta(rule, n_objs, obj_to_idxs, meta_tiles, rule_name, jit=True
         is_vertical = lp.shape[1] == 1
         is_single = lp.shape[0] == 1 and lp.shape[1] == 1
         in_patch_shape = lp.shape
+        has_rp = rp is not None
         # TODO: kernels. We assume just 1 here.
         if is_horizontal:
             lp = lp[0, :]
-            if rp:
+            if has_rp:
                 rp = rp[0, :]
         elif is_vertical:
             lp = lp[:, 0]
-            if rp:
+            if has_rp:
                 rp = rp[:, 0]
         elif is_single:
             lp = lp[0, 0]
-            if rp: 
+            if has_rp: 
                 rp = rp[0, 0]
         else:
             raise Exception('Invalid rule shape.')
@@ -586,7 +607,7 @@ def gen_subrules_meta(rule, n_objs, obj_to_idxs, meta_tiles, rule_name, jit=True
                 is_line_detector = True
                 cell_detection_fns.append('...')
             cell_detection_fns.append(gen_cell_detection_fn(l_cell, force_idx))
-        if rp:
+        if has_rp:
             for i, r_cell in enumerate(rp):
                 if r_cell == '...':
                     assert is_line_detector, f"`...` not found in left pattern of rule {rule_name}"
@@ -655,7 +676,7 @@ def gen_subrules_meta(rule, n_objs, obj_to_idxs, meta_tiles, rule_name, jit=True
             )
             cancelled = False
 
-            if rp:
+            if has_rp:
 
                 def project_cells(lvl, patch_activations, detect_outs):
                     # print('NONZERO ACTIVATIONS')
@@ -1090,8 +1111,8 @@ class PSEnv:
 
     # @partial(jax.jit, static_argnums=(0))
     def _step(self, action, state: PSState):
+        init_lvl = state.multihot_level.copy()
         lvl = self.apply_player_force(action, state)
-        init_lvl = lvl.copy()
         
         def cond_fun(loop_state):
             lvl, lvl_changed, n_apps, cancelled = loop_state

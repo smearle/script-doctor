@@ -1263,7 +1263,7 @@ async function collectGameData(gamePath, captureStates=true) {
     console.log(`Processing level ${level}`);
     compile(['loadLevel', level], code);
     // const [sol, n_iters] = await solveLevelAStar(captureStates=captureStates, gameHash=gamePath, level_i=level, maxIters=1_000_000);
-    const [sol, n_iters] = await solveLevelBFS(level, captureStates=captureStates, maxIters=1_000_000);
+    const [sol, n_iters] = await solveLevelBFS(level, captureStates=captureStates, maxIters=100_000);
     console.log(`Finished processing level ${level}`);
     if (sol.length > 0) {
       const solDir = `sols/${gamePath}`;

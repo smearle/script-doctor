@@ -514,6 +514,7 @@ def list_scraped_games():
     games_set = set()
     games = []
     game_files = os.listdir('data/scraped_games')
+    random.shuffle(game_files)
     test_game_files = [f"{test_game}.txt" for test_game in TEST_GAMES]
     game_files = test_game_files + game_files
     for filename in game_files:
