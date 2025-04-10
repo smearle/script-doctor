@@ -96,25 +96,31 @@ class GenPSTree(Transformer):
 
     def rule_data(self, items):
         prefixes = []
-        l = []
+        lp = []
         for i, item in enumerate(items):
-            # if isinstance(item, Token) and item.type == 'RULE':
-            #     breakpoint()
+            if isinstance(item, Token) and item.type == 'RULE':
+                breakpoint()
             if isinstance(item, Token) and item.type == 'THEN':
-                r = items[i+1:]
+                rp = items[i+1:]
                 break
             elif isinstance(item, Token) and item.type == 'PREFIX':
                 prefixes.append(str(item))
                 continue
             # else:
             #     raise Exception(f'Unrecognized item in rule data: {item}')
-            l.append(item)
-        l = [it for it in l if it is not None]
-        r = [it for it in r if it is not None]
+            lp.append(item)
+        lp = [it for it in lp if it is not None]
+        rp = [it for it in rp if it is not None]
+        command = None
+        if isinstance(rp[0], Tree) and rp[0].data == 'command':
+            # lol
+            command = rp[0].children[0].children[0].value
+            rp = None
         rule = Rule(
             prefixes=prefixes,
-            left_patterns = l,
-            right_patterns = r,
+            left_patterns = lp,
+            right_patterns = rp,
+            command=command
         )
         return rule
     

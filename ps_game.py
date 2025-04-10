@@ -51,12 +51,14 @@ class Rule:
     def __init__(self,
                  left_patterns: List[List[str]],
                  right_patterns: List[List[str]],
-                 prefixes: Optional[List[str]] = None):
+                 prefixes: Optional[List[str]] = None,
+                 command: Optional[str] = None):
         # left_patterns, right_patterns: each is a list of "rule parts",
         # each "rule part" is a list of object/directional tokens in that cell.
         self.left_patterns = left_patterns
         self.right_patterns = right_patterns
         self.prefixes = prefixes if prefixes else []
+        self.command = command
 
     def __repr__(self):
         return (f"Rule(prefixes={self.prefixes}, "
