@@ -151,6 +151,7 @@ function hashStateObjects(state) {
 
 
 async function solveLevelBFS(levelIdx, captureStates=false, maxIters=1_000_000) {
+  console.log('max iters:', maxIters);
   function hashState(levelMap) {
     return JSON.stringify(levelMap).split('').reduce((hash, char) => {
       return (hash * 31 + char.charCodeAt(0)) % 1_000_003; // Simple hash
@@ -956,7 +957,11 @@ async function interactiveEvo() {
 async function displayGameSeeds(){
   /** Fetch all games in our dataset, to display as "seeds" for potential recombination or mutation by the user. */
   const response = await fetch('/list_scraped_games', {
-    method: 'GET',
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ 
+      target_dir: 'scraped_games',
+    }),
   });
   const data = await response.json();
   // TODO: Display the seed garden in the UI
@@ -1286,7 +1291,13 @@ async function collectGameData(gamePath, captureStates=true) {
 }
 
 async function processAllGames() {
-  const response = await fetch('/list_scraped_games');
+  const response = await fetch('/list_scraped_games', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ 
+      target_dir: 'min_games',
+    }),
+  });
   const games = await response.json();
 
   // Shuffle the games

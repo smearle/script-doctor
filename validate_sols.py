@@ -1,3 +1,4 @@
+import bdb
 import glob
 import json
 import os
@@ -39,6 +40,10 @@ if __name__ == '__main__':
 
         try:
             env = PSEnv(tree)
+        except KeyboardInterrupt as e:
+            raise e
+        except bdb.BdbQuit as e:
+            raise e
         except Exception as e:
             traceback.print_exc()
             print(f"Error creating env: {tree_path}")

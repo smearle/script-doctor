@@ -1,6 +1,14 @@
 ScriptDoctor
 ============
 
+## Setup
+
+Requires python 3.12
+```
+pip install -r requirements.txt
+```
+(If you don't have cuda available, install `jax` instead of `jax[cuda]`.)
+
 ## Generate data for training a world model
 
 ```

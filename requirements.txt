@@ -3,6 +3,7 @@ einops
 flask
 flax
 hydra-core
+imageio
 jax[cuda]  # or `jax` if no CUDA is not an option
 lark
 Levenshtein

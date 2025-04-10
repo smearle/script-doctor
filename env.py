@@ -173,6 +173,7 @@ def gen_check_win(win_conditions, obj_to_idxs, jit=True):
         elif win_condition.quantifier == 'no':
             func = partial(check_none, src=src)
         else:
+            breakpoint()
             raise Exception('Invalid quantifier.')
         funcs.append(func)
 
@@ -440,14 +441,18 @@ def gen_subrules_meta(rule, n_objs, obj_to_idxs, meta_tiles, rule_name, jit=True
             else:
                 obj_names.append(obj)
                 if obj in obj_to_idxs:
-                    pass
-                    # obj_idx = obj_to_idxs[obj]
-                    # if no:
-                    #     fns.append(partial(detect_no_obj_in_cell, obj_idx=obj_idx))
-                    # elif force:
-                    #     fns.append(partial(detect_force_on_obj, obj_idx=obj_idx, force_idx=force_idx))
-                    # else:
-                    #     fns.append(partial(detect_obj_in_cell, obj_idx=obj_idx))
+                    obj_idx = obj_to_idxs[obj]
+                    if no:
+                        fns.append(partial(detect_no_obj_in_cell, obj_idx=obj_idx))
+                        no = False
+                    elif force:
+                        fns.append(partial(detect_force_on_obj, obj_idx=obj_idx, force_idx=force_idx))
+                        force = False
+                    elif directional_force:
+                        fns.append(partial(detect_force_on_obj, obj_idx=obj_idx, force_idx=dir_force_idx))
+                        directional_force = False
+                    else:
+                        fns.append(partial(detect_obj_in_cell, obj_idx=obj_idx))
                 elif obj in meta_tiles:
                     sub_objs = expand_meta_tiles([obj], obj_to_idxs, meta_tiles)
                     sub_obj_idxs = [obj_to_idxs[so] for so in sub_objs]
@@ -455,10 +460,13 @@ def gen_subrules_meta(rule, n_objs, obj_to_idxs, meta_tiles, rule_name, jit=True
                     sub_objs_vec[sub_obj_idxs] = 1
                     if no:
                         fns.append(partial(detect_no_objs_in_cell, objs_vec=sub_objs_vec))
+                        no = False
                     elif force:
                         fns.append(partial(detect_force_on_meta, obj_idxs=tuple(sub_obj_idxs), force_idx=force_idx))
+                        force = False
                     elif directional_force:
-                        fns.append(partial(project_force_on_obj, obj=obj, force_idx=dir_force_idx))
+                        fns.append(partial(detect_force_on_meta, obj_idxs=tuple(sub_obj_idxs), force_idx=dir_force_idx))
+                        directional_force = False
                     else:
                         fns.append(partial(detect_any_objs_in_cell, objs_vec=sub_objs_vec))
                 else:
@@ -1017,7 +1025,7 @@ class PSEnv:
         coll_mat = np.einsum('ij,ik->jk', coll_masks, coll_masks, dtype=np.int8)
         self.rule_fn = gen_rule_fn(self.obj_to_idxs, coll_mat, tree.rules, meta_tiles, jit=self.jit)
         self.check_win = gen_check_win(tree.win_conditions, self.obj_to_idxs, jit=self.jit)
-        self.player_idx = self.obj_to_idxs[disambiguate_meta('player', meta_tiles, self.obj_to_idxs)]
+        self.player_idx = disambiguate_meta('player', meta_tiles, self.obj_to_idxs)
         sprite_stack = []
         for obj_name in self.obj_to_idxs:
             obj = tree.objects[obj_name]

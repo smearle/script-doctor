@@ -509,15 +509,19 @@ def get_player_action():
     action = random.randint(0, 5)
     return jsonify({'action': action})
 
-@app.route('/list_scraped_games', methods=['GET'])
+@app.route('/list_scraped_games', methods=['POST'])
 def list_scraped_games():
+    data = request.json
+    target_dir = data['target_dir']
     games_set = set()
     games = []
-    game_files = os.listdir('data/scraped_games')
+    game_files = os.listdir(os.path.join('data', target_dir))
     random.shuffle(game_files)
     test_game_files = [f"{test_game}.txt" for test_game in TEST_GAMES]
     game_files = test_game_files + game_files
     for filename in game_files:
+        if filename.startswith('rigid_'):
+            continue
         if filename.endswith('.txt'):
             filename = filename[:-4]
             if filename not in games_set:
