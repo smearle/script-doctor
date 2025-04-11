@@ -9,7 +9,7 @@ import jax.numpy as jnp
 import numpy as np
 
 from jax_utils import stack_leaves
-from ps_game import LegendEntry, PSGame
+from ps_game import LegendEntry, PSGame, WinCondition
 
 # TODO: double check these colors
 color_hex_map = {
@@ -151,14 +151,15 @@ def expand_meta_tiles(tile_list, obj_to_idxs, meta_tiles):
     return expanded_meta_tiles
 
 def get_meta_channel(lvl, obj_idxs):
-    return jnp.any(lvl[obj_idxs], axis=0)
+    return jnp.any(lvl[jnp.array(obj_idxs)], axis=0)
 
-def gen_check_win(win_conditions, obj_to_idxs, meta_tiles, jit=True):
+def gen_check_win(win_conditions: Iterable[WinCondition], obj_to_idxs, meta_tiles, jit=True):
 
     def check_all(lvl, src, trg):
         src_channel = get_meta_channel(lvl, src)
         trg_channel = get_meta_channel(lvl, trg)
-        return ~jnp.any(src_channel & trg_channel)
+        # There can be no source objects that do not overlap target objects
+        return ~jnp.any(src_channel & ~trg_channel)
 
     def check_some(lvl, src, trg):
         src_channel = get_meta_channel(lvl, src)
@@ -173,12 +174,16 @@ def gen_check_win(win_conditions, obj_to_idxs, meta_tiles, jit=True):
     for win_condition in win_conditions:
         src, trg = win_condition.src_obj, win_condition.trg_obj
         if src in obj_to_idxs:
-            src = obj_to_idxs[src]
+            src = [obj_to_idxs[src]]
         else:
             src_objs = disambiguate_meta(src, meta_tiles, obj_to_idxs)
             src = [obj_to_idxs[obj] for obj in src_objs]
         if trg is not None:
-            trg = obj_to_idxs[trg]
+            if trg in obj_to_idxs:
+                trg = [obj_to_idxs[trg]]
+            else:
+                trg_objs = disambiguate_meta(trg, meta_tiles, obj_to_idxs)
+                trg = [obj_to_idxs[obj] for obj in trg_objs]
         if win_condition.quantifier == 'all':
             func = partial(check_all, src=src, trg=trg)
         elif win_condition.quantifier == 'some':
@@ -389,7 +394,7 @@ def gen_subrules_meta(rule, n_objs, obj_to_idxs, meta_tiles, rule_name, jit=True
 
     # @partial(jax.jit, static_argnums=())
     def detect_no_objs_in_cell(objs_vec, m_cell):
-        active = np.sum(objs_vec[:, None, None] * m_cell) == 0
+        active = ~jnp.any(objs_vec * m_cell)
         return ObjFnReturn(active=active)
 
     # @partial(jax.jit, static_argnums=(0, 1))
@@ -472,6 +477,7 @@ def gen_subrules_meta(rule, n_objs, obj_to_idxs, meta_tiles, rule_name, jit=True
                     sub_objs_vec = np.zeros((n_objs + n_objs * 4), dtype=bool)
                     sub_objs_vec[sub_obj_idxs] = 1
                     if no:
+                        print(l_cell)
                         fns.append(partial(detect_no_objs_in_cell, objs_vec=sub_objs_vec))
                         no = False
                     elif force:
@@ -773,12 +779,12 @@ def gen_subrules_meta(rule, n_objs, obj_to_idxs, meta_tiles, rule_name, jit=True
 
         if 'horizontal' in rule.prefixes:
             rots = [1, 3]
-        elif 'vertical' in rule.prefixes:
-            rots = [0, 2]
         elif 'left' in rule.prefixes:
             rots = [3]
         elif 'right' in rule.prefixes:
             rots = [1]
+        elif 'vertical' in rule.prefixes:
+            rots = [0, 2]
         elif 'up' in rule.prefixes:
             rots = [2]
         elif 'down' in rule.prefixes:
@@ -862,6 +868,7 @@ def gen_rule_fn(obj_to_idxs, coll_mat, tree_rules, meta_tiles, jit=True):
                     rule_applied = rule_app_i > 1
                     grp_applied = jnp.logical_or(grp_applied, rule_applied)
                 jax.debug.print('group {grp_i} applied: {grp_applied}', grp_i=grp_i, grp_applied=grp_applied)
+                # print('rule: {rule}', rule=tree_rules[0][0].rules[grp_i])
                 if not jit:
                     if grp_applied:
                         print('\n' + multihot_to_desc(lvl[0], obj_to_idxs))
@@ -1058,17 +1065,19 @@ class PSEnv:
         self.sprite_stack = np.array(sprite_stack)
         n_objs = len(self.obj_to_idxs)
         char_legend = {v: k for k, v in obj_legend.items()}
+        # Generate vectors to detect atomic objects
         self.obj_vecs = np.eye(n_objs, dtype=bool)
         joint_obj_vecs = []
         self.chars_to_idxs = {obj_legend[k]: v for k, v in self.obj_to_idxs.items() if k in obj_legend}
+
         for jo, subobjects in joint_tiles.items():
             vec = np.zeros(n_objs, dtype=bool)
+            subobjects = expand_meta_tiles(subobjects, self.obj_to_idxs, meta_tiles)
             for so in subobjects:
                 vec += self.obj_vecs[self.obj_to_idxs[so]]
             assert jo not in self.chars_to_idxs
             self.chars_to_idxs[jo] = len(self.chars_to_idxs)
             self.obj_vecs = np.concatenate((self.obj_vecs, vec[None]), axis=0)
-        print(f'self.obj_vecs:\n{self.obj_vecs}')
 
         if self.jit:
             self.step = jax.jit(self._step)
@@ -1127,14 +1136,14 @@ class PSEnv:
             player_int_mask = (self.player_idxs[...,None,None] + 1) * multihot_level[self.player_idxs]
             # turn the int mask into coords, by flattening it, and appending it with xy coords
             xy_coords = jnp.indices(force_map.shape[1:])
+            xy_coords = xy_coords[:, None].repeat(len(self.player_idxs), axis=1)
             player_int_mask = player_int_mask * 4 + action
-            player_int_mask = jnp.concatenate((player_int_mask, xy_coords), axis=0)
+            player_int_mask = jnp.concatenate((player_int_mask[None], xy_coords), axis=0)
             player_coords = player_int_mask.reshape(3, -1).T
             force_map = force_map.at[tuple(player_coords.T)].set(1)
             force_map_sum = force_map.sum()
             # jax.debug.print('force_map: {force_map}', force_map=force_map)
             # jax.debug.print('force map sum: {force_map_sum}', force_map_sum=force_map_sum)
-            # force_map = force_map.at[player_int_mask * 4 + action].set(1)
             return force_map
 
         force_map = jax.lax.cond(
@@ -1146,7 +1155,7 @@ class PSEnv:
         force_map = force_map[4:]
 
         lvl = jnp.concatenate((multihot_level, force_map), axis=0)
-        # lvl = lvl.astype(np.float32)
+
         return lvl
 
     # @partial(jax.jit, static_argnums=(0))

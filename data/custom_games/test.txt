@@ -78,12 +78,13 @@ Player, Wall, Block
 RULES
 ======
 
-[ > Moveable | Moveable ] -> [ > Moveable | LEFT Moveable ] 
+[ UP Moveable | Moveable ] -> [ UP Moveable | UP Moveable ] 
 
 ==============
 WINCONDITIONS
 ==============
 
+some EndPoint on Moveable
 
 =======
 LEVELS
@@ -91,5 +92,5 @@ LEVELS
 
 .P..
 .O..
-.O..
+....
 ....

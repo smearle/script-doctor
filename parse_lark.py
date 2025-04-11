@@ -374,9 +374,9 @@ def strip_comments(text):
     return new_text
 
 def get_tree_from_txt(parser, game, log_dir: str = None, overwrite: bool = True):
-    filepath = os.path.join(games_dir, game + '.txt')
+    filepath = os.path.join(custom_games_dir, game + '.txt')
     if not os.path.exists(filepath):
-        filepath = os.path.join(custom_games_dir, game + '.txt')
+        filepath = os.path.join(games_dir, game + '.txt')
     with open(filepath, 'r', encoding='utf-8') as f:
         ps_text = f.read()
     simp_filename = game[:-4] + '_simplified.txt' 

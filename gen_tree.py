@@ -104,7 +104,7 @@ class GenPSTree(Transformer):
                 rp = items[i+1:]
                 break
             elif isinstance(item, Token) and item.type == 'PREFIX':
-                prefixes.append(str(item))
+                prefixes.append(str(item).lower())
                 continue
             # else:
             #     raise Exception(f'Unrecognized item in rule data: {item}')
