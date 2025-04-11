@@ -154,7 +154,8 @@ def main(cfg: Config):
         tree_paths = sorted(tree_paths, reverse=True)
         test_game_paths = [os.path.join(TREES_DIR, tg + '.pkl') for tg in TEST_GAMES]
         tree_paths = test_game_paths + tree_paths
-        for tree_path in tree_paths:
+        game_paths = [os.path.basename(tree_path)[:-4] for tree_path in tree_paths]
+        for tree_path in game_paths:
             play_game(tree_path, jit=cfg.jit)
     
 

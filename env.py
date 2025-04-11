@@ -88,7 +88,7 @@ def level_to_multihot(level):
 def assign_vecs_to_objs(collision_layers):
     n_lyrs = len(collision_layers)
     n_objs = sum([len(lyr) for lyr in collision_layers])
-    coll_masks = np.zeros((n_lyrs, n_objs), dtype=np.int8)
+    coll_masks = np.zeros((n_lyrs, n_objs), dtype=bool)
     objs_to_idxs = {}
     # vecs = np.eye(n_objs, dtype=np.uint8)
     # obj_vec_dict = {}
@@ -207,100 +207,100 @@ def gen_check_win(win_conditions, obj_to_idxs, meta_tiles, jit=True):
     return check_win
 
 
-def gen_subrule(rule, n_objs, obj_to_idxs, meta_tiles):
-    assert len(rule.prefixes) == 0
-    lp = rule.left_patterns
-    rp = rule.right_patterns
-    n_kernels = len(lp)
-    assert n_kernels == 1
-    assert len(rp) == n_kernels
-    lp = lp[0]
-    rp = rp[0]
-    n_cells = len(lp)
-    assert len(rp) == n_cells
+# def gen_subrule(rule, n_objs, obj_to_idxs, meta_tiles):
+#     assert len(rule.prefixes) == 0
+#     lp = rule.left_patterns
+#     rp = rule.right_patterns
+#     n_kernels = len(lp)
+#     assert n_kernels == 1
+#     assert len(rp) == n_kernels
+#     lp = lp[0]
+#     rp = rp[0]
+#     n_cells = len(lp)
+#     assert len(rp) == n_cells
 
-    lr_in = np.zeros((n_objs + (n_objs * 4), 1, n_cells), dtype=np.int8)
-    rr_in = np.zeros_like(lr_in)
-    ur_in = np.zeros((n_objs + (n_objs * 4), n_cells, 1), dtype=np.int8)
-    dr_in = np.zeros_like(ur_in)
-    lr_out = np.zeros_like(lr_in)
-    rr_out = np.zeros_like(rr_in)
-    ur_out = np.zeros_like(ur_in)
-    dr_out = np.zeros_like(dr_in)
-    for i, (l_cell, r_cell) in enumerate(zip(lp, rp)):
-        # Left cell
-        if len(l_cell) == 1:
-            l_cell = l_cell[0]
-            l_cell = l_cell.split(' ')
-        l_force = False
-        l_no = False
-        for obj in l_cell:
-            obj = obj.lower()
-            if obj in meta_tiles:
-                return None
-            if obj in obj_to_idxs:
-                fill_val = 1
-                if l_no:
-                    fill_val = -1
-                obj_i = obj_to_idxs[obj]
-                lr_in[obj_i, 0, i] = fill_val
-                rr_in[obj_i, 0, n_cells-1-i] = fill_val
-                ur_in[obj_i, i, 0] = fill_val
-                dr_in[obj_i, n_cells-1-i, 0] = fill_val
-                if l_force:
-                    lr_in[n_objs + (obj_i * 4) + 2, 0, i] = 1
-                    rr_in[n_objs + (obj_i * 4) + 0, 0, n_cells-1-i] = 1
-                    ur_in[n_objs + (obj_i * 4) + 1, i, 0] = 1
-                    dr_in[n_objs + (obj_i * 4) + 3, n_cells-1-i, 0] = 1
-                l_force, l_no = False, False
-            elif obj == '>':
-                l_force = True
-            elif obj == 'no':
-                l_no = True
-            else: raise Exception(f'Invalid object `{obj}` in rule.')
-        # Right cell
-        if len(r_cell) == 1:
-            r_cell = r_cell[0]
-            r_cell = r_cell.split(' ')
-        r_force = False
-        r_no = False
-        for obj in r_cell:
-            obj = obj.lower()
-            # NOTE: Should never have a meta-tile here if we didn't already see one on the left side (?)
-            if obj in obj_to_idxs:
-                fill_val = 1
-                if r_no:
-                    fill_val = -1
-                obj_i = obj_to_idxs[obj]
-                lr_out[obj_i, 0, i] = fill_val
-                rr_out[obj_i, 0, n_cells-1-i] = fill_val
-                ur_out[obj_i, i, 0] = fill_val
-                dr_out[obj_i, n_cells-1-i, 0] = fill_val
-                if r_force:
-                    lr_out[n_objs + (obj_i * 4) + 2, 0, i] = 1
-                    rr_out[n_objs + (obj_i * 4) + 0, 0, n_cells-1-i] = 1
-                    ur_out[n_objs + (obj_i * 4) + 1, i, 0] = 1
-                    dr_out[n_objs + (obj_i * 4) + 3, n_cells-1-i, 0] = 1
-                r_force, r_no = False, False
-            elif obj == '>':
-                r_force = True
-            elif obj == 'no':
-                r_no = True
-            else: raise Exception('Invalid object in rule.')
-    lr_out = lr_out - np.clip(lr_in, 0, 1)
-    rr_out = rr_out - np.clip(rr_in, 0, 1)
-    ur_out = ur_out - np.clip(ur_in, 0, 1)
-    dr_out = dr_out - np.clip(dr_in, 0, 1)
-    lr_rule = np.stack((lr_in, lr_out), axis=0)
-    rr_rule = np.stack((rr_in, rr_out), axis=0)
-    ur_rule = np.stack((ur_in, ur_out), axis=0)
-    dr_rule = np.stack((dr_in, dr_out), axis=0)
-    # TODO: If horizontal/vertical etc. has been specified, filter out unnecessary rules here
-    rules = [lr_rule, rr_rule, ur_rule, dr_rule]
-    rule_names = [f"{rule}_{dir}" for dir in enumerate(['lr', 'ur', 'rr', 'dr'])]
-    rule_fns = [partial(apply_move_rule, move_rule=rule, rule_name=rule_name) 
-                    for rule, rule_name in zip(rules, rule_names)]
-    return rule_fns
+#     lr_in = np.zeros((n_objs + (n_objs * 4), 1, n_cells), dtype=np.int8)
+#     rr_in = np.zeros_like(lr_in)
+#     ur_in = np.zeros((n_objs + (n_objs * 4), n_cells, 1), dtype=np.int8)
+#     dr_in = np.zeros_like(ur_in)
+#     lr_out = np.zeros_like(lr_in)
+#     rr_out = np.zeros_like(rr_in)
+#     ur_out = np.zeros_like(ur_in)
+#     dr_out = np.zeros_like(dr_in)
+#     for i, (l_cell, r_cell) in enumerate(zip(lp, rp)):
+#         # Left cell
+#         if len(l_cell) == 1:
+#             l_cell = l_cell[0]
+#             l_cell = l_cell.split(' ')
+#         l_force = False
+#         l_no = False
+#         for obj in l_cell:
+#             obj = obj.lower()
+#             if obj in meta_tiles:
+#                 return None
+#             if obj in obj_to_idxs:
+#                 fill_val = 1
+#                 if l_no:
+#                     fill_val = -1
+#                 obj_i = obj_to_idxs[obj]
+#                 lr_in[obj_i, 0, i] = fill_val
+#                 rr_in[obj_i, 0, n_cells-1-i] = fill_val
+#                 ur_in[obj_i, i, 0] = fill_val
+#                 dr_in[obj_i, n_cells-1-i, 0] = fill_val
+#                 if l_force:
+#                     lr_in[n_objs + (obj_i * 4) + 2, 0, i] = 1
+#                     rr_in[n_objs + (obj_i * 4) + 0, 0, n_cells-1-i] = 1
+#                     ur_in[n_objs + (obj_i * 4) + 1, i, 0] = 1
+#                     dr_in[n_objs + (obj_i * 4) + 3, n_cells-1-i, 0] = 1
+#                 l_force, l_no = False, False
+#             elif obj == '>':
+#                 l_force = True
+#             elif obj == 'no':
+#                 l_no = True
+#             else: raise Exception(f'Invalid object `{obj}` in rule.')
+#         # Right cell
+#         if len(r_cell) == 1:
+#             r_cell = r_cell[0]
+#             r_cell = r_cell.split(' ')
+#         r_force = False
+#         r_no = False
+#         for obj in r_cell:
+#             obj = obj.lower()
+#             # NOTE: Should never have a meta-tile here if we didn't already see one on the left side (?)
+#             if obj in obj_to_idxs:
+#                 fill_val = 1
+#                 if r_no:
+#                     fill_val = -1
+#                 obj_i = obj_to_idxs[obj]
+#                 lr_out[obj_i, 0, i] = fill_val
+#                 rr_out[obj_i, 0, n_cells-1-i] = fill_val
+#                 ur_out[obj_i, i, 0] = fill_val
+#                 dr_out[obj_i, n_cells-1-i, 0] = fill_val
+#                 if r_force:
+#                     lr_out[n_objs + (obj_i * 4) + 2, 0, i] = 1
+#                     rr_out[n_objs + (obj_i * 4) + 0, 0, n_cells-1-i] = 1
+#                     ur_out[n_objs + (obj_i * 4) + 1, i, 0] = 1
+#                     dr_out[n_objs + (obj_i * 4) + 3, n_cells-1-i, 0] = 1
+#                 r_force, r_no = False, False
+#             elif obj == '>':
+#                 r_force = True
+#             elif obj == 'no':
+#                 r_no = True
+#             else: raise Exception('Invalid object in rule.')
+#     lr_out = lr_out - np.clip(lr_in, 0, 1)
+#     rr_out = rr_out - np.clip(rr_in, 0, 1)
+#     ur_out = ur_out - np.clip(ur_in, 0, 1)
+#     dr_out = dr_out - np.clip(dr_in, 0, 1)
+#     lr_rule = np.stack((lr_in, lr_out), axis=0)
+#     rr_rule = np.stack((rr_in, rr_out), axis=0)
+#     ur_rule = np.stack((ur_in, ur_out), axis=0)
+#     dr_rule = np.stack((dr_in, dr_out), axis=0)
+#     # TODO: If horizontal/vertical etc. has been specified, filter out unnecessary rules here
+#     rules = [lr_rule, rr_rule, ur_rule, dr_rule]
+#     rule_names = [f"{rule}_{dir}" for dir in enumerate(['lr', 'ur', 'rr', 'dr'])]
+#     rule_fns = [partial(apply_move_rule, move_rule=rule, rule_name=rule_name) 
+#                     for rule, rule_name in zip(rules, rule_names)]
+#     return rule_fns
 
 
 @flax.struct.dataclass
@@ -396,7 +396,7 @@ def gen_subrules_meta(rule, n_objs, obj_to_idxs, meta_tiles, rule_name, jit=True
     def detect_force_on_meta(obj_idxs, force_idx, m_cell):
         force_obj_vecs = []
         for obj_idx in obj_idxs:
-            force_obj_vec = np.zeros(n_objs + n_objs * 4, dtype=np.int8)
+            force_obj_vec = np.zeros(n_objs + n_objs * 4, dtype=bool)
             force_obj_vec[obj_idx] = 1
             force_obj_vec[n_objs + obj_idx * 4 + force_idx] = 1
             force_obj_vecs.append(force_obj_vec)
@@ -469,7 +469,7 @@ def gen_subrules_meta(rule, n_objs, obj_to_idxs, meta_tiles, rule_name, jit=True
                 elif obj in meta_tiles:
                     sub_objs = expand_meta_tiles([obj], obj_to_idxs, meta_tiles)
                     sub_obj_idxs = [obj_to_idxs[so] for so in sub_objs]
-                    sub_objs_vec = np.zeros((n_objs + n_objs * 4), dtype=np.int8)
+                    sub_objs_vec = np.zeros((n_objs + n_objs * 4), dtype=bool)
                     sub_objs_vec[sub_obj_idxs] = 1
                     if no:
                         fns.append(partial(detect_no_objs_in_cell, objs_vec=sub_objs_vec))
@@ -490,7 +490,7 @@ def gen_subrules_meta(rule, n_objs, obj_to_idxs, meta_tiles, rule_name, jit=True
             # TODO: can vmap this
             fn_outs: List[ObjFnReturn] = [fn(m_cell=m_cell) for fn in fns]
             activated = jnp.all(jnp.array([f.active for f in fn_outs]))
-            detected = jnp.zeros(m_cell.shape, dtype=np.int8)
+            detected = jnp.zeros(m_cell.shape, dtype=bool)
             force_idx = None
             for i, f in enumerate(fn_outs):
                 # if f.obj_idx != -1:
@@ -578,11 +578,10 @@ def gen_subrules_meta(rule, n_objs, obj_to_idxs, meta_tiles, rule_name, jit=True
         
         # @partial(jax.jit, static_argnums=())
         def cell_projection_fn(m_cell, detect_out):
-            m_cell -= detect_out.detected
-            # vmap
+            m_cell = m_cell & ~detect_out.detected
             for proj_fn in fns:
                 m_cell = proj_fn(m_cell=m_cell, detect_out=detect_out)
-            removed_something = jnp.sum(detect_out.detected) > 0
+            removed_something = jnp.any(detect_out.detected)
             jax.lax.cond(
                 removed_something,
                 lambda: jax.debug.print('removing detected: {det}', det=detect_out.detected),
@@ -741,7 +740,7 @@ def gen_subrules_meta(rule, n_objs, obj_to_idxs, meta_tiles, rule_name, jit=True
                     lvl, patch_activations, detect_outs
                 )
                 rule_applied = jnp.any(new_lvl != lvl)
-                lvl = new_lvl.astype(np.float32)
+                lvl = new_lvl
 
             else:
                 assert r_command is not None
@@ -832,7 +831,7 @@ def gen_rule_fn(obj_to_idxs, coll_mat, tree_rules, meta_tiles, jit=True):
     def rule_fn(lvl):
         changed = False
         cancelled = False
-        lvl = lvl[None].astype(np.float32)
+        lvl = lvl[None]
 
         if not jit:
             print('\n' + multihot_to_desc(lvl[0], obj_to_idxs))
@@ -894,6 +893,7 @@ def gen_rule_fn(obj_to_idxs, coll_mat, tree_rules, meta_tiles, jit=True):
 def gen_move_rules(obj_to_idxs, coll_mat, jit=True):
     n_objs = len(obj_to_idxs)
     rule_fns = []
+    coll_mat = coll_mat.astype(np.int8)
     for obj, idx in obj_to_idxs.items():
         if obj == 'Background':
             continue
@@ -1015,6 +1015,7 @@ def apply_move_rule(lvl, move_rule, jit=True, rule_name=None):
     #     print(out[0,2])
     #     breakpoint()
     lvl += out
+    lvl = lvl.astype(bool)
 
     return lvl, changed, False
 
@@ -1035,14 +1036,16 @@ class PSEnv:
         collision_layers = expand_collision_layers(tree.collision_layers, meta_tiles)
         self.obj_to_idxs, coll_masks = assign_vecs_to_objs(collision_layers)
         self.n_objs = len(self.obj_to_idxs)
-        coll_mat = np.einsum('ij,ik->jk', coll_masks, coll_masks, dtype=np.int8)
+        coll_mat = np.einsum('ij,ik->jk', coll_masks, coll_masks, dtype=bool)
         self.rule_fn = gen_rule_fn(self.obj_to_idxs, coll_mat, tree.rules, meta_tiles, jit=self.jit)
         self.check_win = gen_check_win(tree.win_conditions, self.obj_to_idxs, meta_tiles, jit=self.jit)
         if 'player' in self.obj_to_idxs:
-            self.player_idx = self.obj_to_idxs['player']
+            self.player_idxs = [self.obj_to_idxs['player']]
         else:
             player_objs = disambiguate_meta('player', meta_tiles, self.obj_to_idxs)
-            self.player_idx = [self.obj_to_idxs[p] for p in player_objs]
+            self.player_idxs = [self.obj_to_idxs[p] for p in player_objs]
+        self.player_idxs = np.array(self.player_idxs)
+        print(f'player_idxs: {self.player_idxs}')
         sprite_stack = []
         for obj_name in self.obj_to_idxs:
             obj = tree.objects[obj_name]
@@ -1055,16 +1058,17 @@ class PSEnv:
         self.sprite_stack = np.array(sprite_stack)
         n_objs = len(self.obj_to_idxs)
         char_legend = {v: k for k, v in obj_legend.items()}
-        self.obj_vecs = np.eye(n_objs, dtype=np.int8)
+        self.obj_vecs = np.eye(n_objs, dtype=bool)
         joint_obj_vecs = []
         self.chars_to_idxs = {obj_legend[k]: v for k, v in self.obj_to_idxs.items() if k in obj_legend}
         for jo, subobjects in joint_tiles.items():
-            vec = np.zeros(n_objs, dtype=np.int8)
+            vec = np.zeros(n_objs, dtype=bool)
             for so in subobjects:
                 vec += self.obj_vecs[self.obj_to_idxs[so]]
             assert jo not in self.chars_to_idxs
             self.chars_to_idxs[jo] = len(self.chars_to_idxs)
             self.obj_vecs = np.concatenate((self.obj_vecs, vec[None]), axis=0)
+        print(f'self.obj_vecs:\n{self.obj_vecs}')
 
         if self.jit:
             self.step = jax.jit(self._step)
@@ -1072,6 +1076,7 @@ class PSEnv:
         else:
             self.step = self._step
             self.apply_player_force = self._apply_player_force
+        self.joint_tiles = joint_tiles
 
     def char_level_to_multihot(self, level):
         int_level = np.vectorize(lambda x: self.chars_to_idxs[x])(level)
@@ -1079,14 +1084,14 @@ class PSEnv:
         bg_idx = self.obj_to_idxs['background']
         multihot_level = rearrange(multihot_level, "h w c -> c h w")
         multihot_level[bg_idx] = 1
-        multihot_level = multihot_level.astype(np.float32)
+        multihot_level = multihot_level.astype(bool)
         return multihot_level
 
     def render(self, state: PSState, cv2=True):
         lvl = state.multihot_level
         level_height, level_width = lvl.shape[1:]
         sprite_height, sprite_width = self.sprite_stack.shape[1:3]
-        im = np.zeros((level_height * sprite_height, level_width * sprite_width, 4), dtype=np.int8)
+        im = np.zeros((level_height * sprite_height, level_width * sprite_width, 4), dtype=np.uint8)
         im_lyrs = []
         for i, sprite in enumerate(self.sprite_stack):
             sprite_stack_i = np.stack(
@@ -1114,14 +1119,22 @@ class PSEnv:
     # @partial(jax.jit, static_argnums=(0))
     def _apply_player_force(self, action, state: PSState):
         multihot_level = state.multihot_level
-        # player_channel = get_meta_channel(multihot_level, self.player_idx)
-        # player_mask = jnp.any()
-        player_pos = jnp.argwhere(multihot_level[self.player_idx] == 1, size=1)[0]
-        force_map = jnp.zeros((4 * multihot_level.shape[0], *multihot_level.shape[1:]), dtype=np.int8)
-
+        # add a dummy object at the front
+        force_map = jnp.zeros((4 * (multihot_level.shape[0] + 1), *multihot_level.shape[1:]), dtype=bool)
+        
         def place_force(force_map, action):
             action = jnp.array([0, 1, 2, 3])[action]
-            force_map = force_map.at[self.player_idx * 4 + action, player_pos[0], player_pos[1]].set(1)
+            player_int_mask = (self.player_idxs[...,None,None] + 1) * multihot_level[self.player_idxs]
+            # turn the int mask into coords, by flattening it, and appending it with xy coords
+            xy_coords = jnp.indices(force_map.shape[1:])
+            player_int_mask = player_int_mask * 4 + action
+            player_int_mask = jnp.concatenate((player_int_mask, xy_coords), axis=0)
+            player_coords = player_int_mask.reshape(3, -1).T
+            force_map = force_map.at[tuple(player_coords.T)].set(1)
+            force_map_sum = force_map.sum()
+            # jax.debug.print('force_map: {force_map}', force_map=force_map)
+            # jax.debug.print('force map sum: {force_map_sum}', force_map_sum=force_map_sum)
+            # force_map = force_map.at[player_int_mask * 4 + action].set(1)
             return force_map
 
         force_map = jax.lax.cond(
@@ -1130,11 +1143,11 @@ class PSEnv:
             lambda force_map, action: force_map,
             force_map, action
         )
+        force_map = force_map[4:]
 
         lvl = jnp.concatenate((multihot_level, force_map), axis=0)
-        lvl = lvl.astype(np.float32)
+        # lvl = lvl.astype(np.float32)
         return lvl
-
 
     # @partial(jax.jit, static_argnums=(0))
     def _step(self, action, state: PSState):

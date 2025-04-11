@@ -71,6 +71,7 @@ if __name__ == '__main__':
             level_i = int(os.path.basename(level_sol_path).split('-')[1].split('.')[0])
             print(f"Level {level_i} solution: {actions}")
             traj_dir = os.path.join('vids', 'jax_sols', os.path.basename(tree_path)[:-3])
+            os.makedirs(traj_dir, exist_ok=True)
 
             state = env.reset(level_i)
 
@@ -84,7 +85,7 @@ if __name__ == '__main__':
                 with open(log_path, 'w') as f:
                     f.write(f"Level {level_i} solution failed\n")
                     f.write(f"Actions: {actions}\n")
-                    f.write(f"State: {state}\n")
+                    # f.write(f"State: {state}\n")
                 print(f"Level {level_i} solution failed")
 
             # Use jax tree map to add the initial state
