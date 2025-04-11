@@ -1,5 +1,5 @@
 from functools import partial
-from typing import List
+from typing import Iterable, List
 
 from einops import rearrange
 import flax
@@ -150,20 +150,33 @@ def expand_meta_tiles(tile_list, obj_to_idxs, meta_tiles):
             expanded_meta_tiles += expand_meta_tiles(meta_tiles[mt], obj_to_idxs, meta_tiles)
     return expanded_meta_tiles
 
-def gen_check_win(win_conditions, obj_to_idxs, jit=True):
+def get_meta_channel(lvl, obj_idxs):
+    return jnp.any(lvl[obj_idxs], axis=0)
+
+def gen_check_win(win_conditions, obj_to_idxs, meta_tiles, jit=True):
+
     def check_all(lvl, src, trg):
-        return jnp.sum((lvl[src] == 1) * (lvl[trg] == 0)) == 0
+        src_channel = get_meta_channel(lvl, src)
+        trg_channel = get_meta_channel(lvl, trg)
+        return ~jnp.any(src_channel & trg_channel)
 
     def check_some(lvl, src, trg):
-        return jnp.sum((lvl[src] == 1) * (lvl[trg] == 1)) > 0
+        src_channel = get_meta_channel(lvl, src)
+        trg_channel = get_meta_channel(lvl, trg)
+        return jnp.any(src_channel & trg_channel)
 
     def check_none(lvl, src):
-        return jnp.sum(lvl[src] == 1) == 0
+        src_channel = get_meta_channel(lvl, src)
+        return ~jnp.any(src_channel)
 
     funcs = []
     for win_condition in win_conditions:
         src, trg = win_condition.src_obj, win_condition.trg_obj
-        src = obj_to_idxs[src]
+        if src in obj_to_idxs:
+            src = obj_to_idxs[src]
+        else:
+            src_objs = disambiguate_meta(src, meta_tiles, obj_to_idxs)
+            src = [obj_to_idxs[obj] for obj in src_objs]
         if trg is not None:
             trg = obj_to_idxs[trg]
         if win_condition.quantifier == 'all':
@@ -678,6 +691,7 @@ def gen_subrules_meta(rule, n_objs, obj_to_idxs, meta_tiles, rule_name, jit=True
             # eliminate all but one activation
             lp_detected = patch_activations.sum() > 0
             jax.lax.cond(
+                # True,
                 lp_detected,
                 lambda: jax.debug.print('Rule {rule_name} applied: {lp_detected}', rule_name=rule_name, lp_detected=lp_detected),
                 lambda: None,
@@ -860,14 +874,13 @@ def gen_rule_fn(obj_to_idxs, coll_mat, tree_rules, meta_tiles, jit=True):
             grp_app_i = 0
             if jit:
                 lvl, grp_applied, grp_app_i, cancelled = jax.lax.while_loop(
-                    cond_fun=lambda x: jnp.logical_and(x[1], 1 - x[3]),
+                    cond_fun=lambda x: x[1] & ~x[3],
                     body_fun=apply_rule_grp,
                     init_val=(lvl, grp_applied, grp_app_i, cancelled),
                 )
             else:
-                while grp_applied:
-                    lvl, grp_applied = apply_rule_grp((lvl, grp_applied))
-                    grp_app_i += 1
+                while grp_applied and not cancelled:
+                    lvl, grp_applied, grp_app_i, cancelled = apply_rule_grp((lvl, grp_applied, grp_app_i, cancelled))
 
             grp_applied = grp_app_i > 1
 
@@ -1024,8 +1037,12 @@ class PSEnv:
         self.n_objs = len(self.obj_to_idxs)
         coll_mat = np.einsum('ij,ik->jk', coll_masks, coll_masks, dtype=np.int8)
         self.rule_fn = gen_rule_fn(self.obj_to_idxs, coll_mat, tree.rules, meta_tiles, jit=self.jit)
-        self.check_win = gen_check_win(tree.win_conditions, self.obj_to_idxs, jit=self.jit)
-        self.player_idx = disambiguate_meta('player', meta_tiles, self.obj_to_idxs)
+        self.check_win = gen_check_win(tree.win_conditions, self.obj_to_idxs, meta_tiles, jit=self.jit)
+        if 'player' in self.obj_to_idxs:
+            self.player_idx = self.obj_to_idxs['player']
+        else:
+            player_objs = disambiguate_meta('player', meta_tiles, self.obj_to_idxs)
+            self.player_idx = [self.obj_to_idxs[p] for p in player_objs]
         sprite_stack = []
         for obj_name in self.obj_to_idxs:
             obj = tree.objects[obj_name]
@@ -1097,6 +1114,8 @@ class PSEnv:
     # @partial(jax.jit, static_argnums=(0))
     def _apply_player_force(self, action, state: PSState):
         multihot_level = state.multihot_level
+        # player_channel = get_meta_channel(multihot_level, self.player_idx)
+        # player_mask = jnp.any()
         player_pos = jnp.argwhere(multihot_level[self.player_idx] == 1, size=1)[0]
         force_map = jnp.zeros((4 * multihot_level.shape[0], *multihot_level.shape[1:]), dtype=np.int8)
 
@@ -1140,7 +1159,7 @@ class PSEnv:
         else:
             while cond_fun(init_state):
                 init_state = body_fun(init_state)
-            final_lvl = init_state[0]
+            final_lvl, _, _, cancelled = init_state
 
         
         final_lvl = jax.lax.select(

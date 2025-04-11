@@ -49,6 +49,7 @@ def human_loop(env: PSEnv):
         key = cv2.waitKey(0)
         action = None
         do_reset = False
+        print(multihot_to_desc(state.multihot_level, env.obj_to_idxs))
 
         # If the user presses ESC (ASCII 27), exit the loop.
         if key == 27:
@@ -94,7 +95,7 @@ def human_loop(env: PSEnv):
 
         elif do_reset:
             state = env.reset(lvl_i)
-            # print(multihot_to_desc(state.multihot_level, env.obj_to_idxs))
+            print(multihot_to_desc(state.multihot_level, env.obj_to_idxs))
             state_hist.append(state)
             im = env.render(state)
             im = np.array(im, dtype=np.uint8)
