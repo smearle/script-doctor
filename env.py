@@ -310,8 +310,9 @@ def gen_check_win(win_conditions: Iterable[WinCondition], obj_to_idxs, meta_tile
 
 @flax.struct.dataclass
 class ObjFnReturn:
-    active: bool = False
     # detected object/force indices
+    detected: jnp.ndarray
+    active: bool = False
     force_idx: int = None
     obj_idx: int = None
 
@@ -339,19 +340,27 @@ def gen_subrules_meta(rule, n_objs, obj_to_idxs, meta_tiles, rule_name, jit=True
     # @partial(jax.jit, static_argnums=(0,))
     def detect_obj_in_cell(obj_idx, m_cell):
         # active = m_cell[obj_idx] == 1 & is_obj_forceless(obj_idx, m_cell)
+        detected = jnp.zeros_like(m_cell)
         active = m_cell[obj_idx] == 1
+        detected = jax.lax.cond(
+            active,
+            lambda: detected.at[obj_idx].set(1),
+            lambda: detected,
+        )
+
 
         # jax.lax.cond(
         #     active,
         #     lambda: jax.debug.print('detected obj_idx: {obj_idx}', obj_idx=obj_idx),
         #     lambda: None,
         # )
-        return ObjFnReturn(active=active, obj_idx=obj_idx)
+        return ObjFnReturn(active=active, detected=detected, obj_idx=obj_idx)
 
     # @partial(jax.jit, static_argnums=(0,))
     def detect_no_obj_in_cell(obj_idx, m_cell):
         active = m_cell[obj_idx] == 0
-        return ObjFnReturn(active=active, obj_idx=obj_idx)
+        detected = jnp.zeros_like(m_cell)
+        return ObjFnReturn(active=active, detected=detected, obj_idx=-1)
 
     # @partial(jax.jit, static_argnums=(0, 1))
     def detect_force_on_obj(obj_idx, force_idx, m_cell):
@@ -360,6 +369,14 @@ def gen_subrules_meta(rule, n_objs, obj_to_idxs, meta_tiles, rule_name, jit=True
         # force_idx = np.argwhere(m_cell[n_objs + (obj_idx * 4):n_objs + (obj_idx * 4) + 4] == 1)
         # assert len(force_idx) <= 1
         active = obj_is_present & force_is_present
+        is_detected = np.zeros(m_cell.shape, dtype=bool)
+        is_detected[obj_idx] = 1
+        is_detected[n_objs + (obj_idx * 4) + force_idx] = 1
+        detected = jax.lax.cond(
+            active,
+            lambda: is_detected,
+            lambda: np.zeros(m_cell.shape, bool),
+        )
         obj_idx = jax.lax.select(
             active,
             obj_idx,
@@ -370,7 +387,7 @@ def gen_subrules_meta(rule, n_objs, obj_to_idxs, meta_tiles, rule_name, jit=True
         #     lambda: jax.debug.print('detected force_idx {force_idx} on obj_idx: {obj_idx}', obj_idx=obj_idx, force_idx=force_idx),
         #     lambda: None,
         # )
-        return ObjFnReturn(active=active, obj_idx=obj_idx)
+        return ObjFnReturn(active=active, detected=detected, force_idx=force_idx, obj_idx=obj_idx)
 
     ### Functions for detecting meta-objects
     # @partial(jax.jit, static_argnums=())
@@ -379,23 +396,31 @@ def gen_subrules_meta(rule, n_objs, obj_to_idxs, meta_tiles, rule_name, jit=True
         m_cell_forceless_objs = jax.vmap(is_obj_forceless, in_axes = (0, None))(jnp.arange(n_objs), m_cell)
         m_cell_forceless = m_cell.at[:n_objs].set(m_cell_forceless_objs * m_cell[:n_objs])
         detected_vec_idx = jnp.argwhere(objs_vec * m_cell_forceless > 0, size=1, fill_value=-1)[0, 0]
+        detected = jnp.zeros(m_cell.shape, bool)
+        is_detected = detected.at[detected_vec_idx].set(1)
         active = detected_vec_idx != -1
-        obj_idx = jax.lax.select(
+        # obj_idx = jax.lax.select(
+        #     active,
+        #     detected_vec_idx,
+        #     -1,
+        # )
+        detected = jax.lax.cond(
             active,
-            detected_vec_idx,
-            -1,
+            lambda: is_detected,
+            lambda: detected,
         )
         # jax.lax.cond(
         #     active,
         #     lambda: jax.debug.print('detected obj_idx: {obj_idx}', obj_idx=obj_idx),
         #     lambda: None,
         # )
-        return ObjFnReturn(active=active, obj_idx=obj_idx)
+        return ObjFnReturn(active=active, detected=detected)
 
     # @partial(jax.jit, static_argnums=())
     def detect_no_objs_in_cell(objs_vec, m_cell):
         active = ~jnp.any(objs_vec * m_cell)
-        return ObjFnReturn(active=active)
+        detected = np.zeros(m_cell.shape, bool)
+        return ObjFnReturn(active=active, detected=detected, obj_idx=-1)
 
     # @partial(jax.jit, static_argnums=(0, 1))
     def detect_force_on_meta(obj_idxs, force_idx, m_cell):
@@ -417,6 +442,14 @@ def gen_subrules_meta(rule, n_objs, obj_to_idxs, meta_tiles, rule_name, jit=True
             obj_idxs[jnp.argwhere(obj_activations == 2, size=1)[0][0]],
             -1,
         )
+        is_detected = jnp.zeros(m_cell.shape, dtype=bool)
+        is_detected = is_detected.at[obj_idx].set(1)
+        is_detected = is_detected.at[n_objs + (obj_idx * 4) + force_idx].set(1)
+        detected = jax.lax.cond(
+            active,
+            lambda: is_detected,
+            lambda: np.zeros(m_cell.shape, dtype=bool),
+        )
         captured_selected_obj_idx = obj_idx  # Capture after selection
 
         active = ((obj_idx != -1) & active)
@@ -429,7 +462,7 @@ def gen_subrules_meta(rule, n_objs, obj_to_idxs, meta_tiles, rule_name, jit=True
         #         force_idx=force_idx, obj_idx=captured_selected_obj_idx),
         #     lambda: None
         # )
-        return ObjFnReturn(active=active, obj_idx=obj_idx)
+        return ObjFnReturn(active=active, detected=detected, obj_idx=obj_idx)
 
     dirs_to_force_idx = {
         'up': 3,
@@ -502,16 +535,11 @@ def gen_subrules_meta(rule, n_objs, obj_to_idxs, meta_tiles, rule_name, jit=True
                 # if f.obj_idx != -1:
                 #     jax.debug.print('obj_idx: {obj_idx}', obj_idx=f.obj_idx)
                 #     detected = detected.at[f.obj_idx].set(1)
-                detected = jax.lax.cond(
-                    f.obj_idx != -1,
-                    lambda x, detected: detected.at[x].set(1),
-                    lambda x, detected: detected,
-                    f.obj_idx, detected
-                )
-                if f.force_idx is not None:
-                    detected = detected.at[f.force_idx].set(1)
-                    if force_idx is None:
-                        force_idx = f.force_idx
+                detected = detected | f.detected
+                # if f.force_idx is not None:
+                #     detected = detected.at[f.force_idx].set(1)
+                #     if force_idx is None:
+                #         force_idx = f.force_idx
             meta_objs = {k: fn_out.obj_idx for k, fn_out in zip(obj_names, fn_outs)}
             ret = CellFnReturn(
                 detected=detected,
@@ -588,12 +616,12 @@ def gen_subrules_meta(rule, n_objs, obj_to_idxs, meta_tiles, rule_name, jit=True
             for proj_fn in fns:
                 m_cell = proj_fn(m_cell=m_cell, detect_out=detect_out)
             removed_something = jnp.any(detect_out.detected)
-            jax.lax.cond(
-                removed_something,
-                lambda: jax.debug.print('removing detected: {det}', det=detect_out.detected),
-                lambda: None
-            )
-            jax.debug.print('removing detected: {det}', det=detect_out.detected)
+            # jax.lax.cond(
+            #     removed_something,
+            #     lambda: jax.debug.print('removing detected: {det}', det=detect_out.detected),
+            #     lambda: None
+            # )
+            # jax.debug.print('removing detected: {det}', det=detect_out.detected)
             return m_cell
 
         return cell_projection_fn
@@ -632,7 +660,12 @@ def gen_subrules_meta(rule, n_objs, obj_to_idxs, meta_tiles, rule_name, jit=True
             if l_cell == '...':
                 is_line_detector = True
                 cell_detection_fns.append('...')
-            cell_detection_fns.append(gen_cell_detection_fn(l_cell, force_idx))
+            if l_cell is not None:
+                cell_detection_fns.append(gen_cell_detection_fn(l_cell, force_idx))
+            else:
+                cell_detection_fns.append(
+                    lambda m_cell: (True, CellFnReturn(detected=jnp.zeros_like(m_cell), force_idx=None, meta_objs={}))
+                )
         if has_rp:
             for i, r_cell in enumerate(rp):
                 if r_cell == '...':
