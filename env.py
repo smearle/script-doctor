@@ -778,37 +778,62 @@ def gen_subrules_meta(rule, n_objs, obj_to_idxs, meta_tiles, rule_name, jit=True
             if has_rp:
 
                 def project_cells(lvl, patch_activations, detect_outs):
+                    """ Assuming we detected some left patterns, try projecting the right pattern in each of these 
+                    positions until we find one that changes the level or we run out of positions."""
                     # print('NONZERO ACTIVATIONS')
                     # print(lp, rp, force_idx)
                     # print(jnp.argwhere(patch_activations, size=1))
 
-                    # Mask out everything but the position of the "first" activation
-                    first_a = jnp.argwhere(patch_activations == 1, size=1)[0]
-                    patch_activations = jnp.zeros_like(patch_activations)
-                    patch_activations = patch_activations.at[*first_a].set(1)
-                    # detect_outs = detect_outs[first_a[0]][first_a[1]]
-                    detect_outs = jax.tree_map(lambda x: x[first_a[0]][first_a[1]], detect_outs)
+                    init_lvl = lvl
+                    n_cells_in_level = lvl.shape[-1] * lvl.shape[-2]
+                    xys = jnp.argwhere(patch_activations == 1, size=n_cells_in_level, fill_value=-1)
 
-                    # Apply projection functions to the affected cells
-                    out_cell_idxs = np.indices(in_patch_shape)
-                    out_cell_idxs = rearrange(out_cell_idxs, "xy h w -> h w xy")
-                    if is_vertical:
-                        out_cell_idxs = out_cell_idxs[:, 0]
-                    elif is_horizontal:
-                        out_cell_idxs = out_cell_idxs[0, :]
-                    elif is_single:
-                        out_cell_idxs = out_cell_idxs[0, 0]
+                    def project_cells_at(carry):
+                        _, xy_i = carry
+                        xy = xys[xy_i]
+                        # patch_activations_xy = jnp.zeros_like(patch_activations)
+                        # patch_activations_xy = patch_activations_xy.at[*xy].set(1)
+                        # detect_outs = detect_outs[first_a[0]][first_a[1]]
+                        detect_outs_xy = jax.tree_map(lambda x: x[xy[0]][xy[1]], detect_outs)
 
-                    lvl = jnp.array(lvl)
-                    # assert len(detect_outs) == len(out_cell_idxs) == len(cell_projection_fns):
-                    if not len(detect_outs) == len(out_cell_idxs) == len(cell_projection_fns):
-                        breakpoint()
-                    for out_cell_idx, detect_out, cell_proj_fn in zip(out_cell_idxs, detect_outs, cell_projection_fns):
-                        out_cell_idx += first_a
-                        m_cell = lvl[0, :, *out_cell_idx]
-                        m_cell = jnp.array(m_cell)
-                        m_cell = cell_proj_fn(m_cell, detect_out)
-                        lvl = lvl.at[0, :, *out_cell_idx].set(m_cell)
+                        # Apply projection functions to the affected cells
+                        out_cell_idxs = np.indices(in_patch_shape)
+                        out_cell_idxs = rearrange(out_cell_idxs, "xy h w -> h w xy")
+                        if is_vertical:
+                            out_cell_idxs = out_cell_idxs[:, 0]
+                        elif is_horizontal:
+                            out_cell_idxs = out_cell_idxs[0, :]
+                        elif is_single:
+                            out_cell_idxs = out_cell_idxs[0, 0]
+
+                        lvl = jnp.array(init_lvl)
+                        # assert len(detect_outs) == len(out_cell_idxs) == len(cell_projection_fns):
+                        if not len(detect_outs_xy) == len(out_cell_idxs) == len(cell_projection_fns):
+                            breakpoint()
+                        for out_cell_idx, detect_out, cell_proj_fn in zip(out_cell_idxs, detect_outs_xy, cell_projection_fns):
+                            out_cell_idx += xy
+                            m_cell = lvl[0, :, *out_cell_idx]
+                            m_cell = jnp.array(m_cell)
+                            m_cell = cell_proj_fn(m_cell, detect_out)
+                            lvl = lvl.at[0, :, *out_cell_idx].set(m_cell)
+                        lvl_changed = jnp.any(lvl != init_lvl)
+                        jax.debug.print('      at position {xy}, the level changed: {lvl_changed}', xy=xy, lvl_changed=lvl_changed)
+                        return lvl, xy_i + 1
+
+                    def try_next_xy(carry):
+                        # Keep trying to project at each location until the level is actually changed,
+                        # or there are no more positions where the input was detected
+                        lvl, xy_i = carry
+                        xy = xys[xy_i]
+                        return (~jnp.any(xy == -1)) & jnp.all(lvl == init_lvl)
+                    
+                    n_poss = xys.shape[0]
+                    jax.debug.print(f'     trying {n_poss} positions')
+                    lvl, xy_i = jax.lax.while_loop(
+                        try_next_xy,
+                        project_cells_at,
+                        (lvl, 0),
+                    )
                     return lvl
 
                 new_lvl = jax.lax.cond(
