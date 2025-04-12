@@ -11,6 +11,9 @@ import numpy as np
 from jax_utils import stack_leaves
 from ps_game import LegendEntry, PSGame, WinCondition
 
+# per-object movement forces that can be applied: left, right, up, down, action
+N_MOVEMENTS = 5
+
 # TODO: double check these colors
 color_hex_map = {
     "black": "#000000",
@@ -224,9 +227,9 @@ def gen_check_win(win_conditions: Iterable[WinCondition], obj_to_idxs, meta_tile
 #     n_cells = len(lp)
 #     assert len(rp) == n_cells
 
-#     lr_in = np.zeros((n_objs + (n_objs * 4), 1, n_cells), dtype=np.int8)
+#     lr_in = np.zeros((n_objs + (n_objs * N_MOVEMENTS), 1, n_cells), dtype=np.int8)
 #     rr_in = np.zeros_like(lr_in)
-#     ur_in = np.zeros((n_objs + (n_objs * 4), n_cells, 1), dtype=np.int8)
+#     ur_in = np.zeros((n_objs + (n_objs * N_MOVEMENTS), n_cells, 1), dtype=np.int8)
 #     dr_in = np.zeros_like(ur_in)
 #     lr_out = np.zeros_like(lr_in)
 #     rr_out = np.zeros_like(rr_in)
@@ -253,10 +256,10 @@ def gen_check_win(win_conditions: Iterable[WinCondition], obj_to_idxs, meta_tile
 #                 ur_in[obj_i, i, 0] = fill_val
 #                 dr_in[obj_i, n_cells-1-i, 0] = fill_val
 #                 if l_force:
-#                     lr_in[n_objs + (obj_i * 4) + 2, 0, i] = 1
-#                     rr_in[n_objs + (obj_i * 4) + 0, 0, n_cells-1-i] = 1
-#                     ur_in[n_objs + (obj_i * 4) + 1, i, 0] = 1
-#                     dr_in[n_objs + (obj_i * 4) + 3, n_cells-1-i, 0] = 1
+#                     lr_in[n_objs + (obj_i * N_MOVEMENTS) + 2, 0, i] = 1
+#                     rr_in[n_objs + (obj_i * N_MOVEMENTS) + 0, 0, n_cells-1-i] = 1
+#                     ur_in[n_objs + (obj_i * N_MOVEMENTS) + 1, i, 0] = 1
+#                     dr_in[n_objs + (obj_i * N_MOVEMENTS) + 3, n_cells-1-i, 0] = 1
 #                 l_force, l_no = False, False
 #             elif obj == '>':
 #                 l_force = True
@@ -282,10 +285,10 @@ def gen_check_win(win_conditions: Iterable[WinCondition], obj_to_idxs, meta_tile
 #                 ur_out[obj_i, i, 0] = fill_val
 #                 dr_out[obj_i, n_cells-1-i, 0] = fill_val
 #                 if r_force:
-#                     lr_out[n_objs + (obj_i * 4) + 2, 0, i] = 1
-#                     rr_out[n_objs + (obj_i * 4) + 0, 0, n_cells-1-i] = 1
-#                     ur_out[n_objs + (obj_i * 4) + 1, i, 0] = 1
-#                     dr_out[n_objs + (obj_i * 4) + 3, n_cells-1-i, 0] = 1
+#                     lr_out[n_objs + (obj_i * N_MOVEMENTS) + 2, 0, i] = 1
+#                     rr_out[n_objs + (obj_i * N_MOVEMENTS) + 0, 0, n_cells-1-i] = 1
+#                     ur_out[n_objs + (obj_i * N_MOVEMENTS) + 1, i, 0] = 1
+#                     dr_out[n_objs + (obj_i * N_MOVEMENTS) + 3, n_cells-1-i, 0] = 1
 #                 r_force, r_no = False, False
 #             elif obj == '>':
 #                 r_force = True
@@ -333,8 +336,8 @@ def gen_subrules_meta(rule, n_objs, obj_to_idxs, meta_tiles, rule_name, jit=True
     idxs_to_objs = {v: k for k, v in obj_to_idxs.items()}
 
     def is_obj_forceless(obj_idx, m_cell):
-        # return jnp.sum(m_cell[n_objs + (obj_idx * 4):n_objs + (obj_idx * 4) + 4]) == 0
-        return jnp.sum(jax.lax.dynamic_slice(m_cell, (n_objs + (obj_idx * 4),), (4,))) == 0
+        # note that `action` does not count as a force
+        return jnp.sum(jax.lax.dynamic_slice(m_cell, (n_objs + (obj_idx * N_MOVEMENTS),), (4,))) == 0
 
     ### Functions for detecting regular atomic objects
     # @partial(jax.jit, static_argnums=(0,))
@@ -365,13 +368,13 @@ def gen_subrules_meta(rule, n_objs, obj_to_idxs, meta_tiles, rule_name, jit=True
     # @partial(jax.jit, static_argnums=(0, 1))
     def detect_force_on_obj(obj_idx, force_idx, m_cell):
         obj_is_present = m_cell[obj_idx] == 1
-        force_is_present = m_cell[n_objs + (obj_idx * 4) + force_idx] == 1
-        # force_idx = np.argwhere(m_cell[n_objs + (obj_idx * 4):n_objs + (obj_idx * 4) + 4] == 1)
+        force_is_present = m_cell[n_objs + (obj_idx * N_MOVEMENTS) + force_idx] == 1
+        # force_idx = np.argwhere(m_cell[n_objs + (obj_idx * N_MOVEMENTS):n_objs + (obj_idx * N_MOVEMENTS) + 4] == 1)
         # assert len(force_idx) <= 1
         active = obj_is_present & force_is_present
         is_detected = np.zeros(m_cell.shape, dtype=bool)
         is_detected[obj_idx] = 1
-        is_detected[n_objs + (obj_idx * 4) + force_idx] = 1
+        is_detected[n_objs + (obj_idx * N_MOVEMENTS) + force_idx] = 1
         detected = jax.lax.cond(
             active,
             lambda: is_detected,
@@ -393,12 +396,12 @@ def gen_subrules_meta(rule, n_objs, obj_to_idxs, meta_tiles, rule_name, jit=True
     # @partial(jax.jit, static_argnums=())
     def detect_any_objs_in_cell(objs_vec, m_cell):
         """Given a multi-hot vector indicating a set of objects, return the index of the object contained in this cell."""
-        m_cell_forceless_objs = jax.vmap(is_obj_forceless, in_axes = (0, None))(jnp.arange(n_objs), m_cell)
-        m_cell_forceless = m_cell.at[:n_objs].set(m_cell_forceless_objs * m_cell[:n_objs])
-        detected_vec_idx = jnp.argwhere(objs_vec * m_cell_forceless > 0, size=1, fill_value=-1)[0, 0]
+        # m_cell_forceless_objs = jax.vmap(is_obj_forceless, in_axes = (0, None))(jnp.arange(n_objs), m_cell)
+        # m_cell_forceless = m_cell.at[:n_objs].set(m_cell_forceless_objs * m_cell[:n_objs])
+        obj_idx = jnp.argwhere(objs_vec[:n_objs] * m_cell[:n_objs] > 0, size=1, fill_value=-1)[0, 0]
         detected = jnp.zeros(m_cell.shape, bool)
-        is_detected = detected.at[detected_vec_idx].set(1)
-        active = detected_vec_idx != -1
+        is_detected = detected.at[obj_idx].set(1)
+        active = obj_idx != -1
         # obj_idx = jax.lax.select(
         #     active,
         #     detected_vec_idx,
@@ -414,7 +417,7 @@ def gen_subrules_meta(rule, n_objs, obj_to_idxs, meta_tiles, rule_name, jit=True
         #     lambda: jax.debug.print('detected obj_idx: {obj_idx}', obj_idx=obj_idx),
         #     lambda: None,
         # )
-        return ObjFnReturn(active=active, detected=detected)
+        return ObjFnReturn(active=active, detected=detected, obj_idx=obj_idx)
 
     # @partial(jax.jit, static_argnums=())
     def detect_no_objs_in_cell(objs_vec, m_cell):
@@ -425,16 +428,14 @@ def gen_subrules_meta(rule, n_objs, obj_to_idxs, meta_tiles, rule_name, jit=True
     # @partial(jax.jit, static_argnums=(0, 1))
     def detect_force_on_meta(obj_idxs, force_idx, m_cell):
         force_obj_vecs = []
+        # TODO: vmap this
         for obj_idx in obj_idxs:
-            force_obj_vec = np.zeros(n_objs + n_objs * 4, dtype=bool)
+            force_obj_vec = np.zeros(n_objs + n_objs * N_MOVEMENTS, dtype=bool)
             force_obj_vec[obj_idx] = 1
-            force_obj_vec[n_objs + obj_idx * 4 + force_idx] = 1
+            force_obj_vec[n_objs + obj_idx * N_MOVEMENTS + force_idx] = 1
             force_obj_vecs.append(force_obj_vec)
         obj_activations = jnp.sum(jnp.array(force_obj_vecs) * m_cell[None], axis=1) 
         active = jnp.any(obj_activations == 2)
-
-        # Right before the first cond, capture the intended value:
-        captured_obj_idx = obj_idx  # This captures the current loop's obj_idx
 
         obj_idxs = jnp.array(obj_idxs)
         obj_idx = jax.lax.select(
@@ -444,24 +445,49 @@ def gen_subrules_meta(rule, n_objs, obj_to_idxs, meta_tiles, rule_name, jit=True
         )
         is_detected = jnp.zeros(m_cell.shape, dtype=bool)
         is_detected = is_detected.at[obj_idx].set(1)
-        is_detected = is_detected.at[n_objs + (obj_idx * 4) + force_idx].set(1)
+        is_detected = is_detected.at[n_objs + (obj_idx * N_MOVEMENTS) + force_idx].set(1)
         detected = jax.lax.cond(
             active,
             lambda: is_detected,
             lambda: np.zeros(m_cell.shape, dtype=bool),
         )
-        captured_selected_obj_idx = obj_idx  # Capture after selection
-
         active = ((obj_idx != -1) & active)
 
-        # Why does this print out so much, even when apparently non-active??
-        # jax.lax.cond(
-        #     active,
-        #     lambda captulevel-{level_i}level-{level_i}__red_selected_obj_idx=captured_selected_obj_idx: jax.debug.print(
-        #         "B) detected force_idx {force_idx} on meta-obj_idx: {obj_idx}",
-        #         force_idx=force_idx, obj_idx=captured_selected_obj_idx),
-        #     lambda: None
-        # )
+        return ObjFnReturn(active=active, detected=detected, obj_idx=obj_idx)
+
+    # @partial(jax.jit, static_argnums=(0,))
+    def detect_stationary_meta(obj_idxs, m_cell):
+        # TODO: vmap this?
+        active_obj_idx = -1
+        detected = jnp.zeros(m_cell.shape, dtype=bool)
+        for obj_idx in obj_idxs:
+            # if not m_cell[obj_idx]:
+            #     continue
+            # if not is_obj_forceless(obj_idx, m_cell):
+            #     continue
+            # detected = detected.at[obj_idx].set(1)
+
+            obj_is_present = m_cell[obj_idx] == 1
+            obj_is_forceless = is_obj_forceless(obj_idx, m_cell)
+            obj_active = obj_is_present & obj_is_forceless
+
+            detected = jax.lax.select(
+                obj_active,
+                detected.at[obj_idx].set(1),
+                detected,
+            )
+            # note that this takes the last-detected active sub-object
+            active_obj_idx = jax.lax.select(
+                obj_active,
+                obj_idx,
+                active_obj_idx,
+            )
+        active = active_obj_idx != -1
+        jax.lax.cond(
+            active,
+            lambda: jax.debug.print('detected stationary obj_idx: {obj_idx}', obj_idx=active_obj_idx),
+            lambda: None,
+        )
         return ObjFnReturn(active=active, detected=detected, obj_idx=obj_idx)
 
     dirs_to_force_idx = {
@@ -478,7 +504,7 @@ def gen_subrules_meta(rule, n_objs, obj_to_idxs, meta_tiles, rule_name, jit=True
         """
         fns = []
         l_cell = l_cell.split(' ')
-        no, force, directional_force = False, False, False
+        no, force, directional_force, stationary = False, False, False, False
         obj_names = []
         for obj in l_cell:
             obj = obj.lower()
@@ -489,9 +515,17 @@ def gen_subrules_meta(rule, n_objs, obj_to_idxs, meta_tiles, rule_name, jit=True
             elif obj in ['up', 'down', 'left', 'right']:
                 directional_force = True
                 dir_force_idx = dirs_to_force_idx[obj]
+            elif obj == 'stationary':
+                stationary = True
             else:
                 obj_names.append(obj)
-                if obj in obj_to_idxs:
+                sub_objs = expand_meta_tiles([obj], obj_to_idxs, meta_tiles)
+                obj_idxs = np.array([obj_to_idxs[so] for so in sub_objs])
+                obj_vec = np.zeros((n_objs + n_objs * N_MOVEMENTS), dtype=bool)
+                obj_vec[obj_idxs] = 1
+                # TODO: we can remove these functions to individual objects and apply the more abstract meta-tile versions instead
+                if len(obj_idxs) == 1:
+                # if obj in obj_to_idxs:
                     obj_idx = obj_to_idxs[obj]
                     if no:
                         fns.append(partial(detect_no_obj_in_cell, obj_idx=obj_idx))
@@ -502,25 +536,27 @@ def gen_subrules_meta(rule, n_objs, obj_to_idxs, meta_tiles, rule_name, jit=True
                     elif directional_force:
                         fns.append(partial(detect_force_on_obj, obj_idx=obj_idx, force_idx=dir_force_idx))
                         directional_force = False
+                    elif stationary:
+                        fns.append(partial(detect_stationary_meta, obj_idxs=obj_idxs))
+                        stationary = False
                     else:
                         fns.append(partial(detect_obj_in_cell, obj_idx=obj_idx))
                 elif obj in meta_tiles:
-                    sub_objs = expand_meta_tiles([obj], obj_to_idxs, meta_tiles)
-                    sub_obj_idxs = [obj_to_idxs[so] for so in sub_objs]
-                    sub_objs_vec = np.zeros((n_objs + n_objs * 4), dtype=bool)
-                    sub_objs_vec[sub_obj_idxs] = 1
                     if no:
                         print(l_cell)
-                        fns.append(partial(detect_no_objs_in_cell, objs_vec=sub_objs_vec))
+                        fns.append(partial(detect_no_objs_in_cell, objs_vec=obj_vec))
                         no = False
                     elif force:
-                        fns.append(partial(detect_force_on_meta, obj_idxs=tuple(sub_obj_idxs), force_idx=force_idx))
+                        fns.append(partial(detect_force_on_meta, obj_idxs=obj_idxs, force_idx=force_idx))
                         force = False
                     elif directional_force:
-                        fns.append(partial(detect_force_on_meta, obj_idxs=tuple(sub_obj_idxs), force_idx=dir_force_idx))
+                        fns.append(partial(detect_force_on_meta, obj_idxs=obj_idxs, force_idx=dir_force_idx))
                         directional_force = False
+                    elif stationary:
+                        fns.append(partial(detect_stationary_meta, obj_idxs=obj_idxs))
+                        stationary = False
                     else:
-                        fns.append(partial(detect_any_objs_in_cell, objs_vec=sub_objs_vec))
+                        fns.append(partial(detect_any_objs_in_cell, objs_vec=obj_vec))
                 else:
                     raise Exception(f'Invalid object `{obj}` in rule.')
         
@@ -570,7 +606,7 @@ def gen_subrules_meta(rule, n_objs, obj_to_idxs, meta_tiles, rule_name, jit=True
         meta_objs = detect_out.meta_objs
         obj_idx = disambiguate_meta(obj, meta_objs, obj_to_idxs)
         m_cell = m_cell.at[obj_idx].set(1)
-        m_cell = m_cell.at[n_objs + (obj_idx * 4) + force_idx].set(1)
+        m_cell = m_cell.at[n_objs + (obj_idx * N_MOVEMENTS) + force_idx].set(1)
 
         if jit:
             jax.debug.print('project_force_on_obj: {obj_idx}', obj_idx=obj_idx)
@@ -905,7 +941,7 @@ def gen_rule_fn(obj_to_idxs, coll_mat, tree_rules, meta_tiles, jit=True):
                 if not jit:
                     if grp_applied:
                         print('\n' + multihot_to_desc(lvl[0], obj_to_idxs))
-                # force_is_present = jnp.sum(lvl[0, n_objs:n_objs + (n_objs * 4)]) > 0
+                # force_is_present = jnp.sum(lvl[0, n_objs:n_objs + (n_objs * N_MOVEMENTS)]) > 0
                 # jax.debug.print('force is present: {force_is_present}', force_is_present=force_is_present)
                 # jax.debug.print('lvl:\n{lvl}', lvl=lvl)
                 return lvl, grp_applied, grp_app_i, cancelled
@@ -939,11 +975,11 @@ def gen_move_rules(obj_to_idxs, coll_mat, jit=True):
             continue
         coll_vector = coll_mat[idx]
 
-        left_rule_in = np.zeros((n_objs + (n_objs * 4), 1, 2), dtype=np.int8)
+        left_rule_in = np.zeros((n_objs + (n_objs * 5), 1, 2), dtype=np.int8)
         # object must be present in right cell
         left_rule_in[idx, 0, 1] = 1
         # leftward force
-        left_rule_in[n_objs + (idx * 4) + 0, 0, 1] = 1
+        left_rule_in[n_objs + (idx * 5) + 0, 0, 1] = 1
         # absence of collidable tiles in the left cell
         left_rule_in[:n_objs, 0, 0] = -coll_vector
         left_rule_out = np.zeros_like(left_rule_in)
@@ -955,11 +991,11 @@ def gen_move_rules(obj_to_idxs, coll_mat, jit=True):
 
         # FIXME: Actually this is the down rule and vice versa, and we've relabelled actions accordingly. Hack. Can't figure out what's wrong here.
         # Something to do with flipping output kernel?
-        up_rule_in = np.zeros((n_objs + (n_objs * 4), 2, 1), dtype=np.int8)
+        up_rule_in = np.zeros((n_objs + (n_objs * 5), 2, 1), dtype=np.int8)
         # object must be present in lower cell
         up_rule_in[idx, 0] = 1
         # upward force
-        up_rule_in[n_objs + (idx * 4) + 1, 0] = 1
+        up_rule_in[n_objs + (idx * N_MOVEMENTS) + 1, 0] = 1
         # absence of collidable tiles in the upper cell
         up_rule_in[:n_objs, 1, 0] = -coll_vector
         up_rule_out = np.zeros_like(up_rule_in)
@@ -969,11 +1005,11 @@ def gen_move_rules(obj_to_idxs, coll_mat, jit=True):
         up_rule_out -= np.clip(up_rule_in, 0, 1)
         up_rule = np.stack((up_rule_in, up_rule_out), axis=0)
 
-        right_rule_in = np.zeros((n_objs + (n_objs * 4), 1, 2), dtype=np.int8)
+        right_rule_in = np.zeros((n_objs + (n_objs * N_MOVEMENTS), 1, 2), dtype=np.int8)
         # object must be present in left cell
         right_rule_in[idx, 0, 0] = 1
         # rightward force
-        right_rule_in[n_objs + (idx * 4) + 2, 0, 0] = 1
+        right_rule_in[n_objs + (idx * N_MOVEMENTS) + 2, 0, 0] = 1
         # absence of collidable tiles in the right cell
         right_rule_in[:n_objs, 0, 1] = -coll_vector
         right_rule_out = np.zeros_like(right_rule_in)
@@ -983,11 +1019,11 @@ def gen_move_rules(obj_to_idxs, coll_mat, jit=True):
         right_rule_out -= np.clip(right_rule_in, 0, 1)
         right_rule = np.stack((right_rule_in, right_rule_out), axis=0)
 
-        down_rule_in = np.zeros((n_objs + (n_objs * 4), 2, 1), dtype=np.int8)
+        down_rule_in = np.zeros((n_objs + (n_objs * N_MOVEMENTS), 2, 1), dtype=np.int8)
         # object must be present in upper cell
         down_rule_in[idx, 1] = 1
         # downward force
-        down_rule_in[n_objs + (idx * 4) + 3, 1] = 1
+        down_rule_in[n_objs + (idx * N_MOVEMENTS) + 3, 1] = 1
         # absence of collidable tiles in the lower cell
         down_rule_in[:n_objs, 0, 0] = -coll_vector
         down_rule_out = np.zeros_like(down_rule_in)
@@ -1162,7 +1198,7 @@ class PSEnv:
     def _apply_player_force(self, action, state: PSState):
         multihot_level = state.multihot_level
         # add a dummy object at the front
-        force_map = jnp.zeros((4 * (multihot_level.shape[0] + 1), *multihot_level.shape[1:]), dtype=bool)
+        force_map = jnp.zeros((N_MOVEMENTS * (multihot_level.shape[0] + 1), *multihot_level.shape[1:]), dtype=bool)
         
         def place_force(force_map, action):
             action = jnp.array([0, 1, 2, 3])[action]
@@ -1170,7 +1206,7 @@ class PSEnv:
             # turn the int mask into coords, by flattening it, and appending it with xy coords
             xy_coords = jnp.indices(force_map.shape[1:])
             xy_coords = xy_coords[:, None].repeat(len(self.player_idxs), axis=1)
-            player_int_mask = player_int_mask * 4 + action
+            player_int_mask = player_int_mask * N_MOVEMENTS + action
             player_int_mask = jnp.concatenate((player_int_mask[None], xy_coords), axis=0)
             player_coords = player_int_mask.reshape(3, -1).T
             force_map = force_map.at[tuple(player_coords.T)].set(1)
@@ -1185,7 +1221,8 @@ class PSEnv:
             lambda force_map, action: force_map,
             force_map, action
         )
-        force_map = force_map[4:]
+        # remove the dummy object
+        force_map = force_map[N_MOVEMENTS:]
 
         lvl = jnp.concatenate((multihot_level, force_map), axis=0)
 
@@ -1196,25 +1233,28 @@ class PSEnv:
         init_lvl = state.multihot_level.copy()
         lvl = self.apply_player_force(action, state)
         
-        def cond_fun(loop_state):
-            lvl, lvl_changed, n_apps, cancelled = loop_state
-            return jax.numpy.logical_and(lvl_changed, n_apps < 100) & ~cancelled
+        # def cond_fun(loop_state):
+        #     lvl, lvl_changed, n_apps, cancelled = loop_state
+        #     return jax.numpy.logical_and(lvl_changed, n_apps < 100) & ~cancelled
             
-        def body_fun(carry):
-            lvl, lvl_changed_last, n_apps, cancelled = carry
-            new_lvl, lvl_changed, cancelled = self.rule_fn(lvl)
-            return (new_lvl, lvl_changed, n_apps + 1, cancelled)
+        # def body_fun(carry):
+        #     lvl, lvl_changed_last, n_apps, cancelled = carry
+        #     new_lvl, lvl_changed, cancelled = self.rule_fn(lvl)
+        #     return (new_lvl, lvl_changed, n_apps + 1, cancelled)
         
-        # Initial state for the while loop
-        init_state = (lvl, True, 0, False)
+        # # Initial state for the while loop
+        # init_state = (lvl, True, 0, False)
 
-        if self.jit:
-            final_lvl, _, _, cancelled = jax.lax.while_loop(cond_fun, body_fun, init_state)
+        # if self.jit:
+        #     final_lvl, _, _, cancelled = jax.lax.while_loop(cond_fun, body_fun, init_state)
         
-        else:
-            while cond_fun(init_state):
-                init_state = body_fun(init_state)
-            final_lvl, _, _, cancelled = init_state
+        # else:
+        #     while cond_fun(init_state):
+        #         init_state = body_fun(init_state)
+        #     final_lvl, _, _, cancelled = init_state
+
+        # Actually, just apply the rule function once
+        final_lvl, _, cancelled = self.rule_fn(lvl)
 
         
         final_lvl = jax.lax.select(
@@ -1269,7 +1309,7 @@ def multihot_to_desc(multihot_level, obj_to_idxs):
                     force_names = ["left", "down", "right", "up"]
                     forces = []
                     for f_idx, force_name in enumerate(force_names):
-                        force_channel = n_objs + (obj_idx * 4) + f_idx
+                        force_channel = n_objs + (obj_idx * N_MOVEMENTS) + f_idx
                         if force_channel < multihot_level.shape[0] and multihot_level[force_channel, h, w] > 0:
                             forces.append(f"force {force_name}")
                     

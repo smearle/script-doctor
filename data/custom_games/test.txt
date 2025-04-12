@@ -59,7 +59,7 @@ BlockObstacle = Player or Wall or Block or EndPoint
 . = Background
 # = Wall
 P = Player
-O = Block
+B = Block
 E = EndPoint
 
 =========
@@ -78,7 +78,7 @@ Player, Wall, Block
 RULES
 ======
 
-[ UP Moveable | Moveable ] -> [ UP Moveable | UP Moveable ] 
+[ Player | Block] -> [ Player |  ] 
 
 ==============
 WINCONDITIONS
@@ -91,6 +91,6 @@ LEVELS
 =======
 
 .P..
-.O..
 ....
+.B..
 ....
