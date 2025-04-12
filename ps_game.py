@@ -70,7 +70,7 @@ class WinCondition:
     For example: 'All Box on Target'
     """
     def __init__(self, quantifier: str, src_obj: str, trg_obj: str):
-        self.quantifier = quantifier  # e.g. "All", "Some", "No"
+        self.quantifier = quantifier.lower()  # e.g. "All", "Some", "No"
         self.src_obj = src_obj
         self.trg_obj = trg_obj
     
@@ -85,6 +85,8 @@ class Prelude:
     flickscreen: bool = False
     verbose_logging: bool = False
     require_player_movement: bool = False
+    run_rules_on_level_start: bool = False
+    noaction: bool = False
 
 
 class PSGame:

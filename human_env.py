@@ -49,6 +49,7 @@ def human_loop(env: PSEnv):
         key = cv2.waitKey(0)
         action = None
         do_reset = False
+        print("\n\n========= STEP =========\n")
         print(multihot_to_desc(state.multihot_level, env.obj_to_idxs))
 
         # If the user presses ESC (ASCII 27), exit the loop.
@@ -75,6 +76,11 @@ def human_loop(env: PSEnv):
         elif key == ord('n'):
             print("Advancing level...")
             lvl_i += 1
+            do_reset = True
+        elif key == ord('b'):
+            print("Going back a level...")
+            if lvl_i > 0:
+                lvl_i -= 1
             do_reset = True
         elif key == ord('z'):
             print("Undoing last action...")

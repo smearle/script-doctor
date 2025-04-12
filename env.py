@@ -612,9 +612,12 @@ def gen_subrules_meta(rule, n_objs, obj_to_idxs, meta_tiles, rule_name, jit=True
             jax.debug.print('project_force_on_obj: {obj_idx}', obj_idx=obj_idx)
 
         else:
+            pass
+            # jax.debug.print('project_force_on_obj: {obj_idx}', obj_idx=obj_idx)
             # TODO: jax this
-            obj_name = idxs_to_objs[int(obj_idx)]
-            jax.debug.print('project_force_on_obj: {obj_name}', obj_name=obj_name)
+            # obj_name = idxs_to_objs[obj_idx]
+            # jax.debug.print('project_force_on_obj: {obj_name}', obj_name=obj_name)
+            # print(f'project_force_on_obj: {obj_idx}')
 
         return m_cell
 
@@ -767,7 +770,7 @@ def gen_subrules_meta(rule, n_objs, obj_to_idxs, meta_tiles, rule_name, jit=True
             jax.lax.cond(
                 # True,
                 lp_detected,
-                lambda: jax.debug.print('Rule {rule_name} applied: {lp_detected}', rule_name=rule_name, lp_detected=lp_detected),
+                lambda: jax.debug.print('      Rule {rule_name} left pattern detected: {lp_detected}', rule_name=rule_name, lp_detected=lp_detected),
                 lambda: None,
             )
             cancelled = False
@@ -919,13 +922,15 @@ def gen_rule_fn(obj_to_idxs, coll_mat, tree_rules, meta_tiles, jit=True):
                 grp_app_i += 1
                 grp_applied = False
 
-                for rule_fn in rule_grp:
+                for rule_i, rule_fn in enumerate(rule_grp):
 
                     def apply_rule_fn(carry):
-                        lvl, rule_applied, i, cancelled = carry
-                        lvl, rule_applied, cancelled = rule_fn(lvl)
+                        init_lvl, rule_applied, i, cancelled = carry
+                        lvl, rule_applied, cancelled = rule_fn(init_lvl)
+                        rule_had_effect = jnp.any(lvl != init_lvl)
+                        jax.debug.print('    rule had effect: {rule_had_effect}', rule_had_effect=rule_had_effect)
                         i += 1
-                        return lvl, rule_applied, i, cancelled
+                        return lvl, rule_had_effect, i, cancelled
 
                     rule_applied = True
                     rule_app_i = 0
@@ -936,6 +941,7 @@ def gen_rule_fn(obj_to_idxs, coll_mat, tree_rules, meta_tiles, jit=True):
                     )
                     rule_applied = rule_app_i > 1
                     grp_applied = jnp.logical_or(grp_applied, rule_applied)
+                    jax.debug.print('    rule {rule_i} applied: {rule_applied}', rule_i=rule_i, rule_applied=rule_applied)
                 jax.debug.print('group {grp_i} applied: {grp_applied}', grp_i=grp_i, grp_applied=grp_applied)
                 # print('rule: {rule}', rule=tree_rules[0][0].rules[grp_i])
                 if not jit:
@@ -1106,6 +1112,7 @@ class PSEnv:
     def __init__(self, tree: PSGame, jit: bool = True):
         self.jit = jit
         self.title = tree.prelude.title
+        self.tree = tree
         self.levels = tree.levels
         self.require_player_movement = tree.prelude.require_player_movement
         obj_legend, meta_tiles, joint_tiles = process_legend(tree.legend)
@@ -1189,6 +1196,8 @@ class PSEnv:
 
     def reset(self, lvl_i):
         lvl = self.get_level(lvl_i)
+        if self.tree.prelude.run_rules_on_level_start:
+            lvl, _, _ = self.rule_fn(lvl)
         return PSState(
             multihot_level=lvl,
             win = jnp.array(False),
@@ -1215,10 +1224,13 @@ class PSEnv:
             # jax.debug.print('force map sum: {force_map_sum}', force_map_sum=force_map_sum)
             return force_map
 
+        # apply movement (<4) and/or action (if not noaction)
+        apply_force = (action < 4) | (~self.tree.prelude.noaction)
+
         force_map = jax.lax.cond(
-            action < 4, 
+            apply_force,
             place_force,
-            lambda force_map, action: force_map,
+            lambda force_map, _: force_map,
             force_map, action
         )
         # remove the dummy object
