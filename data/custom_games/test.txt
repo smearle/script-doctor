@@ -75,7 +75,7 @@ Player, Wall, Crate
 RULES
 ======
 
-[ ^ Player | Crate ] -> [ ^ Player | ^ Crate ] 
+[ > Player | Crate ] -> [ > Player | > Crate ] 
 
 ==============
 WINCONDITIONS
