@@ -496,11 +496,19 @@ def gen_subrules_meta(rule, n_objs, obj_to_idxs, meta_tiles, rule_name, jit=True
         'down': 1,
         'left': 0,
     }
+    rel_dirs_to_force_idx_offsets = {
+        '>': 0,
+        'v': 3,
+        '^': 1,
+        '<': 2,
+    }
 
-    def gen_cell_detection_fn(l_cell, force_idx):
+    def gen_cell_detection_fn(l_cell, right_force_idx):
         """Produce a function to detect whether all objects/conditions in a cell (within a kernel, within the left pattern of a rule) are present.
         So for the rule `[> Player | Crate] -> [> Player | > Crate]`, this will return a function that detects, for the first cell in the left pattern,
         if the player is present, and has a force applied to it.
+            l_cell: the kernel cell to detect
+            right_force_idx: the force index corresponding to `>` given some rotation
         """
         fns = []
         l_cell = l_cell.split(' ')
@@ -510,11 +518,12 @@ def gen_subrules_meta(rule, n_objs, obj_to_idxs, meta_tiles, rule_name, jit=True
             obj = obj.lower()
             if obj == 'no':
                 no = True
-            elif obj == '>':
+            elif obj in ['>', '<', '^', 'v']:
                 force = True
+                force_idx = (rel_dirs_to_force_idx_offsets[obj] + right_force_idx) % 4
             elif obj in ['up', 'down', 'left', 'right']:
-                directional_force = True
-                dir_force_idx = dirs_to_force_idx[obj]
+                force = True
+                force_idx = dirs_to_force_idx[obj]
             elif obj == 'stationary':
                 stationary = True
             else:
@@ -533,9 +542,6 @@ def gen_subrules_meta(rule, n_objs, obj_to_idxs, meta_tiles, rule_name, jit=True
                     elif force:
                         fns.append(partial(detect_force_on_obj, obj_idx=obj_idx, force_idx=force_idx))
                         force = False
-                    elif directional_force:
-                        fns.append(partial(detect_force_on_obj, obj_idx=obj_idx, force_idx=dir_force_idx))
-                        directional_force = False
                     elif stationary:
                         fns.append(partial(detect_stationary_meta, obj_idxs=obj_idxs))
                         stationary = False
@@ -549,9 +555,6 @@ def gen_subrules_meta(rule, n_objs, obj_to_idxs, meta_tiles, rule_name, jit=True
                     elif force:
                         fns.append(partial(detect_force_on_meta, obj_idxs=obj_idxs, force_idx=force_idx))
                         force = False
-                    elif directional_force:
-                        fns.append(partial(detect_force_on_meta, obj_idxs=obj_idxs, force_idx=dir_force_idx))
-                        directional_force = False
                     elif stationary:
                         fns.append(partial(detect_stationary_meta, obj_idxs=obj_idxs))
                         stationary = False
@@ -621,7 +624,7 @@ def gen_subrules_meta(rule, n_objs, obj_to_idxs, meta_tiles, rule_name, jit=True
 
         return m_cell
 
-    def gen_cell_projection_fn(r_cell, force_idx):
+    def gen_cell_projection_fn(r_cell, right_force_idx):
         fns = []
         if r_cell is None:
             r_cell = []
@@ -632,18 +635,22 @@ def gen_subrules_meta(rule, n_objs, obj_to_idxs, meta_tiles, rule_name, jit=True
             obj = obj.lower()
             if obj == 'no':
                 no = True
-            elif obj == '>':
+            elif obj in ['>', '<', '^', 'v']:
                 force = True
+                force_idx = (rel_dirs_to_force_idx_offsets[obj] + right_force_idx) % 4
             elif obj in ['up', 'down', 'left', 'right']:
-                directional_force = True
-                dir_force_idx = dirs_to_force_idx[obj]
+                force = True
+                force_idx = dirs_to_force_idx[obj]
+            elif obj == 'stationary':
+                stationary = True
+            # ignore sound effects (which can exist incide rules (?))
+            elif obj.startswith('sfx'):
+                continue
             elif (obj in obj_to_idxs) or (obj in meta_tiles):
                 if no:
                     fns.append(partial(project_no_obj, obj=obj))
                 elif force:
                     fns.append(partial(project_force_on_obj, obj=obj, force_idx=force_idx))
-                elif directional_force:
-                    fns.append(partial(project_force_on_obj, obj=obj, force_idx=dir_force_idx))
                 else:
                     fns.append(partial(project_obj, obj=obj))
             else:
