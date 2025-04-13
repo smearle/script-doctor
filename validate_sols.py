@@ -4,16 +4,18 @@ import json
 import os
 import pickle
 import random
+import shutil
 import traceback
 
 import imageio
 import jax
 import jax.numpy as jnp
+from lark import Lark
 import numpy as np
 
 from env import PSEnv
 from gen_tree import GenPSTree
-from parse_lark import TREES_DIR, DATA_DIR, TEST_GAMES
+from parse_lark import TREES_DIR, DATA_DIR, TEST_GAMES, get_tree_from_txt
 from ps_game import PSGame
 
 
@@ -21,22 +23,26 @@ scratch_dir = 'scratch'
 os.makedirs(scratch_dir, exist_ok = True)
 if __name__ == '__main__':
     sol_paths = glob.glob(os.path.join('sols', '*'))
-    tree_paths = [os.path.join(TREES_DIR, os.path.basename(path) + '.pkl') for path in sol_paths]
-    trees = []
-    for sol_dir, tree_path in zip(sol_paths, tree_paths):
-        print(f"Processing solution for game: {tree_path}")
-        og_game_path = os.path.join(DATA_DIR, 'scraped_games', os.path.basename(tree_path)[:-3] + 'txt')
-        print(f"Parsing {og_game_path}")
-        with open(tree_path, 'rb') as f:
-            tree = pickle.load(f)
-        trees.append(tree)
+    games = [os.path.basename(path) for path in sol_paths]
+    # tree_paths = [os.path.join(TREES_DIR, os.path.basename(path) + '.pkl') for path in sol_paths]
+    # games = [os.path.basename(path)[:-4] for path in sol_paths]
+    sols_dir = os.path.join('vids', 'jax_sols')
+    shutil.rmtree(sols_dir, ignore_errors=True)
 
-        try:
-            tree: PSGame = GenPSTree().transform(tree)
-        except Exception as e:
-            traceback.print_exc()
-            print(f"Error parsing tree: {tree_path}")
-            continue
+    for sol_dir, game in zip(sol_paths, games):
+
+        traj_dir = os.path.join('vids', 'jax_sols', game)
+        os.makedirs(traj_dir)
+
+        with open("syntax.lark", "r", encoding='utf-8') as file:
+            puzzlescript_grammar = file.read()
+        # Initialize the Lark parser with the PuzzleScript grammar
+        parser = Lark(puzzlescript_grammar, start="ps_game", maybe_placeholders=False)
+        # min_parser = Lark(min_puzzlescript_grammar, start="ps_game")
+        tree = get_tree_from_txt(parser, game)
+        og_path = os.path.join(DATA_DIR, 'scraped_games', os.path.basename(game) + '.txt')
+
+        print(f"Processing solution for game: {og_path}")
 
         try:
             env = PSEnv(tree)
@@ -45,8 +51,12 @@ if __name__ == '__main__':
         except bdb.BdbQuit as e:
             raise e
         except Exception as e:
+            err_log = traceback.format_exc()
+            with open(os.path.join(traj_dir, 'error.txt'), 'w') as f:
+                f.write(err_log)
             traceback.print_exc()
-            print(f"Error creating env: {tree_path}")
+            print(f"Error creating env: {og_path}")
+            log_path = os.path.join(traj_dir)
             continue
 
         state = env.reset(0)
@@ -55,7 +65,8 @@ if __name__ == '__main__':
         # 1 - down
         # 2 - right
         # 3 - up
-        action_remap = [3, 0, 1, 2]
+        # 4 - action
+        action_remap = [3, 0, 1, 2, 4]
 
         key = jax.random.PRNGKey(0)
 
@@ -70,8 +81,6 @@ if __name__ == '__main__':
 
             level_i = int(os.path.basename(level_sol_path).split('-')[1].split('.')[0])
             print(f"Level {level_i} solution: {actions}")
-            traj_dir = os.path.join('vids', 'jax_sols', os.path.basename(tree_path)[:-3])
-            os.makedirs(traj_dir, exist_ok=True)
 
             state = env.reset(level_i)
 
@@ -79,14 +88,23 @@ if __name__ == '__main__':
                 state = env.step(action, state)
                 return state, state
 
-            state, state_v = jax.lax.scan(step_env, state, actions)
-            if not state.win:
-                log_path = os.path.join(traj_dir, f'level-{level_i}_err.txt')
+            try:
+                state, state_v = jax.lax.scan(step_env, state, actions)
+                if not state.win:
+                    log_path = os.path.join(traj_dir, f'level-{level_i}_solution_err.txt')
+                    with open(log_path, 'w') as f:
+                        f.write(f"Level {level_i} solution failed\n")
+                        f.write(f"Actions: {actions}\n")
+                        # f.write(f"State: {state}\n")
+                    print(f"Level {level_i} solution failed")
+            except Exception as e:
+                traceback.print_exc()
+                print(f"Error running solution: {og_path}")
+                err_log = traceback.format_exc()
+                log_path = os.path.join(traj_dir, f'level-{level_i}_runtime_err.txt')
                 with open(log_path, 'w') as f:
-                    f.write(f"Level {level_i} solution failed\n")
-                    f.write(f"Actions: {actions}\n")
-                    # f.write(f"State: {state}\n")
-                print(f"Level {level_i} solution failed")
+                    f.write(err_log)
+                continue
 
             # Use jax tree map to add the initial state
             state_v = jax.tree_map(lambda x, y: jnp.concatenate([x[None], y]), state, state_v)
