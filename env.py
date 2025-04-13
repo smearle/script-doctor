@@ -53,7 +53,9 @@ def disambiguate_meta(obj, meta_objs, pattern_meta_objs, obj_to_idxs):
     elif obj in meta_objs:
         return meta_objs[obj]
     else:
-        assert obj in pattern_meta_objs
+        # assert obj in pattern_meta_objs, f"Meta-object `{obj}` not found in meta_objs or pattern_meta_objs."
+        if obj not in pattern_meta_objs:
+            breakpoint()
         return pattern_meta_objs[obj]
     # FIXME: as above, but jax (this is broken. is it necessary?)
     # obj_idx = jax.lax.select_n(
@@ -330,6 +332,7 @@ class ObjFnReturn:
     detected: jnp.ndarray
     active: bool = False
     force_idx: int = None
+    moving_idx: int = None
     obj_idx: int = None
 
 
@@ -343,7 +346,12 @@ class CellFnReturn:
     force_idx: np.ndarray
     # A dictionary of the objects detected, mapping meta-object names to sub-object indices
     meta_objs: dict
+    moving_idx: int = None
 
+@flax.struct.dataclass
+class RuleFnReturn:
+    meta_objs: dict
+    moving_idx: int = None
 
 def gen_subrules_meta(rule, n_objs, obj_to_idxs, meta_objs, rule_name, jit=True):
     idxs_to_objs = {v: k for k, v in obj_to_idxs.items()}
@@ -503,6 +511,51 @@ def gen_subrules_meta(rule, n_objs, obj_to_idxs, meta_objs, rule_name, jit=True)
         )
         return ObjFnReturn(active=active, detected=detected, obj_idx=obj_idx)
 
+    # @partial(jax.jit, static_argnums=(0,))
+    def detect_moving_meta(obj_idxs, m_cell):
+        # TODO: vmap this?
+        active_obj_idx = -1
+        active_force_idx = -1
+        detected = jnp.zeros(m_cell.shape, dtype=bool)
+        for obj_idx in obj_idxs:
+            # if not m_cell[obj_idx]:
+            #     continue
+            # if not is_obj_forceless(obj_idx, m_cell):
+            #     continue
+            # detected = detected.at[obj_idx].set(1)
+
+            obj_is_present = m_cell[obj_idx] == 1
+            obj_forces = jax.lax.dynamic_slice(m_cell, (n_objs + (obj_idx * N_MOVEMENTS),), (4,))
+            force_idx = jnp.argwhere(obj_forces, size=1, fill_value=-1)[0, 0]
+            obj_active = obj_is_present & (force_idx != -1)
+
+            active_detected = detected.at[obj_idx].set(1)
+            active_detected = active_detected.at[n_objs + (obj_idx * N_MOVEMENTS) + force_idx].set(1)
+
+            detected = jax.lax.select(
+                obj_active,
+                active_detected,
+                detected,
+            )
+            # note that this takes the last-detected active sub-object
+            active_obj_idx = jax.lax.select(
+                obj_active,
+                obj_idx,
+                active_obj_idx,
+            )
+            active_force_idx = jax.lax.select(
+                obj_active,
+                force_idx,
+                active_force_idx,
+            )
+        active = active_obj_idx != -1
+        jax.lax.cond(
+            active,
+            lambda: jax.debug.print('detected stationary obj_idx: {obj_idx}', obj_idx=active_obj_idx),
+            lambda: None,
+        )
+        return ObjFnReturn(active=active, detected=detected, obj_idx=active_obj_idx, moving_idx=active_force_idx)
+
     dirs_to_force_idx = {
         'up': 3,
         'right': 2,
@@ -525,7 +578,7 @@ def gen_subrules_meta(rule, n_objs, obj_to_idxs, meta_objs, rule_name, jit=True)
         """
         fns = []
         l_cell = l_cell.split(' ')
-        no, force, directional_force, stationary, action = False, False, False, False, False
+        no, force, directional_force, stationary, action, moving = False, False, False, False, False, False
         obj_names = []
         for obj in l_cell:
             obj = obj.lower()
@@ -542,6 +595,8 @@ def gen_subrules_meta(rule, n_objs, obj_to_idxs, meta_objs, rule_name, jit=True)
             elif obj == 'action':
                 force = True
                 force_idx = 4
+            elif obj == 'moving':
+                moving = True
             else:
                 obj_names.append(obj)
                 sub_objs = expand_meta_objs([obj], obj_to_idxs, meta_objs)
@@ -561,6 +616,8 @@ def gen_subrules_meta(rule, n_objs, obj_to_idxs, meta_objs, rule_name, jit=True)
                     elif stationary:
                         fns.append(partial(detect_stationary_meta, obj_idxs=obj_idxs))
                         stationary = False
+                    elif moving:
+                        fns.append(partial(detect_moving_meta, obj_idxs=obj_idxs))
                     else:
                         fns.append(partial(detect_obj_in_cell, obj_idx=obj_idx))
                 elif obj in meta_objs:
@@ -574,6 +631,9 @@ def gen_subrules_meta(rule, n_objs, obj_to_idxs, meta_objs, rule_name, jit=True)
                     elif stationary:
                         fns.append(partial(detect_stationary_meta, obj_idxs=obj_idxs))
                         stationary = False
+                    elif moving:
+                        fns.append(partial(detect_moving_meta, obj_idxs=obj_idxs))
+                        moving = False
                     else:
                         fns.append(partial(detect_any_objs_in_cell, objs_vec=obj_vec))
                 else:
@@ -596,10 +656,16 @@ def gen_subrules_meta(rule, n_objs, obj_to_idxs, meta_objs, rule_name, jit=True)
                 #     if force_idx is None:
                 #         force_idx = f.force_idx
             meta_objs = {k: fn_out.obj_idx for k, fn_out in zip(obj_names, fn_outs)}
+
+            # NOTE: What to do about multiple `moving` objects?
+            moving_idxs = [f.moving_idx for f in fn_outs if f.moving_idx is not None]
+            moving_idx = moving_idxs[0] if len(moving_idxs) > 0 else None
+
             ret = CellFnReturn(
                 detected=detected,
                 force_idx=force_idx,
                 meta_objs=meta_objs,
+                moving_idx=moving_idx,
             )
             # jax.debug.print('detected: {detected}', detected=detected)
             return activated, ret
@@ -607,23 +673,26 @@ def gen_subrules_meta(rule, n_objs, obj_to_idxs, meta_objs, rule_name, jit=True)
         return cell_detection_fn
 
     # @partial(jax.jit, static_argnums=(2))
-    def project_obj(m_cell, detect_out: CellFnReturn, pattern_meta_objs, obj):
+    def project_obj(m_cell, detect_out: CellFnReturn, rule_fn_out: RuleFnReturn, obj):
         meta_objs = detect_out.meta_objs
+        pattern_meta_objs = rule_fn_out.meta_objs
         # jax.debug.print('meta objs: {meta_objs}', meta_objs=meta_objs)
         obj_idx = disambiguate_meta(obj, meta_objs, pattern_meta_objs, obj_to_idxs)
         m_cell = m_cell.at[obj_idx].set(1)
         return m_cell
 
     # @partial(jax.jit, static_argnums=(2))
-    def project_no_obj(m_cell, detect_out: CellFnReturn, pattern_meta_objs, obj):
+    def project_no_obj(m_cell, detect_out: CellFnReturn, rule_fn_out: RuleFnReturn, obj):
         meta_objs = detect_out.meta_objs
+        pattern_meta_objs = rule_fn_out.meta_objs
         obj_idx = disambiguate_meta(obj, meta_objs, pattern_meta_objs, obj_to_idxs)
         m_cell[obj_idx] = 0
         return m_cell
 
     # @partial(jax.jit, static_argnums=(2))
-    def project_force_on_obj(m_cell, detect_out: CellFnReturn, pattern_meta_objs, obj, force_idx):
+    def project_force_on_obj(m_cell, detect_out: CellFnReturn, rule_fn_out: RuleFnReturn, obj, force_idx):
         meta_objs = detect_out.meta_objs
+        pattern_meta_objs = rule_fn_out.meta_objs
         obj_idx = disambiguate_meta(obj, meta_objs, pattern_meta_objs, obj_to_idxs)
         m_cell = m_cell.at[obj_idx].set(1)
         m_cell = m_cell.at[n_objs + (obj_idx * N_MOVEMENTS) + force_idx].set(1)
@@ -641,13 +710,27 @@ def gen_subrules_meta(rule, n_objs, obj_to_idxs, meta_objs, rule_name, jit=True)
 
         return m_cell
 
+    # @partial(jax.jit, static_argnums=(3))
+    def project_moving_on_obj(m_cell, detect_out: CellFnReturn, rule_fn_out: RuleFnReturn, obj):
+        meta_objs = detect_out.meta_objs
+        pattern_meta_objs = rule_fn_out.meta_objs
+        obj_idx = disambiguate_meta(obj, meta_objs, pattern_meta_objs, obj_to_idxs)
+        if detect_out.moving_idx is not None:
+            force_idx = rule_fn_out.moving_idx
+        else:
+            assert rule_fn_out.moving_idx is not None, f'No moving index found in rule {rule_name}'
+            force_idx = rule_fn_out.moving_idx
+        m_cell = m_cell.at[obj_idx].set(1)
+        m_cell = m_cell.at[n_objs + (obj_idx * N_MOVEMENTS) + force_idx].set(1)
+        return m_cell
+
     def gen_cell_projection_fn(r_cell, right_force_idx):
         fns = []
         if r_cell is None:
             r_cell = []
         else:
             r_cell = r_cell.split(' ')
-        no, force, directional_force = False, False, False
+        no, force, directional_force, moving = False, False, False, False
         for obj in r_cell:
             obj = obj.lower()
             if obj == 'no':
@@ -658,26 +741,31 @@ def gen_subrules_meta(rule, n_objs, obj_to_idxs, meta_objs, rule_name, jit=True)
             elif obj in ['up', 'down', 'left', 'right']:
                 force = True
                 force_idx = dirs_to_force_idx[obj]
-            elif obj == 'stationary':
-                stationary = True
+            elif obj == 'moving':
+                moving = True
             # ignore sound effects (which can exist incide rules (?))
             elif obj.startswith('sfx'):
                 continue
             elif (obj in obj_to_idxs) or (obj in meta_objs):
                 if no:
                     fns.append(partial(project_no_obj, obj=obj))
+                    no = False
                 elif force:
                     fns.append(partial(project_force_on_obj, obj=obj, force_idx=force_idx))
+                    force = False
+                elif moving:
+                    fns.append(partial(project_moving_on_obj, obj=obj))
+                    moving = False
                 else:
                     fns.append(partial(project_obj, obj=obj))
             else:
                 raise Exception(f'Invalid object `{obj}` in rule.')
         
         # @partial(jax.jit, static_argnums=())
-        def cell_projection_fn(m_cell, cell_detect_out, pattern_meta_objs):
+        def cell_projection_fn(m_cell, cell_detect_out, rule_fn_out):
             m_cell = m_cell & ~cell_detect_out.detected
             for proj_fn in fns:
-                m_cell = proj_fn(m_cell=m_cell, detect_out=cell_detect_out, pattern_meta_objs=pattern_meta_objs)
+                m_cell = proj_fn(m_cell=m_cell, detect_out=cell_detect_out, rule_fn_out=rule_fn_out)
             removed_something = jnp.any(cell_detect_out.detected)
             # jax.lax.cond(
             #     removed_something,
@@ -823,9 +911,13 @@ def gen_subrules_meta(rule, n_objs, obj_to_idxs, meta_objs, rule_name, jit=True)
                         detect_outs_xy = jax.tree_map(lambda x: x[xy[0]][xy[1]], detect_outs)
 
                         pattern_meta_objs = {}
+                        moving_idx = None
                         # FIXME: Shouldn't this be a jnp array at this point when `jit=True`? And yet it's a list...?
                         for cell_fn_out in detect_outs_xy:
                             pattern_meta_objs.update(cell_fn_out.meta_objs)
+                            if cell_fn_out.moving_idx is not None:
+                                moving_idx = cell_fn_out.moving_idx
+                        rule_fn_out = RuleFnReturn(meta_objs=pattern_meta_objs, moving_idx=moving_idx)
 
                         # Apply projection functions to the affected cells
                         out_cell_idxs = np.indices(in_patch_shape)
@@ -845,7 +937,7 @@ def gen_subrules_meta(rule, n_objs, obj_to_idxs, meta_objs, rule_name, jit=True)
                             out_cell_idx += xy
                             m_cell = lvl[0, :, *out_cell_idx]
                             m_cell = jnp.array(m_cell)
-                            m_cell = cell_proj_fn(m_cell, cell_detect_out=detect_out, pattern_meta_objs=pattern_meta_objs)
+                            m_cell = cell_proj_fn(m_cell, cell_detect_out=detect_out, rule_fn_out=rule_fn_out)
                             lvl = lvl.at[0, :, *out_cell_idx].set(m_cell)
                         lvl_changed = jnp.any(lvl != init_lvl)
                         jax.debug.print('      at position {xy}, the level changed: {lvl_changed}', xy=xy, lvl_changed=lvl_changed)
