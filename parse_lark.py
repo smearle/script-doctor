@@ -379,7 +379,7 @@ def get_tree_from_txt(parser, game, log_dir: str = None, overwrite: bool = True)
         filepath = os.path.join(games_dir, game + '.txt')
     with open(filepath, 'r', encoding='utf-8') as f:
         ps_text = f.read()
-    simp_filename = game[:-4] + '_simplified.txt' 
+    simp_filename = game + '_simplified.txt' 
     # if game in parsed_games or os.path.basename(game) in games_to_skip:
     #     print(f"Skipping {filepath}")
     #     return

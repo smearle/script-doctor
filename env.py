@@ -1,47 +1,28 @@
 from functools import partial
-from typing import Iterable, List
+import os
+from typing import Dict, Iterable, List
 
+import PIL
+import chex
 from einops import rearrange
 import flax
+import imageio
 import jax
 from jax.experimental import checkify
 import jax.numpy as jnp
 import numpy as np
 
+from env_render import render_solid_color, render_sprite
 from jax_utils import stack_leaves
 from ps_game import LegendEntry, PSGame, WinCondition
+
+
+# Whether to print out a bunch of stuff, etc.
+DEBUG = True
 
 # per-object movement forces that can be applied: left, right, up, down, action
 N_MOVEMENTS = 5
 
-# TODO: double check these colors
-color_hex_map = {
-    "black": "#000000",
-    "white": "#FFFFFF",
-    "lightgray": "#D3D3D3",
-    "lightgrey": "#D3D3D3",
-    "gray": "#808080",
-    "grey": "#808080",
-    "darkgray": "#A9A9A9",
-    "darkgrey": "#A9A9A9",
-    "red": "#FF0000",
-    "darkred": "#8B0000",
-    "lightred": "#FF6666",
-    "brown": "#A52A2A",
-    "darkbrown": "#5C4033",
-    "lightbrown": "#C4A484",
-    "orange": "#FFA500",
-    "yellow": "#FFFF00",
-    "green": "#008000",
-    "darkgreen": "#006400",
-    "lightgreen": "#90EE90",
-    "blue": "#0000FF",
-    "lightblue": "#ADD8E6",
-    "darkblue": "#00008B",
-    "purple": "#800080",
-    "pink": "#FFC0CB",
-    "transparent": "#00000000"  # Transparent in RGBA format
-}
 
 # @partial(jax.jit, static_argnums=(0))
 def disambiguate_meta(obj, meta_objs, pattern_meta_objs, obj_to_idxs):
@@ -55,6 +36,8 @@ def disambiguate_meta(obj, meta_objs, pattern_meta_objs, obj_to_idxs):
     else:
         # assert obj in pattern_meta_objs, f"Meta-object `{obj}` not found in meta_objs or pattern_meta_objs."
         if obj not in pattern_meta_objs:
+            print(f"When compiling a meta-object projection rule, the meta-object `{obj}` in the output pattern is" 
+                  "not found in the return of the compiled detection function (either in meta_objs or pattern_meta_objs).")
             breakpoint()
         return pattern_meta_objs[obj]
     # FIXME: as above, but jax (this is broken. is it necessary?)
@@ -64,39 +47,6 @@ def disambiguate_meta(obj, meta_objs, pattern_meta_objs, obj_to_idxs):
     # )
     return obj_idx
     
-
-def replace_bg_tiles(x):
-    if x == '.':
-        return 0
-    else:
-        return int(x) + 1
-
-def render_solid_color(color):
-    color = color.lower()
-    if color in color_hex_map:
-        c = color_hex_map[color]
-    else:
-        c = '#000000'
-    c = hex_to_rgba(c, 255)
-    im = np.zeros((5, 5, 4), dtype=np.uint8)
-    im[:, :, :] = np.array(c)
-    return im
-
-def render_sprite(colors, sprite):
-    sprite = np.vectorize(replace_bg_tiles)(sprite)
-    colors = np.array(['transparent'] + colors)
-    colors_vec = np.zeros((len(colors), 4), dtype=np.uint8)
-    for i, c in enumerate(colors):
-        c = c.lower()
-        if c in color_hex_map:
-            alpha = 255
-            if c == 'transparent':
-                alpha = 0
-            c = color_hex_map[c]
-        c = hex_to_rgba(c, alpha)
-        colors_vec[i] = np.array(c)
-    im = colors_vec[sprite]
-    return im
 
 def level_to_multihot(level):
     pass
@@ -117,13 +67,6 @@ def assign_vecs_to_objs(collision_layers):
             j += 1
     return objs_to_idxs, coll_masks
 
-def hex_to_rgba(hex_code, alpha):
-    """Converts a hex color code to RGB values."""
-
-    hex_code = hex_code.lstrip('#')
-    rgb = tuple(int(hex_code[i:i+2], 16) for i in (0, 2, 4))
-    return (*rgb, alpha)
-
 def process_legend(legend):
     char_legend = {}
     meta_objs = {}
@@ -133,7 +76,14 @@ def process_legend(legend):
         v: LegendEntry
         if v.operator is None:
             assert len(v.obj_names) == 1
-            char_legend[v.obj_names[0]] = k.strip()
+            v_obj = v.obj_names[0]
+            k_obj = k.strip()
+            # TODO: instead of this haxk, check set of objects to see
+            # if k in obj_to_idxs:
+            if len(k) == 1:
+                char_legend[v_obj] = k_obj
+            else:
+                meta_objs[k_obj] = [v_obj]
         elif v.operator == 'or':
             meta_objs[k.strip()] = v.obj_names
         elif v.operator == 'and':
@@ -165,6 +115,7 @@ def expand_meta_objs(tile_list, obj_to_idxs, meta_objs):
         elif mt in obj_to_idxs:
             expanded_meta_objs.append(mt)
         else:
+            breakpoint()
             raise Exception(f'Invalid meta-tile `{mt}`.')
     return expanded_meta_objs
 
@@ -173,20 +124,28 @@ def get_meta_channel(lvl, obj_idxs):
 
 def gen_check_win(win_conditions: Iterable[WinCondition], obj_to_idxs, meta_objs, jit=True):
 
+    # @partial(jax.jit, static_argnums=(1, 2))
     def check_all(lvl, src, trg):
         src_channel = get_meta_channel(lvl, src)
         trg_channel = get_meta_channel(lvl, trg)
         # There can be no source objects that do not overlap target objects
         return ~jnp.any(src_channel & ~trg_channel)
 
+    # @partial(jax.jit, static_argnums=(1, 2))
     def check_some(lvl, src, trg):
         src_channel = get_meta_channel(lvl, src)
         trg_channel = get_meta_channel(lvl, trg)
         return jnp.any(src_channel & trg_channel)
 
+    # @partial(jax.jit, static_argnums=(1,))
     def check_none(lvl, src):
         src_channel = get_meta_channel(lvl, src)
         return ~jnp.any(src_channel)
+
+    # @partial(jax.jit, static_argnums=(1,))
+    def check_any(lvl, src):
+        src_channel = get_meta_channel(lvl, src)
+        return jnp.any(src_channel)
 
     funcs = []
     for win_condition in win_conditions:
@@ -204,21 +163,25 @@ def gen_check_win(win_conditions: Iterable[WinCondition], obj_to_idxs, meta_objs
                 trg = [obj_to_idxs[obj] for obj in trg_objs]
         if win_condition.quantifier == 'all':
             func = partial(check_all, src=src, trg=trg)
-        elif win_condition.quantifier == 'some':
+        elif win_condition.quantifier in ['some']:
             func = partial(check_some, src=src, trg=trg)
         elif win_condition.quantifier == 'no':
             func = partial(check_none, src=src)
+        elif win_condition.quantifier == 'any':
+            func = partial(check_any, src=src)
         else:
             breakpoint()
             raise Exception('Invalid quantifier.')
         funcs.append(func)
 
+    # @partial(jax.jit)
     def check_win(lvl):
 
         if len(funcs) == 0:
             return False
         
         def apply_win_condition_func(i, lvl):
+            # FIXME: can't jit this list of functions... when the funcs are jitted theselves??
             return jax.lax.switch(i, funcs, lvl)
 
         if jit:
@@ -639,7 +602,7 @@ def gen_subrules_meta(rule, n_objs, obj_to_idxs, meta_objs, rule_name, jit=True)
                 else:
                     raise Exception(f'Invalid object `{obj}` in rule.')
         
-        # @partial(jax.jit, static_argnums=())
+        @partial(jax.jit)
         def cell_detection_fn(m_cell):
             # TODO: can vmap this
             fn_outs: List[ObjFnReturn] = [fn(m_cell=m_cell) for fn in fns]
@@ -686,7 +649,21 @@ def gen_subrules_meta(rule, n_objs, obj_to_idxs, meta_objs, rule_name, jit=True)
         meta_objs = detect_out.meta_objs
         pattern_meta_objs = rule_fn_out.meta_objs
         obj_idx = disambiguate_meta(obj, meta_objs, pattern_meta_objs, obj_to_idxs)
-        m_cell[obj_idx] = 0
+        m_cell = m_cell.at[obj_idx].set(0)
+        jax.lax.dynamic_update_slice(
+            m_cell, jnp.zeros(n_objs, dtype=bool), (n_objs + obj_idx * N_MOVEMENTS,)
+        )
+        return m_cell
+
+    # @partial(jax.jit, static_argnums=(2, 3))
+    def project_no_meta(m_cell: chex.Array, detect_out, rule_fn_out, obj: int):
+        sub_objs = expand_meta_objs([obj], obj_to_idxs, meta_objs)
+        obj_idxs = np.array([obj_to_idxs[so] for so in sub_objs])
+        for obj_idx in obj_idxs:
+            m_cell = m_cell.at[obj_idx].set(0)
+            jax.lax.dynamic_update_slice(
+                m_cell, jnp.zeros(N_MOVEMENTS, dtype=bool), (n_objs + obj_idx * N_MOVEMENTS,)
+            )
         return m_cell
 
     # @partial(jax.jit, static_argnums=(2))
@@ -748,7 +725,12 @@ def gen_subrules_meta(rule, n_objs, obj_to_idxs, meta_objs, rule_name, jit=True)
                 continue
             elif (obj in obj_to_idxs) or (obj in meta_objs):
                 if no:
-                    fns.append(partial(project_no_obj, obj=obj))
+                    if obj in obj_to_idxs:
+                        fns.append(partial(project_no_obj, obj=obj))
+                    elif obj in meta_objs:
+                        fns.append(partial(project_no_meta, obj=obj))
+                    else:
+                        raise Exception(f'Invalid object `{obj}` in rule.')
                     no = False
                 elif force:
                     fns.append(partial(project_force_on_obj, obj=obj, force_idx=force_idx))
@@ -890,7 +872,7 @@ def gen_subrules_meta(rule, n_objs, obj_to_idxs, meta_objs, rule_name, jit=True)
 
             if has_rp:
 
-                # @partial(jax.jit)
+                @partial(jax.jit)
                 def project_cells(lvl, patch_activations, detect_outs):
                     """ Assuming we detected some left patterns, try projecting the right pattern in each of these 
                     positions until we find one that changes the level or we run out of positions."""
@@ -1281,10 +1263,24 @@ class PSEnv:
         for obj_name in self.obj_to_idxs:
             obj = tree.objects[obj_name]
             if obj.sprite is not None:
+                print(f'rendering pixel sprite for {obj_name}')
                 im = render_sprite(obj.colors, obj.sprite)
+
             else:
                 assert len(obj.colors) == 1
+                print(f'rendering solid color for {obj_name}')
                 im = render_solid_color(obj.colors[0])
+
+            if DEBUG:
+                temp_dir = 'scratch'
+                os.makedirs(temp_dir, exist_ok=True)
+                sprite_path = os.path.join(temp_dir, f'sprite_{obj_name}.png')
+
+                # Size the image up a bunch
+                # im_s = PIL.Image.fromarray(im)
+                # im_s = im.resize((im_s.size[0] * 10, im_s.size[1] * 10), PIL.Image.NEAREST)
+                # im.save(sprite_path)
+
             sprite_stack.append(im)
         self.sprite_stack = np.array(sprite_stack)
         n_objs = len(self.obj_to_idxs)
@@ -1320,6 +1316,7 @@ class PSEnv:
         multihot_level = multihot_level.astype(bool)
         return multihot_level
 
+    # @partial(jax.jit, static_argnums=(0, 2))
     def render(self, state: PSState, cv2=True):
         lvl = state.multihot_level
         level_height, level_width = lvl.shape[1:]
@@ -1351,7 +1348,7 @@ class PSEnv:
             win = jnp.array(False),
         )
 
-    # @partial(jax.jit, static_argnums=(0))
+    @partial(jax.jit, static_argnums=(0))
     def _apply_player_force(self, action, state: PSState):
         multihot_level = state.multihot_level
         # add a dummy object at the front
@@ -1388,7 +1385,7 @@ class PSEnv:
 
         return lvl
 
-    # @partial(jax.jit, static_argnums=(0))
+    @partial(jax.jit, static_argnums=(0))
     def _step(self, action, state: PSState):
         init_lvl = state.multihot_level.copy()
         lvl = self.apply_player_force(action, state)
