@@ -58,8 +58,8 @@ def render_sprite(colors, sprite):
     colors_vec = np.zeros((len(colors), 4), dtype=np.uint8)
     for i, c in enumerate(colors):
         c = c.lower()
+        alpha = 255
         if c in color_hex_map:
-            alpha = 0
             if c == 'transparent':
                 alpha = 255
             c = color_hex_map[c]

@@ -312,6 +312,10 @@ class CellFnReturn:
     moving_idx: int = None
 
 @flax.struct.dataclass
+class KernelFnReturn:
+    pass
+
+@flax.struct.dataclass
 class RuleFnReturn:
     meta_objs: dict
     moving_idx: int = None
@@ -759,17 +763,111 @@ def gen_subrules_meta(rule, n_objs, obj_to_idxs, meta_objs, rule_name, jit=True)
 
         return cell_projection_fn
 
-    def gen_rotated_rule_fn(lp, rp, rot, r_command):
-        lp = np.array(lp)
+    def gen_rotated_rule_fn(lps, rps, rot, r_command):
+        lps = np.array(lps)
+        first_lp = lp[0]
+        is_horizontal = np.all([lps[i].shape[0] == 1 for i in range(len(lps))])
+        is_vertical = np.all([lps[i].shape[1] == 1 for i in range(len(lps))])
+        is_single = np.all([lps[i].shape[0] == 1 and lps[i].shape[1] == 1 for i in range(len(lps))])
         # Here we map force directions to corresponding rule rotations
-        # if rot == 1:
-        #     breakpoint()
         rot_to_force = [1, 2, 3, 0]
+        in_patch_shape = first_lp.shape
+        has_rp = rp is not None
+
+        def gen_rotated_kernel_detection_fn(lp):
+            force_idx = rot_to_force[rot]
+            # TODO: kernels. We assume just 1 here.
+            if is_horizontal:
+                lp = lp[0, :]
+            elif is_vertical:
+                lp = lp[:, 0]
+            elif is_single:
+                lp = lp[0, 0]
+            else:
+                raise Exception('Invalid rule shape.')
+            is_line_detector = False
+            breakpoint()
+            cell_detection_fns = []
+            cell_projection_fns = []
+            for i, l_cell in enumerate(lp):
+                if l_cell == '...':
+                    is_line_detector = True
+                    cell_detection_fns.append('...')
+                if l_cell is not None:
+                    cell_detection_fns.append(gen_cell_detection_fn(l_cell, force_idx))
+                else:
+                    cell_detection_fns.append(
+                        lambda m_cell: (True, CellFnReturn(detected=jnp.zeros_like(m_cell), force_idx=None, meta_objs={}))
+                    )
+
+            def detect_kernel(lvl):
+                n_chan = lvl.shape[1]
+
+                # @jax.jit
+                def detect_cells(in_patch):
+                    cell_outs_patch = []
+                    patch_active = True
+                    for i, cell_fn in enumerate(cell_detection_fns):
+                        in_patch = in_patch.reshape((n_chan, *in_patch_shape))
+                        if is_vertical:
+                            m_cell = in_patch[:, i, 0]
+                        if is_horizontal:
+                            m_cell = in_patch[:, 0, i]
+                        if is_single:
+                            m_cell = in_patch[:, 0, 0]
+                        cell_active, cell_out = cell_fn(m_cell=m_cell)
+                        patch_active = patch_active & cell_active
+                        cell_outs_patch.append(cell_out)
+                    return patch_active, cell_outs_patch
+
+                def detect_line(in_line):
+                    for i, cell_fn in enumerate(cell_detection_fns):
+                        cell_fn_activs, cell_fn_rets = jax.vmap(cell_fn)(in_line)
+                        breakpoint()
+
+                if not is_line_detector:
+
+                    patches = jax.lax.conv_general_dilated_patches(
+                        lvl, in_patch_shape, window_strides=(1, 1), padding='VALID',
+                    )
+                    assert patches.shape[0] == 1
+                    patches = patches[0]
+                    patches = rearrange(patches, "c h w -> h w c")
+
+                    if jit:
+                        patch_activations, detect_outs = jax.vmap(jax.vmap(detect_cells))(patches)
+
+                    else:
+                        patch_activations = jnp.zeros((patches.shape[0], patches.shape[1]), dtype=bool)
+                        # What's up with this???
+                        detect_outs = [[None for _ in range(patches.shape[0])] for _ in range(patches.shape[1])]
+                        for i in range(patches.shape[0]):
+                            for j in range(patches.shape[1]):
+                                patch = patches[i, j]
+                                patch_active, cell_out = detect_cells(patch)
+                                patch_activations = patch_activations.at[i, j].set(patch_active)
+                                detect_outs[j][i] = cell_out
+                        detect_outs = stack_leaves(stack_leaves(detect_outs))
+
+                else:
+                    # TODO:
+                    breakpoint()
+
+                # eliminate all but one activation
+                kernel_detected = patch_activations.sum() > 0
+                jax.lax.cond(
+                    # True,
+                    kernel_detected,
+                    lambda: jax.debug.print('      Rule {rule_name} left pattern detected: {lp_detected}', rule_name=rule_name, lp_detected=lp_detected),
+                    lambda: None,
+                )
+                cancelled = False
+
+        kernel_detection_fns = [gen_rotated_kernel_detection_fn(lp, rot) for lp in lps]
+
+
         force_idx = rot_to_force[rot]
-        is_horizontal = lp.shape[0] == 1
-        is_vertical = lp.shape[1] == 1
-        is_single = lp.shape[0] == 1 and lp.shape[1] == 1
-        in_patch_shape = lp.shape
+        in_patch_shape = first_lp.shape
         has_rp = rp is not None
         # TODO: kernels. We assume just 1 here.
         if is_horizontal:
@@ -787,6 +885,7 @@ def gen_subrules_meta(rule, n_objs, obj_to_idxs, meta_objs, rule_name, jit=True)
         else:
             raise Exception('Invalid rule shape.')
         is_line_detector = False
+        breakpoint()
         cell_detection_fns = []
         cell_projection_fns = []
         for i, l_cell in enumerate(lp):
@@ -968,43 +1067,46 @@ def gen_subrules_meta(rule, n_objs, obj_to_idxs, meta_objs, rule_name, jit=True)
 
     has_right_pattern = rule.right_patterns is not None
 
-    for i, lp in enumerate(rule.left_patterns):
-        # Replace any empty lists in lp and rp with a None
-        lp = [[None] if len(l) == 0 else [' '.join(l)] for l in lp]
-        lp = np.array(lp)
+    lp, rp = rule.left_patterns, rule.right_patterns
+    # Replace any empty lists in lp and rp with a None
+    # lp = [[None] if len(l) == 0 else [' '.join(l)] for l in lp]
+    lp = np.array(lp)
 
-        rp, rp_rot = None, None
+    # rp, rp_rot = None, None
+    if has_right_pattern:
+    #     rp = rule.right_patterns[i]
+    #     rp = [[None] if len(l) == 0 else [' '.join(l)] for l in rp]
+        rp = np.array(rp)
+    else:
+        rp = None
+
+    if 'horizontal' in rule.prefixes:
+        rots = [1, 3]
+    elif 'left' in rule.prefixes:
+        rots = [3]
+    elif 'right' in rule.prefixes:
+        rots = [1]
+    elif 'vertical' in rule.prefixes:
+        rots = [0, 2]
+    elif 'up' in rule.prefixes:
+        rots = [2]
+    elif 'down' in rule.prefixes:
+        rots = [0]
+    elif len(lp) > 1:
+        rots = [0, 1, 2, 3]
+    else:
+        rots = [0]
+    first_lp = lp[0]
+    if first_lp.shape[0] == 1 and first_lp.shape[1] == 1:
+        rule_fns.append(gen_rotated_rule_fn(lp, rp, 0, rule.command))
+    for rot in rots:
+        # rotate the patterns
+        lp_rot = np.rot90(lp, rot, axes=(1, 2))
+
         if has_right_pattern:
-            rp = rule.right_patterns[i]
-            rp = [[None] if len(l) == 0 else [' '.join(l)] for l in rp]
-            rp = np.array(rp)
+            rp_rot = np.rot90(rp, rot, axes=(1, 2))
 
-        if 'horizontal' in rule.prefixes:
-            rots = [1, 3]
-        elif 'left' in rule.prefixes:
-            rots = [3]
-        elif 'right' in rule.prefixes:
-            rots = [1]
-        elif 'vertical' in rule.prefixes:
-            rots = [0, 2]
-        elif 'up' in rule.prefixes:
-            rots = [2]
-        elif 'down' in rule.prefixes:
-            rots = [0]
-        elif len(lp) > 1:
-            rots = [0, 1, 2, 3]
-        else:
-            rots = [0]
-        if lp.shape[0] == 1 and lp.shape[1] == 1:
-            rule_fns.append(gen_rotated_rule_fn(lp, rp, 0, rule.command))
-        for rot in rots:
-            # rotate the patterns
-            lp_rot = np.rot90(lp, rot)
-
-            if has_right_pattern:
-                rp_rot = np.rot90(rp, rot)
-
-            rule_fns.append(gen_rotated_rule_fn(lp_rot, rp_rot, rot, rule.command))
+        rule_fns.append(gen_rotated_rule_fn(lp_rot, rp_rot, rot, rule.command))
 
     return rule_fns
         
