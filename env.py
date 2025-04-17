@@ -765,16 +765,16 @@ def gen_subrules_meta(rule, n_objs, obj_to_idxs, meta_objs, rule_name, jit=True)
 
     def gen_rotated_rule_fn(lps, rps, rot, r_command):
         lps = np.array(lps)
-        first_lp = lp[0]
+        first_lp = lps[0]
         is_horizontal = np.all([lps[i].shape[0] == 1 for i in range(len(lps))])
         is_vertical = np.all([lps[i].shape[1] == 1 for i in range(len(lps))])
         is_single = np.all([lps[i].shape[0] == 1 and lps[i].shape[1] == 1 for i in range(len(lps))])
         # Here we map force directions to corresponding rule rotations
         rot_to_force = [1, 2, 3, 0]
         in_patch_shape = first_lp.shape
-        has_rp = rp is not None
+        has_rp = rps is not None
 
-        def gen_rotated_kernel_detection_fn(lp):
+        def gen_rotated_kernel_detection_fn(lp, rot):
             force_idx = rot_to_force[rot]
             # TODO: kernels. We assume just 1 here.
             if is_horizontal:
@@ -786,7 +786,6 @@ def gen_subrules_meta(rule, n_objs, obj_to_idxs, meta_objs, rule_name, jit=True)
             else:
                 raise Exception('Invalid rule shape.')
             is_line_detector = False
-            breakpoint()
             cell_detection_fns = []
             cell_projection_fns = []
             for i, l_cell in enumerate(lp):
@@ -858,12 +857,59 @@ def gen_subrules_meta(rule, n_objs, obj_to_idxs, meta_objs, rule_name, jit=True)
                 jax.lax.cond(
                     # True,
                     kernel_detected,
-                    lambda: jax.debug.print('      Rule {rule_name} left pattern detected: {lp_detected}', rule_name=rule_name, lp_detected=lp_detected),
+                    lambda: jax.debug.print('      Rule {rule_name} left kernel N detected: {kernel_detected}',
+                                            rule_name=rule_name, kernel_detected=kernel_detected),
                     lambda: None,
                 )
                 cancelled = False
+                return patch_activations, detect_outs
+            return detect_kernel
+
 
         kernel_detection_fns = [gen_rotated_kernel_detection_fn(lp, rot) for lp in lps]
+
+        def detect_pattern(lvl):
+            pattern_activations = []
+            pattern_detect_outs = []
+            for kernel_detection_fn in kernel_detection_fns:
+                kernel_activations, detect_outs = kernel_detection_fn(lvl)
+                pattern_activations.append(kernel_activations)
+                pattern_detect_outs.append(detect_outs)
+            pattern_detect_outs = stack_leaves(pattern_detect_outs)
+            pattern_activations = stack_leaves(pattern_activations)
+            return pattern_activations, pattern_detect_outs
+
+        def apply_pattern(lvl):
+            pattern_activations, pattern_detect_outs = detect_pattern(lvl)
+            pattern_detected = jnp.all(jnp.sum(pattern_activations, axis=(1,2)) > 0)
+            lvl = jax.lax.cond(
+                pattern_detected,
+                lambda lvl: project_kernels(lvl, pattern_activations, pattern_detect_outs),
+                lambda lvl: lvl,
+                lvl, pattern_activations, pattern_detect_outs,
+            )
+            return lvl
+
+        def project_kernels(lvl, pattern_activations, pattern_detect_outs):
+            n_tiles = lvl.shape[1] * lvl.shape[2]
+            for kernel_activations, kernel_detect_outs in zip(pattern_activations, pattern_detect_outs):
+                kernel_activ_xys = jnp.argwhere(kernel_activations == 1, size=n_tiles, fill_value=-1)
+                kernel_activ_xy_idx = 0
+                kernel_activ_xy = kernel_activ_xys[kernel_activ_xy_idx]
+
+                def project_kernel_at_xy(carry):               
+                    kernel_xy = carry[0]
+                    lvl = carry[1]
+                    breakpoint()
+
+                _, lvl = jax.lax.while_loop(
+                    lambda carry: carry[0] != -1,  
+                    lambda carry: project_kernel_at_xy(carry),
+                    (kernel_activ_xy, lvl),
+                )
+                
+
+        return apply_pattern
 
 
         force_idx = rot_to_force[rot]
@@ -1092,7 +1138,7 @@ def gen_subrules_meta(rule, n_objs, obj_to_idxs, meta_objs, rule_name, jit=True)
         rots = [2]
     elif 'down' in rule.prefixes:
         rots = [0]
-    elif len(lp) > 1:
+    elif lp.shape[1] > 1:
         rots = [0, 1, 2, 3]
     else:
         rots = [0]
