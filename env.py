@@ -36,7 +36,7 @@ def disambiguate_meta(obj, meta_objs, pattern_meta_objs, obj_to_idxs):
     else:
         # assert obj in pattern_meta_objs, f"Meta-object `{obj}` not found in meta_objs or pattern_meta_objs."
         if obj not in pattern_meta_objs:
-            print(f"When compiling a meta-object projection rule, the meta-object `{obj}` in the output pattern is" 
+            print(f"When compiling a meta-object projection rule, the meta-object `{obj}` in the output pattern is " 
                   "not found in the return of the compiled detection function (either in meta_objs or pattern_meta_objs).")
             breakpoint()
         return pattern_meta_objs[obj]
@@ -810,7 +810,12 @@ def gen_subrules_meta(rule, n_objs, obj_to_idxs, meta_objs, rule_name, jit=True)
                     if r_cell == '...':
                         assert is_line_detector, f"`...` not found in left pattern of rule {rule_name}"
                         cell_projection_fns.append('...')
-                    cell_projection_fns.append(gen_cell_projection_fn(r_cell, force_idx))
+                    if r_cell is not None:
+                        cell_projection_fns.append(gen_cell_projection_fn(r_cell, force_idx))
+                    else:
+                        cell_projection_fns.append(
+                            lambda m_cell, detect_out, rule_fn_out: m_cell
+                        )
 
             def detect_kernel(lvl):
                 n_chan = lvl.shape[1]
@@ -829,6 +834,7 @@ def gen_subrules_meta(rule, n_objs, obj_to_idxs, meta_objs, rule_name, jit=True)
                         cell_active, cell_out = cell_fn(m_cell=m_cell)
                         patch_active = patch_active & cell_active
                         cell_outs_patch.append(cell_out)
+                    breakpoint()
                     cell_outs_patch = stack_leaves(cell_outs_patch)
                     return patch_active, cell_outs_patch
 
