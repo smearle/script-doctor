@@ -1,11 +1,10 @@
-
 from dataclasses import dataclass
-from typing import Optional
-import hydra
-from hydra.core.config_store import ConfigStore
 import glob
 import os
-import pickle
+from typing import Optional
+
+import hydra
+from hydra.core.config_store import ConfigStore
 import cv2
 import jax
 from lark import Lark
@@ -13,7 +12,6 @@ import numpy as np
 
 from env import PSEnv, multihot_to_desc
 from parse_lark import TREES_DIR, DATA_DIR, TEST_GAMES, get_tree_from_txt
-
 
 
 @dataclass

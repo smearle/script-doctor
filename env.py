@@ -774,15 +774,22 @@ def gen_subrules_meta(rule, n_objs, obj_to_idxs, meta_objs, rule_name, jit=True)
         in_patch_shape = first_lp.shape
         has_rp = rps is not None
 
-        def gen_rotated_kernel_detection_fn(lp, rot):
+        def gen_rotated_kernel_fns(lp, rp, rot):
             force_idx = rot_to_force[rot]
-            # TODO: kernels. We assume just 1 here.
+            # Here we use the assumption that rules are 1D.
+            # TODO: generalize rules to 2D...?
             if is_horizontal:
                 lp = lp[0, :]
+                if has_rp:
+                    rp = rp[0, :]
             elif is_vertical:
                 lp = lp[:, 0]
+                if has_rp:
+                    rp = rp[:, 0]
             elif is_single:
                 lp = lp[0, 0]
+                if has_rp:
+                    rp = rp[0, 0]
             else:
                 raise Exception('Invalid rule shape.')
             is_line_detector = False
@@ -798,10 +805,15 @@ def gen_subrules_meta(rule, n_objs, obj_to_idxs, meta_objs, rule_name, jit=True)
                     cell_detection_fns.append(
                         lambda m_cell: (True, CellFnReturn(detected=jnp.zeros_like(m_cell), force_idx=None, meta_objs={}))
                     )
+            if has_rp:
+                for i, r_cell in enumerate(rp):
+                    if r_cell == '...':
+                        assert is_line_detector, f"`...` not found in left pattern of rule {rule_name}"
+                        cell_projection_fns.append('...')
+                    cell_projection_fns.append(gen_cell_projection_fn(r_cell, force_idx))
 
             def detect_kernel(lvl):
                 n_chan = lvl.shape[1]
-
                 # @jax.jit
                 def detect_cells(in_patch):
                     cell_outs_patch = []
@@ -817,6 +829,7 @@ def gen_subrules_meta(rule, n_objs, obj_to_idxs, meta_objs, rule_name, jit=True)
                         cell_active, cell_out = cell_fn(m_cell=m_cell)
                         patch_active = patch_active & cell_active
                         cell_outs_patch.append(cell_out)
+                    cell_outs_patch = stack_leaves(cell_outs_patch)
                     return patch_active, cell_outs_patch
 
                 def detect_line(in_line):
@@ -863,78 +876,138 @@ def gen_subrules_meta(rule, n_objs, obj_to_idxs, meta_objs, rule_name, jit=True)
                 )
                 cancelled = False
                 return patch_activations, detect_outs
-            return detect_kernel
 
 
-        kernel_detection_fns = [gen_rotated_kernel_detection_fn(lp, rot) for lp in lps]
-
-        def detect_pattern(lvl):
-            pattern_activations = []
-            pattern_detect_outs = []
-            for kernel_detection_fn in kernel_detection_fns:
-                kernel_activations, detect_outs = kernel_detection_fn(lvl)
-                pattern_activations.append(kernel_activations)
-                pattern_detect_outs.append(detect_outs)
-            pattern_detect_outs = stack_leaves(pattern_detect_outs)
-            pattern_activations = stack_leaves(pattern_activations)
-            return pattern_activations, pattern_detect_outs
-
-        def apply_pattern(lvl):
-            pattern_activations, pattern_detect_outs = detect_pattern(lvl)
-            pattern_detected = jnp.all(jnp.sum(pattern_activations, axis=(1,2)) > 0)
-            lvl = jax.lax.cond(
-                pattern_detected,
-                lambda lvl: project_kernels(lvl, pattern_activations, pattern_detect_outs),
-                lambda lvl: lvl,
-                lvl, pattern_activations, pattern_detect_outs,
-            )
-            return lvl
-
-        def project_kernels(lvl, pattern_activations, pattern_detect_outs):
-            n_tiles = lvl.shape[1] * lvl.shape[2]
-            for kernel_activations, kernel_detect_outs in zip(pattern_activations, pattern_detect_outs):
+            def project_kernel(lvl, kernel_activations, kernel_detect_outs):
+                n_tiles = np.prod(lvl.shape[-2:])
                 kernel_activ_xys = jnp.argwhere(kernel_activations == 1, size=n_tiles, fill_value=-1)
                 kernel_activ_xy_idx = 0
                 kernel_activ_xy = kernel_activ_xys[kernel_activ_xy_idx]
 
+                @jax.jit
+                def project_cells_at(xy, lvl):
+                    detect_outs = kernel_detect_outs
+                    # patch_activations_xy = jnp.zeros_like(patch_activations)
+                    # patch_activations_xy = patch_activations_xy.at[*xy].set(1)
+                    # detect_outs = detect_outs[first_a[0]][first_a[1]]
+                    detect_outs_xy = jax.tree_map(lambda x: x[xy[0]][xy[1]], detect_outs)
+
+                    pattern_meta_objs = {}
+                    moving_idx = None
+                    # FIXME: Shouldn't this be a jnp array at this point when `jit=True`? And yet it's a list...?
+                    for k in detect_outs_xy.meta_objs:
+                        pattern_meta_objs[k] = detect_outs_xy.meta_objs[k].max()
+                    # for cell_fn_out in detect_outs_xy:
+                    #     pattern_meta_objs.update(cell_fn_out.meta_objs)
+                    #     if cell_fn_out.moving_idx is not None:
+                    #         moving_idx = cell_fn_out.moving_idx
+                    rule_fn_out = RuleFnReturn(meta_objs=pattern_meta_objs, moving_idx=moving_idx)
+
+                    # Apply projection functions to the affected cells
+                    out_cell_idxs = np.indices(in_patch_shape)
+                    out_cell_idxs = rearrange(out_cell_idxs, "xy h w -> h w xy")
+                    if is_vertical:
+                        out_cell_idxs = out_cell_idxs[:, 0]
+                    elif is_horizontal:
+                        out_cell_idxs = out_cell_idxs[0, :]
+                    elif is_single:
+                        out_cell_idxs = out_cell_idxs[0, 0]
+
+                    # assert len(detect_outs) == len(out_cell_idxs) == len(cell_projection_fns):
+                    if not detect_outs_xy.detected.shape[0] == len(out_cell_idxs) == len(cell_projection_fns):
+                        breakpoint()
+                    #TODO: vmap this
+                    init_lvl = lvl
+                    for i, (out_cell_idx, cell_proj_fn) in enumerate(zip(out_cell_idxs, cell_projection_fns)):
+                        detect_out = jax.tree.map(lambda x: x[i], detect_outs_xy)
+                        out_cell_idx += xy
+                        m_cell = lvl[0, :, *out_cell_idx]
+                        m_cell = jnp.array(m_cell)
+                        m_cell = cell_proj_fn(m_cell, cell_detect_out=detect_out, rule_fn_out=rule_fn_out)
+                        lvl = lvl.at[0, :, *out_cell_idx].set(m_cell)
+                    lvl_changed = jnp.any(lvl != init_lvl)
+                    jax.debug.print('      at position {xy}, the level changed: {lvl_changed}', xy=xy, lvl_changed=lvl_changed)
+                    return lvl
+
                 def project_kernel_at_xy(carry):               
-                    kernel_xy = carry[0]
+                    kernel_activ_xy_idx = carry[0]
+                    kernel_activ_xy = kernel_activ_xys[kernel_activ_xy_idx]
                     lvl = carry[1]
-                    breakpoint()
+                    lvl = project_cells_at(kernel_activ_xy, lvl)
+
+                    kernel_activ_xy_idx += 1
+                    return kernel_activ_xy_idx, lvl
 
                 _, lvl = jax.lax.while_loop(
-                    lambda carry: carry[0] != -1,  
+                    lambda carry: jnp.all(kernel_activ_xys[carry[0]] != -1),  
                     lambda carry: project_kernel_at_xy(carry),
-                    (kernel_activ_xy, lvl),
+                    (kernel_activ_xy_idx, lvl),
                 )
-                
+                return lvl
+
+            return detect_kernel, project_kernel
+
+        kernel_fns = [gen_rotated_kernel_fns(lp, rp, rot) for lp, rp in zip(lps, rps)]
+        kernel_detection_fns, kernel_projection_fns = zip(*kernel_fns)
+
+        def detect_pattern(lvl):
+            kernel_activations = []
+            kernel_detect_outs = []
+            for kernel_detection_fn in kernel_detection_fns:
+                kernel_activations_i, detect_outs_i = kernel_detection_fn(lvl)
+                kernel_activations.append(kernel_activations_i)
+                kernel_detect_outs.append(detect_outs_i)
+            kernel_detect_outs = stack_leaves(kernel_detect_outs)
+            kernel_activations = stack_leaves(kernel_activations)
+            return kernel_activations, kernel_detect_outs
+
+        def apply_pattern(lvl):
+            kernel_activations, kernel_detect_outs = detect_pattern(lvl)
+            pattern_detected = jnp.all(jnp.sum(kernel_activations, axis=(1,2)) > 0)
+
+            def project_kernels(lvl, kernel_activations, kernel_detect_outs):
+                # TODO: use a jax.lax.switch
+                for i, kernel_projection_fn in enumerate(kernel_projection_fns):
+                    lvl = kernel_projection_fn(lvl, kernel_activations[i],
+                                               jax.tree.map(lambda x: x[i], kernel_detect_outs))
+                return lvl
+
+            next_lvl = jax.lax.cond(
+                pattern_detected,
+                project_kernels,
+                lambda lvl, pattern_activations, pattern_detect_outs: lvl,
+                lvl, kernel_activations, kernel_detect_outs,
+            )
+            rule_applied = jnp.any(next_lvl != lvl)
+            cancelled = False
+            return next_lvl, rule_applied, cancelled
 
         return apply_pattern
 
 
         force_idx = rot_to_force[rot]
         in_patch_shape = first_lp.shape
-        has_rp = rp is not None
+        has_rp = rps is not None
         # TODO: kernels. We assume just 1 here.
         if is_horizontal:
-            lp = lp[0, :]
+            lps = lps[0, :]
             if has_rp:
-                rp = rp[0, :]
+                rps = rps[0, :]
         elif is_vertical:
-            lp = lp[:, 0]
+            lps = lps[:, 0]
             if has_rp:
-                rp = rp[:, 0]
+                rps = rps[:, 0]
         elif is_single:
-            lp = lp[0, 0]
+            lps = lps[0, 0]
             if has_rp: 
-                rp = rp[0, 0]
+                rps = rps[0, 0]
         else:
             raise Exception('Invalid rule shape.')
         is_line_detector = False
         breakpoint()
         cell_detection_fns = []
         cell_projection_fns = []
-        for i, l_cell in enumerate(lp):
+        for i, l_cell in enumerate(lps):
             if l_cell == '...':
                 is_line_detector = True
                 cell_detection_fns.append('...')
@@ -945,7 +1018,7 @@ def gen_subrules_meta(rule, n_objs, obj_to_idxs, meta_objs, rule_name, jit=True)
                     lambda m_cell: (True, CellFnReturn(detected=jnp.zeros_like(m_cell), force_idx=None, meta_objs={}))
                 )
         if has_rp:
-            for i, r_cell in enumerate(rp):
+            for i, r_cell in enumerate(rps):
                 if r_cell == '...':
                     assert is_line_detector, f"`...` not found in left pattern of rule {rule_name}"
                     cell_projection_fns.append('...')
@@ -1113,18 +1186,18 @@ def gen_subrules_meta(rule, n_objs, obj_to_idxs, meta_objs, rule_name, jit=True)
 
     has_right_pattern = rule.right_patterns is not None
 
-    lp, rp = rule.left_patterns, rule.right_patterns
+    lps, rps = rule.left_patterns, rule.right_patterns
     # Replace any empty lists in lp and rp with a None
-    # lp = [[None] if len(l) == 0 else [' '.join(l)] for l in lp]
-    lp = np.array(lp)
+    lps = [[[None] if len(l) == 0 else [' '.join(l)] for l in kernel] for kernel in lps]
+    lps = np.array(lps)
 
     # rp, rp_rot = None, None
     if has_right_pattern:
     #     rp = rule.right_patterns[i]
-    #     rp = [[None] if len(l) == 0 else [' '.join(l)] for l in rp]
-        rp = np.array(rp)
+        rps = [[[None] if len(r) == 0 else [' '.join(r)] for r in kernel] for kernel in rps]
+        rps = np.array(rps)
     else:
-        rp = None
+        rps = None
 
     if 'horizontal' in rule.prefixes:
         rots = [1, 3]
@@ -1138,19 +1211,19 @@ def gen_subrules_meta(rule, n_objs, obj_to_idxs, meta_objs, rule_name, jit=True)
         rots = [2]
     elif 'down' in rule.prefixes:
         rots = [0]
-    elif lp.shape[1] > 1:
+    elif lps.shape[1] > 1:
         rots = [0, 1, 2, 3]
     else:
         rots = [0]
-    first_lp = lp[0]
+    first_lp = lps[0]
     if first_lp.shape[0] == 1 and first_lp.shape[1] == 1:
-        rule_fns.append(gen_rotated_rule_fn(lp, rp, 0, rule.command))
+        rule_fns.append(gen_rotated_rule_fn(lps, rps, 0, rule.command))
     for rot in rots:
         # rotate the patterns
-        lp_rot = np.rot90(lp, rot, axes=(1, 2))
+        lp_rot = np.rot90(lps, rot, axes=(1, 2))
 
         if has_right_pattern:
-            rp_rot = np.rot90(rp, rot, axes=(1, 2))
+            rp_rot = np.rot90(rps, rot, axes=(1, 2))
 
         rule_fns.append(gen_rotated_rule_fn(lp_rot, rp_rot, rot, rule.command))
 
