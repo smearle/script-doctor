@@ -116,14 +116,21 @@ class GenPSTree(Transformer):
             if rp[0].children[0].data.value == 'command_keyword':
                 command = rp[0].children[0].children[0].value
                 rp = None
-            elif rp[0].children[0].data.value == 'sound':
-                return None
-            else:
-                breakpoint()
+
+        # filter out sfx
+        new_rps = []
+        if rp is not None:
+            for r in rp:
+                if isinstance(r, Tree) and r.data == 'command':
+                    if r.children[0].data.value == 'sound':
+                        continue
+                else:
+                    new_rps.append(r)
+
         rule = Rule(
             prefixes=prefixes,
             left_patterns = lp,
-            right_patterns = rp,
+            right_patterns = new_rps,
             command=command
         )
         return rule
