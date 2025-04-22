@@ -329,7 +329,7 @@ class PatternFnReturn:
     meta_objs: dict
     moving_idx: int = None
 
-def gen_subrules_meta(rule, n_objs, obj_to_idxs, meta_objs, rule_name, jit=True):
+def gen_subrules_meta(rule, n_objs, obj_to_idxs, meta_objs, coll_mat, rule_name, jit=True):
     rule = rule
     idxs_to_objs = {v: k for k, v in obj_to_idxs.items()}
     has_right_pattern = len(rule.right_patterns) > 0
@@ -663,6 +663,13 @@ def gen_subrules_meta(rule, n_objs, obj_to_idxs, meta_objs, rule_name, jit=True)
 
         return detect_cell
 
+    def remove_colliding_objs(m_cell, obj_idx, coll_mat):
+        # If any objects on the same collision layer are present in the cell, remove them
+        coll_vec = coll_mat[:, obj_idx]
+        coll_vec[obj_idx] = 0
+        m_cell = m_cell.at[:n_objs].set(m_cell[:n_objs].at[coll_vec].set(0))
+        return m_cell
+
     # @partial(jax.jit, static_argnums=(2))
     def project_obj(m_cell, cell_detect_out: CellFnReturn, pattern_detect_out: PatternFnReturn, obj):
         meta_objs = cell_detect_out.meta_objs
@@ -670,6 +677,7 @@ def gen_subrules_meta(rule, n_objs, obj_to_idxs, meta_objs, rule_name, jit=True)
         # jax.debug.print('meta objs: {meta_objs}', meta_objs=meta_objs)
         obj_idx = disambiguate_meta(obj, meta_objs, pattern_meta_objs, obj_to_idxs)
         m_cell = m_cell.at[obj_idx].set(1)
+        m_cell = remove_colliding_objs(m_cell, obj_idx, coll_mat)
         return m_cell
 
     # @partial(jax.jit, static_argnums=(2))
@@ -699,8 +707,11 @@ def gen_subrules_meta(rule, n_objs, obj_to_idxs, meta_objs, rule_name, jit=True)
         meta_objs = cell_detect_out.meta_objs
         pattern_meta_objs = pattern_detect_out.meta_objs
         obj_idx = disambiguate_meta(obj, meta_objs, pattern_meta_objs, obj_to_idxs)
+        # Add the object
         m_cell = m_cell.at[obj_idx].set(1)
+        # Add force to the object
         m_cell = m_cell.at[n_objs + (obj_idx * N_MOVEMENTS) + force_idx].set(1)
+        m_cell = remove_colliding_objs(m_cell, obj_idx, coll_mat)
 
         if jit:
             jax.debug.print('project_force_on_obj: {obj_idx}', obj_idx=obj_idx)
@@ -727,6 +738,7 @@ def gen_subrules_meta(rule, n_objs, obj_to_idxs, meta_objs, rule_name, jit=True)
             force_idx = pattern_detect_out.moving_idx
         m_cell = m_cell.at[obj_idx].set(1)
         m_cell = m_cell.at[n_objs + (obj_idx * N_MOVEMENTS) + force_idx].set(1)
+        m_cell = remove_colliding_objs(m_cell, obj_idx, coll_mat)
         return m_cell
 
     def gen_cell_projection_fn(r_cell, right_force_idx):
@@ -1331,7 +1343,7 @@ def gen_rule_fn(obj_to_idxs, coll_mat, tree_rules, meta_objs, jit, n_objs):
             assert rule_block.looping == False
             for rule in rule_block.rules:
                 # TODO: rule-block and loop logics
-                sub_rule_fns = gen_subrules_meta(rule, n_objs, obj_to_idxs, meta_objs, rule_name=str(rule), jit=jit)
+                sub_rule_fns = gen_subrules_meta(rule, n_objs, obj_to_idxs, meta_objs, coll_mat, rule_name=str(rule), jit=jit)
                 if not 'late' in rule.prefixes:
                     rule_grps.append(sub_rule_fns)
                 else:
