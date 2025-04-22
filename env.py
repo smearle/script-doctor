@@ -51,21 +51,29 @@ def disambiguate_meta(obj, meta_objs, pattern_meta_objs, obj_to_idxs):
 def level_to_multihot(level):
     pass
 
-def assign_vecs_to_objs(collision_layers):
+def assign_vecs_to_objs(collision_layers, atomic_obj_names):
     n_lyrs = len(collision_layers)
-    n_objs = sum([len(lyr) for lyr in collision_layers])
+    n_objs = len(atomic_obj_names)
     coll_masks = np.zeros((n_lyrs, n_objs), dtype=bool)
     objs_to_idxs = {}
     # vecs = np.eye(n_objs, dtype=np.uint8)
     # obj_vec_dict = {}
     j = 0
+    objs = []
+    atomic_objs_to_idxs = {obj: i for i, obj in enumerate(atomic_obj_names)}
     for i, layer in enumerate(collision_layers):
         for obj in layer:
+            objs.append(obj)
             # obj_vec_dict[obj] = vecs[i]
-            objs_to_idxs[obj] = j
-            coll_masks[i, j] = 1
-            j += 1
-    return objs_to_idxs, coll_masks
+            if obj in atomic_objs_to_idxs:
+                obj_idx = atomic_objs_to_idxs[obj]
+                objs_to_idxs[obj] = obj_idx
+            else:
+                obj_idx = j
+                j += 1
+            objs_to_idxs[obj] = obj_idx
+            coll_masks[i, obj_idx] = 1
+    return objs, objs_to_idxs, coll_masks
 
 def process_legend(legend):
     char_legend = {}
@@ -107,7 +115,8 @@ def expand_collision_layers(collision_layers, meta_objs):
                 j += 1
     return collision_layers
 
-def expand_meta_objs(tile_list, obj_to_idxs, meta_objs):
+def expand_meta_objs(tile_list: List, obj_to_idxs, meta_objs):
+    assert isinstance(tile_list, list), f"tile_list should be a list, got {type(tile_list)}"
     expanded_meta_objs = []
     for mt in tile_list:
         if mt in meta_objs:
@@ -321,7 +330,9 @@ class PatternFnReturn:
     moving_idx: int = None
 
 def gen_subrules_meta(rule, n_objs, obj_to_idxs, meta_objs, rule_name, jit=True):
+    rule = rule
     idxs_to_objs = {v: k for k, v in obj_to_idxs.items()}
+    has_right_pattern = len(rule.right_patterns) > 0
 
     def is_obj_forceless(obj_idx, m_cell):
         # note that `action` does not count as a force
@@ -549,7 +560,9 @@ def gen_subrules_meta(rule, n_objs, obj_to_idxs, meta_objs, rule_name, jit=True)
             right_force_idx: the force index corresponding to `>` given some rotation
         """
         fns = []
+        print('l cell 1:', l_cell)
         l_cell = l_cell.split(' ')
+        print('l cell 2:', l_cell)
         no, force, directional_force, stationary, action, moving = False, False, False, False, False, False
         obj_names = []
         for obj in l_cell:
@@ -775,60 +788,75 @@ def gen_subrules_meta(rule, n_objs, obj_to_idxs, meta_objs, rule_name, jit=True)
         return project_cell
 
     def gen_rotated_rule_fn(lps, rps, rot, r_command):
-        lps = np.array(lps)
-        first_lp = lps[0]
-        is_horizontal = np.all([lps[i].shape[0] == 1 for i in range(len(lps))])
-        is_vertical = np.all([lps[i].shape[1] == 1 for i in range(len(lps))])
-        is_single = np.all([lps[i].shape[0] == 1 and lps[i].shape[1] == 1 for i in range(len(lps))])
-        # Here we map force directions to corresponding rule rotations
-        rot_to_force = [1, 2, 3, 0]
-        in_patch_shape = first_lp.shape
-        has_rp = rps is not None
 
         def gen_rotated_kernel_fns(lp, rp, rot):
+            lp, rp = np.array(lp), np.array(rp)
+            # is_horizontal = np.all([lps[i].shape[0] == 1 for i in range(len(lps))])
+            # is_vertical = np.all([lps[i].shape[1] == 1 for i in range(len(lps))])
+            # is_single = np.all([lps[i].shape[0] == 1 and lps[i].shape[1] == 1 for i in range(len(lps))])
+            is_horizontal = lp.shape[0] == 1 and lp.shape[1] > 1
+            is_vertical = lp.shape[0] > 1 and lp.shape[1] == 1
+            is_single = lp.shape[0] == 1 and lp.shape[1] == 1
+            # Here we map force directions to corresponding rule rotations
+            rot_to_force = [1, 2, 3, 0]
+            in_patch_shape = lp.shape
+            # has_rp = len(rps) > 0
+            lp, rp = np.array(lp), np.array(rp)
+            # has_right_pattern = len()
             force_idx = rot_to_force[rot]
             # Here we use the assumption that rules are 1D.
             # TODO: generalize rules to 2D...?
             if is_horizontal:
                 lp = lp[0, :]
-                if has_rp:
+                if has_right_pattern:
                     rp = rp[0, :]
             elif is_vertical:
                 lp = lp[:, 0]
-                if has_rp:
+                if has_right_pattern:
                     rp = rp[:, 0]
             elif is_single:
                 lp = lp[0, 0]
-                if has_rp:
+                if has_right_pattern:
                     rp = rp[0, 0]
             else:
                 raise Exception('Invalid rule shape.')
             is_line_detector = False
             cell_detection_fns = []
             cell_projection_fns = []
-            for i, l_cell in enumerate(lp):
-                if l_cell == '...':
-                    is_line_detector = True
-                    cell_detection_fns.append('...')
-                    # TODO
-                    exit()
-                if l_cell is not None:
-                    cell_detection_fns.append(gen_cell_detection_fn(l_cell, force_idx))
-                else:
-                    cell_detection_fns.append(
-                        lambda m_cell: (True, CellFnReturn(detected=jnp.zeros_like(m_cell), force_idx=None, meta_objs={}))
-                    )
-            if has_rp:
+            print(f'lp, rp: {lp}, {rp}')
+            # FIXME, HACK
+            if isinstance(lp, str):
+                lp = np.array([lp])
+            if isinstance(rp, str):
+                rp = np.array([rp])
+            print(f'lp2, rp2: {lp}, {rp}')
+            print(f'has right pattern: {has_right_pattern}')
+            if len(lp.shape) == 1:
+                for i, l_cell in enumerate(lp):
+                    if l_cell == '...':
+                        is_line_detector = True
+                        cell_detection_fns.append('...')
+                        # TODO
+                        exit()
+                    if l_cell is not None:
+                        cell_detection_fns.append(gen_cell_detection_fn(l_cell, force_idx))
+                    else:
+                        cell_detection_fns.append(
+                            lambda m_cell: (True, CellFnReturn(detected=jnp.zeros_like(m_cell), force_idx=None, meta_objs={}))
+                        )
+            # FIXME: why is the normal way broken here?
+            # if has_right_pattern:
+            if has_right_pattern and rp is not None:
                 for i, r_cell in enumerate(rp):
                     if r_cell == '...':
                         assert is_line_detector, f"`...` not found in left pattern of rule {rule_name}"
                         cell_projection_fns.append('...')
-                    # if r_cell is not None:
-                    cell_projection_fns.append(gen_cell_projection_fn(r_cell, force_idx))
-                    # else:
-                    #     cell_projection_fns.append(
-                    #         lambda m_cell, cell_detect_out, pattern_detect_out: m_cell
-                        # )
+                    if r_cell is not None:
+                        cell_projection_fns.append(gen_cell_projection_fn(r_cell, force_idx))
+                    else:
+                        cell_projection_fns.append(
+                            lambda m_cell, cell_detect_out, pattern_detect_out: m_cell
+                        )
 
             def detect_kernel(lvl):
                 n_chan = lvl.shape[1]
@@ -938,10 +966,10 @@ def gen_subrules_meta(rule, n_objs, obj_to_idxs, meta_objs, rule_name, jit=True)
                     elif is_horizontal:
                         out_cell_idxs = out_cell_idxs[0, :]
                     elif is_single:
-                        out_cell_idxs = out_cell_idxs[0, 0]
+                        out_cell_idxs = out_cell_idxs[0, :]
 
                     if not len(cell_detect_outs) == len(out_cell_idxs) == len(cell_projection_fns):
-                        breakpoint()
+                        print(f"Warning: len(cell_detect_outs) {len(cell_detect_outs)} != len(out_cell_idxs) {len(out_cell_idxs)} != len(cell_projection_fns) {len(cell_projection_fns)}")
                     #TODO: vmap this
                     init_lvl = lvl
                     for i, (out_cell_idx, cell_proj_fn) in enumerate(zip(out_cell_idxs, cell_projection_fns)):
@@ -973,6 +1001,11 @@ def gen_subrules_meta(rule, n_objs, obj_to_idxs, meta_objs, rule_name, jit=True)
 
             return detect_kernel, project_kernel
 
+
+        if not has_right_pattern:
+            rps = [None] * len(lps)
+        print('rps', rps)
+        print('lps', lps)
         kernel_fns = [gen_rotated_kernel_fns(lp, rp, rot) for lp, rp in zip(lps, rps)]
         kernel_detection_fns, kernel_projection_fns = zip(*kernel_fns)
 
@@ -1024,19 +1057,19 @@ def gen_subrules_meta(rule, n_objs, obj_to_idxs, meta_objs, rule_name, jit=True)
 
         force_idx = rot_to_force[rot]
         in_patch_shape = first_lp.shape
-        has_rp = rps is not None
+        # has_right_pattern = rps is not None
         # TODO: kernels. We assume just 1 here.
         if is_horizontal:
             lps = lps[0, :]
-            if has_rp:
+            if has_right_pattern:
                 rps = rps[0, :]
         elif is_vertical:
             lps = lps[:, 0]
-            if has_rp:
+            if has_right_pattern:
                 rps = rps[:, 0]
         elif is_single:
             lps = lps[0, 0]
-            if has_rp: 
+            if has_right_pattern: 
                 rps = rps[0, 0]
         else:
             raise Exception('Invalid rule shape.')
@@ -1054,7 +1087,7 @@ def gen_subrules_meta(rule, n_objs, obj_to_idxs, meta_objs, rule_name, jit=True)
                 cell_detection_fns.append(
                     lambda m_cell: (True, CellFnReturn(detected=jnp.zeros_like(m_cell), force_idx=None, meta_objs={}))
                 )
-        if has_rp:
+        if has_right_pattern:
             for i, r_cell in enumerate(rps):
                 if r_cell == '...':
                     assert is_line_detector, f"`...` not found in left pattern of rule {rule_name}"
@@ -1125,7 +1158,7 @@ def gen_subrules_meta(rule, n_objs, obj_to_idxs, meta_objs, rule_name, jit=True)
             )
             cancelled = False
 
-            if has_rp:
+            if has_right_pattern:
 
                 @partial(jax.jit)
                 def project_cells(lvl, patch_activations, detect_outs):
@@ -1221,21 +1254,20 @@ def gen_subrules_meta(rule, n_objs, obj_to_idxs, meta_objs, rule_name, jit=True)
     rule_fns = []
     print('RULE PATTERNS', rule.left_patterns, rule.right_patterns)
 
-    has_right_pattern = rule.right_patterns is not None
 
-    lps, rps = rule.left_patterns, rule.right_patterns
+    l_kerns, r_kerns = rule.left_patterns, rule.right_patterns
     # Replace any empty lists in lp and rp with a None
-    lps = [[[None] if len(l) == 0 else [' '.join(l)] for l in kernel] for kernel in lps]
-    breakpoint()
-    lps = np.array(lps)
+    l_kerns = [[[None] if len(l) == 0 else [' '.join(l)] for l in kernel] for kernel in l_kerns]
+    print('lps', l_kerns)
+    # lps = np.array(lps)
 
     # rp, rp_rot = None, None
     if has_right_pattern:
     #     rp = rule.right_patterns[i]
-        rps = [[[None] if len(r) == 0 else [' '.join(r)] for r in kernel] for kernel in rps]
-        rps = np.array(rps)
+        r_kerns = [[[None] if len(r) == 0 else [' '.join(r)] for r in kernel] for kernel in r_kerns]
+        # r_kerns = np.array(r_kerns)
     else:
-        rps = None
+        r_kerns = None
 
     if 'horizontal' in rule.prefixes:
         rots = [1, 3]
@@ -1249,21 +1281,31 @@ def gen_subrules_meta(rule, n_objs, obj_to_idxs, meta_objs, rule_name, jit=True)
         rots = [2]
     elif 'down' in rule.prefixes:
         rots = [0]
-    elif lps.shape[1] > 1:
+    # TODO: Remove unnecessary rotated variations of single-cell kernels
+    elif np.any(np.array([len(kernel) for kernel in l_kerns]) > 1):
         rots = [0, 1, 2, 3]
     else:
         rots = [0]
-    first_lp = lps[0]
+    first_lp = np.array(l_kerns[0])
     if first_lp.shape[0] == 1 and first_lp.shape[1] == 1:
-        rule_fns.append(gen_rotated_rule_fn(lps, rps, 0, rule.command))
+        # print(f'LPS: {lps}')
+        # print(f'RPS: {rps}')
+        rule_fns.append(gen_rotated_rule_fn(l_kerns, r_kerns, 0, rule.command))
     for rot in rots:
         # rotate the patterns
-        lp_rot = np.rot90(lps, rot, axes=(1, 2))
+        l_kerns_rot = []
+        for kern in l_kerns:
+            kern = np.rot90(kern, rot, axes=(0, 1))
+            l_kerns_rot.append(kern)
 
+        r_kerns_rot = None
         if has_right_pattern:
-            rp_rot = np.rot90(rps, rot, axes=(1, 2))
+            r_kerns_rot = []
+            for kern in r_kerns:
+                kern = np.rot90(kern, rot, axes=(0, 1))
+                r_kerns_rot.append(kern)
 
-        rule_fns.append(gen_rotated_rule_fn(lp_rot, rp_rot, rot, rule.command))
+        rule_fns.append(gen_rotated_rule_fn(l_kerns_rot, r_kerns_rot, rot, rule.command))
 
     return rule_fns
         
@@ -1273,8 +1315,7 @@ def player_has_moved(lvl_0, lvl_1, obj_to_idxs):
     jax.debug.print('player moved: {player_moved}', player_moved=player_moved)
     return player_moved
         
-def gen_rule_fn(obj_to_idxs, coll_mat, tree_rules, meta_objs, jit=True):
-    n_objs = len(obj_to_idxs)
+def gen_rule_fn(obj_to_idxs, coll_mat, tree_rules, meta_objs, jit, n_objs):
     rule_grps = []
     late_rule_grps = []
     if len(tree_rules) == 0:
@@ -1292,7 +1333,7 @@ def gen_rule_fn(obj_to_idxs, coll_mat, tree_rules, meta_objs, jit=True):
                 else:
                     late_rule_grps.append(sub_rule_fns)
 
-    rule_grps.append(gen_move_rules(obj_to_idxs, coll_mat, jit=jit))
+    rule_grps.append(gen_move_rules(obj_to_idxs, coll_mat, n_objs, jit=jit))
     rule_grps += late_rule_grps
 
     def rule_fn(lvl):
@@ -1301,7 +1342,7 @@ def gen_rule_fn(obj_to_idxs, coll_mat, tree_rules, meta_objs, jit=True):
         lvl = lvl[None]
 
         if not jit:
-            print('\n' + multihot_to_desc(lvl[0], obj_to_idxs))
+            print('\n' + multihot_to_desc(lvl[0], obj_to_idxs, n_objs))
 
         for grp_i, rule_grp in enumerate(rule_grps):
             grp_applied = True
@@ -1335,7 +1376,7 @@ def gen_rule_fn(obj_to_idxs, coll_mat, tree_rules, meta_objs, jit=True):
                 # print('rule: {rule}', rule=tree_rules[0][0].rules[grp_i])
                 if not jit:
                     if grp_applied:
-                        print('\n' + multihot_to_desc(lvl[0], obj_to_idxs))
+                        print('\n' + multihot_to_desc(lvl[0], obj_to_idxs, n_objs))
                 # force_is_present = jnp.sum(lvl[0, n_objs:n_objs + (n_objs * N_MOVEMENTS)]) > 0
                 # jax.debug.print('force is present: {force_is_present}', force_is_present=force_is_present)
                 # jax.debug.print('lvl:\n{lvl}', lvl=lvl)
@@ -1361,8 +1402,7 @@ def gen_rule_fn(obj_to_idxs, coll_mat, tree_rules, meta_objs, jit=True):
         rule_fn = jax.jit(rule_fn)
     return rule_fn
 
-def gen_move_rules(obj_to_idxs, coll_mat, jit=True):
-    n_objs = len(obj_to_idxs)
+def gen_move_rules(obj_to_idxs, coll_mat, n_objs, jit=True):
     rule_fns = []
     coll_mat = coll_mat.astype(np.int8)
     for obj, idx in obj_to_idxs.items():
@@ -1506,10 +1546,18 @@ class PSEnv:
         self.require_player_movement = tree.prelude.require_player_movement
         obj_legend, meta_objs, joint_tiles = process_legend(tree.legend)
         collision_layers = expand_collision_layers(tree.collision_layers, meta_objs)
-        self.obj_to_idxs, coll_masks = assign_vecs_to_objs(collision_layers)
-        self.n_objs = len(self.obj_to_idxs)
+        atomic_obj_names = [name for name in tree.objects.keys()]
+        atomic_obj_names = [name for name in atomic_obj_names]
+        objs, self.obj_to_idxs, coll_masks = assign_vecs_to_objs(collision_layers, atomic_obj_names)
+        for obj, sub_objs in meta_objs.items():
+            # Meta-objects that are actually just alternate names.
+            print(f'sub_objs', sub_objs)
+            sub_objs = expand_meta_objs(sub_objs, self.obj_to_idxs, meta_objs)
+            if len(sub_objs) == 1 and (obj not in self.obj_to_idxs):
+                self.obj_to_idxs[obj] = self.obj_to_idxs[sub_objs[0]]
+        self.n_objs = len(atomic_obj_names)
         coll_mat = np.einsum('ij,ik->jk', coll_masks, coll_masks, dtype=bool)
-        self.rule_fn = gen_rule_fn(self.obj_to_idxs, coll_mat, tree.rules, meta_objs, jit=self.jit)
+        self.rule_fn = gen_rule_fn(self.obj_to_idxs, coll_mat, tree.rules, meta_objs, jit=self.jit, n_objs=self.n_objs)
         self.check_win = gen_check_win(tree.win_conditions, self.obj_to_idxs, meta_objs, jit=self.jit)
         if 'player' in self.obj_to_idxs:
             self.player_idxs = [self.obj_to_idxs['player']]
@@ -1519,7 +1567,10 @@ class PSEnv:
         self.player_idxs = np.array(self.player_idxs)
         print(f'player_idxs: {self.player_idxs}')
         sprite_stack = []
-        for obj_name in self.obj_to_idxs:
+        print(atomic_obj_names)
+        print(self.obj_to_idxs)
+        # for obj_name in self.obj_to_idxs:
+        for obj_name in atomic_obj_names:
             obj = tree.objects[obj_name]
             if obj.sprite is not None:
                 print(f'rendering pixel sprite for {obj_name}')
@@ -1536,23 +1587,23 @@ class PSEnv:
                 sprite_path = os.path.join(temp_dir, f'sprite_{obj_name}.png')
 
                 # Size the image up a bunch
-                # im_s = PIL.Image.fromarray(im)
-                # im_s = im.resize((im_s.size[0] * 10, im_s.size[1] * 10), PIL.Image.NEAREST)
-                # im.save(sprite_path)
+                im_s = PIL.Image.fromarray(im)
+                im_s = im_s.resize((im_s.size[0] * 10, im_s.size[1] * 10), PIL.Image.NEAREST)
+                im_s.save(sprite_path)
 
             sprite_stack.append(im)
         self.sprite_stack = np.array(sprite_stack)
-        n_objs = len(self.obj_to_idxs)
         char_legend = {v: k for k, v in obj_legend.items()}
         # Generate vectors to detect atomic objects
-        self.obj_vecs = np.eye(n_objs, dtype=bool)
+        self.obj_vecs = np.eye(self.n_objs, dtype=bool)
         joint_obj_vecs = []
         self.chars_to_idxs = {obj_legend[k]: v for k, v in self.obj_to_idxs.items() if k in obj_legend}
 
         for jo, subobjects in joint_tiles.items():
-            vec = np.zeros(n_objs, dtype=bool)
+            vec = np.zeros(self.n_objs, dtype=bool)
             subobjects = expand_meta_objs(subobjects, self.obj_to_idxs, meta_objs)
             for so in subobjects:
+                print(so)
                 vec += self.obj_vecs[self.obj_to_idxs[so]]
             assert jo not in self.chars_to_idxs
             self.chars_to_idxs[jo] = len(self.chars_to_idxs)
@@ -1692,7 +1743,7 @@ class PSEnv:
         multihot_level = self.char_level_to_multihot(level)
         return multihot_level
 
-def multihot_to_desc(multihot_level, obj_to_idxs):
+def multihot_to_desc(multihot_level, obj_to_idxs, n_objs):
     """Converts a multihot array to a 2D list of descriptions.
     
     Args:
@@ -1702,7 +1753,6 @@ def multihot_to_desc(multihot_level, obj_to_idxs):
     Returns:
         A 2D list where each cell contains a string describing all objects and forces present.
     """
-    n_objs = len(obj_to_idxs)
     height, width = multihot_level.shape[1:]
     
     # Create a reverse mapping from indices to object names

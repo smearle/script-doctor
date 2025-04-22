@@ -48,7 +48,7 @@ def human_loop(env: PSEnv):
         action = None
         do_reset = False
         print("\n\n========= STEP =========\n")
-        print(multihot_to_desc(state.multihot_level, env.obj_to_idxs))
+        print(multihot_to_desc(state.multihot_level, env.obj_to_idxs, env.n_objs))
 
         # If the user presses ESC (ASCII 27), exit the loop.
         if key == 27:
