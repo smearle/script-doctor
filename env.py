@@ -782,7 +782,7 @@ def gen_subrules_meta(rule, n_objs, obj_to_idxs, meta_objs, rule_name, jit=True)
             #     lambda: jax.debug.print('removing detected: {det}', det=detect_out.detected),
             #     lambda: None
             # )
-            jax.debug.print('removing detected: {det}', det=cell_detect_out.detected)
+            jax.debug.print('      removing detected: {det}', det=cell_detect_out.detected)
             return m_cell
 
         return project_cell
@@ -935,7 +935,8 @@ def gen_subrules_meta(rule, n_objs, obj_to_idxs, meta_objs, rule_name, jit=True)
 
             def project_kernel(lvl, kernel_activations, cell_detect_outs, kernel_detect_outs, pattern_detect_out):
                 n_tiles = np.prod(lvl.shape[-2:])
-                kernel_activ_xys = jnp.argwhere(kernel_activations == 1, size=n_tiles, fill_value=-1)
+                # Ensure we always have some invalid coordinates so that the loop will break even when all tiles are active
+                kernel_activ_xys = jnp.argwhere(kernel_activations == 1, size=n_tiles+1, fill_value=-1)
                 kernel_activ_xy_idx = 0
                 kernel_activ_xy = kernel_activ_xys[kernel_activ_xy_idx]
 
@@ -947,8 +948,8 @@ def gen_subrules_meta(rule, n_objs, obj_to_idxs, meta_objs, rule_name, jit=True)
                     cell_detect_outs_xy = [jax.tree_map(lambda x: x[xy[0]][xy[1]], cell_detect_out) for 
                         cell_detect_out in cell_detect_outs]
 
-                    pattern_meta_objs = {}
-                    moving_idx = None
+                    # pattern_meta_objs = {}
+                    # moving_idx = None
                     # FIXME: Shouldn't this be a jnp array at this point when `jit=True`? And yet it's a list...?
                     # for k in detect_outs_xy.meta_objs:
                     #     pattern_meta_objs[k] = detect_outs_xy.meta_objs[k].max()
@@ -970,6 +971,7 @@ def gen_subrules_meta(rule, n_objs, obj_to_idxs, meta_objs, rule_name, jit=True)
 
                     if not len(cell_detect_outs) == len(out_cell_idxs) == len(cell_projection_fns):
                         print(f"Warning: len(cell_detect_outs) {len(cell_detect_outs)} != len(out_cell_idxs) {len(out_cell_idxs)} != len(cell_projection_fns) {len(cell_projection_fns)}")
+                        breakpoint()
                     #TODO: vmap this
                     init_lvl = lvl
                     for i, (out_cell_idx, cell_proj_fn) in enumerate(zip(out_cell_idxs, cell_projection_fns)):
@@ -986,6 +988,8 @@ def gen_subrules_meta(rule, n_objs, obj_to_idxs, meta_objs, rule_name, jit=True)
                 def project_kernel_at_xy(carry):               
                     kernel_activ_xy_idx = carry[0]
                     kernel_activ_xy = kernel_activ_xys[kernel_activ_xy_idx]
+                    # jax.debug.print('      kernel_activ_xys: {kernel_activ_xys}', kernel_activ_xys=kernel_activ_xys)
+                    # jax.debug.print('      projecting kernel at position index {kernel_activ_xy_idx}, position {xy}', xy=kernel_activ_xy, kernel_activ_xy_idx=kernel_activ_xy_idx)
                     lvl = carry[1]
                     lvl = project_cells_at(kernel_activ_xy, lvl)
 
@@ -1344,6 +1348,7 @@ def gen_rule_fn(obj_to_idxs, coll_mat, tree_rules, meta_objs, jit, n_objs):
         if not jit:
             print('\n' + multihot_to_desc(lvl[0], obj_to_idxs, n_objs))
 
+        # TODO: jit this?
         for grp_i, rule_grp in enumerate(rule_grps):
             grp_applied = True
 
@@ -1358,7 +1363,7 @@ def gen_rule_fn(obj_to_idxs, coll_mat, tree_rules, meta_objs, jit, n_objs):
                         init_lvl, rule_applied, i, cancelled = carry
                         lvl, rule_applied, cancelled = rule_fn(init_lvl)
                         rule_had_effect = jnp.any(lvl != init_lvl)
-                        jax.debug.print('    rule had effect: {rule_had_effect}', rule_had_effect=rule_had_effect)
+                        jax.debug.print('    rule {rule_i} had effect: {rule_had_effect}', rule_i=rule_i, rule_had_effect=rule_had_effect)
                         i += 1
                         return lvl, rule_had_effect, i, cancelled
 
@@ -1395,6 +1400,10 @@ def gen_rule_fn(obj_to_idxs, coll_mat, tree_rules, meta_objs, jit, n_objs):
 
             grp_applied = grp_app_i > 1
 
+        # if not jit:
+        #     print('\nLevel after applying rules:\n', multihot_to_desc(lvl[0], obj_to_idxs, n_objs))
+        #     print('grp_applied:', grp_applied)
+        #     print('cancelled:', cancelled)
 
         return lvl[0], grp_applied, cancelled
 
@@ -1695,7 +1704,7 @@ class PSEnv:
 
         return lvl
 
-    @partial(jax.jit, static_argnums=(0))
+    # @partial(jax.jit, static_argnums=(0))
     def _step(self, action, state: PSState):
         init_lvl = state.multihot_level.copy()
         lvl = self.apply_player_force(action, state)
@@ -1723,9 +1732,10 @@ class PSEnv:
         # Actually, just apply the rule function once
         final_lvl, _, cancelled = self.rule_fn(lvl)
 
-        
+        accept_lvl_change = ((not self.require_player_movement) or player_has_moved(init_lvl, final_lvl, self.obj_to_idxs)) & ~cancelled
+        # jax.debug.print('accept level change: {accept_lvl_change}', accept_lvl_change=accept_lvl_change) 
         final_lvl = jax.lax.select(
-            ((not self.require_player_movement) or player_has_moved(init_lvl, final_lvl, self.obj_to_idxs)) & ~cancelled,
+            accept_lvl_change,
             final_lvl,
             lvl,
         )

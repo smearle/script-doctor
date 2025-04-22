@@ -51,6 +51,7 @@ def human_loop(env: PSEnv):
         print(multihot_to_desc(state.multihot_level, env.obj_to_idxs, env.n_objs))
 
         # If the user presses ESC (ASCII 27), exit the loop.
+        print("Player input:")
         if key == 27:
             break
         elif key == ord('x'):
@@ -99,7 +100,7 @@ def human_loop(env: PSEnv):
 
         elif do_reset:
             state = env.reset(lvl_i)
-            print(multihot_to_desc(state.multihot_level, env.obj_to_idxs))
+            print(multihot_to_desc(state.multihot_level, env.obj_to_idxs, env.n_objs))
             state_hist.append(state)
             im = env.render(state)
             im = np.array(im, dtype=np.uint8)
@@ -112,7 +113,7 @@ def human_loop(env: PSEnv):
             lvl_changed = True
             n_vis_apps = 0
             state = env.step(action, state)
-            print(multihot_to_desc(state.multihot_level, env.obj_to_idxs))
+            print(multihot_to_desc(state.multihot_level, env.obj_to_idxs, env.n_objs))
             im = env.render(state)
             im = np.array(im, dtype=np.uint8)
             im = cv2.resize(im, (new_w, new_h), interpolation=cv2.INTER_NEAREST)
@@ -128,6 +129,9 @@ def human_loop(env: PSEnv):
 
         if state.win:
             lvl_i += 1
+            if lvl_i >= len(env.levels):
+                print("No more levels!")
+                break
             state = env.reset(lvl_i)
             im = env.render(state)
             im = np.array(im, dtype=np.uint8)
