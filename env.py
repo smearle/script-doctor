@@ -101,6 +101,7 @@ def process_legend(legend):
 
 def expand_collision_layers(collision_layers, meta_objs):
     # Preprocess collision layers to replace joint objects with their sub-objects
+    # TODO: could do this more elegantly using `expand_meta_objs`, right?
     for i, l in enumerate(collision_layers):
         j = 0
         for o in l:
@@ -666,9 +667,14 @@ def gen_subrules_meta(rule, n_objs, obj_to_idxs, meta_objs, coll_mat, rule_name,
     def remove_colliding_objs(m_cell, obj_idx, coll_mat):
         # If any objects on the same collision layer are present in the cell, remove them
         coll_vec = coll_mat[:, obj_idx]
-        coll_vec[obj_idx] = 0
-        m_cell = m_cell.at[:n_objs].set(m_cell[:n_objs].at[coll_vec].set(0))
+        coll_vec = coll_vec.at[obj_idx].set(0)
+        m_cell = m_cell.at[:n_objs].set(m_cell[:n_objs] * ~coll_vec)
         return m_cell
+    
+    if jit:
+        remove_colliding_objs = jax.jit(remove_colliding_objs)
+    else:
+        remove_colliding_objs = remove_colliding_objs
 
     # @partial(jax.jit, static_argnums=(2))
     def project_obj(m_cell, cell_detect_out: CellFnReturn, pattern_detect_out: PatternFnReturn, obj):
@@ -863,12 +869,8 @@ def gen_subrules_meta(rule, n_objs, obj_to_idxs, meta_objs, coll_mat, rule_name,
                     if r_cell == '...':
                         assert is_line_detector, f"`...` not found in left pattern of rule {rule_name}"
                         cell_projection_fns.append('...')
-                    if r_cell is not None:
-                        cell_projection_fns.append(gen_cell_projection_fn(r_cell, force_idx))
                     else:
-                        cell_projection_fns.append(
-                            lambda m_cell, cell_detect_out, pattern_detect_out: m_cell
-                        )
+                        cell_projection_fns.append(gen_cell_projection_fn(r_cell, force_idx))
 
             def detect_kernel(lvl):
                 n_chan = lvl.shape[1]
@@ -981,8 +983,9 @@ def gen_subrules_meta(rule, n_objs, obj_to_idxs, meta_objs, coll_mat, rule_name,
                     elif is_single:
                         out_cell_idxs = out_cell_idxs[0, :]
 
-                    if not len(cell_detect_outs) == len(out_cell_idxs) == len(cell_projection_fns):
-                        print(f"Warning: len(cell_detect_outs) {len(cell_detect_outs)} != len(out_cell_idxs) {len(out_cell_idxs)} != len(cell_projection_fns) {len(cell_projection_fns)}")
+                    # Either the rule has no right pattern, or it should detect as many cells as there are cell projection functions
+                    if not (~has_right_pattern or (len(cell_detect_outs) == len(out_cell_idxs) == len(cell_projection_fns))):
+                        print(f"Warning: rule {rule} with has_right_pattern {has_right_pattern} results in len(cell_detect_outs) {len(cell_detect_outs)} != len(out_cell_idxs) {len(out_cell_idxs)} != len(cell_projection_fns) {len(cell_projection_fns)}")
                         breakpoint()
                     #TODO: vmap this
                     init_lvl = lvl
@@ -1034,7 +1037,12 @@ def gen_subrules_meta(rule, n_objs, obj_to_idxs, meta_objs, coll_mat, rule_name,
                 kernel_activations.append(kernel_activations_i)
                 cell_detect_outs.append(cell_detect_outs_i)
                 kernel_detect_outs.append(kernel_detect_out_i)
-            kernel_activations = stack_leaves(kernel_activations)
+
+            # pad activations to the same shape
+            max_kernel_activation_shape = max([k.shape for k in kernel_activations])
+            kernel_activations = [jnp.pad(k, ((0, max_kernel_activation_shape[0] - k.shape[0]), (0, max_kernel_activation_shape[1] - k.shape[1]))) for k in kernel_activations]
+            kernel_activations = jnp.stack(kernel_activations, axis=0)
+
             pattern_meta_objs = {}
             pattern_moving_idx = None
             for kernel_detect_out in kernel_detect_outs:
@@ -1567,8 +1575,10 @@ class PSEnv:
         self.require_player_movement = tree.prelude.require_player_movement
         obj_legend, meta_objs, joint_tiles = process_legend(tree.legend)
         collision_layers = expand_collision_layers(tree.collision_layers, meta_objs)
-        atomic_obj_names = [name for name in tree.objects.keys()]
-        atomic_obj_names = [name for name in atomic_obj_names]
+        atomic_obj_names = [name for layer in collision_layers for name in layer]
+        # atomic_obj_names = [name for name in tree.objects.keys()]
+        # atomic_obj_names = [name for name in atomic_obj_names]
+        self.atomic_obj_names = atomic_obj_names
         objs, self.obj_to_idxs, coll_masks = assign_vecs_to_objs(collision_layers, atomic_obj_names)
         for obj, sub_objs in meta_objs.items():
             # Meta-objects that are actually just alternate names.
@@ -1627,7 +1637,7 @@ class PSEnv:
                 print(so)
                 vec += self.obj_vecs[self.obj_to_idxs[so]]
             assert jo not in self.chars_to_idxs
-            self.chars_to_idxs[jo] = len(self.chars_to_idxs)
+            self.chars_to_idxs[jo] = self.obj_vecs.shape[0]
             self.obj_vecs = np.concatenate((self.obj_vecs, vec[None]), axis=0)
 
         if self.jit:
