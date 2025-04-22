@@ -124,6 +124,11 @@ class GenPSTree(Transformer):
                 if isinstance(r, Tree) and r.data == 'command':
                     if r.children[0].data.value == 'sound':
                         continue
+                    elif r.children[0].data.value == 'command_keyword':
+                        if command is None:
+                            command = r.children[0].children[0].value
+                        else:
+                            breakpoint()
                 else:
                     new_rps.append(r)
 

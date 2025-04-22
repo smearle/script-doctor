@@ -63,7 +63,8 @@ class Rule:
     def __repr__(self):
         return (f"Rule(prefixes={self.prefixes}, "
                 f"left={self.left_patterns}, "
-                f"right={self.right_patterns})")
+                f"right={self.right_patterns})" + \
+                (f", command={self.command})" if self.command is not None else ""))
 
 class WinCondition:
     """

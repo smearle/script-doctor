@@ -98,15 +98,6 @@ def human_loop(env: PSEnv):
             print("No more levels!")
             break
 
-        elif do_reset:
-            state = env.reset(lvl_i)
-            print(multihot_to_desc(state.multihot_level, env.obj_to_idxs, env.n_objs))
-            state_hist.append(state)
-            im = env.render(state)
-            im = np.array(im, dtype=np.uint8)
-            im = cv2.resize(im, (new_w, new_h), interpolation=cv2.INTER_NEAREST)
-            cv2.imshow(env.title, im)
-    
         elif action is not None:
             lvl = env.apply_player_force(action, state)
             vis_lvl = lvl[:env.n_objs]
@@ -126,6 +117,17 @@ def human_loop(env: PSEnv):
             else:
                 print("You don't win yet!")
             state_hist.append(state)
+            do_reset = state.restart
+
+        if do_reset:
+            state = env.reset(lvl_i)
+            print(multihot_to_desc(state.multihot_level, env.obj_to_idxs, env.n_objs))
+            state_hist.append(state)
+            im = env.render(state)
+            im = np.array(im, dtype=np.uint8)
+            im = cv2.resize(im, (new_w, new_h), interpolation=cv2.INTER_NEAREST)
+            cv2.imshow(env.title, im)
+    
 
         if state.win:
             lvl_i += 1
