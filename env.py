@@ -666,6 +666,8 @@ def gen_subrules_meta(rule, n_objs, obj_to_idxs, meta_objs, coll_mat, rule_name,
 
     def remove_colliding_objs(m_cell, obj_idx, coll_mat):
         # If any objects on the same collision layer are present in the cell, remove them
+        # FIXME: We should make this collision matrix static...
+        coll_mat = jnp.array(coll_mat)
         coll_vec = coll_mat[:, obj_idx]
         coll_vec = coll_vec.at[obj_idx].set(0)
         m_cell = m_cell.at[:n_objs].set(m_cell[:n_objs] * ~coll_vec)
@@ -929,8 +931,8 @@ def gen_subrules_meta(rule, n_objs, obj_to_idxs, meta_objs, coll_mat, rule_name,
                 jax.lax.cond(
                     # True,
                     kernel_detected,
-                    lambda: jax.debug.print('      Rule {rule_name} left kernel N detected: {kernel_detected}',
-                                            rule_name=rule_name, kernel_detected=kernel_detected),
+                    lambda: jax.debug.print('      Rule {rule_name} left kernel {lp} detected: {kernel_detected}',
+                                            rule_name=rule_name, kernel_detected=kernel_detected, lp=lp),
                     lambda: None,
                 )
                 cancelled = False
@@ -1062,6 +1064,7 @@ def gen_subrules_meta(rule, n_objs, obj_to_idxs, meta_objs, coll_mat, rule_name,
             def project_kernels(lvl, kernel_activations, kernel_detect_outs):
                 # TODO: use a jax.lax.switch
                 for i, kernel_projection_fn in enumerate(kernel_projection_fns):
+                    jax.debug.print('      projecting kernel {i}', i=i)
                     lvl = kernel_projection_fn(
                         lvl, kernel_activations[i], cell_detect_outs[i], kernel_detect_outs[i], pattern_detect_out)
                 return lvl
@@ -1306,10 +1309,12 @@ def gen_subrules_meta(rule, n_objs, obj_to_idxs, meta_objs, coll_mat, rule_name,
     elif 'down' in rule.prefixes:
         rots = [0]
     # TODO: Remove unnecessary rotated variations of single-cell kernels
-    elif np.any(np.array([len(kernel) for kernel in l_kerns]) > 1):
-        rots = [0, 1, 2, 3]
+    # elif np.any(np.array([len(kernel) for kernel in l_kerns]) > 1):
     else:
-        rots = [0]
+        # Ah, just rotate everthing for now in case of detecting force in arbitrary directions... FIXME
+        rots = [0, 1, 2, 3]
+    # else:
+    #     rots = [0]
     first_lp = np.array(l_kerns[0])
     if first_lp.shape[0] == 1 and first_lp.shape[1] == 1:
         # print(f'LPS: {lps}')
@@ -1689,14 +1694,13 @@ class PSEnv:
             win = jnp.array(False),
         )
 
-    @partial(jax.jit, static_argnums=(0))
+    # @partial(jax.jit, static_argnums=(0))
     def _apply_player_force(self, action, state: PSState):
         multihot_level = state.multihot_level
         # add a dummy object at the front
         force_map = jnp.zeros((N_MOVEMENTS * (multihot_level.shape[0] + 1), *multihot_level.shape[1:]), dtype=bool)
         
         def place_force(force_map, action):
-            action = jnp.array([0, 1, 2, 3])[action]
             player_int_mask = (self.player_idxs[...,None,None] + 1) * multihot_level[self.player_idxs]
             # turn the int mask into coords, by flattening it, and appending it with xy coords
             xy_coords = jnp.indices(force_map.shape[1:])
@@ -1705,7 +1709,7 @@ class PSEnv:
             player_int_mask = jnp.concatenate((player_int_mask[None], xy_coords), axis=0)
             player_coords = player_int_mask.reshape(3, -1).T
             force_map = force_map.at[tuple(player_coords.T)].set(1)
-            force_map_sum = force_map.sum()
+            # force_map_sum = force_map.sum()
             # jax.debug.print('force_map: {force_map}', force_map=force_map)
             # jax.debug.print('force map sum: {force_map_sum}', force_map_sum=force_map_sum)
             return force_map
@@ -1730,7 +1734,7 @@ class PSEnv:
     def _step(self, action, state: PSState):
         init_lvl = state.multihot_level.copy()
         lvl = self.apply_player_force(action, state)
-        
+
         # def cond_fun(loop_state):
         #     lvl, lvl_changed, n_apps, cancelled = loop_state
         #     return jax.numpy.logical_and(lvl_changed, n_apps < 100) & ~cancelled
@@ -1804,7 +1808,7 @@ def multihot_to_desc(multihot_level, obj_to_idxs, n_objs):
                     obj_desc = obj_name
                     
                     # Check if there's a force applied to this object
-                    force_names = ["left", "down", "right", "up"]
+                    force_names = ["left", "down", "right", "up", "action"]
                     forces = []
                     for f_idx, force_name in enumerate(force_names):
                         force_channel = n_objs + (obj_idx * N_MOVEMENTS) + f_idx
