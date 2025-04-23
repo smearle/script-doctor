@@ -26,6 +26,7 @@ class GenPSTree(Transformer):
     def object_data(self, items):
         name_line = items[0]
         name = str(name_line.children[0].children[0]).lower()
+        legend_key = str(name_line.children[1].children[0]) if len(name_line.children) > 1 else None
         colors = []
         color_line = items[1]
         legend_key = str(name_line.children[1].children[0]) if len(name_line.children) > 1 else None
@@ -38,6 +39,7 @@ class GenPSTree(Transformer):
 
         return PSObject(
             name=name,
+            legend_key=legend_key,
             colors=colors,
             sprite=sprite,
         )

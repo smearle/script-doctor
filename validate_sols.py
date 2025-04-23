@@ -23,8 +23,8 @@ scratch_dir = 'scratch'
 os.makedirs(scratch_dir, exist_ok = True)
 if __name__ == '__main__':
     sol_paths = glob.glob(os.path.join('sols', '*'))
+    random.shuffle(sol_paths)
     games = [os.path.basename(path) for path in sol_paths]
-    shuffle = random.shuffle(games)
     # tree_paths = [os.path.join(TREES_DIR, os.path.basename(path) + '.pkl') for path in sol_paths]
     # games = [os.path.basename(path)[:-4] for path in sol_paths]
     sols_dir = os.path.join('vids', 'jax_sols')
@@ -120,5 +120,5 @@ if __name__ == '__main__':
 
             # Make a gif out of the frames
             gif_path = os.path.join(traj_dir, f'level-{level_i}.gif')
-            imageio.mimsave(gif_path, frames, duration=0.1)
+            imageio.mimsave(gif_path, frames, duration=0.1, loop=1)
             # exit()

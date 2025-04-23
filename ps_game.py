@@ -7,8 +7,12 @@ import random
 
 
 class PSObject:
-    def __init__(self, name: str, colors: List[str], sprite: Optional[List[List[str]]] = None):
+    def __init__(self, name: str, colors: List[str], sprite: Optional[List[List[str]]] = None, legend_key: Optional[str] = None):
         self.name = name
+        if legend_key is not None:
+            assert len(legend_key) == 1, "Legend key must be a single character"
+            legend_key = legend_key.lower()
+        self.legend_key = legend_key 
         self.colors = colors  # e.g. ["BLUE", "LIGHTBLUE"]
         self.sprite = sprite  # e.g. 2D array of '0','1','.'
     
@@ -55,15 +59,15 @@ class Rule:
                  command: Optional[str] = None):
         # left_patterns, right_patterns: each is a list of "rule parts",
         # each "rule part" is a list of object/directional tokens in that cell.
-        self.left_patterns = left_patterns
-        self.right_patterns = right_patterns
+        self.left_kernels = left_patterns
+        self.right_kernels = right_patterns
         self.prefixes = prefixes if prefixes else []
         self.command = command
 
     def __repr__(self):
         return (f"Rule(prefixes={self.prefixes}, "
-                f"left={self.left_patterns}, "
-                f"right={self.right_patterns})" + \
+                f"left={self.left_kernels}, "
+                f"right={self.right_kernels})" + \
                 (f", command={self.command})" if self.command is not None else ""))
 
 class WinCondition:
