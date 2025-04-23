@@ -765,6 +765,9 @@ def gen_subrules_meta(rule: Rule, n_objs, obj_to_idxs, meta_objs, coll_mat, rule
             elif obj in ['up', 'down', 'left', 'right']:
                 force = True
                 force_idx = dirs_to_force_idx[obj]
+            elif obj == 'action':
+                force = True
+                force_idx = 4
             elif obj == 'moving':
                 moving = True
             # ignore sound effects (which can exist incide rules (?))

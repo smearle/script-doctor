@@ -24,6 +24,7 @@ os.makedirs(scratch_dir, exist_ok = True)
 if __name__ == '__main__':
     sol_paths = glob.glob(os.path.join('sols', '*'))
     games = [os.path.basename(path) for path in sol_paths]
+    shuffle = random.shuffle(games)
     # tree_paths = [os.path.join(TREES_DIR, os.path.basename(path) + '.pkl') for path in sol_paths]
     # games = [os.path.basename(path)[:-4] for path in sol_paths]
     sols_dir = os.path.join('vids', 'jax_sols')
