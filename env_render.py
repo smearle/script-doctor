@@ -80,8 +80,9 @@ def replace_bg_tiles(x):
         return int(x) + 1
 
 def hex_to_rgba(hex_code, alpha):
-    """Converts a hex color code to RGB values."""
-
+    """Converts a hex color code to RGBA values."""
     hex_code = hex_code.lstrip('#')
+    if len(hex_code) == 3:
+        hex_code = ''.join(c*2 for c in hex_code)
     rgb = tuple(int(hex_code[i:i+2], 16) for i in (0, 2, 4))
     return (*rgb, alpha)
