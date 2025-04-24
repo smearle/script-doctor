@@ -83,13 +83,12 @@ if __name__ == '__main__':
             level_i = int(os.path.basename(level_sol_path).split('-')[1].split('.')[0])
             print(f"Level {level_i} solution: {actions}")
 
-            state = env.reset(level_i)
-
             def step_env(state, action):
                 state = env.step(action, state)
                 return state, state
 
             try:
+                state = env.reset(level_i)
                 state, state_v = jax.lax.scan(step_env, state, actions)
                 if not state.win:
                     log_path = os.path.join(traj_dir, f'level-{level_i}_solution_err.txt')

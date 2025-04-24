@@ -15,4 +15,5 @@ pandas
 Pillow
 python-dotenv
 tiktoken
+wandb
 # web-browser
