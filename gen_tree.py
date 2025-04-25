@@ -56,7 +56,9 @@ class GenPSTree(Transformer):
         return RuleBlock(looping=False, rules=items)
 
     def rule_block_loop(self, items):
-        return RuleBlock(looping=True, rules=items)
+        assert (str(items[0]) == 'startloop') and (str(items[-1]) == 'endloop')
+        rules = items[1: -1]
+        return RuleBlock(looping=True, rules=rules)
 
     def rule_part(self, items):
         cells = []
@@ -175,6 +177,7 @@ class GenPSTree(Transformer):
         flickscreen = False
         verbose_logging = False
         require_player_movement = False
+        run_rules_on_level_start = False
         for pi in prelude_items:
             pi_items = pi.children
             keyword = pi_items[0].lower()
@@ -193,6 +196,8 @@ class GenPSTree(Transformer):
                 verbose_logging = value
             elif keyword == 'require_player_movement':
                 require_player_movement = True
+            elif keyword == 'run_rules_on_level_start':
+                run_rules_on_level_start = True
         # assert title is not None
         return PSGame(
             prelude=Prelude(
@@ -202,6 +207,7 @@ class GenPSTree(Transformer):
                 flickscreen=flickscreen,
                 verbose_logging=verbose_logging,
                 require_player_movement=require_player_movement,
+                run_rules_on_level_start=run_rules_on_level_start,
             ),
             objects = items[1],
             legend=items[2],

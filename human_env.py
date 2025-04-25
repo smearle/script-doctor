@@ -10,7 +10,7 @@ import jax
 from lark import Lark
 import numpy as np
 
-from env import PSEnv, multihot_to_desc
+from env import PSEnv, PSParams, multihot_to_desc
 from parse_lark import TREES_DIR, DATA_DIR, TEST_GAMES, get_tree_from_txt
 
 
@@ -26,7 +26,9 @@ cs.store(name="config", node=Config)
 
 def human_loop(env: PSEnv):
     lvl_i = 0 
-    state = env.reset(lvl_i)
+    params = PSParams(level_i=lvl_i)
+    rng = jax.random.PRNGKey(0)
+    obs, state = env.reset(rng, params, lvl_i)
     im = env.render(state)
     # print(multihot_to_desc(state.multihot_level, env.obj_to_idxs))
     im = np.array(im, dtype=np.uint8)
@@ -42,6 +44,7 @@ def human_loop(env: PSEnv):
     
     # Loop waiting for key presses
     while True:
+        rng, _ = jax.random.split(rng)
         # cv2.waitKey(0) waits indefinitely until a key is pressed.
         # Mask with 0xFF to get the lowest 8 bits (common practice).
         key = cv2.waitKey(0)
@@ -103,7 +106,8 @@ def human_loop(env: PSEnv):
             vis_lvl = lvl[:env.n_objs]
             lvl_changed = True
             n_vis_apps = 0
-            state = env.step(action, state)
+            obs, state, reward, done, info = env.step(key, state, action)
+            win = state.win
             print(multihot_to_desc(state.multihot_level, env.obj_to_idxs, env.n_objs))
             im = env.render(state)
             im = np.array(im, dtype=np.uint8)
@@ -111,7 +115,6 @@ def human_loop(env: PSEnv):
             cv2.imshow(env.title, im)
             # Add a short waitKey here to allow the window to update.
             cv2.waitKey(1)  # 1 ms delay; adjust as necessary
-            win = env.check_win(vis_lvl)
             if win:
                 print("You win!")
             else:
@@ -120,7 +123,7 @@ def human_loop(env: PSEnv):
             do_reset = state.restart
 
         if do_reset:
-            state = env.reset(lvl_i)
+            obs, state = env.reset(rng, params, lvl_i)
             print(multihot_to_desc(state.multihot_level, env.obj_to_idxs, env.n_objs))
             state_hist.append(state)
             im = env.render(state)
@@ -134,7 +137,7 @@ def human_loop(env: PSEnv):
             if lvl_i >= len(env.levels):
                 print("No more levels!")
                 break
-            state = env.reset(lvl_i)
+            obs, state = env.reset(rng, params, lvl_i)
             im = env.render(state)
             im = np.array(im, dtype=np.uint8)
             im = cv2.resize(im, (new_w, new_h), interpolation=cv2.INTER_NEAREST)

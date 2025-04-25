@@ -1,25 +1,20 @@
 import functools
 import math
-from typing import Sequence
-from envs.pcgrl_env import PCGRLObs
+from typing import Sequence, NamedTuple, Any, Tuple, Union, Dict
+# from env import PSObs
+
+import distrax
 import flax
 import flax.linen as nn
 from flax.linen.initializers import constant, orthogonal
-from jax import numpy as jnp
+from flax.training.train_state import TrainState
 import jax
-import numpy as np
-
-from typing import Sequence, NamedTuple, Any, Tuple, Union, Dict
-
-from conf.config import MultiAgentConfig
-import jax.numpy as jnp
-import flax.linen as nn
-from flax.linen.initializers import constant, orthogonal
-# from flax.training import orbax_utils
+from jax import numpy as jnp
 import numpy as np
 import orbax.checkpoint as ocp
-from flax.training.train_state import TrainState
-import distrax
+
+from conf.config import MultiAgentConfig
+from env import PSObs
 
 
 class ActorCategorical(nn.Module):
@@ -257,32 +252,18 @@ class ActorCriticPS(nn.Module):
     """Transform the action output into a distribution. Do some pre- and post-processing specific to the 
     PCGRL environments."""
     subnet: nn.Module
-    act_shape: Tuple[int, int]
-    n_agents: int
-    n_ctrl_metrics: int
 
     @nn.compact
-    def __call__(self, x: PCGRLObs, avail_actions):
-        map_obs = x.map_obs
-        ctrl_obs = x.flat_obs   
-
-        # Hack. We had to put dummy ctrl obs's here to placate jax tree map during minibatch creation (FIXME?)
-        # Now we need to remove them :)
-        ctrl_obs = ctrl_obs[..., :self.n_ctrl_metrics]
-
-        # n_gpu = x.shape[0]
-        # n_envs = x.shape[1]
-        # x_shape = x.shape[2:]
-        # x = x.reshape((n_gpu * n_envs, *x_shape)) 
-
-        actor_mean, val = self.subnet(map_obs, ctrl_obs)
-        # actor_mean = (nn.sigmoid(actor_mean) - 0.5) * 2
+    def __call__(self, x: PSObs, avail_actions):
+        obs_2d = x.multihot_level
+        obs_1d = x.flat_obs
+        actor_mean, val = self.subnet(obs_2d, obs_1d)
 
         unavail_actions = 1 - avail_actions
 
         actor_mean = actor_mean - (unavail_actions * 1e10)
 
-        actor_mean = actor_mean.reshape((actor_mean.shape[0], *self.act_shape, -1))
+        # actor_mean = actor_mean.reshape((actor_mean.shape[0], *self.act_shape, -1))
         # breakpoint()
 
         # actor_mean = actor_mean[None]

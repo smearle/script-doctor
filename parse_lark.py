@@ -107,18 +107,20 @@ class StripPuzzleScript(Transformer):
     def rule_data(self, items):
         return self.strip_newlines_data(items, 'rule_data')
 
+    def rule_block_once(self, items):
+        items = [i for i in items if i]
+        return self.strip_newlines_data(items, 'rule_block_once')
+
+    def rule_block_loop(self, items):
+        items = [i for i in items if i]
+        return self.strip_newlines_data(items, 'rule_block_loop')
+
     # def rule_block(self, items):
     #     return items[0]
     
     # def rule_part(self, items):
     #     return items[0]
 
-    def rule_block_once(self, items):
-        return Tree('rule_block_once', [i for i in items if i])
-
-    def rule_block_loop(self, items):
-        return Tree('rule_block_loop', [i for i in items if i])
-    
     def condition_data(self, items):
         return self.strip_newlines_data(items, 'condition_data')
 
@@ -394,7 +396,7 @@ def get_tree_from_txt(parser, game, log_dir: str = None, overwrite: bool = True)
     else:
         with open(simp_filepath, "r", encoding='utf-8') as file:
             content = file.read()
-    print(f"Parsing {simp_filepath}")
+    # print(f"Parsing {simp_filepath}")
     
     log_filename = None
     if log_dir:
@@ -440,14 +442,14 @@ def get_tree_from_txt(parser, game, log_dir: str = None, overwrite: bool = True)
         pickle.dump(min_parse_tree, f)
     pretty_parse_tree_str = min_parse_tree.pretty()
     pretty_tree_filename = os.path.join(pretty_trees_dir, game)
-    print(f"Writing pretty tree to {pretty_tree_filename}")
+    # print(f"Writing pretty tree to {pretty_tree_filename}")
     with open(pretty_tree_filename, "w", encoding='utf-8') as file:
         file.write(pretty_parse_tree_str)
     # print(min_parse_tree.pretty())
     ps_str = PrintPuzzleScript().transform(min_parse_tree)
     ps_str = add_empty_sounds_section(ps_str)
     min_filename = os.path.join(min_games_dir, game)
-    print(f"Writing minified game to {min_filename}")
+    # print(f"Writing minified game to {min_filename}")
     with open(min_filename, "w", encoding='utf-8') as file:
         file.write(ps_str)
 

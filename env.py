@@ -1,5 +1,7 @@
+from dataclasses import dataclass
 from functools import partial
 import os
+from timeit import default_timer as timer
 from typing import Dict, Iterable, List, Optional
 
 import PIL
@@ -10,14 +12,20 @@ import imageio
 import jax
 from jax.experimental import checkify
 import jax.numpy as jnp
+from lark import Lark
 import numpy as np
 
+from conf.config import Config
 from env_render import render_solid_color, render_sprite
 from jax_utils import stack_leaves
+from marl.spaces import Box
+from parse_lark import get_tree_from_txt
 from ps_game import LegendEntry, PSGame, Rule, WinCondition
+from spaces import Discrete
 
 
 # Whether to print out a bunch of stuff, etc.
+# DEBUG = False
 DEBUG = True
 
 # per-object movement forces that can be applied: left, right, up, down, action
@@ -138,23 +146,32 @@ def gen_check_win(win_conditions: Iterable[WinCondition], obj_to_idxs, meta_objs
         src_channel = get_meta_channel(lvl, src)
         trg_channel = get_meta_channel(lvl, trg)
         # There can be no source objects that do not overlap target objects
-        return ~jnp.any(src_channel & ~trg_channel)
+        win = ~jnp.any(src_channel & ~trg_channel)
+        # TODO compute distance of srcs from trgs to contribute to score
+        score = jnp.count_nonzero(src_channel & trg_channel)
+        return win, score
 
     # @partial(jax.jit, static_argnums=(1, 2))
     def check_some(lvl, src, trg):
         src_channel = get_meta_channel(lvl, src)
         trg_channel = get_meta_channel(lvl, trg)
-        return jnp.any(src_channel & trg_channel)
+        win = jnp.any(src_channel & trg_channel)
+        score = win
+        return win, score
 
     # @partial(jax.jit, static_argnums=(1,))
     def check_none(lvl, src):
         src_channel = get_meta_channel(lvl, src)
-        return ~jnp.any(src_channel)
+        win = ~jnp.any(src_channel)
+        score = -jnp.count_nonzero(src_channel)
+        return win, score
 
     # @partial(jax.jit, static_argnums=(1,))
     def check_any(lvl, src):
         src_channel = get_meta_channel(lvl, src)
-        return jnp.any(src_channel)
+        win = jnp.any(src_channel)
+        score = jnp.count_nonzero(src_channel)
+        return win, score
 
     funcs = []
     for win_condition in win_conditions:
@@ -187,17 +204,19 @@ def gen_check_win(win_conditions: Iterable[WinCondition], obj_to_idxs, meta_objs
     def check_win(lvl):
 
         if len(funcs) == 0:
-            return False
+            return False, 0
         
         def apply_win_condition_func(i, lvl):
             # FIXME: can't jit this list of functions... when the funcs are jitted theselves??
             return jax.lax.switch(i, funcs, lvl)
 
         if jit:
-            func_returns = jax.vmap(apply_win_condition_func, in_axes=(0, None))(jnp.arange(len(funcs)), lvl)
+            wins, scores = jax.vmap(apply_win_condition_func, in_axes=(0, None))(jnp.arange(len(funcs)), lvl)
         else:
             func_returns = jnp.array([f(lvl) for f in funcs])
-        return jnp.all(func_returns)
+            wins, scores = zip(*func_returns)
+            wins, scores = np.array(wins), np.array(scores)
+        return jnp.all(wins), scores.sum()
 
     return check_win
 
@@ -391,11 +410,12 @@ def gen_subrules_meta(rule: Rule, n_objs, obj_to_idxs, meta_objs, coll_mat, rule
                 active_obj_idx,
             )
         active = active_obj_idx != -1
-        jax.lax.cond(
-            active,
-            lambda: jax.debug.print('detected stationary obj_idx: {obj_idx}', obj_idx=active_obj_idx),
-            lambda: None,
-        )
+        if DEBUG:
+            jax.lax.cond(
+                active,
+                lambda: jax.debug.print('detected stationary obj_idx: {obj_idx}', obj_idx=active_obj_idx),
+                lambda: None,
+            )
         return ObjFnReturn(active=active, detected=detected, obj_idx=obj_idx)
 
     # @partial(jax.jit, static_argnums=(0,))
@@ -436,11 +456,12 @@ def gen_subrules_meta(rule: Rule, n_objs, obj_to_idxs, meta_objs, coll_mat, rule
                 active_force_idx,
             )
         active = active_obj_idx != -1
-        jax.lax.cond(
-            active,
-            lambda: jax.debug.print('detected stationary obj_idx: {obj_idx}', obj_idx=active_obj_idx),
-            lambda: None,
-        )
+        if DEBUG:
+            jax.lax.cond(
+                active,
+                lambda: jax.debug.print('detected stationary obj_idx: {obj_idx}', obj_idx=active_obj_idx),
+                lambda: None,
+            )
         return ObjFnReturn(active=active, detected=detected, obj_idx=active_obj_idx, moving_idx=active_force_idx)
 
     dirs_to_force_idx = {
@@ -464,9 +485,11 @@ def gen_subrules_meta(rule: Rule, n_objs, obj_to_idxs, meta_objs, coll_mat, rule
             right_force_idx: the force index corresponding to `>` given some rotation
         """
         fns = []
-        print('l cell 1:', l_cell)
+        if DEBUG:
+            print('l cell 1:', l_cell)
         l_cell = l_cell.split(' ')
-        print('l cell 2:', l_cell)
+        if DEBUG:
+            print('l cell 2:', l_cell)
         no, force, directional_force, stationary, action, moving = False, False, False, False, False, False
         obj_names = []
         for obj in l_cell:
@@ -511,7 +534,8 @@ def gen_subrules_meta(rule: Rule, n_objs, obj_to_idxs, meta_objs, coll_mat, rule
                         fns.append(partial(detect_obj_in_cell, obj_idx=obj_idx))
                 elif obj in meta_objs:
                     if no:
-                        print(l_cell)
+                        if DEBUG:
+                            print(l_cell)
                         fns.append(partial(detect_no_objs_in_cell, objs_vec=obj_vec))
                         no = False
                     elif force:
@@ -586,9 +610,11 @@ def gen_subrules_meta(rule: Rule, n_objs, obj_to_idxs, meta_objs, coll_mat, rule
     def project_obj(m_cell, cell_detect_out: CellFnReturn, pattern_detect_out: PatternFnReturn, obj):
         meta_objs = cell_detect_out.detected_meta_objs
         pattern_meta_objs = pattern_detect_out.detected_meta_objs
-        jax.debug.print('meta objs: {meta_objs}', meta_objs=meta_objs)
+        if DEBUG:
+            jax.debug.print('meta objs: {meta_objs}', meta_objs=meta_objs)
         obj_idx = disambiguate_meta(obj, meta_objs, pattern_meta_objs, obj_to_idxs)
-        jax.debug.print('projecting obj {obj}, disambiguated index: {obj_idx}', obj=obj, obj_idx=obj_idx)
+        if DEBUG:
+            jax.debug.print('projecting obj {obj}, disambiguated index: {obj_idx}', obj=obj, obj_idx=obj_idx)
         if not jit:
             if obj_idx == -1:
                 breakpoint()
@@ -630,7 +656,8 @@ def gen_subrules_meta(rule: Rule, n_objs, obj_to_idxs, meta_objs, coll_mat, rule
         m_cell = remove_colliding_objs(m_cell, obj_idx, coll_mat)
 
         if jit:
-            jax.debug.print('project_force_on_obj: {obj_idx}', obj_idx=obj_idx)
+            if DEBUG:
+                jax.debug.print('project_force_on_obj: {obj_idx}', obj_idx=obj_idx)
 
         else:
             pass
@@ -762,14 +789,16 @@ def gen_subrules_meta(rule: Rule, n_objs, obj_to_idxs, meta_objs, coll_mat, rule
             is_line_detector = False
             cell_detection_fns = []
             cell_projection_fns = []
-            print(f'lp, rp: {lp}, {rp}')
+            if DEBUG:
+                print(f'lp, rp: {lp}, {rp}')
             # FIXME, HACK
             if isinstance(lp, str):
                 lp = np.array([lp])
             if isinstance(rp, str):
                 rp = np.array([rp])
-            print(f'lp2, rp2: {lp}, {rp}')
-            print(f'has right pattern: {has_right_pattern}')
+            if DEBUG:
+                print(f'lp2, rp2: {lp}, {rp}')
+                print(f'has right pattern: {has_right_pattern}')
             if len(lp.shape) == 1:
                 for i, l_cell in enumerate(lp):
                     if l_cell == '...':
@@ -849,13 +878,14 @@ def gen_subrules_meta(rule: Rule, n_objs, obj_to_idxs, meta_objs, coll_mat, rule
 
                 # eliminate all but one activation
                 kernel_detected = kernel_activations.sum() > 0
-                jax.lax.cond(
-                    # True,
-                    kernel_detected,
-                    lambda: jax.debug.print('      Rule {rule_name} left kernel {lp} detected: {kernel_detected}',
-                                            rule_name=rule_name, kernel_detected=kernel_detected, lp=lp),
-                    lambda: None,
-                )
+                if DEBUG:
+                    jax.lax.cond(
+                        # True,
+                        kernel_detected,
+                        lambda: jax.debug.print('      Rule {rule_name} left kernel {lp} detected: {kernel_detected}',
+                                                rule_name=rule_name, kernel_detected=kernel_detected, lp=lp),
+                        lambda: None,
+                    )
                 cancelled = False
                 detected_kernel_meta_objs = {}
                 detected_kernel_moving_idx = None
@@ -932,7 +962,8 @@ def gen_subrules_meta(rule: Rule, n_objs, obj_to_idxs, meta_objs, coll_mat, rule
                         m_cell = cell_proj_fn(m_cell, cell_detect_out=cell_detect_out_i, pattern_detect_out=pattern_detect_out_i)
                         lvl = lvl.at[0, :, *cell_xy].set(m_cell)
                     lvl_changed = jnp.any(lvl != init_lvl)
-                    jax.debug.print('      at position {xy}, the level changed: {lvl_changed}', xy=xy, lvl_changed=lvl_changed)
+                    if DEBUG:
+                        jax.debug.print('      at position {xy}, the level changed: {lvl_changed}', xy=xy, lvl_changed=lvl_changed)
                     # if not jit:
                     #     print('\n' + multihot_to_desc(lvl[0], obj_to_idxs=obj_to_idxs, n_objs=n_objs))
                     return lvl
@@ -968,8 +999,9 @@ def gen_subrules_meta(rule: Rule, n_objs, obj_to_idxs, meta_objs, coll_mat, rule
 
         if not has_right_pattern:
             rps = [None] * len(lps)
-        print('rps', rps)
-        print('lps', lps)
+        if DEBUG:
+            print('rps', rps)
+            print('lps', lps)
         kernel_fns = [gen_rotated_kernel_fns(lp, rp, rot) for lp, rp in zip(lps, rps)]
         kernel_detection_fns, kernel_projection_fns = zip(*kernel_fns)
 
@@ -1012,7 +1044,8 @@ def gen_subrules_meta(rule: Rule, n_objs, obj_to_idxs, meta_objs, coll_mat, rule
             def project_kernels(lvl, kernel_activations, kernel_detect_outs):
                 # TODO: use a jax.lax.switch
                 for i, kernel_projection_fn in enumerate(kernel_projection_fns):
-                    jax.debug.print('      projecting kernel {i}', i=i)
+                    if DEBUG:
+                        jax.debug.print('      projecting kernel {i}', i=i)
                     lvl = kernel_projection_fn(
                         lvl, kernel_activations[i], cell_detect_outs[i], kernel_detect_outs[i], pattern_detect_out)
                 return lvl
@@ -1045,21 +1078,24 @@ def gen_subrules_meta(rule: Rule, n_objs, obj_to_idxs, meta_objs, coll_mat, rule
                     cancel = pattern_detected
                 elif rule.command == 'restart':
                     restart = pattern_detected
-                elif rule.command == 'again':
-                    again = pattern_detected
-                jax.debug.print('applying {command} command', command=rule.command)
+            if rule.command == 'again':
+                again = rule_applied
+                if DEBUG:
+                    jax.debug.print('applying the {command} command', command=rule.command)
             return next_lvl, rule_applied, cancel, restart, again
 
         return apply_pattern
 
     rule_fns = []
-    print('RULE PATTERNS', rule.left_kernels, rule.right_kernels)
+    if DEBUG:
+        print('RULE PATTERNS', rule.left_kernels, rule.right_kernels)
 
 
     l_kerns, r_kerns = rule.left_kernels, rule.right_kernels
     # Replace any empty lists in lp and rp with a None
     l_kerns = [[[None] if len(l) == 0 else [' '.join(l)] for l in kernel] for kernel in l_kerns]
-    print('lps', l_kerns)
+    if DEBUG:
+        print('lps', l_kerns)
     # lps = np.array(lps)
 
     # rp, rp_rot = None, None
@@ -1119,19 +1155,25 @@ def player_has_moved(lvl_0, lvl_1, obj_to_idxs, meta_objs):
     for player_idx in player_idxs:
         player_i_moved = jnp.sum(lvl_0[player_idx] != lvl_1[player_idx]) > 0
         player_moved = jnp.logical_or(player_moved, player_i_moved)
-    jax.debug.print('player moved: {player_moved}', player_moved=player_moved)
+    if DEBUG:
+        jax.debug.print('player moved: {player_moved}', player_moved=player_moved)
     return player_moved
         
 def gen_rule_fn(obj_to_idxs, coll_mat, tree_rules, meta_objs, jit, n_objs):
-    rule_grps = []
-    late_rule_grps = []
     if len(tree_rules) == 0:
         pass
-    elif len(tree_rules) == 1:
-        # TODO: Extend to multiple rule blocks
-        rule_blocks = tree_rules[0]
-        for rule_block in rule_blocks:
-            assert rule_block.looping == False
+    else:
+        rule_blocks = []
+        late_rule_grps = []
+        for rule_block in tree_rules:
+
+            # FIXME: what's with this unnecessary list?
+            assert len(rule_block) == 1
+            rule_block = rule_block[0]
+
+            looping = rule_block.looping
+            rule_grps = []
+            # TODO: Extend to multiple rule blocks
             for rule in rule_block.rules:
                 # TODO: rule-block and loop logics
                 sub_rule_fns = gen_subrules_meta(rule, n_objs, obj_to_idxs, meta_objs, coll_mat, rule_name=str(rule), jit=jit)
@@ -1139,83 +1181,157 @@ def gen_rule_fn(obj_to_idxs, coll_mat, tree_rules, meta_objs, jit, n_objs):
                     rule_grps.append(sub_rule_fns)
                 else:
                     late_rule_grps.append(sub_rule_fns)
+            rule_blocks.append((looping, rule_grps))
 
-    rule_grps.append(gen_move_rules(obj_to_idxs, coll_mat, n_objs, jit=jit))
-    rule_grps += late_rule_grps
+    rule_blocks.append((False, [gen_move_rules(obj_to_idxs, coll_mat, n_objs, jit=jit)]))
+    # Can we have loops in late rules? I hope not.
+    rule_blocks.append((False, late_rule_grps))
 
     def rule_fn(lvl):
-        changed = False
+        lvl_changed = False
         cancelled = False
         restart = False
         again = False
         lvl = lvl[None]
 
         if not jit:
-            print('\n' + multihot_to_desc(lvl[0], obj_to_idxs, n_objs))
+            if DEBUG:
+                print('\n' + multihot_to_desc(lvl[0], obj_to_idxs, n_objs))
 
-        # TODO: jit this?
-        for grp_i, rule_grp in enumerate(rule_grps):
-            grp_applied = True
+        def apply_turn(carry):
+            lvl, _, turn_app_i, cancelled, restart, turn_again = carry
+            turn_app_i += 1
+            turn_applied = False
 
-            def apply_rule_grp(carry):
-                lvl, grp_applied, grp_app_i, cancelled, restart, again = carry
-                grp_app_i += 1
-                grp_applied = False
+            for block_i, (looping, rule_grps) in enumerate(rule_blocks):
 
-                for rule_i, rule_fn in enumerate(rule_grp):
+                def apply_rule_block(carry):
+                    lvl, _, block_app_i, cancelled, restart, again = carry
+                    block_app_i += 1
+                    block_applied = False
 
-                    def apply_rule_fn(carry):
-                        init_lvl, rule_applied, i, cancelled, restart, again = carry
-                        lvl, rule_applied, cancelled, restart, again = rule_fn(init_lvl)
-                        rule_had_effect = jnp.any(lvl != init_lvl)
-                        jax.debug.print('    rule {rule_i} had effect: {rule_had_effect}', rule_i=rule_i, rule_had_effect=rule_had_effect)
-                        i += 1
-                        return lvl, rule_had_effect, i, cancelled, restart, again
+                    # TODO: jit this?
+                    for grp_i, rule_grp in enumerate(rule_grps):
+                        grp_applied = True
 
-                    rule_applied = True
-                    rule_app_i = 0
-                    if jit:
-                        lvl, rule_applied, rule_app_i, cancelled, restart, again = jax.lax.while_loop(
-                            cond_fun=lambda x: x[1] & ~x[3] & ~x[4] & ~x[5],
-                            body_fun=lambda x: apply_rule_fn(x),
-                            init_val=(lvl, rule_applied, rule_app_i, cancelled, restart, again),
-                        )
-                    else:
-                        while rule_applied and not cancelled and not restart and not again:
-                            lvl, rule_applied, rule_app_i, cancelled, restart, again = apply_rule_fn((lvl, rule_applied, rule_app_i, cancelled, restart, again))
+                        def apply_rule_grp(carry):
+                            lvl, _, grp_app_i, cancelled, restart, again = carry
+                            grp_app_i += 1
+                            grp_applied = False
 
-                    rule_applied = rule_app_i > 1
-                    grp_applied = jnp.logical_or(grp_applied, rule_applied)
-                    jax.debug.print('    rule {rule_i} applied: {rule_applied}', rule_i=rule_i, rule_applied=rule_applied)
-                jax.debug.print('group {grp_i} applied: {grp_applied}', grp_i=grp_i, grp_applied=grp_applied)
-                # print('rule: {rule}', rule=tree_rules[0][0].rules[grp_i])
-                if not jit:
-                    if grp_applied:
-                        print('\n' + multihot_to_desc(lvl[0], obj_to_idxs, n_objs))
-                # force_is_present = jnp.sum(lvl[0, n_objs:n_objs + (n_objs * N_MOVEMENTS)]) > 0
-                # jax.debug.print('force is present: {force_is_present}', force_is_present=force_is_present)
-                # jax.debug.print('lvl:\n{lvl}', lvl=lvl)
-                return lvl, grp_applied, grp_app_i, cancelled, restart, again
+                            for rule_i, rule_fn in enumerate(rule_grp):
 
-            grp_app_i = 0
-            if jit:
-                lvl, grp_applied, grp_app_i, cancelled, restart, again = jax.lax.while_loop(
-                    cond_fun=lambda x: x[1] & ~x[3] & ~x[4] & ~x[5],
-                    body_fun=apply_rule_grp,
-                    init_val=(lvl, grp_applied, grp_app_i, cancelled, restart, again),
-                )
-            else:
-                while grp_applied and not cancelled and not restart and not again:
-                    lvl, grp_applied, grp_app_i, cancelled, restart, again = apply_rule_grp((lvl, grp_applied, grp_app_i, cancelled, restart, again))
+                                def apply_rule_fn(carry):
+                                    init_lvl, rule_applied, i, cancelled, restart, again = carry
+                                    lvl, rule_applied, cancelled, restart, again = rule_fn(init_lvl)
+                                    rule_had_effect = jnp.any(lvl != init_lvl)
+                                    if DEBUG:
+                                        if jit:
+                                            jax.debug.print('    rule {rule_i} had effect: {rule_had_effect}', rule_i=rule_i, rule_had_effect=rule_had_effect)
+                                        else:
+                                            if rule_had_effect:
+                                                print(f'      rule {rule_i} had effect')
+                                    i += 1
+                                    return lvl, rule_had_effect, i, cancelled, restart, again
 
-            grp_applied = grp_app_i > 1
+                                rule_applied = True
+                                rule_app_i = 0
+                                if jit:
+                                    lvl, rule_applied, rule_app_i, cancelled, restart, rule_again = jax.lax.while_loop(
+                                        cond_fun=lambda x: x[1] & ~x[3] & ~x[4],
+                                        body_fun=lambda x: apply_rule_fn(x),
+                                        init_val=(lvl, rule_applied, rule_app_i, cancelled, restart, again),
+                                    )
+                                else:
+                                    while rule_applied and not cancelled and not restart:
+                                        lvl, rule_applied, rule_app_i, cancelled, restart, rule_again = apply_rule_fn((lvl, rule_applied, rule_app_i, cancelled, restart, again))
+
+                                again = again | rule_again
+                                rule_applied = rule_app_i > 1
+                                grp_applied = jnp.logical_or(grp_applied, rule_applied)
+                                if DEBUG:
+                                    if jit:
+                                        jax.debug.print('    rule {rule_i} applied: {rule_applied}', rule_i=rule_i, rule_applied=rule_applied)
+                                    else:
+                                        if rule_applied:
+                                            print(f'      rule {rule_i} applied')
+                            if DEBUG:
+                                if jit:
+                                    jax.debug.print('group {grp_i} applied: {grp_applied}', grp_i=grp_i, grp_applied=grp_applied)
+                                else:
+                                    if grp_applied:
+                                        print(f'group {grp_i} applied')
+                            # print('rule: {rule}', rule=tree_rules[0][0].rules[grp_i])
+                            if not jit:
+                                if grp_applied:
+                                    if DEBUG:
+                                        print('\n' + multihot_to_desc(lvl[0], obj_to_idxs, n_objs))
+                            # force_is_present = jnp.sum(lvl[0, n_objs:n_objs + (n_objs * N_MOVEMENTS)]) > 0
+                            # jax.debug.print('force is present: {force_is_present}', force_is_present=force_is_present)
+                            # jax.debug.print('lvl:\n{lvl}', lvl=lvl)
+                            return lvl, grp_applied, grp_app_i, cancelled, restart, again
+
+                        grp_app_i = 0
+                        if jit:
+                            lvl, grp_applied, grp_app_i, cancelled, restart, grp_again = jax.lax.while_loop(
+                                cond_fun=lambda x: x[1] & ~x[3] & ~x[4],
+                                body_fun=apply_rule_grp,
+                                init_val=(lvl, grp_applied, grp_app_i, cancelled, restart, again),
+                            )
+                        else:
+                            while grp_applied and not cancelled and not restart:
+                                lvl, grp_applied, grp_app_i, cancelled, restart, grp_again = apply_rule_grp((lvl, grp_applied, grp_app_i, cancelled, restart, again))
+
+                        again = again | grp_again
+                        grp_applied = grp_app_i > 1
+                        block_applied = block_applied | grp_applied
+
+                    return lvl, block_applied, block_app_i, cancelled, restart, again
+
+                block_applied = True
+                block_app_i = 0
+                block_again = True
+                init_val = (lvl, block_applied, block_app_i, cancelled, restart, block_again)
+                if looping:
+                    lvl, block_applied, block_app_i, cancelled, restart, block_again = jax.lax.while_loop(
+                        cond_fun=lambda x: x[1] & ~x[3] & ~x[4],
+                        body_fun=apply_rule_block,
+                        init_val=init_val,
+                    )
+                    block_applied = block_app_i > 1
+                else:
+                    lvl, block_applied, block_app_i, cancelled, restart, block_again = apply_rule_block(init_val)
+                turn_again = turn_again | block_again
+                
+                turn_applied = turn_applied | block_applied
+
+            return lvl, turn_applied, turn_app_i, cancelled, restart, turn_again
+
+        turn_applied = True
+        turn_app_i = 0
+        turn_again = True
+
+        init_carry = (lvl, turn_applied, turn_app_i, cancelled, restart, again)
+        if jit:
+            lvl, turn_applied, turn_app_i, cancelled, restart, again = jax.lax.while_loop(
+                lambda x: x[1] & x[5],
+                lambda x: apply_turn(x),
+                init_carry
+            )
+        else:
+            carry = init_carry
+            while turn_applied and turn_again:
+                carry = apply_turn(carry)
+                lvl, turn_applied, turn_app_i, cancelled, restart, turn_again = carry
+
+        lvl_changed = turn_app_i > 1
 
         # if not jit:
         #     print('\nLevel after applying rules:\n', multihot_to_desc(lvl[0], obj_to_idxs, n_objs))
         #     print('grp_applied:', grp_applied)
         #     print('cancelled:', cancelled)
 
-        return lvl[0], grp_applied, cancelled, restart, again
+        return lvl[0], lvl_changed, turn_app_i, cancelled, restart
 
     if jit:
         rule_fn = jax.jit(rule_fn)
@@ -1333,12 +1449,17 @@ def apply_move_rule(lvl, move_rule, jit=True, rule_name=None):
         # TODO
         out = jax.lax.conv_transpose(bin_activations, outk, (1, 1), padding='VALID',
                                             dimension_numbers=('NCHW', 'OIHW', 'NCHW'))
-    jax.lax.cond(
-        changed,
-        lambda _: jax.debug.print('rule {rule_name} applied: {changed}', rule_name=rule_name, changed=changed),
-        lambda _: None,
-        None
-    )    # if out.sum() != 0:
+    if DEBUG:
+        if jit:
+            jax.lax.cond(
+                changed,
+                lambda _: jax.debug.print('rule {rule_name} applied: {changed}', rule_name=rule_name, changed=changed),
+                lambda _: None,
+                None
+            )    # if out.sum() != 0:
+        else:
+            if changed:
+                print(f'rule {rule_name} applied')
     #     print('lvl')
     #     print(lvl[0,2])
     #     print('out')
@@ -1357,15 +1478,27 @@ class PSState:
     win: bool
     restart: bool
 
+@flax.struct.dataclass
+class PSParams:
+    level_i: int = 0
+
+@flax.struct.dataclass
+class PSObs:
+    multihot_level: chex.Array
+    flat_obs: Optional[chex.Array] = None
+
+
 class PSEnv:
-    def __init__(self, tree: PSGame, jit: bool = True):
+    def __init__(self, tree: PSGame, jit: bool = True, level_i: int = 0):
         self.jit = jit
         self.title = tree.prelude.title
         self.tree = tree
         self.levels = tree.levels
+        self.level_i = level_i
         self.require_player_movement = tree.prelude.require_player_movement
         obj_to_char, meta_objs, joint_tiles = process_legend(tree.legend)
         self.meta_objs = meta_objs
+        self.n_agents = 1
 
         # Add to the legend any objects to whose keys are specified in their object definition
         for obj_key, obj in tree.objects.items():
@@ -1381,7 +1514,8 @@ class PSEnv:
         objs, self.obj_to_idxs, coll_masks = assign_vecs_to_objs(collision_layers, atomic_obj_names)
         for obj, sub_objs in meta_objs.items():
             # Meta-objects that are actually just alternate names.
-            print(f'sub_objs', sub_objs)
+            if DEBUG:
+                print(f'sub_objs {sub_objs}')
             sub_objs = expand_meta_objs(sub_objs, self.obj_to_idxs, meta_objs)
             if len(sub_objs) == 1 and (obj not in self.obj_to_idxs):
                 self.obj_to_idxs[obj] = self.obj_to_idxs[sub_objs[0]]
@@ -1395,20 +1529,24 @@ class PSEnv:
             player_objs = expand_meta_objs(['player'], self.obj_to_idxs, meta_objs)
             self.player_idxs = [self.obj_to_idxs[p] for p in player_objs]
         self.player_idxs = np.array(self.player_idxs)
-        print(f'player_idxs: {self.player_idxs}')
+        if DEBUG:
+            print(f'player_idxs: {self.player_idxs}')
         sprite_stack = []
-        print(atomic_obj_names)
-        print(self.obj_to_idxs)
+        if DEBUG:
+            print(atomic_obj_names)
+            print(self.obj_to_idxs)
         # for obj_name in self.obj_to_idxs:
         for obj_key in atomic_obj_names:
             obj = tree.objects[obj_key]
             if obj.sprite is not None:
-                print(f'rendering pixel sprite for {obj_key}')
+                if DEBUG:
+                    print(f'rendering pixel sprite for {obj_key}')
                 im = render_sprite(obj.colors, obj.sprite)
 
             else:
                 assert len(obj.colors) == 1
-                print(f'rendering solid color for {obj_key}')
+                if DEBUG:
+                    print(f'rendering solid color for {obj_key}')
                 im = render_solid_color(obj.colors[0])
 
             if DEBUG:
@@ -1433,19 +1571,30 @@ class PSEnv:
             vec = np.zeros(self.n_objs, dtype=bool)
             subobjects = expand_meta_objs(subobjects, self.obj_to_idxs, meta_objs)
             for so in subobjects:
-                print(so)
+                if DEBUG:
+                    print(so)
                 vec += self.obj_vecs[self.obj_to_idxs[so]]
             assert jo not in self.chars_to_idxs
             self.chars_to_idxs[jo] = self.obj_vecs.shape[0]
             self.obj_vecs = np.concatenate((self.obj_vecs, vec[None]), axis=0)
 
         if self.jit:
-            self.step = jax.jit(self._step)
+            self.step = jax.jit(self.step)
             self.apply_player_force = jax.jit(self._apply_player_force)
         else:
-            self.step = self._step
+            self.step = self.step
             self.apply_player_force = self._apply_player_force
         self.joint_tiles = joint_tiles
+
+        multihot_level = self.get_level(level_i)
+        self.observation_space = Box(low=0, high=1, shape=multihot_level.shape)
+        self.action_space = Discrete(5)
+
+    def gen_dummy_obs(self, params):
+        return PSObs(
+            multihot_level=jnp.zeros(self.observation_space.shape)[None],
+            flat_obs=None,
+        )
 
     def char_level_to_multihot(self, level):
         int_level = np.vectorize(lambda x: self.chars_to_idxs[x])(level)
@@ -1485,18 +1634,35 @@ class PSEnv:
 
         return im
 
-    def reset(self, lvl_i):
-        lvl = self.get_level(lvl_i)
+    def reset(self, key, params: PSParams, level_i: int = None):
+        if level_i is None:
+            level_i = self.level_i
+        lvl = self.get_level(level_i)
         again = True
         if self.tree.prelude.run_rules_on_level_start:
+            state = PSState(
+                multihot_level=lvl,
+                win = jnp.array(False),
+                restart = jnp.array(False),
+            )
+            lvl = self.apply_player_force(-1, state)
             # FIXME: jit this!
-            while again:
-                lvl, _, _, _, again = self.rule_fn(lvl)
-        return PSState(
+            lvl, _, _, _, _ = self.rule_fn(lvl)
+            lvl = lvl[:self.n_objs]
+        state = PSState(
             multihot_level=lvl,
             win = jnp.array(False),
             restart = jnp.array(False),
         )
+        obs = self.get_obs(state)
+        return obs, state
+
+    def get_obs(self, state):
+        obs = PSObs(
+            multihot_level=state.multihot_level,
+            flat_obs=None,
+        )
+        return obs
 
     # @partial(jax.jit, static_argnums=(0))
     def _apply_player_force(self, action, state: PSState):
@@ -1519,7 +1685,7 @@ class PSEnv:
             return force_map
 
         # apply movement (<4) and/or action (if not noaction)
-        apply_force = (action < 4) | (~self.tree.prelude.noaction)
+        apply_force = (action != -1) & ((action < 4) | (~self.tree.prelude.noaction))
 
         force_map = jax.lax.cond(
             apply_force,
@@ -1535,7 +1701,7 @@ class PSEnv:
         return lvl
 
     # @partial(jax.jit, static_argnums=(0))
-    def _step(self, action, state: PSState):
+    def step(self, key, state: PSState, action):
         init_lvl = state.multihot_level.copy()
         lvl = self.apply_player_force(action, state)
 
@@ -1560,19 +1726,9 @@ class PSEnv:
         #     final_lvl, _, _, cancelled = init_state
 
         # Actually, just apply the rule function once
-        again = True
         cancelled = False
         restart = False
-        rule_applied = False
-        if self.jit:
-            final_lvl, rule_applied, cancelled, restart, again = jax.lax.while_loop(
-                lambda x: x[4],
-                lambda x: self.rule_fn(x[0]),
-                (lvl, rule_applied, cancelled, restart, again),
-            )
-                
-        else:
-            final_lvl, _, cancelled, restart, again = self.rule_fn(lvl)
+        final_lvl, rule_applied, turn_app_i, cancelled, restart = self.rule_fn(lvl)
 
         accept_lvl_change = ((not self.require_player_movement) or player_has_moved(init_lvl, final_lvl, self.obj_to_idxs, self.meta_objs)) & ~cancelled
         # jax.debug.print('accept level change: {accept_lvl_change}', accept_lvl_change=accept_lvl_change) 
@@ -1582,13 +1738,17 @@ class PSEnv:
             lvl,
         )
         multihot_level = final_lvl[:self.n_objs]
-        win = self.check_win(multihot_level)
+        win, score = self.check_win(multihot_level)
         state = PSState(
             multihot_level=multihot_level,
             win=win,
             restart=restart,
         )
-        return state
+        obs = self.get_obs(state)
+        reward = score
+        done = win
+        info = {}
+        return obs, state, reward, done, info
 
     def get_level(self, level_idx):
         level = self.levels[level_idx][0]
@@ -1657,3 +1817,20 @@ def multihot_to_desc(multihot_level, obj_to_idxs, n_objs):
     desc_str = "\n".join([" || ".join(row) for row in desc_grid])
     
     return desc_str
+
+
+def init_ps_env(config: Config, params: PSParams, verbose: bool = False) -> PSEnv:
+    start_time = timer()
+    game = config.game
+    level_i = config.level_i
+    with open("syntax.lark", "r", encoding='utf-8') as file:
+        puzzlescript_grammar = file.read()
+    # Initialize the Lark parser with the PuzzleScript grammar
+    parser = Lark(puzzlescript_grammar, start="ps_game", maybe_placeholders=False)
+    tree = get_tree_from_txt(parser, game)
+    parse_time = timer()
+    print(f'Parsed PS file using Lark into python PSTree object in {(parse_time - start_time) / 1000} seconds.')
+    env = PSEnv(tree, jit=True, level_i=level_i)
+    env.max_steps = config.max_episode_steps
+    print(f'Initialized PSEnv in {(timer() - parse_time) / 1000} seconds.')
+    return env

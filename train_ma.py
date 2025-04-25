@@ -21,9 +21,9 @@ from flax.training.train_state import TrainState
 import hydra
 from omegaconf import OmegaConf
 
-from model import ActorRNN, CriticRNN, ScannedRNN
+from marl.model import ActorRNN, CriticRNN, ScannedRNN
 from conf.config import MultiAgentConfig
-from ma_utils import RunnerState, batchify, init_config, init_run, ma_init_config, make_sim_render_episode, render_callback, restore_run, save_checkpoint, unbatchify
+from utils_rl import RunnerState, batchify, init_run, ma_init_config, make_sim_render_episode, render_callback, restore_run, save_checkpoint, unbatchify, N_AGENTS
 from utils import get_env_params_from_config, init_network
 
 class Transition(NamedTuple):

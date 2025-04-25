@@ -7,7 +7,6 @@ import shutil
 from typing import Sequence, NamedTuple, Any, Tuple, Union, Dict
 
 import chex
-import distrax
 import imageio
 import jax
 import jax.numpy as jnp
@@ -25,44 +24,60 @@ import hydra
 from omegaconf import DictConfig, OmegaConf
 from time import perf_counter
 
-from marl.environments.spaces import Box
-from marl.environments.multi_agent_env import MultiAgentEnv
-from marl.model import ActorCategorical, ActorCriticPCGRL, ActorMLP, ActorRNN, CriticRNN, MAConvForward2, ScannedRNN
-
 from conf.config import Config, MultiAgentConfig
-from envs.pcgrl_env import PCGRLEnv, PCGRLEnvParams, PCGRLEnvState, PCGRLObs
-from marl.wrappers.baselines import MALogWrapper, MultiAgentWrapper
-from utils import get_env_params_from_config, get_exp_dir, init_config
+from env import PSEnv, PSObs, PSState, PSParams, init_ps_env
+from marl.model import ActorCategorical, ActorMLP, ActorRNN, CriticRNN, MAConvForward2, ScannedRNN
+from models import NCA, AutoEncoder, ConvForward, ConvForward2, SeqNCA, ActorCriticPS, Dense
+from purejaxrl.wrappers import LogWrapper
 
+N_AGENTS = 1
+
+def get_exp_dir(config: MultiAgentConfig):
+    exp_dir = os.path.join(
+        "rl_logs", 
+        "game",
+        (
+            f"n-envs-{config.n_envs}_"
+            f"seed-{config.seed}"
+        )
+    )
+    return exp_dir
+
+def get_env_params_from_config(config: MultiAgentConfig):
+    return PSParams(
+        level_i=config.level_i,
+    )
 
 @struct.dataclass
 class RunnerState:
     train_states: Tuple[TrainState, TrainState]
-    env_state: MultiAgentEnv
+    env_state: PSState
     last_obs: Dict[str, jnp.ndarray]
     last_done: jnp.ndarray
     hstates: Tuple[jnp.ndarray, jnp.ndarray]
     rng: jnp.ndarray
 
 
-def batchify(x: dict, agent_list, num_actors):
-    obs_list = [x[a] for a in agent_list]
-    if isinstance(obs_list[0], PCGRLObs):
-        x = PCGRLObs(
-            map_obs=jnp.stack([obs.map_obs for obs in obs_list]),
-            flat_obs=jnp.stack([obs.flat_obs for obs in obs_list]),
-        )
-        # x = stack_leaves(obs_list)
-        # Assume we have a batch dimension and an agent dimension
-        return jax.tree.map(lambda x: x.reshape((num_actors, *x.shape[2:])), x)
-    else:
-        x = jnp.stack(obs_list)
-        return x.reshape((num_actors, -1))
+def batchify(x: Dict[int, PSObs], agent_list, num_actors):
+    # obs_list = [x[a] for a in agent_list]
+    # if isinstance(obs_list[0], PSObs):
+    #     x = PSObs(
+    #         multihot_level=jnp.stack([obs.multihot_level for obs in obs_list]),
+    #         flat_obs=jnp.stack([obs.flat_obs for obs in obs_list]),
+    #     )
+    #     # x = stack_leaves(obs_list)
+    #     # Assume we have a batch dimension and an agent dimension
+    #     return jax.tree.map(lambda x: x.reshape((num_actors, *x.shape[2:])), x)
+    # else:
+    #     x = jnp.stack(obs_list)
+    # return x.reshape((num_actors, -1))
+    return x
 
 
 def unbatchify(x: jnp.ndarray, agent_list, num_envs, num_actors):
-    x = x.reshape((num_actors, num_envs, -1))
-    return {a: x[i] for i, a in enumerate(agent_list)}
+    # x = x.reshape((num_actors, num_envs, -1))
+    # return {a: x[i] for i, a in enumerate(agent_list)}
+    return x
 
 
 def linear_schedule(config, count):
@@ -77,16 +92,17 @@ def linear_schedule(config, count):
 def init_run(config: MultiAgentConfig, ckpt_manager, latest_update_step, rng):
     # Create PCGRL environment
     env_params = get_env_params_from_config(config)
-    env = PCGRLEnv(env_params)
+    env = init_ps_env(env_params)
 
     # Wrap environment with JAXMARL wrapper
-    env = MultiAgentWrapper(env, env_params)
+    # env = MultiAgentWrapper(env, env_params)
 
     # Wrap environment with LogWrapper
-    env = MALogWrapper(env)
+    # env = MALogWrapper(env)
+    env = LogWrapper(env)
 
     # Configure training
-    config._num_actors = env.n_agents * config.n_envs
+    config._num_actors = N_AGENTS * config.n_envs
     
     config._num_updates = int(
         config.total_timesteps // config.num_steps // config.n_envs
@@ -95,7 +111,7 @@ def init_run(config: MultiAgentConfig, ckpt_manager, latest_update_step, rng):
         config._num_actors * config.num_steps // config.NUM_MINIBATCHES
     )
     config.CLIP_EPS = (
-        config.CLIP_EPS / env.n_agents
+        config.CLIP_EPS / N_AGENTS
         if config.scale_clip_eps
         else config.CLIP_EPS
     )
@@ -200,16 +216,60 @@ def init_run(config: MultiAgentConfig, ckpt_manager, latest_update_step, rng):
     return runner_state, actor_network, env, latest_update_step
 
 
-def init_network(env: PCGRLEnv, env_params: PCGRLEnvParams, config: Config):
-    action_dim = env.rep.action_space.n
-    network = MAConvForward2(
-        action_dim=action_dim, activation=config.activation,
-        act_shape=config.act_shape,
-        hidden_dims=config.hidden_dims,
-    )
-    network = ActorCriticPCGRL(network, act_shape=config.act_shape,
-                        n_agents=config.n_agents, n_ctrl_metrics=len(config.ctrl_metrics))
+def init_network(env: PSEnv, env_params: PSParams, config: Config):
+    action_dim = env.action_space.n
+
+    if config.model == "dense":
+        network = Dense(
+            action_dim, activation=config.activation,
+        )
+    elif config.model == "rnn":
+        # TODO: Standardize everything to take and return (by default None/unused) hidden states. Enable multi-agent 
+        #   script to use non-RNN networks.
+        network = ActorCategorical(action_dim,
+                             subnet=ActorRNN(env.action_space(env.agents[0]).n, config=config,
+                            #  subnet=ActorMLP(env.action_space(env.agents[0]).shape[0], config=config,
+                                             ))
+        return network
+    elif config.model == "conv":
+        network = ConvForward(
+            action_dim=action_dim, activation=config.activation,
+            arf_size=config.arf_size, act_shape=config.act_shape,
+            vrf_size=config.vrf_size,
+            hidden_dims=config.hidden_dims,
+        )
+    elif config.model == "conv2":
+        network = ConvForward2(
+            action_dim=action_dim, activation=config.activation,
+            act_shape=config.act_shape,
+            hidden_dims=config.hidden_dims,
+        )
+    elif config.model == "seqnca":
+        network = SeqNCA(
+            action_dim, activation=config.activation,
+            arf_size=config.arf_size, act_shape=config.act_shape,
+            vrf_size=config.vrf_size,
+            hidden_dims=config.hidden_dims,
+        )
+    elif config.model in {"nca", "autoencoder"}:
+        if config.model == "nca":
+            network = NCA(
+                representation=config.representation,
+                tile_action_dim=env.rep.tile_action_dim,
+                activation=config.activation,
+            )
+        elif config.model == "autoencoder":
+            network = AutoEncoder(
+                representation=config.representation,
+                action_dim=action_dim,
+                activation=config.activation,
+            )
+    else:
+        raise Exception(f"Unknown model {config.model}")
+    network = ActorCriticPS(network)
     return network
+
+ 
 
 
 def restore_run(config: MultiAgentConfig, runner_state: RunnerState, ckpt_manager, latest_update_step: int, load_wandb: bool = True):
@@ -223,7 +283,7 @@ def restore_run(config: MultiAgentConfig, runner_state: RunnerState, ckpt_manage
     return runner_state, wandb_run_id
 
 
-def make_sim_render_episode(config: MultiAgentConfig, actor_network, env: PCGRLEnv):
+def make_sim_render_episode(config: MultiAgentConfig, actor_network, env: PSEnv):
     
     # FIXME: Shouldn't hardcode this
     max_episode_len = env.max_steps
@@ -249,7 +309,7 @@ def make_sim_render_episode(config: MultiAgentConfig, actor_network, env: PCGRLE
                 avail_actions = jax.lax.stop_gradient(
                     batchify(avail_actions, env.agents, len(env.agents))
                 )
-                obs = batchify(obs, env.agents, env.n_agents)
+                obs = batchify(obs, env.agents, N_AGENTS)
                 ac_in = (
                     obs[np.newaxis, :],
                     # obs,
@@ -264,12 +324,12 @@ def make_sim_render_episode(config: MultiAgentConfig, actor_network, env: PCGRLE
                     batchify(avail_actions, env.agents, len(env.agents))
                 )
                 obs = jax.tree.map(lambda x: x[jnp.newaxis], obs)
-                obs = batchify(obs, env.agents, env.n_agents)
+                obs = batchify(obs, env.agents, N_AGENTS)
                 # obs = obs.replace(flat_obs=obs.flat_obs[..., jnp.newaxis])
                 pi, _ = actor_network.apply(actor_params, obs, avail_actions)
             action = pi.sample(seed=rng)
             env_act = unbatchify(
-                action, env.agents, 1, env.n_agents
+                action, env.agents, 1, N_AGENTS
             )
             env_act = {k: v.squeeze() for k, v in env_act.items()}
 
@@ -280,7 +340,7 @@ def make_sim_render_episode(config: MultiAgentConfig, actor_network, env: PCGRLE
             # action = agents.merge_actions(outputs)
             obs, next_state, reward, done, info = env.step(state=state, action=env_act, key=rng)
             rng, _ = jax.random.split(rng)
-            done = batchify(done, env.agents, env.n_agents)[:, 0]
+            done = batchify(done, env.agents, N_AGENTS)[:, 0]
 
             return (rng, obs, next_state, done, actor_hidden), next_state
 
@@ -306,7 +366,7 @@ def make_sim_render_episode(config: MultiAgentConfig, actor_network, env: PCGRLE
 #     states.append(state)
 
     
-def render_callback(env: PCGRLEnv, frames, save_dir: str, t: int, max_steps: int):
+def render_callback(env: PSEnv, frames, save_dir: str, t: int, max_steps: int):
 
     imageio.mimsave(os.path.join(save_dir, f"enjoy_{t}.gif"), np.array(frames), fps=20, loop=0)
     wandb.log({"video": wandb.Video(os.path.join(save_dir, f"enjoy_{t}.gif"), fps=20, format="gif")})
@@ -317,12 +377,18 @@ def get_ckpt_dir(config: MultiAgentConfig):
     return ckpts_dir
 
     
-def ma_init_config(config: MultiAgentConfig):
-    config._num_eval_actors = config.n_eval_envs * config.n_agents
-    init_config(config)
+def init_config(config: MultiAgentConfig):
+    # config._num_eval_actors = config.n_eval_envs * config.n_agents
     config._exp_dir = get_exp_dir(config)
     config._ckpt_dir = get_ckpt_dir(config)
     config._vid_dir = os.path.join(config._exp_dir, "vids")
+    config._n_gpus = jax.local_device_count()
+    config._is_recurrent = config.model in {'rnn'}
+
+    if config.model == 'seqnca':
+        config.hidden_dims = config.hidden_dims[:1]
+
+    return config
 
     
 def save_checkpoint(config: MultiAgentConfig, ckpt_manager, runner_state, t):

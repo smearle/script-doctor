@@ -11,6 +11,8 @@ from dataclasses import dataclass
 
 @dataclass
 class Config:
+    game: str = "sokoban_basic"
+    level_i: int = 0
     lr: float = 1.0e-4
     n_envs: int = 400
     # How many steps do I take in all of my batched environments before doing a gradient update
@@ -26,14 +28,12 @@ class Config:
     VF_COEF: float = 0.5
     MAX_GRAD_NORM: float = 0.5
     activation: str = "relu"
-    env_name: str = "PCGRL"
+    env_name: str = "PSEnv"
     ANNEAL_LR: bool = False
     DEBUG: bool = True
     exp_name: str = "0"
     seed: int = 0
 
-    problem: str = "binary"
-    representation: str = "narrow"
     model: str = "conv"
 
     map_width: int = 16
@@ -56,7 +56,7 @@ class Config:
     n_freezies: int = 0
     n_agents: int = 1  # multi-agent is fake and broken
     multiagent: bool = False
-    max_board_scans: float = 3.0
+    max_episode_steps: int = 100
 
     # How many milliseconds to wait between frames of the rendered gifs
     gif_frame_duration: int = 25
@@ -83,9 +83,8 @@ class Config:
 
 
     """ DO NOT USE. WILL BE OVERWRITTEN. """
-    exp_dir: Optional[str] = None
-    n_gpus: int = 1
-    _is_recurrent: bool = False
+    _exp_dir: Optional[str] = None
+    _n_gpus: int = 1
 
 
 @dataclass
@@ -116,14 +115,18 @@ class TrainConfig(Config):
     # discount factor for regret value calculation is the same as GAMMA
 
     # NOTE: DO NOT MODIFY THESE. WILL BE SET AUTOMATICALLY AT RUNTIME. ########
-    NUM_UPDATES: Optional[int] = None
-    MINIBATCH_SIZE: Optional[int] = None
+    _num_updates: Optional[int] = None
+    _minibatch_size: Optional[int] = None
+    _ckpt_dir: Optional[str] = None
+    _is_recurrent: bool = False
+    _exp_dir: Optional[str] = None
+    _vid_dir: Optional[str] = None
     ###########################################################################
 
 
 @dataclass
 class MultiAgentConfig(TrainConfig):
-    multiagent: bool = True
+    multiagent: bool = False
     # lr: float = 3e-4
     # update_epochs: int = 4
     # num_steps: int = 521
@@ -136,13 +139,11 @@ class MultiAgentConfig(TrainConfig):
     # max_grad_norm: float = 0.25
 
     model: str = 'rnn'
-    representation: str = "turtle"
-    n_agents: int = 2
+    n_agents: int = 1
     n_envs: int = 4
     n_eval_envs: int = 10
     scale_clip_eps: bool = False
     hidden_dims: Tuple[int] = (512, -1)
-    a_freezer: bool = False
 
     # Save a checkpoint after (at least) this many ***update*** steps
     ckpt_freq: int = 40
@@ -151,7 +152,7 @@ class MultiAgentConfig(TrainConfig):
     # WandB Params
     WANDB_MODE: str = 'run'  # one of: 'offline', 'run', 'dryrun', 'shared', 'disabled', 'online'
     ENTITY: str = ''
-    PROJECT: str = 'smearle_pcgrl_mappo'
+    PROJECT: str = 'smearle_ps_ppo'
 
     # NOTE: DO NOT MODIFY THESE. WILL BE SET AUTOMATICALLY AT RUNTIME. ########
     _num_actors: int = -1
@@ -159,7 +160,6 @@ class MultiAgentConfig(TrainConfig):
     _minibatch_size: int = -1
     _num_updates: int = -1
     _exp_dir: Optional[str] = None
-    _ckpt_dir: Optional[str] = None
     _vid_dir: Optional[str] = None
     ###########################################################################
 
@@ -214,14 +214,14 @@ class EnjoyConfig(EvalConfig):
 
 
 @dataclass
-class EnjoyMultiAgentConfig(MultiAgentConfig, EnjoyConfig):
+class EnjoyRLConfig(MultiAgentConfig, EnjoyConfig):
     pass
     
 
 @dataclass
 class ProfileEnvConfig(Config):
     N_PROFILE_STEPS: int = 5000
-    reevaluate: bool = False
+    reevaluate: bool = True
 
 
 @dataclass
@@ -242,13 +242,13 @@ class GetTracesConfig(EnjoyConfig):
 cs = ConfigStore.instance()
 cs.store(name="config", node=Config)
 cs.store(name="ma_config", node=MultiAgentConfig)
-cs.store(name="enjoy_ma_pcgrl", node=EnjoyMultiAgentConfig)
+cs.store(name="enjoy_ma_pcgrl", node=EnjoyRLConfig)
 cs.store(name="get_traces_pcgrl", node=GetTracesConfig)
 cs.store(name="evo_map_pcgrl", node=EvoMapConfig)
 cs.store(name="train_pcgrl", node=TrainConfig)
 cs.store(name="train_accel_pcgrl", node=TrainAccelConfig)
 cs.store(name="enjoy_pcgrl", node=EnjoyConfig)
 cs.store(name="eval_pcgrl", node=EvalConfig)
-cs.store(name="eval_ma_pcgrl", node=MultiAgentEvalConfig)
+# cs.store(name="eval_ma_pcgrl", node=MultiAgentEvalConfig)
 cs.store(name="profile_pcgrl", node=ProfileEnvConfig)
 cs.store(name="batch_pcgrl", node=SweepConfig)

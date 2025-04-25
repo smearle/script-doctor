@@ -1,10 +1,14 @@
 beautifulsoup4
+distrax
 einops
 flask
 flax
+gym
+gymnax
 hydra-core
 imageio
-jax[cuda]  # or `jax` if no CUDA is not an option
+# jax[cuda]  # or `jax` if no CUDA is not an option
+jax
 lark
 Levenshtein
 matplotlib
