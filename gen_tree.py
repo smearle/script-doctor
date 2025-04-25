@@ -56,7 +56,7 @@ class GenPSTree(Transformer):
         return RuleBlock(looping=False, rules=items)
 
     def rule_block_loop(self, items):
-        assert (str(items[0]) == 'startloop') and (str(items[-1]) == 'endloop')
+        assert (str(items[0]).lower() == 'startloop') and (str(items[-1]).lower() == 'endloop')
         rules = items[1: -1]
         return RuleBlock(looping=True, rules=rules)
 

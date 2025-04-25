@@ -13,6 +13,7 @@ from utils_rl import init_config, get_env_params_from_config
 
 
 games = [
+    'castlemouse',
     'atlas shrank',
     'sokoban_basic',
     'sokoban_match3',

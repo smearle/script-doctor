@@ -1159,7 +1159,7 @@ def player_has_moved(lvl_0, lvl_1, obj_to_idxs, meta_objs):
         jax.debug.print('player moved: {player_moved}', player_moved=player_moved)
     return player_moved
         
-def gen_rule_fn(obj_to_idxs, coll_mat, tree_rules, meta_objs, jit, n_objs):
+def gen_tick_fn(obj_to_idxs, coll_mat, tree_rules, meta_objs, jit, n_objs):
     if len(tree_rules) == 0:
         pass
     else:
@@ -1187,7 +1187,7 @@ def gen_rule_fn(obj_to_idxs, coll_mat, tree_rules, meta_objs, jit, n_objs):
     # Can we have loops in late rules? I hope not.
     rule_blocks.append((False, late_rule_grps))
 
-    def rule_fn(lvl):
+    def tick_fn(lvl):
         lvl_changed = False
         cancelled = False
         restart = False
@@ -1291,16 +1291,22 @@ def gen_rule_fn(obj_to_idxs, coll_mat, tree_rules, meta_objs, jit, n_objs):
                 block_applied = True
                 block_app_i = 0
                 block_again = True
-                init_val = (lvl, block_applied, block_app_i, cancelled, restart, block_again)
+                init_carry = (lvl, block_applied, block_app_i, cancelled, restart, block_again)
                 if looping:
-                    lvl, block_applied, block_app_i, cancelled, restart, block_again = jax.lax.while_loop(
-                        cond_fun=lambda x: x[1] & ~x[3] & ~x[4],
-                        body_fun=apply_rule_block,
-                        init_val=init_val,
-                    )
+                    if jit:
+                        lvl, block_applied, block_app_i, cancelled, restart, block_again = jax.lax.while_loop(
+                            cond_fun=lambda x: x[1] & ~x[3] & ~x[4],
+                            body_fun=apply_rule_block,
+                            init_val=init_carry,
+                        )
+                    else:
+                        carry = init_carry
+                        while block_applied and not cancelled and not restart:
+                            carry = apply_rule_block(carry)
+                            lvl, block_applied, block_app_i, cancelled, restart, block_again = carry
                     block_applied = block_app_i > 1
                 else:
-                    lvl, block_applied, block_app_i, cancelled, restart, block_again = apply_rule_block(init_val)
+                    lvl, block_applied, block_app_i, cancelled, restart, block_again = apply_rule_block(init_carry)
                 turn_again = turn_again | block_again
                 
                 turn_applied = turn_applied | block_applied
@@ -1311,7 +1317,7 @@ def gen_rule_fn(obj_to_idxs, coll_mat, tree_rules, meta_objs, jit, n_objs):
         turn_app_i = 0
         turn_again = True
 
-        init_carry = (lvl, turn_applied, turn_app_i, cancelled, restart, again)
+        init_carry = (lvl, turn_applied, turn_app_i, cancelled, restart, turn_again)
         if jit:
             lvl, turn_applied, turn_app_i, cancelled, restart, again = jax.lax.while_loop(
                 lambda x: x[1] & x[5],
@@ -1334,8 +1340,8 @@ def gen_rule_fn(obj_to_idxs, coll_mat, tree_rules, meta_objs, jit, n_objs):
         return lvl[0], lvl_changed, turn_app_i, cancelled, restart
 
     if jit:
-        rule_fn = jax.jit(rule_fn)
-    return rule_fn
+        tick_fn = jax.jit(tick_fn)
+    return tick_fn
 
 def gen_move_rules(obj_to_idxs, coll_mat, n_objs, jit=True):
     rule_fns = []
@@ -1521,7 +1527,7 @@ class PSEnv:
                 self.obj_to_idxs[obj] = self.obj_to_idxs[sub_objs[0]]
         self.n_objs = len(atomic_obj_names)
         coll_mat = np.einsum('ij,ik->jk', coll_masks, coll_masks, dtype=bool)
-        self.rule_fn = gen_rule_fn(self.obj_to_idxs, coll_mat, tree.rules, meta_objs, jit=self.jit, n_objs=self.n_objs)
+        self.tick_fn = gen_tick_fn(self.obj_to_idxs, coll_mat, tree.rules, meta_objs, jit=self.jit, n_objs=self.n_objs)
         self.check_win = gen_check_win(tree.win_conditions, self.obj_to_idxs, meta_objs, jit=self.jit)
         if 'player' in self.obj_to_idxs:
             self.player_idxs = [self.obj_to_idxs['player']]
@@ -1580,10 +1586,10 @@ class PSEnv:
 
         if self.jit:
             self.step = jax.jit(self.step)
-            self.apply_player_force = jax.jit(self._apply_player_force)
+            self.apply_player_force = jax.jit(self.apply_player_force)
         else:
             self.step = self.step
-            self.apply_player_force = self._apply_player_force
+            self.apply_player_force = self.apply_player_force
         self.joint_tiles = joint_tiles
 
         multihot_level = self.get_level(level_i)
@@ -1647,7 +1653,7 @@ class PSEnv:
             )
             lvl = self.apply_player_force(-1, state)
             # FIXME: jit this!
-            lvl, _, _, _, _ = self.rule_fn(lvl)
+            lvl, _, _, _, _ = self.tick_fn(lvl)
             lvl = lvl[:self.n_objs]
         state = PSState(
             multihot_level=lvl,
@@ -1665,7 +1671,7 @@ class PSEnv:
         return obs
 
     # @partial(jax.jit, static_argnums=(0))
-    def _apply_player_force(self, action, state: PSState):
+    def apply_player_force(self, action, state: PSState):
         multihot_level = state.multihot_level
         # add a dummy object at the front
         force_map = jnp.zeros((N_MOVEMENTS * (multihot_level.shape[0] + 1), *multihot_level.shape[1:]), dtype=bool)
@@ -1728,7 +1734,7 @@ class PSEnv:
         # Actually, just apply the rule function once
         cancelled = False
         restart = False
-        final_lvl, rule_applied, turn_app_i, cancelled, restart = self.rule_fn(lvl)
+        final_lvl, tick_applied, turn_app_i, cancelled, restart = self.tick_fn(lvl)
 
         accept_lvl_change = ((not self.require_player_movement) or player_has_moved(init_lvl, final_lvl, self.obj_to_idxs, self.meta_objs)) & ~cancelled
         # jax.debug.print('accept level change: {accept_lvl_change}', accept_lvl_change=accept_lvl_change) 
