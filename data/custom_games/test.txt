@@ -2,7 +2,7 @@ title Block Faker
 author Droqen
 homepage www.droqen.com
 
-require_player_movement
+(require_player_movement)
 key_repeat_interval 0.12
 
 background_color white
@@ -80,7 +80,6 @@ RULES
 ======
 
 [ > Moveable  |  Moveable ] -> [ > Moveable  |  > Moveable ]
-[ > Block  |  ] -> [ Block  |  ]
 
 ==============
 WINCONDITIONS
