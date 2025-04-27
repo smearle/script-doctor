@@ -25,8 +25,8 @@ from spaces import Discrete
 
 
 # Whether to print out a bunch of stuff, etc.
-DEBUG = False
-# DEBUG = True
+# DEBUG = False
+DEBUG = True
 
 # per-object movement forces that can be applied: left, right, up, down, action
 N_MOVEMENTS = 5
@@ -139,6 +139,35 @@ def expand_meta_objs(tile_list: List, obj_to_idxs, meta_objs):
 def get_meta_channel(lvl, obj_idxs):
     return jnp.any(lvl[jnp.array(obj_idxs)], axis=0)
 
+def compute_manhattan_dists(lvl, src, trg):
+    n_cells = np.prod(lvl.shape[1:])
+    src_channel = get_meta_channel(lvl, src)
+    trg_channel = get_meta_channel(lvl, trg)
+    src_coords = jnp.argwhere(src_channel, size=n_cells, fill_value=-1)
+    trg_coords = jnp.argwhere(trg_channel, size=n_cells, fill_value=-1)
+    src_coords = rearrange(src_coords, 'n c -> n 1 c')
+    trg_coords = rearrange(trg_coords, 'n c -> 1 n c')
+    dists = jnp.abs(src_coords - trg_coords)
+    dists = jnp.sum(dists, axis=-1)
+    # Exclude any dists corresponding to cells without src/trg nodes
+    dists = jnp.where(jnp.all(src_coords == -1, axis=-1), jnp.nan, dists)
+    dists = jnp.where(jnp.all(trg_coords == -1, axis=-1), jnp.nan, dists)
+    return dists
+
+def compute_sum_of_manhattan_dists(lvl, src, trg):
+    dists = compute_manhattan_dists(lvl, src, trg)
+    # Get minimum of each source to any target
+    dists = jnp.nanmin(dists, axis=0)
+    dists = jnp.where(jnp.isnan(dists), 0, dists)
+    sum_dist = jnp.sum(dists, axis=0)
+    return sum_dist
+
+def compute_min_manhattan_dist(lvl, src, trg):
+    dists = compute_manhattan_dists(lvl, src, trg)
+    dists = jnp.where(jnp.isnan(dists), jnp.inf, dists)
+    min_dist = jnp.min(dists, axis=0)
+    return min_dist
+
 def gen_check_win(win_conditions: Iterable[WinCondition], obj_to_idxs, meta_objs, jit=True):
 
     # @partial(jax.jit, static_argnums=(1, 2))
@@ -149,7 +178,8 @@ def gen_check_win(win_conditions: Iterable[WinCondition], obj_to_idxs, meta_objs
         win = ~jnp.any(src_channel & ~trg_channel)
         # TODO compute distance of srcs from trgs to contribute to score
         score = jnp.count_nonzero(src_channel & trg_channel)
-        return win, score
+        heuristic = compute_sum_of_manhattan_dists(lvl, src, trg)
+        return win, score, -heuristic
 
     # @partial(jax.jit, static_argnums=(1, 2))
     def check_some(lvl, src, trg):
@@ -157,21 +187,24 @@ def gen_check_win(win_conditions: Iterable[WinCondition], obj_to_idxs, meta_objs
         trg_channel = get_meta_channel(lvl, trg)
         win = jnp.any(src_channel & trg_channel)
         score = win
-        return win, score
+        heuristic = compute_min_manhattan_dist(lvl, src, trg)
+        return win, score, -heuristic
 
     # @partial(jax.jit, static_argnums=(1,))
     def check_none(lvl, src):
         src_channel = get_meta_channel(lvl, src)
         win = ~jnp.any(src_channel)
         score = -jnp.count_nonzero(src_channel)
-        return win, score
+        heuristic = score
+        return win, score, heuristic
 
     # @partial(jax.jit, static_argnums=(1,))
     def check_any(lvl, src):
         src_channel = get_meta_channel(lvl, src)
         win = jnp.any(src_channel)
         score = jnp.count_nonzero(src_channel)
-        return win, score
+        heuristic = compute_min_manhattan_dist(lvl, src, trg)
+        return win, score, heuristic
 
     funcs = []
     for win_condition in win_conditions:
@@ -211,12 +244,12 @@ def gen_check_win(win_conditions: Iterable[WinCondition], obj_to_idxs, meta_objs
             return jax.lax.switch(i, funcs, lvl)
 
         if jit:
-            wins, scores = jax.vmap(apply_win_condition_func, in_axes=(0, None))(jnp.arange(len(funcs)), lvl)
+            wins, scores, heuristics = jax.vmap(apply_win_condition_func, in_axes=(0, None))(jnp.arange(len(funcs)), lvl)
         else:
             func_returns = jnp.array([f(lvl) for f in funcs])
-            wins, scores = zip(*func_returns)
-            wins, scores = np.array(wins), np.array(scores)
-        return jnp.all(wins), scores.sum()
+            wins, scores, heuristics = zip(*func_returns)
+            wins, scores, heuristics = np.array(wins), np.array(scores), np.array(heuristics)
+        return jnp.all(wins), scores.sum(), heuristics.sum()
 
     return check_win
 
@@ -1591,7 +1624,7 @@ class PSObs:
 
 
 class PSEnv:
-    def __init__(self, tree: PSGame, jit: bool = True, level_i: int = 0):
+    def __init__(self, tree: PSGame, jit: bool = True, level_i: int = 0, max_steps: int = 1000):
         self.jit = jit
         self.title = tree.prelude.title
         self.tree = tree
@@ -1600,7 +1633,7 @@ class PSEnv:
         self.require_player_movement = tree.prelude.require_player_movement
         obj_to_char, meta_objs, joint_tiles = process_legend(tree.legend)
         self.meta_objs = meta_objs
-        self.n_agents = 1
+        self.max_steps = max_steps
 
         # Add to the legend any objects to whose keys are specified in their object definition
         for obj_key, obj in tree.objects.items():
@@ -1842,8 +1875,8 @@ class PSEnv:
             lvl,
         )
         multihot_level = final_lvl[:self.n_objs]
-        win, score = self.check_win(multihot_level)
-        reward = score
+        win, score, heuristic = self.check_win(multihot_level)
+        reward = heuristic
         done = win | (state.step_i + 1 >= self.max_steps)
         info = {}
         state = PSState(
@@ -1853,6 +1886,11 @@ class PSEnv:
             step_i=state.step_i + 1,
         )
         obs = self.get_obs(state)
+        if DEBUG:
+            jax.debug.print('step_i: {step_i}', step_i=state.step_i)
+            jax.debug.print('win: {win}', win=win)
+            jax.debug.print('score: {score}', score=score)
+            jax.debug.print('heuristic: {heuristic}', heuristic=heuristic)
         return obs, state, reward, done, info
 
     def get_level(self, level_idx):
@@ -1935,7 +1973,6 @@ def init_ps_env(config: Config, params: PSParams, verbose: bool = False) -> PSEn
     tree = get_tree_from_txt(parser, game)
     parse_time = timer()
     print(f'Parsed PS file using Lark into python PSTree object in {(parse_time - start_time) / 1000} seconds.')
-    env = PSEnv(tree, jit=True, level_i=level_i)
-    env.max_steps = config.max_episode_steps
+    env = PSEnv(tree, jit=True, level_i=level_i, max_steps=config.max_episode_steps)
     print(f'Initialized PSEnv in {(timer() - parse_time) / 1000} seconds.')
     return env
