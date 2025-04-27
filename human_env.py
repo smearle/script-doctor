@@ -18,13 +18,14 @@ from parse_lark import TREES_DIR, DATA_DIR, TEST_GAMES, get_tree_from_txt
 class Config:
     jit: bool = True
     game: Optional[str] = None
+    profile: bool = False
 
 
 cs = ConfigStore.instance()
 cs.store(name="config", node=Config)
 
 
-def human_loop(env: PSEnv):
+def human_loop(env: PSEnv, profile=False):
     lvl_i = 0 
     params = PSParams(level_i=lvl_i)
     rng = jax.random.PRNGKey(0)
@@ -106,7 +107,13 @@ def human_loop(env: PSEnv):
             vis_lvl = lvl[:env.n_objs]
             lvl_changed = True
             n_vis_apps = 0
-            obs, state, reward, done, info = env.step(key, state, action)
+            if profile:
+                with jax.profiler.trace("/tmp/jax-trace", create_perfetto_link=True):
+                    obs, state, reward, done, info = env.step(key, state, action)
+                    obs.multihot_level.block_until_ready()
+                    print("JAX profiling complete.")
+            else:
+                obs, state, reward, done, info = env.step(key, state, action)
             win = state.win
             print(multihot_to_desc(state.multihot_level, env.obj_to_idxs, env.n_objs))
             im = env.render(state)
@@ -146,7 +153,7 @@ def human_loop(env: PSEnv):
     cv2.destroyAllWindows()
 
 
-def play_game(game: str, jit: bool = False):
+def play_game(game: str, jit: bool = False, profile: bool = False):
     with open("syntax.lark", "r", encoding='utf-8') as file:
         puzzlescript_grammar = file.read()
     # Initialize the Lark parser with the PuzzleScript grammar
@@ -154,13 +161,13 @@ def play_game(game: str, jit: bool = False):
     # min_parser = Lark(min_puzzlescript_grammar, start="ps_game")
     tree = get_tree_from_txt(parser, game)
     env = PSEnv(tree, jit=jit)
-    human_loop(env)
+    human_loop(env, profile=profile)
 
 @hydra.main(config_name="config", version_base="1.3")
 def main(cfg: Config):
 
     if cfg.game is not None:
-        play_game(cfg.game, jit=cfg.jit)
+        play_game(cfg.game, jit=cfg.jit, profile=cfg.profile)
 
     else:
         tree_paths = glob.glob(os.path.join(TREES_DIR, '*'))

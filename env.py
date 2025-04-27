@@ -25,8 +25,8 @@ from spaces import Discrete
 
 
 # Whether to print out a bunch of stuff, etc.
-# DEBUG = False
-DEBUG = True
+DEBUG = False
+# DEBUG = True
 
 # per-object movement forces that can be applied: left, right, up, down, action
 N_MOVEMENTS = 5
@@ -1568,6 +1568,7 @@ class PSState:
     multihot_level: np.ndarray
     win: bool
     restart: bool
+    step_i: int
 
 @flax.struct.dataclass
 class PSParams:
@@ -1735,6 +1736,7 @@ class PSEnv:
                 multihot_level=lvl,
                 win = jnp.array(False),
                 restart = jnp.array(False),
+                step_i = 0
             )
             lvl = self.apply_player_force(-1, state)
             # FIXME: jit this!
@@ -1744,6 +1746,7 @@ class PSEnv:
             multihot_level=lvl,
             win = jnp.array(False),
             restart = jnp.array(False),
+            step_i = 0
         )
         obs = self.get_obs(state)
         return obs, state
@@ -1830,15 +1833,16 @@ class PSEnv:
         )
         multihot_level = final_lvl[:self.n_objs]
         win, score = self.check_win(multihot_level)
+        reward = score
+        done = win | (state.step_i + 1 >= self.max_steps)
+        info = {}
         state = PSState(
             multihot_level=multihot_level,
             win=win,
             restart=restart,
+            step_i=state.step_i + 1,
         )
         obs = self.get_obs(state)
-        reward = score
-        done = win
-        info = {}
         return obs, state, reward, done, info
 
     def get_level(self, level_idx):

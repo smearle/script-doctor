@@ -13,8 +13,8 @@ from utils_rl import init_config, get_env_params_from_config
 
 
 games = [
-    'castlemouse',
-    'atlas shrank',
+    # 'castlemouse',
+    # 'atlas shrank',
     'sokoban_basic',
     'sokoban_match3',
     'slidings',
@@ -35,15 +35,16 @@ def profile(config: ProfileEnvConfig):
         n_steps = 0
 
         game_n_envs_to_fps = {}
+
+        for game in games:
+            start_time = timer()
+            env_params = get_env_params_from_config(config)
+            env = init_ps_env(config, env_params)
+            config.game = game
+            game_n_envs_to_fps[game] = {}
         
-        for n_envs in n_envss:
-            config.n_envs= n_envs
-            for game in games:
-                start_time = timer()
-                env_params = get_env_params_from_config(config)
-                env = init_ps_env(config, env_params)
-                config.game = game
-                game_n_envs_to_fps[game] = {}
+            for n_envs in n_envss:
+                config.n_envs= n_envs
 
                 # INIT ENV
                 rng, _rng = jax.random.split(rng)
@@ -67,10 +68,15 @@ def profile(config: ProfileEnvConfig):
 
                 _env_step_jitted = jax.jit(_env_step)
 
+                print(f'\nGame: {game}, n_envs: {config.n_envs}.')
                 print(f'Initialized and reset jitted PSEnv in {(timer() - start_time) / 1000} seconds.')
 
                 start = timer()
                 carry = (env_state, rng)
+                carry, _ = _env_step_jitted(carry, None)
+                print(f'Finished 1 step in {(timer() - start) / 1000} seconds.')
+
+                start = timer()
                 carry, _ = jax.lax.scan(
                     _env_step_jitted, carry, None, config.N_PROFILE_STEPS
                 )
@@ -78,8 +84,8 @@ def profile(config: ProfileEnvConfig):
                 n_env_steps = config.N_PROFILE_STEPS * config.n_envs
 
                 end = timer()
-                print(f'Game: {game}, n_envs: {config.n_envs}. Finished {n_env_steps} steps in {end - start} seconds.')
                 fps = n_env_steps / (end - start)
+                print(f'Finished {n_env_steps} steps in {end - start} seconds.')
                 print(f'Average steps per second: {fps}')
 
                 game_n_envs_to_fps[game][n_envs] = fps
