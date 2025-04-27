@@ -417,8 +417,8 @@ def make_train(config: TrainConfig, restored_ckpt, checkpoint_manager):
                 batch_size = config._minibatch_size * config.NUM_MINIBATCHES
                 assert (
                     batch_size == config.num_steps * config.n_envs
-                ), "batch size must be equal to number of steps * number " + \
-                    "of envs"
+                ), f"batch size ({batch_size}) must be equal to number of steps * number " + \
+                    f"of envs ({config.num_steps} * {config.n_envs})"
                 permutation = jax.random.permutation(_rng, batch_size)
                 batch = (traj_batch, advantages, targets)
                 batch = jax.tree_util.tree_map(

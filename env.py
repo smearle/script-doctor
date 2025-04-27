@@ -349,13 +349,23 @@ def gen_subrules_meta(rule: Rule, n_objs, obj_to_idxs, meta_objs, coll_mat, rule
 
     # @partial(jax.jit, static_argnums=(0, 1))
     def detect_force_on_meta(obj_idxs, force_idx, m_cell):
-        force_obj_vecs = []
         # TODO: vmap this
-        for obj_idx in obj_idxs:
-            force_obj_vec = np.zeros(n_objs + n_objs * N_MOVEMENTS, dtype=bool)
-            force_obj_vec[obj_idx] = 1
-            force_obj_vec[n_objs + obj_idx * N_MOVEMENTS + force_idx] = 1
-            force_obj_vecs.append(force_obj_vec)
+        # force_obj_vecs = []
+        # for obj_idx in obj_idxs:
+        #     force_obj_vec = np.zeros(n_objs + n_objs * N_MOVEMENTS, dtype=bool)
+        #     force_obj_vec[obj_idx] = 1
+        #     force_obj_vec[n_objs + obj_idx * N_MOVEMENTS + force_idx] = 1
+        #     force_obj_vecs.append(force_obj_vec)
+
+        dummy_force_obj_vec = jnp.zeros(n_objs + n_objs * N_MOVEMENTS, dtype=bool)
+
+        def force_obj_vec_fn(obj_idx):
+            force_obj_vec = dummy_force_obj_vec.at[obj_idx].set(1)
+            force_obj_vec = force_obj_vec.at[n_objs + obj_idx * N_MOVEMENTS + force_idx].set(1)
+            return force_obj_vec
+        
+        force_obj_vecs = jax.vmap(force_obj_vec_fn)(obj_idxs)
+
         obj_activations = jnp.sum(jnp.array(force_obj_vecs) * m_cell[None], axis=1) 
         active = jnp.any(obj_activations == 2)
 
@@ -919,7 +929,7 @@ def gen_subrules_meta(rule: Rule, n_objs, obj_to_idxs, meta_objs, coll_mat, rule
                     # patch_activations_xy = jnp.zeros_like(patch_activations)
                     # patch_activations_xy = patch_activations_xy.at[*xy].set(1)
                     # detect_outs = detect_outs[first_a[0]][first_a[1]]
-                    cell_detect_outs_xy = [jax.tree_map(lambda x: x[xy[0]][xy[1]], cell_detect_out) for 
+                    cell_detect_outs_xy = [jax.tree.map(lambda x: x[xy[0]][xy[1]], cell_detect_out) for 
                         cell_detect_out in cell_detect_outs]
                     # pattern_detect_outs_xy = [jax.tree_map(lambda x: x[xy[0]][xy[1]], pattern_detect_out)]
                     pattern_detect_outs_xy = pattern_detect_out

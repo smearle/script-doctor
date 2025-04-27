@@ -220,8 +220,9 @@ class EnjoyRLConfig(MultiAgentConfig, EnjoyConfig):
 
 @dataclass
 class ProfileEnvConfig(Config):
-    N_PROFILE_STEPS: int = 5000
+    n_profile_steps: int = 5000
     reevaluate: bool = True
+    render: bool = False
 
 
 @dataclass
