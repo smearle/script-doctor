@@ -58,6 +58,7 @@ class FlattenObservationWrapper(GymnaxWrapper):
         return obs, state, reward, done, info
 
 
+
 @struct.dataclass
 class LogEnvState:
     env_state: environment.EnvState
@@ -65,8 +66,7 @@ class LogEnvState:
     episode_lengths: int
     returned_episode_returns: float
     returned_episode_lengths: int
-    timestep: int
-
+    timestep: np.uint64
 
 class LogWrapper(GymnaxWrapper):
     """Log the episode returns and lengths."""
@@ -74,15 +74,15 @@ class LogWrapper(GymnaxWrapper):
     def __init__(self, env: environment.Environment):
         super().__init__(env)
 
-    @partial(jax.jit, static_argnums=(0,))
+    @partial(jax.jit, static_argnums=(0, 2))
     def reset(
         self, key: chex.PRNGKey, params: Optional[environment.EnvParams] = None, queued_state = None,
     ) -> Tuple[chex.Array, environment.EnvState]:
-        obs, env_state = self._env.reset(key, params)
-        state = LogEnvState(env_state, 0, 0, 0, 0, 0)
+        obs, env_state = self._env.reset(key, params, queued_state)
+        state = LogEnvState(env_state, 0.0, 0, 0.0, 0, 0)
         return obs, state
 
-    @partial(jax.jit, static_argnums=(0,))
+    @partial(jax.jit, static_argnums=(0, 4))
     def step(
         self,
         key: chex.PRNGKey,
@@ -90,20 +90,16 @@ class LogWrapper(GymnaxWrapper):
         action: Union[int, float],
         params: Optional[environment.EnvParams] = None,
     ) -> Tuple[chex.Array, environment.EnvState, float, bool, dict]:
-        obs, env_state, reward, done, info = self._env.step(
-            key, state.env_state, action
-        )
+        obs, env_state, reward, done, info = self._env.step(key, state.env_state, action)
         new_episode_return = state.episode_returns + reward
         new_episode_length = state.episode_lengths + 1
         state = LogEnvState(
-            env_state=env_state,
-            episode_returns=new_episode_return * (1 - done),
-            episode_lengths=new_episode_length * (1 - done),
-            returned_episode_returns=state.returned_episode_returns * (1 - done)
-            + new_episode_return * done,
-            returned_episode_lengths=state.returned_episode_lengths * (1 - done)
-            + new_episode_length * done,
-            timestep=state.timestep + 1,
+            env_state = env_state,
+            episode_returns = new_episode_return * (1 - done),
+            episode_lengths = new_episode_length * (1 - done),
+            returned_episode_returns = state.returned_episode_returns * (1 - done) + new_episode_return * done,
+            returned_episode_lengths = state.returned_episode_lengths * (1 - done) + new_episode_length * done,
+            timestep = state.timestep + 1,
         )
         info["returned_episode_returns"] = state.returned_episode_returns
         info["returned_episode_lengths"] = state.returned_episode_lengths

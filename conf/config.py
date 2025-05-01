@@ -102,6 +102,11 @@ class EvoMapConfig(Config):
 class TrainConfig(Config):
     overwrite: bool = False
 
+    # WandB Params
+    wandb_mode: str = 'run'  # one of: 'offline', 'run', 'dryrun', 'shared', 'disabled', 'online'
+    wandb_entity: str = ''
+    wandb_project: str = 'smearle_ps_ppo'
+
     # Save a checkpoint after (at least) this many timesteps
     ckpt_freq: int = int(1e7)
     # Render after this many update steps
@@ -148,11 +153,6 @@ class MultiAgentConfig(TrainConfig):
     # Save a checkpoint after (at least) this many ***update*** steps
     ckpt_freq: int = 40
     render_freq: int = 20
-
-    # WandB Params
-    WANDB_MODE: str = 'run'  # one of: 'offline', 'run', 'dryrun', 'shared', 'disabled', 'online'
-    ENTITY: str = ''
-    PROJECT: str = 'smearle_ps_ppo'
 
     # NOTE: DO NOT MODIFY THESE. WILL BE SET AUTOMATICALLY AT RUNTIME. ########
     _num_actors: int = -1

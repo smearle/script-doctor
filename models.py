@@ -97,7 +97,10 @@ class ConvForward2(nn.Module):
         map_x = activation(map_x)
 
         map_x = map_x.reshape((map_x.shape[0], -1))
-        x = jnp.concatenate((map_x, flat_x), axis=-1)
+        if flat_x is not None:
+            x = jnp.concatenate((map_x, flat_x), axis=-1)
+        else:
+            x = map_x
 
         x = nn.Dense(
             h2, kernel_init=orthogonal(np.sqrt(2)), bias_init=constant(0.0)

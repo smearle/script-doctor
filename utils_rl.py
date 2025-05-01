@@ -38,6 +38,7 @@ def get_exp_dir(config: MultiAgentConfig):
         "game",
         (
             f"n-envs-{config.n_envs}_"
+            f"{config.model}-{'-'.join([str(hd) for hd in config.hidden_dims])}_"
             f"seed-{config.seed}"
         )
     )

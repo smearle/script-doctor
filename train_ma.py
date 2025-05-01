@@ -597,10 +597,10 @@ def main(config: MultiAgentConfig):
     os.makedirs(config._vid_dir, exist_ok=True)
 
     run = wandb.init(
-        project=config.PROJECT,
+        project=config.wandb_project,
         tags=["MAPPO"],
         config=OmegaConf.to_container(config),
-        mode=config.WANDB_MODE,
+        mode=config.wandb_mode,
         dir=config._exp_dir,
         id=wandb_run_id,
         resume=wandb_resume,

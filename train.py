@@ -14,7 +14,8 @@ import optax
 from flax.training.train_state import TrainState
 from flax.training import orbax_utils
 import orbax.checkpoint as ocp
-from tensorboardX import SummaryWriter
+import wandb
+# from tensorboardX import SummaryWriter
 
 from conf.config import Config, TrainConfig
 from env import init_ps_env
@@ -43,7 +44,81 @@ class Transition(NamedTuple):
     # rng_act: jnp.ndarray
 
 
-def log_callback(metric, steps_prev_complete, config: Config, writer, train_start_time):
+def _render_episodes(network_params, network, env_r, rng_r, obsv_r, env_state_r, n_render_eps):
+    _step_env_render = partial(
+        step_env_render, network=network, env_r=env_r, n_render_eps=n_render_eps,
+    )
+    _, (states, rewards, dones, infos, frames) = jax.lax.scan(
+        _step_env_render, (rng_r, obsv_r, env_state_r, network_params),
+        None, 1*env_r.max_steps)
+
+    frames = jnp.concatenate(jnp.stack(frames, axis=1))
+    return frames, states
+
+def step_env_render(carry, _, network, n_render_eps, env_r):
+    rng_r, obs_r, env_state_r, network_params = carry
+    rng_r, _rng_r = jax.random.split(rng_r)
+
+    pi, value = network.apply(network_params, obs_r)
+    action_r = pi.sample(seed=rng_r)
+
+    rng_step = jax.random.split(_rng_r, n_render_eps)
+
+    # rng_step_r = rng_step_r.reshape((config.n_gpus, -1) + rng_step_r.shape[1:])
+    vmap_step_fn = jax.vmap(env_r.step, in_axes=(0, 0, 0))
+    # pmap_step_fn = jax.pmap(vmap_step_fn, in_axes=(0, 0, 0, None))
+    obs_r, env_state_r, reward_r, done_r, info_r = vmap_step_fn(
+                    rng_step, env_state_r, action_r)
+    vmap_render_fn = jax.vmap(env_r.render, in_axes=(0,))
+    # pmap_render_fn = jax.pmap(vmap_render_fn, in_axes=(0,))
+    frames = vmap_render_fn(env_state_r)
+    # Get rid of the gpu dimension
+    # frames = jnp.concatenate(jnp.stack(frames, 1))
+    return (rng_r, obs_r, env_state_r, network_params),\
+        (env_state_r, reward_r, done_r, info_r, frames)
+
+
+def _render_frames(frames, i, metric, steps_prev_complete, env, config):
+    timesteps = metric["timestep"][metric["returned_episode"]
+                            ] * config.n_envs
+    if len(timesteps) > 0:
+        t = timesteps[0]
+    else:
+        t = 0
+    if config.render_freq <= 0 or i % config.render_freq != 0 or t == steps_prev_complete:
+    # if jnp.all(frames == 0):
+        return
+    print(f"Rendering episode gifs at update {i}")
+    assert len(frames) == config.n_render_eps * 1 * env.max_steps,\
+        "Not enough frames collected"
+
+    # Save gifs.
+    for ep_is in range(config.n_render_eps):
+        gif_name = f"{config._exp_dir}/update-{i}_ep-{ep_is}.gif"
+        ep_frames = frames[ep_is*env.max_steps:(ep_is+1)*env.max_steps]
+
+        # new_frames = []
+        # for i, frame in enumerate(frames):
+        #     state_i = jax.tree_util.tree_map(lambda x: x[i], env_states)
+        #     frame = render_stats(env_r, state_i, frame)
+        #     new_frames.append(frame)
+        # frames = new_frames
+
+        try:
+            imageio.v3.imwrite(
+                gif_name,
+                ep_frames,
+                duration=config.gif_frame_duration,
+                loop=0,
+            )
+            wandb.log({'video': wandb.Video(gif_name, format='gif')})
+
+        except jax.errors.TracerArrayConversionError:
+            print("Failed to save gif. Skipping...")
+            return
+    print(f"Done rendering episode gifs at update {i}")
+
+def log_callback(metric, steps_prev_complete, config: Config, train_start_time):
     timesteps = metric["timestep"][metric["returned_episode"]] * config.n_envs
     return_values = metric["returned_episode_returns"][metric["returned_episode"]]
 
@@ -56,7 +131,7 @@ def log_callback(metric, steps_prev_complete, config: Config, writer, train_star
         ep_return_mean = return_values.mean()
         ep_return_max = return_values.max()
         ep_return_min = return_values.min()
-        print(f"global step={t}; episodic return mean: {ep_return_mean} " + \
+        print(f"global step={t:,}; episodic return mean: {ep_return_mean} " + \
             f"max: {ep_return_max}, min: {ep_return_min}")
         ep_length = (metric["returned_episode_lengths"]
                         [metric["returned_episode"]].mean())
@@ -66,14 +141,25 @@ def log_callback(metric, steps_prev_complete, config: Config, writer, train_star
                                 "progress.csv"), "a") as f:
             f.write(f"{t},{ep_return_mean}\n")
 
-        writer.add_scalar("ep_return", ep_return_mean, t)
-        writer.add_scalar("ep_return_max", ep_return_max, t)
-        writer.add_scalar("ep_return_min", ep_return_min, t)
-        writer.add_scalar("ep_length", ep_length, t)
         fps = (t - steps_prev_complete) / (timer() - train_start_time)
-        writer.add_scalar("fps", fps, t)
 
-        print(f"fps: {fps}")
+        # writer.add_scalar("ep_return", ep_return_mean, t)
+        # writer.add_scalar("ep_return_max", ep_return_max, t)
+        # writer.add_scalar("ep_return_min", ep_return_min, t)
+        # writer.add_scalar("ep_length", ep_length, t)
+        # writer.add_scalar("fps", fps, t)
+        wandb.log(
+            {
+                "ep_return": ep_return_mean,
+                "ep_return_max": ep_return_max,
+                "ep_return_min": ep_return_min,
+                "ep_length": ep_length,
+                "fps": fps,
+            },
+            step=t,
+        )
+
+        print(f"fps: {fps:,}")
         # for k, v in zip(env.prob.metric_names, env.prob.stats):
         #     writer.add_scalar(k, v, t)
 
@@ -103,7 +189,7 @@ def make_train(config: TrainConfig, restored_ckpt, checkpoint_manager):
         train_start_time = timer()
 
         # Create a tensorboard writer
-        writer = SummaryWriter(get_exp_dir(config))
+        # writer = SummaryWriter(get_exp_dir(config))
 
         # INIT NETWORK
         network = init_network(env, env_params, config)
@@ -156,6 +242,12 @@ def make_train(config: TrainConfig, restored_ckpt, checkpoint_manager):
         vmap_reset_fn = jax.vmap(env_r.reset, in_axes=(0, None))
         # pmap_reset_fn = jax.pmap(vmap_reset_fn, in_axes=(0, None))
         obsv_r, env_state_r = vmap_reset_fn(reset_rng_r, env_params)
+
+        render_episodes = partial(
+            _render_episodes, env_r=env_r, network=network, n_render_eps=config.n_render_eps,
+            rng_r=rng_r, obsv_r=obsv_r, env_state_r=env_state_r)
+        render_frames = partial(
+            _render_frames, env=env_r, config=config)
         
         # obsv_r, env_state_r = jax.vmap(
         #     env_r.reset, in_axes=(0, None))(reset_rng_r, env_params)
@@ -179,80 +271,10 @@ def make_train(config: TrainConfig, restored_ckpt, checkpoint_manager):
 
             # TODO: Overwrite certain config values
 
-        _log_callback = partial(log_callback, config=config, writer=writer,
+        _log_callback = partial(log_callback, config=config,
                                train_start_time=train_start_time,
                                steps_prev_complete=steps_prev_complete)
 
-        def render_frames(frames, i, metric):
-            timesteps = metric["timestep"][metric["returned_episode"]
-                                    ] * config.n_envs
-            if len(timesteps) > 0:
-                t = timesteps[0]
-            else:
-                t = 0
-            if config.render_freq <= 0 or i % config.render_freq != 0 or t == steps_prev_complete:
-            # if jnp.all(frames == 0):
-                return
-            print(f"Rendering episode gifs at update {i}")
-            assert len(frames) == config.n_render_eps * 1 * env.max_steps,\
-                "Not enough frames collected"
-
-            if config.env_name == 'Candy':
-                # Render intermediary frames.
-                pass
-
-            # Save gifs.
-            for ep_is in range(config.n_render_eps):
-                gif_name = f"{config._exp_dir}/update-{i}_ep-{ep_is}.gif"
-                ep_frames = frames[ep_is*env.max_steps:(ep_is+1)*env.max_steps]
-
-                # new_frames = []
-                # for i, frame in enumerate(frames):
-                #     state_i = jax.tree_util.tree_map(lambda x: x[i], env_states)
-                #     frame = render_stats(env_r, state_i, frame)
-                #     new_frames.append(frame)
-                # frames = new_frames
-
-                try:
-                    imageio.v3.imwrite(
-                        gif_name,
-                        ep_frames,
-                        duration=config.gif_frame_duration
-                    )
-                except jax.errors.TracerArrayConversionError:
-                    print("Failed to save gif. Skipping...")
-                    return
-            print(f"Done rendering episode gifs at update {i}")
-
-        def render_episodes(network_params):
-            _, (states, rewards, dones, infos, frames) = jax.lax.scan(
-                step_env_render, (rng_r, obsv_r, env_state_r, network_params),
-                None, 1*env.max_steps)
-
-            frames = jnp.concatenate(jnp.stack(frames, 1))
-            return frames, states
-
-        def step_env_render(carry, _):
-            rng_r, obs_r, env_state_r, network_params = carry
-            rng_r, _rng_r = jax.random.split(rng_r)
-
-            pi, value = network.apply(network_params, obs_r)
-            action_r = pi.sample(seed=rng_r)
-
-            rng_step = jax.random.split(_rng_r, config.n_render_eps)
-
-            # rng_step_r = rng_step_r.reshape((config.n_gpus, -1) + rng_step_r.shape[1:])
-            vmap_step_fn = jax.vmap(env_r.step, in_axes=(0, 0, 0))
-            # pmap_step_fn = jax.pmap(vmap_step_fn, in_axes=(0, 0, 0, None))
-            obs_r, env_state_r, reward_r, done_r, info_r = vmap_step_fn(
-                            rng_step, env_state_r, action_r)
-            vmap_render_fn = jax.vmap(env_r.render, in_axes=(0,))
-            # pmap_render_fn = jax.pmap(vmap_render_fn, in_axes=(0,))
-            frames = vmap_render_fn(env_state_r)
-            # Get rid of the gpu dimension
-            # frames = jnp.concatenate(jnp.stack(frames, 1))
-            return (rng_r, obs_r, env_state_r, network_params),\
-                (env_state_r, reward_r, done_r, info_r, frames)
 
         def save_checkpoint(runner_state, info, steps_prev_complete):
             # Get the global env timestep numbers corresponding to the points at which different episodes were finished
@@ -274,9 +296,9 @@ def make_train(config: TrainConfig, restored_ckpt, checkpoint_manager):
                     #                         'save_args': save_args})
                     checkpoint_manager.save(t, args=ocp.args.StandardSave(ckpt))
 
-        frames, states = render_episodes(train_state.params)
+        # frames, states = render_episodes(train_state.params)
         # jax.debug.callback(render_frames, frames, runner_state.update_i, metric)
-        old_render_results = (frames, states)
+        # old_render_results = (frames, states)
 
         # jax.debug.print(f'Rendering episode gifs took {timer() - start_time} seconds')
 
@@ -382,7 +404,7 @@ def make_train(config: TrainConfig, restored_ckpt, checkpoint_manager):
                         gae = (gae - gae.mean()) / (gae.std() + 1e-8)
 
                         # Some reshaping to accomodate player, x, and y dimensions to action output. (Not used often...)
-                        gae = gae[..., None, None, None]
+                        # gae = gae[..., None, None, None]
 
                         loss_actor1 = ratio * gae
                         loss_actor2 = (
@@ -441,6 +463,7 @@ def make_train(config: TrainConfig, restored_ckpt, checkpoint_manager):
                 return update_state, total_loss
 
             update_state = (train_state, traj_batch, advantages, targets, rng)
+            old_params = train_state.params
             update_state, loss_info = jax.lax.scan(
                 _update_epoch, update_state, None, config.update_epochs
             )
@@ -459,17 +482,26 @@ def make_train(config: TrainConfig, restored_ckpt, checkpoint_manager):
             # FIXME: Inside vmap, both conditions are likely to get executed. Any way around this?
             # Currently not vmapping the train loop though, so it's ok.
             # start_time = timer()
-            should_render = runner_state.update_i % config.render_freq == 0
-            frames, states = jax.lax.cond(
-                should_render,
-                lambda: render_episodes(train_state.params),
-                lambda: old_render_results,)
-            jax.lax.cond(
-                should_render,
-                partial(jax.debug.callback, render_frames),
-                lambda _, __, ___: None,
-                frames, runner_state.update_i, metric
-            )
+            # should_render = (runner_state.update_i % config.render_freq) == 0
+            # jax.debug.print(
+            #     "Rendering episode gifs at update {update_i}: {should_render}",
+            #     update_i=runner_state.update_i, should_render=should_render
+            # )
+            # frames, states = jax.lax.cond(
+            #     should_render,
+            #     lambda: render_episodes(train_state.params),
+            #     lambda: old_render_results,)
+            new_frames, _ = render_episodes(train_state.params)
+            # jax.lax.cond(
+            #     should_render,
+            #     partial(jax.debug.callback, render_frames),
+            #     lambda _, __, ___: None,
+            #     frames, runner_state.update_i, metric
+            # )
+            jax.experimental.io_callback(callback=render_frames,
+                                         result_shape_dtypes=None,
+                                         frames=new_frames, i=runner_state.update_i, metric=metric,
+                                         steps_prev_complete=steps_prev_complete,)
             # jax.debug.print(f'Rendering episode gifs took {timer() - start_time} seconds')
 
             jax.debug.callback(_log_callback, metric)
@@ -607,6 +639,7 @@ def main_chunk(config, rng, exp_dir):
     """When jax jits the training loop, it pre-allocates an array with size equal to number of training steps. So, when training for a very long time, we sometimes need to break training up into multiple
     chunks to save on VRAM.
     """
+    # FIXME: This shouldn't happen inside every chunk!
     checkpoint_manager, restored_ckpt = init_checkpointer(config)
 
     # if restored_ckpt is not None:
@@ -614,12 +647,32 @@ def main_chunk(config, rng, exp_dir):
     #     plot_ep_returns(ep_returns, config)
     # else:
     if restored_ckpt is None:
+        wandb_run_id = None
+        wandb_resume = None
         progress_csv_path = os.path.join(exp_dir, "progress.csv")
         assert not os.path.exists(progress_csv_path), "Progress csv already exists, but have no checkpoint to restore " +\
             "from. Run with `overwrite=True` to delete the progress csv."
         # Create csv for logging progress
         with open(os.path.join(exp_dir, "progress.csv"), "w") as f:
             f.write("timestep,ep_return\n")
+
+    else:
+        with open(os.path.join(exp_dir, "wandb_run_id.txt"), "r") as f:
+            wandb_run_id = f.read()
+        wandb_resume = "must"
+
+    run = wandb.init(
+        project=config.wandb_project,
+        tags=["MAPPO"],
+        config=OmegaConf.to_container(config),
+        mode=config.wandb_mode,
+        dir=config._exp_dir,
+        id=wandb_run_id,
+        resume=wandb_resume,
+    )
+    wandb_run_id = run.id
+    with open(os.path.join(exp_dir, "wandb_run_id.txt"), "w") as f:
+        f.write(wandb_run_id)
 
     train_jit = jax.jit(make_train(config, restored_ckpt, checkpoint_manager))
     out = train_jit(rng)

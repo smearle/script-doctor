@@ -2,7 +2,7 @@ from dataclasses import dataclass
 from functools import partial
 import os
 from timeit import default_timer as timer
-from typing import Dict, Iterable, List, Optional
+from typing import Dict, Iterable, List, Optional, Tuple, Union
 
 import PIL
 import chex
@@ -25,8 +25,8 @@ from spaces import Discrete
 
 
 # Whether to print out a bunch of stuff, etc.
-# DEBUG = False
-DEBUG = True
+DEBUG = False
+# DEBUG = True
 
 # per-object movement forces that can be applied: left, right, up, down, action
 N_MOVEMENTS = 5
@@ -204,7 +204,7 @@ def gen_check_win(win_conditions: Iterable[WinCondition], obj_to_idxs, meta_objs
         win = jnp.any(src_channel)
         score = jnp.count_nonzero(src_channel)
         heuristic = compute_min_manhattan_dist(lvl, src, trg)
-        return win, score, heuristic
+        return win, score, -heuristic
 
     funcs = []
     for win_condition in win_conditions:
@@ -233,7 +233,7 @@ def gen_check_win(win_conditions: Iterable[WinCondition], obj_to_idxs, meta_objs
             raise Exception('Invalid quantifier.')
         funcs.append(func)
 
-    # @partial(jax.jit)
+    @partial(jax.jit)
     def check_win(lvl):
 
         if len(funcs) == 0:
@@ -295,7 +295,7 @@ def gen_subrules_meta(rule: Rule, n_objs, obj_to_idxs, meta_objs, coll_mat, rule
         return jnp.sum(jax.lax.dynamic_slice(m_cell, (n_objs + (obj_idx * N_MOVEMENTS),), (4,))) == 0
 
     ### Functions for detecting regular atomic objects
-    # @partial(jax.jit, static_argnums=(0,))
+    @partial(jax.jit, static_argnums=(0,))
     def detect_obj_in_cell(obj_idx, m_cell):
         # active = m_cell[obj_idx] == 1 & is_obj_forceless(obj_idx, m_cell)
         detected = jnp.zeros_like(m_cell)
@@ -314,13 +314,13 @@ def gen_subrules_meta(rule: Rule, n_objs, obj_to_idxs, meta_objs, coll_mat, rule
         # )
         return ObjFnReturn(active=active, detected=detected, obj_idx=obj_idx)
 
-    # @partial(jax.jit, static_argnums=(0,))
+    @partial(jax.jit, static_argnums=(0,))
     def detect_no_obj_in_cell(obj_idx, m_cell):
         active = m_cell[obj_idx] == 0
         detected = jnp.zeros_like(m_cell)
         return ObjFnReturn(active=active, detected=detected, obj_idx=-1)
 
-    # @partial(jax.jit, static_argnums=(0, 1))
+    @partial(jax.jit, static_argnums=(0, 1))
     def detect_force_on_obj(obj_idx, force_idx, m_cell):
         obj_is_present = m_cell[obj_idx] == 1
         force_is_present = m_cell[n_objs + (obj_idx * N_MOVEMENTS) + force_idx] == 1
@@ -348,7 +348,7 @@ def gen_subrules_meta(rule: Rule, n_objs, obj_to_idxs, meta_objs, coll_mat, rule
         return ObjFnReturn(active=active, detected=detected, force_idx=force_idx, obj_idx=obj_idx)
 
     ### Functions for detecting meta-objects
-    # @partial(jax.jit, static_argnums=())
+    @partial(jax.jit, static_argnums=())
     def detect_any_objs_in_cell(objs_vec, m_cell):
         """Given a multi-hot vector indicating a set of objects, return the index of the object contained in this cell."""
         # m_cell_forceless_objs = jax.vmap(is_obj_forceless, in_axes = (0, None))(jnp.arange(n_objs), m_cell)
@@ -374,13 +374,13 @@ def gen_subrules_meta(rule: Rule, n_objs, obj_to_idxs, meta_objs, coll_mat, rule
         # )
         return ObjFnReturn(active=active, detected=detected, obj_idx=obj_idx)
 
-    # @partial(jax.jit, static_argnums=())
+    @partial(jax.jit, static_argnums=())
     def detect_no_objs_in_cell(objs_vec, m_cell):
         active = ~jnp.any(objs_vec * m_cell)
         detected = np.zeros(m_cell.shape, bool)
         return ObjFnReturn(active=active, detected=detected, obj_idx=-1)
 
-    # @partial(jax.jit, static_argnums=(0, 1))
+    @partial(jax.jit, static_argnums=(1))
     def detect_force_on_meta(obj_idxs, force_idx, m_cell):
         # TODO: vmap this
         # force_obj_vecs = []
@@ -425,7 +425,7 @@ def gen_subrules_meta(rule: Rule, n_objs, obj_to_idxs, meta_objs, coll_mat, rule
 
         return ObjFnReturn(active=active, detected=detected, obj_idx=obj_idx, force_idx=force_idx)
 
-    # @partial(jax.jit, static_argnums=(0,))
+    @partial(jax.jit, static_argnums=())
     def detect_stationary_meta(obj_idxs, m_cell):
         # TODO: vmap this?
         active_obj_idx = -1
@@ -461,7 +461,7 @@ def gen_subrules_meta(rule: Rule, n_objs, obj_to_idxs, meta_objs, coll_mat, rule
             )
         return ObjFnReturn(active=active, detected=detected, obj_idx=obj_idx)
 
-    # @partial(jax.jit, static_argnums=(0,))
+    @partial(jax.jit, static_argnums=())
     def detect_moving_meta(obj_idxs, m_cell):
         # TODO: vmap this?
         active_obj_idx = -1
@@ -649,7 +649,7 @@ def gen_subrules_meta(rule: Rule, n_objs, obj_to_idxs, meta_objs, coll_mat, rule
     else:
         remove_colliding_objs = remove_colliding_objs
 
-    # @partial(jax.jit, static_argnums=(2))
+    @partial(jax.jit, static_argnums=(3))
     def project_obj(m_cell, cell_detect_out: CellFnReturn, pattern_detect_out: PatternFnReturn, obj):
         meta_objs = cell_detect_out.detected_meta_objs
         pattern_meta_objs = pattern_detect_out.detected_meta_objs
@@ -665,7 +665,7 @@ def gen_subrules_meta(rule: Rule, n_objs, obj_to_idxs, meta_objs, coll_mat, rule
         m_cell = remove_colliding_objs(m_cell, obj_idx, coll_mat)
         return m_cell
 
-    # @partial(jax.jit, static_argnums=(2))
+    @partial(jax.jit, static_argnums=(3))
     def project_no_obj(m_cell, cell_detect_out: CellFnReturn, pattern_detect_out: PatternFnReturn, obj):
         meta_objs = cell_detect_out.detected_meta_objs
         pattern_meta_objs = pattern_detect_out.detected_meta_objs
@@ -676,7 +676,7 @@ def gen_subrules_meta(rule: Rule, n_objs, obj_to_idxs, meta_objs, coll_mat, rule
         )
         return m_cell
 
-    # @partial(jax.jit, static_argnums=(2, 3))
+    @partial(jax.jit, static_argnums=(3))
     def project_no_meta(m_cell: chex.Array, cell_detect_out, pattern_detect_out, obj: int):
         sub_objs = expand_meta_objs([obj], obj_to_idxs, meta_objs)
         obj_idxs = np.array([obj_to_idxs[so] for so in sub_objs])
@@ -687,7 +687,7 @@ def gen_subrules_meta(rule: Rule, n_objs, obj_to_idxs, meta_objs, coll_mat, rule
             )
         return m_cell
 
-    # @partial(jax.jit, static_argnums=(2))
+    @partial(jax.jit, static_argnums=(3, 4))
     def project_force_on_obj(m_cell, cell_detect_out: CellFnReturn, pattern_detect_out: PatternFnReturn, obj, force_idx):
         meta_objs = cell_detect_out.detected_meta_objs
         pattern_meta_objs = pattern_detect_out.detected_meta_objs
@@ -712,7 +712,7 @@ def gen_subrules_meta(rule: Rule, n_objs, obj_to_idxs, meta_objs, coll_mat, rule
 
         return m_cell
 
-    # @partial(jax.jit, static_argnums=(3))
+    @partial(jax.jit, static_argnums=(3))
     def project_moving_on_obj(m_cell, cell_detect_out: CellFnReturn, pattern_detect_out: PatternFnReturn, obj):
         meta_objs = cell_detect_out.detected_meta_objs
         pattern_meta_objs = pattern_detect_out.detected_meta_objs
@@ -772,7 +772,7 @@ def gen_subrules_meta(rule: Rule, n_objs, obj_to_idxs, meta_objs, coll_mat, rule
             else:
                 raise Exception(f'Invalid object `{obj}` in rule.')
         
-        # @partial(jax.jit, static_argnums=())
+        @partial(jax.jit, static_argnums=())
         def project_cell(m_cell, cell_detect_out, pattern_detect_out):
             m_cell = m_cell & ~cell_detect_out.detected
             assert len(m_cell.shape) == 1, f'Invalid cell shape {m_cell.shape}'
@@ -1611,6 +1611,8 @@ class PSState:
     multihot_level: np.ndarray
     win: bool
     restart: bool
+    init_heuristic: int
+    prev_heuristic: int
     step_i: int
 
 @flax.struct.dataclass
@@ -1621,6 +1623,7 @@ class PSParams:
 class PSObs:
     multihot_level: chex.Array
     flat_obs: Optional[chex.Array] = None
+
 
 
 class PSEnv:
@@ -1746,7 +1749,7 @@ class PSEnv:
         multihot_level = multihot_level.astype(bool)
         return multihot_level
 
-    # @partial(jax.jit, static_argnums=(0, 2))
+    @partial(jax.jit, static_argnums=(0, 2))
     def render(self, state: PSState, cv2=True):
         lvl = state.multihot_level
         level_height, level_width = lvl.shape[1:]
@@ -1774,12 +1777,15 @@ class PSEnv:
             level_i = self.level_i
         lvl = self.get_level(level_i)
         again = True
+        _, _, init_heuristic = self.check_win(lvl)
         if self.tree.prelude.run_rules_on_level_start:
             state = PSState(
                 multihot_level=lvl,
                 win = jnp.array(False),
                 restart = jnp.array(False),
-                step_i = 0
+                step_i = 0,
+                init_heuristic = init_heuristic,
+                prev_heuristic = init_heuristic,
             )
             lvl = self.apply_player_force(-1, state)
             # FIXME: jit this!
@@ -1789,7 +1795,9 @@ class PSEnv:
             multihot_level=lvl,
             win = jnp.array(False),
             restart = jnp.array(False),
-            step_i = 0
+            step_i = 0,
+            init_heuristic = init_heuristic,
+            prev_heuristic = init_heuristic,
         )
         obs = self.get_obs(state)
         return obs, state
@@ -1801,7 +1809,7 @@ class PSEnv:
         )
         return obs
 
-    # @partial(jax.jit, static_argnums=(0))
+    @partial(jax.jit, static_argnums=(0))
     def apply_player_force(self, action, state: PSState):
         multihot_level = state.multihot_level
         # add a dummy object at the front
@@ -1837,8 +1845,34 @@ class PSEnv:
 
         return lvl
 
-    # @partial(jax.jit, static_argnums=(0))
-    def step(self, key, state: PSState, action):
+    # @partial(jax.jit, static_argnums=(0,))
+    def step(
+        self,
+        key: chex.PRNGKey,
+        state: PSState,
+        action: int,
+        params: Optional[PSParams] = None,
+    ) -> Tuple[chex.Array, PSState, float, bool, dict]:
+        """Performs step transitions in the environment."""
+        key, key_reset = jax.random.split(key)
+        obs_st, state_st, reward, done, info = self.step_env(
+            key, state, action, params
+        )
+        obs_re, state_re = self.reset(key_reset, params)
+        # Auto-reset environment based on termination
+        state = jax.tree.map(
+            lambda x, y: jax.lax.select(done, x, y), state_re, state_st
+        )
+        # Generalizing this to flax dataclass observations
+        obs = jax.tree.map(
+            lambda x, y: jax.lax.select(done, x, y), obs_re, obs_st
+        )
+        return obs, state, reward, done, info
+
+
+
+    @partial(jax.jit, static_argnums=(0))
+    def step_env(self, key, state: PSState, action, params: Optional[PSParams] = None):
         init_lvl = state.multihot_level.copy()
         lvl = self.apply_player_force(action, state)
 
@@ -1876,18 +1910,23 @@ class PSEnv:
         )
         multihot_level = final_lvl[:self.n_objs]
         win, score, heuristic = self.check_win(multihot_level)
-        reward = heuristic
-        done = win | (state.step_i + 1 >= self.max_steps)
+        # reward = (heuristic - state.init_heuristic) / jnp.abs(state.init_heuristic)
+        reward = (heuristic - state.prev_heuristic) / jnp.abs(state.init_heuristic)
+        done = win | ((state.step_i + 1) >= self.max_steps)
         info = {}
         state = PSState(
             multihot_level=multihot_level,
             win=win,
             restart=restart,
             step_i=state.step_i + 1,
+            init_heuristic=state.init_heuristic,
+            prev_heuristic=heuristic,
         )
         obs = self.get_obs(state)
         if DEBUG:
+            jax.debug.print('episode done: {done}', done=done)
             jax.debug.print('step_i: {step_i}', step_i=state.step_i)
+            jax.debug.print('max_steps: {max_steps}', max_steps=self.max_steps)
             jax.debug.print('win: {win}', win=win)
             jax.debug.print('score: {score}', score=score)
             jax.debug.print('heuristic: {heuristic}', heuristic=heuristic)
