@@ -27,9 +27,10 @@ cs.store(name="config", node=Config)
 
 def human_loop(env: PSEnv, profile=False):
     lvl_i = 0 
-    params = PSParams(level_i=lvl_i)
+    level = env.get_level(lvl_i)
+    params = PSParams(level=level)
     rng = jax.random.PRNGKey(0)
-    obs, state = env.reset(rng, params, lvl_i)
+    obs, state = env.reset(rng, params)
     im = env.render(state)
     # print(multihot_to_desc(state.multihot_level, env.obj_to_idxs))
     im = np.array(im, dtype=np.uint8)
@@ -109,11 +110,11 @@ def human_loop(env: PSEnv, profile=False):
             n_vis_apps = 0
             if profile:
                 with jax.profiler.trace("/tmp/jax-trace", create_perfetto_link=True):
-                    obs, state, reward, done, info = env.step(key, state, action)
+                    obs, state, reward, done, info = env.step(rng, state, action, params)
                     obs.multihot_level.block_until_ready()
                     print("JAX profiling complete.")
             else:
-                obs, state, reward, done, info = env.step(key, state, action)
+                obs, state, reward, done, info = env.step(rng, state, action, params)
             win = state.win
             print(multihot_to_desc(state.multihot_level, env.obj_to_idxs, env.n_objs))
             im = env.render(state)
@@ -130,7 +131,7 @@ def human_loop(env: PSEnv, profile=False):
             do_reset = state.restart
 
         if do_reset:
-            obs, state = env.reset(rng, params, lvl_i)
+            obs, state = env.reset(rng, params)
             print(multihot_to_desc(state.multihot_level, env.obj_to_idxs, env.n_objs))
             state_hist.append(state)
             im = env.render(state)
@@ -139,12 +140,15 @@ def human_loop(env: PSEnv, profile=False):
             cv2.imshow(env.title, im)
     
 
-        if state.win:
+        if done:
+        # if state.win:
             lvl_i += 1
             if lvl_i >= len(env.levels):
                 print("No more levels!")
                 break
-            obs, state = env.reset(rng, params, lvl_i)
+            level = env.get_level(lvl_i)
+            params = params.replace(level=level)
+            obs, state = env.reset(rng, params)
             im = env.render(state)
             im = np.array(im, dtype=np.uint8)
             im = cv2.resize(im, (new_w, new_h), interpolation=cv2.INTER_NEAREST)
