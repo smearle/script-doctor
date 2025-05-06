@@ -62,6 +62,7 @@ BlockObstacle = Player or Wall or Block or EndPoint
 P = Player
 O = Block
 E = EndPoint
+@ = EndPoint and Block
 
 =========
 SOUNDS
@@ -79,19 +80,20 @@ Player, Wall, Block
 RULES
 ======
 
-[ > Moveable  |  Moveable ] -> [ > Moveable  |  > Moveable ]
+[> Player] [Block] -> [ > Player] [> Block ]
+([no Wall] -> [Wall])
 
 ==============
 WINCONDITIONS
 ==============
 
-some EndPoint on Moveable
+(some EndPoint on Moveable)
 
 =======
 LEVELS
 =======
 
 .P..
-.O..
 ....
+.O..
 ....

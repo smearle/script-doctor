@@ -2,6 +2,7 @@ import base64
 import binascii as ba
 from dataclasses import dataclass
 from enum import IntEnum
+from functools import partial
 import io
 import inspect
 import itertools
@@ -29,6 +30,7 @@ import openai
 import pandas as pd
 import requests
 
+from client import open_browser
 import game_gen
 from parse_lark import PrintPuzzleScript, RepairPuzzleScript, StripPuzzleScript, add_empty_sounds_section, preprocess_ps, TEST_GAMES
 from prompts import *
@@ -43,7 +45,8 @@ class Config:
     # Mostly for dev. When we change something client-side about the metrics that we save for a given game.
     recompute_stats: bool = False
     max_gen_attempts: int = 10
-    model: str = 'gpt-4o'
+    provider: str = 'portkey'
+    model: str = 'gemini-2.0-flash-exp'
     viz_feedback: bool = True
 
 
@@ -278,7 +281,7 @@ def gen_game():
                 print(traceback.format_exc())
                 print(f"Failed to query the model. I think because a human game in the fewshot prompt was flagged as inappropriate? Retrying...")
         save_prompts(system_prompt, prompt, gen_game_prompt_output_path)
-        text = llm_text_query(system_prompt, prompt, seed, model=exp_config.model)
+        text = llm_text_query(system_prompt, prompt, seed, model=exp_config.model, provider=exp_config.provider)
         with open(gen_game_code_output_path, 'w', encoding='utf-8') as f:
             f.write(text)
     else:
@@ -363,7 +366,7 @@ def gen_game_from_plan():
         if fewshot:
             plan_system_prompt += gen_fewshot_examples(plan_system_prompt, prompt, max_tokens=exp_config.context_len)
         save_prompts(plan_system_prompt, prompt, plan_prompt_output_path)
-        game_plan = llm_text_query(plan_system_prompt, prompt, seed)
+        game_plan = llm_text_query(plan_system_prompt, prompt, seed, model=exp_config.model, provider=exp_config.provider)
         with open(plan_output_path, 'w', encoding='utf-8') as f:
             f.write(game_plan)
     else:
@@ -381,7 +384,7 @@ def gen_game_from_plan():
     if not os.path.isfile(sprites_output_path):
         sprites_prompt_output_path = os.path.join(save_dir, f'0b_sprites_prompt.txt')
         save_prompts(sprites_system_prompt, sprites_prompt, sprites_prompt_output_path)
-        sprites = llm_text_query(sprites_system_prompt, sprites_prompt, seed)
+        sprites = llm_text_query(sprites_system_prompt, sprites_prompt, seed, model=exp_config.model, provider=exp_config.provider)
         with open(sprites_output_path, 'w', encoding='utf-8') as f:
             f.write(sprites)
         
@@ -408,7 +411,7 @@ def gen_game_from_plan():
     if not os.path.isfile(rules_output_path):
         rules_prompt_output_path = os.path.join(save_dir, f'0d_rules_prompt.txt')
         save_prompts(sprites_system_prompt, rules_prompt, rules_prompt_output_path)
-        rules = llm_text_query(sprites_system_prompt, rules_prompt, seed)
+        rules = llm_text_query(sprites_system_prompt, rules_prompt, seed, model=exp_config.model, provider=exp_config.provider)
         with open(rules_output_path, 'w', encoding='utf-8') as f:
             f.write(rules)
     else:
@@ -438,7 +441,7 @@ def gen_game_from_plan():
     if not os.path.isfile(levels_output_path):
         levels_prompt_output_path = os.path.join(save_dir, f'0f_levels_prompt.txt')
         save_prompts(levels_system_prompt, levels_prompt, levels_prompt_output_path)
-        levels = llm_text_query(levels_system_prompt, levels_prompt, seed)
+        levels = llm_text_query(levels_system_prompt, levels_prompt, seed, model=exp_config.model, provider=exp_config.provider)
         with open(levels_output_path, 'w', encoding='utf-8') as f:
             f.write(levels)
     else:
@@ -464,7 +467,7 @@ def gen_game_from_plan():
     if not os.path.isfile(finalize_output_path):
         finalize_prompt_output_path = os.path.join(save_dir, f'0h_code_prompt.txt')
         save_prompts(finalize_system_prompt, finalize_prompt, finalize_prompt_output_path)
-        code = llm_text_query(finalize_system_prompt, finalize_prompt, seed)
+        code = llm_text_query(finalize_system_prompt, finalize_prompt, seed, model=exp_config.model, provider=exp_config.provider)
         with open(finalize_output_path, 'w', encoding='utf-8') as f:
             f.write(code)
     else:
@@ -594,7 +597,8 @@ hypers_ks, hypers_lst = [], []
 
 class ExpConfig:
     seed = 0
-    model = 'o1'
+    provider = 'portkey'
+    model = 'gemini-2.0-flash-exp'
     inventive_prompt = True
     cot = True
     fewshot = True
@@ -1050,6 +1054,11 @@ def main(cfg: Config):
     elif cfg.mode == 'viz_evo':
         viz_evo_stats()
     elif cfg.mode == 'generate':
+
+        browser_thread = threading.Thread(target=partial(open_browser, url=f"http://127.0.0.1:{cfg.port}"))
+        browser_thread.daemon = True
+        browser_thread.start()
+
         app.run(port=cfg.port)
 
 

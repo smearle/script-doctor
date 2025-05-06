@@ -82,60 +82,77 @@ o_key = os.getenv("O3_MINI_KEY")
 
 client = None
 
-def llm_text_query(system_prompt, prompt, seed, model):
+def llm_text_query(system_prompt, prompt, seed, model, provider):
     messages = [
         {"role": "system", "content": system_prompt},
         {"role": "user", "content": prompt},
     ]
-    if model == 'gpt-4o':
-        payload = {
-            "messages": messages,
-            "temperature": 0.7,
-            "top_p": 0.95,
-        }
-        successful_query = False
-        while not successful_query:
-            try:
+    if provider == 'azure':
+        if model == 'gpt-4o':
+            payload = {
+                "messages": messages,
+                "temperature": 0.7,
+                "top_p": 0.95,
+            }
+            successful_query = False
+            while not successful_query:
+                try:
+                    print('Querying openai...')
+                    response = requests.post(GPT4V_ENDPOINT, headers=headers, json=payload)
+                    response.raise_for_status() # Will raise an HTTPError if the HTTP request returned an unsuccessful status code
+                    successful_query = True
+                    print('Query completed.')
+                except requests.RequestException as e:
+                    print(f"Failed to make the request. RequestException: {e}")
+                except requests.HTTPError as e:
+                    print(f"HTTPError: {e}")
+                time.sleep(5)
+
+            return response.json()['choices'][0]['message']['content']
+
+        else:
+            global client
+            if client is None:
+                client = AzureOpenAI(  
+                    azure_endpoint=o_endpoint,  
+                    api_key=o_key,  
+                    api_version="2024-12-01-preview",
+                )
+            assert model in ['o1', 'o3-mini']
+            deployment = os.getenv('DEPLOYMENT_NAME', model)
+            successful_query = False
+            while not successful_query:
                 print('Querying openai...')
-                response = requests.post(GPT4V_ENDPOINT, headers=headers, json=payload)
-                response.raise_for_status() # Will raise an HTTPError if the HTTP request returned an unsuccessful status code
+                completion = client.chat.completions.create(  
+                    model=deployment,
+                    messages=messages,
+                    max_completion_tokens=100_000,
+                    stop=None,  
+                    stream=False
+                )
                 successful_query = True
-                print('Query completed.')
-            except requests.RequestException as e:
-                print(f"Failed to make the request. RequestException: {e}")
-            except requests.HTTPError as e:
-                print(f"HTTPError: {e}")
-            time.sleep(5)
-
-        return response.json()['choices'][0]['message']['content']
-
-    else:
-        global client
-        if client is None:
-            client = AzureOpenAI(  
-                azure_endpoint=o_endpoint,  
-                api_key=o_key,  
-                api_version="2024-12-01-preview",
-            )
-        assert model in ['o1', 'o3-mini']
-        deployment = os.getenv('DEPLOYMENT_NAME', model)
-        successful_query = False
-        while not successful_query:
-            print('Querying openai...')
-            completion = client.chat.completions.create(  
-                model=deployment,
-                messages=messages,
-                max_completion_tokens=100_000,
-                stop=None,  
-                stream=False
-            )
-            successful_query = True
-            # if completion.status_code == 200:
-            #     successful_query = True
-            #     print('Query completed.')
-            # else:
-            #     print(f"Failed to make the request. Status code: {completion.status_code}")
-            #     time.sleep(5)
+                # if completion.status_code == 200:
+                #     successful_query = True
+                #     print('Query completed.')
+                # else:
+                #     print(f"Failed to make the request. Status code: {completion.status_code}")
+                #     time.sleep(5)
+            return completion.choices[0].message.content
+        
+    elif provider == 'portkey':
+        from portkey_ai import Portkey
+        # Construct a client with a virtual key
+        portkey = Portkey(
+            api_key=os.getenv('PORTKEY_API_KEY'),
+            virtual_key="vertex-ai-3e806d",
+            base_url = "https://ai-gateway.apps.cloud.rt.nyu.edu/v1"
+        )
+        completion = portkey.chat.completions.create(
+            messages=messages,
+            # model="gemini-2.0-flash-exp",
+            model=model,
+            max_tokens=8192
+        )
         return completion.choices[0].message.content
         
 

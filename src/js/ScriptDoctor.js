@@ -982,8 +982,8 @@ async function userSelectParentsDummy(seed_games) {
 }
 
 
-const popSize = 3;
-const nGens = 20;
+const popSize = 1;
+const nGens = 1;
 
 async function evolve(evoSeed, metaParents=null) {
   /** The main loop for evolving games.
@@ -1364,7 +1364,7 @@ function sweepClick() {
 // fromIdeaSweep();
 // fromPlanSweep();
 // playTest();
-// evolve();
+evolve();
 // processAllGames();
 
 // genGame('init', [], 'test_99', 99, fewshot=true, cot=true, maxGenAttempts=20);
