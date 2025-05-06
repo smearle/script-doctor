@@ -1,15 +1,7 @@
-einops
-flask
-flax
-hydra-core
-# jax[cuda]  # or `jax` if no CUDA is not an option
-lark
-Levenshtein
-openai
-opencv-python
-optax
-pandas
-Pillow
-python-dotenv
-tiktoken
-# web-browser
+flask>=2.0.0
+selenium>=4.0.0
+hydra-core>=1.3.0
+python-dotenv>=0.19.0
+requests>=2.25.0
+pillow>=8.0.0
+webdriver-manager>=3.5.0

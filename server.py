@@ -201,7 +201,8 @@ def gen_game():
             if lark_error is None:
                 lark_error_prompt = ''
             else:
-                lark_error_prompt = f"""{(f"It also resulted in the following error when we attempted to parse the code as a context free grammar using lark:\n```\n{lark_error}\n```\n" if lark_error is not None else "")}"""
+                lark_error_prompt = f"""It also resulted in the following error when we attempted to parse the code as a context free grammar using lark: ```{lark_error}```""" if lark_error is not None else ""
+            
             prompt = game_compile_repair_prompt.format(code=code, console_text=console_text, cot_prompt=cot_prompt_text,
                                                        game_idea=game_idea, lark_error_prompt=lark_error_prompt,
                                                        from_idea_repair_prompt=from_idea_prompt_i)
@@ -450,8 +451,23 @@ games_to_skip = set({'Broken Rigid Body'})
 def list_scraped_games():
     games_set = set()
     games = []
-    game_files = os.listdir('data/min_games')
-    test_game_files = [f"{test_game}.txt" for test_game in test_games]
+
+    # 检查目录是否存在，如果不存在则创建
+    if not os.path.exists('data/min_games'):
+        try:
+            os.makedirs('data/min_games')
+            print("Created directory: data/min_games")
+        except Exception as e:
+            print(f"Error creating directory: {e}")
+    
+    # 读取目录文件
+    try:
+        game_files = os.listdir('data/min_games')
+    except Exception as e:
+        print(f"Error listing directory: {e}")
+        game_files = []
+        
+    test_game_files = [f"{test_game}.txt" for test_game in test_games] 
     game_files = test_game_files + game_files
 
     for filename in game_files:
@@ -984,40 +1000,60 @@ def main(cfg: Config):
 
 #LLM agents
 # 
+from LLM_agent import LLMAgent, ReinforcementWrapper, StateVisualizer
+
+# 初始化智能体系统
+llm_agent = LLMAgent(model_name="gpt-4o")
+rl_wrapper = ReinforcementWrapper(llm_agent)
+
 @app.route('/llm_action', methods=['POST'])
 def llm_action():
-    data = request.json
-    state_repr = data['state']           # 例如字符地图、状态文本等
-    level_goal = data.get('goal', '')    # 可选：游戏目标
-    history = data.get('history', [])    # 可选：之前动作历史
-    custom_prompt = data.get('prompt')  # 客户端传了 prompt 就用
-    if custom_prompt:
-        prompt = custom_prompt
-    else:
-        prompt = f"""Current Game State:
-            {state_repr}
+    try:
+        data = request.json
+        state_repr = StateVisualizer.render_ascii({
+            'entities': llm_agent._extract_entities(data['state'])
+        })
+        
+        # 处理游戏状态
+        processed_state = llm_agent.process_state(state_repr)
+        
+        # 生成决策
+        action = llm_agent.choose_action(
+            processed_state=processed_state,
+            goal=data.get('goal', '')
+        )
+        
+        # 记录历史
+        llm_agent.update_history(action, "pending")
+        
+        # 强化学习更新
+        if 'reward' in data:
+            rl_wrapper.reinforce(data['reward'])
+        
+        return jsonify({
+            'action': action,
+            'state_hash': hash(state_repr),
+            'complexity': processed_state['metrics']['complexity']
+        })
+    
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
 
-            Game Objective: {level_goal}
+@app.route('/agent_history', methods=['GET'])
+def get_action_history():
+    return jsonify({
+        'history': llm_agent.action_history,
+        'q_table': rl_wrapper.q_table
+    })
 
-            Valid Actions: up,  left, down, right, use
-
-            What should the next action be? Just reply with a single word.
-
-            """
-
-
-    # 构造 prompt
-    system_prompt = "You are an agent playing a puzzle game. Given the current state of the game, decide the best action."
-
-
-    if history:
-        prompt = "Previous steps:\n" + "\n".join(f"{i+1}. {a}" for i, a in enumerate(history)) + "\n\n" + prompt
-
-    # 调用 LLM 获取动作
-    action = llm_text_query(system_prompt, prompt, seed=42, model=exp_config.model)
-    action = action.strip().lower().split()[0]  # 只取第一个词作为动作
-
-    return jsonify({'action': action})
+@app.route('/retrain', methods=['POST'])
+def retrain_agent():
+    try:
+        training_data = request.json
+        # TODO: 实现训练逻辑
+        return jsonify({'status': 'training_started'})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
  
 @app.route('/get_state', methods=['GET'])
 def get_state():
