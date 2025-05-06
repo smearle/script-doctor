@@ -91,7 +91,7 @@ def linear_schedule(config, count):
     return config["LR"] * frac
 
 
-def init_run(config: MultiAgentConfig, ckpt_manager, latest_update_step, rng):
+def init_run(env: PSEnv, config: MultiAgentConfig, ckpt_manager, latest_update_step, rng):
     # Create PCGRL environment
     env = init_ps_env(config)
     env_params = get_env_params_from_config(env, config)

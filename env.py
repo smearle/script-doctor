@@ -1996,8 +1996,10 @@ class PSEnv:
         )
         multihot_level = final_lvl[:self.n_objs]
         win, score, heuristic = self.check_win(multihot_level)
+
         # reward = (heuristic - state.init_heuristic) / jnp.abs(state.init_heuristic)
-        reward = (heuristic - state.prev_heuristic) / jnp.abs(state.init_heuristic)
+        reward = heuristic - state.prev_heuristic
+
         done = win | ((state.step_i + 1) >= self.max_steps)
         info = {}
         state = PSState(
