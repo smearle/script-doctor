@@ -10,7 +10,7 @@ import numpy as np
 
 from gen_tree import GenPSTree, PSEnv
 from parse_lark import TREES_DIR, TEST_GAMES, DATA_DIR
-from ps_game import PSGame
+from ps_game import PSGameTree
 
 
 scratch_dir = 'scratch'
@@ -29,7 +29,7 @@ if __name__ == '__main__':
             tree = pickle.load(f)
         trees.append(tree)
 
-        tree: PSGame = GenPSTree().transform(tree)
+        tree: PSGameTree = GenPSTree().transform(tree)
 
         env = PSEnv(tree)
         state = env.reset(0)

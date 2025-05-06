@@ -17,7 +17,7 @@ from lark import Token, Transformer, Tree
 import numpy as np
 from PIL import Image
 
-from ps_game import LegendEntry, PSGame, PSObject, Prelude, Rule, RuleBlock, WinCondition
+from ps_game import LegendEntry, PSGameTree, PSObject, Prelude, Rule, RuleBlock, WinCondition
 
 class GenPSTree(Transformer):
     """
@@ -199,7 +199,7 @@ class GenPSTree(Transformer):
             elif keyword == 'run_rules_on_level_start':
                 run_rules_on_level_start = True
         # assert title is not None
-        return PSGame(
+        return PSGameTree(
             prelude=Prelude(
                 title=title,
                 author=author,

@@ -16,7 +16,7 @@ import numpy as np
 from env import PSEnv
 from gen_tree import GenPSTree
 from parse_lark import TREES_DIR, DATA_DIR, TEST_GAMES, get_tree_from_txt
-from ps_game import PSGame
+from ps_game import PSGameTree
 
 
 scratch_dir = 'scratch'

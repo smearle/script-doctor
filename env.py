@@ -20,7 +20,7 @@ from env_render import render_solid_color, render_sprite
 from jax_utils import stack_leaves
 from marl.spaces import Box
 from parse_lark import get_tree_from_txt
-from ps_game import LegendEntry, PSGame, Rule, WinCondition
+from ps_game import LegendEntry, PSGameTree, Rule, WinCondition
 from spaces import Discrete
 
 
@@ -176,6 +176,7 @@ def compute_manhattan_dists(lvl, src, trg):
     # Exclude any dists corresponding to cells without src/trg nodes
     dists = jnp.where(jnp.all(src_coords == -1, axis=-1), jnp.nan, dists)
     dists = jnp.where(jnp.all(trg_coords == -1, axis=-1), jnp.nan, dists)
+    jax.debug.breakpoint()
     return dists
 
 def compute_sum_of_manhattan_dists(lvl, src, trg):
@@ -1315,12 +1316,13 @@ def loop_rule_grp(carry, grp_i, block_i, n_prior_rules_arr, n_rules_per_grp_arr,
                     lvl, rule_applied, cancelled, restart, again = \
                         all_rule_fns[n_prior_rules_arr[block_i, grp_i] + rule_i](init_lvl)
                 rule_had_effect = jnp.any(lvl != init_lvl)
+                print(f'      rule {rule_i} of group {grp_i} had effect: {rule_had_effect}')
                 if DEBUG:
                     if jit:
                         jax.debug.print('    rule {rule_i} had effect: {rule_had_effect}', rule_i=rule_i, rule_had_effect=rule_had_effect)
                     else:
                         if rule_had_effect:
-                            print(f'      rule {rule_i} had effect')
+                            print(f'      rule {rule_i} of group {grp_i} had effect: True')
                 rule_app_i += 1
                 again = again_prev | again
                 restart = restart_prev | restart
@@ -1712,7 +1714,7 @@ class PSObs:
 
 
 class PSEnv:
-    def __init__(self, tree: PSGame, jit: bool = True, level_i: int = 0, max_steps: int = 1000):
+    def __init__(self, tree: PSGameTree, jit: bool = True, level_i: int = 0, max_steps: int = 1000):
         self.jit = jit
         self.title = tree.prelude.title
         self.tree = tree
@@ -1996,7 +1998,7 @@ class PSEnv:
         )
         multihot_level = final_lvl[:self.n_objs]
         win, score, heuristic = self.check_win(multihot_level)
-
+        jax.debug.print('heuristic: {heuristic}, score: {score}', heuristic=heuristic, score=score)
         # reward = (heuristic - state.init_heuristic) / jnp.abs(state.init_heuristic)
         reward = heuristic - state.prev_heuristic
 

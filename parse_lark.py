@@ -12,7 +12,7 @@ import lark
 from lark.reconstruct import Reconstructor
 
 from gen_tree import GenPSTree
-from ps_game import PSGame
+from ps_game import PSGameTree
 
 games_to_skip = set({'easyenigma', 'A_Plaid_Puzzle'})
 
@@ -378,7 +378,7 @@ def strip_comments(text):
 def get_tree_from_txt(parser, game, log_dir: str = None, overwrite: bool = True):
     filepath = os.path.join(custom_games_dir, game + '.txt')
     if not os.path.exists(filepath):
-        filepath = os.path.join(games_dir, game + '.txt')
+        filepath = os.path.join(GAMES_DIR, game + '.txt')
     with open(filepath, 'r', encoding='utf-8') as f:
         ps_text = f.read()
     simp_filename = game + '_simplified.txt' 
@@ -457,7 +457,7 @@ def get_tree_from_txt(parser, game, log_dir: str = None, overwrite: bool = True)
         file.write(game + "\n")
 
     try:
-        tree: PSGame = GenPSTree().transform(min_parse_tree)
+        tree: PSGameTree = GenPSTree().transform(min_parse_tree)
     except Exception as e:
         traceback.print_exc()
         print(f"Error parsing tree: {game}")
@@ -466,7 +466,7 @@ def get_tree_from_txt(parser, game, log_dir: str = None, overwrite: bool = True)
     return tree
 
 DATA_DIR = 'data'
-games_dir = os.path.join(DATA_DIR, 'scraped_games')
+GAMES_DIR = os.path.join(DATA_DIR, 'scraped_games')
 min_games_dir = os.path.join(DATA_DIR, 'min_games')
 custom_games_dir = os.path.join(DATA_DIR, 'custom_games')
 simpd_dir = os.path.join(DATA_DIR, 'simplified_games')
@@ -497,7 +497,7 @@ if __name__ == "__main__":
         # Get the set of all lines from this text file
         parsed_games = set(file.read().splitlines())
     # for i, filename in enumerate(['blank.txt'] + os.listdir(demo_games_dir)):
-    game_files = os.listdir(games_dir)
+    game_files = os.listdir(GAMES_DIR)
     # sort them alphabetically
     game_files.sort()
     test_game_files = [f"{test_game}.txt" for test_game in TEST_GAMES]

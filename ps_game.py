@@ -94,7 +94,7 @@ class Prelude:
     noaction: bool = False
 
 
-class PSGame:
+class PSGameTree:
     def __init__(self,
                  prelude: Prelude,
                  objects: Dict[str, PSObject],
@@ -112,7 +112,7 @@ class PSGame:
         self.win_conditions = win_conditions # List[WinCondition]
         self.levels = levels                 # Each level is a 2D array of strings
     
-    def copy(self) -> 'PSGame':
+    def copy(self) -> 'PSGameTree':
         """
         Return a deep copy of this game instance.
         """
