@@ -25,8 +25,8 @@ from spaces import Discrete
 
 
 # Whether to print out a bunch of stuff, etc.
-# DEBUG = False
-DEBUG = True
+DEBUG = False
+# DEBUG = True
 
 # per-object movement forces that can be applied: left, right, up, down, action
 N_MOVEMENTS = 5
@@ -85,6 +85,7 @@ def assign_vecs_to_objs(collision_layers, atomic_obj_names):
 
 def process_legend(legend):
     char_legend = {}
+    char_legend_inverse = {}
     meta_objs = {}
     conjoined_tiles = {}
     for k, v in legend.items():
@@ -98,6 +99,7 @@ def process_legend(legend):
             # if k in obj_to_idxs:
             if len(k) == 1:
                 char_legend[v_obj] = k_obj
+                char_legend_inverse[k_obj] = v_obj
             else:
                 meta_objs[k_obj] = [v_obj]
         elif v.operator == 'or':
@@ -105,35 +107,57 @@ def process_legend(legend):
         elif v.operator == 'and':
             conjoined_tiles[k.strip()] = v.obj_names
         else: raise Exception('Invalid LegendEntry operator.')
+
+
+    for k, v in meta_objs.items():
+        # Replace with actual atomic object name if this value has already been established as a shorthand for
+        # an actual atomic object
+        v_1 = []
+        for v_obj in v:
+            if v_obj in char_legend_inverse:
+                v_1.append(char_legend_inverse[v_obj])
+            else:
+                v_1.append(v_obj)
+        meta_objs[k] = v_1 
+    
     return char_legend, meta_objs, conjoined_tiles
 
-def expand_collision_layers(collision_layers, meta_objs):
+def expand_collision_layers(collision_layers, meta_objs, char_to_obj):
     # Preprocess collision layers to replace joint objects with their sub-objects
     # TODO: could do this more elegantly using `expand_meta_objs`, right?
-    for i, l in enumerate(collision_layers):
-        j = 0
+    # for i, l in enumerate(collision_layers):
+    #     j = 0
+    #     for o in l:
+    #         if o in meta_objs:
+    #             subtiles = meta_objs[o]
+    #             l = l[:j] + subtiles + l[j+1:]
+    #             collision_layers[i] = l
+    #             # HACK: we could do this more efficiently
+    #             expand_collision_layers(collision_layers, meta_objs=meta_objs)
+    #             j += len(subtiles)
+    #         else:
+    #             j += 1
+    cl = []
+    for l in collision_layers:
+        l_1 = []
         for o in l:
-            if o in meta_objs:
-                subtiles = meta_objs[o]
-                l = l[:j] + subtiles + l[j+1:]
-                collision_layers[i] = l
-                # HACK: we could do this more efficiently
-                expand_collision_layers(collision_layers, meta_objs=meta_objs)
-                j += len(subtiles)
-            else:
-                j += 1
-    return collision_layers
+            l_1 += expand_meta_objs([o], meta_objs, char_to_obj)
+        cl.append(l_1)
+    return cl
 
-def expand_meta_objs(tile_list: List, obj_to_idxs, meta_objs):
+def expand_meta_objs(tile_list: List, meta_objs, char_to_obj):
     assert isinstance(tile_list, list), f"tile_list should be a list, got {type(tile_list)}"
     expanded_meta_objs = []
-    for mt in tile_list:
-        if mt in meta_objs:
-            expanded_meta_objs += expand_meta_objs(meta_objs[mt], obj_to_idxs, meta_objs)
-        elif mt in obj_to_idxs:
-            expanded_meta_objs.append(mt)
+    for mo in tile_list:
+        if mo in meta_objs:
+            expanded_meta_objs += expand_meta_objs(meta_objs[mo], meta_objs, char_to_obj)
+        elif mo in char_to_obj:
+            expanded_meta_objs.append(char_to_obj[mo])
+        # elif mt in obj_to_idxs:
         else:
-            raise Exception(f'Invalid meta-tile `{mt}`.')
+            expanded_meta_objs.append(mo)
+        # else:
+        #     raise Exception(f'Invalid meta-tile `{mt}`.')
     return expanded_meta_objs
 
 def get_meta_channel(lvl, obj_idxs):
@@ -159,16 +183,16 @@ def compute_sum_of_manhattan_dists(lvl, src, trg):
     # Get minimum of each source to any target
     dists = jnp.nanmin(dists, axis=0)
     dists = jnp.where(jnp.isnan(dists), 0, dists)
-    sum_dist = jnp.sum(dists, axis=0)
+    sum_dist = jnp.sum(dists, axis=0).astype(np.int32)
     return sum_dist
 
 def compute_min_manhattan_dist(lvl, src, trg):
     dists = compute_manhattan_dists(lvl, src, trg)
     dists = jnp.where(jnp.isnan(dists), jnp.inf, dists)
-    min_dist = jnp.min(dists, axis=0)
+    min_dist = jnp.min(dists, axis=0).astype(np.int32)
     return min_dist
 
-def gen_check_win(win_conditions: Iterable[WinCondition], obj_to_idxs, meta_objs, jit=True):
+def gen_check_win(win_conditions: Iterable[WinCondition], obj_to_idxs, meta_objs, char_to_obj, jit=True):
 
     # @partial(jax.jit, static_argnums=(1, 2))
     def check_all(lvl, src, trg):
@@ -193,7 +217,7 @@ def gen_check_win(win_conditions: Iterable[WinCondition], obj_to_idxs, meta_objs
         src_channel = get_meta_channel(lvl, src)
         win = jnp.any(src_channel)
         score = win.astype(np.int32)
-        heuristic = score.astype(np.float32)
+        heuristic = score.astype(np.int32)
         return win, score, heuristic
 
     # @partial(jax.jit, static_argnums=(1,))
@@ -218,13 +242,13 @@ def gen_check_win(win_conditions: Iterable[WinCondition], obj_to_idxs, meta_objs
         if src in obj_to_idxs:
             src = [obj_to_idxs[src]]
         else:
-            src_objs = expand_meta_objs([src], obj_to_idxs, meta_objs)
+            src_objs = expand_meta_objs([src], meta_objs, char_to_obj)
             src = [obj_to_idxs[obj] for obj in src_objs]
         if trg is not None:
             if trg in obj_to_idxs:
                 trg = [obj_to_idxs[trg]]
             else:
-                trg_objs = expand_meta_objs([trg], obj_to_idxs, meta_objs)
+                trg_objs = expand_meta_objs([trg], meta_objs, char_to_obj)
                 trg = [obj_to_idxs[obj] for obj in trg_objs]
         if win_condition.quantifier == 'all':
             func = partial(check_all, src=src, trg=trg)
@@ -302,7 +326,7 @@ def is_rel_force_in_kernel(k):
                 return True
     return False
 
-def gen_subrules_meta(rule: Rule, n_objs, obj_to_idxs, meta_objs, coll_mat, rule_name, jit=True):
+def gen_subrules_meta(rule: Rule, n_objs, obj_to_idxs, meta_objs, coll_mat, rule_name, char_to_obj, jit=True):
     idxs_to_objs = {v: k for k, v in obj_to_idxs.items()}
     has_right_pattern = len(rule.right_kernels) > 0
 
@@ -447,14 +471,15 @@ def gen_subrules_meta(rule: Rule, n_objs, obj_to_idxs, meta_objs, coll_mat, rule
     # @partial(jax.jit, static_argnames=('obj_idxs'))
     def detect_stationary_meta(m_cell, obj_idxs):
         # TODO: vmap this?
-        active_obj_idx = -1
-        detected = jnp.zeros(m_cell.shape, dtype=bool)
-        for obj_idx in obj_idxs:
+
+        def detect_stationary_obj(m_cell, obj_idx):
             # if not m_cell[obj_idx]:
             #     continue
             # if not is_obj_forceless(obj_idx, m_cell):
             #     continue
             # detected = detected.at[obj_idx].set(1)
+
+            detected = jnp.zeros(m_cell.shape, dtype=bool)
 
             obj_is_present = m_cell[obj_idx] == 1
             obj_is_forceless = is_obj_forceless(obj_idx, m_cell)
@@ -469,8 +494,19 @@ def gen_subrules_meta(rule: Rule, n_objs, obj_to_idxs, meta_objs, coll_mat, rule
             active_obj_idx = jax.lax.select(
                 obj_active,
                 obj_idx,
-                active_obj_idx,
+                -1,
             )
+            return detected, active_obj_idx
+
+        detecteds, active_obj_idxs = jax.vmap(detect_stationary_obj, in_axes=(None, 0))(m_cell, obj_idxs)
+        detected = jnp.any(detecteds, axis=0)
+        active_obj_i = jnp.argwhere(active_obj_idxs != -1, size=1, fill_value=-1)[0][0]
+        active_obj_idx = jax.lax.select(
+            active_obj_i != -1,
+            jnp.array(obj_idxs)[active_obj_i],
+            -1,
+        )
+
         active = active_obj_idx != -1
         if DEBUG:
             jax.lax.cond(
@@ -478,7 +514,7 @@ def gen_subrules_meta(rule: Rule, n_objs, obj_to_idxs, meta_objs, coll_mat, rule
                 lambda: jax.debug.print('detected stationary obj_idx: {obj_idx}', obj_idx=active_obj_idx),
                 lambda: None,
             )
-        return ObjFnReturn(active=active, detected=detected, obj_idx=obj_idx)
+        return ObjFnReturn(active=active, detected=detected, obj_idx=active_obj_idx)
 
     # @partial(jax.jit, static_argnums=())
     def detect_moving_meta(m_cell, obj_idxs):
@@ -486,12 +522,8 @@ def gen_subrules_meta(rule: Rule, n_objs, obj_to_idxs, meta_objs, coll_mat, rule
         active_obj_idx = -1
         active_force_idx = -1
         detected = jnp.zeros(m_cell.shape, dtype=bool)
+
         for obj_idx in obj_idxs:
-            # if not m_cell[obj_idx]:
-            #     continue
-            # if not is_obj_forceless(obj_idx, m_cell):
-            #     continue
-            # detected = detected.at[obj_idx].set(1)
 
             obj_is_present = m_cell[obj_idx] == 1
             obj_forces = jax.lax.dynamic_slice(m_cell, (n_objs + (obj_idx * N_MOVEMENTS),), (4,))
@@ -573,10 +605,12 @@ def gen_subrules_meta(rule: Rule, n_objs, obj_to_idxs, meta_objs, coll_mat, rule
                 moving = True
             else:
                 obj_names.append(obj)
-                sub_objs = expand_meta_objs([obj], obj_to_idxs, meta_objs)
+                sub_objs = expand_meta_objs([obj], meta_objs, char_to_obj)
                 obj_idxs = np.array([obj_to_idxs[so] for so in sub_objs])
                 obj_vec = np.zeros((n_objs + n_objs * N_MOVEMENTS), dtype=bool)
                 obj_vec[obj_idxs] = 1
+                if obj in char_to_obj:
+                    obj = char_to_obj[obj]
                 # TODO: we can remove these functions to individual objects and apply the more abstract meta-tile versions instead
                 if len(obj_idxs) == 1:
                 # if obj in obj_to_idxs:
@@ -616,7 +650,6 @@ def gen_subrules_meta(rule: Rule, n_objs, obj_to_idxs, meta_objs, coll_mat, rule
         
         # @partial(jax.jit)
         def detect_cell(m_cell):
-            # TODO: can vmap this
 
             def apply_cell_fn_switch(i):
                 return jax.lax.switch(i, fns, m_cell)
@@ -705,7 +738,7 @@ def gen_subrules_meta(rule: Rule, n_objs, obj_to_idxs, meta_objs, coll_mat, rule
 
     # @partial(jax.jit, static_argnums=(3))
     def project_no_meta(m_cell: chex.Array, cell_detect_out, pattern_detect_out, obj: int):
-        sub_objs = expand_meta_objs([obj], obj_to_idxs, meta_objs)
+        sub_objs = expand_meta_objs([obj], meta_objs, char_to_obj)
         obj_idxs = np.array([obj_to_idxs[so] for so in sub_objs])
         for obj_idx in obj_idxs:
             m_cell = m_cell.at[obj_idx].set(0)
@@ -715,7 +748,7 @@ def gen_subrules_meta(rule: Rule, n_objs, obj_to_idxs, meta_objs, coll_mat, rule
         return m_cell
 
     # @partial(jax.jit, static_argnums=(3, 4))
-    def project_force_on_obj(m_cell, cell_detect_out: CellFnReturn, pattern_detect_out: PatternFnReturn, obj, force_idx):
+    def project_force_obj(m_cell, cell_detect_out: CellFnReturn, pattern_detect_out: PatternFnReturn, obj, force_idx):
         meta_objs = cell_detect_out.detected_meta_objs
         pattern_meta_objs = pattern_detect_out.detected_meta_objs
         obj_idx = disambiguate_meta(obj, meta_objs, pattern_meta_objs, obj_to_idxs)
@@ -740,7 +773,7 @@ def gen_subrules_meta(rule: Rule, n_objs, obj_to_idxs, meta_objs, coll_mat, rule
         return m_cell
 
     # @partial(jax.jit, static_argnums=(3))
-    def project_moving_on_obj(m_cell, cell_detect_out: CellFnReturn, pattern_detect_out: PatternFnReturn, obj):
+    def project_moving_obj(m_cell, cell_detect_out: CellFnReturn, pattern_detect_out: PatternFnReturn, obj):
         meta_objs = cell_detect_out.detected_meta_objs
         pattern_meta_objs = pattern_detect_out.detected_meta_objs
         obj_idx = disambiguate_meta(obj, meta_objs, pattern_meta_objs, obj_to_idxs)
@@ -754,15 +787,26 @@ def gen_subrules_meta(rule: Rule, n_objs, obj_to_idxs, meta_objs, coll_mat, rule
         m_cell = remove_colliding_objs(m_cell, obj_idx, coll_mat)
         return m_cell
 
+    def project_stationary_obj(m_cell, cell_detect_out: CellFnReturn, pattern_detect_out: PatternFnReturn, obj):
+        meta_objs = cell_detect_out.detected_meta_objs
+        pattern_meta_objs = pattern_detect_out.detected_meta_objs
+        obj_idx = disambiguate_meta(obj, meta_objs, pattern_meta_objs, obj_to_idxs)
+        m_cell = m_cell.at[obj_idx].set(1)
+        m_cell = m_cell.at[n_objs + (obj_idx * N_MOVEMENTS): n_objs + ((obj_idx + 1) * N_MOVEMENTS)].set(1)
+        m_cell = remove_colliding_objs(m_cell, obj_idx, coll_mat)
+        return m_cell
+
     def gen_cell_projection_fn(r_cell, right_force_idx):
         fns = []
         if r_cell is None:
             r_cell = []
         else:
             r_cell = r_cell.split(' ')
-        no, force, directional_force, moving = False, False, False, False
+        no, force, moving, stationary = False, False, False, False
         for obj in r_cell:
             obj = obj.lower()
+            if obj in char_to_obj:
+                obj = char_to_obj[obj]
             if obj == 'no':
                 no = True
             elif obj in ['>', '<', '^', 'v']:
@@ -776,6 +820,8 @@ def gen_subrules_meta(rule: Rule, n_objs, obj_to_idxs, meta_objs, coll_mat, rule
                 force_idx = 4
             elif obj == 'moving':
                 moving = True
+            elif obj == 'stationary':
+                stationary = True
             # ignore sound effects (which can exist incide rules (?))
             elif obj.startswith('sfx'):
                 continue
@@ -789,11 +835,13 @@ def gen_subrules_meta(rule: Rule, n_objs, obj_to_idxs, meta_objs, coll_mat, rule
                         raise Exception(f'Invalid object `{obj}` in rule.')
                     no = False
                 elif force:
-                    fns.append(partial(project_force_on_obj, obj=obj, force_idx=force_idx))
+                    fns.append(partial(project_force_obj, obj=obj, force_idx=force_idx))
                     force = False
                 elif moving:
-                    fns.append(partial(project_moving_on_obj, obj=obj))
+                    fns.append(partial(project_moving_obj, obj=obj))
                     moving = False
+                elif stationary:
+                    fns.append(partial(project_stationary_obj, obj=obj))
                 else:
                     fns.append(partial(project_obj, obj=obj))
             else:
@@ -991,6 +1039,8 @@ def gen_subrules_meta(rule: Rule, n_objs, obj_to_idxs, meta_objs, coll_mat, rule
                     # detect_outs = detect_outs[first_a[0]][first_a[1]]
                     cell_detect_outs_xy = [jax.tree.map(lambda x: x[xy[0]][xy[1]], cell_detect_out) for 
                         cell_detect_out in cell_detect_outs]
+                    # cell_detect_outs_xy = stack_leaves(cell_detect_outs_xy)
+
                     # pattern_detect_outs_xy = [jax.tree_map(lambda x: x[xy[0]][xy[1]], pattern_detect_out)]
                     pattern_detect_outs_xy = pattern_detect_out
 
@@ -1020,9 +1070,11 @@ def gen_subrules_meta(rule: Rule, n_objs, obj_to_idxs, meta_objs, coll_mat, rule
                     if not (~has_right_pattern or (len(cell_detect_outs) == len(out_cell_idxs) == len(cell_projection_fns))):
                         print(f"Warning: rule {rule} with has_right_pattern {has_right_pattern} results in len(cell_detect_outs) {len(cell_detect_outs)} != len(out_cell_idxs) {len(out_cell_idxs)} != len(cell_projection_fns) {len(cell_projection_fns)}")
                         breakpoint()
-                    #TODO: vmap this
                     init_lvl = lvl
+
+                    #TODO: vmap this. But then we risk overlapping? But we do here, too.
                     for i, (out_cell_idx, cell_proj_fn) in enumerate(zip(out_cell_idxs, cell_projection_fns)):
+                    # def apply_cell_proj_fn(lvl, i):
                         # FIXME: a cell at position `i` may not exist in the input kernel!! So here, it's just referring to the ``last'' cell in the input (?)
                         cell_detect_out_i = cell_detect_outs_xy[i]
                         pattern_detect_out_i = pattern_detect_outs_xy
@@ -1030,7 +1082,13 @@ def gen_subrules_meta(rule: Rule, n_objs, obj_to_idxs, meta_objs, coll_mat, rule
                         m_cell = lvl[0, :, *cell_xy]
                         m_cell = jnp.array(m_cell)
                         m_cell = cell_proj_fn(m_cell, cell_detect_out=cell_detect_out_i, pattern_detect_out=pattern_detect_out_i)
+                        # m_cell = jax.lax.switch(i, cell_projection_fns, m_cell, cell_detect_out,
+                        #                         pattern_detect_outs_xy)
                         lvl = lvl.at[0, :, *cell_xy].set(m_cell)
+                        # return lvl, None
+                    
+                    # lvl, _ = jax.lax.scan(apply_cell_proj_fn, lvl, jnp.arange(len(out_cell_idxs)))
+
                     lvl_changed = jnp.any(lvl != init_lvl)
                     if DEBUG:
                         jax.debug.print('      at position {xy}, the level changed: {lvl_changed}', xy=xy, lvl_changed=lvl_changed)
@@ -1195,7 +1253,6 @@ def gen_subrules_meta(rule: Rule, n_objs, obj_to_idxs, meta_objs, coll_mat, rule
             np.any([is_rel_force_in_kernel(lp) for lp in rule.left_kernels]):
             rots = [0]
         else:
-            breakpoint()
             rots = [0, 1, 2, 3]
     # else:
     #     rots = [0]
@@ -1222,8 +1279,8 @@ def gen_subrules_meta(rule: Rule, n_objs, obj_to_idxs, meta_objs, coll_mat, rule
 
     return rule_fns
         
-def player_has_moved(lvl_0, lvl_1, obj_to_idxs, meta_objs):
-    player_sub_objs = expand_meta_objs(['player'], obj_to_idxs, meta_objs)
+def player_has_moved(lvl_0, lvl_1, obj_to_idxs, meta_objs, char_to_obj):
+    player_sub_objs = expand_meta_objs(['player'], meta_objs, char_to_obj)
     player_idxs = [obj_to_idxs[obj] for obj in player_sub_objs]
     player_moved = False
     for player_idx in player_idxs:
@@ -1348,7 +1405,7 @@ def loop_rule_grp(carry, grp_i, block_i, n_prior_rules_arr, n_rules_per_grp_arr,
     return (lvl, block_applied, grp_app_i, cancelled, restart, again), None
 
         
-def gen_tick_fn(obj_to_idxs, coll_mat, tree_rules, meta_objs, jit, n_objs):
+def gen_tick_fn(obj_to_idxs, coll_mat, tree_rules, meta_objs, jit, n_objs, char_to_obj):
     if len(tree_rules) == 0:
         pass
     else:
@@ -1363,7 +1420,8 @@ def gen_tick_fn(obj_to_idxs, coll_mat, tree_rules, meta_objs, jit, n_objs):
             looping = rule_block.looping
             rule_grps = []
             for rule in rule_block.rules:
-                sub_rule_fns = gen_subrules_meta(rule, n_objs, obj_to_idxs, meta_objs, coll_mat, rule_name=str(rule), jit=jit)
+                sub_rule_fns = gen_subrules_meta(rule, n_objs, obj_to_idxs, meta_objs, coll_mat, rule_name=str(rule), 
+                                                 char_to_obj=char_to_obj, jit=jit)
                 if not 'late' in rule.prefixes:
                     rule_grps.append(sub_rule_fns)
                 else:
@@ -1670,8 +1728,9 @@ class PSEnv:
             obj_key = obj.legend_key
             if obj_key is not None:
                 obj_to_char[obj.name] = obj_key
+        self.char_to_obj = char_to_obj = {v: k for k, v in obj_to_char.items()}
 
-        collision_layers = expand_collision_layers(tree.collision_layers, meta_objs)
+        collision_layers = expand_collision_layers(tree.collision_layers, meta_objs, char_to_obj)
         atomic_obj_names = [name for layer in collision_layers for name in layer]
         # atomic_obj_names = [name for name in tree.objects.keys()]
         # atomic_obj_names = [name for name in atomic_obj_names]
@@ -1681,17 +1740,18 @@ class PSEnv:
             # Meta-objects that are actually just alternate names.
             if DEBUG:
                 print(f'sub_objs {sub_objs}')
-            sub_objs = expand_meta_objs(sub_objs, self.obj_to_idxs, meta_objs)
+            sub_objs = expand_meta_objs(sub_objs, meta_objs, char_to_obj)
             if len(sub_objs) == 1 and (obj not in self.obj_to_idxs):
                 self.obj_to_idxs[obj] = self.obj_to_idxs[sub_objs[0]]
         self.n_objs = len(atomic_obj_names)
         coll_mat = np.einsum('ij,ik->jk', coll_masks, coll_masks, dtype=bool)
-        self.tick_fn = gen_tick_fn(self.obj_to_idxs, coll_mat, tree.rules, meta_objs, jit=self.jit, n_objs=self.n_objs)
-        self.check_win = gen_check_win(tree.win_conditions, self.obj_to_idxs, meta_objs, jit=self.jit)
+        self.tick_fn = gen_tick_fn(self.obj_to_idxs, coll_mat, tree.rules, meta_objs, jit=self.jit, n_objs=self.n_objs,
+                                   char_to_obj=char_to_obj)
+        self.check_win = gen_check_win(tree.win_conditions, self.obj_to_idxs, meta_objs, self.char_to_obj, jit=self.jit)
         if 'player' in self.obj_to_idxs:
             self.player_idxs = [self.obj_to_idxs['player']]
         else:
-            player_objs = expand_meta_objs(['player'], self.obj_to_idxs, meta_objs)
+            player_objs = expand_meta_objs(['player'], meta_objs, char_to_obj)
             self.player_idxs = [self.obj_to_idxs[p] for p in player_objs]
         self.player_idxs = np.array(self.player_idxs)
         if DEBUG:
@@ -1702,6 +1762,8 @@ class PSEnv:
             print(self.obj_to_idxs)
         # for obj_name in self.obj_to_idxs:
         for obj_key in atomic_obj_names:
+            if obj_key not in tree.objects:
+                breakpoint()
             obj = tree.objects[obj_key]
             if obj.sprite is not None:
                 if DEBUG:
@@ -1731,10 +1793,11 @@ class PSEnv:
         self.obj_vecs = np.eye(self.n_objs, dtype=bool)
         joint_obj_vecs = []
         self.chars_to_idxs = {obj_to_char[k]: v for k, v in self.obj_to_idxs.items() if k in obj_to_char}
+        self.chars_to_idxs.update({k: v for k, v in self.obj_to_idxs.items() if len(k) == 1})
 
         for jo, subobjects in joint_tiles.items():
             vec = np.zeros(self.n_objs, dtype=bool)
-            subobjects = expand_meta_objs(subobjects, self.obj_to_idxs, meta_objs)
+            subobjects = expand_meta_objs(subobjects, meta_objs, char_to_obj)
             for so in subobjects:
                 if DEBUG:
                     print(so)
@@ -1765,7 +1828,7 @@ class PSEnv:
         multihot_level = rearrange(multihot_level, "h w c -> c h w")
 
         # Add a default background object everywhere
-        background_sub_objs = expand_meta_objs(['background'], self.obj_to_idxs, self.meta_objs)
+        background_sub_objs = expand_meta_objs(['background'], self.meta_objs, self.char_to_obj)
         sub_objs = background_sub_objs
         bg_obj = background_sub_objs[0]
         bg_idx = self.obj_to_idxs[bg_obj]
@@ -1923,7 +1986,8 @@ class PSEnv:
         restart = False
         final_lvl, tick_applied, turn_app_i, cancelled, restart = self.tick_fn(lvl)
 
-        accept_lvl_change = ((not self.require_player_movement) or player_has_moved(init_lvl, final_lvl, self.obj_to_idxs, self.meta_objs)) & ~cancelled
+        accept_lvl_change = ((not self.require_player_movement) or 
+                             player_has_moved(init_lvl, final_lvl, self.obj_to_idxs, self.meta_objs, self.char_to_obj)) & ~cancelled
         # jax.debug.print('accept level change: {accept_lvl_change}', accept_lvl_change=accept_lvl_change) 
         final_lvl = jax.lax.select(
             accept_lvl_change,
@@ -2023,7 +2087,7 @@ def multihot_to_desc(multihot_level, obj_to_idxs, n_objs):
     return desc_str
 
 
-def init_ps_env(config: Config, params: PSParams, verbose: bool = False) -> PSEnv:
+def init_ps_env(config: Config, verbose: bool = False) -> PSEnv:
     start_time = timer()
     game = config.game
     level_i = config.level_i

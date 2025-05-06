@@ -43,6 +43,7 @@ def human_loop(env: PSEnv, profile=False):
     # Display the image in an OpenCV window
     cv2.imshow(env.title, im)
     print("Press an arrow key or 'x' (ESC to exit).")
+    done = False
     
     # Loop waiting for key presses
     while True:
@@ -80,6 +81,7 @@ def human_loop(env: PSEnv, profile=False):
         elif key == ord('n'):
             print("Advancing level...")
             lvl_i += 1
+            params = params.replace(level=env.get_level(lvl_i))
             do_reset = True
         elif key == ord('b'):
             print("Going back a level...")

@@ -18,6 +18,7 @@ from utils_rl import init_config, get_env_params_from_config
 games = [
     # 'castlemouse',
     # 'atlas shrank',
+    'tiny treasure hunt',
     'test',
     'sokoban_basic',
     'sokoban_match3',
@@ -55,8 +56,8 @@ def profile(config: ProfileEnvConfig):
 
             print(f'\nGame: {game}, n_envs: {config.n_envs}.')
             start = timer()
-            env_params = get_env_params_from_config(config)
-            env = init_ps_env(config, env_params)
+            env = init_ps_env(config)
+            env_params = get_env_params_from_config(env, config)
 
             # INIT ENV
             rng, _rng = jax.random.split(rng)
@@ -72,8 +73,8 @@ def profile(config: ProfileEnvConfig):
                 # STEP ENV
                 rng_step = jax.random.split(_rng, config.n_envs)
                 obsv, env_state, reward, done, info = jax.vmap(
-                    env.step, in_axes=(0, 0, 0)
-                )(rng_step, env_state, action)
+                    env.step, in_axes=(0, 0, 0, None)
+                )(rng_step, env_state, action, env_params)
                 carry = (env_state, rng)
                 return carry, env_state
 

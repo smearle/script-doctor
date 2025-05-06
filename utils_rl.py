@@ -44,9 +44,10 @@ def get_exp_dir(config: MultiAgentConfig):
     )
     return exp_dir
 
-def get_env_params_from_config(config: MultiAgentConfig):
+def get_env_params_from_config(env: PSEnv, config: MultiAgentConfig):
+    level = env.get_level(config.level_i)
     return PSParams(
-        level_i=config.level_i,
+        level=level
     )
 
 @struct.dataclass
@@ -92,8 +93,8 @@ def linear_schedule(config, count):
 
 def init_run(config: MultiAgentConfig, ckpt_manager, latest_update_step, rng):
     # Create PCGRL environment
-    env_params = get_env_params_from_config(config)
-    env = init_ps_env(env_params)
+    env = init_ps_env(config)
+    env_params = get_env_params_from_config(env, config)
 
     # Wrap environment with JAXMARL wrapper
     # env = MultiAgentWrapper(env, env_params)

@@ -171,9 +171,9 @@ def make_train(config: TrainConfig, restored_ckpt, checkpoint_manager):
     config._minibatch_size = (
         config.n_envs * config.num_steps // config.NUM_MINIBATCHES
     )
-    env_params = get_env_params_from_config(config)
+    env_r = init_ps_env(config)
+    env_params = get_env_params_from_config(env_r, config)
     # Don't need to wrap the version of the environment we'll use for rendering
-    env_r = init_ps_env(config, env_params)
     env = LogWrapper(env_r)
 
     def linear_schedule(count):
@@ -542,8 +542,8 @@ def init_checkpointer(config: Config) -> Tuple[Any, dict]:
     ckpt_dir = get_ckpt_dir(config)
 
     # Create a dummy checkpoint so we can restore it to the correct dataclasses
-    env_params = get_env_params_from_config(config)
-    env = init_ps_env(config, env_params)
+    env = init_ps_env(config)
+    env_params = get_env_params_from_config(env, config)
     # env = FlattenObservationWrapper(env)
     env = LogWrapper(env)
     rng, _rng = jax.random.split(rng)
