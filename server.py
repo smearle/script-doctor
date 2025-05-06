@@ -232,7 +232,7 @@ def gen_game():
     curr_inventive_prompt = inventive_prompt if exp_config.inventive_prompt else ''
     gen_game_output_path = os.path.join(save_dir, f'{n_iter}b_code.txt')
     gen_game_code_output_path = os.path.join(save_dir, f'{n_iter}b_code.txt')
-    print(f"Saving code at {gen_game_code_output_path}")
+    print(f"Generating and saving code at {gen_game_code_output_path}")
     if not os.path.isfile(gen_game_code_output_path):
         gen_game_prompt_output_path = os.path.join(save_dir, f'{n_iter}a_prompt.txt')
         if meta_parents is None:
@@ -598,13 +598,14 @@ hypers_ks, hypers_lst = [], []
 class ExpConfig:
     seed = 0
     provider = 'portkey'
+    # model = 'gemini-2.5-flash-preview-04-17'
     model = 'gemini-2.0-flash-exp'
     inventive_prompt = True
     cot = True
     fewshot = True
     docs = False
     from_idea = False
-    context_len = 30_000
+    context_len = 10_000
     viz_feedback = False
 
 class Sweep:
@@ -667,6 +668,33 @@ all_hypers = {
 }
 
 sweep_stats = {}
+
+
+class EvoConfig(ExpConfig):
+    n_generations: int = 10
+
+
+class QDProcess():
+    def __init__(self):
+        # Cre
+        archive = [[] * 10] * 10
+        breakpoint()
+
+qd_process = None
+
+@app.route('/evo_ask', methods=['POST'])
+def evo_ask():
+    global evo_config, qd_process
+    if qd_process is None:
+        qd_process = QDProcess()
+
+@app.route('/evo_tell', methods=['POST'])
+def evo_tell():
+    global evo_config, qd_process
+    data = request.json
+    sols, gif_urls, console_text, solver_text = data['sols'], data['gif_urls'], data['console_text'], data['solver_text']
+    breakpoint()
+
 
 @app.route('/reset_sweep', methods=['POST'])
 def reset_sweep():
@@ -1055,7 +1083,9 @@ def main(cfg: Config):
         viz_evo_stats()
     elif cfg.mode == 'generate':
 
-        browser_thread = threading.Thread(target=partial(open_browser, url=f"http://127.0.0.1:{cfg.port}"))
+        browser_thread = threading.Thread(
+            target=partial(open_browser, url=f"http://127.0.0.1:{cfg.port}")
+        )
         browser_thread.daemon = True
         browser_thread.start()
 

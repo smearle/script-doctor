@@ -177,7 +177,7 @@ async function solveLevelBFS(levelIdx, captureStates=false, maxIters=1_000_000) 
   console.log(sol.length);
   // visited = new Set([hashState(init_level_map)]);
   visited = {};
-  visited[level.objects] = true;
+  visited[init_level.objects] = true;
   i = 0;
   start_time = Date.now();
   console.log(frontier.size())
@@ -217,7 +217,7 @@ async function solveLevelBFS(levelIdx, captureStates=false, maxIters=1_000_000) 
         new_level_map = new_level['dat'];
         // const newHash = hashState(new_level_map);
         // if (!visited.has(newHash)) {
-        if (!(level.objects in visited)) {
+        if (!(new_level.objects in visited)) {
           
           // UNCOMMENT THESE LINES FOR VISUAL DEBUGGING
           // await new Promise(resolve => setTimeout(resolve, 1)); // Small delay for live feedback
@@ -231,7 +231,7 @@ async function solveLevelBFS(levelIdx, captureStates=false, maxIters=1_000_000) 
           // action_seqs.enqueue(new_action_seq);
 
           // visited.add(newHash);
-          visited[level.objects] = true;
+          visited[new_level.objects] = true;
         } 
       }
     }
@@ -779,9 +779,7 @@ async function genGame(config) {
     }
   
     const data = await response.json();
-    // ...existing code...
 
-    // Rest of the function remains the same, just replacing direct references to parameters with config.paramName
     code = data.code;
     vizFeedback = data.viz_feedback;
     minCode = null;
@@ -982,8 +980,164 @@ async function userSelectParentsDummy(seed_games) {
 }
 
 
-const popSize = 1;
-const nGens = 1;
+const popSize = 5;
+const nGens = 10;
+
+async function evolve2() {
+  // Get a candidate game from the server
+  const response = await fetch('/evo_ask', {
+    method: 'GET',
+  });
+
+  // Evaluate the game
+  const data = await response.json();
+  const game = data.game;
+  code = data.code;
+  vizFeedback = data.viz_feedback;
+  minCode = null;
+  // if min_code is not None, then use this
+  if (data.min_code) {
+    minCode = data.min_code;
+  }
+  sols = data.sols;
+  larkError = data.lark_error
+  if (data.skip) {
+    return new GameIndividual(code, minCode, -1, 0, [], [], true);
+  }
+  errorLoadingLevel = false;
+  try {
+    codeToCompile = minCode ? minCode : code;
+    editor.setValue(codeToCompile);
+    editor.clearHistory();
+    clearConsole();
+    setEditorClean();
+    unloadGame();
+  } catch (e) {
+    console.log('Error while loading code:', e);
+    errorLoadingLevel = true;
+    consoleText = `Error while loading code into editor: ${e}.`;
+    errorCount = 10;
+  }
+  if (!errorLoadingLevel) {
+    try {
+      compile(['restart'], codeToCompile);
+    } catch (e) {
+      console.log('Error while compiling code:', e);
+    }
+    consoleText = getConsoleText();
+  }
+
+  if (errorCount > 0) {
+    compilationSuccess = false;
+    solvable = false;
+    solverText = '';
+    // console.log(`Errors: ${errorCount}. Iterating on the game code. Attempt ${nGenAttempts}.`);
+    fitness = -errorCount;
+    dataURLs = [];
+  } else {
+    compiledIters.push(nGenAttempts);
+    compilationSuccess = true;
+    solverText = '';
+    solvable = true;
+    dataURLs = [];
+    var anySolvable = false;
+    var sol;
+    var nSearchIters;
+    // console.log('No compilation errors. Performing playtest.');
+    fitness = 0
+    solComplexities = []
+    for (level_i in state.levels) {
+      // console.log('Levels:', state.levels);
+      // Check if type `Level` or dict
+      if (!state.levels[level_i].hasOwnProperty('height')) {
+        // console.log(`Skipping level ${level_i} as it does not appear to be a map (just a message?): ${state.levels[level_i]}.`);
+        continue;
+      }
+      // try {
+        // Check if level_i is in sols
+      if (sols.hasOwnProperty(level_i)) {
+        // console.log('Using cached solution.');
+        [sol, nSearchIters] = sols[level_i];
+      } else {
+        clearConsole();
+        console.log(`Solving level ${level_i}...`);
+        [sol, nSearchIters] = await solveLevelBFS(level_i);
+        if (sol.length > 0) {
+          console.log(`Solution for level ${level_i}:`, sol);
+          console.log(`Saving gif for level ${level_i}.`);
+          curlevel = level_i;
+          compile(['loadLevel', level_i], editor.getValue());
+          inputHistory = sol;
+          const [ dataURL, filename ] = makeGIFDoctor();
+          dataURLs.push([dataURL, level_i]);
+        }
+      }
+      // } catch (e) {
+      //   console.log('Error while solving level:', e);
+      //   sol = [];
+      //   n_search_iters = -1;
+      //   solverText += ` Level ${level_i} resulted in error: ${e}. Please repair it.`;
+      // }
+      if (!sol) {
+        console.log(`sol undefined`);
+      }
+      sols[level_i] = [sol, nSearchIters];
+      // console.log('Solution:', sol);
+      // check if sol is undefined
+      solComplexity = 0;
+      if (sol.length > 0) {
+        fitness += nSearchIters;
+        solComplexity = nSearchIters;
+        // console.log('Level is solvable.');
+        // solverText += `Found solution for level ${level_i} in ${n_search_iters} iterations: ${sol}.\n`
+        solverText += `Found solution for level ${level_i} in ${nSearchIters} iterations. Solution is ${sol.length} moves long.\n`
+        if (sol.length > 1) {
+          anySolvable = true;
+        }
+        if (sol.length < 10) {
+          solverText += `Solution is very short. Please make it a bit more complex.\n`
+          solvable = false;
+        }
+      } else if (sol == -1) {
+        solvable = false;
+        solverText += `Hit maximum search depth of ${i} while attempting to solve ${level_i}. Are you sure it's solvable? If so, please make it a bit simpler.\n`
+      } else if (sol == -2) {
+        solvable = false;
+        consoleText = getConsoleText();
+        solverText += `Error while solving level ${level_i}. Please repair it.\nThe PuzzleScript console output was:\n${consoleText}\n`
+      } else {
+        // console.log(`Level ${level_i} is not solvable.`);
+        solvable = false;
+        solverText += ` Level ${level_i} is not solvable. Please repair it.\n`
+      }
+      solComplexities.push(solComplexity);
+    }
+    if (solComplexities.length == 0) {
+      solComplexities = [0];
+    }
+    meanSolComplexity = solComplexities.reduce((a, b) => a + b, 0) / solComplexities.length;
+    maxMeanSolComplexity = Math.max(maxMeanSolComplexity, meanSolComplexity);
+    if (solvable) {
+      // If all levels are solvable
+      solvedIters.push(nGenAttempts)
+    }
+    if (anySolvable) {
+      anySolvedIters.push(nGenAttempts)
+    }
+  }
+
+  // Now send the results to the server
+  response = await fetch('/evo_tell', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ 
+      sols: sols,
+      gif_urls: dataURLs,
+      console_text: consoleText,
+      solver_text: solverText,
+    }),
+  });
+}
 
 async function evolve(evoSeed, metaParents=null) {
   /** The main loop for evolving games.
@@ -1357,14 +1511,15 @@ function sweepClick() {
   sweepGeneral();
 }
 
- const expSeed = 21;
+ const expSeed = 0;
 
 // sweepGeneral();
 // sweep();
 // fromIdeaSweep();
 // fromPlanSweep();
 // playTest();
-evolve();
+// evolve(expSeed);
+evolve2();
 // processAllGames();
 
 // genGame('init', [], 'test_99', 99, fewshot=true, cot=true, maxGenAttempts=20);

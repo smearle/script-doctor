@@ -65,6 +65,7 @@ def gen_fewshot_examples(system_prompt, prompt, max_tokens):
         fewshot_examples_prompt_i += '\n```\n' + example_games.pop(rand_example_i) + '\n```\n'
         n_games_included += 1
     fewshot_examples_prompt_i = last_fewshot_examples_prompt_i
+    print(f"Number of games included in fewshot examples: {n_games_included-1}")
     if n_games_included == 0:
         fewshow_examples_prompt_i = ''
     return fewshot_examples_prompt_i
@@ -126,7 +127,7 @@ def llm_text_query(system_prompt, prompt, seed, model, provider):
                 completion = client.chat.completions.create(  
                     model=deployment,
                     messages=messages,
-                    max_completion_tokens=100_000,
+                    max_completion_tokens=1_000_000,
                     stop=None,  
                     stream=False
                 )
@@ -145,30 +146,24 @@ def llm_text_query(system_prompt, prompt, seed, model, provider):
         portkey = Portkey(
             api_key=os.getenv('PORTKEY_API_KEY'),
             virtual_key="vertex-ai-3e806d",
-            base_url = "https://ai-gateway.apps.cloud.rt.nyu.edu/v1"
+            base_url = "https://ai-gateway.apps.cloud.rt.nyu.edu/v1",
+            # request_timeout=100_000,
         )
         completion = portkey.chat.completions.create(
+            # stream=True,
             messages=messages,
             # model="gemini-2.0-flash-exp",
             model=model,
             max_tokens=8192
         )
+        # for chunk in stream:
+        #     if chunk['choices'][0]['finish_reason'] == 'stop':
+        #         break
+        #     if chunk['choices'][0]['delta']['role'] == 'assistant':
+        #         continue
+        #     if chunk['choices'][0]['delta']['content']:
+        #         print(chunk['choices'][0]['delta']['content'], end='', flush=True)
         return completion.choices[0].message.content
         
-
-    global openai_client
-    if openai_client is None:
-        openai_client = openai.Client(api_key=os.getenv('OPENAI_API_KEY'))
-    response = openai_client.chat.completions.create(
-        model='gpt-4o',
-        messages=[
-            {'role': 'system', 'content': system_prompt},
-            {'role': 'user', 'content': prompt},
-        ],
-        seed=seed,
-    )
-    text = response.choices[0].message.content
-    if text == '':
-        breakpoint()
-    return text
-
+    else:
+        raise ValueError("Invalid provider. Choose 'azure' or 'portkey'.")
