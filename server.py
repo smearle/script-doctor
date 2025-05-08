@@ -201,7 +201,8 @@ def gen_game():
             if lark_error is None:
                 lark_error_prompt = ''
             else:
-                lark_error_prompt = f"""{(f"It also resulted in the following error when we attempted to parse the code as a context free grammar using lark:\n```\n{lark_error}\n```\n" if lark_error is not None else "")}"""
+                lark_error_prompt = f"""It also resulted in the following error when we attempted to parse the code as a context free grammar using lark: ```{lark_error}```""" if lark_error is not None else ""
+            
             prompt = game_compile_repair_prompt.format(code=code, console_text=console_text, cot_prompt=cot_prompt_text,
                                                        game_idea=game_idea, lark_error_prompt=lark_error_prompt,
                                                        from_idea_repair_prompt=from_idea_prompt_i)
@@ -450,8 +451,23 @@ games_to_skip = set({'Broken Rigid Body'})
 def list_scraped_games():
     games_set = set()
     games = []
-    game_files = os.listdir('data/min_games')
-    test_game_files = [f"{test_game}.txt" for test_game in test_games]
+
+    # 检查目录是否存在，如果不存在则创建
+    if not os.path.exists('data/min_games'):
+        try:
+            os.makedirs('data/min_games')
+            print("Created directory: data/min_games")
+        except Exception as e:
+            print(f"Error creating directory: {e}")
+    
+    # 读取目录文件
+    try:
+        game_files = os.listdir('data/min_games')
+    except Exception as e:
+        print(f"Error listing directory: {e}")
+        game_files = []
+        
+    test_game_files = [f"{test_game}.txt" for test_game in test_games] 
     game_files = test_game_files + game_files
 
     for filename in game_files:
@@ -468,7 +484,7 @@ def list_scraped_games():
 @app.route('/save_init_state', methods=['POST'])
 def save_init_state():
     data = request.json
-
+    game_rep = data['state_repr']
     game_hash = data['game_hash']
     game_level = data['game_level']
     state_hash = data['state_hash']
@@ -480,13 +496,20 @@ def save_init_state():
     if not os.path.isfile(im_path):
         with open(im_path, 'wb') as f:
             f.write(im_data)
-    return jsonify({'status': 'success'})
+    return jsonify({
+        'status': 'success',
+        'game_hash': game_hash,
+        'state_hash': state_hash,
+        'game_rep': game_rep,
+        'im_dir':im_dir
+    })
+    # feed my python code the game state
 
 
 @app.route('/save_transition', methods=['POST'])
 def save_transition():
     data = request.json
-
+    game_rep = data['state_repr']
     game_hash = data['game_hash']
     game_level = data['game_level']
     trans_dir = os.path.join(TRANSITIONS_DIR, game_hash, str(game_level))
@@ -974,6 +997,87 @@ def main(cfg: Config):
         eval_sweep(stats_path, hypers_ks, hypers_lst)
     elif cfg.mode == 'generate':
         app.run(port=cfg.port)
+
+#LLM agents
+# 
+from LLM_agent import LLMAgent, ReinforcementWrapper, StateVisualizer
+
+# 初始化智能体系统
+llm_agent = LLMAgent(model_name="gpt-4o")
+rl_wrapper = ReinforcementWrapper(llm_agent)
+
+@app.route('/llm_action', methods=['POST'])
+def llm_action():
+    try:
+        data = request.json
+        state_repr = StateVisualizer.render_ascii({
+            'entities': llm_agent._extract_entities(data['state'])
+        })
+        
+        # 处理游戏状态
+        processed_state = llm_agent.process_state(state_repr)
+        
+        # 生成决策
+        action = llm_agent.choose_action(
+            processed_state=processed_state,
+            goal=data.get('goal', '')
+        )
+        
+        # 记录历史
+        llm_agent.update_history(action, "pending")
+        
+        # 强化学习更新
+        if 'reward' in data:
+            rl_wrapper.reinforce(data['reward'])
+        
+        return jsonify({
+            'action': action,
+            'state_hash': hash(state_repr),
+            'complexity': processed_state['metrics']['complexity']
+        })
+    
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/agent_history', methods=['GET'])
+def get_action_history():
+    return jsonify({
+        'history': llm_agent.action_history,
+        'q_table': rl_wrapper.q_table
+    })
+
+@app.route('/retrain', methods=['POST'])
+def retrain_agent():
+    try:
+        training_data = request.json
+        # TODO: 实现训练逻辑
+        return jsonify({'status': 'training_started'})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+ 
+@app.route('/get_state', methods=['GET'])
+def get_state():
+    game_hash = request.args.get('game_hash')
+    state_hash = request.args.get('state_hash')
+    game_level = request.args.get('game_level', '0')  # default to 0
+
+    if not game_hash or not state_hash:
+        return jsonify({'error': 'Missing parameters'}), 400
+
+    # 尝试在 init 里找
+    init_path = os.path.join('transitions', game_hash, str(game_level), 'images', f'{state_hash}.txt')
+    if os.path.isfile(init_path):
+        with open(init_path, 'r', encoding='utf-8') as f:
+            return jsonify({'state': f.read()})
+
+    # 尝试在 transition 中找（可以拓展）
+    # 你可以把 transition 状态文本也存在 images 里或单独的路径
+    trans_path = os.path.join('transitions', game_hash, str(game_level), 'images', f'{state_hash}.txt')
+    if os.path.isfile(trans_path):
+        with open(trans_path, 'r', encoding='utf-8') as f:
+            return jsonify({'state': f.read()})
+
+    return jsonify({'error': 'State not found'}), 404
 
 
 if __name__ == '__main__':

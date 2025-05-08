@@ -176,8 +176,8 @@ def gen_game(seed, fewshot, cot, save_dir, gen_mode, parents, code, from_idea, g
             if lark_error is None:
                 lark_error_prompt = ''
             else:
-                lark_error_prompt = f"""{("It also resulted in the following error when we attempted to parse the code as a context free grammar using lark:\n```\n{lark_error}\n```\n" if lark_error is not None else "")}"""
-            prompt = game_compile_repair_prompt.format(code=code, console_text=console_text, cot_prompt=cot_prompt_text,
+                lark_error_prompt = f"""It also resulted in the following error when we attempted to parse the code as a context free grammar using lark: ```{lark_error}```""" if lark_error is not None else ""
+                prompt = game_compile_repair_prompt.format(code=code, console_text=console_text, cot_prompt=cot_prompt_text,
                                                        game_idea=game_idea, lark_error_prompt=lark_error_prompt)
         else:
             prompt = game_solvability_repair_prompt.format(code=code, solver_text=solver_text,
