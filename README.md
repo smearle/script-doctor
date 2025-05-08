@@ -1,6 +1,15 @@
 # LLM Agent for Sokoban
 
 This project provides a unified LLM client and agent system for using Large Language Models (LLMs) as intelligent agents in Sokoban puzzle game environments. The system supports multiple LLM models and providers, and integrates reinforcement learning capabilities.
+## Setup
+
+Requires python 3.12
+```
+pip install -r requirements.txt
+```
+(If you don't have cuda available, install `jax` instead of `jax[cuda]`.)
+
+## Generate data for training a world model
 
 ## Main Components
 
@@ -32,7 +41,7 @@ pip install jax jaxlib dm-haiku
 
 ### Basic Example
 
-Run the simple example script:
+## Collecting/scraping and parsing games
 
 ```bash
 python example_sokoban_agent.py --model gpt-4o --provider azure --visualize
@@ -52,6 +61,9 @@ Run the agent integrated with JAX environment:
 
 ```bash
 python jax_sokoban_agent.py --model gpt-4o --provider azure --episodes 5 --render
+python collect_games.py
+python parse_lark.py
+python gen_trees.py
 ```
 
 Parameter description:

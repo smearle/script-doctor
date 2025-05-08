@@ -2,11 +2,13 @@ import base64
 import binascii as ba
 from dataclasses import dataclass
 from enum import IntEnum
+from functools import partial
 import io
 import inspect
 import itertools
 import json
 import os
+from pathlib import Path
 import random
 import re
 import traceback
@@ -28,8 +30,9 @@ import openai
 import pandas as pd
 import requests
 
+from client import open_browser
 import game_gen
-from parse_lark import PrintPuzzleScript, RepairPuzzleScript, StripPuzzleScript, add_empty_sounds_section, preprocess_ps, test_games
+from parse_lark import GAMES_DIR, MIN_GAMES_DIR, PrintPuzzleScript, RepairPuzzleScript, StripPuzzleScript, add_empty_sounds_section, preprocess_ps, TEST_GAMES
 from prompts import *
 from utils import extract_ps_code, gen_fewshot_examples, llm_text_query, num_tokens_from_string, save_prompts, truncate_str_to_token_len
 
@@ -41,9 +44,23 @@ class Config:
     sweep: str = 'models'
     # Mostly for dev. When we change something client-side about the metrics that we save for a given game.
     recompute_stats: bool = False
+    max_gen_attempts: int = 10
+    provider: str = 'portkey'
+    model: str = 'gemini-2.0-flash-exp'
+    viz_feedback: bool = True
+
+
+@dataclass
+class EvoConfig(Config):
+    seed: int = 0
+    port: int = 8000
+
 
 cs = ConfigStore.instance()
 cs.store(name="config", node=Config)
+cs.store(name="evo", node=EvoConfig)
+
+max_gen_attempts = None
 
 
 load_dotenv()
@@ -92,12 +109,18 @@ def load_ideas():
         ideas = json.load(f)
     return ideas
 
+@app.route('/file_exists', methods=['POST'])
+def file_exists():
+    data = request.json
+    file_path = data['filePath']
+    exists = os.path.isfile(file_path)
+    return jsonify({'exists': exists})
 
 @app.route('/load_game_from_file', methods=['POST'])
 def load_game_from_file():
     data = request.json
     game = data['game']
-    game_path = os.path.join('data', 'min_games', f'{game}.txt')
+    game_path = os.path.join(MIN_GAMES_DIR, f'{game}.txt')
     with open(game_path, 'r') as f:
         code = f.read()
     print(code)
@@ -158,6 +181,37 @@ def log_gen_results():
 import lark
 lark_parser = lark.Lark.open('syntax.lark', start='ps_game')
 
+@app.route('/save_evo_gen_stats', methods=['POST'])
+def save_evo_gen_stats():
+    data = request.json
+    stats = data['stats']
+    stats_path = os.path.join('logs', data['save_dir'])
+    stats_dir = Path(stats_path).parent
+    if not os.path.exists(stats_dir):
+        os.makedirs(stats_dir)
+    with open(stats_path, 'w') as f:
+        json.dump(stats, f, indent=4)
+    return jsonify({})
+
+def viz_evo_stats(exp_seed=21):
+    stats_dir = f'logs/evo-{exp_seed}/stats'
+    gen_i = 0
+    stats_exist = True
+    fits = []
+    while stats_exist:
+        gen_i += 1
+        stats_path = os.path.join(stats_dir, f'gen-{gen_i}.json')
+        with open(stats_path, 'r') as f:
+            stats = json.load(f)
+            pop_fits = stats['pop_fits']
+            fits.append(pop_fits)
+        stats_exist = os.path.exists(os.path.join(stats_dir, f'gen-{gen_i+1}.json'))
+    breakpoint()
+
+@app.route('/get_viz_feedback', methods=['POST'])
+def get_viz_feedback():
+    breakpoint()
+
 @app.route('/gen_game', methods=['POST'])
 def gen_game():
     data = request.json
@@ -179,14 +233,23 @@ def gen_game():
     solver_text = data['solver_text']
     lark_error = data['lark_error']
     n_iter = data['n_iter']
+    meta_parents = data['meta_parents']
     curr_docs_prompt = docs_prompt if exp_config.docs else ''
     curr_inventive_prompt = inventive_prompt if exp_config.inventive_prompt else ''
     gen_game_output_path = os.path.join(save_dir, f'{n_iter}b_code.txt')
     gen_game_code_output_path = os.path.join(save_dir, f'{n_iter}b_code.txt')
-    print(f"Saving code at {gen_game_code_output_path}")
+    print(f"Generating and saving code at {gen_game_code_output_path}")
     if not os.path.isfile(gen_game_code_output_path):
         gen_game_prompt_output_path = os.path.join(save_dir, f'{n_iter}a_prompt.txt')
-        system_prompt = game_gen_system_prompt.format(docs_prompt=curr_docs_prompt)
+        if meta_parents is None:
+            system_prompt = game_gen_system_prompt.format(docs_prompt=curr_docs_prompt)
+        else:
+            # Load the meta-parents from the scraped_games directory
+            meta_parent_txt = ''
+            for parent in meta_parents:
+                with open(os.path.join('data/scraped_games', f'{parent}.txt'), 'r') as f:
+                    meta_parent_txt += f.read() + '\n\n'
+            system_prompt = evo_meta_prompt.format(docs_prompt=curr_docs_prompt, meta_parents=meta_parent_txt)
         from_idea_prompt_i = from_idea_prompt.format(game_idea=game_idea) if from_idea else ''
         if n_iter == 0:
             parents_text = '/n/n'.join([p['code'] for p in parents])
@@ -225,7 +288,7 @@ def gen_game():
                 print(traceback.format_exc())
                 print(f"Failed to query the model. I think because a human game in the fewshot prompt was flagged as inappropriate? Retrying...")
         save_prompts(system_prompt, prompt, gen_game_prompt_output_path)
-        text = llm_text_query(system_prompt, prompt, seed, model=exp_config.model)
+        text = llm_text_query(system_prompt, prompt, seed, model=exp_config.model, provider=exp_config.provider)
         with open(gen_game_code_output_path, 'w', encoding='utf-8') as f:
             f.write(text)
     else:
@@ -310,7 +373,7 @@ def gen_game_from_plan():
         if fewshot:
             plan_system_prompt += gen_fewshot_examples(plan_system_prompt, prompt, max_tokens=exp_config.context_len)
         save_prompts(plan_system_prompt, prompt, plan_prompt_output_path)
-        game_plan = llm_text_query(plan_system_prompt, prompt, seed)
+        game_plan = llm_text_query(plan_system_prompt, prompt, seed, model=exp_config.model, provider=exp_config.provider)
         with open(plan_output_path, 'w', encoding='utf-8') as f:
             f.write(game_plan)
     else:
@@ -328,7 +391,7 @@ def gen_game_from_plan():
     if not os.path.isfile(sprites_output_path):
         sprites_prompt_output_path = os.path.join(save_dir, f'0b_sprites_prompt.txt')
         save_prompts(sprites_system_prompt, sprites_prompt, sprites_prompt_output_path)
-        sprites = llm_text_query(sprites_system_prompt, sprites_prompt, seed)
+        sprites = llm_text_query(sprites_system_prompt, sprites_prompt, seed, model=exp_config.model, provider=exp_config.provider)
         with open(sprites_output_path, 'w', encoding='utf-8') as f:
             f.write(sprites)
         
@@ -355,7 +418,7 @@ def gen_game_from_plan():
     if not os.path.isfile(rules_output_path):
         rules_prompt_output_path = os.path.join(save_dir, f'0d_rules_prompt.txt')
         save_prompts(sprites_system_prompt, rules_prompt, rules_prompt_output_path)
-        rules = llm_text_query(sprites_system_prompt, rules_prompt, seed)
+        rules = llm_text_query(sprites_system_prompt, rules_prompt, seed, model=exp_config.model, provider=exp_config.provider)
         with open(rules_output_path, 'w', encoding='utf-8') as f:
             f.write(rules)
     else:
@@ -385,7 +448,7 @@ def gen_game_from_plan():
     if not os.path.isfile(levels_output_path):
         levels_prompt_output_path = os.path.join(save_dir, f'0f_levels_prompt.txt')
         save_prompts(levels_system_prompt, levels_prompt, levels_prompt_output_path)
-        levels = llm_text_query(levels_system_prompt, levels_prompt, seed)
+        levels = llm_text_query(levels_system_prompt, levels_prompt, seed, model=exp_config.model, provider=exp_config.provider)
         with open(levels_output_path, 'w', encoding='utf-8') as f:
             f.write(levels)
     else:
@@ -411,7 +474,7 @@ def gen_game_from_plan():
     if not os.path.isfile(finalize_output_path):
         finalize_prompt_output_path = os.path.join(save_dir, f'0h_code_prompt.txt')
         save_prompts(finalize_system_prompt, finalize_prompt, finalize_prompt_output_path)
-        code = llm_text_query(finalize_system_prompt, finalize_prompt, seed)
+        code = llm_text_query(finalize_system_prompt, finalize_prompt, seed, model=exp_config.model, provider=exp_config.provider)
         with open(finalize_output_path, 'w', encoding='utf-8') as f:
             f.write(code)
     else:
@@ -447,30 +510,32 @@ TRANSITIONS_DIR = 'transitions'
 
 games_to_skip = set({'Broken Rigid Body'})
 
-@app.route('/list_scraped_games')
+@app.route('/get_player_action', methods=['POST'])
+def get_player_action():
+    data = request.json
+    obs = data['obs']
+    # TODO
+    # action = ...
+    action = random.randint(0, 5)
+    return jsonify({'action': action})
+
+@app.route('/list_scraped_games', methods=['POST'])
 def list_scraped_games():
+    data = request.json
+    target_dir = data['target_dir']
     games_set = set()
     games = []
-
-    # Check if directory exists, create it if it doesn't
-    if not os.path.exists('data/min_games'):
-        try:
-            os.makedirs('data/min_games')
-            print("Created directory: data/min_games")
-        except Exception as e:
-            print(f"Error creating directory: {e}")
-    
-    # Read directory files
-    try:
-        game_files = os.listdir('data/min_games')
-    except Exception as e:
-        print(f"Error listing directory: {e}")
-        game_files = []
-        
-    test_game_files = [f"{test_game}.txt" for test_game in test_games] 
-    game_files = test_game_files + game_files
-
+    # game_files = os.listdir(os.path.join('data', target_dir))
+    # random.shuffle(game_files)
+    # test_game_files = [f"{test_game}.txt" for test_game in TEST_GAMES]
+    # game_files = test_game_files + game_files
+    with open('games_n_rules.json', 'r') as f:
+        games_n_rules = json.load(f)
+    games_n_rules = sorted(games_n_rules, key=lambda x: x[1])
+    game_files = [game[0] for game in games_n_rules]
     for filename in game_files:
+        if filename.startswith('rigid_'):
+            continue
         if filename.endswith('.txt'):
             filename = filename[:-4]
             if filename not in games_set:
@@ -478,7 +543,8 @@ def list_scraped_games():
                     print(f"Skipping {filename}")
                     continue
                 games_set.add(filename)
-                games.append(filename)
+        games.append(filename)
+    print(games)
     return jsonify(games)
 
 @app.route('/save_init_state', methods=['POST'])
@@ -549,57 +615,63 @@ hypers_i = 0
 hypers_ks, hypers_lst = [], []
 
 class ExpConfig:
-    model = 'gpt-4o'
-    game_i = 0
+    seed = 0
+    provider = 'portkey'
+    # model = 'gemini-2.5-flash-preview-04-17'
+    model = 'gemini-2.0-flash-exp'
     inventive_prompt = True
     cot = True
     fewshot = True
     docs = False
     from_idea = False
-    context_len = 30_000
+    context_len = 10_000
+    viz_feedback = False
 
 class Sweep:
-    game_i = list(range(10))
+    seed = list(range(10))
     context_len = [30_000]
 
 class InventiveSweep(Sweep):
-    game_i = list(range(20))
+    seed = list(range(20))
     inventive_prompt = [True, False]
 
 class FewshotSweep(Sweep):
-    game_i = list(range(20))
+    seed = list(range(20))
     fewshot = [True, False]
     cot = [True, False]
 
 class FromIdeaSweep(Sweep):
-    game_i = list(range(20))
+    seed = list(range(20))
     from_idea = [True, False]
     cot = [True, False]
 
 class FromIdeaSweep2(Sweep):
-    game_i = list(range(10))
+    seed = list(range(10))
     model = ['gpt-4o', 'o1', 'o3-mini']
     from_idea = [True, False]
-    context_len = [10_000]
+    context_len = [10_000, 30_000]
 
 class ModelSweep(Sweep):
-    game_i = list(range(15))
+    seed = list(range(15))
     model = ['gpt-4o', 'o1', 'o3-mini']
     context_len = [10_000]
 
 class DocSweep(Sweep):
     # context_len = [5_000, 10_000, 15_000, 20_000, 25_000, 30_000]
-    context_len = [10_000]
+    context_len = [5_000, 10_000]
     docs = [True, False]
     model = ['o1', 'o3-mini']
 
 class CtxSweep(Sweep):
-    # context_len = [10_000, 20_000, 30_000, 40_000, 50_000, 70_000]
-    context_len = [10_000, 30_000, 50_000, 70_000]
+    context_len = [10_000, 20_000, 30_000, 40_000, 50_000, 70_000]
+    # context_len = [10_000, 30_000, 50_000, 70_000]
 
 class CtxSweep2(Sweep):
     context_len = [10_000, 20_000, 30_000]
     model = ['o3-mini']
+
+class VizSweep(Sweep):
+    viz_feedback = [True, False]
 
 exp_config = ExpConfig()
 
@@ -615,6 +687,33 @@ all_hypers = {
 }
 
 sweep_stats = {}
+
+
+class EvoConfig(ExpConfig):
+    n_generations: int = 10
+
+
+class QDProcess():
+    def __init__(self):
+        # Cre
+        archive = [[] * 10] * 10
+        breakpoint()
+
+qd_process = None
+
+@app.route('/evo_ask', methods=['POST'])
+def evo_ask():
+    global evo_config, qd_process
+    if qd_process is None:
+        qd_process = QDProcess()
+
+@app.route('/evo_tell', methods=['POST'])
+def evo_tell():
+    global evo_config, qd_process
+    data = request.json
+    sols, gif_urls, console_text, solver_text = data['sols'], data['gif_urls'], data['console_text'], data['solver_text']
+    breakpoint()
+
 
 @app.route('/reset_sweep', methods=['POST'])
 def reset_sweep():
@@ -670,8 +769,6 @@ def compute_edit_distances(stats_path, hyper_ks, hypers_lst):
             json.dump(stats, f, indent=4)
         print(f"Saved edit distances to {stats_and_dists_path}")
     eval_sweep(stats_and_dists_path, hypers_ks, hypers_lst)
-
-max_gen_attempts = 10
 
 def eval_sweep(stats_and_dists_path, hyper_ks, hypers_lst):
     stats_dir = os.path.dirname(stats_and_dists_path)
@@ -762,10 +859,11 @@ def eval_sweep(stats_and_dists_path, hyper_ks, hypers_lst):
         'pct_comp': 'Compiles',
     }
 
-    row_index_header_order = ['model', 'from_idea', 'docs', 'fewshot', 'cot']
+    row_index_header_order = ['docs', 'model', 'from_idea', 'fewshot', 'cot']
     row_index_headers_remap = {
         'model': 'Model',
         'cot': 'CoT',
+        'docs': 'Docs',
         'fewshot': 'Fewshot',
         'from_idea': 'From Idea',
         'inventive_prompt': 'Inventive Prompt',
@@ -792,7 +890,6 @@ def eval_sweep(stats_and_dists_path, hyper_ks, hypers_lst):
     # Rename indices
     # index_tuples = [[row_index_rename(n) for n in t] for t in index_tuples]
     index_tuples = [[row_index_remap.get(n, n) for n in t] for t in index_tuples]
-    index_tuples = [[format_row_index(n) for n in t] for t in index_tuples]
     _hyper_ks = [row_index_headers_remap.get(k, k) for k in _hyper_ks]
 
     r_mi = pd.MultiIndex.from_tuples(index_tuples, names=_hyper_ks)
@@ -863,6 +960,9 @@ def eval_sweep(stats_and_dists_path, hyper_ks, hypers_lst):
     # df = df.rename(columns=lambda x: x.replace("_", " ").title())
 
     df = df.sort_index()
+    index_tuples, names = df.index.to_flat_index(), df.index.names
+    index_tuples = [[format_row_index(n) for n in t] for t in index_tuples]
+    df.index = pd.MultiIndex.from_tuples(index_tuples, names=names)
 
     # Save DataFrame to LaTeX
     # latex_path = "/mnt/data/modified_hierarchical_dataframe.tex"
@@ -913,6 +1013,7 @@ def get_exp_name(exp_config):
         (f'fromIdea-{int(exp_config.from_idea)}_' if exp_config.from_idea else '') + \
         f'fewshot-{int(exp_config.fewshot)}_cot-{int(exp_config.cot)}' + \
         (f'_{exp_config.model}' if exp_config.model != 'gpt-4o' else '') + \
+        (f'_{exp_config.viz_feedback}' if exp_config.viz_feedback else '') + \
         (f'_docs' if exp_config.docs else '') + \
         (f'_ctx-{exp_config.context_len}' if exp_config.context_len != 30_000 else '')
 
@@ -924,6 +1025,7 @@ def get_exp_config(hyper_ks, hyper_vals):
 
 @app.route('/get_sweep_args', methods=['GET'])
 def get_sweep_args():
+    """Sends args to the client-side `genGame` function."""
     global hypers_i, exp_config, sweep_stats
     save_dir = f'sweep-{sweep_i}'
     stats_exist = True
@@ -941,7 +1043,7 @@ def get_sweep_args():
             save_dir, 
             get_exp_name(exp_config)
         )
-        game_dir = os.path.join(exp_dir, f'game-{exp_config.game_i}')
+        game_dir = os.path.join(exp_dir, f'game-{exp_config.seed}')
         stats_path = os.path.join('logs', game_dir, 'stats.json')
         if os.path.exists(stats_path) and not recompute_stats:
             with open(stats_path, 'r') as f:
@@ -965,7 +1067,7 @@ def get_sweep_args():
         'gameDir': game_dir,
         'fewshot': exp_config.fewshot,
         'cot': exp_config.cot,
-        'gameIdx': exp_config.game_i,
+        'gameIdx': exp_config.seed,
         'fromIdea': exp_config.from_idea,
         'fromPlan': False,
     })
@@ -978,7 +1080,8 @@ recompute_stats = Config.recompute_stats
 
 @hydra.main(config_name="config", version_base="1.3")
 def main(cfg: Config):
-    global hypers, hypers_ks, hypers_lst, sweep_name, recompute_stats
+    global hypers, hypers_ks, hypers_lst, sweep_name, recompute_stats, max_gen_attempts
+    max_gen_attempts = cfg.max_gen_attempts
     hypers = all_hypers[cfg.sweep]
     sweep_name = cfg.sweep
     recompute_stats = cfg.recompute_stats
@@ -995,7 +1098,16 @@ def main(cfg: Config):
         os.makedirs(stats_dir, exist_ok=True)
         stats_path = os.path.join(stats_dir, 'sweep_stats_and_dists.json')
         eval_sweep(stats_path, hypers_ks, hypers_lst)
+    elif cfg.mode == 'viz_evo':
+        viz_evo_stats()
     elif cfg.mode == 'generate':
+
+        browser_thread = threading.Thread(
+            target=partial(open_browser, url=f"http://127.0.0.1:{cfg.port}")
+        )
+        browser_thread.daemon = True
+        browser_thread.start()
+
         app.run(port=cfg.port)
 
 #LLM agents
