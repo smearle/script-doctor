@@ -1,6 +1,14 @@
 ScriptDoctor
 ============
 
+## Setup
+
+Requires python 3.12
+```
+pip install -r requirements.txt
+```
+(If you don't have cuda available, install `jax` instead of `jax[cuda]`.)
+
 ## Generate data for training a world model
 
 ```
@@ -13,10 +21,10 @@ TODO:
 - write a script that converts these symbolic representations to 2D multi-hot arrays
 - train an MLP to predict the next state given a previous state and an action.
 
-## Scraping and parsing games
+## Collecting/scraping and parsing games
 
 ```
-python scrape_pedro.py
+python collect_games.py
 python parse_lark.py
 python gen_trees.py
 ```

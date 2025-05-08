@@ -2,6 +2,7 @@ import json
 import os
 import re
 
+from collect_games import SCRAPED_GAMES_DIR
 from utils import num_tokens_from_string
 
 def extract_sprites(content):
@@ -24,12 +25,11 @@ def extract_sprites(content):
 
     return objects
 
-
 if __name__ == '__main__':
     example_games = []
     example_sprites = {}
-    for game_path in os.listdir('scraped_games'):
-        with open(f'scraped_games/{game_path}', 'r', encoding='utf-8') as f:
+    for game_path in os.listdir(SCRAPED_GAMES_DIR):
+        with open(os.path.join(SCRAPED_GAMES_DIR, game_path), 'r', encoding='utf-8') as f:
             game_code = f.read().strip()
         if not game_path.endswith('.txt'):
             print(f'Skipping {game_path}')

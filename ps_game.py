@@ -1,3 +1,4 @@
+from dataclasses import dataclass
 import os
 import pickle
 from typing import List, Dict, Optional, Any, Set, Tuple, Type, Union
@@ -6,8 +7,15 @@ import random
 
 
 class PSObject:
-    def __init__(self, name: str, colors: List[str], sprite: Optional[List[List[str]]] = None):
+    def __init__(self, name: str, alt_name: str, colors: List[str], sprite: Optional[List[List[str]]] = None, legend_key: Optional[str] = None):
         self.name = name
+        if alt_name is not None:
+            alt_name = alt_name.lower()
+        self.alt_name = alt_name
+        if legend_key is not None:
+            assert len(legend_key) == 1, "Legend key must be a single character"
+            legend_key = legend_key.lower()
+        self.legend_key = legend_key 
         self.colors = colors  # e.g. ["BLUE", "LIGHTBLUE"]
         self.sprite = sprite  # e.g. 2D array of '0','1','.'
     
@@ -50,44 +58,55 @@ class Rule:
     def __init__(self,
                  left_patterns: List[List[str]],
                  right_patterns: List[List[str]],
-                 prefixes: Optional[List[str]] = None):
+                 prefixes: Optional[List[str]] = None,
+                 command: Optional[str] = None):
         # left_patterns, right_patterns: each is a list of "rule parts",
         # each "rule part" is a list of object/directional tokens in that cell.
-        self.left_patterns = left_patterns
-        self.right_patterns = right_patterns
+        self.left_kernels = left_patterns
+        self.right_kernels = right_patterns
         self.prefixes = prefixes if prefixes else []
+        self.command = command
 
     def __repr__(self):
         return (f"Rule(prefixes={self.prefixes}, "
-                f"left={self.left_patterns}, "
-                f"right={self.right_patterns})")
+                f"left={self.left_kernels}, "
+                f"right={self.right_kernels})" + \
+                (f", command={self.command})" if self.command is not None else ""))
 
 class WinCondition:
     """
     For example: 'All Box on Target'
     """
     def __init__(self, quantifier: str, src_obj: str, trg_obj: str):
-        self.quantifier = quantifier  # e.g. "All", "Some", "No"
+        self.quantifier = quantifier.lower()  # e.g. "All", "Some", "No"
         self.src_obj = src_obj
         self.trg_obj = trg_obj
     
     def __repr__(self):
         return f"{self.quantifier} {self.src_obj}" + (f" on {self.trg_obj}" if self.trg_obj is not None else "")
 
-class PSGame:
+@dataclass
+class Prelude:
+    title: str
+    author: Optional[str] = None
+    homepage: Optional[str] = None
+    flickscreen: bool = False
+    verbose_logging: bool = False
+    require_player_movement: bool = False
+    run_rules_on_level_start: bool = False
+    noaction: bool = False
+
+
+class PSGameTree:
     def __init__(self,
-                 title: str,
-                 flickscreen: Optional[str],
-                 verbose_logging: bool,
+                 prelude: Prelude,
                  objects: Dict[str, PSObject],
                  legend: List[LegendEntry],
                  collision_layers: List[List[str]],
                  rules: List[Rule],
                  win_conditions: List[WinCondition],
                  levels: List[List[List[str]]]):
-        self.title = title
-        self.flickscreen = flickscreen
-        self.verbose_logging = verbose_logging
+        self.prelude = prelude
 
         self.objects = objects               # Dict[object_name -> PSObject]
         self.legend = legend               # List[LegendEntry]
@@ -96,14 +115,14 @@ class PSGame:
         self.win_conditions = win_conditions # List[WinCondition]
         self.levels = levels                 # Each level is a 2D array of strings
     
-    def copy(self) -> 'PSGame':
+    def copy(self) -> 'PSGameTree':
         """
         Return a deep copy of this game instance.
         """
         return copy.deepcopy(self)
     
     def __repr__(self):
-        return (f"PSGame(title={self.title!r}, objects={self.objects}, "
+        return (f"PSGame(title={self.prelude.title!r}, objects={self.objects}, "
                 f"legends={self.legend}, layers={self.collision_layers}, "
                 f"rules={self.rules}, wcs={self.win_conditions}, "
                 f"levels=...)")
