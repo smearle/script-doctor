@@ -16,6 +16,7 @@ openai
 opencv-python
 optax
 pandas
+pathvalidate
 Pillow
 python-dotenv
 tiktoken

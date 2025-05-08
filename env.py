@@ -1294,12 +1294,12 @@ def player_has_moved(lvl_0, lvl_1, obj_to_idxs, meta_objs, char_to_obj):
 
 def loop_rule_grp(carry, grp_i, block_i, n_prior_rules_arr, n_rules_per_grp_arr, all_rule_fns, obj_to_idxs, n_objs,
                   jit):
-    lvl, grp_applied_prev, grp_app_i, cancelled, restart, again = carry
+    lvl, grp_applied_prev, grp_app_i, cancelled, restart, again, win = carry
 
     grp_applied = True
 
     def apply_rule_grp(carry):
-        lvl, _, grp_app_i, cancelled, restart, again = carry
+        lvl, _, grp_app_i, cancelled, restart, again, win = carry
         grp_app_i += 1
         grp_applied = False
 
@@ -1381,8 +1381,8 @@ def loop_rule_grp(carry, grp_i, block_i, n_prior_rules_arr, n_rules_per_grp_arr,
             # )
         else:
             while rule_i < n_rules_in_grp and not cancelled and not restart:
-                lvl, rule_i, grp_applied, rule_app_i, cancelled, restart, again = loop_rule_fn(
-                    (lvl, rule_i, grp_applied, rule_app_i, cancelled, restart, again))
+                lvl, rule_i, grp_applied, rule_app_i, cancelled, restart, again, win = loop_rule_fn(
+                    (lvl, rule_i, grp_applied, rule_app_i, cancelled, restart, again, win))
 
         if DEBUG:
             if jit:
@@ -1474,7 +1474,7 @@ def gen_tick_fn(obj_to_idxs, coll_mat, tree_rules, meta_objs, jit, n_objs, char_
                 print('\n' + multihot_to_desc(lvl[0], obj_to_idxs, n_objs))
 
         def apply_turn(carry):
-            lvl, _, turn_app_i, cancelled, restart, turn_again = carry
+            lvl, _, turn_app_i, cancelled, restart, turn_again, win = carry
             turn_app_i += 1
             turn_applied = False
 
@@ -1508,24 +1508,25 @@ def gen_tick_fn(obj_to_idxs, coll_mat, tree_rules, meta_objs, jit, n_objs, char_
                 block_applied = True
                 block_app_i = 0
                 block_again = False
-                init_carry = (lvl, block_applied, block_app_i, cancelled, restart, block_again)
+                win = False
+                init_carry = (lvl, block_applied, block_app_i, cancelled, restart, block_again, win)
                 if not jit:
                     print(f'Level when applying block {block_i}:\n', multihot_to_desc(lvl[0], obj_to_idxs, n_objs))
                 if looping:
                     if jit:
                         lvl, block_applied, block_app_i, cancelled, restart, block_again = jax.lax.while_loop(
-                            cond_fun=lambda x: x[1] & ~x[3] & ~x[4],
+                            cond_fun=lambda x: x[1] & ~x[3] & ~x[4] & ~x[5],
                             body_fun=apply_rule_block,
                             init_val=init_carry,
                         )
                     else:
                         carry = init_carry
-                        while block_applied and not cancelled and not restart:
+                        while block_applied and not cancelled and not restart and not win:
                             carry = apply_rule_block(carry)
-                            lvl, block_applied, block_app_i, cancelled, restart, block_again = carry
+                            lvl, block_applied, block_app_i, cancelled, restart, block_again, win = carry
                     block_applied = block_app_i > 1
                 else:
-                    lvl, block_applied, block_app_i, cancelled, restart, block_again = apply_rule_block(init_carry)
+                    lvl, block_applied, block_app_i, cancelled, restart, block_again, win = apply_rule_block(init_carry)
                 if DEBUG:
                     if jit:
                         jax.debug.print('block {block_i} applied: {block_applied}', block_i=block_i, block_applied=block_applied)
@@ -1538,16 +1539,17 @@ def gen_tick_fn(obj_to_idxs, coll_mat, tree_rules, meta_objs, jit, n_objs, char_
                 
                 turn_applied = turn_applied | block_applied
 
-            return lvl, turn_applied, turn_app_i, cancelled, restart, turn_again
+            return lvl, turn_applied, turn_app_i, cancelled, restart, turn_again, win
 
         turn_applied = True
         turn_app_i = 0
         turn_again = True
+        win = False
 
-        init_carry = (lvl, turn_applied, turn_app_i, cancelled, restart, turn_again)
+        init_carry = (lvl, turn_applied, turn_app_i, cancelled, restart, turn_again, win)
         if jit:
-            lvl, turn_applied, turn_app_i, cancelled, restart, again = jax.lax.while_loop(
-                lambda x: x[1] & x[5],
+            lvl, turn_applied, turn_app_i, cancelled, restart, again, win = jax.lax.while_loop(
+                lambda x: x[1] & x[5] & ~x[3] & ~x[4] & ~x[6],
                 lambda x: apply_turn(x),
                 init_carry
             )
@@ -1555,7 +1557,7 @@ def gen_tick_fn(obj_to_idxs, coll_mat, tree_rules, meta_objs, jit, n_objs, char_
             carry = init_carry
             while turn_applied and turn_again:
                 carry = apply_turn(carry)
-                lvl, turn_applied, turn_app_i, cancelled, restart, turn_again = carry
+                lvl, turn_applied, turn_app_i, cancelled, restart, turn_again, win = carry
 
         lvl_changed = turn_app_i > 1
 
@@ -1564,7 +1566,7 @@ def gen_tick_fn(obj_to_idxs, coll_mat, tree_rules, meta_objs, jit, n_objs, char_
         #     print('grp_applied:', grp_applied)
         #     print('cancelled:', cancelled)
 
-        return lvl[0], lvl_changed, turn_app_i, cancelled, restart
+        return lvl[0], lvl_changed, turn_app_i, cancelled, restart, win
 
     if jit:
         tick_fn = jax.jit(tick_fn)
@@ -1890,7 +1892,7 @@ class PSEnv:
                 prev_heuristic = init_heuristic,
             )
             lvl = self.apply_player_force(-1, state)
-            lvl, _, _, _, _ = self.tick_fn(lvl)
+            lvl, _, _, _, _, _ = self.tick_fn(lvl)
             lvl = lvl[:self.n_objs]
         state = PSState(
             multihot_level=lvl,
@@ -2000,7 +2002,7 @@ class PSEnv:
         # Actually, just apply the rule function once
         cancelled = False
         restart = False
-        final_lvl, tick_applied, turn_app_i, cancelled, restart = self.tick_fn(lvl)
+        final_lvl, tick_applied, turn_app_i, cancelled, restart, tick_win = self.tick_fn(lvl)
 
         accept_lvl_change = ((not self.require_player_movement) or 
                              player_has_moved(init_lvl, final_lvl, self.obj_to_idxs, self.meta_objs, self.char_to_obj)) & ~cancelled
@@ -2012,6 +2014,7 @@ class PSEnv:
         )
         multihot_level = final_lvl[:self.n_objs]
         win, score, heuristic = self.check_win(multihot_level)
+        win = win | tick_win
         jax.debug.print('heuristic: {heuristic}, score: {score}', heuristic=heuristic, score=score)
         # reward = (heuristic - state.init_heuristic) / jnp.abs(state.init_heuristic)
         reward = heuristic - state.prev_heuristic

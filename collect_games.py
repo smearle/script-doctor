@@ -7,6 +7,7 @@ import re
 
 from bs4 import BeautifulSoup
 from dotenv import load_dotenv
+from pathvalidate import sanitize_filename
 
 
 SCRAPED_GAMES_DIR = os.path.join('data', 'scraped_games')
@@ -117,9 +118,8 @@ if __name__ == '__main__':
             if not title_match:
                 breakpoint()
             title = title_match.groups()[0]
-            title = title.replace(' ', '_')
-            title = title.replace('/', '_')
-            filename = f'{title}'
+            # Replace invalid characters for filenames with underscores
+            filename =  sanitize_filename(title)
             script_path = os.path.join('data/scraped_games', filename)
 
             dupe_filenames = {}
@@ -133,7 +133,7 @@ if __name__ == '__main__':
                     dupe_filenames[filename] += n_prev_dupes
                 filename = f'{title}_{n_prev_dupes}'
             else:
-                filename = title
+                filename = str(title)
             filename += '.txt'
             script_path = os.path.join(SCRAPED_GAMES_DIR, filename)
 

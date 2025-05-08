@@ -129,7 +129,7 @@ class GenPSTree(Transformer):
                     if r.children[0].data.value == 'sound':
                         continue
                     elif r.children[0].data.value == 'command_keyword':
-                        command = r.children[0].children[0].value
+                        command = r.children[0].children[0].value.lower()
                         if command in ['again', 'win']:
                             pass
                         elif command == 'checkpoint':
