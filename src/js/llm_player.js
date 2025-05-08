@@ -39,7 +39,7 @@ function extractGameRules() {
 
 // Function to get the current game name
 function getCurrentGameName() {
-    // 尝试从下拉菜单获取当前游戏名称
+    // Try to get current game name from dropdown menu
     try {
         const dropdown = document.getElementById('exampleDropdown');
         if (dropdown && dropdown.value && dropdown.value !== 'Load Example') {
@@ -49,7 +49,7 @@ function getCurrentGameName() {
         consolePrint(`Error getting game name from dropdown: ${error.message}`);
     }
     
-    // 如果无法从下拉菜单获取，则返回默认值
+    // If unable to get from dropdown menu, return default value
     return "sokoban_basic";
 }
 
@@ -81,7 +81,7 @@ function getCurrentGameState() {
 // Function to send the game state to the LLM and get a decision
 async function getLLMDecision(gameState) {
     try {
-        // 获取当前游戏名称
+        // Get current game name
         const gameName = getCurrentGameName();
         
         const response = await fetch('/llm_action', {
@@ -108,7 +108,7 @@ async function getLLMDecision(gameState) {
     }
 }
 
-// 跟踪动作执行次数
+// Track number of action executions
 let actionCounter = 0;
 
 // Function to execute the LLM's decision
@@ -137,15 +137,15 @@ function executeAction(action) {
             return;
     }
     
-    // 确保游戏画布获得焦点
+    // Ensure game canvas has focus
     const gameCanvas = document.getElementById('gameCanvas');
     if (gameCanvas) {
         gameCanvas.focus();
     }
     
-    // 模拟按键的更可靠方法
+    // More reliable method for simulating key press
     try {
-        // 方法1：使用KeyboardEvent
+        // Method 1: Use KeyboardEvent
         const keyDownEvent = new KeyboardEvent('keydown', {
             keyCode: keyCode,
             which: keyCode,
@@ -155,19 +155,19 @@ function executeAction(action) {
             cancelable: true
         });
         
-        // 方法2：直接调用游戏的按键处理函数（如果存在）
+        // Method 2: Directly call the game's key handling function (if it exists)
         if (typeof onKeyDown === 'function') {
-            // 直接调用游戏的按键处理函数
+            // Directly call the game's key handling function
             onKeyDown(keyDownEvent);
         } else {
-            // 如果没有直接的处理函数，分发事件到文档和游戏画布
+            // If there's no direct handling function, dispatch events to document and game canvas
             document.dispatchEvent(keyDownEvent);
             if (gameCanvas) {
                 gameCanvas.dispatchEvent(keyDownEvent);
             }
         }
         
-        // 短暂延迟后发送keyup事件
+        // Send keyup event after a short delay
         setTimeout(() => {
             const keyUpEvent = new KeyboardEvent('keyup', {
                 keyCode: keyCode,
@@ -190,28 +190,28 @@ function executeAction(action) {
         
         consolePrint(`LLM executed action: ${action}`);
         
-        // 增加动作计数器
+        // Increment action counter
         actionCounter++;
         
-        // 只在前两次动作执行后点击游戏画布
+        // Only click on game canvas after the first two actions
         if (actionCounter <= 2) {
             consolePrint(`Action ${actionCounter}: Clicking on game canvas`);
             setTimeout(() => {
                 const gameCanvas = document.getElementById('gameCanvas');
                 if (gameCanvas) {
-                    // 获取游戏画布的位置和尺寸
+                    // Get position and size of game canvas
                     const rect = gameCanvas.getBoundingClientRect();
                     
-                    // 定义要点击的位置（只点击上部和中心）
+                    // Define positions to click (only top and center)
                     const clickPositions = [
-                        { x: rect.left + rect.width / 2, y: rect.top + rect.height / 4 },    // 上部
-                        { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 }     // 中心
+                        { x: rect.left + rect.width / 2, y: rect.top + rect.height / 4 },    // Top
+                        { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 }     // Center
                     ];
                     
-                    // 依次点击每个位置
+                    // Click each position in sequence
                     for (let i = 0; i < clickPositions.length; i++) {
                         setTimeout((pos) => {
-                            // 创建并分发mousedown事件
+                            // Create and dispatch mousedown event
                             const mouseDownEvent = new MouseEvent('mousedown', {
                                 bubbles: true,
                                 cancelable: true,
@@ -221,7 +221,7 @@ function executeAction(action) {
                             });
                             gameCanvas.dispatchEvent(mouseDownEvent);
                             
-                            // 短暂延迟后发送mouseup事件
+                            // Send mouseup event after a short delay
                             setTimeout(() => {
                                 const mouseUpEvent = new MouseEvent('mouseup', {
                                     bubbles: true,
@@ -232,7 +232,7 @@ function executeAction(action) {
                                 });
                                 gameCanvas.dispatchEvent(mouseUpEvent);
                                 
-                                // 最后发送click事件
+                                // Finally send click event
                                 const clickEvent = new MouseEvent('click', {
                                     bubbles: true,
                                     cancelable: true,
@@ -244,17 +244,17 @@ function executeAction(action) {
                                 
                                 consolePrint(`Clicked on game canvas at position ${i+1} after action: ${action}`);
                             }, 50);
-                        }, i * 100, clickPositions[i]); // 每个点击间隔100毫秒
+                        }, i * 100, clickPositions[i]); // 100ms interval between each click
                     }
                 }
-            }, 200); // 稍微延迟点击，确保动作已执行
+            }, 200); // Slightly delay clicks to ensure action has been executed
         }
     } catch (error) {
         consolePrint(`Error executing action: ${error.message}`);
     }
 }
 
-// 辅助函数：获取键码对应的code字符串
+// Helper function: Get code string corresponding to key code
 function getKeyCodeString(keyCode) {
     switch (keyCode) {
         case 37: return 'ArrowLeft';
@@ -266,7 +266,7 @@ function getKeyCodeString(keyCode) {
     }
 }
 
-// 辅助函数：获取键码对应的key字符串
+// Helper function: Get key string corresponding to key code
 function getKeyString(keyCode) {
     switch (keyCode) {
         case 37: return 'ArrowLeft';
@@ -284,7 +284,7 @@ function startLLMPlaying() {
     
     consolePrint("LLM is now playing the game...");
     
-    // 尝试确保游戏已经启动
+    // Try to ensure game is running
     ensureGameIsRunning();
     
     isLLMPlaying = true;
@@ -297,7 +297,7 @@ function startLLMPlaying() {
             consolePrint("No game state available, trying to ensure game is running...");
             ensureGameIsRunning();
             
-            // 再次尝试获取游戏状态
+            // Try to get game state again
             currentGameState = getCurrentGameState();
             if (!currentGameState) {
                 consolePrint("Still no game state, stopping LLM player");
@@ -324,13 +324,13 @@ function startLLMPlaying() {
     }, 1000); // Make a move every second
 }
 
-// 确保游戏已经启动
+// Ensure game is running
 function ensureGameIsRunning() {
     consolePrint("Ensuring game is running...");
     
-    // 尝试多种方法启动游戏
+    // Try multiple methods to start game
     
-    // 1. 尝试调用游戏的内部函数
+    // 1. Try to call game's internal functions
     if (typeof canvasResize === 'function') {
         consolePrint("Calling canvasResize()");
         canvasResize();
@@ -341,18 +341,18 @@ function ensureGameIsRunning() {
         redraw();
     }
     
-    // 2. 尝试模拟按键事件
+    // 2. Try to simulate key events
     const gameCanvas = document.getElementById('gameCanvas');
     if (gameCanvas) {
-        // 确保游戏画布获得焦点
+        // Ensure game canvas has focus
         gameCanvas.focus();
         
-        // 模拟按各种可能的按键
-        const keyCodes = [32, 13, 38, 40, 37, 39, 88, 90]; // 空格, 回车, 上下左右, X, Z
+        // Simulate pressing various possible keys
+        const keyCodes = [32, 13, 38, 40, 37, 39, 88, 90]; // Space, Enter, Up, Down, Left, Right, X, Z
         for (let i = 0; i < keyCodes.length; i++) {
             const keyCode = keyCodes[i];
             
-            // 创建并分发keydown事件
+            // Create and dispatch keydown event
             const keyDownEvent = new KeyboardEvent('keydown', {
                 keyCode: keyCode,
                 which: keyCode,
@@ -362,7 +362,7 @@ function ensureGameIsRunning() {
                 cancelable: true
             });
             
-            // 尝试直接调用游戏的按键处理函数
+            // Try to directly call game's key handling function
             if (typeof onKeyDown === 'function') {
                 consolePrint("Calling onKeyDown() with keyCode " + keyCode);
                 onKeyDown(keyDownEvent);
@@ -372,7 +372,7 @@ function ensureGameIsRunning() {
                 gameCanvas.dispatchEvent(keyDownEvent);
             }
             
-            // 短暂延迟后发送keyup事件
+            // Send keyup event after a short delay
             setTimeout(function(kc) {
                 return function() {
                     const keyUpEvent = new KeyboardEvent('keyup', {
@@ -394,7 +394,7 @@ function ensureGameIsRunning() {
             }(keyCode), 100);
         }
         
-        // 模拟点击游戏画布中心
+        // Simulate clicking center of game canvas
         const rect = gameCanvas.getBoundingClientRect();
         const clickEvent = new MouseEvent('click', {
             bubbles: true,
@@ -406,10 +406,10 @@ function ensureGameIsRunning() {
         gameCanvas.dispatchEvent(clickEvent);
     }
     
-// 3. 尝试直接设置游戏状态变量和初始化游戏
+// 3. Try to directly set game state variables and initialize game
     try {
         const initScript = `
-            // 确保游戏状态变量正确初始化
+            // Ensure game state variables are correctly initialized
             if (typeof gameRunning !== 'undefined') {
                 gameRunning = true;
                 consolePrint("Setting gameRunning = true");
@@ -425,24 +425,24 @@ function ensureGameIsRunning() {
                 consolePrint("Setting titleScreen = false");
             }
             
-            // 确保游戏级别正确加载
+            // Ensure game levels are correctly loaded
             if (typeof state !== 'undefined' && state.levels && state.levels.length > 0) {
-                // 确保当前级别索引有效
+                // Ensure current level index is valid
                 if (typeof curlevel === 'undefined' || curlevel < 0 || curlevel >= state.levels.length) {
                     curlevel = 0;
                     consolePrint("Resetting curlevel to 0");
                 }
                 
-                // 确保级别数据已正确初始化
+                // Ensure level data is correctly initialized
                 var level = state.levels[curlevel];
                 if (level) {
-                    // 重新编译级别以确保所有数据结构都正确初始化
+                    // Recompile level to ensure all data structures are correctly initialized
                     if (typeof recompileLevel === 'function') {
                         recompileLevel();
                         consolePrint("Recompiled level");
                     }
                     
-                    // 确保背景图层已初始化
+                    // Ensure background layer is initialized
                     if (level.layerData === undefined || level.layerData.length === 0) {
                         if (typeof regenerateCellLayer === 'function') {
                             regenerateCellLayer();
@@ -450,20 +450,20 @@ function ensureGameIsRunning() {
                         }
                     }
                     
-                    // 确保背景颜色已设置
+                    // Ensure background color is set
                     if (typeof state.bgcolor !== 'undefined') {
                         state.bgcolor = state.bgcolor || [0, 0, 0];
                         consolePrint("Ensured bgcolor is set");
                     }
                     
-                    // 确保游戏对象已正确初始化
+                    // Ensure game objects are correctly initialized
                     if (typeof state.objects !== 'undefined') {
                         consolePrint("Game objects exist");
                     }
                 }
             }
             
-            // 尝试强制重绘游戏
+            // Try to force redraw of game
             if (typeof canvasResize === 'function') {
                 canvasResize();
                 consolePrint("Forced canvas resize");
@@ -483,14 +483,14 @@ function ensureGameIsRunning() {
         consolePrint(`Error in game state initialization: ${e.message}`);
     }
     
-    // 4. 尝试调用其他可能的游戏函数
+    // 4. Try to call other possible game functions
     if (typeof loadLevelFromStateString === 'function' && typeof state !== 'undefined' && state.levels && state.levels[curlevel]) {
         consolePrint("Calling loadLevelFromStateString()");
         const levelString = state.levels[curlevel].toString();
         loadLevelFromStateString(levelString);
     }
     
-    // 只有在必要的对象都已定义时才调用applyRandomRuleGroup
+    // Only call applyRandomRuleGroup when necessary objects are defined
     if (typeof applyRandomRuleGroup === 'function' && 
         typeof state !== 'undefined' && 
         state.rules !== undefined && 
@@ -507,7 +507,7 @@ function ensureGameIsRunning() {
     consolePrint("Game start attempts completed");
 }
 
-// 辅助函数：获取键码对应的code字符串
+// Helper function: Get code string corresponding to key code
 function getKeyCodeString(keyCode) {
     switch (keyCode) {
         case 32: return 'Space';
@@ -522,7 +522,7 @@ function getKeyCodeString(keyCode) {
     }
 }
 
-// 辅助函数：获取键码对应的key字符串
+// Helper function: Get key string corresponding to key code
 function getKeyString(keyCode) {
     switch (keyCode) {
         case 32: return ' ';
@@ -550,21 +550,21 @@ function stopLLMPlaying() {
 // Function to reset the current level
 function resetGame() {
     try {
-        // 停止LLM玩家（如果正在运行）
+        // Stop LLM player (if running)
         if (isLLMPlaying) {
             stopLLMPlaying();
         }
         
-        // 确保游戏画布获得焦点
+        // Ensure game canvas has focus
         const gameCanvas = document.getElementById('gameCanvas');
         if (gameCanvas) {
             gameCanvas.focus();
         }
         
-        // 直接使用R键重置游戏
+        // Directly use R key to reset game
         consolePrint("Using R key to reset game");
         
-        // 模拟按R键重置游戏
+        // Simulate pressing R key to reset game
         const resetKeyCode = 82; // R键的keyCode
         
         const keyDownEvent = new KeyboardEvent('keydown', {
@@ -576,7 +576,7 @@ function resetGame() {
             cancelable: true
         });
         
-        // 尝试直接调用游戏的按键处理函数
+        // Try to directly call game's key handling function
         if (typeof onKeyDown === 'function') {
             onKeyDown(keyDownEvent);
         } else {
@@ -586,7 +586,7 @@ function resetGame() {
             }
         }
         
-        // 发送keyup事件
+        // Send keyup event
         setTimeout(() => {
             const keyUpEvent = new KeyboardEvent('keyup', {
                 keyCode: resetKeyCode,
@@ -607,13 +607,13 @@ function resetGame() {
             }
         }, 100);
         
-        // 确保游戏状态被重置
+        // Ensure game state is reset
         setTimeout(() => {
-            // 尝试重置一些可能的游戏状态变量
+            // Try to reset some possible game state variables
             try {
-                // 重置游戏状态的JavaScript代码
+                // JavaScript code to reset game state
                 const resetScript = `
-                    // 重置一些常见的游戏状态变量
+                    // Reset some common game state variables
                     if (typeof level !== 'undefined' && typeof curlevel !== 'undefined') {
                         level = curlevel;
                     }
@@ -627,12 +627,12 @@ function resetGame() {
                         messagetext = "";
                     }
                     
-                    // 重新聚焦游戏画布
+                    // Refocus game canvas
                     var gameCanvas = document.getElementById('gameCanvas');
                     if (gameCanvas) {
                         gameCanvas.focus();
                         
-                        // 模拟点击游戏画布中心
+                        // Simulate clicking center of game canvas
                         var rect = gameCanvas.getBoundingClientRect();
                         var clickEvent = new MouseEvent('click', {
                             bubbles: true,
@@ -655,7 +655,7 @@ function resetGame() {
             
             consolePrint("Game reset completed");
             
-            // 如果之前LLM正在玩游戏，重新开始
+            // If LLM was playing before, restart
             if (isLLMPlaying) {
                 setTimeout(() => {
                     startLLMPlaying();
@@ -686,13 +686,13 @@ function feedStateToLLM() {
         return false;
     }
     
-    // 获取当前游戏状态
+    // Get current game state
     const gameState = getCurrentGameState();
     
-    // 获取当前游戏名称
+    // Get current game name
     const gameName = getCurrentGameName();
     
-    // 发送到服务器，提供反馈
+    // Send to server, provide feedback
     fetch('/llm_feedback', {
         method: 'POST',
         headers: {
@@ -723,20 +723,20 @@ function feedStateToLLM() {
 
 // Add event listeners for the buttons
 document.addEventListener('DOMContentLoaded', function() {
-    // LLM Play按钮
+    // LLM Play button
     const llmPlayLink = document.getElementById('llmPlayClickLink');
     if (llmPlayLink) {
         llmPlayLink.addEventListener('click', toggleLLMPlaying);
     }
     
-    // 创建Reset按钮
+    // Create Reset button
     const toolbar = document.getElementById('uppertoolbar');
     if (toolbar) {
-        // 查找LLM PLAY链接元素
+        // Find LLM PLAY link element
         const llmPlayElement = document.getElementById('llmPlayClickLink');
         
         if (llmPlayElement) {
-            // 创建Reset按钮
+            // Create Reset button
             const resetButton = document.createElement('a');
             resetButton.id = 'resetGameLink';
             resetButton.href = 'javascript:void(0);';
@@ -744,14 +744,14 @@ document.addEventListener('DOMContentLoaded', function() {
             resetButton.style.marginLeft = '5px';
             resetButton.addEventListener('click', resetGame);
             
-            // 创建分隔符
+            // Create separator
             const separator = document.createTextNode(' - ');
             
-            // 在LLM PLAY后面插入
+            // Insert after LLM PLAY
             llmPlayElement.parentNode.insertBefore(separator, llmPlayElement.nextSibling);
             llmPlayElement.parentNode.insertBefore(resetButton, separator.nextSibling);
             
-            // 创建Feedback按钮
+            // Create Feedback button
             const feedbackButton = document.createElement('a');
             feedbackButton.id = 'feedStateLink';
             feedbackButton.href = 'javascript:void(0);';
@@ -759,10 +759,10 @@ document.addEventListener('DOMContentLoaded', function() {
             feedbackButton.style.marginLeft = '5px';
             feedbackButton.addEventListener('click', feedStateToLLM);
             
-            // 创建另一个分隔符
+            // Create another separator
             const separator2 = document.createTextNode(' - ');
             
-            // 在Reset后面插入
+            // Insert after Reset
             resetButton.parentNode.insertBefore(separator2, resetButton.nextSibling);
             resetButton.parentNode.insertBefore(feedbackButton, separator2.nextSibling);
         }

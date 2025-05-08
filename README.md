@@ -1,68 +1,165 @@
-ScriptDoctor
-============
+# LLM Agent for Sokoban
 
-## Generate data for training a world model
+This project provides a unified LLM client and agent system for using Large Language Models (LLMs) as intelligent agents in Sokoban puzzle game environments. The system supports multiple LLM models and providers, and integrates reinforcement learning capabilities.
 
-```
-python server.py
-```
-Open up the local web-page, then press `GEN DATA` in the top-left. This will run `processAllGames` in `src/js/ScriptDoctor.js`, which loads games (in random order) and applies A*, saving images of unique level states, as well as a record of which actions led to which transitions between states. This data is stored in `transitions`.
+## Main Components
 
-TODO:
-- save symbolic representations of the map instead
-- write a script that converts these symbolic representations to 2D multi-hot arrays
-- train an MLP to predict the next state given a previous state and an action.
+The project includes the following main components:
 
-## Scraping and parsing games
+1. **LLMClient** - A unified LLM query client supporting multiple models and providers
+2. **EnhancedLLMAgent** - An enhanced LLM agent for game decision-making
+3. **ReinforcementWrapper** - A reinforcement learning wrapper to improve agent performance
+4. **StateVisualizer** - A state visualization tool for displaying game states
+5. **JaxSokobanAgent** - A Sokoban agent integrated with JAX environments
 
-```
-python scrape_pedro.py
-python parse_lark.py
-python gen_trees.py
-```
-I'm still working on `gen_trees.py`
-- Convert games to canonical (graph-like) form
-- Determine if two games are functionally equivalent via this form
-- Reimplement game mechanics etc. in numpy and jax, as an RL environment
+## File Description
 
-## Fine-tuning a model
+- `client.py` - Core client and agent implementation
+- `example_sokoban_agent.py` - Simple example script demonstrating basic usage
+- `jax_sokoban_agent.py` - Complete agent implementation integrated with JAX environments
 
-```
-python finetune.py
+## Installation Dependencies
+
+```bash
+# Basic dependencies
+pip install numpy requests tiktoken openai python-dotenv
+
+# JAX environment dependencies (if using JAX environments)
+pip install jax jaxlib dm-haiku
 ```
 
-## Evolving games with OpenAI queries
+## Usage
 
-Put your OpenAI API key in a file called `.env`, which will have a single line that reads `OPENAI_API_KEY=yourkeyhere`.
+### Basic Example
 
-To install requirements: `pip install -r requirements.txt`. To run a local server: `python server.py`. Then, open the local IP address. You should see the PuzzleScript editor page displayed, and some GPT slop appearing in the PuzzleScript terminal and level code editor. 
+Run the simple example script:
 
-The main function is run client-side, from inside `ScriptDoctor.js`, which is included in the `editor.html` (which is served by the server). This JS process asks for a game from the server (which makes an OpenAI API call), then throws it in the editor.
+```bash
+python example_sokoban_agent.py --model gpt-4o --provider azure --visualize
+```
 
-Next: playtesting. Making generated games not suck.
+Parameter description:
+- `--model`: LLM model name (gpt-4o, o1, o3-mini, gemini-2.0-flash-exp)
+- `--provider`: LLM provider (azure, portkey)
+- `--game`: Game name
+- `--max_steps`: Maximum number of steps
+- `--save_dir`: Directory to save agent data
+- `--visualize`: Whether to visualize game state
 
-Notes:
-- We made a single edit to `compile.js` to fix an issue importing gzipper, but we don't actually use the compressed version of the engine at the moment (the one in `bin`---instead just using the one in `src`).
+### JAX Environment Integration
 
-TODO (feel free to claim a task---they're relatively standalone):
-- Submodule focused solely on adding new levels to functioning games
-- Save gifs of solutions being played out (there is some existing functionality for saving gifs in the js codebase---use it)
-- Feed screenshots of generated levels to GPT-4o to iterate on sprites
-- Some kind of evolutionary loop that will generate a bunch of games for us, diverse/novel along some axis (implemented, need to debug)
+Run the agent integrated with JAX environment:
 
-## Running experiments
+```bash
+python jax_sokoban_agent.py --model gpt-4o --provider azure --episodes 5 --render
+```
 
-To sweep over fewshot and chain of thought prompting, uncomment `sweep()` in `src/js/ScriptDoctor.js`, launch the server with `python server.py` and open the webpage at `127.0.0.1:8000` (or whatever pops up in the terminal where you've launched the server). Then the javascript code, and the `sweep()` function, will be run. Once this is done, run `python compute_edit_distances.py` then `python eval_fewshot_cot_sweep.py` to generate tables of results.
+Parameter description:
+- `--model`: LLM model name
+- `--provider`: LLM provider
+- `--episodes`: Number of episodes to run
+- `--max_steps`: Maximum steps per episode
+- `--save_dir`: Directory to save agent data
+- `--level`: Sokoban level name
+- `--render`: Whether to render game state
+- `--no_rl`: Disable reinforcement learning
+- `--quiet`: Reduce output verbosity
 
-To generate game ideas, run `python brainstorm.py`, then uncomment `fromIdeaSweep()` in `src/js/ScriptDoctor.js`, launch the server and open the webpage, then run `python compute_from_idea_edit_distances.py` and `python eval_from_idea_sweep.py`.
+## Environment Variable Configuration
 
-PuzzleScript
-============
+Create a `.env` file in the project root directory and configure the following environment variables:
 
-Open Source HTML5 Puzzle Game Engine
+```
+# Azure OpenAI configuration
+AZURE_OPENAI_API_KEY=your_azure_openai_api_key
+ENDPOINT_URL=your_azure_endpoint_url
+O3_MINI_KEY=your_o3_mini_key
 
-Try it out at https://www.puzzlescript.net.
+# Portkey API configuration
+PORTKEY_API_KEY=your_portkey_api_key
+```
 
------
+## Code Examples
 
-If you're interested in recompiling/modifing/hacking the engine, there is [development setup info here](DEVELOPMENT.md).  If you're just interested in learning how to use the engine/make games in it, [the documentation is here](https://www.puzzlescript.net/Documentation/documentation.html).
+### Using LLMClient
+
+```python
+from client import LLMClient
+
+# Initialize client
+client = LLMClient()
+
+# Query LLM
+response = client.query(
+    system_prompt="You are a helpful assistant.",
+    prompt="Explain what a Sokoban game is.",
+    model="gpt-4o",
+    provider="azure"
+)
+
+print(response)
+```
+
+### Using EnhancedLLMAgent
+
+```python
+from client import EnhancedLLMAgent
+
+# Initialize agent
+agent = EnhancedLLMAgent(model_name="gpt-4o", provider="azure")
+
+# Process game state
+game_state = """
+#####
+#@$.#
+#####
+"""
+processed_state = agent.process_state(game_state)
+
+# Choose action
+action = agent.choose_action(processed_state, goal="Push the box to the target position")
+print(f"Chosen action: {action}")
+```
+
+### Using ReinforcementWrapper
+
+```python
+from client import EnhancedLLMAgent, ReinforcementWrapper
+
+# Initialize agent and RL wrapper
+agent = EnhancedLLMAgent(model_name="gpt-4o")
+rl_wrapper = ReinforcementWrapper(agent)
+
+# Use RL to choose action
+state_hash = "some_state_hash"
+action = rl_wrapper.choose_action(state_hash)
+
+# Update Q-value
+next_state_hash = "next_state_hash"
+reward = 1.0
+rl_wrapper.reinforce(state_hash, action, reward, next_state_hash)
+```
+
+## Custom Environment Integration
+
+To integrate this system with other environments, you need to implement the following functions:
+
+1. Convert environment observations to ASCII representation
+2. Convert agent actions to environment-acceptable format
+3. Process environment feedback and update the agent
+
+Refer to the implementation in `jax_sokoban_agent.py`, especially the following methods:
+- `_observation_to_ascii`
+- `_action_to_env_action`
+- `run_episode`
+
+## Notes
+
+- Ensure environment variables are correctly configured, especially API keys
+- JAX environments require additional dependencies
+- For large game states, you may need to adjust the LLM token limit
+- Reinforcement learning features require sufficient training episodes to significantly improve performance
+
+## License
+
+MIT
