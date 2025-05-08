@@ -176,7 +176,6 @@ def compute_manhattan_dists(lvl, src, trg):
     # Exclude any dists corresponding to cells without src/trg nodes
     dists = jnp.where(jnp.all(src_coords == -1, axis=-1), jnp.nan, dists)
     dists = jnp.where(jnp.all(trg_coords == -1, axis=-1), jnp.nan, dists)
-    jax.debug.breakpoint()
     return dists
 
 def compute_sum_of_manhattan_dists(lvl, src, trg):
@@ -1179,7 +1178,7 @@ def gen_subrules_meta(rule: Rule, n_objs, obj_to_idxs, meta_objs, coll_mat, rule
                         lvl, kernel_activations[i], cell_detect_outs[i], kernel_detect_outs[i], pattern_detect_out)
                 return lvl
 
-            cancel, restart, again = False, False, False
+            cancel, restart, again, win = False, False, False, False
             if has_right_pattern:
                 if jit:
                     next_lvl = jax.lax.cond(
@@ -1211,7 +1210,9 @@ def gen_subrules_meta(rule: Rule, n_objs, obj_to_idxs, meta_objs, coll_mat, rule
                 again = rule_applied
                 if DEBUG:
                     jax.debug.print('applying the {command} command', command=rule.command)
-            return next_lvl, rule_applied, cancel, restart, again
+            elif rule.command == 'win':
+                win = True
+            return next_lvl, rule_applied, cancel, restart, again, win
 
         return apply_pattern
 
@@ -1303,17 +1304,17 @@ def loop_rule_grp(carry, grp_i, block_i, n_prior_rules_arr, n_rules_per_grp_arr,
         grp_applied = False
 
         def loop_rule_fn(carry):
-            lvl, rule_i, rule_applied_prev, rule_app_i, cancelled_prev, restart_prev, again_prev = carry
+            lvl, rule_i, rule_applied_prev, rule_app_i, cancelled_prev, restart_prev, again_prev, win_prev = carry
 
             def apply_rule_fn(carry):
-                init_lvl, rule_applied_prev, rule_app_i, cancelled_prev, restart_prev, again_prev = carry
+                init_lvl, rule_applied_prev, rule_app_i, cancelled_prev, restart_prev, again_prev, win_prev = carry
                 if jit:
                     # lvl, rule_applied, cancelled, restart, again = jax.lax.switch(rule_i, rule_grp, init_lvl)
-                    lvl, rule_applied, cancelled, restart, again = jax.lax.switch(
+                    lvl, rule_applied, cancelled, restart, again, win = jax.lax.switch(
                         n_prior_rules_arr[block_i, grp_i] + rule_i, all_rule_fns, init_lvl)
                 else:
                     # lvl, rule_applied, cancelled, restart, again = rule_grp[rule_i](init_lvl)
-                    lvl, rule_applied, cancelled, restart, again = \
+                    lvl, rule_applied, cancelled, restart, again, win = \
                         all_rule_fns[n_prior_rules_arr[block_i, grp_i] + rule_i](init_lvl)
                 rule_had_effect = jnp.any(lvl != init_lvl)
                 print(f'      rule {rule_i} of group {grp_i} had effect: {rule_had_effect}')
@@ -1327,23 +1328,25 @@ def loop_rule_grp(carry, grp_i, block_i, n_prior_rules_arr, n_rules_per_grp_arr,
                 again = again_prev | again
                 restart = restart_prev | restart
                 cancelled = cancelled_prev | cancelled
-                return lvl, rule_had_effect, rule_app_i, cancelled, restart, again
+                return lvl, rule_had_effect, rule_app_i, cancelled, restart, again, win
 
             rule_applied = True
             rule_app_i = 0
+            win = False
             if jit:
-                lvl, rule_applied, rule_app_i, cancelled, restart, again = jax.lax.while_loop(
-                    cond_fun=lambda x: x[1] & ~x[3] & ~x[4],
+                # For each rule in the group, apply it as many times as possible.
+                lvl, rule_applied, rule_app_i, cancelled, restart, again, win = jax.lax.while_loop(
+                    cond_fun=lambda x: x[1] & ~x[3] & ~x[4] & ~x[5],
                     body_fun=lambda x: apply_rule_fn(x),
-                    init_val=(lvl, rule_applied, rule_app_i, cancelled_prev, restart_prev, again_prev),
+                    init_val=(lvl, rule_applied, rule_app_i, cancelled_prev, restart_prev, again_prev, win),
                 )
             else:
                 cancelled = cancelled_prev
                 restart = restart_prev
                 again = again_prev
-                while rule_applied and not cancelled and not restart:
-                    lvl, rule_applied, rule_app_i, cancelled, restart, again = apply_rule_fn(
-                        (lvl, rule_applied, rule_app_i, cancelled_prev, restart_prev, again_prev))
+                while rule_applied and not cancelled and not restart and not win:
+                    lvl, rule_applied, rule_app_i, cancelled, restart, again, win = apply_rule_fn(
+                        (lvl, rule_applied, rule_app_i, cancelled_prev, restart_prev, again_prev, win))
 
             rule_applied = rule_app_i > 1
             rule_applied = rule_applied | rule_applied_prev
@@ -1355,19 +1358,27 @@ def loop_rule_grp(carry, grp_i, block_i, n_prior_rules_arr, n_rules_per_grp_arr,
                     print(f'      rule {rule_i} applied: {rule_applied}')
             
             rule_i += 1
-            return lvl, rule_i, rule_applied, rule_app_i, cancelled, restart, again
+            return lvl, rule_i, rule_applied, rule_app_i, cancelled, restart, again, win
 
         rule_i = 0
         rule_app_i = 0
         grp_applied = False
+        win = False
         n_rules_in_grp = n_rules_per_grp_arr[block_i, grp_i]
         if jit:
-            # For each rule in the group, apply it as many times as possible.
-            lvl, rule_i, grp_applied, _, cancelled, restart, again = jax.lax.while_loop(
+            # Iterate through each rule in the group (and loop it). (Note that this is effectively a for loop.)
+            lvl, rule_i, grp_applied, _, cancelled, restart, again, win = jax.lax.while_loop(
                 cond_fun=lambda x: (x[1] < n_rules_in_grp) & ~x[4] & ~x[5],
                 body_fun=loop_rule_fn,
-                init_val=(lvl, rule_i, grp_applied, rule_app_i, cancelled, restart, again),
+                init_val=(lvl, rule_i, grp_applied, rule_app_i, cancelled, restart, again, win),
             )
+            # We can't use scan because n_rules_in_grp is a jnp array, as are block_i and grp_i, which index into this
+            # array.
+            # (lvl, rule_i, grp_applied, _, cancelled, restart, again, win), _ = jax.lax.scan(
+            #     loop_rule_fn,
+            #     init=(lvl, rule_i, grp_applied, rule_app_i, cancelled, restart, again, win),
+            #     length=n_rules_in_grp,
+            # )
         else:
             while rule_i < n_rules_in_grp and not cancelled and not restart:
                 lvl, rule_i, grp_applied, rule_app_i, cancelled, restart, again = loop_rule_fn(
@@ -1387,24 +1398,25 @@ def loop_rule_grp(carry, grp_i, block_i, n_prior_rules_arr, n_rules_per_grp_arr,
         # force_is_present = jnp.sum(lvl[0, n_objs:n_objs + (n_objs * N_MOVEMENTS)]) > 0
         # jax.debug.print('force is present: {force_is_present}', force_is_present=force_is_present)
         # jax.debug.print('lvl:\n{lvl}', lvl=lvl)
-        return lvl, grp_applied, grp_app_i, cancelled, restart, again
+        return lvl, grp_applied, grp_app_i, cancelled, restart, again, win
 
     grp_app_i = 0
+    win = False
     if jit:
-        lvl, grp_applied, grp_app_i, cancelled, restart, grp_again = jax.lax.while_loop(
-            cond_fun=lambda x: x[1] & ~x[3] & ~x[4],
+        lvl, grp_applied, grp_app_i, cancelled, restart, grp_again, win = jax.lax.while_loop(
+            cond_fun=lambda x: x[1] & ~x[3] & ~x[4] & ~x[5],
             body_fun=apply_rule_grp,
-            init_val=(lvl, grp_applied, grp_app_i, cancelled, restart, again),
+            init_val=(lvl, grp_applied, grp_app_i, cancelled, restart, again, win),
         )
     else:
-        while grp_applied and not cancelled and not restart:
-            lvl, grp_applied, grp_app_i, cancelled, restart, grp_again = apply_rule_grp((lvl, grp_applied, grp_app_i, cancelled, restart, again))
+        while grp_applied and not cancelled and not restart and not win:
+            lvl, grp_applied, grp_app_i, cancelled, restart, grp_again, win = apply_rule_grp((lvl, grp_applied, grp_app_i, cancelled, restart, again, win))
 
     again = again | grp_again
     grp_applied = grp_app_i > 1
     block_applied = grp_applied_prev | grp_applied
 
-    return (lvl, block_applied, grp_app_i, cancelled, restart, again), None
+    return (lvl, block_applied, grp_app_i, cancelled, restart, again, win), None
 
         
 def gen_tick_fn(obj_to_idxs, coll_mat, tree_rules, meta_objs, jit, n_objs, char_to_obj):
@@ -1474,22 +1486,24 @@ def gen_tick_fn(obj_to_idxs, coll_mat, tree_rules, meta_objs, jit, n_objs, char_
                                         obj_to_idxs=obj_to_idxs, n_objs=n_objs, jit=jit)
 
                 def apply_rule_block(carry):
-                    lvl, _, block_app_i, cancelled, restart, again = carry
+                    lvl, _, block_app_i, cancelled, restart, again, win = carry
                     block_app_i += 1
                     block_applied = False
+                    win = False
 
                     if jit:
-                        (lvl, block_applied, block_app_i, cancelled, restart, again), _ = jax.lax.scan(
+                        # FIXME: This should be a while that cancels if applicable
+                        (lvl, block_applied, block_app_i, cancelled, restart, again, win), _ = jax.lax.scan(
                             _loop_rule_grp,
-                            init=(lvl, block_applied, block_app_i, cancelled, restart, again),
+                            init=(lvl, block_applied, block_app_i, cancelled, restart, again, win),
                             xs=jnp.arange(len(rule_grps)),
                         )
                     else:
                         for grp_i in range(len(rule_grps)):
-                            carry, _ = _loop_rule_grp((lvl, block_applied, block_app_i, cancelled, restart, again), grp_i)
-                            lvl, block_applied, block_app_i, cancelled, restart, again = carry
+                            carry, _ = _loop_rule_grp((lvl, block_applied, block_app_i, cancelled, restart, again, win), grp_i)
+                            lvl, block_applied, block_app_i, cancelled, restart, again, win = carry
 
-                    return lvl, block_applied, block_app_i, cancelled, restart, again
+                    return lvl, block_applied, block_app_i, cancelled, restart, again, win
 
                 block_applied = True
                 block_app_i = 0
@@ -1689,7 +1703,7 @@ def apply_move_rule(lvl, move_rule, jit=True, rule_name=None):
     lvl += out
     lvl = lvl.astype(bool)
 
-    return lvl, changed, False, False, False
+    return lvl, changed, False, False, False, False
 
     
 

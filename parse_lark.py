@@ -334,6 +334,9 @@ def preprocess_ps(txt):
     # Remove any lines that are just `=+`
     txt = re.sub(r'^=+\n', '', txt, flags=re.MULTILINE)
 
+    # Replace any pairs of commas, separated by whitespace, with a single comma
+    txt = re.sub(r',\s*,', ',', txt)
+
     txt = txt.replace('\u00A0', ' ')
     # If the file does not end with 2 newlines, fix this
     for i in range(2):
@@ -379,6 +382,7 @@ def get_tree_from_txt(parser, game, log_dir: str = None, overwrite: bool = True)
     filepath = os.path.join(custom_games_dir, game + '.txt')
     if not os.path.exists(filepath):
         filepath = os.path.join(GAMES_DIR, game + '.txt')
+    print(f"Parsing {filepath}")
     with open(filepath, 'r', encoding='utf-8') as f:
         ps_text = f.read()
     simp_filename = game + '_simplified.txt' 
@@ -437,7 +441,7 @@ def get_tree_from_txt(parser, game, log_dir: str = None, overwrite: bool = True)
 
 
     min_parse_tree = StripPuzzleScript().transform(parse_tree)
-    min_tree_path = os.path.join(TREES_DIR, game[:-3] + 'pkl')
+    min_tree_path = os.path.join(TREES_DIR, game + '.pkl')
     with open(min_tree_path, "wb") as f:
         pickle.dump(min_parse_tree, f)
     pretty_parse_tree_str = min_parse_tree.pretty()
@@ -448,7 +452,7 @@ def get_tree_from_txt(parser, game, log_dir: str = None, overwrite: bool = True)
     # print(min_parse_tree.pretty())
     ps_str = PrintPuzzleScript().transform(min_parse_tree)
     ps_str = add_empty_sounds_section(ps_str)
-    min_filename = os.path.join(min_games_dir, game)
+    min_filename = os.path.join(min_games_dir, game + 'txt')
     # print(f"Writing minified game to {min_filename}")
     with open(min_filename, "w", encoding='utf-8') as file:
         file.write(ps_str)
