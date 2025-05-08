@@ -32,7 +32,7 @@ import requests
 
 from client import open_browser
 import game_gen
-from parse_lark import PrintPuzzleScript, RepairPuzzleScript, StripPuzzleScript, add_empty_sounds_section, preprocess_ps, TEST_GAMES
+from parse_lark import GAMES_DIR, MIN_GAMES_DIR, PrintPuzzleScript, RepairPuzzleScript, StripPuzzleScript, add_empty_sounds_section, preprocess_ps, TEST_GAMES
 from prompts import *
 from utils import extract_ps_code, gen_fewshot_examples, llm_text_query, num_tokens_from_string, save_prompts, truncate_str_to_token_len
 
@@ -109,12 +109,18 @@ def load_ideas():
         ideas = json.load(f)
     return ideas
 
+@app.route('/file_exists', methods=['POST'])
+def file_exists():
+    data = request.json
+    file_path = data['filePath']
+    exists = os.path.isfile(file_path)
+    return jsonify({'exists': exists})
 
 @app.route('/load_game_from_file', methods=['POST'])
 def load_game_from_file():
     data = request.json
     game = data['game']
-    game_path = os.path.join('data', 'min_games', f'{game}.txt')
+    game_path = os.path.join(MIN_GAMES_DIR, f'{game}.txt')
     with open(game_path, 'r') as f:
         code = f.read()
     print(code)
@@ -518,10 +524,14 @@ def list_scraped_games():
     target_dir = data['target_dir']
     games_set = set()
     games = []
-    game_files = os.listdir(os.path.join('data', target_dir))
-    random.shuffle(game_files)
-    test_game_files = [f"{test_game}.txt" for test_game in TEST_GAMES]
-    game_files = test_game_files + game_files
+    # game_files = os.listdir(os.path.join('data', target_dir))
+    # random.shuffle(game_files)
+    # test_game_files = [f"{test_game}.txt" for test_game in TEST_GAMES]
+    # game_files = test_game_files + game_files
+    with open('games_n_rules.json', 'r') as f:
+        games_n_rules = json.load(f)
+    games_n_rules = sorted(games_n_rules, key=lambda x: x[1])
+    game_files = [game[0] for game in games_n_rules]
     for filename in game_files:
         if filename.startswith('rigid_'):
             continue
@@ -532,7 +542,8 @@ def list_scraped_games():
                     print(f"Skipping {filename}")
                     continue
                 games_set.add(filename)
-                games.append(filename)
+        games.append(filename)
+    print(games)
     return jsonify(games)
 
 @app.route('/save_init_state', methods=['POST'])

@@ -1,4 +1,5 @@
 import argparse
+import glob
 import json
 import os
 import pickle
@@ -11,6 +12,7 @@ from typing import Optional
 import lark
 from lark.reconstruct import Reconstructor
 
+from env import PSEnv
 from gen_tree import GenPSTree
 from ps_game import PSGameTree
 
@@ -95,7 +97,7 @@ class StripPuzzleScript(Transformer):
         return self.strip_newlines_data(items, 'prelude_data')
 
     def object_data(self, items):
-        return self.strip_newlines_data(items, 'object_data')
+        return self.strip_newlines_data(items[0].children, 'object_data')
 
     def level_data(self, items):
         return self.strip_newlines_data(items, 'level_data')
@@ -407,6 +409,7 @@ def get_tree_from_txt(parser, game, log_dir: str = None, overwrite: bool = True)
         log_filename = os.path.join(log_dir, game + '.log')
 
     # This timeout functionality only works on Unix
+    print(f"Parsing {simp_filepath}")
     if os.name != 'nt':
         def parse_attempt_fn():
             with timeout_handler(10):
@@ -442,17 +445,18 @@ def get_tree_from_txt(parser, game, log_dir: str = None, overwrite: bool = True)
 
     min_parse_tree = StripPuzzleScript().transform(parse_tree)
     min_tree_path = os.path.join(TREES_DIR, game + '.pkl')
+    print(f"Writing parse tree to {min_tree_path}")
     with open(min_tree_path, "wb") as f:
         pickle.dump(min_parse_tree, f)
     pretty_parse_tree_str = min_parse_tree.pretty()
     pretty_tree_filename = os.path.join(pretty_trees_dir, game)
-    # print(f"Writing pretty tree to {pretty_tree_filename}")
+    print(f"Writing pretty tree to {pretty_tree_filename}")
     with open(pretty_tree_filename, "w", encoding='utf-8') as file:
         file.write(pretty_parse_tree_str)
     # print(min_parse_tree.pretty())
     ps_str = PrintPuzzleScript().transform(min_parse_tree)
     ps_str = add_empty_sounds_section(ps_str)
-    min_filename = os.path.join(min_games_dir, game + 'txt')
+    min_filename = os.path.join(MIN_GAMES_DIR, game + '.txt')
     # print(f"Writing minified game to {min_filename}")
     with open(min_filename, "w", encoding='utf-8') as file:
         file.write(ps_str)
@@ -466,12 +470,18 @@ def get_tree_from_txt(parser, game, log_dir: str = None, overwrite: bool = True)
         traceback.print_exc()
         print(f"Error parsing tree: {game}")
         return
+    # try:
+    #     env = PSEnv(tree, level_i=0)
+    except Exception as e:
+        traceback.print_exc()
+        print(f"Error initializing environment for {game}: {e}")
 
+    print(f"Parsed {game} successfully")
     return tree
 
 DATA_DIR = 'data'
 GAMES_DIR = os.path.join(DATA_DIR, 'scraped_games')
-min_games_dir = os.path.join(DATA_DIR, 'min_games')
+MIN_GAMES_DIR = os.path.join(DATA_DIR, 'min_games')
 custom_games_dir = os.path.join(DATA_DIR, 'custom_games')
 simpd_dir = os.path.join(DATA_DIR, 'simplified_games')
 TREES_DIR = os.path.join(DATA_DIR, 'game_trees')
@@ -482,6 +492,7 @@ parsed_games_filename = os.path.join(DATA_DIR, "parsed_games.txt")
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Parse PuzzleScript files')
     parser.add_argument('--overwrite', '-o', action='store_true', help='Overwrite existing parsed_games.txt')
+    parser.add_argument('--game', '-g', type=str, help='Name of the game to parse')
     args = parser.parse_args()
 
     # Initialize the Lark parser with the PuzzleScript grammar
@@ -492,7 +503,7 @@ if __name__ == "__main__":
 
     os.makedirs(TREES_DIR, exist_ok=True)
     os.makedirs(pretty_trees_dir, exist_ok=True)
-    os.makedirs(min_games_dir, exist_ok=True)
+    os.makedirs(MIN_GAMES_DIR, exist_ok=True)
     # min_grammar = os.path.join('syntax_generate.lark')
     if args.overwrite or not os.path.exists(parsed_games_filename):
         with open(parsed_games_filename, "w") as file:
@@ -501,7 +512,10 @@ if __name__ == "__main__":
         # Get the set of all lines from this text file
         parsed_games = set(file.read().splitlines())
     # for i, filename in enumerate(['blank.txt'] + os.listdir(demo_games_dir)):
-    game_files = os.listdir(GAMES_DIR)
+    if args.game is None:
+        game_files = os.listdir(GAMES_DIR)
+    else:
+        game_files = [args.game + '.txt']
     # sort them alphabetically
     game_files.sort()
     test_game_files = [f"{test_game}.txt" for test_game in TEST_GAMES]
@@ -514,8 +528,9 @@ if __name__ == "__main__":
         os.makedirs(scrape_log_dir)
     simpd_games = set(os.listdir(simpd_dir))
     for i, filename in enumerate(game_files):
+        print(f"Parsing {filename} ({i+1}/{len(game_files)})")
         tree = get_tree_from_txt(parser, filename[:-4], log_dir=scrape_log_dir, overwrite=args.overwrite)
 
     # Count the number of games in `min_gmes`
-    n_min_games = len(min_games_dir)
+    n_min_games = len(glob.glob(os.path.join(MIN_GAMES_DIR, '*.txt')))
     print(f"Number of minified games: {n_min_games}")

@@ -7,8 +7,11 @@ import random
 
 
 class PSObject:
-    def __init__(self, name: str, colors: List[str], sprite: Optional[List[List[str]]] = None, legend_key: Optional[str] = None):
+    def __init__(self, name: str, alt_name: str, colors: List[str], sprite: Optional[List[List[str]]] = None, legend_key: Optional[str] = None):
         self.name = name
+        if alt_name is not None:
+            alt_name = alt_name.lower()
+        self.alt_name = alt_name
         if legend_key is not None:
             assert len(legend_key) == 1, "Legend key must be a single character"
             legend_key = legend_key.lower()

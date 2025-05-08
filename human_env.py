@@ -165,8 +165,11 @@ def play_game(game: str, jit: bool = False, profile: bool = False):
     # Initialize the Lark parser with the PuzzleScript grammar
     parser = Lark(puzzlescript_grammar, start="ps_game", maybe_placeholders=False)
     # min_parser = Lark(min_puzzlescript_grammar, start="ps_game")
+    print(f"Parsing game: {game}")
     tree = get_tree_from_txt(parser, game)
+    print(f"Initializing environment for game: {game}")
     env = PSEnv(tree, jit=jit)
+    print(f"Playing game: {game}")
     human_loop(env, profile=profile)
 
 @hydra.main(config_name="config", version_base="1.3")

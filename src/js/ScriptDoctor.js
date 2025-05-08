@@ -152,11 +152,7 @@ function hashStateObjects(state) {
 
 async function solveLevelBFS(levelIdx, captureStates=false, maxIters=1_000_000) {
   console.log('max iters:', maxIters);
-  function hashState(levelMap) {
-    return JSON.stringify(levelMap).split('').reduce((hash, char) => {
-      return (hash * 31 + char.charCodeAt(0)) % 1_000_003; // Simple hash
-    }, 0);
-  }
+	precalcDistances();
 
   // Load the level
   compile(['loadLevel', levelIdx], editor.getValue());
@@ -173,11 +169,12 @@ async function solveLevelBFS(levelIdx, captureStates=false, maxIters=1_000_000) 
   frontier.enqueue([init_level, []]);
   // action_seqs.enqueue([]);
 
-  sol = [];
+  var sol = [];
+  var bestScore = -10000;
   console.log(sol.length);
   // visited = new Set([hashState(init_level_map)]);
   visited = {};
-  visited[init_level.objects] = true;
+  // visited[level.objects] = true;
   i = 0;
   start_time = Date.now();
   console.log(frontier.size())
@@ -201,12 +198,16 @@ async function solveLevelBFS(levelIdx, captureStates=false, maxIters=1_000_000) 
 
       new_action_seq = action_seq.slice();
       new_action_seq.push(move);
-      try {
-        changed = processInputSearch(move);
-      } catch (e) {
-        console.log('Error while processing input:', e);
-        return [-2, i];
-      }
+      // try {
+      //   changed = processInputSearch(move);
+      // } catch (e) {
+      //   console.log('Error while processing input:', e);
+      //   return [-2, i];
+      // }
+			var changed = processInputSearch(move);
+			while (againing) {
+				changed = processInputSearch(-1) || changedSomething;
+			}
       if (winning) {
         console.log(`Winning! Solution:, ${new_action_seq}\n Iterations: ${i}`);
         console.log('FPS:', (i / (Date.now() - start_time) * 1000).toFixed(2));
@@ -214,14 +215,16 @@ async function solveLevelBFS(levelIdx, captureStates=false, maxIters=1_000_000) 
       }
       else if (changed) {
         new_level = backupLevel();
-        new_level_map = new_level['dat'];
+        // new_level_map = new_level['dat'];
         // const newHash = hashState(new_level_map);
         // if (!visited.has(newHash)) {
-        if (!(new_level.objects in visited)) {
-          
+        if (!(level.objects in visited)) {
+          // console.log('New state found:', level.objects);
+
           // UNCOMMENT THESE LINES FOR VISUAL DEBUGGING
           // await new Promise(resolve => setTimeout(resolve, 1)); // Small delay for live feedback
           // redraw();
+          ///////////////////////////////////////////////
 
           frontier.enqueue([new_level, new_action_seq]);
           // frontier.enqueue(new_level);
@@ -231,8 +234,9 @@ async function solveLevelBFS(levelIdx, captureStates=false, maxIters=1_000_000) 
           // action_seqs.enqueue(new_action_seq);
 
           // visited.add(newHash);
-          visited[new_level.objects] = true;
+          visited[level.objects] = true;
         } 
+        // console.log('State already visited:', level.objects);
       }
     }
     if (i % 10000 == 0) {
@@ -240,7 +244,7 @@ async function solveLevelBFS(levelIdx, captureStates=false, maxIters=1_000_000) 
       console.log('Iteration:', i);
       console.log('FPS:', (i / (now - start_time) * 1000).toFixed(2));
       console.log(`Size of frontier: ${frontier.size()}`);
-      console.log(`Visited states: ${visited.len}`);
+      console.log(`Visited states: ${Object.keys(visited).length}`);
       // await new Promise(resolve => setTimeout(resolve, 1)); // Small delay for live feedback
       // redraw();
     }
@@ -494,7 +498,7 @@ async function testBFS() {
     console.log('Iterations:', nSearchIters);
     inputHistory = sol;
     const solDir = `sols/${title}/level_${i}`;
-    makeGIFDoctor();
+    const [dataURL, filename] = makeGIFDoctor();
     await fetch ('/save_sol', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -502,6 +506,7 @@ async function testBFS() {
         levelIdx: i,
         sol: sol,
         solDir: solDir,
+        dataURL: dataURL,
       })
     });
   }
@@ -653,7 +658,7 @@ async function solveLevelBestFirst(captureStates=false, gameHash=0, levelI=0, ma
       console.log('Iteration:', totalIters);
       console.log('FPS:', (totalIters / (now - start_time) * 1000).toFixed(2));
       console.log(`Size of frontier: ${queue.size}`);
-      console.log(`Visited states: ${size}`);
+      console.log(`Visited states: ${Object.keys(visited).length}`);
       // await new Promise(resolve => setTimeout(resolve, 1)); // Small delay for live feedback
       // redraw();
     }
@@ -1419,13 +1424,26 @@ async function collectGameData(gamePath, captureStates=true) {
       continue;
     }
     
-    console.log(`Processing level ${level}`);
+    console.log(`Processing level ${level} of game ${gamePath}`);
     compile(['loadLevel', level], code);
     // const [sol, n_iters] = await solveLevelAStar(captureStates=captureStates, gameHash=gamePath, level_i=level, maxIters=1_000_000);
+    const solDir = `sols/${gamePath}`;
+    const solPath = `${solDir}/level-${level}.json`;
+    // If the solution exists, skip it
+    const solExists = await fetch('/file_exists', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ filePath: solPath })
+    });
+    const solExistsData = await solExists.json();
+    if (solExistsData.exists) {
+      console.log(`Solution for level ${level} already exists. Skipping.`);
+      continue;
+    }
+    // If the solution does not exist, solve it
     const [sol, n_iters] = await solveLevelBFS(level, captureStates=captureStates, maxIters=100_000);
     console.log(`Finished processing level ${level}`);
     if (sol.length > 0) {
-      const solDir = `sols/${gamePath}`;
       console.log(`Solution for level ${level}:`, sol);
       console.log(`Saving gif for level ${level}.`);
       inputHistory = sol;
@@ -1519,7 +1537,7 @@ function sweepClick() {
 // fromPlanSweep();
 // playTest();
 // evolve(expSeed);
-evolve2();
-// processAllGames();
+// evolve2();
+processAllGames();
 
 // genGame('init', [], 'test_99', 99, fewshot=true, cot=true, maxGenAttempts=20);

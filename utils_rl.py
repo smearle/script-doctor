@@ -1,4 +1,5 @@
 import dataclasses
+from timeit import default_timer as timer
 from functools import partial
 import math
 import os
@@ -13,10 +14,12 @@ import jax.numpy as jnp
 import flax.linen as nn
 from flax import struct
 from flax.training import orbax_utils
+from lark import Lark
 import numpy as np
 from jax_utils import stack_leaves
 import optax
 import orbax.checkpoint as ocp
+from parse_lark import get_tree_from_txt
 import wandb
 import functools
 from flax.training.train_state import TrainState
@@ -24,15 +27,15 @@ import hydra
 from omegaconf import DictConfig, OmegaConf
 from time import perf_counter
 
-from conf.config import Config, MultiAgentConfig
-from env import PSEnv, PSObs, PSState, PSParams, init_ps_env
+from conf.config import Config, MultiAgentConfig, TrainConfig
+from env import PSEnv, PSObs, PSState, PSParams
 from marl.model import ActorCategorical, ActorMLP, ActorRNN, CriticRNN, MAConvForward2, ScannedRNN
 from models import NCA, AutoEncoder, ConvForward, ConvForward2, SeqNCA, ActorCriticPS, Dense
 from purejaxrl.wrappers import LogWrapper
 
 N_AGENTS = 1
 
-def get_exp_dir(config: MultiAgentConfig):
+def get_exp_dir(config: TrainConfig):
     exp_dir = os.path.join(
         "rl_logs", 
         "game",
@@ -44,7 +47,7 @@ def get_exp_dir(config: MultiAgentConfig):
     )
     return exp_dir
 
-def get_env_params_from_config(env: PSEnv, config: MultiAgentConfig):
+def get_env_params_from_config(env: PSEnv, config: Config):
     level = env.get_level(config.level_i)
     return PSParams(
         level=level
@@ -397,3 +400,19 @@ def save_checkpoint(config: MultiAgentConfig, ckpt_manager, runner_state, t):
     save_args = orbax_utils.save_args_from_target(runner_state)
     ckpt_manager.save(t.item(), args=ocp.args.StandardSave(runner_state))
     ckpt_manager.wait_until_finished() 
+
+
+def init_ps_env(config: Config, verbose: bool = False) -> PSEnv:
+    start_time = timer()
+    game = config.game
+    level_i = config.level_i
+    with open("syntax.lark", "r", encoding='utf-8') as file:
+        puzzlescript_grammar = file.read()
+    # Initialize the Lark parser with the PuzzleScript grammar
+    parser = Lark(puzzlescript_grammar, start="ps_game", maybe_placeholders=False)
+    tree = get_tree_from_txt(parser, game)
+    parse_time = timer()
+    print(f'Parsed PS file using Lark into python PSTree object in {(parse_time - start_time) / 1000} seconds.')
+    env = PSEnv(tree, jit=True, level_i=level_i, max_steps=config.max_episode_steps)
+    print(f'Initialized PSEnv in {(timer() - parse_time) / 1000} seconds.')
+    return env

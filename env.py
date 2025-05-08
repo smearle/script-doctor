@@ -19,8 +19,7 @@ from conf.config import Config
 from env_render import render_solid_color, render_sprite
 from jax_utils import stack_leaves
 from marl.spaces import Box
-from parse_lark import get_tree_from_txt
-from ps_game import LegendEntry, PSGameTree, Rule, WinCondition
+from ps_game import LegendEntry, PSGameTree, PSObject, Rule, WinCondition
 from spaces import Discrete
 
 
@@ -262,7 +261,6 @@ def gen_check_win(win_conditions: Iterable[WinCondition], obj_to_idxs, meta_objs
         elif win_condition.quantifier == 'any':
             func = partial(check_any, src=src)
         else:
-            breakpoint()
             raise Exception('Invalid quantifier.')
         funcs.append(func)
 
@@ -270,7 +268,7 @@ def gen_check_win(win_conditions: Iterable[WinCondition], obj_to_idxs, meta_objs
     def check_win(lvl):
 
         if len(funcs) == 0:
-            return False, 0
+            return False, 0, 0
         
         def apply_win_condition_func(i, lvl):
             # FIXME: can't jit this list of functions... when the funcs are jitted theselves??
@@ -321,7 +319,7 @@ class PatternFnReturn:
 
 def is_rel_force_in_kernel(k):
     for c in k:
-        for o in c:
+        for o in c[0].split(' '):
             if o in ['>', 'v', '^', '<']:
                 return True
     return False
@@ -923,7 +921,7 @@ def gen_subrules_meta(rule: Rule, n_objs, obj_to_idxs, meta_objs, coll_mat, rule
                         is_line_detector = True
                         cell_detection_fns.append('...')
                         # TODO
-                        exit()
+                        raise NotImplementedError('Line detector not implemented yet')    
                     if l_cell is not None:
                         cell_detection_fns.append(gen_cell_detection_fn(l_cell, force_idx))
                     else:
@@ -1256,13 +1254,6 @@ def gen_subrules_meta(rule: Rule, n_objs, obj_to_idxs, meta_objs, coll_mat, rule
             rots = [0]
         else:
             rots = [0, 1, 2, 3]
-    # else:
-    #     rots = [0]
-    first_lp = np.array(l_kerns[0])
-    if first_lp.shape[0] == 1 and first_lp.shape[1] == 1:
-        # print(f'LPS: {lps}')
-        # print(f'RPS: {rps}')
-        rule_fns.append(gen_rotated_rule_fn(l_kerns, r_kerns, 0, rule.command))
     for rot in rots:
         # rotate the patterns
         l_kerns_rot = []
@@ -1728,16 +1719,27 @@ class PSObs:
     flat_obs: Optional[chex.Array] = None
 
 
+def get_names_to_alts(objects):
+    names_to_alts = {}
+    for obj_key, obj in objects.items():
+        obj: PSObject
+        if obj.alt_name is not None:
+            names_to_alts[obj.alt_name] = obj_key
+    return names_to_alts
+
 
 class PSEnv:
-    def __init__(self, tree: PSGameTree, jit: bool = True, level_i: int = 0, max_steps: int = 1000):
+    def __init__(self, tree: PSGameTree, jit: bool = True, level_i: int = 0, max_steps: int = np.inf):
         self.jit = jit
         self.title = tree.prelude.title
         self.tree = tree
         self.levels = tree.levels
         self.level_i = level_i
         self.require_player_movement = tree.prelude.require_player_movement
+        print(f"Processing legend for {self.title}")
         obj_to_char, meta_objs, joint_tiles = process_legend(tree.legend)
+        names_to_alts = get_names_to_alts(tree.objects)
+        alts_to_names = {v: k for k, v in names_to_alts.items()}
         self.meta_objs = meta_objs
         self.max_steps = max_steps
 
@@ -1746,8 +1748,11 @@ class PSEnv:
             obj_key = obj.legend_key
             if obj_key is not None:
                 obj_to_char[obj.name] = obj_key
+                if obj.alt_name is not None:
+                    obj_to_char[obj.alt_name] = obj_key
         self.char_to_obj = char_to_obj = {v: k for k, v in obj_to_char.items()}
 
+        print(f"Expanding collision layers for {self.title}")
         collision_layers = expand_collision_layers(tree.collision_layers, meta_objs, char_to_obj)
         atomic_obj_names = [name for layer in collision_layers for name in layer]
         # atomic_obj_names = [name for name in tree.objects.keys()]
@@ -1763,8 +1768,10 @@ class PSEnv:
                 self.obj_to_idxs[obj] = self.obj_to_idxs[sub_objs[0]]
         self.n_objs = len(atomic_obj_names)
         coll_mat = np.einsum('ij,ik->jk', coll_masks, coll_masks, dtype=bool)
+        print(f"Generating tick function for {self.title}")
         self.tick_fn = gen_tick_fn(self.obj_to_idxs, coll_mat, tree.rules, meta_objs, jit=self.jit, n_objs=self.n_objs,
                                    char_to_obj=char_to_obj)
+        print(f"Generating check win function for {self.title}")
         self.check_win = gen_check_win(tree.win_conditions, self.obj_to_idxs, meta_objs, self.char_to_obj, jit=self.jit)
         if 'player' in self.obj_to_idxs:
             self.player_idxs = [self.obj_to_idxs['player']]
@@ -1781,7 +1788,14 @@ class PSEnv:
         # for obj_name in self.obj_to_idxs:
         for obj_key in atomic_obj_names:
             if obj_key not in tree.objects:
-                breakpoint()
+                if obj_key in alts_to_names:
+                    meta_objs[obj_key] = alts_to_names[obj_key]
+                    obj_key = alts_to_names[obj_key]
+                elif obj_key in names_to_alts:
+                    meta_objs[obj_key] = names_to_alts[obj_key]
+                    obj_key = names_to_alts[obj_key]
+                else:
+                    breakpoint()
             obj = tree.objects[obj_key]
             if obj.sprite is not None:
                 if DEBUG:
@@ -1789,7 +1803,9 @@ class PSEnv:
                 im = render_sprite(obj.colors, obj.sprite)
 
             else:
-                assert len(obj.colors) == 1
+                # assert len(obj.colors) == 1
+                if len(obj.colors) != 1:
+                    breakpoint()
                 if DEBUG:
                     print(f'rendering solid color for {obj_key}')
                 im = render_solid_color(obj.colors[0])
@@ -1813,6 +1829,7 @@ class PSEnv:
         self.chars_to_idxs = {obj_to_char[k]: v for k, v in self.obj_to_idxs.items() if k in obj_to_char}
         self.chars_to_idxs.update({k: v for k, v in self.obj_to_idxs.items() if len(k) == 1})
 
+        # Generate vectors to detect joint objects
         for jo, subobjects in joint_tiles.items():
             vec = np.zeros(self.n_objs, dtype=bool)
             subobjects = expand_meta_objs(subobjects, meta_objs, char_to_obj)
@@ -2106,19 +2123,3 @@ def multihot_to_desc(multihot_level, obj_to_idxs, n_objs):
     desc_str = "\n".join([" || ".join(row) for row in desc_grid])
     
     return desc_str
-
-
-def init_ps_env(config: Config, verbose: bool = False) -> PSEnv:
-    start_time = timer()
-    game = config.game
-    level_i = config.level_i
-    with open("syntax.lark", "r", encoding='utf-8') as file:
-        puzzlescript_grammar = file.read()
-    # Initialize the Lark parser with the PuzzleScript grammar
-    parser = Lark(puzzlescript_grammar, start="ps_game", maybe_placeholders=False)
-    tree = get_tree_from_txt(parser, game)
-    parse_time = timer()
-    print(f'Parsed PS file using Lark into python PSTree object in {(parse_time - start_time) / 1000} seconds.')
-    env = PSEnv(tree, jit=True, level_i=level_i, max_steps=config.max_episode_steps)
-    print(f'Initialized PSEnv in {(timer() - parse_time) / 1000} seconds.')
-    return env

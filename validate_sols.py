@@ -7,21 +7,27 @@ import random
 import shutil
 import traceback
 
+import hydra
 import imageio
 import jax
 import jax.numpy as jnp
 from lark import Lark
 import numpy as np
 
+from conf.config import Config
 from env import PSEnv
 from gen_tree import GenPSTree
 from parse_lark import TREES_DIR, DATA_DIR, TEST_GAMES, get_tree_from_txt
 from ps_game import PSGameTree
+from utils_rl import get_env_params_from_config
 
 
 scratch_dir = 'scratch'
 os.makedirs(scratch_dir, exist_ok = True)
-if __name__ == '__main__':
+
+
+@hydra.main(version_base="1.3", config_path='./conf', config_name='config')
+def main(config: Config):
     sol_paths = glob.glob(os.path.join('sols', '*'))
     random.shuffle(sol_paths)
     games = [os.path.basename(path) for path in sol_paths]
@@ -60,7 +66,9 @@ if __name__ == '__main__':
             log_path = os.path.join(traj_dir)
             continue
 
-        state = env.reset(0)
+        key = jax.random.PRNGKey(0)
+        params = get_env_params_from_config(env, config)
+        obs, state = env.reset(key, params)
 
         # 0 - left
         # 1 - down
@@ -81,16 +89,20 @@ if __name__ == '__main__':
             actions = jnp.array([int(a) for a in actions])
 
             level_i = int(os.path.basename(level_sol_path).split('-')[1].split('.')[0])
+            level = env.get_level(level_i)
+            params = params.replace(level=level)
             print(f"Level {level_i} solution: {actions}")
 
-            def step_env(state, action):
-                state = env.step(action, state)
-                return state, state
+            def step_env(carry, action):
+                state, _ = carry
+                obs, state, reward, done, info = env.step(key, state, action, params)
+                return (state, done), state
 
             try:
-                state = env.reset(level_i)
-                state, state_v = jax.lax.scan(step_env, state, actions)
-                if not state.win:
+                obs, state = env.reset(key, params)
+                (state, done), state_v = jax.lax.scan(step_env, (state, False), actions)
+                # if not state.win:
+                if not done:
                     log_path = os.path.join(traj_dir, f'level-{level_i}_solution_err.txt')
                     with open(log_path, 'w') as f:
                         f.write(f"Level {level_i} solution failed\n")
@@ -121,3 +133,7 @@ if __name__ == '__main__':
             gif_path = os.path.join(traj_dir, f'level-{level_i}.gif')
             imageio.mimsave(gif_path, frames, duration=0.1, loop=1)
             # exit()
+
+
+if __name__ == '__main__':
+    main()

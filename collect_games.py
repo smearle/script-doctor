@@ -119,7 +119,7 @@ if __name__ == '__main__':
                 breakpoint()
             title = title_match.groups()[0]
             # Replace invalid characters for filenames with underscores
-            filename =  sanitize_filename(title)
+            filename =  sanitize_filename(title, replacement_text='_')
             script_path = os.path.join('data/scraped_games', filename)
 
             dupe_filenames = {}
@@ -131,9 +131,9 @@ if __name__ == '__main__':
                 else:
                     n_prev_dupes += 1
                     dupe_filenames[filename] += n_prev_dupes
-                filename = f'{title}_{n_prev_dupes}'
+                filename = f'{filename}_{n_prev_dupes}'
             else:
-                filename = str(title)
+                filename = str(filename)
             filename += '.txt'
             script_path = os.path.join(SCRAPED_GAMES_DIR, filename)
 
