@@ -65,7 +65,7 @@ async function playTest() {
   console.log('Playtesting...');
   compile(['loadLevel', n_level], editor.getValue());
   console.log('Solving level:', n_level, ' with A*');
-  var [sol_a, n_search_iters_a] = await solveLevelAStar(level_i=n_level);
+  var [sol_a, n_search_iters_a] = await solveLevelBestFirst(level_i=n_level);
 
 
   editor.setValue(code);
@@ -151,11 +151,8 @@ function hashStateObjects(state) {
 
 
 async function solveLevelBFS(levelIdx, captureStates=false, maxIters=1_000_000) {
-  function hashState(levelMap) {
-    return JSON.stringify(levelMap).split('').reduce((hash, char) => {
-      return (hash * 31 + char.charCodeAt(0)) % 1_000_003; // Simple hash
-    }, 0);
-  }
+  console.log('max iters:', maxIters);
+	precalcDistances();
 
   // Load the level
   compile(['loadLevel', levelIdx], editor.getValue());
@@ -172,11 +169,12 @@ async function solveLevelBFS(levelIdx, captureStates=false, maxIters=1_000_000) 
   frontier.enqueue([init_level, []]);
   // action_seqs.enqueue([]);
 
-  sol = [];
+  var sol = [];
+  var bestScore = -10000;
   console.log(sol.length);
   // visited = new Set([hashState(init_level_map)]);
   visited = {};
-  visited[level.objects] = true;
+  // visited[level.objects] = true;
   i = 0;
   start_time = Date.now();
   console.log(frontier.size())
@@ -200,12 +198,16 @@ async function solveLevelBFS(levelIdx, captureStates=false, maxIters=1_000_000) 
 
       new_action_seq = action_seq.slice();
       new_action_seq.push(move);
-      try {
-        changed = processInputSearch(move);
-      } catch (e) {
-        console.log('Error while processing input:', e);
-        return [-2, i];
-      }
+      // try {
+      //   changed = processInputSearch(move);
+      // } catch (e) {
+      //   console.log('Error while processing input:', e);
+      //   return [-2, i];
+      // }
+			var changed = processInputSearch(move);
+			while (againing) {
+				changed = processInputSearch(-1) || changedSomething;
+			}
       if (winning) {
         console.log(`Winning! Solution:, ${new_action_seq}\n Iterations: ${i}`);
         console.log('FPS:', (i / (Date.now() - start_time) * 1000).toFixed(2));
@@ -213,14 +215,16 @@ async function solveLevelBFS(levelIdx, captureStates=false, maxIters=1_000_000) 
       }
       else if (changed) {
         new_level = backupLevel();
-        new_level_map = new_level['dat'];
+        // new_level_map = new_level['dat'];
         // const newHash = hashState(new_level_map);
         // if (!visited.has(newHash)) {
         if (!(level.objects in visited)) {
-          
+          // console.log('New state found:', level.objects);
+
           // UNCOMMENT THESE LINES FOR VISUAL DEBUGGING
           // await new Promise(resolve => setTimeout(resolve, 1)); // Small delay for live feedback
           // redraw();
+          ///////////////////////////////////////////////
 
           frontier.enqueue([new_level, new_action_seq]);
           // frontier.enqueue(new_level);
@@ -232,6 +236,7 @@ async function solveLevelBFS(levelIdx, captureStates=false, maxIters=1_000_000) 
           // visited.add(newHash);
           visited[level.objects] = true;
         } 
+        // console.log('State already visited:', level.objects);
       }
     }
     if (i % 10000 == 0) {
@@ -239,7 +244,7 @@ async function solveLevelBFS(levelIdx, captureStates=false, maxIters=1_000_000) 
       console.log('Iteration:', i);
       console.log('FPS:', (i / (now - start_time) * 1000).toFixed(2));
       console.log(`Size of frontier: ${frontier.size()}`);
-      console.log(`Visited states: ${visited.len}`);
+      console.log(`Visited states: ${Object.keys(visited).length}`);
       // await new Promise(resolve => setTimeout(resolve, 1)); // Small delay for live feedback
       // redraw();
     }
@@ -493,7 +498,7 @@ async function testBFS() {
     console.log('Iterations:', nSearchIters);
     inputHistory = sol;
     const solDir = `sols/${title}/level_${i}`;
-    makeGIFDoctor();
+    const [dataURL, filename] = makeGIFDoctor();
     await fetch ('/save_sol', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -501,6 +506,7 @@ async function testBFS() {
         levelIdx: i,
         sol: sol,
         solDir: solDir,
+        dataURL: dataURL,
       })
     });
   }
@@ -520,7 +526,7 @@ async function testMCTS() {
 }
 
 
-async function solveLevelAStar(captureStates=false, gameHash=0, levelI=0, maxIters=100_000_000) {
+async function solveLevelBestFirst(captureStates=false, gameHash=0, levelI=0, maxIters=100_000_000) {
 	// if (levelEditorOpened) return;
 	// if (showingSolution) return;
 	// if (solving) return;
@@ -654,7 +660,7 @@ async function solveLevelAStar(captureStates=false, gameHash=0, levelI=0, maxIte
       console.log('Iteration:', totalIters);
       console.log('FPS:', (totalIters / (now - start_time) * 1000).toFixed(2));
       console.log(`Size of frontier: ${queue.size}`);
-      console.log(`Visited states: ${size}`);
+      console.log(`Visited states: ${Object.keys(visited).length}`);
       // await new Promise(resolve => setTimeout(resolve, 1)); // Small delay for live feedback
       // redraw();
     }
@@ -717,9 +723,11 @@ async function processStateTransition(gameHash, parentState, childState, action)
 }
 
 
-async function genGame(genMode, parents, saveDir, expSeed, fewshot, cot,
-  /* This funciton will recursively call itself to iterate on broken (uncompilable or unsolvable (or too simply solvable)) games. */
-  fromIdea=false, idea='', fromPlan=false, maxGenAttempts=10) {
+async function genGame(config) {
+  /* This function will recursively call itself to iterate on broken
+   * (uncompilable or unsolvable (or too simply solvable)) games.
+   */
+
   consoleText = '';
   larkError = '';
   nGenAttempts = 0;
@@ -733,19 +741,19 @@ async function genGame(genMode, parents, saveDir, expSeed, fewshot, cot,
   maxMeanSolComplexity = 0;
 
   bestIndividual = new GameIndividual('', null, -Infinity, 0, [], [], true);
-  while (nGenAttempts < maxGenAttempts & (nGenAttempts == 0 | !compilationSuccess | !solvable)) {
-    console.log(`Game ${saveDir}, attempt ${nGenAttempts}.`);
+  while (nGenAttempts < config.maxGenAttempts & (nGenAttempts == 0 | !compilationSuccess | !solvable)) {
+    console.log(`Game ${config.saveDir}, attempt ${nGenAttempts}.`);
 
     var response;
 
-    if (fromPlan & nGenAttempts == 0) {
+    if (config.fromPlan & nGenAttempts == 0) {
       response = await fetch('/gen_game_from_plan', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
-          seed: expSeed,
-          save_dir: saveDir,
-          game_idea: idea,
+          seed: config.expSeed,
+          save_dir: config.saveDir,
+          game_idea: config.idea,
           n_iter: nGenAttempts,
         }),
       });
@@ -755,20 +763,21 @@ async function genGame(genMode, parents, saveDir, expSeed, fewshot, cot,
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
-          seed: expSeed,
-          fewshot: fewshot,
-          cot: cot,
-          save_dir: saveDir,
-          gen_mode: genMode,
-          parents: parents,
+          seed: config.expSeed,
+          fewshot: config.fewshot,
+          cot: config.cot,
+          save_dir: config.saveDir,
+          gen_mode: config.genMode,
+          parents: config.parents,
           code: code,
-          from_idea: fromIdea,
-          game_idea: idea,
+          from_idea: config.fromIdea,
+          game_idea: config.idea,
           lark_error: larkError,
           console_text: consoleText,
           solver_text: solverText,
           compilation_success: compilationSuccess,
           n_iter: nGenAttempts,
+          meta_parents: config.metaParents,
         }),
       });
     }
@@ -778,10 +787,9 @@ async function genGame(genMode, parents, saveDir, expSeed, fewshot, cot,
     }
   
     const data = await response.json();
-    // for (const line of data.text.split('\n')) {
-    //   consolePrint(line);
-    // }
+
     code = data.code;
+    vizFeedback = data.viz_feedback;
     minCode = null;
     // if min_code is not None, then use this
     if (data.min_code) {
@@ -917,7 +925,7 @@ async function genGame(genMode, parents, saveDir, expSeed, fewshot, cot,
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ 
-        save_dir: saveDir,
+        save_dir: config.saveDir,
         sols: sols,
         n_iter: nGenAttempts,
         gif_urls: dataURLs,
@@ -933,34 +941,274 @@ async function genGame(genMode, parents, saveDir, expSeed, fewshot, cot,
     nGenAttempts++;
     individual = new GameIndividual(code, minCode, fitness, maxMeanSolComplexity, compiledIters, solvedIters, anySolvedIters, false);
     bestIndividual = bestIndividual.fitness < individual.fitness ? individual : bestIndividual;
-
   }
   return bestIndividual;
 }
 
+async function interactiveEvo() {
+  /** The main function to initiate interactive evolution. Currently triggered by clicking the "GARDEN" button
+   * in the top-left of the PS Editor page (doctor.html), but should happen automatically on a separate garden.html.
+   */
+  const response = await fetch('/get_evo_args', {
+    method: 'GET',
+  });
+  const data = await response.json();
+  const evoSeed = data.seed;
+  const seed_games = await displayGameSeeds();
+  // const metaParents = await userSelectParentsDummy(seed_games);
+  const metaParents = ['midas', 'i am two']
+  await evolve(evoSeed, metaParents);
+}
 
-const popSize = 3;
-const nGens = 20;
+async function displayGameSeeds(){
+  /** Fetch all games in our dataset, to display as "seeds" for potential recombination or mutation by the user. */
+  const response = await fetch('/list_scraped_games', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ 
+      target_dir: 'scraped_games',
+    }),
+  });
+  const data = await response.json();
+  // TODO: Display the seed garden in the UI
+  // For now, log the length of the seed garden
+  console.log(`Seed garden length: ${data.length}`);
+  return data
+}
 
-async function evolve() {
+async function userSelectParentsDummy(seed_games) {
+  /** Dummy function for user to select parents from seed garden.
+  For now, just return to random games. Make sure the games are different.
+  */
+  const firstIndex = Math.floor(Math.random() * seed_games.length); 
+  const first = seed_games.splice(firstIndex, 1)[0];
+  const secondIndex = Math.floor(Math.random() * seed_games.length);
+  const second = seed_games.splice(secondIndex, 1)[0];  
+  return [first, second];
+}
+
+
+const popSize = 5;
+const nGens = 10;
+
+async function evolve2() {
+  // Get a candidate game from the server
+  const response = await fetch('/evo_ask', {
+    method: 'GET',
+  });
+
+  // Evaluate the game
+  const data = await response.json();
+  const game = data.game;
+  code = data.code;
+  vizFeedback = data.viz_feedback;
+  minCode = null;
+  // if min_code is not None, then use this
+  if (data.min_code) {
+    minCode = data.min_code;
+  }
+  sols = data.sols;
+  larkError = data.lark_error
+  if (data.skip) {
+    return new GameIndividual(code, minCode, -1, 0, [], [], true);
+  }
+  errorLoadingLevel = false;
+  try {
+    codeToCompile = minCode ? minCode : code;
+    editor.setValue(codeToCompile);
+    editor.clearHistory();
+    clearConsole();
+    setEditorClean();
+    unloadGame();
+  } catch (e) {
+    console.log('Error while loading code:', e);
+    errorLoadingLevel = true;
+    consoleText = `Error while loading code into editor: ${e}.`;
+    errorCount = 10;
+  }
+  if (!errorLoadingLevel) {
+    try {
+      compile(['restart'], codeToCompile);
+    } catch (e) {
+      console.log('Error while compiling code:', e);
+    }
+    consoleText = getConsoleText();
+  }
+
+  if (errorCount > 0) {
+    compilationSuccess = false;
+    solvable = false;
+    solverText = '';
+    // console.log(`Errors: ${errorCount}. Iterating on the game code. Attempt ${nGenAttempts}.`);
+    fitness = -errorCount;
+    dataURLs = [];
+  } else {
+    compiledIters.push(nGenAttempts);
+    compilationSuccess = true;
+    solverText = '';
+    solvable = true;
+    dataURLs = [];
+    var anySolvable = false;
+    var sol;
+    var nSearchIters;
+    // console.log('No compilation errors. Performing playtest.');
+    fitness = 0
+    solComplexities = []
+    for (level_i in state.levels) {
+      // console.log('Levels:', state.levels);
+      // Check if type `Level` or dict
+      if (!state.levels[level_i].hasOwnProperty('height')) {
+        // console.log(`Skipping level ${level_i} as it does not appear to be a map (just a message?): ${state.levels[level_i]}.`);
+        continue;
+      }
+      // try {
+        // Check if level_i is in sols
+      if (sols.hasOwnProperty(level_i)) {
+        // console.log('Using cached solution.');
+        [sol, nSearchIters] = sols[level_i];
+      } else {
+        clearConsole();
+        console.log(`Solving level ${level_i}...`);
+        [sol, nSearchIters] = await solveLevelBFS(level_i);
+        if (sol.length > 0) {
+          console.log(`Solution for level ${level_i}:`, sol);
+          console.log(`Saving gif for level ${level_i}.`);
+          curlevel = level_i;
+          compile(['loadLevel', level_i], editor.getValue());
+          inputHistory = sol;
+          const [ dataURL, filename ] = makeGIFDoctor();
+          dataURLs.push([dataURL, level_i]);
+        }
+      }
+      // } catch (e) {
+      //   console.log('Error while solving level:', e);
+      //   sol = [];
+      //   n_search_iters = -1;
+      //   solverText += ` Level ${level_i} resulted in error: ${e}. Please repair it.`;
+      // }
+      if (!sol) {
+        console.log(`sol undefined`);
+      }
+      sols[level_i] = [sol, nSearchIters];
+      // console.log('Solution:', sol);
+      // check if sol is undefined
+      solComplexity = 0;
+      if (sol.length > 0) {
+        fitness += nSearchIters;
+        solComplexity = nSearchIters;
+        // console.log('Level is solvable.');
+        // solverText += `Found solution for level ${level_i} in ${n_search_iters} iterations: ${sol}.\n`
+        solverText += `Found solution for level ${level_i} in ${nSearchIters} iterations. Solution is ${sol.length} moves long.\n`
+        if (sol.length > 1) {
+          anySolvable = true;
+        }
+        if (sol.length < 10) {
+          solverText += `Solution is very short. Please make it a bit more complex.\n`
+          solvable = false;
+        }
+      } else if (sol == -1) {
+        solvable = false;
+        solverText += `Hit maximum search depth of ${i} while attempting to solve ${level_i}. Are you sure it's solvable? If so, please make it a bit simpler.\n`
+      } else if (sol == -2) {
+        solvable = false;
+        consoleText = getConsoleText();
+        solverText += `Error while solving level ${level_i}. Please repair it.\nThe PuzzleScript console output was:\n${consoleText}\n`
+      } else {
+        // console.log(`Level ${level_i} is not solvable.`);
+        solvable = false;
+        solverText += ` Level ${level_i} is not solvable. Please repair it.\n`
+      }
+      solComplexities.push(solComplexity);
+    }
+    if (solComplexities.length == 0) {
+      solComplexities = [0];
+    }
+    meanSolComplexity = solComplexities.reduce((a, b) => a + b, 0) / solComplexities.length;
+    maxMeanSolComplexity = Math.max(maxMeanSolComplexity, meanSolComplexity);
+    if (solvable) {
+      // If all levels are solvable
+      solvedIters.push(nGenAttempts)
+    }
+    if (anySolvable) {
+      anySolvedIters.push(nGenAttempts)
+    }
+  }
+
+  // Now send the results to the server
+  response = await fetch('/evo_tell', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ 
+      sols: sols,
+      gif_urls: dataURLs,
+      console_text: consoleText,
+      solver_text: solverText,
+    }),
+  });
+}
+
+async function evolve(evoSeed, metaParents=null) {
+  /** The main loop for evolving games.
+   * Maybe move this to python eventually?
+   */
   // Create an initial population of 10 games
   pop = [];
   gen = 0
+  if (!metaParents) {
+    evoDir = `evo-${evoSeed}`;
+  }
+  else {
+    evoDir = `evo-${evoSeed}_meta`
+  }
+  
+  // Create a base config for this experiment
+  const baseConfig = new GameConfig({
+    expSeed: evoSeed,
+    fewshot: true,
+    cot: true,
+    metaParents: metaParents
+  });
+  
   for (indIdx = 0; indIdx < (popSize*2); indIdx++) {
-    saveDir = `evo-${expSeed}/gen${gen}/game${indIdx}`;
-    game_i = await genGame('init', [], saveDir, expSeed, fewshot=true, cot=true, fromIdea=false, idea='');
+    genDir = `${evoDir}/gen${gen}`;
+    saveDir = `${genDir}/game${indIdx}`;
+    
+    // Create a config for this specific game
+    const gameConfig = baseConfig.extend({
+      genMode: 'init',
+      saveDir: saveDir,
+      maxGenAttempts: 10
+    });
+    
+    game_i = await genGame(gameConfig);
     pop.push(game_i);
   }
+  
   for (gen = 1; gen < nGens; gen++) {
     // Sort the population by fitness, in descending order
     pop = pop.sort((a, b) => b.fitness - a.fitness);
+    // Get rid of the bottom half
+    pop = pop.slice(0, popSize);
     // Print list of fitnesses
     popFits = pop.map(game => game.fitness);
     meanPopFit = popFits.reduce((acc, fit) => acc + fit, 0) / popFits.length;
+    genDir = `${evoDir}/gen${gen}`;
+    stats = {
+      'pop_fits': popFits,
+      'mean_pop_fit': meanPopFit,
+    }
+    await fetch('/save_evo_gen_stats', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ 
+        save_dir: `${evoDir}/stats/gen-${gen}.json`,
+        stats: stats,
+      }),
+    });
     console.log(`Generation ${gen}. Fitnesses: ${popFits}`);
     console.log(`Generation ${gen}. Mean fitness: ${meanPopFit}`);
     // Select the top half of the population as parents
-    ancestors = pop.slice(0, popSize);
+    ancestors = pop;
     // Get mean fitness of elites
     eliteFits =  ancestors.map(game => game.fitness);
     meanEliteFit = eliteFits.reduce((acc, fit) => acc + fit, 0) / eliteFits.length;
@@ -970,21 +1218,32 @@ async function evolve() {
     newPop = [];
     for (indIdx = 0; indIdx < popSize; indIdx++) {
       doCrossOver = Math.random() < 0.5;
+      let gameConfig;
+      
       if (doCrossOver) {
-        genMode = 'crossover';
         // Get two random games from list without replacement
         parent1 = ancestors[Math.floor(Math.random() * popSize)];
         // Create copy of array without parent1
         remainingAncestors = ancestors.filter(parent => parent != parent1);
         parent2 = remainingAncestors[Math.floor(Math.random() * (popSize - 1))];
         parents = [parent1, parent2];
+        
+        gameConfig = baseConfig.extend({
+          genMode: 'crossover',
+          parents: parents,
+          saveDir: `${genDir}/game${indIdx}`
+        });
       } else {
-        genMode = 'mutate';
         parents = [ancestors[Math.floor(Math.random() * popSize)]];
+        
+        gameConfig = baseConfig.extend({
+          genMode: 'mutate',
+          parents: parents,
+          saveDir: `${genDir}/game${indIdx}`
+        });
       }
-      // console.log(`Parents: ${parents}. genMode: ${genMode}`);
-      saveDir = `evo-${expSeed}/gen${gen}/game${indIdx}`;
-      newPop.push(await genGame('mutate', parents, saveDir, expSeed, fewshot=fewshot, cot=cot));
+      
+      newPop.push(await genGame(gameConfig));
     }
     pop = pop.concat(newPop);
   }
@@ -1013,8 +1272,18 @@ async function sweepGeneral() {
     args = await response.json();
     isDone = args.done;
     if (!isDone) {
-      gameInd = await genGame('init', [], args.gameDir,
-        args.gameIdx, args.fewshot, args.cot, args.fromIdea, args.gameIdea, args.fromPlan);
+      const gameConfig = new GameConfig({
+        genMode: 'init',
+        saveDir: args.gameDir,
+        expSeed: args.gameIdx,
+        fewshot: args.fewshot,
+        cot: args.cot,
+        fromIdea: args.fromIdea,
+        idea: args.gameIdea,
+        fromPlan: args.fromPlan
+      });
+      
+      gameInd = await genGame(gameConfig);
       await fetch('/save_game_stats', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -1038,15 +1307,20 @@ async function sweep() {
         if (!results.hasOwnProperty(expName)) {
           results[expName] = [];
         }
-          gameStr = `${saveDir}/${expName}/game-${gameIdx}`;
-          cot = cot_i == 1
-          fewshot = fewshot_i == 1
-          console.log(`Generating game ${gameStr}`);
-          gameInd = await genGame('init', [], gameStr,
-            gameIdx, fewshot, cot, fromIdea=false, idea='');
-          results[expName].push(gameInd);
-        }
+        gameStr = `${saveDir}/${expName}/game-${gameIdx}`;
+        const gameConfig = new GameConfig({
+          genMode: 'init',
+          saveDir: gameStr,
+          expSeed: gameIdx,
+          fewshot: fewshot_i == 1,
+          cot: cot_i == 1
+        });
+        
+        console.log(`Generating game ${gameStr}`);
+        gameInd = await genGame(gameConfig);
+        results[expName].push(gameInd);
       }
+    }
   }
   saveStats(saveDir, results);
 }
@@ -1070,14 +1344,21 @@ async function fromIdeaSweep() {
     for (var gameIdx = 0; gameIdx < 20; gameIdx++) {
       saveDir = `sweep-${expSeed}`
       gameStr = `${saveDir}/${hypStr}/game-${gameIdx}`;
-      fewshot = fewshot_i == 1
-      cot = cot_i == 1
-      fromIdea = fromIdea_i == 1
-      console.log(`Generating game ${gameStr}`);
       ideaIdx = gameIdx % ideas.length;
       idea = ideas[ideaIdx];
-      gameInd = await genGame('init', [], gameStr,
-        gameIdx, fewshot, cot, fromIdea, idea);
+      
+      const gameConfig = new GameConfig({
+        genMode: 'init',
+        saveDir: gameStr,
+        expSeed: gameIdx,
+        fewshot: fewshot_i == 1,
+        cot: cot_i == 1,
+        fromIdea: fromIdea_i == 1,
+        idea: idea
+      });
+      
+      console.log(`Generating game ${gameStr}`);
+      gameInd = await genGame(gameConfig);
       results[hypStr].push(gameInd);
     }
   }
@@ -1102,15 +1383,22 @@ async function fromPlanSweep() {
   for (var gameIdx = 0; gameIdx < 20; gameIdx++) {
     saveDir = `sweep-${expSeed}`
     gameStr = `${saveDir}/${hypStr}/game-${gameIdx}`;
-    fewshot = fewshot_i == 1
-    cot = cot_i == 1
-    fromPlan = fromPlan_i == 1
-    fromIdea = fromIdea_i == 1
-    console.log(`Generating game ${gameStr}`);
     ideaIdx = gameIdx % ideas.length;
     idea = ideas[ideaIdx];
-    gameInd = await genGame('init', [], gameStr,
-      gameIdx, fewshot, cot, fromIdea, idea, fromPlan);
+    
+    const gameConfig = new GameConfig({
+      genMode: 'init',
+      saveDir: gameStr,
+      expSeed: gameIdx,
+      fewshot: fewshot_i == 1,
+      cot: cot_i == 1,
+      fromIdea: fromIdea_i == 1,
+      idea: idea,
+      fromPlan: fromPlan_i == 1
+    });
+    
+    console.log(`Generating game ${gameStr}`);
+    gameInd = await genGame(gameConfig);
     results[hypStr].push(gameInd);
   }
   saveStats(saveDir + '/fromPlan', results);
@@ -1139,13 +1427,26 @@ async function collectGameData(gamePath, captureStates=true) {
       continue;
     }
     
-    console.log(`Processing level ${level}`);
+    console.log(`Processing level ${level} of game ${gamePath}`);
     compile(['loadLevel', level], code);
     // const [sol, n_iters] = await solveLevelAStar(captureStates=captureStates, gameHash=gamePath, level_i=level, maxIters=1_000_000);
-    const [sol, n_iters] = await solveLevelBFS(level, captureStates=captureStates, maxIters=1_000_000);
+    const solDir = `sols/${gamePath}`;
+    const solPath = `${solDir}/level-${level}.json`;
+    // If the solution exists, skip it
+    const solExists = await fetch('/file_exists', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ filePath: solPath })
+    });
+    const solExistsData = await solExists.json();
+    if (solExistsData.exists) {
+      console.log(`Solution for level ${level} already exists. Skipping.`);
+      continue;
+    }
+    // If the solution does not exist, solve it
+    const [sol, n_iters] = await solveLevelBFS(level, captureStates=captureStates, maxIters=100_000);
     console.log(`Finished processing level ${level}`);
     if (sol.length > 0) {
-      const solDir = `sols/${gamePath}`;
       console.log(`Solution for level ${level}:`, sol);
       console.log(`Saving gif for level ${level}.`);
       inputHistory = sol;
@@ -1165,7 +1466,13 @@ async function collectGameData(gamePath, captureStates=true) {
 }
 
 async function processAllGames() {
-  const response = await fetch('/list_scraped_games');
+  const response = await fetch('/list_scraped_games', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ 
+      target_dir: 'min_games',
+    }),
+  });
   const games = await response.json();
 
   // Shuffle the games
@@ -1194,6 +1501,12 @@ genDataClickLink.addEventListener("click", processAllGames, false);
 var solveClickLink = document.getElementById("solveClickLink");
 solveClickLink.addEventListener("click", playTest, false);
 
+var evolveClickLink = document.getElementById("evolveClickLink");
+evolveClickLink.addEventListener("click", evolve, false);
+
+var interactiveEvoClickLink = document.getElementById("interactiveEvoClickLink");
+interactiveEvoClickLink.addEventListener("click", interactiveEvo, false);
+
 var expFn = evolve;
 
 function experimentDropdownChange() {
@@ -1219,14 +1532,15 @@ function sweepClick() {
   sweepGeneral();
 }
 
- const expSeed = 21;
+ const expSeed = 0;
 
 // sweepGeneral();
 // sweep();
 // fromIdeaSweep();
 // fromPlanSweep();
 // playTest();
-// evolve();
-// processAllGames();
+// evolve(expSeed);
+// evolve2();
+processAllGames();
 
 // genGame('init', [], 'test_99', 99, fewshot=true, cot=true, maxGenAttempts=20);

@@ -30,9 +30,20 @@ levels_section: "LEVELS"i NEWLINES level_data+
 STRING: /[^\n]+/
 
 // Object Data
-object_line: object_name legend_key?
+object_line: object_name object_name* legend_key?
 color_line: color+ 
-object_data: object_line NEWLINE color_line NEWLINE sprite? NEWLINE
+object_data: object_with_sprite_trailing
+       | object_with_sprite_no_trailing
+       | object_without_sprite_trailing
+       | object_without_sprite_no_trailing
+
+object_with_sprite_trailing.3: object_line NEWLINE color_line NEWLINE sprite NEWLINE
+
+object_with_sprite_no_trailing.2: object_line NEWLINE color_line NEWLINE sprite
+
+object_without_sprite_trailing.1: object_line NEWLINE color_line NEWLINE NEWLINE
+
+object_without_sprite_no_trailing.0: object_line NEWLINE color_line NEWLINE
 
 SPRITE_PIXEL: /[0-9.]/
 colors: color+
@@ -63,7 +74,7 @@ STARTLOOP: "startloop"i
 ENDLOOP: "endloop"i
 
 // Rule Data
-rule_data: PLUS? (prefix | rule_part)+ THEN (prefix | command | rule_part)* message? NEWLINES
+rule_data: PLUS? (PREFIX | rule_part)+ THEN (PREFIX | command | rule_part)* message? NEWLINES
 
 THEN: "->"
 PLUS: "+"
@@ -82,7 +93,7 @@ cell_border: "|"
 
 rule_content: DIRECTIONAL? ID
 
-ID: /[a-z0-9.A-Z#_\/\\]/+
+ID: /[a-z0-9.A-Z#_\/\\@!]/+
 
 // Command
 command: command_keyword
@@ -114,12 +125,12 @@ sound_id: ID
 condition_id: ID
 
 // A rule prefix is anything but `[`
-legend_key: PIXEL+
+legend_key: PIXEL
 
 DIRECTIONAL: /[\^v<>]/
 
 KEYWORD_ID: /[a-z0-9.A-Z_]+/
-prefix: ID
+PREFIX: "late"i | "horizontal"i | "vertical"i | "left"i | "right"i | "up"i | "down"i | ID
 
 prelude_data: PRELUDE_KEYWORD (" " STRING)* NEWLINES
 

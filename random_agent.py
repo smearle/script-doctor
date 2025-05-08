@@ -8,28 +8,28 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 
-from gen_trees import GenPSTree, PSEnv
-from parse_lark import trees_dir, test_games, data_dir
-from ps_game import PSGame
+from gen_tree import GenPSTree, PSEnv
+from parse_lark import TREES_DIR, TEST_GAMES, DATA_DIR
+from ps_game import PSGameTree
 
 
 scratch_dir = 'scratch'
 os.makedirs(scratch_dir, exist_ok = True)
 if __name__ == '__main__':
-    tree_paths = glob.glob(os.path.join(trees_dir, '*'))
+    tree_paths = glob.glob(os.path.join(TREES_DIR, '*'))
     trees = []
     tree_paths = sorted(tree_paths, reverse=True)
-    test_game_paths = [os.path.join(trees_dir, tg + '.pkl') for tg in test_games]
+    test_game_paths = [os.path.join(TREES_DIR, tg + '.pkl') for tg in TEST_GAMES]
     tree_paths = test_game_paths + tree_paths
     for tree_path in tree_paths:
         print(tree_path)
-        og_game_path = os.path.join(data_dir, 'scraped_games', os.path.basename(tree_path)[:-3] + 'txt')
+        og_game_path = os.path.join(DATA_DIR, 'scraped_games', os.path.basename(tree_path)[:-3] + 'txt')
         print(f"Parsing {og_game_path}")
         with open(tree_path, 'rb') as f:
             tree = pickle.load(f)
         trees.append(tree)
 
-        tree: PSGame = GenPSTree().transform(tree)
+        tree: PSGameTree = GenPSTree().transform(tree)
 
         env = PSEnv(tree)
         state = env.reset(0)

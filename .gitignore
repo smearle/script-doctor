@@ -11,7 +11,8 @@ src - Kopie
 node_modules/
 __pycache__
 
-data
+data*
+!data/custom_games/
 scraped_puzzles
 scraped_games
 scrape_logs
@@ -21,6 +22,7 @@ example_sprites.json
 example_sprites_names.txt
 outputs
 logs
+rl_logs
 pretty_trees
 simplified_games
 script-doctor-py
