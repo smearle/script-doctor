@@ -72,6 +72,11 @@ app = Flask(__name__)
 def serve_doctor():
     return send_from_directory('src', 'doctor.html')
 
+@app.route('/get_mode', methods=['GET'])
+def get_mode():
+    global global_cfg
+    return jsonify({'mode': global_cfg.mode})
+
 # Route to serve JavaScript files dynamically
 @app.route('/<path:filename>')
 def serve_js(filename):
@@ -673,6 +678,7 @@ class CtxSweep2(Sweep):
 class VizSweep(Sweep):
     viz_feedback = [True, False]
 
+global_cfg = None
 exp_config = ExpConfig()
 
 all_hypers = {
@@ -1086,6 +1092,8 @@ recompute_stats = Config.recompute_stats
 
 @hydra.main(config_name="config", version_base="1.3")
 def main(cfg: Config):
+    global global_cfg
+    global_cfg = cfg
     global hypers, hypers_ks, hypers_lst, sweep_name, recompute_stats, max_gen_attempts
     max_gen_attempts = cfg.max_gen_attempts
     hypers = all_hypers[cfg.sweep]
@@ -1106,7 +1114,8 @@ def main(cfg: Config):
         eval_sweep(stats_path, hypers_ks, hypers_lst)
     elif cfg.mode == 'viz_evo':
         viz_evo_stats()
-    elif cfg.mode == 'generate':
+    # elif cfg.mode == 'generate':
+    else:
 
         browser_thread = threading.Thread(
             target=partial(open_browser, url=f"http://127.0.0.1:{cfg.port}")

@@ -1543,6 +1543,28 @@ function sweepClick() {
   sweepGeneral();
 }
 
+async function init() {
+  response = await fetch('/get_mode', {
+    method: 'GET',
+  });
+  const data = await response.json();
+  const mode = data.mode;
+  if (mode == 'sweep') {
+    sweepGeneral();
+  } else if (mode == 'evolve') {
+    interactiveEvo();
+  } else if (mode == 'playtest') {
+    playTest();
+  } else if (mode == 'gen_solutions') {
+    processAllGames();
+  } else if (mode == null) {
+    console.log('No mode specified. Serving webpage and awaiting user input.');
+  }
+  else {
+    console.log('Unknown mode:', mode);
+  }
+}
+
  const expSeed = 0;
 
 // sweepGeneral();
@@ -1552,6 +1574,7 @@ function sweepClick() {
 // playTest();
 // evolve(expSeed);
 // evolve2();
-processAllGames();
-
+// processAllGames();
 // genGame('init', [], 'test_99', 99, fewshot=true, cot=true, maxGenAttempts=20);
+
+init();

@@ -92,6 +92,7 @@ def main(config: Config):
             actions = jnp.array([int(a) for a in actions])
 
             level_i = int(os.path.basename(level_sol_path).split('-')[1].split('.')[0])
+            js_gif_path = os.path.join(sol_dir, f'level-{level_i}_sol.gif')
             level = env.get_level(level_i)
             params = params.replace(level=level)
             print(f"Level {level_i} solution: {actions}")
@@ -111,7 +112,7 @@ def main(config: Config):
                         f.write(f"Actions: {actions}\n")
                         # f.write(f"State: {state}\n")
                     print(f"Level {level_i} solution failed")
-                elif not level_win and (state.score != level_score):
+                elif not level_win and (state.heuristic != level_score):
                     # FIXME: There is a discrepancy between the way we compute scores in js (I actually don't understand
                     # how we're getting that number) and the way we compute scores in jax, so this will always fail.
                     log_path = os.path.join(traj_dir, f'level-{level_i}_score_err.txt')
@@ -143,7 +144,9 @@ def main(config: Config):
             # Make a gif out of the frames
             gif_path = os.path.join(traj_dir, f'level-{level_i}.gif')
             imageio.mimsave(gif_path, frames, duration=0.1, loop=1)
-            # exit()
+
+            # Copy over the js gif
+            shutil.copy(js_gif_path, os.path.join(traj_dir, f'level-{level_i}_js.gif'))
 
 
 if __name__ == '__main__':

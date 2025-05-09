@@ -24,8 +24,8 @@ from spaces import Discrete
 
 
 # Whether to print out a bunch of stuff, etc.
-# DEBUG = False
-DEBUG = True
+DEBUG = False
+# DEBUG = True
 
 # per-object movement forces that can be applied: left, right, up, down, action
 N_MOVEMENTS = 5
@@ -1704,6 +1704,8 @@ def apply_move_rule(lvl, move_rule, jit=True, rule_name=None):
 class PSState:
     multihot_level: np.ndarray
     win: bool
+    score: int
+    heuristic: int
     restart: bool
     init_heuristic: int
     prev_heuristic: int
@@ -1899,26 +1901,20 @@ class PSEnv:
         lvl = params.level
         again = False
         _, _, init_heuristic = self.check_win(lvl)
-        if self.tree.prelude.run_rules_on_level_start:
-            state = PSState(
-                multihot_level=lvl,
-                win = jnp.array(False),
-                restart = jnp.array(False),
-                step_i = 0,
-                init_heuristic = init_heuristic,
-                prev_heuristic = init_heuristic,
-            )
-            lvl = self.apply_player_force(-1, state)
-            lvl, _, _, _, _, _ = self.tick_fn(lvl)
-            lvl = lvl[:self.n_objs]
         state = PSState(
             multihot_level=lvl,
             win = jnp.array(False),
+            score = 0,
+            heuristic = np.iinfo(np.int32).min,
             restart = jnp.array(False),
             step_i = 0,
             init_heuristic = init_heuristic,
             prev_heuristic = init_heuristic,
         )
+        if self.tree.prelude.run_rules_on_level_start:
+            lvl = self.apply_player_force(-1, state)
+            lvl, _, _, _, _, _ = self.tick_fn(lvl)
+            lvl = lvl[:self.n_objs]
         obs = self.get_obs(state)
         return obs, state
 
@@ -2041,6 +2037,8 @@ class PSEnv:
         state = PSState(
             multihot_level=multihot_level,
             win=win,
+            score=score,
+            heuristic=heuristic,
             restart=restart,
             step_i=state.step_i + 1,
             init_heuristic=state.init_heuristic,
