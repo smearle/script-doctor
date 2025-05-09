@@ -81,6 +81,8 @@ class Config:
 
     reward_freq: int = 1
 
+    overwrite: bool = False
+
 
     """ DO NOT USE. WILL BE OVERWRITTEN. """
     _exp_dir: Optional[str] = None

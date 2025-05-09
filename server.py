@@ -48,6 +48,7 @@ class Config:
     provider: str = 'portkey'
     model: str = 'gemini-2.0-flash-exp'
     viz_feedback: bool = True
+    headless: bool = False
 
 
 @dataclass
@@ -1118,7 +1119,7 @@ def main(cfg: Config):
     else:
 
         browser_thread = threading.Thread(
-            target=partial(open_browser, url=f"http://127.0.0.1:{cfg.port}")
+            target=partial(open_browser, url=f"http://127.0.0.1:{cfg.port}", headless=cfg.headless)
         )
         browser_thread.daemon = True
         browser_thread.start()
