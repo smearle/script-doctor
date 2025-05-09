@@ -19,6 +19,7 @@ class Config:
     jit: bool = True
     game: Optional[str] = None
     profile: bool = False
+    debug: bool = False
 
 
 cs = ConfigStore.instance()
@@ -159,16 +160,16 @@ def human_loop(env: PSEnv, profile=False):
     cv2.destroyAllWindows()
 
 
-def play_game(game: str, jit: bool = False, profile: bool = False):
+def play_game(game: str, jit: bool = False, profile: bool = False, debug: bool = False):
     with open("syntax.lark", "r", encoding='utf-8') as file:
         puzzlescript_grammar = file.read()
     # Initialize the Lark parser with the PuzzleScript grammar
     parser = Lark(puzzlescript_grammar, start="ps_game", maybe_placeholders=False)
     # min_parser = Lark(min_puzzlescript_grammar, start="ps_game")
     print(f"""Parsing game: \"{game}\"""")
-    tree = get_tree_from_txt(parser, game)
+    tree = get_tree_from_txt(parser, game, overwrite=True)
     print(f"Initializing environment for game: {game}")
-    env = PSEnv(tree, jit=jit)
+    env = PSEnv(tree, jit=jit, debug=debug)
     print(f"Playing game: {game}")
     human_loop(env, profile=profile)
 
@@ -176,7 +177,7 @@ def play_game(game: str, jit: bool = False, profile: bool = False):
 def main(cfg: Config):
 
     if cfg.game is not None:
-        play_game(cfg.game, jit=cfg.jit, profile=cfg.profile)
+        play_game(cfg.game, jit=cfg.jit, profile=cfg.profile, debug=cfg.debug)
 
     else:
         tree_paths = glob.glob(os.path.join(TREES_DIR, '*'))
@@ -185,7 +186,7 @@ def main(cfg: Config):
         tree_paths = test_game_paths + tree_paths
         game_paths = [os.path.basename(tree_path)[:-4] for tree_path in tree_paths]
         for tree_path in game_paths:
-            play_game(tree_path, jit=cfg.jit)
+            play_game(tree_path, jit=cfg.jit, debug=cfg.debug)
     
 
 

@@ -13,6 +13,7 @@ import jax
 import jax.numpy as jnp
 from lark import Lark
 import numpy as np
+from skimage.transform import resize
 
 from conf.config import Config
 from env import PSEnv
@@ -131,11 +132,19 @@ def main(config: Config):
                 continue
 
             # Use jax tree map to add the initial state
-            state_v = jax.tree_map(lambda x, y: jnp.concatenate([x[None], y]), state, state_v)
+            state_v = jax.tree.map(lambda x, y: jnp.concatenate([x[None], y]), state, state_v)
 
             frames = jax.vmap(env.render, in_axes=(0, None))(state_v, None)
             frames = frames.astype(np.uint8)
 
+            # Scale up the frames
+            print(f"Scaling up frames for level {level_i}")
+            scale = 10
+            frames = jnp.repeat(frames, scale, axis=1)
+            frames = jnp.repeat(frames, scale, axis=2)
+
+            # Save the frames
+            print(f"Saving frames for level {level_i}")
             frames_dir = os.path.join(traj_dir, 'frames')
             os.makedirs(frames_dir, exist_ok=True)
             for i, frame in enumerate(frames):

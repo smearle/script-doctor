@@ -119,8 +119,8 @@ if __name__ == '__main__':
                 breakpoint()
             title = title_match.groups()[0]
             # Replace invalid characters for filenames with underscores
+            title = title.replace(' ', '_')
             filename =  sanitize_filename(title, replacement_text='_')
-            filename = filename.replace(' ', '_')
             script_path = os.path.join('data/scraped_games', filename)
 
             dupe_filenames = {}
