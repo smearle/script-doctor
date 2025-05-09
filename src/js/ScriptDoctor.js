@@ -1453,6 +1453,7 @@ async function collectGameData(gamePath, captureStates=true) {
       continue;
     }
     // If the solution does not exist, solve it
+    console.log(`Solving level ${level} of game ${gamePath}`);
     const [sol, won, score, n_iters] = await solveLevelBFS(level, captureStates=captureStates, maxIters=100_000);
     console.log(`Finished processing level ${level}`);
     if (sol.length > 0) {

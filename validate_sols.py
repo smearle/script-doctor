@@ -78,7 +78,6 @@ def main(config: Config):
 
         key = jax.random.PRNGKey(0)
         params = get_env_params_from_config(env, config)
-        obs, state = env.reset(key, params)
 
         # 0 - left
         # 1 - down
@@ -172,6 +171,8 @@ def main(config: Config):
 
             # Copy over the js gif
             shutil.copy(js_gif_path, os.path.join(traj_dir, f'level-{level_i}_js.gif'))
+
+    print(f"Finished validating solutions in jax.")
 
 
 if __name__ == '__main__':

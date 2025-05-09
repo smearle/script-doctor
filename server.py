@@ -49,6 +49,7 @@ class Config:
     model: str = 'gemini-2.0-flash-exp'
     viz_feedback: bool = True
     headless: bool = False
+    auto_launch_browser: bool = True
 
 
 @dataclass
@@ -120,6 +121,7 @@ def file_exists():
     data = request.json
     file_path = data['filePath']
     exists = os.path.isfile(file_path)
+    print(f"File {file_path} exists: {exists}")
     return jsonify({'exists': exists})
 
 @app.route('/load_game_from_file', methods=['POST'])
@@ -1091,41 +1093,6 @@ def instance_to_dict(instance):
 sweep_name = Config.sweep
 recompute_stats = Config.recompute_stats
 
-@hydra.main(config_name="config", version_base="1.3")
-def main(cfg: Config):
-    global global_cfg
-    global_cfg = cfg
-    global hypers, hypers_ks, hypers_lst, sweep_name, recompute_stats, max_gen_attempts
-    max_gen_attempts = cfg.max_gen_attempts
-    hypers = all_hypers[cfg.sweep]
-    sweep_name = cfg.sweep
-    recompute_stats = cfg.recompute_stats
-    sweep_dict = instance_to_dict(hypers)
-    hypers_ks = list(sweep_dict)
-    hypers_lst = list(itertools.product(*sweep_dict.values()))
-    save_dir = f'sweep-{sweep_i}'
-    stats_dir = os.path.join('logs', save_dir, 'stats', sweep_name)
-    if cfg.mode == 'compute_novelty':
-        os.makedirs(stats_dir, exist_ok=True)
-        stats_path = os.path.join(stats_dir, 'sweep_stats.json')
-        compute_edit_distances(stats_path, hypers_ks, hypers_lst)
-    elif cfg.mode == 'eval':
-        os.makedirs(stats_dir, exist_ok=True)
-        stats_path = os.path.join(stats_dir, 'sweep_stats_and_dists.json')
-        eval_sweep(stats_path, hypers_ks, hypers_lst)
-    elif cfg.mode == 'viz_evo':
-        viz_evo_stats()
-    # elif cfg.mode == 'generate':
-    else:
-
-        browser_thread = threading.Thread(
-            target=partial(open_browser, url=f"http://127.0.0.1:{cfg.port}", headless=cfg.headless)
-        )
-        browser_thread.daemon = True
-        browser_thread.start()
-
-        app.run(port=cfg.port)
-
 #LLM agents
 # 
 from LLM_agent import LLMAgent, ReinforcementWrapper, StateVisualizer
@@ -1207,6 +1174,42 @@ def get_state():
 
     return jsonify({'error': 'State not found'}), 404
 
+
+@hydra.main(config_name="config", version_base="1.3")
+def main(cfg: Config):
+    global global_cfg
+    global_cfg = cfg
+    global hypers, hypers_ks, hypers_lst, sweep_name, recompute_stats, max_gen_attempts
+    max_gen_attempts = cfg.max_gen_attempts
+    hypers = all_hypers[cfg.sweep]
+    sweep_name = cfg.sweep
+    recompute_stats = cfg.recompute_stats
+    sweep_dict = instance_to_dict(hypers)
+    hypers_ks = list(sweep_dict)
+    hypers_lst = list(itertools.product(*sweep_dict.values()))
+    save_dir = f'sweep-{sweep_i}'
+    stats_dir = os.path.join('logs', save_dir, 'stats', sweep_name)
+    if cfg.mode == 'compute_novelty':
+        os.makedirs(stats_dir, exist_ok=True)
+        stats_path = os.path.join(stats_dir, 'sweep_stats.json')
+        compute_edit_distances(stats_path, hypers_ks, hypers_lst)
+    elif cfg.mode == 'eval':
+        os.makedirs(stats_dir, exist_ok=True)
+        stats_path = os.path.join(stats_dir, 'sweep_stats_and_dists.json')
+        eval_sweep(stats_path, hypers_ks, hypers_lst)
+    elif cfg.mode == 'viz_evo':
+        viz_evo_stats()
+    # elif cfg.mode == 'generate':
+    else:
+
+        if cfg.auto_launch_browser:
+            browser_thread = threading.Thread(
+                target=partial(open_browser, url=f"http://127.0.0.1:{cfg.port}", headless=cfg.headless)
+            )
+            browser_thread.daemon = True
+            browser_thread.start()
+
+        app.run(port=cfg.port)
 
 if __name__ == '__main__':
     main()

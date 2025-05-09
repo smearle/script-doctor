@@ -190,7 +190,7 @@ def compute_sum_of_manhattan_dists(lvl, src, trg):
 def compute_min_manhattan_dist(lvl, src, trg):
     dists = compute_manhattan_dists(lvl, src, trg)
     dists = jnp.where(jnp.isnan(dists), jnp.inf, dists)
-    min_dist = jnp.min(dists, axis=0).astype(np.int32)
+    min_dist = jnp.min(dists).astype(np.int32)
     return min_dist
 
 def gen_check_win(win_conditions: Iterable[WinCondition], obj_to_idxs, meta_objs, char_to_obj, jit=True):

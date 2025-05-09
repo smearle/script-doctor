@@ -45,15 +45,12 @@ def open_browser(url=url, headless=False):
         while True:
             logs = driver.get_log("browser")
             for entry in logs:
-                key = (entry['message'], entry['timestamp'])
-                if key not in seen:
-                    seen.add(key)
-                    print(f"[{entry['level']}] {entry['message']}")
-            time.sleep(0.5)  # Poll every 500ms
+                print(f"[{entry['level']}] {entry['message']}")
+            time.sleep(0.5)
     except KeyboardInterrupt:
         print("\nStopped.")
     finally:
-        driver.quit()    
+        driver.quit()  
 
     return driver
 
