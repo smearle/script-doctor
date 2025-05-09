@@ -482,7 +482,7 @@ def get_tree_from_txt(parser, game, log_dir: str = None, overwrite: bool = True)
 DATA_DIR = 'data'
 GAMES_DIR = os.path.join(DATA_DIR, 'scraped_games')
 MIN_GAMES_DIR = os.path.join(DATA_DIR, 'min_games')
-custom_games_dir = os.path.join(DATA_DIR, 'custom_games')
+custom_games_dir = os.path.join('custom_games')
 simpd_dir = os.path.join(DATA_DIR, 'simplified_games')
 TREES_DIR = os.path.join(DATA_DIR, 'game_trees')
 pretty_trees_dir = os.path.join(DATA_DIR, 'pretty_trees')
