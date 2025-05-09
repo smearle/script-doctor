@@ -74,7 +74,7 @@ async function playTest() {
   setEditorClean();
   unloadGame();
   console.log('Solving level:', n_level, ' with BFS');
-  [sol_a, n_search_iters_a] = await solveLevelBFS(n_level);
+  [sol_a, won, score, n_search_iters_a] = await solveLevelBFS(n_level);
   // const [sol, n_search_iters] = await solveLevelBFS(n_level);
   // gameToLoad = '/demo/sokoban_match3.txt';
   // gameToLoad = '/misc/3d_sokoban.txt';
@@ -170,7 +170,7 @@ async function solveLevelBFS(levelIdx, captureStates=false, maxIters=1_000_000) 
   // action_seqs.enqueue([]);
 
   var sol = [];
-  var bestScore = -10000;
+  var bestScore = Infinity;
   console.log(sol.length);
   // visited = new Set([hashState(init_level_map)]);
   visited = {};
@@ -192,7 +192,7 @@ async function solveLevelBFS(levelIdx, captureStates=false, maxIters=1_000_000) 
     for (const move of Array(5).keys()) {
       if (i > maxIters) {
         console.log('Exceeded ' + maxIters + ' iterations. Exiting.');
-        return [-1, i];
+        return [sol, winning, score, i];
       }
       restoreLevel(parent_level);
 
@@ -211,7 +211,7 @@ async function solveLevelBFS(levelIdx, captureStates=false, maxIters=1_000_000) 
       if (winning) {
         console.log(`Winning! Solution:, ${new_action_seq}\n Iterations: ${i}`);
         console.log('FPS:', (i / (Date.now() - start_time) * 1000).toFixed(2));
-        return [new_action_seq, i];
+        return [new_action_seq, winning, score, i];
       }
       else if (changed) {
         new_level = backupLevel();
@@ -235,6 +235,13 @@ async function solveLevelBFS(levelIdx, captureStates=false, maxIters=1_000_000) 
 
           // visited.add(newHash);
           visited[level.objects] = true;
+          score = getScore();
+          // This is counter-intuitive, but we're curious about long action sequences that explore many diverse states,
+          // all else being equal, for the sake of validating the accuracy of our jax environment.
+          if ((score < bestScore) | (score == bestScore && new_action_seq.length > sol.length)) {
+            bestScore = score;
+            sol = new_action_seq;
+          }
         } 
         // console.log('State already visited:', level.objects);
       }
@@ -250,7 +257,7 @@ async function solveLevelBFS(levelIdx, captureStates=false, maxIters=1_000_000) 
     }
     i++;
   }
-  return [sol, i];
+  return [sol, winning, score, i];
 }
 
 class MCTSNode{
@@ -493,7 +500,7 @@ async function testBFS() {
   for (let i = 0; i < n_levels; i++) {
     compile(['loadLevel', i], editor.getValue());
     console.log('Solving level:', i, ' with BFS');
-    var [sol, nSearchIters] = await solveLevelBFS(i);
+    var [sol, won, score, nSearchIters] = await solveLevelBFS(i);
     console.log('Solution:', sol);
     console.log('Iterations:', nSearchIters);
     inputHistory = sol;
@@ -505,6 +512,8 @@ async function testBFS() {
       body: JSON.stringify({
         levelIdx: i,
         sol: sol,
+        won: won,
+        score: score,
         solDir: solDir,
         dataURL: dataURL,
       })
@@ -857,7 +866,7 @@ async function genGame(config) {
         } else {
           clearConsole();
           console.log(`Solving level ${level_i}...`);
-          [sol, nSearchIters] = await solveLevelBFS(level_i);
+          [sol, won, score, nSearchIters] = await solveLevelBFS(level_i);
           if (sol.length > 0) {
             console.log(`Solution for level ${level_i}:`, sol);
             console.log(`Saving gif for level ${level_i}.`);
@@ -1069,7 +1078,7 @@ async function evolve2() {
       } else {
         clearConsole();
         console.log(`Solving level ${level_i}...`);
-        [sol, nSearchIters] = await solveLevelBFS(level_i);
+        [sol, won, score, nSearchIters] = await solveLevelBFS(level_i);
         if (sol.length > 0) {
           console.log(`Solution for level ${level_i}:`, sol);
           console.log(`Saving gif for level ${level_i}.`);
@@ -1444,7 +1453,7 @@ async function collectGameData(gamePath, captureStates=true) {
       continue;
     }
     // If the solution does not exist, solve it
-    const [sol, n_iters] = await solveLevelBFS(level, captureStates=captureStates, maxIters=100_000);
+    const [sol, won, score, n_iters] = await solveLevelBFS(level, captureStates=captureStates, maxIters=100_000);
     console.log(`Finished processing level ${level}`);
     if (sol.length > 0) {
       console.log(`Solution for level ${level}:`, sol);
@@ -1457,6 +1466,8 @@ async function collectGameData(gamePath, captureStates=true) {
         body: JSON.stringify({
           levelIdx: level,
           sol: sol,
+          won: won,
+          score: score,
           solDir: solDir,
           dataURL: dataURL,
         })

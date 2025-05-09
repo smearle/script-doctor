@@ -24,8 +24,8 @@ from spaces import Discrete
 
 
 # Whether to print out a bunch of stuff, etc.
-DEBUG = False
-# DEBUG = True
+# DEBUG = False
+DEBUG = True
 
 # per-object movement forces that can be applied: left, right, up, down, action
 N_MOVEMENTS = 5

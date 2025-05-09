@@ -30,7 +30,7 @@ if __name__ == '__main__':
 
     # Collect games already in the repo
     example_games_dir = os.path.join('src', 'demo')
-    custom_games_dir = os.path.join('data', 'custom_games')
+    custom_games_dir = 'custom_games'
     for game_dir in [custom_games_dir, example_games_dir]:
         games = glob.glob(os.path.join(game_dir, '*.txt'))
         for eg in games:
@@ -120,6 +120,7 @@ if __name__ == '__main__':
             title = title_match.groups()[0]
             # Replace invalid characters for filenames with underscores
             filename =  sanitize_filename(title, replacement_text='_')
+            filename = filename.replace(' ', '_')
             script_path = os.path.join('data/scraped_games', filename)
 
             dupe_filenames = {}

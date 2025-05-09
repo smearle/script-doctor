@@ -83,7 +83,10 @@ def main(config: Config):
 
         for level_sol_path in level_sols:
             with open(level_sol_path, 'r') as f:
-                level_sol = json.load(f)
+                sol_dict = json.load(f)
+            level_sol = sol_dict['sol']
+            level_win = sol_dict['won']
+            level_score = sol_dict['score']
             actions = level_sol
             actions = [action_remap[a] for a in actions]
             actions = jnp.array([int(a) for a in actions])
@@ -93,22 +96,30 @@ def main(config: Config):
             params = params.replace(level=level)
             print(f"Level {level_i} solution: {actions}")
 
-            def step_env(carry, action):
-                state, _ = carry
-                obs, state, reward, done, info = env.step(key, state, action, params)
-                return (state, done), state
+            def step_env(state, action):
+                obs, state, reward, done, info = env.step_env(key, state, action, params)
+                return state, state
 
             try:
                 obs, state = env.reset(key, params)
-                (state, done), state_v = jax.lax.scan(step_env, (state, False), actions)
-                # if not state.win:
-                if not done:
+                state, state_v = jax.lax.scan(step_env, state, actions)
+                if level_win and not state.win:
+                # if not done:
                     log_path = os.path.join(traj_dir, f'level-{level_i}_solution_err.txt')
                     with open(log_path, 'w') as f:
                         f.write(f"Level {level_i} solution failed\n")
                         f.write(f"Actions: {actions}\n")
                         # f.write(f"State: {state}\n")
                     print(f"Level {level_i} solution failed")
+                elif not level_win and (state.score != level_score):
+                    # FIXME: There is a discrepancy between the way we compute scores in js (I actually don't understand
+                    # how we're getting that number) and the way we compute scores in jax, so this will always fail.
+                    log_path = os.path.join(traj_dir, f'level-{level_i}_score_err.txt')
+                    with open(log_path, 'w') as f:
+                        f.write(f"Level {level_i} solution score mismatch\n")
+                        f.write(f"Actions: {actions}\n")
+                        f.write(f"Jax score: {state.score}\n")
+                        f.write(f"JS score: {level_score}\n")
             except Exception as e:
                 traceback.print_exc()
                 print(f"Error running solution: {og_path}")

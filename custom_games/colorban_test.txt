@@ -1,0 +1,76 @@
+title Colorban
+author Alex Oland
+
+
+========
+OBJECTS
+========
+Player
+gray
+.000.
+0...0
+0...0
+0...0
+.000.
+
+wall
+orange
+
+Background
+white
+
+
+ybox
+yellow
+00000
+0...0
+0...0
+0...0
+00000
+
+
+
+=======
+LEGEND
+=======
+
+. = Background
+o = Player
+w = wall
+
+y = ybox
+
+
+=======
+SOUNDS
+=======
+
+================
+COLLISIONLAYERS
+================
+Background
+ybox,Player,wall
+
+======
+RULES
+======
+
+[> Player | ybox] -> [> Player | > ybox]
+[> ybox] [ybox] -> [> ybox] [> ybox]
+
+==============
+WINCONDITIONS
+==============
+
+=======
+LEVELS
+=======
+
+...wy..
+...wwww
+.o..y..
+...wwww
+...wy..
+
+
+

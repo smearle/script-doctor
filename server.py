@@ -984,10 +984,16 @@ def save_game_stats():
 def save_sol():
     data = request.json
     sol_dir, level_i, sol, gif_url = data['solDir'], data['levelIdx'], data['sol'], data['dataURL']
+    won, score = data['won'], data['score']
     os.makedirs(sol_dir, exist_ok=True)
     sol_path = os.path.join(sol_dir, f'level-{level_i}.json')
+    sol_dict = {
+        'won': won,
+        'score': score,
+        'sol': sol,
+    }
     with open(sol_path, 'w') as f:
-        json.dump(sol, f, indent=4)
+        json.dump(sol_dict, f, indent=4)
     print(f"Saved solution to {sol_path}")
     gif_data = base64.b64decode(gif_url.split(',')[1])
     gif_path = os.path.join(sol_dir, f'level-{level_i}_sol.gif')

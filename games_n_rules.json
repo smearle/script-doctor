@@ -1,26 +1,10 @@
 [
     [
-        "Futuristic Block Pushing Game",
-        1
-    ],
-    [
         "sokoban_sanity",
         1
     ],
     [
         "microban",
-        1
-    ],
-    [
-        "Clones",
-        1
-    ],
-    [
-        "Microban",
-        1
-    ],
-    [
-        "Skeleton Assembler",
         1
     ],
     [
@@ -40,47 +24,7 @@
         1
     ],
     [
-        "zelda fan game",
-        1
-    ],
-    [
-        "Sokoban Flipped",
-        1
-    ],
-    [
-        "Bad Example",
-        1
-    ],
-    [
-        "Swap the block!",
-        1
-    ],
-    [
-        "Opposition",
-        1
-    ],
-    [
-        "naborciM",
-        1
-    ],
-    [
-        "Lis' game development adventure",
-        1
-    ],
-    [
-        "Carnival Shooter!",
-        1
-    ],
-    [
-        "Time-reversed Microban",
-        1
-    ],
-    [
         "sokoban_sticky",
-        1
-    ],
-    [
-        "Okosban",
         1
     ],
     [
@@ -96,47 +40,7 @@
         1
     ],
     [
-        "Swap Sokoban",
-        1
-    ],
-    [
-        "Piedra",
-        1
-    ],
-    [
-        "King of walls",
-        1
-    ],
-    [
-        "the undertaking",
-        1
-    ],
-    [
         "sokoban_basic_debug",
-        1
-    ],
-    [
-        "Microban I",
-        1
-    ],
-    [
-        "Pulling Box Sokoban",
-        1
-    ],
-    [
-        "Sokubunny and the colored Boxes",
-        1
-    ],
-    [
-        "Minimalist",
-        1
-    ],
-    [
-        "ESCAPE!",
-        1
-    ],
-    [
-        "Sokoban..._",
         1
     ],
     [
@@ -144,15 +48,7 @@
         2
     ],
     [
-        "TwinPush",
-        2
-    ],
-    [
         "twolittlecrates1",
-        2
-    ],
-    [
-        "Love and Pieces",
         2
     ],
     [
@@ -160,19 +56,7 @@
         2
     ],
     [
-        "Escape the Void Full",
-        2
-    ],
-    [
-        "Deltarune block pushing game",
-        2
-    ],
-    [
         "colorban_test",
-        2
-    ],
-    [
-        "Puzzle-Design Homework",
         2
     ],
     [
@@ -180,27 +64,7 @@
         2
     ],
     [
-        "Roze",
-        2
-    ],
-    [
         "notsnake",
-        2
-    ],
-    [
-        "Ice Block Game",
-        2
-    ],
-    [
-        "GDD301 Demo Game",
-        2
-    ],
-    [
-        "Cyberpunk 2020",
-        2
-    ],
-    [
-        "Crafting Table",
         2
     ],
     [
@@ -208,47 +72,11 @@
         2
     ],
     [
-        "Silly Rabbit",
-        2
-    ],
-    [
-        "Dot Puzzle 3.1",
-        2
-    ],
-    [
         "lovendpieces",
         2
     ],
     [
-        "Maze it all",
-        3
-    ],
-    [
-        "Footprint Puzzle",
-        3
-    ],
-    [
-        "Harvesting Apples",
-        3
-    ],
-    [
-        "Undertale X_O Puzzle",
-        3
-    ],
-    [
-        "Deadly Cat Maze",
-        3
-    ],
-    [
-        "Zen Puzzle Garden",
-        3
-    ],
-    [
-        "Veggie Jam",
-        3
-    ],
-    [
-        "Harvesting Apples II",
+        "Deadly_Cat_Maze",
         3
     ],
     [
@@ -260,15 +88,7 @@
         3
     ],
     [
-        "Bridge",
-        3
-    ],
-    [
         "zenpuzzlegarden",
-        3
-    ],
-    [
-        "Soko-bine",
         3
     ],
     [
@@ -276,59 +96,7 @@
         3
     ],
     [
-        "Time-Reversed Minicosmos",
-        3
-    ],
-    [
-        "Snow",
-        3
-    ],
-    [
-        "Come Doggo come - Alliteration",
-        3
-    ],
-    [
-        "Modality",
-        4
-    ],
-    [
-        "Ice Maze",
-        4
-    ],
-    [
-        "Muddy Sokoban Level Set I",
-        4
-    ],
-    [
-        "Bubble Boy",
-        4
-    ],
-    [
-        "Brush Runner",
-        4
-    ],
-    [
-        "Broken Maze",
-        4
-    ],
-    [
-        "Snake Crate",
-        4
-    ],
-    [
-        "Handle with Care",
-        4
-    ],
-    [
         "constellationz",
-        4
-    ],
-    [
-        "3 brothers",
-        4
-    ],
-    [
-        "All These Damn Crates",
         4
     ],
     [
@@ -336,39 +104,7 @@
         4
     ],
     [
-        "Find Girlfriend!",
-        4
-    ],
-    [
-        "RAFTURE 2_ SALVATION",
-        4
-    ],
-    [
         "leftrightnpcs",
-        4
-    ],
-    [
-        "Remote Control Sokoban",
-        4
-    ],
-    [
-        "Travelling salesman",
-        4
-    ],
-    [
-        "Soko and the Band",
-        4
-    ],
-    [
-        "Monster block push game",
-        4
-    ],
-    [
-        "The Land Of Secrets",
-        4
-    ],
-    [
-        "Tele",
         4
     ],
     [
@@ -376,39 +112,7 @@
         4
     ],
     [
-        "Multi-word Dictionary Game",
-        4
-    ],
-    [
-        "CC2",
-        5
-    ],
-    [
-        "Every Three Steps You Hit a Wall Out of Nowhere",
-        5
-    ],
-    [
-        "Poop and Salad Have Different Mindsets",
-        5
-    ],
-    [
-        "PS Paint",
-        5
-    ],
-    [
-        "I Only Play REAL Multiban",
-        5
-    ],
-    [
-        "TipOver",
-        5
-    ],
-    [
         "octat_test",
-        5
-    ],
-    [
-        "Box Fill",
         5
     ],
     [
@@ -420,23 +124,7 @@
         5
     ],
     [
-        "Roots",
-        5
-    ],
-    [
-        "Broken Leg Sokoban",
-        5
-    ],
-    [
-        "Stand",
-        5
-    ],
-    [
         "twolittlecrates2",
-        5
-    ],
-    [
-        "Lufia Puzzle Remake",
         5
     ],
     [
@@ -444,71 +132,7 @@
         5
     ],
     [
-        "Merge and Swap",
-        5
-    ],
-    [
         "byyourside",
-        6
-    ],
-    [
-        "Racist Dogs",
-        6
-    ],
-    [
-        "Indiana Jones And His Adventure In The Lost Temple Of Owls",
-        6
-    ],
-    [
-        "Algorithm-Generated Sokoban Levels",
-        6
-    ],
-    [
-        "Isle of Sokoban",
-        6
-    ],
-    [
-        "Four-room tilt mazes",
-        6
-    ],
-    [
-        "Bubblegoban",
-        6
-    ],
-    [
-        "Stuffle",
-        6
-    ],
-    [
-        "Thirty-Two Nanobots",
-        6
-    ],
-    [
-        "Impossible Sokoban",
-        6
-    ],
-    [
-        "window hero",
-        6
-    ],
-    [
-        "Power Problems",
-        6
-    ],
-    [
-        "The electrician",
-        6
-    ],
-    [
-        "Flower Dance",
-        6
-    ],
-    [
-        "pusH",
-        6
-    ],
-    [
-        "STUCK IN A HOLE",
         6
     ],
     [
@@ -516,47 +140,7 @@
         6
     ],
     [
-        "Tile Tiler",
-        6
-    ],
-    [
-        "Pac-Puzzler",
-        6
-    ],
-    [
-        "Little Girl, Big World",
-        7
-    ],
-    [
-        "Combine!",
-        7
-    ],
-    [
-        "Roller Boi",
-        7
-    ],
-    [
-        "Fruit Ghost",
-        7
-    ],
-    [
         "blockfaker",
-        7
-    ],
-    [
-        "Black & White",
-        7
-    ],
-    [
-        "Dreaming of Strawberries",
-        7
-    ],
-    [
-        "GDD301 Game",
-        7
-    ],
-    [
-        "Cancel",
         7
     ],
     [
@@ -564,135 +148,11 @@
         7
     ],
     [
-        "Some lines were meant to be crossed",
-        7
-    ],
-    [
-        "Sokocross",
-        7
-    ],
-    [
-        "LameLightsOut",
-        7
-    ],
-    [
-        "Reap",
-        8
-    ],
-    [
-        "Surround Yourself With Dogs",
-        8
-    ],
-    [
-        "HyperMaze",
-        8
-    ],
-    [
-        "Escaping Limbo",
-        8
-    ],
-    [
-        "Cell Division",
-        8
-    ],
-    [
-        "Stand aside, everyone! I take large steps!",
-        8
-    ],
-    [
-        "Ebony & Ivory",
-        9
-    ],
-    [
-        "It Is Pitch Black",
-        9
-    ],
-    [
-        "GASP",
-        9
-    ],
-    [
-        "Step-over sequence mazes [2021]",
-        9
-    ],
-    [
-        "Brotherhood",
-        9
-    ],
-    [
-        "Stickyban",
-        9
-    ],
-    [
-        "Absorb",
-        9
-    ],
-    [
-        "Step-over sequence mazes [pre-2010]",
-        9
-    ],
-    [
-        "Delicious Ships!",
-        9
-    ],
-    [
-        "RED GREEN BLUE",
-        9
-    ],
-    [
-        "The Blob",
-        9
-    ],
-    [
-        "Union Move",
-        9
-    ],
-    [
         "ebony and ivory",
         9
     ],
     [
-        "Kicking walls",
-        10
-    ],
-    [
-        "L.A.S.E.R",
-        10
-    ],
-    [
-        "Pilgrimage",
-        10
-    ],
-    [
-        "Slidings",
-        10
-    ],
-    [
         "slidings",
-        10
-    ],
-    [
-        "Game One",
-        10
-    ],
-    [
-        "ESL Puzzle Game -- CHALLENGE MODE \u30a2\u30c0\u30e0\u306e\u30d1\u30ba\u30eb\u30b2\u30fc\u30e0",
-        10
-    ],
-    [
-        "One Way Street",
-        10
-    ],
-    [
-        "Add Man 2_ This Time It's Arithmetical",
-        10
-    ],
-    [
-        "Unity",
-        10
-    ],
-    [
-        "Path Finder",
         10
     ],
     [
@@ -700,263 +160,19 @@
         11
     ],
     [
-        "Line of Sight",
-        11
-    ],
-    [
-        "Shield Game",
-        11
-    ],
-    [
         "limerick",
         11
-    ],
-    [
-        "Stand III",
-        11
-    ],
-    [
-        "Sponge Game",
-        11
-    ],
-    [
-        "Lime Richard",
-        11
-    ],
-    [
-        "Stand II",
-        11
-    ],
-    [
-        "Lime Rick",
-        11
-    ],
-    [
-        "Circuit Breaker",
-        11
-    ],
-    [
-        "Colorban",
-        12
-    ],
-    [
-        "Little Glube",
-        12
-    ],
-    [
-        "Yin-Yang",
-        12
-    ],
-    [
-        "Sheep",
-        12
-    ],
-    [
-        "Flood",
-        12
-    ],
-    [
-        "Variations",
-        13
-    ],
-    [
-        "Hamiltwo",
-        13
-    ],
-    [
-        "This Adventure World",
-        13
-    ],
-    [
-        "2020",
-        13
-    ],
-    [
-        "Dogs, dogs and additional dogs",
-        13
-    ],
-    [
-        "AutoDom",
-        13
-    ],
-    [
-        "Drainage",
-        13
-    ],
-    [
-        "Antimatter Labs",
-        13
-    ],
-    [
-        "Cold Feet Sokoban",
-        13
-    ],
-    [
-        "Palette",
-        13
-    ],
-    [
-        "The Growth of H'Ragh",
-        13
-    ],
-    [
-        "Michael Bay's Legend of Zelda",
-        14
-    ],
-    [
-        "Crocodiles Love Cookies",
-        14
-    ],
-    [
-        "Electric Slide",
-        14
-    ],
-    [
-        "Ouroboros",
-        14
-    ],
-    [
-        "2048",
-        14
-    ],
-    [
-        "Together Alone",
-        14
-    ],
-    [
-        "NAND Circuit Simulator",
-        14
-    ],
-    [
-        "Painter",
-        14
-    ],
-    [
-        "Rewindoban",
-        14
     ],
     [
         "kettle",
         14
     ],
     [
-        "shoving",
-        14
-    ],
-    [
-        "Kettle",
-        14
-    ],
-    [
-        "Rocketman",
-        14
-    ],
-    [
-        "Rolling-block colour-zone mazes",
-        14
-    ],
-    [
-        "Abel's Werehouse",
-        15
-    ],
-    [
-        "Weird Bug II_ Weird Bugger",
-        15
-    ],
-    [
-        "No Right Turn Sokoban",
-        15
-    ],
-    [
-        "Mitosys",
-        15
-    ],
-    [
-        "Omnipresent",
-        15
-    ],
-    [
-        "Tempting Fate",
-        15
-    ],
-    [
-        "Sokolor EX",
-        15
-    ],
-    [
-        "Midas",
-        15
-    ],
-    [
-        "Pitman MZ-700",
-        15
-    ],
-    [
         "midas",
         15
     ],
     [
-        "Stepping Stones",
-        15
-    ],
-    [
-        "Color Slider",
-        16
-    ],
-    [
-        "Fast Forward",
-        16
-    ],
-    [
-        "Saute Mouton",
-        16
-    ],
-    [
-        "AutoTrom",
-        16
-    ],
-    [
-        "Good Example",
-        16
-    ],
-    [
-        "Emerita",
-        16
-    ],
-    [
-        "Goblin Hooblob",
-        16
-    ],
-    [
-        "Leo",
-        16
-    ],
-    [
-        "Knight's Tour",
-        16
-    ],
-    [
-        "You're Toast!",
-        16
-    ],
-    [
-        "Brain",
-        16
-    ],
-    [
-        "where did all this ice come from_",
-        17
-    ],
-    [
         "rigid_parallel_many",
-        17
-    ],
-    [
-        "Take Heart Lass",
-        17
-    ],
-    [
-        "EntrepotPhage Demake",
         17
     ],
     [
@@ -964,148 +180,12 @@
         17
     ],
     [
-        "Castle Duck!",
-        17
-    ],
-    [
-        "Hysteresis mazes",
-        17
-    ],
-    [
-        "Clean Up",
-        17
-    ],
-    [
-        "Solitaire",
-        18
-    ],
-    [
-        "Last day of the year",
-        18
-    ],
-    [
-        "Uphill Pathfinder",
-        18
-    ],
-    [
-        "Hey you! Stop blocking the laser!",
-        18
-    ],
-    [
-        "Darkness Sokoban",
-        18
-    ],
-    [
-        "Match Flow",
-        18
-    ],
-    [
-        "BUDS",
-        18
-    ],
-    [
         "rigid_many_broken",
         18
     ],
     [
-        "MC Escher's Equestrian Armageddon",
-        19
-    ],
-    [
-        "I Have No Mouth, And I Must  Find My Hiding Spot",
-        19
-    ],
-    [
-        "Bit Blocks",
-        19
-    ],
-    [
-        "Schleimban",
-        19
-    ],
-    [
-        "Puzzleboi",
-        19
-    ],
-    [
-        "Catrap",
-        19
-    ],
-    [
         "m c eschers armageddon",
         19
-    ],
-    [
-        "Strong Fish",
-        20
-    ],
-    [
-        "Candy Bomb",
-        20
-    ],
-    [
-        "Color Combination",
-        20
-    ],
-    [
-        "The Block Tower",
-        20
-    ],
-    [
-        "I Have No Mouth, And I Cannot Push Two Boxes",
-        20
-    ],
-    [
-        "No Fault of My Own",
-        20
-    ],
-    [
-        "Heroes of Sokoban - Ancient Japan",
-        20
-    ],
-    [
-        "XL-Up Maze",
-        20
-    ],
-    [
-        "Towers of Saigon",
-        20
-    ],
-    [
-        "Rob's first game",
-        21
-    ],
-    [
-        "Bricks and Hammer",
-        21
-    ],
-    [
-        "Multiply",
-        21
-    ],
-    [
-        "Nyetris DEMOv1.8",
-        21
-    ],
-    [
-        "Hill Buddies",
-        21
-    ],
-    [
-        "Oxygen Not Required",
-        21
-    ],
-    [
-        "Linked",
-        22
-    ],
-    [
-        "Heroes of Sokoban",
-        22
-    ],
-    [
-        "Heroes of sokoban edited",
-        22
     ],
     [
         "stick_candy_puzzle_saga",
@@ -1116,184 +196,8 @@
         22
     ],
     [
-        "Slidyyyyyyy",
-        22
-    ],
-    [
-        "dungeons",
-        22
-    ],
-    [
-        "Lawn-Mowing Robot",
-        22
-    ],
-    [
-        "Tumblin'",
-        23
-    ],
-    [
-        "Bat Loves Lava Shark",
-        23
-    ],
-    [
-        "Tricky Tower",
-        23
-    ],
-    [
-        "I Have No Mouth, And I Must Toggle Blocks On All Sides Of Me",
-        23
-    ],
-    [
-        "Detroit_ Become Immense",
-        23
-    ],
-    [
-        "Wrap",
-        23
-    ],
-    [
-        "Crate Game Five",
-        23
-    ],
-    [
-        "pretender to the crown",
-        23
-    ],
-    [
-        "candy saga 2_ turbo edge",
-        24
-    ],
-    [
-        "Gravity Sokoban",
-        24
-    ],
-    [
-        "Coin Eater",
-        24
-    ],
-    [
-        "Two level puzzle",
-        24
-    ],
-    [
-        "The Nuevo Asylum",
-        24
-    ],
-    [
-        "Possibility Space",
-        24
-    ],
-    [
-        "Back home",
-        25
-    ],
-    [
-        "Fallow Land",
-        25
-    ],
-    [
-        "Eschoban",
-        26
-    ],
-    [
-        "Misaligned",
-        26
-    ],
-    [
-        "The Beginning, The End",
-        26
-    ],
-    [
-        "Spacekoban",
-        26
-    ],
-    [
-        "Stick-with-it mazes",
-        27
-    ],
-    [
-        "9x9 Go",
-        27
-    ],
-    [
-        "Stairs",
-        27
-    ],
-    [
-        "Circulando",
-        27
-    ],
-    [
-        "Meatball",
-        27
-    ],
-    [
-        "Explod",
-        27
-    ],
-    [
-        "Snakeoban",
-        27
-    ],
-    [
-        "Paul Bunyan's Demade Island Adventure_ (v2)",
-        27
-    ],
-    [
-        "Angize",
-        27
-    ],
-    [
-        "Light Maze",
-        28
-    ],
-    [
-        "PuzzleScript Cell Machine Test",
-        28
-    ],
-    [
-        "Neutralize",
-        28
-    ],
-    [
         "ledchallenge",
         28
-    ],
-    [
-        "~~ PWARE SKEG v1.1 ~~",
-        29
-    ],
-    [
-        "Medusa's Wrath v0.2.1",
-        30
-    ],
-    [
-        "PackBot",
-        30
-    ],
-    [
-        "Mini Nomerads 2_ Constructaballs",
-        30
-    ],
-    [
-        "Do You Want to Build a Snowman_",
-        30
-    ],
-    [
-        "Memory path",
-        31
-    ],
-    [
-        "Floor Painter",
-        31
-    ],
-    [
-        "Collapse",
-        31
-    ],
-    [
-        "The Workshop",
-        31
     ],
     [
         "collapse",
@@ -1308,212 +212,16 @@
         31
     ],
     [
-        "Game Loading",
-        32
-    ],
-    [
-        "Memory Push",
-        32
-    ],
-    [
-        "Baguettes",
-        33
-    ],
-    [
-        "Freeform Bal Ru's Curse",
-        33
-    ],
-    [
-        "Loup-Mouton-Chou",
-        33
-    ],
-    [
-        "Stage Floor Assembler",
-        33
-    ],
-    [
-        "Sleeping Bear",
-        33
-    ],
-    [
-        "Inchworm",
-        33
-    ],
-    [
-        "Pushller",
-        34
-    ],
-    [
-        "Go",
-        34
-    ],
-    [
         "cakemonsters",
         34
-    ],
-    [
-        "Bal Ru's Curse cruelty-free demake",
-        34
-    ],
-    [
-        "firefighting",
-        34
-    ],
-    [
-        "Pipe Game",
-        34
-    ],
-    [
-        "Mow Problems",
-        34
-    ],
-    [
-        "Tumblebox",
-        34
-    ],
-    [
-        "Janitor Ted",
-        35
-    ],
-    [
-        "Mini Nomerads",
-        35
-    ],
-    [
-        "something",
-        36
-    ],
-    [
-        "Gears",
-        36
-    ],
-    [
-        "Un-Lock",
-        36
-    ],
-    [
-        "Insey Winsey Spider",
-        36
-    ],
-    [
-        "Jormungandr",
-        37
-    ],
-    [
-        "Rainbow Apples",
-        37
-    ],
-    [
-        "A Unexamined Life Is Not Worth Meowing",
-        37
-    ],
-    [
-        "BulletDodger",
-        37
-    ],
-    [
-        "Ice Cubes",
-        37
-    ],
-    [
-        "Manic Ammo",
-        38
     ],
     [
         "manic_ammo",
         38
     ],
     [
-        "Tornado Tamer",
-        38
-    ],
-    [
-        "Sticky Cubes",
-        38
-    ],
-    [
-        "Rocketmen",
-        39
-    ],
-    [
-        "Reset",
-        39
-    ],
-    [
-        "Snake Scout",
-        39
-    ],
-    [
-        "Gingham",
-        39
-    ],
-    [
-        "Shared Bridges Game",
-        40
-    ],
-    [
-        "Velocity Castle",
-        40
-    ],
-    [
-        "Sokoslam",
-        40
-    ],
-    [
-        "Soliquid",
-        40
-    ],
-    [
-        "Sokofun Clone",
-        41
-    ],
-    [
-        "No Ant Not Dead",
-        41
-    ],
-    [
-        "Count Mover",
-        41
-    ],
-    [
         "puzzles",
         41
-    ],
-    [
-        "Crate Rotate",
-        42
-    ],
-    [
-        "P[+]SITIVE ~ NEG[-]TIVE {BETA 1}",
-        42
-    ],
-    [
-        "Flipush_ An Exciting Square Game",
-        42
-    ],
-    [
-        "Fabric",
-        42
-    ],
-    [
-        "Robot Repairs 1.2",
-        42
-    ],
-    [
-        "Boolean Bloom 0.37",
-        43
-    ],
-    [
-        "Good title for my puzzle game",
-        43
-    ],
-    [
-        "Stained Glass",
-        44
-    ],
-    [
-        "Atlas Shrank",
-        44
     ],
     [
         "atlas shrank",
@@ -1524,176 +232,16 @@
         44
     ],
     [
-        "The Riddle Machine",
-        46
-    ],
-    [
-        "Flying Kick",
-        46
-    ],
-    [
-        "Crypt of the Necrodancer _DEMAKE_",
-        47
-    ],
-    [
-        "Rabbits like Carrots",
-        49
-    ],
-    [
-        "Dating Queens",
-        50
-    ],
-    [
         "icecrates",
         50
-    ],
-    [
-        "Party Demon",
-        50
-    ],
-    [
-        "IceCrates",
-        50
-    ],
-    [
-        "Frogbike_ Magnet Hero",
-        51
-    ],
-    [
-        "Heroes of Sokoban II_ Monsters",
-        51
     ],
     [
         "heroes_of_sokoban_2",
         51
     ],
     [
-        "RBG",
-        51
-    ],
-    [
-        "Life is Hard",
-        52
-    ],
-    [
-        "12345 v1.0",
-        52
-    ],
-    [
-        "Gloves and Boots",
-        53
-    ],
-    [
-        "Magical Shoe Adventure",
-        54
-    ],
-    [
-        "Magik",
-        54
-    ],
-    [
-        "Dharma Dojo demake",
-        56
-    ],
-    [
-        "Illuminate",
-        56
-    ],
-    [
-        "Luxbend II_ Marbles",
-        57
-    ],
-    [
-        "Puzzle Stitch",
-        58
-    ],
-    [
-        "Heroes of Sokoban and Other Tales_ The Rogue",
-        61
-    ],
-    [
-        "Kick the Can",
-        62
-    ],
-    [
-        "Snek",
-        63
-    ],
-    [
-        "Miss Direction",
-        63
-    ],
-    [
-        "MicroChip",
-        63
-    ],
-    [
-        "FROWN INVERSION SQUAD",
-        64
-    ],
-    [
-        "Let me through",
-        64
-    ],
-    [
-        "Diagonal Block Pushing Prototype",
-        66
-    ],
-    [
-        "Two-faced",
-        67
-    ],
-    [
-        "Parity Match",
-        68
-    ],
-    [
         "i_am_two",
         69
-    ],
-    [
-        "Indigestion",
-        73
-    ],
-    [
-        "Upstairs Downstairs",
-        75
-    ],
-    [
-        "Flippin' Ladybug",
-        75
-    ],
-    [
-        "Smoothoban",
-        78
-    ],
-    [
-        "SHELL CASE",
-        80
-    ],
-    [
-        "Light Knight",
-        80
-    ],
-    [
-        "Marble Shoot",
-        85
-    ],
-    [
-        "Animal Cascade",
-        85
-    ],
-    [
-        "Forest Road",
-        85
-    ],
-    [
-        "Sokoboros",
-        90
-    ],
-    [
-        "Memories Of Castlemouse",
-        93
     ],
     [
         "castlemouse",
@@ -1702,57 +250,5 @@
     [
         "coincounter",
         94
-    ],
-    [
-        "Fireproof bomber",
-        94
-    ],
-    [
-        "Coin Counter",
-        94
-    ],
-    [
-        "PENTAGO",
-        102
-    ],
-    [
-        "Impetus",
-        105
-    ],
-    [
-        "Lasers [study]",
-        122
-    ],
-    [
-        "Laserverse",
-        122
-    ],
-    [
-        "Wriggler demake",
-        147
-    ],
-    [
-        "Sweet Hints",
-        160
-    ],
-    [
-        "5 step steve DEMAKE",
-        161
-    ],
-    [
-        "Sasquatch Sokoban",
-        185
-    ],
-    [
-        "STRATA-GEMS",
-        201
-    ],
-    [
-        "Doors and Boxes",
-        279
-    ],
-    [
-        "Filler",
-        422
     ]
 ]
