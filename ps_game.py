@@ -13,6 +13,8 @@ class PSObject:
             alt_name = alt_name.lower()
         self.alt_name = alt_name
         if legend_key is not None:
+            # if len(legend_key) > 1:
+            #     breakpoint()
             assert len(legend_key) == 1, "Legend key must be a single character"
             legend_key = legend_key.lower()
         self.legend_key = legend_key 

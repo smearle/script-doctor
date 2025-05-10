@@ -20,14 +20,15 @@ class Config:
     game: Optional[str] = None
     profile: bool = False
     debug: bool = False
+    level: int = 0
 
 
 cs = ConfigStore.instance()
 cs.store(name="config", node=Config)
 
 
-def human_loop(env: PSEnv, profile=False):
-    lvl_i = 0 
+def human_loop(env: PSEnv, level: int = 0, profile=False):
+    lvl_i = level
     level = env.get_level(lvl_i)
     params = PSParams(level=level)
     rng = jax.random.PRNGKey(0)
@@ -160,7 +161,7 @@ def human_loop(env: PSEnv, profile=False):
     cv2.destroyAllWindows()
 
 
-def play_game(game: str, jit: bool = False, profile: bool = False, debug: bool = False):
+def play_game(game: str, level: int = 0, jit: bool = False, profile: bool = False, debug: bool = False):
     with open("syntax.lark", "r", encoding='utf-8') as file:
         puzzlescript_grammar = file.read()
     # Initialize the Lark parser with the PuzzleScript grammar
@@ -171,13 +172,13 @@ def play_game(game: str, jit: bool = False, profile: bool = False, debug: bool =
     print(f"Initializing environment for game: {game}")
     env = PSEnv(tree, jit=jit, debug=debug)
     print(f"Playing game: {game}")
-    human_loop(env, profile=profile)
+    human_loop(env, profile=profile, level=level)
 
 @hydra.main(config_name="config", version_base="1.3")
 def main(cfg: Config):
 
     if cfg.game is not None:
-        play_game(cfg.game, jit=cfg.jit, profile=cfg.profile, debug=cfg.debug)
+        play_game(cfg.game, level=cfg.level, jit=cfg.jit, profile=cfg.profile, debug=cfg.debug)
 
     else:
         tree_paths = glob.glob(os.path.join(TREES_DIR, '*'))

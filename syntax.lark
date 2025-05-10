@@ -45,6 +45,8 @@ object_without_sprite_trailing.1: object_line NEWLINE color_line NEWLINE NEWLINE
 
 object_without_sprite_no_trailing.0: object_line NEWLINE color_line NEWLINE
 
+// object_without_sprite_no_trailing_with_newlines: object_line NEWLINES color_line NEWLINE
+
 SPRITE_PIXEL: /[0-9.]/
 colors: color+
 
@@ -130,7 +132,7 @@ legend_key: PIXEL
 DIRECTIONAL: /[\^v<>]/
 
 KEYWORD_ID: /[a-z0-9.A-Z_]+/
-PREFIX: "late"i | "horizontal"i | "vertical"i | "left"i | "right"i | "up"i | "down"i | ID
+PREFIX: "late"i | "horizontal"i | "vertical"i | "left"i | "right"i | "up"i | "down"i | "+" | "random"i | ID
 
 prelude_data: PRELUDE_KEYWORD (" " STRING)* NEWLINES
 

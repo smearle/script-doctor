@@ -3,12 +3,15 @@ import os
 import random
 import re
 import time
+
 import dotenv
+import numpy as np
 from openai import AzureOpenAI
 import requests
 import tiktoken
 
 from prompts import *
+
 
 dotenv.load_dotenv()
 
@@ -69,6 +72,10 @@ def gen_fewshot_examples(system_prompt, prompt, max_tokens):
     if n_games_included == 0:
         fewshow_examples_prompt_i = ''
     return fewshot_examples_prompt_i
+
+def to_binary_vectors(arr_2d, num_bits):
+    arr_2d = np.asarray(arr_2d)
+    return ((arr_2d[..., None] & (1 << np.arange(num_bits)[::-1])) > 0).astype(int)
 
 
 GPT4V_ENDPOINT = "https://aoai-physics.openai.azure.com/openai/deployments/gpt4o/chat/completions?api-version=2024-02-15-preview"

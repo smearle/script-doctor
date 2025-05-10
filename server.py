@@ -49,7 +49,7 @@ class Config:
     model: str = 'gemini-2.0-flash-exp'
     viz_feedback: bool = True
     headless: bool = False
-    auto_launch_browser: bool = True
+    auto_launch_client: bool = True
 
 
 @dataclass
@@ -989,17 +989,35 @@ def save_game_stats():
     exp_dir, game_dir, stats = data['expDir'], data['gameDir'], data['gameInd']
     return _save_game_stats(exp_dir, game_dir, stats)
 
+def level_to_int_arr(level: dict):
+    level_arr = []
+    for x in range(level['width']):
+        level_arr.append([])
+        for y in range(level['height']):
+            flat_idx = x * level['height'] + y
+            level_arr[x].append(level['dat'][str(flat_idx)])
+    return np.array(level_arr)
+
+
 @app.route('/save_sol', methods=['POST'])
 def save_sol():
     data = request.json
-    sol_dir, level_i, sol, gif_url = data['solDir'], data['levelIdx'], data['sol'], data['dataURL']
+    sol_dir, level_i, sol, gif_url, end_state, timeout, obj_list = (
+        data['solDir'], data['levelIdx'], data['sol'], data['dataURL'], data['bestState'], 
+        data['timeout'], data['objList'])
     won, score = data['won'], data['score']
     os.makedirs(sol_dir, exist_ok=True)
     sol_path = os.path.join(sol_dir, f'level-{level_i}.json')
+    end_level_arr = level_to_int_arr(end_state)
+    # end_level_arr = to_binary_vectors(end_level_arr.flatten(), 8) 
+    end_level_arr
     sol_dict = {
         'won': won,
         'score': score,
         'sol': sol,
+        'timeout': timeout,
+        'objs': obj_list,
+        'state': end_level_arr.tolist(),
     }
     with open(sol_path, 'w') as f:
         json.dump(sol_dict, f, indent=4)
@@ -1202,7 +1220,7 @@ def main(cfg: Config):
     # elif cfg.mode == 'generate':
     else:
 
-        if cfg.auto_launch_browser:
+        if cfg.auto_launch_client:
             browser_thread = threading.Thread(
                 target=partial(open_browser, url=f"http://127.0.0.1:{cfg.port}", headless=cfg.headless)
             )

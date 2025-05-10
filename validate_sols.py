@@ -7,6 +7,7 @@ import random
 import shutil
 import traceback
 
+from einops import rearrange
 import hydra
 import imageio
 import jax
@@ -20,6 +21,7 @@ from env import PSEnv
 from gen_tree import GenPSTree
 from parse_lark import TREES_DIR, DATA_DIR, TEST_GAMES, get_tree_from_txt
 from ps_game import PSGameTree
+from utils import to_binary_vectors
 from utils_rl import get_env_params_from_config
 
 
@@ -38,6 +40,14 @@ def main(config: Config):
     games_n_rules = sorted(games_n_rules, key=lambda x: x[1])
     games = [game for game, n_rules in games_n_rules]
     sol_paths = [os.path.join('sols', game) for game in games]
+    results = {
+        'compile_error': [],
+        'runtime_error': [],
+        'solution_error': [],
+        'state_error': [],
+        'score_error': [],
+        'success': [],
+    }
 
     # tree_paths = [os.path.join(TREES_DIR, os.path.basename(path) + '.pkl') for path in sol_paths]
     # games = [os.path.basename(path)[:-4] for path in sol_paths]
@@ -47,6 +57,7 @@ def main(config: Config):
         traj_dir = os.path.join(sols_dir, game)
         compile_log_path = os.path.join(traj_dir, 'compile_err.txt')
         if os.path.exists(compile_log_path) and not config.overwrite:
+            results['compile_error'].append(game)
             print(f"Skipping {game} because compile error log already exists")
             continue
 
@@ -74,6 +85,7 @@ def main(config: Config):
                 f.write(err_log)
             traceback.print_exc()
             print(f"Error creating env: {og_path}")
+            results['compile_error'].append(og_path)
             continue
 
         key = jax.random.PRNGKey(0)
@@ -96,9 +108,20 @@ def main(config: Config):
             sol_log_path = os.path.join(traj_dir, f'level-{level_i}_solution_err.txt')
             score_log_path = os.path.join(traj_dir, f'level-{level_i}_score_err.txt')
             run_log_path = os.path.join(traj_dir, f'level-{level_i}_runtime_err.txt')
+            state_log_path = os.path.join(traj_dir, f'level-{level_i}_state_err.txt')
             gif_path = os.path.join(traj_dir, f'level-{level_i}.gif')
             if (os.path.exists(gif_path) or os.path.exists(sol_log_path) or os.path.exists(score_log_path) \
-                    or os.path.exists(run_log_path)) and not config.overwrite:
+                    or os.path.exists(run_log_path) or os.path.exists(state_log_path)) and not config.overwrite:
+                if os.path.exists(run_log_path):
+                    results['runtime_error'].append((og_path, level_i))
+                elif os.path.exists(sol_log_path):
+                    results['solution_error'].append((og_path, level_i))
+                elif os.path.exists(score_log_path):
+                    results['score_error'].append((og_path, level_i))
+                elif os.path.exists(state_log_path):
+                    results['state_error'].append((og_path, level_i))
+                else:
+                    results['success'].append((og_path, level_i))
                 print(f"Skipping level {level_i} because gif or error log already exists")
                 continue
 
@@ -107,6 +130,12 @@ def main(config: Config):
             level_sol = sol_dict['sol']
             level_win = sol_dict['won']
             level_score = sol_dict['score']
+            level_state = sol_dict['state']
+            obj_list = sol_dict['objs']
+            level_state = np.array(level_state).T
+            level_multihot = to_binary_vectors(level_state, len(obj_list))
+            level_multihot = rearrange(level_multihot, 'h w c -> c h w')
+            level_multihot = np.flip(level_multihot, 0)
             actions = level_sol
             actions = [action_remap[a] for a in actions]
             actions = jnp.array([int(a) for a in actions])
@@ -129,20 +158,41 @@ def main(config: Config):
                     with open(sol_log_path, 'w') as f:
                         f.write(f"Level {level_i} solution failed\n")
                         f.write(f"Actions: {actions}\n")
+                        results['solution_error'].append((og_path, level_i))
                         # f.write(f"State: {state}\n")
                     print(f"Level {level_i} solution failed")
-                elif not level_win and (state.heuristic != level_score):
-                    # FIXME: There is a discrepancy between the way we compute scores in js (I actually don't understand
-                    # how we're getting that number) and the way we compute scores in jax, so this will always fail.
+                elif np.any(level_multihot != state.multihot_level):
+                    js_state = state.replace(multihot_level=level_multihot)
+                    js_frame = env.render(js_state, cv2=False)
+                    js_frame = np.array(js_frame, dtype=np.uint8)
+                    imageio.imsave(os.path.join(traj_dir, f'level-{level_i}_state_js.png'), js_frame)
+                    jax_frame = env.render(state, cv2=False)
+                    jax_frame = np.array(jax_frame, dtype=np.uint8)
+                    imageio.imsave(os.path.join(traj_dir, f'level-{level_i}_state_jax.png'), jax_frame)
+                    breakpoint()
+                    with open(sol_log_path, 'w') as f:
+                        f.write(f"Level {level_i} solution failed\n")
+                        f.write(f"Actions: {actions}\n")
+                        f.write(f"State: {state}\n")
+                        results['state_error'].append((og_path, level_i))
+                    print(f"Level {level_i} solution failed")
+                else:
+                    results['success'].append((og_path, level_i))
+                    print(f"Level {level_i} solution succeeded")
+                # # FIXME: There is a discrepancy between the way we compute scores in js (I actually don't understand
+                # # how we're getting that number) and the way we compute scores in jax, so this will always fail.
+                if not level_win and (state.heuristic != level_score):
                     with open(score_log_path, 'w') as f:
                         f.write(f"Level {level_i} solution score mismatch\n")
                         f.write(f"Actions: {actions}\n")
                         f.write(f"Jax score: {state.score}\n")
                         f.write(f"JS score: {level_score}\n")
+                        results['score_error'].append((og_path, level_i))
             except Exception as e:
                 traceback.print_exc()
                 print(f"Error running solution: {og_path}")
                 err_log = traceback.format_exc()
+                results['runtime_error'].append((og_path, level_i))
                 with open(run_log_path, 'w') as f:
                     f.write(err_log)
                 continue
@@ -163,14 +213,18 @@ def main(config: Config):
             print(f"Saving frames for level {level_i}")
             frames_dir = os.path.join(traj_dir, 'frames')
             os.makedirs(frames_dir, exist_ok=True)
-            for i, frame in enumerate(frames):
-                imageio.imsave(os.path.join(frames_dir, f'level-{level_i}_sol_{i:03d}.png'), frame)
+            for i, js_frame in enumerate(frames):
+                imageio.imsave(os.path.join(frames_dir, f'level-{level_i}_sol_{i:03d}.png'), js_frame)
 
             # Make a gif out of the frames
             imageio.mimsave(gif_path, frames, duration=0.1, loop=0)
 
             # Copy over the js gif
             shutil.copy(js_gif_path, os.path.join(traj_dir, f'level-{level_i}_js.gif'))
+
+        with open(os.path.join('data', 'validation_results.json'), 'w') as f:
+            json.dump(results, f, indent=4)
+
 
     print(f"Finished validating solutions in jax.")
 
