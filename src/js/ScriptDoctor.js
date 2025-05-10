@@ -151,7 +151,9 @@ function hashStateObjects(state) {
 
 
 async function solveLevelBFS(levelIdx, captureStates=false, maxIters=1_000_000) {
+  const timeout_ms = 60 * 1000;
   console.log('max iters:', maxIters);
+  console.log('timeout:', timeout_ms);
 	precalcDistances();
 
   // Load the level
@@ -178,7 +180,6 @@ async function solveLevelBFS(levelIdx, captureStates=false, maxIters=1_000_000) 
   visited[level.objects] = true;
   i = 0;
   start_time = Date.now();
-  const timeout_ms = 60 * 1000;
   console.log(frontier.size())
   while (frontier.size() > 0) {
     const elapsed_time = Date.now() - start_time;

@@ -1,9 +1,11 @@
 import argparse
+from enum import IntEnum
 import glob
 import json
 import os
 import pickle
 import re
+import shutil
 import traceback
 import signal  # Add this import
 import contextlib
@@ -20,6 +22,15 @@ games_to_skip = set({'easyenigma', 'A_Plaid_Puzzle'})
 
 # TEST_GAMES = ['blockfaker', 'sokoban_match3', 'notsnake', 'sokoban_basic']
 TEST_GAMES = []
+
+DATA_DIR = 'data'
+GAMES_DIR = os.path.join(DATA_DIR, 'scraped_games')
+MIN_GAMES_DIR = os.path.join(DATA_DIR, 'min_games')
+custom_games_dir = os.path.join('custom_games')
+simpd_dir = os.path.join(DATA_DIR, 'simplified_games')
+TREES_DIR = os.path.join(DATA_DIR, 'game_trees')
+pretty_trees_dir = os.path.join(DATA_DIR, 'pretty_trees')
+# parsed_games_filename = os.path.join(DATA_DIR, "parsed_games.txt")
 
 from lark import Lark, Transformer, Tree, Token, Visitor
 import numpy as np
@@ -143,7 +154,7 @@ class StripPuzzleScript(Transformer):
                 row.append(s.value)
         row_lens = [len(r) for r in grid]
         if len(set(row_lens)) > 1:
-            breakpoint()
+            raise ValueError(f"Rows in grid have different lengths: {row_lens}")
         grid = np.array(grid)
         return grid
 
@@ -170,10 +181,6 @@ class StripPuzzleScript(Transformer):
 
 
 class RepairPuzzleScript(Transformer):
-    # def color_line(self, items):
-    #     breakpoint()
-    #     pass
-
     def object_data(self, items):
         # If we're missing colors, add random ones
         child_trees = [i for i in items if isinstance(i, Tree)]
@@ -187,7 +194,7 @@ class RepairPuzzleScript(Transformer):
             sprite = [i for i in child_trees if i.data == 'sprite'][0]
             sprite_arr = np.array(sprite.children)
             if sprite_arr.shape != (5, 5):
-                breakpoint()
+                raise ValueError(f"Sprite shape is not 5x5: {sprite_arr.shape}")
             n_unique_pixels = np.vectorize(lambda x: int(x) if x != '.' else 0)(sprite_arr).max() + 1
             while n_unique_pixels > n_colors:
                 colors.children.append(Token('COLOR', f'#{np.random.randint(0, 0xFFFFFF):06X}'))
@@ -370,15 +377,34 @@ def strip_comments(text):
     new_text = ""
     n_open_brackets = 0
     # Move through the text, keeping track of how deep we are in brackets
-    for c in text:
+    for i, c in enumerate(text):
         if c == "(":
             n_open_brackets += 1
         elif c == ")":
             # we ignore unmatched closing brackets if we are outside
-            n_open_brackets = max(0, n_open_brackets - 1)
+            new_n_open_brackets = max(0, n_open_brackets - 1)
+            if new_n_open_brackets == 0 and n_open_brackets == 1:
+                # If the removed comment has left us with a double-newline (because there was a newline on either side 
+                # of it), convert it to a single newline
+                if new_text.endswith("\n") and text[i+1] == "\n":
+                    new_text = new_text[:-1]
+            n_open_brackets = new_n_open_brackets
         elif n_open_brackets == 0:
             new_text += c
     return new_text
+
+def count_rules(tree):
+    n_rules = 0
+    for rule_block in tree.rules:
+        n_rules += len(rule_block[0].rules)
+    return n_rules
+
+class PSErrors(IntEnum):
+    SUCCESS = 0
+    PARSE_ERROR = 1
+    TREE_ERROR = 2
+    ENV_ERROR = 3
+    TIMEOUT = 4
 
 def get_tree_from_txt(parser, game, log_dir: str = None, overwrite: bool = True):
     filepath = os.path.join(custom_games_dir, game + '.txt')
@@ -413,8 +439,7 @@ def get_tree_from_txt(parser, game, log_dir: str = None, overwrite: bool = True)
     if os.name != 'nt':
         def parse_attempt_fn():
             with timeout_handler(10):
-                parse_tree = parser.parse(content)
-            return parse_tree
+                return parser.parse(content)
     else:
         def parse_attempt_fn():
             return parser.parse(content)
@@ -428,9 +453,9 @@ def get_tree_from_txt(parser, game, log_dir: str = None, overwrite: bool = True)
             with open(log_filename, 'w') as file:
                 file.write("timeout")
             print(f"Timeout parsing {simp_filepath}")
-            with open(parsed_games_filename, 'a') as file:
-                file.write(game + "\n")
-        return
+            # with open(parsed_games_filename, 'a') as file:
+            #     file.write(game + "\n")
+        return None, PSErrors.TIMEOUT, ""
     except Exception as e:
         print(traceback.format_exc())
         if log_filename:
@@ -438,9 +463,9 @@ def get_tree_from_txt(parser, game, log_dir: str = None, overwrite: bool = True)
                 traceback.print_exc(file=file)
 
             print(f"Error parsing {simp_filepath}:\n{e}")
-            with open(parsed_games_filename, 'a') as file:
-                file.write(game + "\n")
-        return
+            # with open(parsed_games_filename, 'a') as file:
+            #     file.write(game + "\n")
+        return None, PSErrors.PARSE_ERROR, gen_error_str(e)
 
 
     min_parse_tree = StripPuzzleScript().transform(parse_tree)
@@ -461,32 +486,27 @@ def get_tree_from_txt(parser, game, log_dir: str = None, overwrite: bool = True)
     with open(min_filename, "w", encoding='utf-8') as file:
         file.write(ps_str)
 
-    with open(parsed_games_filename, 'a') as file:
-        file.write(game + "\n")
+    # with open(parsed_games_filename, 'a') as file:
+    #     file.write(game + "\n")
 
     try:
         tree: PSGameTree = GenPSTree().transform(min_parse_tree)
     except Exception as e:
         traceback.print_exc()
-        print(f"Error parsing tree: {game}")
-        return
-    # try:
-    #     env = PSEnv(tree, level_i=0)
+        print(f"Error transforming tree: {game}")
+        return None, PSErrors.TREE_ERROR, gen_error_str(e)
+    try:
+        env = PSEnv(tree, level_i=0)
     except Exception as e:
         traceback.print_exc()
         print(f"Error initializing environment for {game}: {e}")
+        return tree, PSErrors.ENV_ERROR, gen_error_str(e)
 
     print(f"Parsed {game} successfully")
-    return tree
+    return tree, PSErrors.SUCCESS, ""
 
-DATA_DIR = 'data'
-GAMES_DIR = os.path.join(DATA_DIR, 'scraped_games')
-MIN_GAMES_DIR = os.path.join(DATA_DIR, 'min_games')
-custom_games_dir = os.path.join('custom_games')
-simpd_dir = os.path.join(DATA_DIR, 'simplified_games')
-TREES_DIR = os.path.join(DATA_DIR, 'game_trees')
-pretty_trees_dir = os.path.join(DATA_DIR, 'pretty_trees')
-parsed_games_filename = os.path.join(DATA_DIR, "parsed_games.txt")
+def gen_error_str(e):
+    return f"{type(e).__name__}: {e}"
 
 # Usage example
 if __name__ == "__main__":
@@ -504,13 +524,26 @@ if __name__ == "__main__":
     os.makedirs(TREES_DIR, exist_ok=True)
     os.makedirs(pretty_trees_dir, exist_ok=True)
     os.makedirs(MIN_GAMES_DIR, exist_ok=True)
+    parse_results = {
+        'stats': {},
+        'success': [],
+        'parse_error': {},
+        'tree_error': {},
+        'env_error': {},
+        'parse_timeout': [],
+    }
+    parse_results_path = os.path.join('data', 'parse_results.json')
+    # Copy a backup of previous results if it exists
+    if os.path.exists(parse_results_path):
+        shutil.copyfile(parse_results_path, parse_results_path[:-5] + "_bkp" + ".json")
+
     # min_grammar = os.path.join('syntax_generate.lark')
-    if args.overwrite or not os.path.exists(parsed_games_filename):
-        with open(parsed_games_filename, "w") as file:
-            file.write("")
-    with open(parsed_games_filename, "r", encoding='utf-8') as file:
-        # Get the set of all lines from this text file
-        parsed_games = set(file.read().splitlines())
+    # if args.overwrite or not os.path.exists(parsed_games_filename):
+    #     with open(parsed_games_filename, "w") as file:
+    #         file.write("")
+    # with open(parsed_games_filename, "r", encoding='utf-8') as file:
+    #     # Get the set of all lines from this text file
+    #     parsed_games = set(file.read().splitlines())
     # for i, filename in enumerate(['blank.txt'] + os.listdir(demo_games_dir)):
     if args.game is None:
         game_files = os.listdir(GAMES_DIR)
@@ -521,16 +554,53 @@ if __name__ == "__main__":
     test_game_files = [f"{test_game}.txt" for test_game in TEST_GAMES]
     game_files = test_game_files + game_files
 
-    if not os.path.isdir(simpd_dir):
-        os.mkdir(simpd_dir)
+    os.makedirs(simpd_dir, exist_ok=True)
     scrape_log_dir = 'scrape_logs'
-    if not os.path.isdir(scrape_log_dir):
-        os.makedirs(scrape_log_dir)
+    os.makedirs(scrape_log_dir, exist_ok=True)
     simpd_games = set(os.listdir(simpd_dir))
     for i, filename in enumerate(game_files):
+        og_game_path = os.path.join(GAMES_DIR, filename)
         print(f"Parsing {filename} ({i+1}/{len(game_files)})")
-        tree = get_tree_from_txt(parser, filename[:-4], log_dir=scrape_log_dir, overwrite=args.overwrite)
+        ps_tree, success, err_msg = get_tree_from_txt(parser, filename[:-4], log_dir=scrape_log_dir, overwrite=args.overwrite)
 
-    # Count the number of games in `min_gmes`
-    n_min_games = len(glob.glob(os.path.join(MIN_GAMES_DIR, '*.txt')))
-    print(f"Number of minified games: {n_min_games}")
+        if success == PSErrors.SUCCESS:
+            parse_results['success'].append(og_game_path)
+        elif success == PSErrors.PARSE_ERROR:
+            if err_msg not in parse_results['parse_error']:
+                parse_results['parse_error'][err_msg] = []
+            parse_results['parse_error'][err_msg].append(og_game_path)
+        elif success == PSErrors.TIMEOUT:
+            parse_results['parse_timeout'].append(og_game_path)
+        elif success == PSErrors.TREE_ERROR:
+            if err_msg not in parse_results['tree_error']:
+                parse_results['tree_error'][err_msg] = []
+            parse_results['tree_error'][err_msg].append(og_game_path)
+        elif success == PSErrors.ENV_ERROR:
+            if err_msg not in parse_results['env_error']:
+                parse_results['env_error'][err_msg] = []
+            parse_results['env_error'][err_msg].append((og_game_path, count_rules(ps_tree)))
+        else:
+            breakpoint()
+
+        n_success = len(parse_results['success'])
+        n_env_errors = np.sum([len(v) for k, v in parse_results['env_error'].items()])
+        n_tree_errors = np.sum([len(v) for k, v in parse_results['tree_error'].items()])
+        n_parse_errors = np.sum([len(v) for k, v in parse_results['parse_error'].items()])
+        n_timeouts = len(parse_results['parse_timeout'])
+        parse_results['stats']['total'] = len(game_files)
+        parse_results['stats']['success'] = n_success
+        parse_results['stats']['parse_error'] = n_parse_errors
+        parse_results['stats']['tree_error'] = n_tree_errors
+        parse_results['stats']['env_error'] = n_env_errors
+        parse_results['stats']['parse_timeout'] = n_timeouts
+
+        with open(parse_results_path, "w", encoding='utf-8') as file:
+            json.dump(parse_results, file, indent=4)
+
+    print(f"Attempted to parse and initialize {len(game_files)} games.")
+    print(f"Initialized {len(parse_results['success'])} games successfully as jax envs")
+    print(f"Env errors {n_env_errors}.")
+    print(f"Tree transformation errors: {n_tree_errors}")
+    print(f"Lark parse errors: {n_parse_errors}")
+    print(f"Timeouts: {len(parse_results['parse_timeout'])}")
+

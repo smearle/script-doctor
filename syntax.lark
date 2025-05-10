@@ -75,17 +75,17 @@ layer_data: (object_name ("," | " "))* object_name ","? NEWLINES
 STARTLOOP: "startloop"i
 ENDLOOP: "endloop"i
 
+rule_block: rule_block_once
+          | rule_block_loop
+
+rule_block_once: rule_data+
+rule_block_loop: STARTLOOP NEWLINES rule_data+ ENDLOOP NEWLINES
+
 // Rule Data
 rule_data: PLUS? (PREFIX | rule_part)+ THEN (PREFIX | command | rule_part)* message? NEWLINES
 
 THEN: "->"
 PLUS: "+"
-
-rule_block_once: rule_data+
-rule_block_loop: STARTLOOP NEWLINES rule_data+ ENDLOOP NEWLINES
-
-rule_block: rule_block_once
-          | rule_block_loop
 
 message: "message"i STRING+
 
@@ -100,6 +100,14 @@ ID: /[a-z0-9.A-Z#_\/\\@!]/+
 // Command
 command: command_keyword
        | sound
+
+command_keyword: AGAIN | CANCEL | CHECKPOINT | RESTART | WIN
+
+AGAIN: "again"i
+CANCEL: "cancel"i
+CHECKPOINT: "checkpoint"i
+RESTART: "restart"i
+WIN: "win"i
 
 // Condition Data
 condition_data: QUANT object_name (ON object_name)? NEWLINES
@@ -143,13 +151,5 @@ PRELUDE_KEYWORD: "title"i | "author"i | "homepage"i | "color_palette"i | "again_
                | "text_color"i | "throttle_movement"i | "verbose_logging"i | "youtube"i | "zoomscreen"i
 
 legend_keyword: "or"i | "and"i
-// command_keyword: "again"i | "cancel"i | "checkpoint"i | "restart"i | "win"i
-command_keyword: AGAIN | CANCEL | CHECKPOINT | RESTART | WIN
-
-AGAIN: "again"i
-CANCEL: "cancel"i
-CHECKPOINT: "checkpoint"i
-RESTART: "restart"i
-WIN: "win"i
 
 // ID: /[a-z0-9.A-Z#_+]+/

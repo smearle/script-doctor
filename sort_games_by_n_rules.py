@@ -8,7 +8,7 @@ from lark import Lark
 
 from env import PSEnv
 from gen_tree import GenPSTree
-from parse_lark import TREES_DIR, GAMES_DIR, get_tree_from_txt
+from parse_lark import TREES_DIR, GAMES_DIR, count_rules, get_tree_from_txt
 from ps_game import PSGameTree
 
 
@@ -28,9 +28,7 @@ def main():
             # parse_tree = get_tree_from_txt(parser, game_name)
             tree: PSGameTree = GenPSTree().transform(parse_tree)
             env = PSEnv(tree, level_i=0)
-            n_rules = 0
-            for rule_block in tree.rules:
-                n_rules += len(rule_block[0].rules)
+            n_rules = count_rules(tree)
             games_n_rules.append((game_name, n_rules))
         except Exception as e:
             print(traceback.format_exc())

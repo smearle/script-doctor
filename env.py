@@ -328,6 +328,43 @@ def is_rel_force_in_kernel(k):
                 return True
     return False
 
+def is_perp_or_par_in_pattern(p):
+    for k in p:
+        for c in k:
+            for o in c:
+                if o.lower() in ['perpendicular', 'orthoganal', 'parallel']:
+                    return True
+    return False
+
+def gen_perp_par_subrules(l_kerns, r_kerns):
+    new_patterns = [[None, None], [None, None]]
+    for i, p in enumerate((l_kerns, r_kerns)):
+        new_kerns_a = []
+        new_kerns_b = []
+        for k in p:
+            l_kern_a = []
+            l_kern_b = []
+            for c in k:
+                c_a = []
+                c_b = []
+                for o in c:
+                    if o.lower() in ['perpendicular', 'orthoganal']:
+                        c_a.append('^')
+                        c_b.append('v')
+                    elif o.lower() in ['parallel']:
+                        c_a.append('>')
+                        c_b.append('<')
+                    else:
+                        c_a.append(o)
+                        c_b.append(o)
+                l_kern_a.append(c_a)
+                l_kern_b.append(c_b)
+            new_kerns_a.append(l_kern_a)
+            new_kerns_b.append(l_kern_b)
+        new_patterns[0][i] = (new_kerns_a)
+        new_patterns[1][i] = (new_kerns_b)
+    return new_patterns
+
 def gen_subrules_meta(rule: Rule, n_objs, obj_to_idxs, meta_objs, coll_mat, rule_name, char_to_obj, jit=True):
     idxs_to_objs = {v: k for k, v in obj_to_idxs.items()}
     has_right_pattern = len(rule.right_kernels) > 0
@@ -714,14 +751,20 @@ def gen_subrules_meta(rule: Rule, n_objs, obj_to_idxs, meta_objs, coll_mat, rule
         remove_colliding_objs = remove_colliding_objs
 
     # @partial(jax.jit, static_argnums=(3))
-    def project_obj(m_cell, cell_detect_out: CellFnReturn, kernel_detect_out: KernelFnReturn,
-                    pattern_detect_out: PatternFnReturn, obj):
-        meta_objs = cell_detect_out.detected_meta_objs
+    def project_obj(rng, m_cell, cell_detect_out: CellFnReturn, kernel_detect_out: KernelFnReturn,
+                    pattern_detect_out: PatternFnReturn, obj, random=False):
+        detected_meta_objs = cell_detect_out.detected_meta_objs
         kernel_meta_objs = kernel_detect_out.detected_meta_objs
         pattern_meta_objs = pattern_detect_out.detected_meta_objs
         if DEBUG:
-            jax.debug.print('meta objs: {meta_objs}', meta_objs=meta_objs)
-        obj_idx = disambiguate_meta(obj, meta_objs, kernel_meta_objs, pattern_meta_objs, obj_to_idxs)
+            jax.debug.print('meta objs: {meta_objs}', meta_objs=detected_meta_objs)
+        if random:
+            sub_objs = expand_meta_objs([obj], meta_objs, char_to_obj)
+            obj_idxs = np.array([obj_to_idxs[so] for so in sub_objs])
+            obj_idx = jax.random.choice(rng, obj_idxs, shape=(1,), replace=False)[0]
+            rng, _ = jax.random.split(rng)
+        else:
+            obj_idx = disambiguate_meta(obj, detected_meta_objs, kernel_meta_objs, pattern_meta_objs, obj_to_idxs)
         if DEBUG:
             jax.debug.print('projecting obj {obj}, disambiguated index: {obj_idx}', obj=obj, obj_idx=obj_idx)
         if not jit:
@@ -729,10 +772,10 @@ def gen_subrules_meta(rule: Rule, n_objs, obj_to_idxs, meta_objs, coll_mat, rule
                 breakpoint()
         m_cell = m_cell.at[obj_idx].set(1)
         m_cell = remove_colliding_objs(m_cell, obj_idx, coll_mat)
-        return m_cell
+        return rng, m_cell
 
     # @partial(jax.jit, static_argnums=(3))
-    def project_no_obj(m_cell, cell_detect_out: CellFnReturn, kernel_detect_out: KernelFnReturn,
+    def project_no_obj(rng, m_cell, cell_detect_out: CellFnReturn, kernel_detect_out: KernelFnReturn,
                        pattern_detect_out: PatternFnReturn, obj):
         meta_objs = cell_detect_out.detected_meta_objs
         kernel_meta_objs = kernel_detect_out.detected_meta_objs
@@ -742,10 +785,10 @@ def gen_subrules_meta(rule: Rule, n_objs, obj_to_idxs, meta_objs, coll_mat, rule
         jax.lax.dynamic_update_slice(
             m_cell, jnp.zeros(n_objs, dtype=bool), (n_objs + obj_idx * N_MOVEMENTS,)
         )
-        return m_cell
+        return rng, m_cell
 
     # @partial(jax.jit, static_argnums=(3))
-    def project_no_meta(m_cell: chex.Array, cell_detect_out, kernel_detect_out, pattern_detect_out, obj: int):
+    def project_no_meta(rng, m_cell: chex.Array, cell_detect_out, kernel_detect_out, pattern_detect_out, obj: int):
         sub_objs = expand_meta_objs([obj], meta_objs, char_to_obj)
         obj_idxs = np.array([obj_to_idxs[so] for so in sub_objs])
         for obj_idx in obj_idxs:
@@ -753,10 +796,10 @@ def gen_subrules_meta(rule: Rule, n_objs, obj_to_idxs, meta_objs, coll_mat, rule
             jax.lax.dynamic_update_slice(
                 m_cell, jnp.zeros(N_MOVEMENTS, dtype=bool), (n_objs + obj_idx * N_MOVEMENTS,)
             )
-        return m_cell
+        return rng, m_cell
 
     # @partial(jax.jit, static_argnums=(3, 4))
-    def project_force_obj(m_cell, cell_detect_out: CellFnReturn, kernel_detect_out: KernelFnReturn,
+    def project_force_obj(rng, m_cell, cell_detect_out: CellFnReturn, kernel_detect_out: KernelFnReturn,
                           pattern_detect_out: PatternFnReturn, obj, force_idx):
         meta_objs = cell_detect_out.detected_meta_objs
         kernel_meta_objs = kernel_detect_out.detected_meta_objs
@@ -780,11 +823,11 @@ def gen_subrules_meta(rule: Rule, n_objs, obj_to_idxs, meta_objs, coll_mat, rule
             # jax.debug.print('project_force_on_obj: {obj_name}', obj_name=obj_name)
             # print(f'project_force_on_obj: {obj_idx}')
 
-        return m_cell
+        return rng, m_cell
 
     # @partial(jax.jit, static_argnums=(3))
     # TODO: add kernel detect out
-    def project_moving_obj(m_cell, cell_detect_out: CellFnReturn, kernel_detect_out: KernelFnReturn,
+    def project_moving_obj(rng, m_cell, cell_detect_out: CellFnReturn, kernel_detect_out: KernelFnReturn,
                            pattern_detect_out: PatternFnReturn, obj):
         meta_objs = cell_detect_out.detected_meta_objs
         kernel_meta_objs = kernel_detect_out.detected_meta_objs
@@ -810,9 +853,9 @@ def gen_subrules_meta(rule: Rule, n_objs, obj_to_idxs, meta_objs, coll_mat, rule
             jax.debug.print('project_moving_obj, obj_idx: {obj_idx}, force_idx: {force_idx}',
                             obj_idx=obj_idx, force_idx=force_idx)
         m_cell = remove_colliding_objs(m_cell, obj_idx, coll_mat)
-        return m_cell
+        return rng, m_cell
 
-    def project_stationary_obj(m_cell, cell_detect_out: CellFnReturn, kernel_detect_out: KernelFnReturn,
+    def project_stationary_obj(rng, m_cell, cell_detect_out: CellFnReturn, kernel_detect_out: KernelFnReturn,
                                pattern_detect_out: PatternFnReturn, obj):
         meta_objs = cell_detect_out.detected_meta_objs
         kernel_meta_objs = kernel_detect_out.detected_meta_objs
@@ -821,7 +864,7 @@ def gen_subrules_meta(rule: Rule, n_objs, obj_to_idxs, meta_objs, coll_mat, rule
         m_cell = m_cell.at[obj_idx].set(1)
         m_cell = m_cell.at[n_objs + (obj_idx * N_MOVEMENTS): n_objs + ((obj_idx + 1) * N_MOVEMENTS)].set(1)
         m_cell = remove_colliding_objs(m_cell, obj_idx, coll_mat)
-        return m_cell
+        return rng, m_cell
 
     def gen_cell_projection_fn(r_cell, right_force_idx):
         fns = []
@@ -829,7 +872,7 @@ def gen_subrules_meta(rule: Rule, n_objs, obj_to_idxs, meta_objs, coll_mat, rule
             r_cell = []
         else:
             r_cell = r_cell.split(' ')
-        no, force, moving, stationary = False, False, False, False
+        no, force, moving, stationary, random = False, False, False, False, False
         for obj in r_cell:
             obj = obj.lower()
             if obj in char_to_obj:
@@ -849,6 +892,8 @@ def gen_subrules_meta(rule: Rule, n_objs, obj_to_idxs, meta_objs, coll_mat, rule
                 moving = True
             elif obj == 'stationary':
                 stationary = True
+            elif obj == 'random':
+                random = True
             # ignore sound effects (which can exist incide rules (?))
             elif obj.startswith('sfx'):
                 continue
@@ -869,17 +914,19 @@ def gen_subrules_meta(rule: Rule, n_objs, obj_to_idxs, meta_objs, coll_mat, rule
                     moving = False
                 elif stationary:
                     fns.append(partial(project_stationary_obj, obj=obj))
+                elif random:
+                    fns.append(partial(project_obj, obj=obj, random=True))
                 else:
                     fns.append(partial(project_obj, obj=obj))
             else:
                 raise Exception(f'Invalid object `{obj}` in rule.')
         
         # @partial(jax.jit, static_argnums=())
-        def project_cell(m_cell, cell_detect_out, kernel_detect_out, pattern_detect_out):
+        def project_cell(rng, m_cell, cell_detect_out, kernel_detect_out, pattern_detect_out):
             m_cell = m_cell & ~cell_detect_out.detected
             assert len(m_cell.shape) == 1, f'Invalid cell shape {m_cell.shape}'
             for proj_fn in fns:
-                m_cell = proj_fn(m_cell=m_cell, cell_detect_out=cell_detect_out, kernel_detect_out=kernel_detect_out,
+                rng, m_cell = proj_fn(rng=rng, m_cell=m_cell, cell_detect_out=cell_detect_out, kernel_detect_out=kernel_detect_out,
                                  pattern_detect_out=pattern_detect_out)
             # removed_something = jnp.any(cell_detect_out.detected)
             # jax.lax.cond(
@@ -888,7 +935,7 @@ def gen_subrules_meta(rule: Rule, n_objs, obj_to_idxs, meta_objs, coll_mat, rule
             #     lambda: None
             # )
             # jax.debug.print('      removing detected: {det}', det=cell_detect_out.detected)
-            return m_cell
+            return rng, m_cell
 
         return project_cell
 
@@ -1051,7 +1098,7 @@ def gen_subrules_meta(rule: Rule, n_objs, obj_to_idxs, meta_objs, coll_mat, rule
                 return kernel_activations, cell_detect_outs, kernel_detect_out
 
 
-            def project_kernel(lvl, kernel_activations, 
+            def project_kernel(rng, lvl, kernel_activations, 
                                cell_detect_outs: List[CellFnReturn],
                                kernel_detect_outs: List[KernelFnReturn], 
                                pattern_detect_out: List[PatternFnReturn]
@@ -1066,7 +1113,7 @@ def gen_subrules_meta(rule: Rule, n_objs, obj_to_idxs, meta_objs, coll_mat, rule
                 kernel_activ_xy = kernel_activ_xys[kernel_activ_xy_idx]
 
                 # @jax.jit
-                def project_cells_at(xy, lvl):
+                def project_cells_at(rng, xy, lvl):
                     # patch_activations_xy = jnp.zeros_like(patch_activations)
                     # patch_activations_xy = patch_activations_xy.at[*xy].set(1)
                     # detect_outs = detect_outs[first_a[0]][first_a[1]]
@@ -1116,8 +1163,8 @@ def gen_subrules_meta(rule: Rule, n_objs, obj_to_idxs, meta_objs, coll_mat, rule
                         cell_xy = out_cell_idx + xy
                         m_cell = lvl[0, :, *cell_xy]
                         m_cell = jnp.array(m_cell)
-                        m_cell = cell_proj_fn(
-                            m_cell, cell_detect_out=cell_detect_out_i, kernel_detect_out=kernel_detect_outs_xy,
+                        rng, m_cell = cell_proj_fn(
+                            rng, m_cell, cell_detect_out=cell_detect_out_i, kernel_detect_out=kernel_detect_outs_xy,
                             pattern_detect_out=pattern_detect_out_i)
                         # m_cell = jax.lax.switch(i, cell_projection_fns, m_cell, cell_detect_out,
                         #                         pattern_detect_outs_xy)
@@ -1131,33 +1178,31 @@ def gen_subrules_meta(rule: Rule, n_objs, obj_to_idxs, meta_objs, coll_mat, rule
                         jax.debug.print('      at position {xy}, the level changed: {lvl_changed}', xy=xy, lvl_changed=lvl_changed)
                     # if not jit:
                     #     print('\n' + multihot_to_desc(lvl[0], obj_to_idxs=obj_to_idxs, n_objs=n_objs))
-                    return lvl
+                    return rng, lvl
 
                 def project_kernel_at_xy(carry):               
-                    kernel_activ_xy_idx = carry[0]
+                    rng, kernel_activ_xy_idx, lvl = carry
                     kernel_activ_xy = kernel_activ_xys[kernel_activ_xy_idx]
                     # jax.debug.print('      kernel_activ_xys: {kernel_activ_xys}', kernel_activ_xys=kernel_activ_xys)
                     # jax.debug.print('      projecting kernel at position index {kernel_activ_xy_idx}, position {xy}', xy=kernel_activ_xy, kernel_activ_xy_idx=kernel_activ_xy_idx)
-                    lvl = carry[1]
-                    lvl = project_cells_at(kernel_activ_xy, lvl)
+                    rng, lvl = project_cells_at(rng, kernel_activ_xy, lvl)
 
                     kernel_activ_xy_idx += 1
-                    return kernel_activ_xy_idx, lvl
+                    return rng, kernel_activ_xy_idx, lvl
 
 
+                carry = (rng, kernel_activ_xy_idx, lvl)
                 if jit:
-                    _, lvl = jax.lax.while_loop(
-                        lambda carry: jnp.all(kernel_activ_xys[carry[0]] != -1),  
+                    rng, _, lvl = jax.lax.while_loop(
+                        lambda carry: jnp.all(kernel_activ_xys[carry[1]] != -1),  
                         lambda carry: project_kernel_at_xy(carry),
-                        (kernel_activ_xy_idx, lvl),
+                        carry,
                     )
                 else:
-                    carry = (kernel_activ_xy_idx, lvl)
                     while kernel_activ_xy_idx < len(kernel_activ_xys):
                         carry = project_kernel_at_xy(carry)
-                        kernel_activ_xy_idx = carry[0]
-                    lvl = carry[1]
-                return lvl
+                        rng, kernel_activ_xy_idx, lvl = carry
+                return rng, lvl
 
             return detect_kernel, project_kernel
 
@@ -1211,31 +1256,31 @@ def gen_subrules_meta(rule: Rule, n_objs, obj_to_idxs, meta_objs, coll_mat, rule
             )
             return kernel_activations, cell_detect_outs, kernel_detect_outs, pattern_out
 
-        def apply_pattern(lvl):
+        def apply_pattern(rng, lvl):
             kernel_activations, cell_detect_outs, kernel_detect_outs, pattern_detect_out = detect_pattern(lvl)
             pattern_detected = jnp.all(jnp.sum(kernel_activations, axis=(1,2)) > 0)
 
-            def project_kernels(lvl, kernel_activations, kernel_detect_outs):
+            def project_kernels(rng, lvl, kernel_activations, kernel_detect_outs):
                 # TODO: use a jax.lax.switch
                 for i, kernel_projection_fn in enumerate(kernel_projection_fns):
                     if DEBUG:
                         jax.debug.print('      projecting kernel {i}', i=i)
-                    lvl = kernel_projection_fn(
-                        lvl, kernel_activations[i], cell_detect_outs[i], kernel_detect_outs[i], pattern_detect_out)
-                return lvl
+                    rng, lvl = kernel_projection_fn(
+                        rng, lvl, kernel_activations[i], cell_detect_outs[i], kernel_detect_outs[i], pattern_detect_out)
+                return rng, lvl
 
             cancel, restart, again, win = False, False, False, False
             if has_right_pattern:
                 if jit:
-                    next_lvl = jax.lax.cond(
+                    rng, next_lvl = jax.lax.cond(
                         pattern_detected,
                         project_kernels,
-                        lambda lvl, pattern_activations, pattern_detect_outs: lvl,
-                        lvl, kernel_activations, kernel_detect_outs,
+                        lambda rng, lvl, pattern_activations, pattern_detect_outs: (rng, lvl),
+                        rng, lvl, kernel_activations, kernel_detect_outs,
                     )
                 else:
                     if pattern_detected:
-                        next_lvl = project_kernels(lvl, kernel_activations, kernel_detect_outs)
+                        rng, next_lvl = project_kernels(rng, lvl, kernel_activations, kernel_detect_outs)
                     else:
                         next_lvl = lvl
 
@@ -1258,7 +1303,7 @@ def gen_subrules_meta(rule: Rule, n_objs, obj_to_idxs, meta_objs, coll_mat, rule
                     jax.debug.print('applying the {command} command', command=rule.command)
             elif rule.command == 'win':
                 win = True
-            return next_lvl, rule_applied, cancel, restart, again, win
+            return next_lvl, rule_applied, cancel, restart, again, win, rng
 
         return apply_pattern
 
@@ -1269,54 +1314,63 @@ def gen_subrules_meta(rule: Rule, n_objs, obj_to_idxs, meta_objs, coll_mat, rule
 
     l_kerns, r_kerns = rule.left_kernels, rule.right_kernels
     # Replace any empty lists in lp and rp with a None
-    l_kerns = [[[None] if len(l) == 0 else [' '.join(l)] for l in kernel] for kernel in l_kerns]
-    if DEBUG:
-        print('lps', l_kerns)
-    # lps = np.array(lps)
 
-    # rp, rp_rot = None, None
-    if has_right_pattern:
-    #     rp = rule.right_patterns[i]
-        r_kerns = [[[None] if len(r) == 0 else [' '.join(r)] for r in kernel] for kernel in r_kerns]
-        # r_kerns = np.array(r_kerns)
+    # Expand into appropriate subrules (with relative forces) if perpendicular or parallel keywords are present.
+    if is_perp_or_par_in_pattern(l_kerns):
+        kern_tpls = gen_perp_par_subrules(l_kerns, r_kerns)
     else:
-        r_kerns = None
+        kern_tpls = [(l_kerns, r_kerns)]
 
-    if 'horizontal' in rule.prefixes:
-        rots = [1, 3]
-    elif 'left' in rule.prefixes:
-        rots = [3]
-    elif 'right' in rule.prefixes:
-        rots = [1]
-    elif 'vertical' in rule.prefixes:
-        rots = [0, 2]
-    elif 'up' in rule.prefixes:
-        rots = [2]
-    elif 'down' in rule.prefixes:
-        rots = [0]
-    # TODO: Remove unnecessary rotated variations of single-cell kernels
-    # elif np.any(np.array([len(kernel) for kernel in l_kerns]) > 1):
-    else:
-        if np.all(np.array([len(lp) for lp in rule.left_kernels]) == 1) and not \
-            np.any([is_rel_force_in_kernel(lp) for lp in rule.left_kernels]):
-            rots = [0]
-        else:
-            rots = [0, 1, 2, 3]
-    for rot in rots:
-        # rotate the patterns
-        l_kerns_rot = []
-        for kern in l_kerns:
-            kern = np.rot90(kern, rot, axes=(0, 1))
-            l_kerns_rot.append(kern)
+    for l_kerns, r_kerns in kern_tpls:
+        l_kerns = [[[None] if len(l) == 0 else [' '.join(l)] for l in kernel] for kernel in l_kerns]
+        if DEBUG:
+            print('lps', l_kerns)
+        # lps = np.array(lps)
 
-        r_kerns_rot = None
+        # rp, rp_rot = None, None
         if has_right_pattern:
-            r_kerns_rot = []
-            for kern in r_kerns:
-                kern = np.rot90(kern, rot, axes=(0, 1))
-                r_kerns_rot.append(kern)
+        #     rp = rule.right_patterns[i]
+            r_kerns = [[[None] if len(r) == 0 else [' '.join(r)] for r in kernel] for kernel in r_kerns]
+            # r_kerns = np.array(r_kerns)
+        else:
+            r_kerns = None
 
-        rule_fns.append(gen_rotated_rule_fn(l_kerns_rot, r_kerns_rot, rot, rule.command))
+        if 'horizontal' in rule.prefixes:
+            rots = [1, 3]
+        elif 'left' in rule.prefixes:
+            rots = [3]
+        elif 'right' in rule.prefixes:
+            rots = [1]
+        elif 'vertical' in rule.prefixes:
+            rots = [0, 2]
+        elif 'up' in rule.prefixes:
+            rots = [2]
+        elif 'down' in rule.prefixes:
+            rots = [0]
+        # TODO: Remove unnecessary rotated variations of single-cell kernels
+        # elif np.any(np.array([len(kernel) for kernel in l_kerns]) > 1):
+        else:
+            if np.all(np.array([len(lp) for lp in rule.left_kernels]) == 1) and not \
+                np.any([is_rel_force_in_kernel(lp) for lp in rule.left_kernels]):
+                rots = [0]
+            else:
+                rots = [0, 1, 2, 3]
+        for rot in rots:
+
+            # rotate the patterns
+            l_kerns_rot = []
+            for kern in l_kerns:
+                kern = np.rot90(kern, rot, axes=(0, 1))
+                l_kerns_rot.append(kern)
+
+            r_kerns_rot = None
+            if has_right_pattern:
+                r_kerns_rot = []
+                for kern in r_kerns:
+                    kern = np.rot90(kern, rot, axes=(0, 1))
+                    r_kerns_rot.append(kern)
+
+            rule_fns.append(gen_rotated_rule_fn(l_kerns_rot, r_kerns_rot, rot, rule.command))
 
     return rule_fns
         
@@ -1333,29 +1387,34 @@ def player_has_moved(lvl_0, lvl_1, obj_to_idxs, meta_objs, char_to_obj):
 
 def loop_rule_grp(carry, grp_i, block_i, n_prior_rules_arr, n_rules_per_grp_arr, all_rule_fns, obj_to_idxs, n_objs,
                   jit):
-    lvl, grp_applied_prev, grp_app_i, cancelled, restart, again, win = carry
+    lvl, grp_applied_prev, grp_app_i, cancelled, restart, again, win, rng = carry
 
     grp_applied = True
 
     def apply_rule_grp(carry):
-        lvl, _, grp_app_i, cancelled, restart, again, win = carry
+        lvl, _, grp_app_i, cancelled, restart, again, win, rng = carry
         grp_app_i += 1
         grp_applied = False
 
         def loop_rule_fn(carry):
-            lvl, rule_i, grp_applied_prev, rule_app_i, cancelled_prev, restart_prev, again_prev, win_prev = carry
+            lvl, rule_i, grp_applied_prev, rule_app_i, cancelled_prev, restart_prev, again_prev, win_prev, rng = carry
 
             def apply_rule_fn(carry):
-                init_lvl, rule_applied_prev, rule_app_i, cancelled_prev, restart_prev, again_prev, win_prev = carry
+                init_lvl, rule_applied_prev, rule_app_i, cancelled_prev, restart_prev, again_prev, win_prev, rng = carry
                 if jit:
                     # lvl, rule_applied, cancelled, restart, again = jax.lax.switch(rule_i, rule_grp, init_lvl)
-                    lvl, rule_applied, cancelled, restart, again, win = jax.lax.switch(
-                        n_prior_rules_arr[block_i, grp_i] + rule_i, all_rule_fns, init_lvl)
+                    lvl, rule_applied, cancelled, restart, again, win, _rng = jax.lax.switch(
+                        n_prior_rules_arr[block_i, grp_i] + rule_i, all_rule_fns, rng, init_lvl)
                 else:
                     # lvl, rule_applied, cancelled, restart, again = rule_grp[rule_i](init_lvl)
-                    lvl, rule_applied, cancelled, restart, again, win = \
-                        all_rule_fns[n_prior_rules_arr[block_i, grp_i] + rule_i](init_lvl)
+                    lvl, rule_applied, cancelled, restart, again, win, _rng = \
+                        all_rule_fns[n_prior_rules_arr[block_i, grp_i] + rule_i](rng, init_lvl)
                 rule_had_effect = jnp.any(lvl != init_lvl)
+
+                # HACK (?): Random rules do not count as having had effect (otherwise we'll end up in an infinite loop)
+                rule_had_effect = rule_had_effect & jnp.all(rng == _rng)
+                rng = _rng
+
                 # print(f'      rule {rule_i} of group {grp_i} had effect: {rule_had_effect}')
                 if DEBUG:
                     if jit:
@@ -1367,25 +1426,25 @@ def loop_rule_grp(carry, grp_i, block_i, n_prior_rules_arr, n_rules_per_grp_arr,
                 again = again_prev | again
                 restart = restart_prev | restart
                 cancelled = cancelled_prev | cancelled
-                return lvl, rule_had_effect, rule_app_i, cancelled, restart, again, win
+                return lvl, rule_had_effect, rule_app_i, cancelled, restart, again, win, rng
 
             rule_applied = True
             rule_app_i = 0
             win = False
             if jit:
                 # For the current rule in the group, apply it as many times as possible.
-                lvl, rule_applied, rule_app_i, cancelled, restart, again, win = jax.lax.while_loop(
+                lvl, rule_applied, rule_app_i, cancelled, restart, again, win, rng = jax.lax.while_loop(
                     cond_fun=lambda x: x[1] & ~x[3] & ~x[4] & ~x[5],
                     body_fun=lambda x: apply_rule_fn(x),
-                    init_val=(lvl, rule_applied, rule_app_i, cancelled_prev, restart_prev, again_prev, win),
+                    init_val=(lvl, rule_applied, rule_app_i, cancelled_prev, restart_prev, again_prev, win, rng),
                 )
             else:
                 cancelled = cancelled_prev
                 restart = restart_prev
                 again = again_prev
                 while rule_applied and not cancelled and not restart and not win:
-                    lvl, rule_applied, rule_app_i, cancelled, restart, again, win = apply_rule_fn(
-                        (lvl, rule_applied, rule_app_i, cancelled_prev, restart_prev, again_prev, win))
+                    lvl, rule_applied, rule_app_i, cancelled, restart, again, win, rng = apply_rule_fn(
+                        (lvl, rule_applied, rule_app_i, cancelled_prev, restart_prev, again_prev, win, rng))
 
             rule_applied = rule_app_i > 1
             if DEBUG:
@@ -1397,7 +1456,7 @@ def loop_rule_grp(carry, grp_i, block_i, n_prior_rules_arr, n_rules_per_grp_arr,
             grp_applied = rule_applied | grp_applied_prev
             
             rule_i += 1
-            return lvl, rule_i, grp_applied, rule_app_i, cancelled, restart, again, win
+            return lvl, rule_i, grp_applied, rule_app_i, cancelled, restart, again, win, rng
 
         rule_i = 0
         rule_app_i = 0
@@ -1406,10 +1465,10 @@ def loop_rule_grp(carry, grp_i, block_i, n_prior_rules_arr, n_rules_per_grp_arr,
         n_rules_in_grp = n_rules_per_grp_arr[block_i, grp_i]
         if jit:
             # Iterate through each rule in the group (and loop it). (Note that this is effectively a for loop.)
-            lvl, rule_i, grp_applied, _, cancelled, restart, again, win = jax.lax.while_loop(
+            lvl, rule_i, grp_applied, _, cancelled, restart, again, win, rng = jax.lax.while_loop(
                 cond_fun=lambda x: (x[1] < n_rules_in_grp) & ~x[4] & ~x[5],
                 body_fun=loop_rule_fn,
-                init_val=(lvl, rule_i, grp_applied, rule_app_i, cancelled, restart, again, win),
+                init_val=(lvl, rule_i, grp_applied, rule_app_i, cancelled, restart, again, win, rng),
             )
             # We can't use scan because n_rules_in_grp is a jnp array, as are block_i and grp_i, which index into this
             # array.
@@ -1420,8 +1479,8 @@ def loop_rule_grp(carry, grp_i, block_i, n_prior_rules_arr, n_rules_per_grp_arr,
             # )
         else:
             while rule_i < n_rules_in_grp and not cancelled and not restart:
-                lvl, rule_i, grp_applied, rule_app_i, cancelled, restart, again, win = loop_rule_fn(
-                    (lvl, rule_i, grp_applied, rule_app_i, cancelled, restart, again, win))
+                lvl, rule_i, grp_applied, rule_app_i, cancelled, restart, again, win, rng = loop_rule_fn(
+                    (lvl, rule_i, grp_applied, rule_app_i, cancelled, restart, again, win, rng))
 
         if DEBUG:
             if jit:
@@ -1437,25 +1496,26 @@ def loop_rule_grp(carry, grp_i, block_i, n_prior_rules_arr, n_rules_per_grp_arr,
         # force_is_present = jnp.sum(lvl[0, n_objs:n_objs + (n_objs * N_MOVEMENTS)]) > 0
         # jax.debug.print('force is present: {force_is_present}', force_is_present=force_is_present)
         # jax.debug.print('lvl:\n{lvl}', lvl=lvl)
-        return lvl, grp_applied, grp_app_i, cancelled, restart, again, win
+        return lvl, grp_applied, grp_app_i, cancelled, restart, again, win, rng
 
     grp_app_i = 0
     win = False
     if jit:
-        lvl, grp_applied, grp_app_i, cancelled, restart, grp_again, win = jax.lax.while_loop(
+        lvl, grp_applied, grp_app_i, cancelled, restart, grp_again, win, rng = jax.lax.while_loop(
             cond_fun=lambda x: x[1] & ~x[3] & ~x[4] & ~x[5],
             body_fun=apply_rule_grp,
-            init_val=(lvl, grp_applied, grp_app_i, cancelled, restart, again, win),
+            init_val=(lvl, grp_applied, grp_app_i, cancelled, restart, again, win, rng),
         )
     else:
         while grp_applied and not cancelled and not restart and not win:
-            lvl, grp_applied, grp_app_i, cancelled, restart, grp_again, win = apply_rule_grp((lvl, grp_applied, grp_app_i, cancelled, restart, again, win))
+            lvl, grp_applied, grp_app_i, cancelled, restart, grp_again, win, rng = \
+                apply_rule_grp((lvl, grp_applied, grp_app_i, cancelled, restart, again, win, rng))
 
     again = again | grp_again
     grp_applied = grp_app_i > 1
     block_applied = grp_applied_prev | grp_applied
 
-    return (lvl, block_applied, grp_app_i, cancelled, restart, again, win), None
+    return (lvl, block_applied, grp_app_i, cancelled, restart, again, win, rng), None
 
         
 def gen_tick_fn(obj_to_idxs, coll_mat, tree_rules, meta_objs, jit, n_objs, char_to_obj):
@@ -1501,7 +1561,7 @@ def gen_tick_fn(obj_to_idxs, coll_mat, tree_rules, meta_objs, jit, n_objs, char_
     n_prior_rules_arr = jnp.array(n_prior_rules_arr)
     n_rules_per_grp_arr = jnp.array(n_rules_per_grp_arr)
 
-    def tick_fn(lvl):
+    def tick_fn(rng, lvl):
         lvl_changed = False
         cancelled = False
         restart = False
@@ -1513,7 +1573,7 @@ def gen_tick_fn(obj_to_idxs, coll_mat, tree_rules, meta_objs, jit, n_objs, char_
                 print('\n' + multihot_to_desc(lvl[0], obj_to_idxs, n_objs))
 
         def apply_turn(carry):
-            lvl, _, turn_app_i, cancelled, restart, turn_again, win = carry
+            lvl, _, turn_app_i, cancelled, restart, turn_again, win, rng = carry
             turn_app_i += 1
             turn_applied = False
 
@@ -1525,35 +1585,36 @@ def gen_tick_fn(obj_to_idxs, coll_mat, tree_rules, meta_objs, jit, n_objs, char_
                                         obj_to_idxs=obj_to_idxs, n_objs=n_objs, jit=jit)
 
                 def apply_rule_block(carry):
-                    lvl, _, block_app_i, cancelled, restart, again, win = carry
+                    lvl, _, block_app_i, cancelled, restart, again, win, rng = carry
                     block_app_i += 1
                     block_applied = False
                     win = False
 
                     if jit:
                         # FIXME: This should be a while that cancels if applicable
-                        (lvl, block_applied, block_app_i, cancelled, restart, again, win), _ = jax.lax.scan(
+                        (lvl, block_applied, block_app_i, cancelled, restart, again, win, rng), _ = jax.lax.scan(
                             _loop_rule_grp,
-                            init=(lvl, block_applied, block_app_i, cancelled, restart, again, win),
+                            init=(lvl, block_applied, block_app_i, cancelled, restart, again, win, rng),
                             xs=jnp.arange(len(rule_grps)),
                         )
                     else:
                         for grp_i in range(len(rule_grps)):
-                            carry, _ = _loop_rule_grp((lvl, block_applied, block_app_i, cancelled, restart, again, win), grp_i)
-                            lvl, block_applied, block_app_i, cancelled, restart, again, win = carry
+                            carry, _ = _loop_rule_grp(
+                                (lvl, block_applied, block_app_i, cancelled, restart, again, win, rng), grp_i)
+                            lvl, block_applied, block_app_i, cancelled, restart, again, win, rng = carry
 
-                    return lvl, block_applied, block_app_i, cancelled, restart, again, win
+                    return lvl, block_applied, block_app_i, cancelled, restart, again, win, rng
 
                 block_applied = True
                 block_app_i = 0
                 block_again = False
                 win = False
-                init_carry = (lvl, block_applied, block_app_i, cancelled, restart, block_again, win)
+                init_carry = (lvl, block_applied, block_app_i, cancelled, restart, block_again, win, rng)
                 if not jit:
                     print(f'Level when applying block {block_i}:\n', multihot_to_desc(lvl[0], obj_to_idxs, n_objs))
                 if looping:
                     if jit:
-                        lvl, block_applied, block_app_i, cancelled, restart, block_again = jax.lax.while_loop(
+                        lvl, block_applied, block_app_i, cancelled, restart, block_again, win, rng = jax.lax.while_loop(
                             cond_fun=lambda x: x[1] & ~x[3] & ~x[4] & ~x[5],
                             body_fun=apply_rule_block,
                             init_val=init_carry,
@@ -1562,10 +1623,10 @@ def gen_tick_fn(obj_to_idxs, coll_mat, tree_rules, meta_objs, jit, n_objs, char_
                         carry = init_carry
                         while block_applied and not cancelled and not restart and not win:
                             carry = apply_rule_block(carry)
-                            lvl, block_applied, block_app_i, cancelled, restart, block_again, win = carry
+                            lvl, block_applied, block_app_i, cancelled, restart, block_again, win, rng = carry
                     block_applied = block_app_i > 1
                 else:
-                    lvl, block_applied, block_app_i, cancelled, restart, block_again, win = apply_rule_block(init_carry)
+                    lvl, block_applied, block_app_i, cancelled, restart, block_again, win, rng = apply_rule_block(init_carry)
                 if DEBUG:
                     if jit:
                         jax.debug.print('block {block_i} applied: {block_applied}', block_i=block_i, block_applied=block_applied)
@@ -1578,16 +1639,16 @@ def gen_tick_fn(obj_to_idxs, coll_mat, tree_rules, meta_objs, jit, n_objs, char_
                 
                 turn_applied = turn_applied | block_applied
 
-            return lvl, turn_applied, turn_app_i, cancelled, restart, turn_again, win
+            return lvl, turn_applied, turn_app_i, cancelled, restart, turn_again, win, rng
 
         turn_applied = True
         turn_app_i = 0
         turn_again = True
         win = False
 
-        init_carry = (lvl, turn_applied, turn_app_i, cancelled, restart, turn_again, win)
+        init_carry = (lvl, turn_applied, turn_app_i, cancelled, restart, turn_again, win, rng)
         if jit:
-            lvl, turn_applied, turn_app_i, cancelled, restart, again, win = jax.lax.while_loop(
+            lvl, turn_applied, turn_app_i, cancelled, restart, again, win, rng = jax.lax.while_loop(
                 lambda x: x[1] & x[5] & ~x[3] & ~x[4] & ~x[6],
                 lambda x: apply_turn(x),
                 init_carry
@@ -1596,7 +1657,7 @@ def gen_tick_fn(obj_to_idxs, coll_mat, tree_rules, meta_objs, jit, n_objs, char_
             carry = init_carry
             while turn_applied and turn_again:
                 carry = apply_turn(carry)
-                lvl, turn_applied, turn_app_i, cancelled, restart, turn_again, win = carry
+                lvl, turn_applied, turn_app_i, cancelled, restart, turn_again, win, rng = carry
 
         lvl_changed = turn_app_i > 1
 
@@ -1605,7 +1666,7 @@ def gen_tick_fn(obj_to_idxs, coll_mat, tree_rules, meta_objs, jit, n_objs, char_
         #     print('grp_applied:', grp_applied)
         #     print('cancelled:', cancelled)
 
-        return lvl[0], lvl_changed, turn_app_i, cancelled, restart, win
+        return lvl[0], lvl_changed, turn_app_i, cancelled, restart, win, rng
 
     if jit:
         tick_fn = jax.jit(tick_fn)
@@ -1684,7 +1745,7 @@ def gen_move_rules(obj_to_idxs, coll_mat, n_objs, jit=True):
                      for rule, rule_name in zip(rules, rule_names)]
     return rule_fns
 
-def apply_move_rule(lvl, move_rule, jit=True, rule_name=None):
+def apply_move_rule(rng, lvl, move_rule, jit=True, rule_name=None):
     inp = move_rule[0]
     ink = inp[None]
     lvl = lvl.astype(np.float32)
@@ -1744,7 +1805,7 @@ def apply_move_rule(lvl, move_rule, jit=True, rule_name=None):
     lvl += out
     lvl = lvl.astype(bool)
 
-    return lvl, changed, False, False, False, False
+    return lvl, changed, False, False, False, False, rng
 
     
 
@@ -1848,7 +1909,8 @@ class PSEnv:
                     meta_objs[obj_key] = names_to_alts[obj_key]
                     obj_key = names_to_alts[obj_key]
                 else:
-                    breakpoint()
+                    raise ValueError(f"Object {obj_key} not found in tree.objects")
+                    # breakpoint()
             obj = tree.objects[obj_key]
             if obj.sprite is not None:
                 if DEBUG:
@@ -1948,7 +2010,7 @@ class PSEnv:
 
         return im
 
-    def reset(self, key, params: PSParams):
+    def reset(self, rng, params: PSParams):
         lvl = params.level
         again = False
         _, _, init_heuristic = self.check_win(lvl)
@@ -1964,7 +2026,7 @@ class PSEnv:
         )
         if self.tree.prelude.run_rules_on_level_start:
             lvl = self.apply_player_force(-1, state)
-            lvl, _, _, _, _, _ = self.tick_fn(lvl)
+            lvl, _, _, _, _, _ = self.tick_fn(rng, lvl)
             lvl = lvl[:self.n_objs]
         obs = self.get_obs(state)
         return obs, state
@@ -2039,7 +2101,7 @@ class PSEnv:
 
 
     # @partial(jax.jit, static_argnums=(0))
-    def step_env(self, key, state: PSState, action, params: Optional[PSParams] = None):
+    def step_env(self, rng, state: PSState, action, params: Optional[PSParams] = None):
         init_lvl = state.multihot_level.copy()
         lvl = self.apply_player_force(action, state)
 
@@ -2066,7 +2128,7 @@ class PSEnv:
         # Actually, just apply the rule function once
         cancelled = False
         restart = False
-        final_lvl, tick_applied, turn_app_i, cancelled, restart, tick_win = self.tick_fn(lvl)
+        final_lvl, tick_applied, turn_app_i, cancelled, restart, tick_win, rng = self.tick_fn(rng, lvl)
 
         accept_lvl_change = ((not self.require_player_movement) or 
                              player_has_moved(init_lvl, final_lvl, self.obj_to_idxs, self.meta_objs, self.char_to_obj)) & ~cancelled
