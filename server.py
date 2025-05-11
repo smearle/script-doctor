@@ -129,7 +129,7 @@ def load_game_from_file():
     data = request.json
     game = data['game']
     game_path = os.path.join(MIN_GAMES_DIR, f'{game}.txt')
-    with open(game_path, 'r') as f:
+    with open(game_path, 'r', encoding='utf-8') as f:
         code = f.read()
     print(f"Serving game from {game_path}")
     return code
@@ -517,7 +517,8 @@ def gen_game_from_plan():
 TRANSITIONS_DIR = 'transitions'
 
 games_to_skip = set({'Broken Rigid Body', 
-                     "Path_Finder"  # This one does not compile in the js engine
+                     "Path_Finder",  # This one does not compile in the js engine
+                     "Cold_Feet_Sokoban",  # Compiled in standalone JS. But weird bug when mode=gen_solutions...
                      })
 
 @app.route('/get_player_action', methods=['POST'])
@@ -539,7 +540,7 @@ def list_scraped_games():
     # random.shuffle(game_files)
     # test_game_files = [f"{test_game}.txt" for test_game in TEST_GAMES]
     # game_files = test_game_files + game_files
-    with open('data', 'games_n_rules.json', 'r') as f:
+    with open(os.path.join('data', 'games_n_rules.json'), 'r') as f:
         games_n_rules = json.load(f)
     games_n_rules = sorted(games_n_rules, key=lambda x: x[1])
     game_files = [game[0] for game in games_n_rules]

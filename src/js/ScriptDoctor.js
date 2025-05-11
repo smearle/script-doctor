@@ -1437,7 +1437,7 @@ async function fromPlanSweep() {
 }
 
 async function collectGameData(gamePath, captureStates=true) {
-  console.log(`Heap: ${(performance.memory.usedJSHeapSize / 1e6).toFixed(2)} MB`);
+  console.log(`Heap at the top of collectGameData: ${(performance.memory.usedJSHeapSize / 1e6).toFixed(2)} MB`);
   redraw();
 
   // Load game
@@ -1456,17 +1456,17 @@ async function collectGameData(gamePath, captureStates=true) {
   setEditorClean();
   unloadGame();
   compile(['restart'], code);
-
+  gameCompiled = true;
+  
   // Process each level
   for (let levelIdx = 0; levelIdx < state.levels.length; levelIdx++) {
     clearConsole();
     if (!state.levels[levelIdx].hasOwnProperty('height')) {
       continue;
     }
-    console.log(`Heap: ${(performance.memory.usedJSHeapSize / 1e6).toFixed(2)} MB`);
+    console.log(`Heap in CollectGameData when solving level: ${(performance.memory.usedJSHeapSize / 1e6).toFixed(2)} MB`);
     
     console.log(`Processing level ${levelIdx} of game ${gamePath}`);
-    compile(['loadLevel', levelIdx], code);
     // const [sol, n_iters] = await solveLevelAStar(captureStates=captureStates, gameHash=gamePath, level_i=level, maxIters=1_000_000);
     const solDir = `data/js_sols/${gamePath}`;
     const solPath = `${solDir}/level-${levelIdx}.json`;
@@ -1482,6 +1482,7 @@ async function collectGameData(gamePath, captureStates=true) {
       continue;
     }
     // If the solution does not exist, solve it
+    compile(['loadLevel', levelIdx], code);
     console.log(`Solving level ${levelIdx} of game ${gamePath}`);
     const [sol, won, score, bestState, n_iters, timeout] = await solveLevelBFS(levelIdx, captureStates=captureStates, maxIters=100_000);
     console.log(`Finished processing level ${levelIdx}`);

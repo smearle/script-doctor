@@ -1,0 +1,68 @@
+title Cold Feet Sokoban
+author Franklin P. Dyer
+again_interval 0.1
+
+========
+OBJECTS
+========
+
+Background .
+Gray Lightgray
+00010
+00000
+01000
+00000
+00001
+
+Player @
+Brown #d2b48c #6666ff Darkblue Purple
+.000.
+.111.
+42224
+.333.
+.3.3.
+
+Ice a
+Lightblue White
+00010
+00000
+01000
+00000
+00001
+
+
+=======
+LEGEND
+=======
+
+b = Player and Ice
+
+=======
+SOUNDS
+=======
+
+================
+COLLISIONLAYERS
+================
+
+Background
+Ice
+Player
+
+======
+RULES
+======
+
+[Player Ice] -> [LEFT Player Ice] again
+
+==============
+WINCONDITIONS
+==============
+
+=======
+LEVELS
+=======
+
+aaaa
+aaab
+aaaa
