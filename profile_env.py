@@ -11,18 +11,18 @@ import pandas as pd
 from timeit import default_timer as timer
 
 from conf.config import ProfileEnvConfig
-from env import init_ps_env, PSState
-from utils_rl import init_config, get_env_params_from_config
+from env import PSState
+from utils_rl import get_env_params_from_config, init_ps_env
 
 
 games = [
     # 'castlemouse',
     # 'atlas shrank',
-    'tiny treasure hunt',
-    'test',
     'sokoban_basic',
     'sokoban_match3',
     'slidings',
+    'tiny treasure hunt',
+    'test',
 ]
 # game_paths = glob.glob(os.path.join('data', 'scraped_games', '*.txt'))
 # games = [os.path.basename(p) for p in game_paths]

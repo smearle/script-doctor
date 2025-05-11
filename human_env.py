@@ -170,7 +170,7 @@ def play_game(game: str, level: int = 0, jit: bool = False, profile: bool = Fals
     print(f"""Parsing game: \"{game}\"""")
     tree, success, err_msg = get_tree_from_txt(parser, game, overwrite=True)
     print(f"Initializing environment for game: {game}")
-    env = PSEnv(tree, jit=jit, debug=debug)
+    env = PSEnv(tree, jit=jit, debug=debug, print_score=True)
     print(f"Playing game: {game}")
     human_loop(env, profile=profile, level=level)
 

@@ -4,7 +4,6 @@ bin/
 .vscode
 .build
 logs*
-sols/
 
 *.swp
 src - Kopie
@@ -27,5 +26,3 @@ simplified_games
 script-doctor-py
 script-doctor
 scratch
-transitions
-vids

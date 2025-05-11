@@ -107,12 +107,15 @@ class GenPSTree(Transformer):
         lp = []
         for i, item in enumerate(items):
             if isinstance(item, Token) and item.type == 'RULE':
-                breakpoint()
+                raise Exception(f'Unrecognized item in rule data (RULE within a rule?): {item}')
             if isinstance(item, Token) and item.type == 'THEN':
                 rp = items[i+1:]
                 break
             elif isinstance(item, Token) and item.type == 'PREFIX':
-                prefixes.append(str(item).lower())
+                prefix = str(item).lower()
+                if prefix == 'rigid':
+                    raise NotImplementedError('Rigid prefix not implemented')
+                prefixes.append(prefix)
                 continue
             # else:
             #     raise Exception(f'Unrecognized item in rule data: {item}')

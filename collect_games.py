@@ -40,7 +40,7 @@ if __name__ == '__main__':
     # Load github token to scrape gists
     load_dotenv()
 
-    ps_urls_path = "ps_urls.txt"
+    ps_urls_path = os.path.join("data", "ps_urls.txt")
     if args.update or not os.path.isfile(ps_urls_path):
 
         # URL of the JS file

@@ -25,10 +25,12 @@ from spaces import Discrete
 
 # Whether to print out a bunch of stuff, etc.
 DEBUG = False
+PRINT_SCORE = True
 # DEBUG = True
 
 # per-object movement forces that can be applied: left, right, up, down, action
 N_MOVEMENTS = 5
+ACTION = 4
 
 
 # @partial(jax.jit, static_argnums=(0))
@@ -1116,7 +1118,7 @@ def gen_subrules_meta(rule: Rule, n_objs, obj_to_idxs, meta_objs, coll_mat, rule
                 # index. In this case, we assume there is only one detected moving index in the kernel, so we can take 
                 # the max to propagate these values across cells.
                 cell_detected_moving_idxs = jnp.stack(
-                    [cell_detect_out.detected_moving_idx for cell_detect_out in cell_detect_outs], axis=0)
+                    [cell_detect_out.detected_moving_idx for cell_detect_out in cell_detect_outs if cell_detect_out.detected_moving_idx is not None], axis=0)
                 detected_kernel_moving_idx = jnp.max(cell_detected_moving_idxs, axis=0)
 
                 kernel_detect_out = KernelFnReturn(
@@ -1568,7 +1570,8 @@ def gen_tick_fn(obj_to_idxs, coll_mat, tree_rules, meta_objs, jit, n_objs, char_
                 late_rule_grps.append(sub_rule_fns)
         rule_blocks.append((looping, rule_grps))
 
-    rule_blocks.append((False, [gen_move_rules(obj_to_idxs, coll_mat, n_objs, jit=jit)]))
+    _move_rule_fn = partial(move_rule_fn, obj_to_idxs=obj_to_idxs, coll_mat=coll_mat, n_objs=n_objs, jit=jit)
+    rule_blocks.append((False, [[_move_rule_fn]]))
     # Can we have loops in late rules? I hope not.
     rule_blocks.append((False, late_rule_grps))
 
@@ -1699,142 +1702,54 @@ def gen_tick_fn(obj_to_idxs, coll_mat, tree_rules, meta_objs, jit, n_objs, char_
         tick_fn = jax.jit(tick_fn)
     return tick_fn
 
-def gen_move_rules(obj_to_idxs, coll_mat, n_objs, jit=True):
-    rule_fns = []
-    coll_mat = coll_mat.astype(np.int8)
-    for obj, idx in obj_to_idxs.items():
-        if obj == 'Background':
-            continue
-        coll_vector = coll_mat[idx]
+def move_rule_fn(rng, lvl, obj_to_idxs, coll_mat, n_objs, jit=True):
+    coll_mat = jnp.array(coll_mat, dtype=bool)
+    n_lvl_cells = lvl.shape[2] * lvl.shape[3]
+    force_arr = lvl[0, n_objs:]
+    # Mask out all forces corresponding to ACTION.
+    force_mask = np.ones((force_arr.shape[0],), dtype=bool)
+    force_mask[ACTION::N_MOVEMENTS] = 0
+    force_arr = force_arr[force_mask]
+    # Rearrange the array, since we want to apply force to the "first" objects spatially on the map.
+    force_arr = rearrange(force_arr, "c h w -> h w c")
+    # Get the first x,y,c coordinates where force is present.
+    coords = jnp.argwhere(force_arr, size=n_lvl_cells, fill_value=-1)
 
-        left_rule_in = np.zeros((n_objs + (n_objs * 5), 1, 2), dtype=np.int8)
-        # object must be present in right cell
-        left_rule_in[idx, 0, 1] = 1
-        # leftward force
-        left_rule_in[n_objs + (idx * 5) + 0, 0, 1] = 1
-        # absence of collidable tiles in the left cell
-        left_rule_in[:n_objs, 0, 0] = -coll_vector
-        left_rule_out = np.zeros_like(left_rule_in)
-        # object moves to left cell
-        left_rule_out[idx, 0, 0] = 1
-        # remove anything that was present in the input (i.e. the object and force)
-        left_rule_out -= np.clip(left_rule_in, 0, 1)
-        left_rule = np.stack((left_rule_in, left_rule_out), axis=0)
+    def attempt_move(carry):
+        lvl, _, _, i = carry
+        x, y, c = coords[i]
+        is_force_present = x != -1
+        # Get the obj idx on which the force is applied.
+        obj_idx = c // (N_MOVEMENTS - 1)
+        # Determine where the object would move and whether such a move would be legal.
+        forces_to_deltas = jnp.array([[0, -1], [1, 0], [0, 1], [-1, 0]])
+        delta = forces_to_deltas[c % (N_MOVEMENTS - 1)]
+        x_1, y_1 = x + delta[0], y + delta[1]
+        would_collide = jnp.any(lvl[0, :n_objs, x_1, y_1] * coll_mat[obj_idx])
+        out_of_bounds = (x_1 < 0) | (x_1 >= lvl.shape[2]) | (y_1 < 0) | (y_1 >= lvl.shape[3])
+        can_move = is_force_present & ~would_collide & ~out_of_bounds
+        # Now, in the new level, move the object in the direction of the force.
+        new_lvl = lvl.at[0, obj_idx, x, y].set(0)
+        new_lvl = new_lvl.at[0, obj_idx,  x_1, y_1].set(1)
+        lvl = jax.lax.select(can_move, new_lvl, lvl)
+        i += 1
+        return lvl, can_move, rng, i
 
-        # FIXME: Actually this is the down rule and vice versa, and we've relabelled actions accordingly. Hack. Can't figure out what's wrong here.
-        # Something to do with flipping output kernel?
-        up_rule_in = np.zeros((n_objs + (n_objs * 5), 2, 1), dtype=np.int8)
-        # object must be present in lower cell
-        up_rule_in[idx, 0] = 1
-        # upward force
-        up_rule_in[n_objs + (idx * N_MOVEMENTS) + 1, 0] = 1
-        # absence of collidable tiles in the upper cell
-        up_rule_in[:n_objs, 1, 0] = -coll_vector
-        up_rule_out = np.zeros_like(up_rule_in)
-        # object moves to upper cell
-        up_rule_out[idx, 1] = 1
-        # remove anything that was present in the input
-        up_rule_out -= np.clip(up_rule_in, 0, 1)
-        up_rule = np.stack((up_rule_in, up_rule_out), axis=0)
+    init_carry = (lvl, False, rng, 0)
 
-        right_rule_in = np.zeros((n_objs + (n_objs * N_MOVEMENTS), 1, 2), dtype=np.int8)
-        # object must be present in left cell
-        right_rule_in[idx, 0, 0] = 1
-        # rightward force
-        right_rule_in[n_objs + (idx * N_MOVEMENTS) + 2, 0, 0] = 1
-        # absence of collidable tiles in the right cell
-        right_rule_in[:n_objs, 0, 1] = -coll_vector
-        right_rule_out = np.zeros_like(right_rule_in)
-        # object moves to right cell
-        right_rule_out[idx, 0, 1] = 1
-        # remove anything that was present in the input
-        right_rule_out -= np.clip(right_rule_in, 0, 1)
-        right_rule = np.stack((right_rule_in, right_rule_out), axis=0)
-
-        down_rule_in = np.zeros((n_objs + (n_objs * N_MOVEMENTS), 2, 1), dtype=np.int8)
-        # object must be present in upper cell
-        down_rule_in[idx, 1] = 1
-        # downward force
-        down_rule_in[n_objs + (idx * N_MOVEMENTS) + 3, 1] = 1
-        # absence of collidable tiles in the lower cell
-        down_rule_in[:n_objs, 0, 0] = -coll_vector
-        down_rule_out = np.zeros_like(down_rule_in)
-        # object moves to lower cell
-        down_rule_out[idx, 0] = 1
-        # remove anything that was present in the input
-        down_rule_out -= np.clip(down_rule_in, 0, 1)
-        down_rule = np.stack((down_rule_in, down_rule_out), axis=0)
-
-        # rules += [left_rule, right_rule, up_rule, down_rule]
-        rules = [left_rule, right_rule, up_rule, down_rule]
-        rule_names = [f"{obj}_move_{j}" for j in ['left', 'right', 'down', 'up']]
-        rule_fns += [partial(apply_move_rule, move_rule=rule, jit=jit, rule_name=rule_name)
-                     for rule, rule_name in zip(rules, rule_names)]
-    return rule_fns
-
-def apply_move_rule(rng, lvl, move_rule, jit=True, rule_name=None):
-    inp = move_rule[0]
-    ink = inp[None]
-    lvl = lvl.astype(np.float32)
-    ink = ink.astype(np.float32)
-    # jax.debug.print('lvl: {lvl}', lvl=(lvl.min(), lvl.max(), lvl.shape))
+    # Iterate through possible moves until we apply one, or run out of possible moves.
     if jit:
-        activations = jax.lax.conv(lvl, ink, window_strides=(1,1), padding='VALID')[0, 0]
+        lvl, can_move, rng, i = jax.lax.while_loop(
+            lambda carry: (coords[carry[3], 0] != -1) & ~carry[1],
+            lambda carry: attempt_move(carry),
+            init_carry,
+        )
     else:
-        # TODO
-        activations = jax.lax.conv(lvl, ink, window_strides=(1,1), padding='VALID')[0, 0]
-
-    thresh_act = np.sum(np.clip(inp, 0, 1))
-    bin_activations = (activations == thresh_act).astype(np.float32)
-
-    non_zero_activation = jnp.argwhere(bin_activations != 0, size=1, fill_value=-1)[0]
-    # jax.lax.cond(jnp.all(non_zero_activation == -1), lambda _: None, 
-    #              lambda _: jax.debug.print(
-    #                  'Non-zero activation detected: {non_zero_activation}. Rule_i: {rule_name}',
-    #                  non_zero_activation=non_zero_activation, rule_name=rule_name), None)
-    # if non_zero_activations.size > 0:
-    #     print(f"Non-zero activations detected: {non_zero_activations}. Rule_i: {rule_name}")
-        # if rule_i == 1:
-        #     breakpoint()
-
-    outp = move_rule[1]
-    outk = outp[:, None]
-    outk = outk.astype(np.float32)
-    # flip along width and height
-    outk = np.flip(outk, axis=(2, 3))
-    bin_activations = bin_activations[None, None]
-    changed = bin_activations.sum() > 0
-    if jit:
-        out = jax.lax.conv_transpose(bin_activations, outk, (1, 1), padding='VALID',
-                                            dimension_numbers=('NCHW', 'OIHW', 'NCHW'))
-    else:
-        # TODO
-        out = jax.lax.conv_transpose(bin_activations, outk, (1, 1), padding='VALID',
-                                            dimension_numbers=('NCHW', 'OIHW', 'NCHW'))
-    if DEBUG:
-        if jit:
-            jax.lax.cond(
-                changed,
-                lambda _: jax.debug.print('rule {rule_name} applied: {changed}', rule_name=rule_name, changed=changed),
-                lambda _: None,
-                None
-            )    # if out.sum() != 0:
-        else:
-            if changed:
-                print(f'rule {rule_name} applied')
-            else:
-                print(f'rule {rule_name} not applied')
-    #     print('lvl')
-    #     print(lvl[0,2])
-    #     print('out')
-    #     print(out[0,2])
-    #     breakpoint()
-    lvl += out
-    lvl = lvl.astype(bool)
-
-    return lvl, changed, False, False, False, False, rng
-
+        while coords[i, 0] != -1 and not can_move:
+            lvl, can_move, rng, i = attempt_move((lvl, can_move, rng, i))
     
+    return lvl, can_move, False, False, False, False, rng
+
 
 @flax.struct.dataclass
 class PSState:
@@ -1869,9 +1784,9 @@ def get_names_to_alts(objects):
 
 class PSEnv:
     def __init__(self, tree: PSGameTree, jit: bool = True, level_i: int = 0, max_steps: int = np.inf,
-                 debug: bool = False):
-        global DEBUG
-        DEBUG = debug
+                 debug: bool = False, print_score: bool = True):
+        global DEBUG, PRINT_SCORE
+        DEBUG, PRINT_SCORE = debug, print_score
         self.jit = jit
         self.title = tree.prelude.title
         self.tree = tree
@@ -2176,7 +2091,8 @@ class PSEnv:
         multihot_level = final_lvl[:self.n_objs]
         win, score, heuristic = self.check_win(multihot_level)
         win = win | tick_win
-        jax.debug.print('heuristic: {heuristic}, score: {score}', heuristic=heuristic, score=score)
+        if PRINT_SCORE:
+            jax.debug.print('heuristic: {heuristic}, score: {score}', heuristic=heuristic, score=score)
         # reward = (heuristic - state.init_heuristic) / jnp.abs(state.init_heuristic)
         reward = heuristic - state.prev_heuristic
 
