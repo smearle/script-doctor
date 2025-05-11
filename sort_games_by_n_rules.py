@@ -39,7 +39,7 @@ def main():
     games_n_rules = sorted(games_n_rules, key=lambda x: x[1])
 
     # Save the sorted list to a json
-    with open('games_n_rules.json', 'w') as f:
+    with open('data', 'games_n_rules.json', 'w') as f:
         json.dump(games_n_rules, f, indent=4)
 
 

@@ -31,7 +31,7 @@ os.makedirs(scratch_dir, exist_ok = True)
 
 @hydra.main(version_base="1.3", config_path='./conf', config_name='config')
 def main(config: Config):
-    with open('games_n_rules.json', 'r') as f:
+    with open('data', 'games_n_rules.json', 'r') as f:
         games_n_rules = json.load(f)
     games_n_rules = sorted(games_n_rules, key=lambda x: x[1])
     games = [game for game, n_rules in games_n_rules]

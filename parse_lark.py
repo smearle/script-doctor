@@ -443,6 +443,7 @@ def get_tree_from_txt(parser, game, log_dir: str = None, overwrite: bool = True)
         def parse_attempt_fn():
             with timeout_handler(10):
                 return parser.parse(content)
+    # FIXME: On windows, this will hang indefinitely on nasty games :(
     else:
         def parse_attempt_fn():
             return parser.parse(content)

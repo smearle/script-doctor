@@ -48,7 +48,7 @@ class Config:
     provider: str = 'portkey'
     model: str = 'gemini-2.0-flash-exp'
     viz_feedback: bool = True
-    headless: bool = False
+    headless: bool = True
     auto_launch_client: bool = True
 
 
@@ -516,7 +516,9 @@ def gen_game_from_plan():
 
 TRANSITIONS_DIR = 'transitions'
 
-games_to_skip = set({'Broken Rigid Body'})
+games_to_skip = set({'Broken Rigid Body', 
+                     "Path_Finder"  # This one does not compile in the js engine
+                     })
 
 @app.route('/get_player_action', methods=['POST'])
 def get_player_action():
@@ -537,20 +539,21 @@ def list_scraped_games():
     # random.shuffle(game_files)
     # test_game_files = [f"{test_game}.txt" for test_game in TEST_GAMES]
     # game_files = test_game_files + game_files
-    with open('games_n_rules.json', 'r') as f:
+    with open('data', 'games_n_rules.json', 'r') as f:
         games_n_rules = json.load(f)
     games_n_rules = sorted(games_n_rules, key=lambda x: x[1])
     game_files = [game[0] for game in games_n_rules]
     for filename in game_files:
         if filename.startswith('rigid_'):
+            print(f"Skipping {filename} because it seems to be a pesky rigid body game")
             continue
-        if filename.endswith('.txt'):
-            filename = filename[:-4]
-            if filename not in games_set:
-                if filename in games_to_skip:
-                    print(f"Skipping {filename}")
-                    continue
-                games_set.add(filename)
+        if filename in games_to_skip:
+            print(f"Skipping {filename} because we have marked it to be skipped.")
+            continue
+        if filename in games_set:
+            print(f"Skipping {filename} because it is already in the set.")
+            continue
+        games_set.add(filename)
         games.append(filename)
     print(games)
     return jsonify(games)

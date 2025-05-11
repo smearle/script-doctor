@@ -825,7 +825,16 @@ def gen_subrules_meta(rule: Rule, n_objs, obj_to_idxs, meta_objs, coll_mat, rule
         obj_idx = disambiguate_meta(obj, meta_objs, kernel_meta_objs, pattern_meta_objs, obj_to_idxs)
         # Add the object
         m_cell = m_cell.at[obj_idx].set(1)
-        # Add force to the object
+        if force_idx is None:
+            # Generate random movement.
+            force_idx = jax.random.randint(rng, (1,), 0, N_MOVEMENTS-1)[0]
+            rng, _ = jax.random.split(rng)
+        # Remove any existing forces from the object
+        m_cell = jax.lax.dynamic_update_slice(
+            m_cell, jnp.zeros(N_MOVEMENTS, dtype=bool), (n_objs + obj_idx * N_MOVEMENTS,)
+        )
+
+        # Place the new force
         m_cell = m_cell.at[n_objs + (obj_idx * N_MOVEMENTS) + force_idx].set(1)
         m_cell = remove_colliding_objs(m_cell, obj_idx, coll_mat)
 
@@ -890,7 +899,7 @@ def gen_subrules_meta(rule: Rule, n_objs, obj_to_idxs, meta_objs, coll_mat, rule
             r_cell = []
         else:
             r_cell = r_cell.split(' ')
-        no, force, moving, stationary, random, vertical, horizontal = False, False, False, False, False, False, False
+        no, force, moving, stationary, random, vertical, horizontal, random_dir = False, False, False, False, False, False, False, False
         for obj in r_cell:
             obj = obj.lower()
             if obj in char_to_obj:
@@ -916,6 +925,8 @@ def gen_subrules_meta(rule: Rule, n_objs, obj_to_idxs, meta_objs, coll_mat, rule
                 horizontal = True
             elif obj == 'vertical':
                 vertical = True
+            elif obj == 'randomdir':
+                random_dir = True
             # ignore sound effects (which can exist incide rules (?))
             elif obj.startswith('sfx'):
                 continue
@@ -946,6 +957,9 @@ def gen_subrules_meta(rule: Rule, n_objs, obj_to_idxs, meta_objs, coll_mat, rule
                 elif random:
                     fns.append(partial(project_obj, obj=obj, random=True))
                     random = False
+                elif random_dir:
+                    fns.append(partial(project_force_obj, obj=obj, force_idx=None))
+                    random_dir = False
                 else:
                     fns.append(partial(project_obj, obj=obj))
             else:
@@ -1716,6 +1730,7 @@ def move_rule_fn(rng, lvl, obj_to_idxs, coll_mat, n_objs, jit=True):
     coords = jnp.argwhere(force_arr, size=n_lvl_cells, fill_value=-1)
 
     def attempt_move(carry):
+        # NOTE: This depends on movement forces preceding any other forces (per object) in the channel dimension.
         lvl, _, _, i = carry
         x, y, c = coords[i]
         is_force_present = x != -1
@@ -1731,8 +1746,12 @@ def move_rule_fn(rng, lvl, obj_to_idxs, coll_mat, n_objs, jit=True):
         # Now, in the new level, move the object in the direction of the force.
         new_lvl = lvl.at[0, obj_idx, x, y].set(0)
         new_lvl = new_lvl.at[0, obj_idx,  x_1, y_1].set(1)
+        # And remove the old force from the level.
+        new_lvl = new_lvl.at[0, n_objs + (obj_idx * N_MOVEMENTS) + c, x, y].set(0)
         lvl = jax.lax.select(can_move, new_lvl, lvl)
         i += 1
+        if DEBUG:
+            jax.debug.print('      at position {xy}, the object {obj} moved to {new_xy}', xy=(x, y), obj=obj_idx, new_xy=(x_1, y_1))
         return lvl, can_move, rng, i
 
     init_carry = (lvl, False, rng, 0)
@@ -1745,8 +1764,12 @@ def move_rule_fn(rng, lvl, obj_to_idxs, coll_mat, n_objs, jit=True):
             init_carry,
         )
     else:
-        while coords[i, 0] != -1 and not can_move:
-            lvl, can_move, rng, i = attempt_move((lvl, can_move, rng, i))
+        i = init_carry[3]
+        can_move = init_carry[1]
+        carry = init_carry
+        while (coords[i, 0] != -1) and not can_move:
+            lvl, can_move, rng, i = attempt_move(carry)
+            carry = (lvl, can_move, rng, i)
     
     return lvl, can_move, False, False, False, False, rng
 
@@ -1988,7 +2011,7 @@ class PSEnv:
         )
         return obs
 
-    @partial(jax.jit, static_argnums=(0))
+    # @partial(jax.jit, static_argnums=(0))
     def apply_player_force(self, action, state: PSState):
         multihot_level = state.multihot_level
         # add a dummy object at the front
@@ -2009,14 +2032,18 @@ class PSEnv:
             return force_map
 
         # apply movement (<4) and/or action (if not noaction)
-        apply_force = (action != -1) & ((action < 4) | (~self.tree.prelude.noaction))
+        should_apply_force = (action != -1) & ((action < 4) | (~self.tree.prelude.noaction))
 
-        force_map = jax.lax.cond(
-            apply_force,
-            place_force,
-            lambda force_map, _: force_map,
-            force_map, action
-        )
+        if self.jit:
+            force_map = jax.lax.cond(
+                should_apply_force,
+                place_force,
+                lambda force_map, _: force_map,
+                force_map, action
+            )
+        else:
+            if should_apply_force:
+                force_map = place_force(force_map, action)
         # remove the dummy object
         force_map = force_map[N_MOVEMENTS:]
 
