@@ -880,7 +880,7 @@ def gen_subrules_meta(rule: Rule, n_objs, obj_to_idxs, meta_objs, coll_mat, rule
         pattern_meta_objs = pattern_detect_out.detected_meta_objs
         obj_idx = disambiguate_meta(obj, meta_objs, kernel_meta_objs, pattern_meta_objs, obj_to_idxs)
         m_cell = m_cell.at[obj_idx].set(1)
-        m_cell = m_cell.at[n_objs + (obj_idx * N_MOVEMENTS): n_objs + ((obj_idx + 1) * N_MOVEMENTS)].set(1)
+        m_cell = m_cell.at[n_objs + (obj_idx * N_MOVEMENTS): n_objs + ((obj_idx + 1) * N_MOVEMENTS)].set(0)
         m_cell = remove_colliding_objs(m_cell, obj_idx, coll_mat)
         return rng, m_cell
 
