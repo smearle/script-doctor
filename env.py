@@ -1879,7 +1879,7 @@ def gen_tick_fn(obj_to_idxs, coll_mat, tree_rules, meta_objs, jit, n_objs, char_
 def apply_movement(rng, lvl, obj_to_idxs, coll_mat, n_objs, jit=True):
     coll_mat = jnp.array(coll_mat, dtype=bool)
     n_lvl_cells = lvl.shape[2] * lvl.shape[3]
-    force_arr = lvl[0, n_objs:]
+    force_arr = lvl[0, n_objs:-1]
     # Mask out all forces corresponding to ACTION.
     force_mask = np.ones((force_arr.shape[0],), dtype=bool)
     force_mask[ACTION::N_FORCES] = 0
@@ -1916,8 +1916,8 @@ def apply_movement(rng, lvl, obj_to_idxs, coll_mat, n_objs, jit=True):
         i += 1
         if DEBUG:
             jax.debug.print('      at position {xy}, the object {obj} moved to {new_xy}', xy=(x, y), obj=obj_idx, new_xy=(x_1, y_1))
-            jax.debug.print('      would collide: {would_collide}', would_collide=would_collide)
-            jax.debug.print('      out of bounds: {out_of_bounds}', out_of_bounds=out_of_bounds)
+            jax.debug.print('      would collide: {would_collide}, out of bounds: {out_of_bounds}, can_move: {can_move}',
+                            would_collide=would_collide, out_of_bounds=out_of_bounds, can_move=can_move)
         return lvl, can_move, rng, i
 
     init_carry = (lvl, False, rng, 0)
@@ -1937,7 +1937,6 @@ def apply_movement(rng, lvl, obj_to_idxs, coll_mat, n_objs, jit=True):
             lvl, can_move, rng, i = attempt_move(carry)
             carry = (lvl, can_move, rng, i)
     
-    applied = (i > 1) | can_move
     if DEBUG:
         jax.debug.print('      applied movement: {can_move}', can_move=can_move)
     rule_state = RuleState(
