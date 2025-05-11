@@ -31,15 +31,10 @@ os.makedirs(scratch_dir, exist_ok = True)
 
 @hydra.main(version_base="1.3", config_path='./conf', config_name='config')
 def main(config: Config):
-    sol_paths = glob.glob(os.path.join('sols', '*'))
-    random.shuffle(sol_paths)
-    games = [os.path.basename(path) for path in sol_paths]
-
     with open('games_n_rules.json', 'r') as f:
         games_n_rules = json.load(f)
     games_n_rules = sorted(games_n_rules, key=lambda x: x[1])
     games = [game for game, n_rules in games_n_rules]
-    sol_paths = [os.path.join('sols', game) for game in games]
     results = {
         'compile_error': [],
         'runtime_error': [],
@@ -48,27 +43,31 @@ def main(config: Config):
         'score_error': [],
         'success': [],
     }
+    val_results_path = os.path.join('data', 'validation_results.json')
+    if os.path.isfile(val_results_path):
+        shutil.copy(val_results_path, val_results_path[:-5] + '_bkp.json')
 
     # tree_paths = [os.path.join(TREES_DIR, os.path.basename(path) + '.pkl') for path in sol_paths]
     # games = [os.path.basename(path)[:-4] for path in sol_paths]
-    sols_dir = os.path.join('vids', 'jax_sols')
+    js_sols_dir = os.path.join('data', 'js_sols')
+    jax_sols_dir = os.path.join('data', 'jax_sols')
+    sol_paths = [os.path.join(js_sols_dir, game) for game in games]
 
     for sol_dir, game in zip(sol_paths, games):
-        traj_dir = os.path.join(sols_dir, game)
-        compile_log_path = os.path.join(traj_dir, 'compile_err.txt')
+        jax_sol_dir = os.path.join(jax_sols_dir, game)
+        os.makedirs(jax_sol_dir, exist_ok=True)
+        compile_log_path = os.path.join(jax_sol_dir, 'compile_err.txt')
         if os.path.exists(compile_log_path) and not config.overwrite:
             results['compile_error'].append(game)
             print(f"Skipping {game} because compile error log already exists")
             continue
-
-        os.makedirs(traj_dir, exist_ok=True)
 
         with open("syntax.lark", "r", encoding='utf-8') as file:
             puzzlescript_grammar = file.read()
         # Initialize the Lark parser with the PuzzleScript grammar
         parser = Lark(puzzlescript_grammar, start="ps_game", maybe_placeholders=False)
         # min_parser = Lark(min_puzzlescript_grammar, start="ps_game")
-        tree = get_tree_from_txt(parser, game)
+        tree, success, err_msg = get_tree_from_txt(parser, game)
         og_path = os.path.join(DATA_DIR, 'scraped_games', os.path.basename(game) + '.txt')
 
         print(f"Processing solution for game: {og_path}")
@@ -81,7 +80,7 @@ def main(config: Config):
             raise e
         except Exception as e:
             err_log = traceback.format_exc()
-            with open(os.path.join(traj_dir, 'error.txt'), 'w') as f:
+            with open(os.path.join(jax_sol_dir, 'error.txt'), 'w') as f:
                 f.write(err_log)
             traceback.print_exc()
             print(f"Error creating env: {og_path}")
@@ -105,11 +104,11 @@ def main(config: Config):
 
         for level_sol_path in level_sols:
             level_i = int(os.path.basename(level_sol_path).split('-')[1].split('.')[0])
-            sol_log_path = os.path.join(traj_dir, f'level-{level_i}_solution_err.txt')
-            score_log_path = os.path.join(traj_dir, f'level-{level_i}_score_err.txt')
-            run_log_path = os.path.join(traj_dir, f'level-{level_i}_runtime_err.txt')
-            state_log_path = os.path.join(traj_dir, f'level-{level_i}_state_err.txt')
-            gif_path = os.path.join(traj_dir, f'level-{level_i}.gif')
+            sol_log_path = os.path.join(jax_sol_dir, f'level-{level_i}_solution_err.txt')
+            score_log_path = os.path.join(jax_sol_dir, f'level-{level_i}_score_err.txt')
+            run_log_path = os.path.join(jax_sol_dir, f'level-{level_i}_runtime_err.txt')
+            state_log_path = os.path.join(jax_sol_dir, f'level-{level_i}_state_err.txt')
+            gif_path = os.path.join(jax_sol_dir, f'level-{level_i}.gif')
             if (os.path.exists(gif_path) or os.path.exists(sol_log_path) or os.path.exists(score_log_path) \
                     or os.path.exists(run_log_path) or os.path.exists(state_log_path)) and not config.overwrite:
                 if os.path.exists(run_log_path):
@@ -165,11 +164,10 @@ def main(config: Config):
                     js_state = state.replace(multihot_level=level_multihot)
                     js_frame = env.render(js_state, cv2=False)
                     js_frame = np.array(js_frame, dtype=np.uint8)
-                    imageio.imsave(os.path.join(traj_dir, f'level-{level_i}_state_js.png'), js_frame)
+                    imageio.imsave(os.path.join(jax_sol_dir, f'level-{level_i}_state_js.png'), js_frame)
                     jax_frame = env.render(state, cv2=False)
                     jax_frame = np.array(jax_frame, dtype=np.uint8)
-                    imageio.imsave(os.path.join(traj_dir, f'level-{level_i}_state_jax.png'), jax_frame)
-                    breakpoint()
+                    imageio.imsave(os.path.join(jax_sol_dir, f'level-{level_i}_state_jax.png'), jax_frame)
                     with open(sol_log_path, 'w') as f:
                         f.write(f"Level {level_i} solution failed\n")
                         f.write(f"Actions: {actions}\n")
@@ -211,7 +209,7 @@ def main(config: Config):
 
             # Save the frames
             print(f"Saving frames for level {level_i}")
-            frames_dir = os.path.join(traj_dir, 'frames')
+            frames_dir = os.path.join(jax_sol_dir, 'frames')
             os.makedirs(frames_dir, exist_ok=True)
             for i, js_frame in enumerate(frames):
                 imageio.imsave(os.path.join(frames_dir, f'level-{level_i}_sol_{i:03d}.png'), js_frame)
@@ -220,9 +218,9 @@ def main(config: Config):
             imageio.mimsave(gif_path, frames, duration=0.1, loop=0)
 
             # Copy over the js gif
-            shutil.copy(js_gif_path, os.path.join(traj_dir, f'level-{level_i}_js.gif'))
+            shutil.copy(js_gif_path, os.path.join(jax_sol_dir, f'level-{level_i}_js.gif'))
 
-        with open(os.path.join('data', 'validation_results.json'), 'w') as f:
+        with open(val_results_path, 'w') as f:
             json.dump(results, f, indent=4)
 
 

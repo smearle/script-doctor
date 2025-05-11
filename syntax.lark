@@ -54,7 +54,7 @@ sprite: (SPRITE_PIXEL~5 NEWLINE)~5
 
 // Legend Data
 legend_data: LEGEND_PIXEL object_name legend_operation* NEWLINES
-LEGEND_PIXEL: PIXEL+ "="
+LEGEND_PIXEL: PIXEL+" "?"="
 
 OR: "or"i
 AND: "and"i
@@ -93,8 +93,9 @@ rule_part: "[" (rule_content? cell_border*)+ "]"
 
 cell_border: "|"
 
-rule_content: DIRECTIONAL? ID
+rule_content: (DIRECTIONAL WS_INLINE)? ID
 
+DIRECTIONAL: /[\^v<>]/
 ID: /[a-z0-9.A-Z#_\/\\@!]/+
 
 // Command
@@ -136,8 +137,6 @@ condition_id: ID
 
 // A rule prefix is anything but `[`
 legend_key: PIXEL
-
-DIRECTIONAL: /[\^v<>]/
 
 KEYWORD_ID: /[a-z0-9.A-Z_]+/
 PREFIX: "late"i | "horizontal"i | "vertical"i | "left"i | "right"i | "up"i | "down"i | "+" | "random"i | ID

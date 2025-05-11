@@ -131,7 +131,7 @@ def load_game_from_file():
     game_path = os.path.join(MIN_GAMES_DIR, f'{game}.txt')
     with open(game_path, 'r') as f:
         code = f.read()
-    print(code)
+    print(f"Serving game from {game_path}")
     return code
 
 
@@ -998,6 +998,22 @@ def level_to_int_arr(level: dict):
             level_arr[x].append(level['dat'][str(flat_idx)])
     return np.array(level_arr)
 
+@app.route('/log_error', methods=['POST'])
+def log_error():
+    data = request.json
+    context = data['context']
+    error = data['error']
+    log_dir = data['logDir']
+    level_idx = data['levelIdx']
+    os.makedirs(log_dir, exist_ok=True)
+    if level_idx is None:
+        error_path = os.path.join(log_dir, 'js_error.txt')
+    else:
+        error_path = os.path.join(log_dir, f'level-{level_idx}_js_error.txt')
+    with open(error_path, 'w') as f:
+        f.write(context + '\n\n' + error)
+    print(f"Saved error to {error_path}")
+    return jsonify({})
 
 @app.route('/save_sol', methods=['POST'])
 def save_sol():

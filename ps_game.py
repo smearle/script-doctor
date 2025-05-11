@@ -38,7 +38,7 @@ class LegendEntry:
         self.operator = operator
 
     def __repr__(self):
-        return f"{self.key} = {f' {self.operator} '.join(self.obj_names)}"
+        return f"{f' {self.operator} '.join(self.obj_names)}"
 
 class RuleBlock:
     def __init__(self, rules: List[Union["Rule", "RuleBlock"]], looping=False):

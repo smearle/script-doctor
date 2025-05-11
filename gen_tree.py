@@ -48,6 +48,7 @@ class GenPSTree(Transformer):
         )
 
     def rule_content(self, items):
+        items = [it for it in items if not (isinstance(it, Token) and it.type == 'WS_INLINE')]
         return ' '.join(items)
 
     def cell_border(self, items):
@@ -76,7 +77,7 @@ class GenPSTree(Transformer):
         return cells
 
     def legend_data(self, items):
-        key = items[0].lower()
+        key = items[0].rstrip(' =')
         # The first entry in this legend key's mapping is just an object name
         assert len(items[1].children) == 1
         obj_names = [str(items[1].children[0]).lower()]
@@ -92,7 +93,7 @@ class GenPSTree(Transformer):
             else:
                 operator = new_op
 
-        return LegendEntry(key=key, obj_names=obj_names, operator=operator)
+        return LegendEntry(key=key.lower(), obj_names=obj_names, operator=operator)
 
     def prefix(self, items):
         out = str(items[0])

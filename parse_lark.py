@@ -26,7 +26,7 @@ TEST_GAMES = []
 DATA_DIR = 'data'
 GAMES_DIR = os.path.join(DATA_DIR, 'scraped_games')
 MIN_GAMES_DIR = os.path.join(DATA_DIR, 'min_games')
-custom_games_dir = os.path.join('custom_games')
+CUSTOM_GAMES_DIR = os.path.join('custom_games')
 simpd_dir = os.path.join(DATA_DIR, 'simplified_games')
 TREES_DIR = os.path.join(DATA_DIR, 'game_trees')
 pretty_trees_dir = os.path.join(DATA_DIR, 'pretty_trees')
@@ -340,6 +340,9 @@ def preprocess_ps(txt):
     # Remove whitespace at end of any line
     txt = re.sub(r'[ \t]+$', '', txt, flags=re.MULTILINE)
 
+    # Remove whitespace at start of any line
+    txt = re.sub(r'^[ \t]+', '', txt, flags=re.MULTILINE)
+
     # Remove any lines that are just `=+`
     txt = re.sub(r'^=+\n', '', txt, flags=re.MULTILINE)
 
@@ -407,7 +410,7 @@ class PSErrors(IntEnum):
     TIMEOUT = 4
 
 def get_tree_from_txt(parser, game, log_dir: str = None, overwrite: bool = True):
-    filepath = os.path.join(custom_games_dir, game + '.txt')
+    filepath = os.path.join(CUSTOM_GAMES_DIR, game + '.txt')
     if not os.path.exists(filepath):
         filepath = os.path.join(GAMES_DIR, game + '.txt')
     print(f"Parsing {filepath}")
@@ -583,9 +586,9 @@ if __name__ == "__main__":
             breakpoint()
 
         n_success = len(parse_results['success'])
-        n_env_errors = np.sum([len(v) for k, v in parse_results['env_error'].items()])
-        n_tree_errors = np.sum([len(v) for k, v in parse_results['tree_error'].items()])
-        n_parse_errors = np.sum([len(v) for k, v in parse_results['parse_error'].items()])
+        n_env_errors = np.sum([len(v) for k, v in parse_results['env_error'].items()]).item()
+        n_tree_errors = np.sum([len(v) for k, v in parse_results['tree_error'].items()]).item()
+        n_parse_errors = np.sum([len(v) for k, v in parse_results['parse_error'].items()]).item()
         n_timeouts = len(parse_results['parse_timeout'])
         parse_results['stats']['total'] = len(game_files)
         parse_results['stats']['success'] = n_success

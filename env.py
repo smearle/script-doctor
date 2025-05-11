@@ -90,7 +90,6 @@ def process_legend(legend):
     meta_objs = {}
     conjoined_tiles = {}
     for k, v in legend.items():
-        k = k.split(' ')[0]
         v: LegendEntry
         if v.operator is None:
             assert len(v.obj_names) == 1
@@ -103,12 +102,12 @@ def process_legend(legend):
                 char_legend_inverse[k_obj] = v_obj
             else:
                 meta_objs[k_obj] = [v_obj]
-        elif v.operator == 'or':
+        elif v.operator.lower() == 'or':
             meta_objs[k.strip()] = v.obj_names
-        elif v.operator == 'and':
+        elif v.operator.lower() == 'and':
             conjoined_tiles[k.strip()] = v.obj_names
-        else: raise Exception('Invalid LegendEntry operator.')
-
+        else:
+            raise Exception('Invalid LegendEntry operator.')
 
     for k, v in meta_objs.items():
         # Replace with actual atomic object name if this value has already been established as a shorthand for
@@ -332,7 +331,7 @@ def is_perp_or_par_in_pattern(p):
     for k in p:
         for c in k:
             for o in c:
-                if o.lower() in ['perpendicular', 'orthoganal', 'parallel']:
+                if o.lower() in ['perpendicular', 'orthogonal', 'parallel']:
                     return True
     return False
 
@@ -348,7 +347,7 @@ def gen_perp_par_subrules(l_kerns, r_kerns):
                 c_a = []
                 c_b = []
                 for o in c:
-                    if o.lower() in ['perpendicular', 'orthoganal']:
+                    if o.lower() in ['perpendicular', 'orthogonal']:
                         c_a.append('^')
                         c_b.append('v')
                     elif o.lower() in ['parallel']:
@@ -556,7 +555,7 @@ def gen_subrules_meta(rule: Rule, n_objs, obj_to_idxs, meta_objs, coll_mat, rule
         return ObjFnReturn(active=active, detected=detected, obj_idx=active_obj_idx)
 
     # @partial(jax.jit, static_argnums=())
-    def detect_moving_meta(m_cell, obj_idxs):
+    def detect_moving_meta(m_cell, obj_idxs, vertical=False, horizontal=False):
         # TODO: vmap this?
         active_obj_idx = -1
         active_force_idx = -1
@@ -566,6 +565,12 @@ def gen_subrules_meta(rule: Rule, n_objs, obj_to_idxs, meta_objs, coll_mat, rule
 
             obj_is_present = m_cell[obj_idx] == 1
             obj_forces = jax.lax.dynamic_slice(m_cell, (n_objs + (obj_idx * N_MOVEMENTS),), (4,))
+            if vertical:
+                vertical_mask = np.array([0, 1, 0, 1], dtype=bool)
+                obj_forces = jnp.logical_and(obj_forces, vertical_mask)
+            elif horizontal:
+                horizontal_mask = np.array([1, 0, 1, 0], dtype=bool)
+                obj_forces = jnp.logical_and(obj_forces, horizontal_mask)
             force_idx = jnp.argwhere(obj_forces, size=1, fill_value=-1)[0, 0]
             obj_active = obj_is_present & (force_idx != -1)
 
@@ -624,7 +629,8 @@ def gen_subrules_meta(rule: Rule, n_objs, obj_to_idxs, meta_objs, coll_mat, rule
         l_cell = l_cell.split(' ')
         if DEBUG:
             print('l cell 2:', l_cell)
-        no, force, directional_force, stationary, action, moving = False, False, False, False, False, False
+        no, force, directional_force, stationary, action, moving, vertical, horizontal = \
+            False, False, False, False, False, False, False, False
         obj_names = []
         for obj in l_cell:
             obj = obj.lower()
@@ -643,6 +649,10 @@ def gen_subrules_meta(rule: Rule, n_objs, obj_to_idxs, meta_objs, coll_mat, rule
                 force_idx = 4
             elif obj == 'moving':
                 moving = True
+            elif obj == 'vertical':
+                vertical = True
+            elif obj == 'horizontal':
+                horizontal = True
             else:
                 obj_names.append(obj)
                 sub_objs = expand_meta_objs([obj], meta_objs, char_to_obj)
@@ -667,6 +677,12 @@ def gen_subrules_meta(rule: Rule, n_objs, obj_to_idxs, meta_objs, coll_mat, rule
                     elif moving:
                         fns.append(partial(detect_moving_meta, obj_idxs=obj_idxs))
                         moving = False
+                    elif vertical:
+                        fns.append(partial(detect_moving_meta, obj_idxs=obj_idxs, vertical=True))
+                        vertical = False
+                    elif horizontal:
+                        fns.append(partial(detect_moving_meta, obj_idxs=obj_idxs, horizontal=True))
+                        horizontal = False
                     else:
                         fns.append(partial(detect_obj_in_cell, obj_idx=obj_idx))
                 elif obj in meta_objs:
@@ -872,7 +888,7 @@ def gen_subrules_meta(rule: Rule, n_objs, obj_to_idxs, meta_objs, coll_mat, rule
             r_cell = []
         else:
             r_cell = r_cell.split(' ')
-        no, force, moving, stationary, random = False, False, False, False, False
+        no, force, moving, stationary, random, vertical, horizontal = False, False, False, False, False, False, False
         for obj in r_cell:
             obj = obj.lower()
             if obj in char_to_obj:
@@ -894,6 +910,10 @@ def gen_subrules_meta(rule: Rule, n_objs, obj_to_idxs, meta_objs, coll_mat, rule
                 stationary = True
             elif obj == 'random':
                 random = True
+            elif obj == 'horizontal':
+                horizontal = True
+            elif obj == 'vertical':
+                vertical = True
             # ignore sound effects (which can exist incide rules (?))
             elif obj.startswith('sfx'):
                 continue
@@ -912,10 +932,18 @@ def gen_subrules_meta(rule: Rule, n_objs, obj_to_idxs, meta_objs, coll_mat, rule
                 elif moving:
                     fns.append(partial(project_moving_obj, obj=obj))
                     moving = False
+                elif vertical:
+                    fns.append(partial(project_moving_obj, obj=obj))
+                    vertical = False
+                elif horizontal:
+                    fns.append(partial(project_moving_obj, obj=obj))
+                    horizontal = False
                 elif stationary:
                     fns.append(partial(project_stationary_obj, obj=obj))
+                    stationary = False
                 elif random:
                     fns.append(partial(project_obj, obj=obj, random=True))
+                    random = False
                 else:
                     fns.append(partial(project_obj, obj=obj))
             else:
@@ -1336,13 +1364,13 @@ def gen_subrules_meta(rule: Rule, n_objs, obj_to_idxs, meta_objs, coll_mat, rule
             r_kerns = None
 
         if 'horizontal' in rule.prefixes:
-            rots = [1, 3]
+            rots = [3, 1]
         elif 'left' in rule.prefixes:
             rots = [3]
         elif 'right' in rule.prefixes:
             rots = [1]
         elif 'vertical' in rule.prefixes:
-            rots = [0, 2]
+            rots = [2, 0]
         elif 'up' in rule.prefixes:
             rots = [2]
         elif 'down' in rule.prefixes:
@@ -1354,7 +1382,7 @@ def gen_subrules_meta(rule: Rule, n_objs, obj_to_idxs, meta_objs, coll_mat, rule
                 np.any([is_rel_force_in_kernel(lp) for lp in rule.left_kernels]):
                 rots = [0]
             else:
-                rots = [0, 1, 2, 3]
+                rots = [2, 0, 3, 1]
         for rot in rots:
 
             # rotate the patterns
@@ -1502,14 +1530,16 @@ def loop_rule_grp(carry, grp_i, block_i, n_prior_rules_arr, n_rules_per_grp_arr,
     win = False
     if jit:
         lvl, grp_applied, grp_app_i, cancelled, restart, grp_again, win, rng = jax.lax.while_loop(
-            cond_fun=lambda x: x[1] & ~x[3] & ~x[4] & ~x[5],
+            cond_fun=lambda x: x[1] & ~x[3] & ~x[4] & ~x[5] & (x[2] < 200),
             body_fun=apply_rule_grp,
             init_val=(lvl, grp_applied, grp_app_i, cancelled, restart, again, win, rng),
         )
     else:
-        while grp_applied and not cancelled and not restart and not win:
+        while grp_applied and not cancelled and not restart and not win and grp_app_i < 200:
             lvl, grp_applied, grp_app_i, cancelled, restart, grp_again, win, rng = \
                 apply_rule_grp((lvl, grp_applied, grp_app_i, cancelled, restart, again, win, rng))
+            if DEBUG:
+                print(f'     group {grp_i} applied for the {grp_app_i}th time')
 
     again = again | grp_again
     grp_applied = grp_app_i > 1
@@ -1519,27 +1549,24 @@ def loop_rule_grp(carry, grp_i, block_i, n_prior_rules_arr, n_rules_per_grp_arr,
 
         
 def gen_tick_fn(obj_to_idxs, coll_mat, tree_rules, meta_objs, jit, n_objs, char_to_obj):
-    if len(tree_rules) == 0:
-        pass
-    else:
-        rule_blocks = []
-        late_rule_grps = []
-        for rule_block in tree_rules:
+    rule_blocks = []
+    late_rule_grps = []
+    for rule_block in tree_rules:
 
-            # FIXME: what's with this unnecessary list?
-            assert len(rule_block) == 1
-            rule_block = rule_block[0]
+        # FIXME: what's with this unnecessary list?
+        assert len(rule_block) == 1
+        rule_block = rule_block[0]
 
-            looping = rule_block.looping
-            rule_grps = []
-            for rule in rule_block.rules:
-                sub_rule_fns = gen_subrules_meta(rule, n_objs, obj_to_idxs, meta_objs, coll_mat, rule_name=str(rule), 
-                                                 char_to_obj=char_to_obj, jit=jit)
-                if not 'late' in rule.prefixes:
-                    rule_grps.append(sub_rule_fns)
-                else:
-                    late_rule_grps.append(sub_rule_fns)
-            rule_blocks.append((looping, rule_grps))
+        looping = rule_block.looping
+        rule_grps = []
+        for rule in rule_block.rules:
+            sub_rule_fns = gen_subrules_meta(rule, n_objs, obj_to_idxs, meta_objs, coll_mat, rule_name=str(rule), 
+                                                char_to_obj=char_to_obj, jit=jit)
+            if not 'late' in rule.prefixes:
+                rule_grps.append(sub_rule_fns)
+            else:
+                late_rule_grps.append(sub_rule_fns)
+        rule_blocks.append((looping, rule_grps))
 
     rule_blocks.append((False, [gen_move_rules(obj_to_idxs, coll_mat, n_objs, jit=jit)]))
     # Can we have loops in late rules? I hope not.
@@ -1819,6 +1846,7 @@ class PSState:
     init_heuristic: int
     prev_heuristic: int
     step_i: int
+    rng: chex.PRNGKey
 
 @flax.struct.dataclass
 class PSParams:
@@ -1889,9 +1917,14 @@ class PSEnv:
         self.check_win = gen_check_win(tree.win_conditions, self.obj_to_idxs, meta_objs, self.char_to_obj, jit=self.jit)
         if 'player' in self.obj_to_idxs:
             self.player_idxs = [self.obj_to_idxs['player']]
-        else:
+        elif 'player' in meta_objs:
             player_objs = expand_meta_objs(['player'], meta_objs, char_to_obj)
             self.player_idxs = [self.obj_to_idxs[p] for p in player_objs]
+        elif 'player' in joint_tiles: 
+            sub_objs = joint_tiles['player']
+            self.player_idxs = [self.obj_to_idxs[sub_obj] for sub_obj in sub_objs]
+        else: 
+            raise ValueError("Cannot figure out what indices to assign to player.")
         self.player_idxs = np.array(self.player_idxs)
         if DEBUG:
             print(f'player_idxs: {self.player_idxs}')
@@ -1920,7 +1953,7 @@ class PSEnv:
             else:
                 # assert len(obj.colors) == 1
                 if len(obj.colors) != 1:
-                    breakpoint()
+                    raise ValueError(f"Object {obj_key} has more than one color, but no sprite.")
                 if DEBUG:
                     print(f'rendering solid color for {obj_key}')
                 im = render_solid_color(obj.colors[0])
@@ -1973,7 +2006,7 @@ class PSEnv:
         )
 
     def char_level_to_multihot(self, level):
-        int_level = np.vectorize(lambda x: self.chars_to_idxs[x])(level)
+        int_level = np.vectorize(lambda x: self.chars_to_idxs[x.lower()])(level)
         multihot_level = self.obj_vecs[int_level]
         multihot_level = rearrange(multihot_level, "h w c -> c h w")
 
@@ -2016,18 +2049,20 @@ class PSEnv:
         _, _, init_heuristic = self.check_win(lvl)
         state = PSState(
             multihot_level=lvl,
-            win = jnp.array(False),
-            score = 0,
-            heuristic = np.iinfo(np.int32).min,
-            restart = jnp.array(False),
-            step_i = 0,
-            init_heuristic = init_heuristic,
-            prev_heuristic = init_heuristic,
+            win=jnp.array(False),
+            score=0,
+            heuristic=np.iinfo(np.int32).min,
+            restart=jnp.array(False),
+            step_i=0,
+            init_heuristic=init_heuristic,
+            prev_heuristic=init_heuristic,
+            rng=rng,
         )
         if self.tree.prelude.run_rules_on_level_start:
             lvl = self.apply_player_force(-1, state)
-            lvl, _, _, _, _, _ = self.tick_fn(rng, lvl)
+            lvl, _, _, _, _, _, rng = self.tick_fn(rng, lvl)
             lvl = lvl[:self.n_objs]
+            state = state.replace(multihot_level=lvl, rng=rng)
         obs = self.get_obs(state)
         return obs, state
 
@@ -2156,6 +2191,7 @@ class PSEnv:
             step_i=state.step_i + 1,
             init_heuristic=state.init_heuristic,
             prev_heuristic=heuristic,
+            rng=rng,
         )
         obs = self.get_obs(state)
         if DEBUG:

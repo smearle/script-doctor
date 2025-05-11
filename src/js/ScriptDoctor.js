@@ -154,6 +154,7 @@ async function solveLevelBFS(levelIdx, captureStates=false, maxIters=1_000_000) 
   const timeout_ms = 60 * 1000;
   console.log('max iters:', maxIters);
   console.log('timeout:', timeout_ms);
+  clearInputHistory();
 	precalcDistances();
 
   // Load the level
@@ -188,6 +189,8 @@ async function solveLevelBFS(levelIdx, captureStates=false, maxIters=1_000_000) 
       return [sol, false, bestScore, bestState, i, true];
     }
 
+    // This is a global variable of previous states. Clear it to be safe (though processInputSearch shouldn't be using 
+    // it)
     backups = [];
 
     // const level = frontier.shift();
@@ -256,6 +259,11 @@ async function solveLevelBFS(levelIdx, captureStates=false, maxIters=1_000_000) 
         // console.log('State already visited:', level.objects);
       }
     }
+    // Every 1k iterations, yield to the event loop to allow for UI updates
+    if (i % 1000 == 0) {
+      await new Promise(resolve => setTimeout(resolve, 1)); // Small delay for live feedback
+    }
+
     if (i % 10_000 == 0) {
       now = Date.now();
       console.log('Iteration:', i);
@@ -565,7 +573,6 @@ async function solveLevelBestFirst(captureStates=false, gameHash=0, levelI=0, ma
 	// restartTarget = backupLevel();
 	DoRestartSearch();
 	hasUsedCheckpoint = false;
-	backups = [];
 	var oldDT = deltatime;
 	deltatime = 0;
 	var actions = [0, 1, 2, 3, 4];
@@ -1430,6 +1437,9 @@ async function fromPlanSweep() {
 }
 
 async function collectGameData(gamePath, captureStates=true) {
+  console.log(`Heap: ${(performance.memory.usedJSHeapSize / 1e6).toFixed(2)} MB`);
+  redraw();
+
   // Load game
   const response = await fetch('/load_game_from_file', {
     method: 'POST',
@@ -1440,6 +1450,7 @@ async function collectGameData(gamePath, captureStates=true) {
   const code = await response.text();
   
   // Initialize game
+  editor.clearHistory();
   editor.setValue(code);
   clearConsole();
   setEditorClean();
@@ -1448,14 +1459,16 @@ async function collectGameData(gamePath, captureStates=true) {
 
   // Process each level
   for (let levelIdx = 0; levelIdx < state.levels.length; levelIdx++) {
+    clearConsole();
     if (!state.levels[levelIdx].hasOwnProperty('height')) {
       continue;
     }
+    console.log(`Heap: ${(performance.memory.usedJSHeapSize / 1e6).toFixed(2)} MB`);
     
     console.log(`Processing level ${levelIdx} of game ${gamePath}`);
     compile(['loadLevel', levelIdx], code);
     // const [sol, n_iters] = await solveLevelAStar(captureStates=captureStates, gameHash=gamePath, level_i=level, maxIters=1_000_000);
-    const solDir = `sols/${gamePath}`;
+    const solDir = `data/js_sols/${gamePath}`;
     const solPath = `${solDir}/level-${levelIdx}.json`;
     // If the solution exists, skip it
     const solExists = await fetch('/file_exists', {
