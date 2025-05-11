@@ -28,10 +28,10 @@ DEBUG = False
 PRINT_SCORE = True
 # DEBUG = True
 
-# per-object movement forces that can be applied: left, right, up, down, action
-N_MOVEMENTS = 5
+# Per-object forces forces that can be applied: left, right, up, down; action.
+N_FORCES = 5
+N_MOVEMENTS = 4
 ACTION = 4
-
 
 # @partial(jax.jit, static_argnums=(0))
 def disambiguate_meta(obj, cell_meta_objs, kernel_meta_objs, pattern_meta_objs, obj_to_idxs):
@@ -372,7 +372,7 @@ def gen_subrules_meta(rule: Rule, n_objs, obj_to_idxs, meta_objs, coll_mat, rule
 
     def is_obj_forceless(obj_idx, m_cell):
         # note that `action` does not count as a force
-        return jnp.sum(jax.lax.dynamic_slice(m_cell, (n_objs + (obj_idx * N_MOVEMENTS),), (4,))) == 0
+        return jnp.sum(jax.lax.dynamic_slice(m_cell, (n_objs + (obj_idx * N_FORCES),), (4,))) == 0
 
     ### Functions for detecting regular atomic objects
     # @partial(jax.jit, static_argnames='obj_idx')
@@ -401,13 +401,11 @@ def gen_subrules_meta(rule: Rule, n_objs, obj_to_idxs, meta_objs, coll_mat, rule
     # @partial(jax.jit, static_argnames=('obj_idx', 'force_idx'))
     def detect_force_on_obj(m_cell, obj_idx, force_idx):
         obj_is_present = m_cell[obj_idx] == 1
-        force_is_present = m_cell[n_objs + (obj_idx * N_MOVEMENTS) + force_idx] == 1
-        # force_idx = np.argwhere(m_cell[n_objs + (obj_idx * N_MOVEMENTS):n_objs + (obj_idx * N_MOVEMENTS) + 4] == 1)
-        # assert len(force_idx) <= 1
+        force_is_present = m_cell[n_objs + (obj_idx * N_FORCES) + force_idx] == 1
         active = obj_is_present & force_is_present
         is_detected = np.zeros(m_cell.shape, dtype=bool)
         is_detected[obj_idx] = 1
-        is_detected[n_objs + (obj_idx * N_MOVEMENTS) + force_idx] = 1
+        is_detected[n_objs + (obj_idx * N_FORCES) + force_idx] = 1
         detected = jax.lax.cond(
             active,
             lambda: is_detected,
@@ -465,11 +463,11 @@ def gen_subrules_meta(rule: Rule, n_objs, obj_to_idxs, meta_objs, coll_mat, rule
 
     # @partial(jax.jit, static_argnames=())
     def detect_force_on_meta(m_cell, obj_idxs, force_idx):
-        dummy_force_obj_vec = jnp.zeros(n_objs + n_objs * N_MOVEMENTS, dtype=bool)
+        dummy_force_obj_vec = jnp.zeros(n_objs + n_objs * N_FORCES + 1, dtype=bool)
 
         def force_obj_vec_fn(obj_idx):
             force_obj_vec = dummy_force_obj_vec.at[obj_idx].set(1)
-            force_obj_vec = force_obj_vec.at[n_objs + obj_idx * N_MOVEMENTS + force_idx].set(1)
+            force_obj_vec = force_obj_vec.at[n_objs + obj_idx * N_FORCES + force_idx].set(1)
             return force_obj_vec
         
         force_obj_vecs = jax.vmap(force_obj_vec_fn)(obj_idxs)
@@ -485,7 +483,7 @@ def gen_subrules_meta(rule: Rule, n_objs, obj_to_idxs, meta_objs, coll_mat, rule
         )
         is_detected = jnp.zeros(m_cell.shape, dtype=bool)
         is_detected = is_detected.at[obj_idx].set(1)
-        is_detected = is_detected.at[n_objs + (obj_idx * N_MOVEMENTS) + force_idx].set(1)
+        is_detected = is_detected.at[n_objs + (obj_idx * N_FORCES) + force_idx].set(1)
         detected = jax.lax.cond(
             active,
             lambda: is_detected,
@@ -566,7 +564,7 @@ def gen_subrules_meta(rule: Rule, n_objs, obj_to_idxs, meta_objs, coll_mat, rule
         for obj_idx in obj_idxs:
 
             obj_is_present = m_cell[obj_idx] == 1
-            obj_forces = jax.lax.dynamic_slice(m_cell, (n_objs + (obj_idx * N_MOVEMENTS),), (4,))
+            obj_forces = jax.lax.dynamic_slice(m_cell, (n_objs + (obj_idx * N_FORCES),), (4,))
             if vertical:
                 vertical_mask = np.array([0, 1, 0, 1], dtype=bool)
                 obj_forces = jnp.logical_and(obj_forces, vertical_mask)
@@ -577,7 +575,7 @@ def gen_subrules_meta(rule: Rule, n_objs, obj_to_idxs, meta_objs, coll_mat, rule
             obj_active = obj_is_present & (force_idx != -1)
 
             active_detected = detected.at[obj_idx].set(1)
-            active_detected = active_detected.at[n_objs + (obj_idx * N_MOVEMENTS) + force_idx].set(1)
+            active_detected = active_detected.at[n_objs + (obj_idx * N_FORCES) + force_idx].set(1)
 
             detected = jax.lax.select(
                 obj_active,
@@ -659,7 +657,7 @@ def gen_subrules_meta(rule: Rule, n_objs, obj_to_idxs, meta_objs, coll_mat, rule
                 obj_names.append(obj)
                 sub_objs = expand_meta_objs([obj], meta_objs, char_to_obj)
                 obj_idxs = np.array([obj_to_idxs[so] for so in sub_objs])
-                obj_vec = np.zeros((n_objs + n_objs * N_MOVEMENTS), dtype=bool)
+                obj_vec = np.zeros((n_objs + n_objs * N_FORCES + 1), dtype=bool)
                 obj_vec[obj_idxs] = 1
                 if obj in char_to_obj:
                     obj = char_to_obj[obj]
@@ -727,7 +725,7 @@ def gen_subrules_meta(rule: Rule, n_objs, obj_to_idxs, meta_objs, coll_mat, rule
             #     #     detected = detected.at[detect_obj_out.obj_idx].set(1)
             #     detected = detected | detect_obj_out.detected
             #     if detect_obj_out.force_idx is not None:
-            #         detected = detected.at[n_objs + N_MOVEMENTS * detect_obj_out.obj_idx + detect_obj_out.force_idx].set(1)
+            #         detected = detected.at[n_objs + N_FORCES * detect_obj_out.obj_idx + detect_obj_out.force_idx].set(1)
             #         if force_idx is None:
             #             force_idx = detect_obj_out.force_idx
 
@@ -801,7 +799,7 @@ def gen_subrules_meta(rule: Rule, n_objs, obj_to_idxs, meta_objs, coll_mat, rule
         obj_idx = disambiguate_meta(obj, meta_objs, kernel_meta_objs, pattern_meta_objs, obj_to_idxs)
         m_cell = m_cell.at[obj_idx].set(0)
         jax.lax.dynamic_update_slice(
-            m_cell, jnp.zeros(n_objs, dtype=bool), (n_objs + obj_idx * N_MOVEMENTS,)
+            m_cell, jnp.zeros(n_objs, dtype=bool), (n_objs + obj_idx * N_FORCES,)
         )
         return rng, m_cell
 
@@ -812,7 +810,7 @@ def gen_subrules_meta(rule: Rule, n_objs, obj_to_idxs, meta_objs, coll_mat, rule
         for obj_idx in obj_idxs:
             m_cell = m_cell.at[obj_idx].set(0)
             jax.lax.dynamic_update_slice(
-                m_cell, jnp.zeros(N_MOVEMENTS, dtype=bool), (n_objs + obj_idx * N_MOVEMENTS,)
+                m_cell, jnp.zeros(N_FORCES, dtype=bool), (n_objs + obj_idx * N_FORCES,)
             )
         return rng, m_cell
 
@@ -827,17 +825,17 @@ def gen_subrules_meta(rule: Rule, n_objs, obj_to_idxs, meta_objs, coll_mat, rule
         m_cell = m_cell.at[obj_idx].set(1)
         if force_idx is None:
             # Generate random movement.
-            force_idx = jax.random.randint(rng, (1,), 0, N_MOVEMENTS-1)[0]
+            force_idx = jax.random.randint(rng, (1,), 0, N_FORCES-1)[0]
             rng, _ = jax.random.split(rng)
         # Remove any existing forces from the object
         m_cell = jax.lax.dynamic_update_slice(
-            m_cell, jnp.zeros(N_MOVEMENTS, dtype=bool), (n_objs + obj_idx * N_MOVEMENTS,)
+            m_cell, jnp.zeros(N_FORCES, dtype=bool), (n_objs + obj_idx * N_FORCES,)
         )
         # Also remove player action mask
         m_cell = m_cell.at[-1].set(0)
 
         # Place the new force
-        m_cell = m_cell.at[n_objs + (obj_idx * N_MOVEMENTS) + force_idx].set(1)
+        m_cell = m_cell.at[n_objs + (obj_idx * N_FORCES) + force_idx].set(1)
         m_cell = remove_colliding_objs(m_cell, obj_idx, coll_mat)
 
         if jit:
@@ -877,7 +875,7 @@ def gen_subrules_meta(rule: Rule, n_objs, obj_to_idxs, meta_objs, coll_mat, rule
         )
             
         m_cell = m_cell.at[obj_idx].set(1)
-        m_cell = m_cell.at[n_objs + (obj_idx * N_MOVEMENTS) + force_idx].set(1)
+        m_cell = m_cell.at[n_objs + (obj_idx * N_FORCES) + force_idx].set(1)
         if DEBUG:
             jax.debug.print('project_moving_obj, obj_idx: {obj_idx}, force_idx: {force_idx}',
                             obj_idx=obj_idx, force_idx=force_idx)
@@ -891,7 +889,7 @@ def gen_subrules_meta(rule: Rule, n_objs, obj_to_idxs, meta_objs, coll_mat, rule
         pattern_meta_objs = pattern_detect_out.detected_meta_objs
         obj_idx = disambiguate_meta(obj, meta_objs, kernel_meta_objs, pattern_meta_objs, obj_to_idxs)
         m_cell = m_cell.at[obj_idx].set(1)
-        m_cell = m_cell.at[n_objs + (obj_idx * N_MOVEMENTS): n_objs + ((obj_idx + 1) * N_MOVEMENTS)].set(0)
+        m_cell = m_cell.at[n_objs + (obj_idx * N_FORCES): n_objs + ((obj_idx + 1) * N_FORCES)].set(0)
         m_cell = remove_colliding_objs(m_cell, obj_idx, coll_mat)
         return rng, m_cell
 
@@ -1883,7 +1881,7 @@ def apply_movement(rng, lvl, obj_to_idxs, coll_mat, n_objs, jit=True):
     force_arr = lvl[0, n_objs:]
     # Mask out all forces corresponding to ACTION.
     force_mask = np.ones((force_arr.shape[0],), dtype=bool)
-    force_mask[ACTION::N_MOVEMENTS] = 0
+    force_mask[ACTION::N_FORCES] = 0
     force_arr = force_arr[force_mask]
     # Rearrange the array, since we want to apply force to the "first" objects spatially on the map.
     force_arr = rearrange(force_arr, "c h w -> h w c")
@@ -1896,10 +1894,10 @@ def apply_movement(rng, lvl, obj_to_idxs, coll_mat, n_objs, jit=True):
         x, y, c = coords[i]
         is_force_present = x != -1
         # Get the obj idx on which the force is applied.
-        obj_idx = c // (N_MOVEMENTS - 1)
+        obj_idx = c // (N_FORCES - 1)
         # Determine where the object would move and whether such a move would be legal.
         forces_to_deltas = jnp.array([[0, -1], [1, 0], [0, 1], [-1, 0]])
-        delta = forces_to_deltas[c % (N_MOVEMENTS - 1)]
+        delta = forces_to_deltas[c % (N_FORCES - 1)]
         x_1, y_1 = x + delta[0], y + delta[1]
         would_collide = jnp.any(lvl[0, :n_objs, x_1, y_1] * coll_mat[obj_idx])
         out_of_bounds = (x_1 < 0) | (x_1 >= lvl.shape[2]) | (y_1 < 0) | (y_1 >= lvl.shape[3])
@@ -1910,8 +1908,8 @@ def apply_movement(rng, lvl, obj_to_idxs, coll_mat, n_objs, jit=True):
         # And remove any forces that were applied to the object before it moved.
         new_lvl = jax.lax.dynamic_update_slice(
             new_lvl,
-            jnp.zeros((1, N_MOVEMENTS, 1, 1), dtype=bool),
-            (0, n_objs + (obj_idx * N_MOVEMENTS), x, y)
+            jnp.zeros((1, N_FORCES, 1, 1), dtype=bool),
+            (0, n_objs + (obj_idx * N_FORCES), x, y)
         )
         lvl = jax.lax.select(can_move, new_lvl, lvl)
         i += 1
@@ -2198,7 +2196,7 @@ class PSEnv:
     def apply_player_force(self, action, state: PSState):
         multihot_level = state.multihot_level
         # Add a dummy object at the front. Add one final channel to mark the player's effect.
-        force_map = jnp.zeros((N_MOVEMENTS * (multihot_level.shape[0] + 1) + 1, *multihot_level.shape[1:]), dtype=bool)
+        force_map = jnp.zeros((N_FORCES * (multihot_level.shape[0] + 1) + 1, *multihot_level.shape[1:]), dtype=bool)
         
         def place_force(force_map, action):
             # This is a map-shape array of the obj-indices corresponding to the player objects active on these respective cells.
@@ -2209,7 +2207,7 @@ class PSEnv:
             xy_coords = xy_coords[:, None].repeat(len(self.player_idxs), axis=1)
 
             # This is a map-shaped array of the force-indices (and xy indices) that should be applied, given the player objects at these cells.
-            player_force_mask = player_int_mask * N_MOVEMENTS + action
+            player_force_mask = player_int_mask * N_FORCES + action
 
             player_force_mask = jnp.concatenate((player_force_mask[None], xy_coords), axis=0)
             player_coords = player_force_mask.reshape(3, -1).T
@@ -2240,7 +2238,7 @@ class PSEnv:
             if should_apply_force:
                 force_map = place_force(force_map, action)
         # remove the dummy object
-        force_map = force_map[N_MOVEMENTS:]
+        force_map = force_map[N_FORCES:]
 
         lvl = jnp.concatenate((multihot_level, force_map), axis=0)
 
@@ -2379,7 +2377,7 @@ def multihot_to_desc(multihot_level, obj_to_idxs, n_objs):
                     force_names = ["left", "down", "right", "up", "action"]
                     forces = []
                     for f_idx, force_name in enumerate(force_names):
-                        force_channel = n_objs + (obj_idx * N_MOVEMENTS) + f_idx
+                        force_channel = n_objs + (obj_idx * N_FORCES) + f_idx
                         if force_channel < multihot_level.shape[0] and multihot_level[force_channel, h, w] > 0:
                             forces.append(f"force {force_name}")
                     
