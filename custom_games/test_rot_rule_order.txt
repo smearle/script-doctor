@@ -1,6 +1,7 @@
 title Carnival Shooter!
 author joe gigs
 background_color #022327
+verbose_logging
 
 OBJECTS
 

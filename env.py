@@ -1405,7 +1405,8 @@ def gen_subrules_meta(rule: Rule, n_objs, obj_to_idxs, meta_objs, coll_mat, rule
         # elif np.any(np.array([len(kernel) for kernel in l_kerns]) > 1):
         else:
             if np.all(np.array([len(lp) for lp in rule.left_kernels]) == 1) and not \
-                np.any([is_rel_force_in_kernel(lp) for lp in rule.left_kernels]):
+                np.any([is_rel_force_in_kernel(lp) for lp in rule.left_kernels]) and not \
+                np.any([is_rel_force_in_kernel(rp) for rp in rule.right_kernels]):
                 rots = [0]
             else:
                 rots = [2, 0, 3, 1]

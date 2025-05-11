@@ -26,6 +26,7 @@ class Config:
 cs = ConfigStore.instance()
 cs.store(name="config", node=Config)
 
+SCALING_FACTOR = 10
 
 def human_loop(env: PSEnv, level: int = 0, profile=False):
     lvl_i = level
@@ -38,7 +39,7 @@ def human_loop(env: PSEnv, level: int = 0, profile=False):
     im = np.array(im, dtype=np.uint8)
     
     # Resize the image by a factor of 5
-    new_h, new_w = tuple(np.array(im.shape[:2]) * 10)
+    new_h, new_w = tuple(np.array(im.shape[:2]) * SCALING_FACTOR)
     im = cv2.resize(im, (new_w, new_h), interpolation=cv2.INTER_NEAREST)
     state_hist = []
     
@@ -97,6 +98,7 @@ def human_loop(env: PSEnv, level: int = 0, profile=False):
                 state = state_hist[-1]
             im = env.render(state)
             im = np.array(im, dtype=np.uint8)
+            new_h, new_w = tuple(np.array(im.shape[:2]) * SCALING_FACTOR)
             im = cv2.resize(im, (new_w, new_h), interpolation=cv2.INTER_NEAREST)
             cv2.imshow(env.title, im)
 
@@ -123,6 +125,7 @@ def human_loop(env: PSEnv, level: int = 0, profile=False):
             print(multihot_to_desc(state.multihot_level, env.obj_to_idxs, env.n_objs))
             im = env.render(state)
             im = np.array(im, dtype=np.uint8)
+            new_h, new_w = tuple(np.array(im.shape[:2]) * SCALING_FACTOR)
             im = cv2.resize(im, (new_w, new_h), interpolation=cv2.INTER_NEAREST)
             cv2.imshow(env.title, im)
             # Add a short waitKey here to allow the window to update.
@@ -140,6 +143,7 @@ def human_loop(env: PSEnv, level: int = 0, profile=False):
             state_hist.append(state)
             im = env.render(state)
             im = np.array(im, dtype=np.uint8)
+            new_h, new_w = tuple(np.array(im.shape[:2]) * SCALING_FACTOR)
             im = cv2.resize(im, (new_w, new_h), interpolation=cv2.INTER_NEAREST)
             cv2.imshow(env.title, im)
     
@@ -155,6 +159,7 @@ def human_loop(env: PSEnv, level: int = 0, profile=False):
             obs, state = env.reset(rng, params)
             im = env.render(state)
             im = np.array(im, dtype=np.uint8)
+            new_h, new_w = tuple(np.array(im.shape[:2]) * SCALING_FACTOR)
             im = cv2.resize(im, (new_w, new_h), interpolation=cv2.INTER_NEAREST)
             cv2.imshow(env.title, im)
     # Close the image window
