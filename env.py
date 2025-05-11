@@ -1995,7 +1995,8 @@ class PSEnv:
         self.levels = tree.levels
         self.level_i = level_i
         self.require_player_movement = tree.prelude.require_player_movement
-        print(f"Processing legend for {self.title}")
+        if DEBUG:
+            print(f"Processing legend for {self.title}")
         obj_to_char, meta_objs, joint_tiles = process_legend(tree.legend)
         names_to_alts = get_names_to_alts(tree.objects)
         alts_to_names = {v: k for k, v in names_to_alts.items()}
@@ -2011,7 +2012,8 @@ class PSEnv:
                     obj_to_char[obj.alt_name] = obj_key
         self.char_to_obj = char_to_obj = {v: k for k, v in obj_to_char.items()}
 
-        print(f"Expanding collision layers for {self.title}")
+        if DEBUG:
+            print(f"Expanding collision layers for {self.title}")
         collision_layers = expand_collision_layers(tree.collision_layers, meta_objs, char_to_obj)
         atomic_obj_names = [name for layer in collision_layers for name in layer]
         # atomic_obj_names = [name for name in tree.objects.keys()]
@@ -2027,10 +2029,12 @@ class PSEnv:
                 self.obj_to_idxs[obj] = self.obj_to_idxs[sub_objs[0]]
         self.n_objs = len(atomic_obj_names)
         coll_mat = np.einsum('ij,ik->jk', coll_masks, coll_masks, dtype=bool)
-        print(f"Generating tick function for {self.title}")
+        if DEBUG:
+            print(f"Generating tick function for {self.title}")
         self.tick_fn = gen_tick_fn(self.obj_to_idxs, coll_mat, tree.rules, meta_objs, jit=self.jit, n_objs=self.n_objs,
                                    char_to_obj=char_to_obj)
-        print(f"Generating check win function for {self.title}")
+        if DEBUG:
+            print(f"Generating check win function for {self.title}")
         self.check_win = gen_check_win(tree.win_conditions, self.obj_to_idxs, meta_objs, self.char_to_obj, jit=self.jit)
         if 'player' in self.obj_to_idxs:
             self.player_idxs = [self.obj_to_idxs['player']]

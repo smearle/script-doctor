@@ -593,9 +593,9 @@ if __name__ == "__main__":
         n_timeouts = len(parse_results['parse_timeout'])
         parse_results['stats']['total'] = len(game_files)
         parse_results['stats']['success'] = n_success
-        parse_results['stats']['parse_error'] = n_parse_errors
-        parse_results['stats']['tree_error'] = n_tree_errors
         parse_results['stats']['env_error'] = n_env_errors
+        parse_results['stats']['tree_error'] = n_tree_errors
+        parse_results['stats']['parse_error'] = n_parse_errors
         parse_results['stats']['parse_timeout'] = n_timeouts
 
         with open(parse_results_path, "w", encoding='utf-8') as file:
