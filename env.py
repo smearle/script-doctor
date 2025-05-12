@@ -324,9 +324,10 @@ class PatternFnReturn:
 
 def is_rel_force_in_kernel(k):
     for c in k:
-        for o in c[0].split(' '):
-            if o in ['>', 'v', '^', '<']:
-                return True
+        for rule_content in c:
+            for o in rule_content.split(' '):
+                if o in ['>', 'v', '^', '<']:
+                    return True
     return False
 
 def is_perp_or_par_in_pattern(p):

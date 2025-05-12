@@ -343,7 +343,7 @@ def preprocess_ps(txt):
     # Remove whitespace at start of any line
     txt = re.sub(r'^[ \t]+', '', txt, flags=re.MULTILINE)
 
-    # Remove any lines that are just `=+`
+    # Remove any lines that are just r`=+`
     txt = re.sub(r'^=+\n', '', txt, flags=re.MULTILINE)
 
     # Replace any pairs of commas, separated by whitespace, with a single comma
@@ -369,6 +369,10 @@ def preprocess_ps(txt):
 
     # any more-than-double newlines should be replaced by a single newline
     txt = re.sub(r'\n{3,}', '\n\n', txt)
+
+    # Remove any lines that are just a single character. (Very niche patch, this one is. But we know such lines can 
+    # never be anything useful, so this should be safe...)
+    txt = re.sub(r'^[.]\n', '', txt, flags=re.MULTILINE)
 
     # Remove everything until "objects" (case insensitive)
     # txt = re.sub(r'^.*OBJECTS', 'OBJECTS', txt, flags=re.MULTILINE | re.DOTALL | re.IGNORECASE)
