@@ -2340,26 +2340,6 @@ class PSEnv:
         init_lvl = state.multihot_level.copy()
         lvl = self.apply_player_force(action, state)
 
-        # def cond_fun(loop_state):
-        #     lvl, lvl_changed, n_apps, cancelled = loop_state
-        #     return jax.numpy.logical_and(lvl_changed, n_apps < 100) & ~cancelled
-            
-        # def body_fun(carry):
-        #     lvl, lvl_changed_last, n_apps, cancelled = carry
-        #     new_lvl, lvl_changed, cancelled = self.rule_fn(lvl)
-        #     return (new_lvl, lvl_changed, n_apps + 1, cancelled)
-        
-        # # Initial state for the while loop
-        # init_state = (lvl, True, 0, False)
-
-        # if self.jit:
-        #     final_lvl, _, _, cancelled = jax.lax.while_loop(cond_fun, body_fun, init_state)
-        
-        # else:
-        #     while cond_fun(init_state):
-        #         init_state = body_fun(init_state)
-        #     final_lvl, _, _, cancelled = init_state
-
         # Actually, just apply the rule function once
         cancelled = False
         restart = False
@@ -2367,7 +2347,9 @@ class PSEnv:
 
         accept_lvl_change = ((not self.require_player_movement) or 
                              player_has_moved(init_lvl, final_lvl, self.obj_to_idxs, self.meta_objs, self.char_to_obj)) & ~cancelled
-        # jax.debug.print('accept level change: {accept_lvl_change}', accept_lvl_change=accept_lvl_change) 
+        # if DEBUG:
+        #     jax.debug.print('accept level change: {accept_lvl_change}', accept_lvl_change=accept_lvl_change) 
+
         final_lvl = jax.lax.select(
             accept_lvl_change,
             final_lvl,
@@ -2378,8 +2360,12 @@ class PSEnv:
         win = win | tick_win
         if PRINT_SCORE:
             jax.debug.print('heuristic: {heuristic}, score: {score}', heuristic=heuristic, score=score)
+
         # reward = (heuristic - state.init_heuristic) / jnp.abs(state.init_heuristic)
         reward = heuristic - state.prev_heuristic
+        # reward += 10 if win else 0
+        reward = jax.lax.select(win, reward + 1, reward)
+        reward -= 0.01
 
         done = win | ((state.step_i + 1) >= self.max_steps)
         info = {}

@@ -522,6 +522,12 @@ games_to_skip = set({'Broken Rigid Body',
                      "Good_Example",  # Playable, but doesn't want to solve by BFS.
                      })
 
+# Games with tons of levels, redundant mechanics, or that we'll otherwise leave out for tha sake of rapid validation
+# TODO: Add these back in later to fully validate the engine.
+games_to_skip_for_speed = set({
+    "Microban_I",
+})
+
 @app.route('/get_player_action', methods=['POST'])
 def get_player_action():
     data = request.json
@@ -554,6 +560,10 @@ def list_scraped_games():
             continue
         if filename in games_set:
             print(f"Skipping {filename} because it is already in the set.")
+            continue
+        if filename in games_to_skip_for_speed:
+            print(f"Skipping {filename} because we have marked it to be skipped for speed.")
+            print("NOTE: Add this back in later to fully validate the engine!")
             continue
         games_set.add(filename)
         games.append(filename)

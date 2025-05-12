@@ -573,26 +573,27 @@ if __name__ == "__main__":
     os.makedirs(scrape_log_dir, exist_ok=True)
     simpd_games = set(os.listdir(simpd_dir))
     for i, filename in enumerate(game_files):
+        game_name = os.path.basename(filename)
         og_game_path = os.path.join(GAMES_DIR, filename)
         print(f"Parsing {filename} ({i+1}/{len(game_files)})")
         ps_tree, success, err_msg = get_tree_from_txt(parser, filename[:-4], log_dir=scrape_log_dir, overwrite=args.overwrite)
 
         if success == PSErrors.SUCCESS:
-            parse_results['success'].append(og_game_path)
+            parse_results['success'].append(game_name)
         elif success == PSErrors.PARSE_ERROR:
             if err_msg not in parse_results['parse_error']:
                 parse_results['parse_error'][err_msg] = []
-            parse_results['parse_error'][err_msg].append(og_game_path)
+            parse_results['parse_error'][err_msg].append(game_name)
         elif success == PSErrors.TIMEOUT:
-            parse_results['parse_timeout'].append(og_game_path)
+            parse_results['parse_timeout'].append(game_name)
         elif success == PSErrors.TREE_ERROR:
             if err_msg not in parse_results['tree_error']:
                 parse_results['tree_error'][err_msg] = []
-            parse_results['tree_error'][err_msg].append(og_game_path)
+            parse_results['tree_error'][err_msg].append(game_name)
         elif success == PSErrors.ENV_ERROR:
             if err_msg not in parse_results['env_error']:
                 parse_results['env_error'][err_msg] = []
-            parse_results['env_error'][err_msg].append((og_game_path, count_rules(ps_tree)))
+            parse_results['env_error'][err_msg].append((game_name, count_rules(ps_tree)))
         else:
             breakpoint()
 

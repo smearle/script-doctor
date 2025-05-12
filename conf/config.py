@@ -59,7 +59,7 @@ class Config:
     max_episode_steps: int = 100
 
     # How many milliseconds to wait between frames of the rendered gifs
-    gif_frame_duration: int = 25
+    gif_frame_duration: float = 0.1
 
     # To make the task simpler, always start with an empty map
     empty_start: bool = False
