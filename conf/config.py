@@ -16,7 +16,7 @@ class PSConfig:
 
     
 @dataclass
-BFSConfig:
+class BFSConfig:
     pass
 
 @dataclass

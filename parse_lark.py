@@ -430,6 +430,7 @@ def get_tree_from_txt(parser, game, log_dir: str = None, overwrite: bool = True)
 
     # print(f"Parsing game {filepath} ({i+1}/{len(game_files)})")
     simp_filepath = os.path.join(simpd_dir, simp_filename)
+    os.makedirs(simpd_dir, exist_ok=True)
     if overwrite or not (simp_filename in simpd_games):
         # Now save the simplified version of the file
         content = preprocess_ps(ps_text)
