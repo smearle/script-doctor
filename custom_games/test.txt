@@ -80,7 +80,7 @@ Player, Wall, Block
 RULES
 ======
 
-[> Player | Block] -> [ > Player | > Block ]
+[Player | Block] -> [ Block | Block ]
 
 ==============
 WINCONDITIONS

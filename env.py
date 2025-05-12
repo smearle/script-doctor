@@ -803,6 +803,8 @@ def gen_subrules_meta(rule: Rule, n_objs, obj_to_idxs, meta_objs, coll_mat, rule
                 breakpoint()
         m_cell = m_cell.at[obj_idx].set(1)
 
+        # FIXME: Somehow, amazingly, this ends up moving the projected object to a different POSITION?! But we
+        #    can't even SEE the position here! `m_cell` is just a 1D vector of booleans at a FIXED posisition in the map.
         # Reassign any forces belonging to the detected object to the new object
         # First, identify the forces of the detected object.
         detected_forces = jax.lax.dynamic_slice(
@@ -1517,6 +1519,45 @@ def player_has_moved(lvl_0, lvl_1, obj_to_idxs, meta_objs, char_to_obj):
         jax.debug.print('player moved: {player_moved}', player_moved=player_moved)
     return player_moved
 
+def expand_joint_objs(objs, joint_tiles):
+    """Expand a list of objects to include all the objects in the joint tiles."""
+    expanded_objs = []
+    for obj in objs:
+        if obj in joint_tiles:
+            expanded_objs.extend(expand_joint_objs(joint_tiles[obj], joint_tiles))
+        else:
+            expanded_objs.append(obj)
+    return expanded_objs
+
+def expand_joint_objs_in_pattern(pattern, joint_tiles):
+    new_pattern = []
+    for kernel in pattern:
+        new_kernel = []
+        for cell in kernel:
+            new_cell = []
+            for rule_content in cell:
+                modifier_obj = rule_content.split(' ')
+                if len(modifier_obj) == 1:
+                    modifier = None
+                    obj = modifier_obj[0]
+                elif len(modifier_obj) == 2:
+                    modifier = modifier_obj[0]
+                    obj = modifier_obj[1]
+                else:
+                    raise Exception(f'Invalid rule_content: {rule_content}. Lark parsing issue?')
+                obj = obj.lower()
+                if obj in joint_tiles:
+                    sub_objs = expand_joint_objs([obj], joint_tiles)
+                    for so in sub_objs:
+                        if modifier is not None:
+                            new_cell.append(f'{modifier} {so}')
+                        else:
+                            new_cell.append(so)
+                else:
+                    new_cell.append(rule_content)
+            new_kernel.append(new_cell)
+        new_pattern.append(new_kernel)
+    return new_pattern
 
 @flax.struct.dataclass
 class RuleState:
@@ -1679,24 +1720,24 @@ class LoopRuleGroupState:
     grp_i: int
     block_i: int
 
-def apply_rule_grp(loop_rule_group_state: LoopRuleGroupState, all_rule_fns, jit, n_prior_rules_arr, n_rules_per_grp_arr, obj_to_idxs, n_objs):
+def apply_rule_grp(loop_group_state: LoopRuleGroupState, all_rule_fns, jit, n_prior_rules_arr, n_rules_per_grp_arr, obj_to_idxs, n_objs):
     """Iterate through each rule in the group. Loop it until it no longer has an effect."""
 
     _loop_rule_fn = partial(loop_rule_fn, all_rule_fns=all_rule_fns, n_prior_rules_arr=n_prior_rules_arr,
                         jit=jit, obj_to_idxs=obj_to_idxs, n_objs=n_objs)
 
-    block_i, grp_i = loop_rule_group_state.block_i, loop_rule_group_state.grp_i
+    block_i, grp_i = loop_group_state.block_i, loop_group_state.grp_i
 
     n_rules_in_grp = n_rules_per_grp_arr[block_i, grp_i]
 
     rule_group_state = RuleGroupState(
-        lvl=loop_rule_group_state.lvl,
+        lvl=loop_group_state.lvl,
         applied=False,
-        cancelled=loop_rule_group_state.cancelled,
-        restart=loop_rule_group_state.restart,
-        again=loop_rule_group_state.again,
-        win=loop_rule_group_state.win,
-        rng=loop_rule_group_state.rng,
+        cancelled=loop_group_state.cancelled,
+        restart=loop_group_state.restart,
+        again=loop_group_state.again,
+        win=loop_group_state.win,
+        rng=loop_group_state.rng,
         rule_i=0,
         grp_i=grp_i,
         block_i=block_i,
@@ -1720,19 +1761,19 @@ def apply_rule_grp(loop_rule_group_state: LoopRuleGroupState, all_rule_fns, jit,
         while rule_group_state.rule_i < n_rules_in_grp and not rule_group_state.cancelled and not rule_group_state.restart:
             rule_group_state = _loop_rule_fn(rule_group_state)
 
-    again = loop_rule_group_state.again | rule_group_state.again
-    win = loop_rule_group_state.win | rule_group_state.win
+    again = loop_group_state.again | rule_group_state.again
+    win = loop_group_state.win | rule_group_state.win
     lvl = rule_group_state.lvl
 
     if DEBUG:
         jax.debug.print('  apply_rule_grp: group {grp_i} applied: {grp_applied}. again: {again}', grp_i=grp_i, grp_applied=rule_group_state.applied, again=again)
 
         if not jit:
-            if loop_rule_group_state.applied:
+            if loop_group_state.applied:
                 print('Level state after rule group application:\n' + multihot_to_desc(lvl[0], obj_to_idxs, n_objs))
 
     # return rule_group_state.lvl, rule_group_state.applied, grp_app_i, rule_group_state.cancelled, rule_group_state.restart, again, win, rule_group_state.rng
-    loop_rule_group_state = LoopRuleGroupState(
+    loop_group_state = LoopRuleGroupState(
         lvl=lvl,
         applied=rule_group_state.applied,
         cancelled=rule_group_state.cancelled,
@@ -1740,11 +1781,11 @@ def apply_rule_grp(loop_rule_group_state: LoopRuleGroupState, all_rule_fns, jit,
         again=again,
         win=win,
         rng=rule_group_state.rng,
-        app_i=loop_rule_group_state.app_i + 1,
-        grp_i=loop_rule_group_state.grp_i,
-        block_i=loop_rule_group_state.block_i,
+        app_i=loop_group_state.app_i + 1,
+        grp_i=loop_group_state.grp_i,
+        block_i=loop_group_state.block_i,
     )
-    return loop_rule_group_state
+    return loop_group_state
 
 @flax.struct.dataclass
 class RuleBlockState:
@@ -1758,7 +1799,7 @@ class RuleBlockState:
     grp_i: int
     block_i: int
 
-def loop_rule_grp(rule_block_state: RuleBlockState, _,  n_prior_rules_arr, n_rules_per_grp_arr, all_rule_fns, obj_to_idxs,
+def loop_rule_grp(rule_block_state: RuleBlockState,  n_prior_rules_arr, n_rules_per_grp_arr, all_rule_fns, obj_to_idxs,
                   n_objs, jit):
     """Given a rule group, repeatedly attempt to apply the group (by looping each rule in sequence) until the group no longer has an effect."""
     # lvl, grp_applied_prev, _, cancelled, restart, prev_again, win, rng = carry
@@ -1828,11 +1869,28 @@ def loop_rule_grp(rule_block_state: RuleBlockState, _,  n_prior_rules_arr, n_rul
     )
 
     # return (lvl, block_applied, grp_app_i, cancelled, restart, again, win, rng), None
-    return rule_block_state, _
+    return rule_block_state
 
+@flax.struct.dataclass
+class LoopRuleBlockState:
+    lvl: chex.Array
+    applied: bool
+    block_app_i: int
+    cancelled: bool
+    restart: bool
+    again: bool
+    win: bool
+    rng: chex.PRNGKey
+    block_i: int
 
-def apply_rule_block(carry, block_i, n_prior_rules_arr, n_rules_per_grp_arr, all_rule_fns, obj_to_idxs, n_objs, rule_grps, jit):
-    lvl, _, block_app_i, cancelled, restart, prev_again, win, rng = carry
+def apply_rule_block(rule_block_state: LoopRuleBlockState, 
+                     n_prior_rules_arr, n_rules_per_grp_arr, n_grps_per_block_arr, all_rule_fns, obj_to_idxs, n_objs,
+                     jit):
+    # lvl, _, block_app_i, cancelled, restart, prev_again, win, rng, block_i = carry
+    lvl, block_app_i, cancelled, restart, prev_again, win, rng, block_i = \
+        rule_block_state.lvl, rule_block_state.block_app_i, rule_block_state.cancelled, \
+        rule_block_state.restart, rule_block_state.again, rule_block_state.win, \
+        rule_block_state.rng, rule_block_state.block_i
     block_app_i += 1
     block_applied = False
     win = False
@@ -1853,22 +1911,28 @@ def apply_rule_block(carry, block_i, n_prior_rules_arr, n_rules_per_grp_arr, all
         grp_i=0,
         block_i=block_i,
     )
+    n_rule_grps = n_grps_per_block_arr[block_i]
     if jit:
         # FIXME: This should be a while that cancels if applicable
         # (lvl, block_applied, block_app_i, cancelled, restart, again, win, rng), _ = jax.lax.scan(
-        rule_block_state, _ = jax.lax.scan(
-            _loop_rule_grp,
-            init=rule_block_state,
-            xs=jnp.arange(len(rule_grps)),
+        # rule_block_state, _ = jax.lax.scan(
+        #     _loop_rule_grp,
+        #     init=rule_block_state,
+        #     xs=jnp.arange(len(rule_grps)),
+        # )
+        rule_block_state = jax.lax.while_loop(
+            cond_fun=lambda x: (x.grp_i < n_rule_grps) & ~x.cancelled & ~x.restart,
+            body_fun=_loop_rule_grp,
+            init_val=rule_block_state,
         )
         lvl, block_applied, cancelled, restart, again, win, rng = \
             rule_block_state.lvl, rule_block_state.applied, rule_block_state.cancelled, \
             rule_block_state.restart, rule_block_state.again, rule_block_state.win, rule_block_state.rng
     else:
-        again = False
-        for grp_i in range(len(rule_grps)):
-            rule_block_state, _ = _loop_rule_grp(
-                rule_block_state, grp_i)
+        again = False  # In case there are no groups in this block
+        while rule_block_state.grp_i < n_rule_grps and not cancelled and not restart:
+            rule_block_state = _loop_rule_grp(rule_block_state)
+            rule_block_state: RuleBlockState
             # lvl, block_applied, block_app_i, cancelled, restart, again, win, rng = carry
             lvl, block_applied, cancelled, restart, again, win, rng = \
                 rule_block_state.lvl, rule_block_state.applied, rule_block_state.cancelled, \
@@ -1882,50 +1946,97 @@ def apply_rule_block(carry, block_i, n_prior_rules_arr, n_rules_per_grp_arr, all
             if block_applied:
                 print(f'Level state after rule block {block_i} application:\n{multihot_to_desc(lvl[0], obj_to_idxs=obj_to_idxs, n_objs=n_objs)}')
 
+    rule_block_state = LoopRuleBlockState(
+        lvl=lvl,
+        applied=block_applied,
+        block_app_i=block_app_i,
+        cancelled=cancelled,
+        restart=restart,
+        again=again,
+        win=win,
+        rng=rng,
+        block_i=block_i,
+    )
 
-    return lvl, block_applied, block_app_i, cancelled, restart, again, win, rng
+    # return lvl, block_applied, block_app_i, cancelled, restart, again, win, rng, block_i
+    return rule_block_state
 
-def expand_joint_objs(objs, joint_tiles):
-    """Expand a list of objects to include all the objects in the joint tiles."""
-    expanded_objs = []
-    for obj in objs:
-        if obj in joint_tiles:
-            expanded_objs.extend(expand_joint_objs(joint_tiles[obj], joint_tiles))
-        else:
-            expanded_objs.append(obj)
-    return expanded_objs
+def loop_rule_block(carry, all_rule_fns, n_prior_rules_arr, n_rules_per_grp_arr, obj_to_idxs, n_objs, rule_grps, 
+                    blocks_are_looping_lst, jit, n_grps_per_block_arr):
+    lvl, applied, again, cancelled, restart, prev_win, rng, block_i = carry
 
-def expand_joint_objs_in_pattern(pattern, joint_tiles):
-    new_pattern = []
-    for kernel in pattern:
-        new_kernel = []
-        for cell in kernel:
-            new_cell = []
-            for rule_content in cell:
-                modifier_obj = rule_content.split(' ')
-                if len(modifier_obj) == 1:
-                    modifier = None
-                    obj = modifier_obj[0]
-                elif len(modifier_obj) == 2:
-                    modifier = modifier_obj[0]
-                    obj = modifier_obj[1]
-                else:
-                    raise Exception(f'Invalid rule_content: {rule_content}. Lark parsing issue?')
-                obj = obj.lower()
-                if obj in joint_tiles:
-                    sub_objs = expand_joint_objs([obj], joint_tiles)
-                    for so in sub_objs:
-                        if modifier is not None:
-                            new_cell.append(f'{modifier} {so}')
-                        else:
-                            new_cell.append(so)
-                else:
-                    new_cell.append(rule_content)
-            new_kernel.append(new_cell)
-        new_pattern.append(new_kernel)
-    return new_pattern
-                
+    _apply_rule_block = partial(apply_rule_block, n_prior_rules_arr=n_prior_rules_arr,
+                            n_rules_per_grp_arr=n_rules_per_grp_arr, all_rule_fns=all_rule_fns,
+                            obj_to_idxs=obj_to_idxs, n_objs=n_objs, jit=jit, n_grps_per_block_arr=n_grps_per_block_arr)
+
+    block_applied = True
+    block_app_i = 0
+    init_carry = (lvl, block_applied, block_app_i, cancelled, restart, again, prev_win, rng, block_i)
+    if not jit:
+        print(f'Level when applying block {block_i}:\n', multihot_to_desc(lvl[0], obj_to_idxs, n_objs))
+    # if looping:
+    looping = blocks_are_looping_lst[block_i]
+    loop_block_state = LoopRuleBlockState(
+        lvl=lvl,
+        applied=block_applied,
+        block_app_i=block_app_i,
+        cancelled=cancelled,
+        restart=restart,
+        again=again,
+        win=prev_win,
+        rng=rng,
+        block_i=block_i,
+    )
+    if jit:
+        def apply_block_loop():
+            # lvl, block_applied, block_app_i, cancelled, restart, block_again, win, rng, block_i = jax.lax.while_loop(
+            return jax.lax.while_loop(
+                cond_fun=lambda x: x.applied & ~x.cancelled & ~x.restart,
+                body_fun=_apply_rule_block,
+                init_val=loop_block_state,
+            )
+
+        def apply_block():
+            return _apply_rule_block(loop_block_state)
         
+        # lvl, block_applied, block_app_i, cancelled, restart, block_again, win, rng, block_i = jax.lax.cond(
+        loop_block_state = jax.lax.cond(
+            looping,
+            apply_block_loop,
+            apply_block,
+        )
+    else:
+        if looping:
+            while loop_block_state.applied and not loop_block_state.cancelled and not loop_block_state.restart:
+                loop_block_state = _apply_rule_block(loop_block_state)
+        else:
+            loop_block_state = _apply_rule_block(loop_block_state)
+            # lvl, block_applied, block_app_i, cancelled, restart, block_again, win, rng, block_i = carry
+    lvl, block_applied, block_app_i, cancelled, restart, block_again, win, rng, block_i = \
+        loop_block_state.lvl, loop_block_state.applied, loop_block_state.block_app_i, \
+        loop_block_state.cancelled, loop_block_state.restart, loop_block_state.again, \
+        loop_block_state.win, loop_block_state.rng, loop_block_state.block_i
+
+    block_applied = block_app_i > 1
+    # else:
+    #     lvl, block_applied, block_app_i, cancelled, restart, block_again, win, rng, block_i = \
+    #         _apply_rule_block(init_carry)
+    if DEBUG:
+        if jit:
+            jax.debug.print('loop_rule_block: block {block_i} applied: {block_applied}. again: {block_again}', block_i=block_i, block_applied=block_applied, block_again=block_again)
+        else:
+            if block_applied:
+                print(f'block {block_i} applied: True')
+            else:
+                print(f'block {block_i} applied: False')
+
+    again = block_again | again
+    applied = applied | block_applied
+    win = prev_win | win
+
+    return lvl, applied, again, cancelled, restart, win, rng, block_i + 1
+
+
 def gen_tick_fn(obj_to_idxs, coll_mat, tree_rules, meta_objs, jit, n_objs, char_to_obj, joint_tiles):
     rule_blocks = []
     late_rule_grps = []
@@ -1959,8 +2070,10 @@ def gen_tick_fn(obj_to_idxs, coll_mat, tree_rules, meta_objs, jit, n_objs, char_
     max_n_grps = max([len(rule_grps) for _, rule_grps in rule_blocks])
     n_prior_rules_arr = np.zeros((len(rule_blocks), max_n_grps), dtype=jnp.int32)
     n_rules_per_grp_arr = np.zeros((len(rule_blocks), max_n_grps), dtype=jnp.int32)
+    n_grps_per_block_arr = np.zeros((len(rule_blocks),), dtype=jnp.int32)
     for rule_block_i, rule_block in enumerate(rule_blocks):
         _, rule_grps = rule_block
+        n_grps_per_block_arr[rule_block_i] = len(rule_grps)
         for rule_grp_i, rule_grp in enumerate(rule_grps):
             # n_prior_rules[(rule_block_i, rule_grp_i)] = n_rules_counted
             n_prior_rules_arr[rule_block_i, rule_grp_i] = n_rules_counted
@@ -1968,6 +2081,7 @@ def gen_tick_fn(obj_to_idxs, coll_mat, tree_rules, meta_objs, jit, n_objs, char_
             n_rules_counted += len(rule_grp)
     n_prior_rules_arr = jnp.array(n_prior_rules_arr)
     n_rules_per_grp_arr = jnp.array(n_rules_per_grp_arr)
+    n_grps_per_block_arr = jnp.array(n_grps_per_block_arr)
 
     def tick_fn(rng, lvl):
         lvl_changed = False
@@ -1983,49 +2097,42 @@ def gen_tick_fn(obj_to_idxs, coll_mat, tree_rules, meta_objs, jit, n_objs, char_
         def apply_turn(carry):
             lvl, _, turn_app_i, cancelled, restart, turn_again, win, rng = carry
             turn_app_i += 1
-            turn_applied = False
-            block_again = False
+            applied = False
+            again = False
 
-            for block_i, (looping, rule_grps) in enumerate(rule_blocks):
+            # for block_i, (looping, rule_grps) in enumerate(rule_blocks):
                 # n_prior_rules
+            blocks_are_looping_lst = jnp.array([looping for looping, _ in rule_blocks])
+            
+            _loop_rule_block = partial(loop_rule_block, n_prior_rules_arr=n_prior_rules_arr,
+                                    n_rules_per_grp_arr=n_rules_per_grp_arr, all_rule_fns=all_rule_fns,
+                                    obj_to_idxs=obj_to_idxs, n_objs=n_objs, rule_grps=rule_blocks,
+                                    blocks_are_looping_lst=blocks_are_looping_lst, jit=jit,
+                                    n_grps_per_block_arr=n_grps_per_block_arr)
 
-                _apply_rule_block = partial(apply_rule_block, block_i=block_i, n_prior_rules_arr=n_prior_rules_arr,
-                                        n_rules_per_grp_arr=n_rules_per_grp_arr, all_rule_fns=all_rule_fns,
-                                        obj_to_idxs=obj_to_idxs, rule_grps=rule_grps, n_objs=n_objs, jit=jit)
+            # TODO: jax while loop over loop_rule_block
+            block_i = 0
+            carry = (lvl, applied, again, cancelled, restart, win, rng, block_i)
+            if jit:
+                # Apply (loop) each block in sequence.
+                carry = jax.lax.while_loop(
+                    cond_fun=lambda x: ~x[3] & ~x[4] & (x[7] < len(rule_blocks)),
+                    body_fun=_loop_rule_block,
+                    init_val=carry,
+                )
+                # carry, _ = jax.lax.scan(
+                #     loop_rule_block,
+                #     init=init_carry,
+                #     xs=jnp.arange(len(rule_blocks)),
+                # )
+            else:
+                while not cancelled and not restart and block_i < len(rule_blocks):
+                    carry = _loop_rule_block(carry)
+                    lvl, applied, again, cancelled, restart, win, rng, block_i = carry
+                    if DEBUG:
+                        print(f'      block {block_i} applied: {applied}. again: {again}')
 
-                block_applied = True
-                block_app_i = 0
-                win = False
-                init_carry = (lvl, block_applied, block_app_i, cancelled, restart, block_again, win, rng)
-                if not jit:
-                    print(f'Level when applying block {block_i}:\n', multihot_to_desc(lvl[0], obj_to_idxs, n_objs))
-                if looping:
-                    if jit:
-                        lvl, block_applied, block_app_i, cancelled, restart, block_again, win, rng = jax.lax.while_loop(
-                            cond_fun=lambda x: x[1] & ~x[3] & ~x[4] & ~x[6],
-                            body_fun=_apply_rule_block,
-                            init_val=init_carry,
-                        )
-                    else:
-                        carry = init_carry
-                        while block_applied and not cancelled and not restart and not win:
-                            carry = _apply_rule_block(carry)
-                            lvl, block_applied, block_app_i, cancelled, restart, block_again, win, rng = carry
-                    block_applied = block_app_i > 1
-                else:
-                    lvl, block_applied, block_app_i, cancelled, restart, block_again, win, rng = _apply_rule_block(init_carry)
-                if DEBUG:
-                    if jit:
-                        jax.debug.print('block {block_i} applied: {block_applied}. again: {block_again}', block_i=block_i, block_applied=block_applied, block_again=block_again)
-                    else:
-                        if block_applied:
-                            print(f'block {block_i} applied: True')
-                        else:
-                            print(f'block {block_i} applied: False')
-
-                turn_again = block_again
-                
-                turn_applied = turn_applied | block_applied
+            lvl, applied, again, cancelled, restart, win, rng, block_i = carry
 
             return lvl, turn_applied, turn_app_i, cancelled, restart, turn_again, win, rng
 
@@ -2035,26 +2142,15 @@ def gen_tick_fn(obj_to_idxs, coll_mat, tree_rules, meta_objs, jit, n_objs, char_
         win = False
 
         init_carry = (lvl, turn_applied, turn_app_i, cancelled, restart, turn_again, win, rng)
-        if jit:
-            lvl, turn_applied, turn_app_i, cancelled, restart, again, win, rng = jax.lax.while_loop(
-                lambda x: x[1] & x[5] & ~x[3] & ~x[4] & ~x[6],
-                lambda x: apply_turn(x),
-                init_carry
-            )
-        else:
-            carry = init_carry
-            while turn_applied and turn_again:
-                carry = apply_turn(carry)
-                lvl, turn_applied, turn_app_i, cancelled, restart, turn_again, win, rng = carry
-
-        lvl_changed = turn_app_i > 1
+        carry = apply_turn(init_carry)
+        lvl, turn_applied, turn_app_i, cancelled, restart, turn_again, win, rng = carry
 
         # if not jit:
         #     print('\nLevel after applying rules:\n', multihot_to_desc(lvl[0], obj_to_idxs, n_objs))
         #     print('grp_applied:', grp_applied)
         #     print('cancelled:', cancelled)
 
-        return lvl[0], lvl_changed, turn_app_i, cancelled, restart, win, rng
+        return lvl[0], turn_applied, turn_app_i, cancelled, restart, win, rng
 
     if jit:
         tick_fn = jax.jit(tick_fn)

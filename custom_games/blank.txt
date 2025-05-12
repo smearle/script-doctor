@@ -59,6 +59,7 @@ Player
 RULES
 ======
 
+[Player] -> [Player]
 
 ==============
 WINCONDITIONS
