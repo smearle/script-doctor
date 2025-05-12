@@ -1037,7 +1037,11 @@ def gen_subrules_meta(rule: Rule, n_objs, obj_to_idxs, meta_objs, coll_mat, rule
             if DEBUG:
                 print(f'lp2, rp2: {lp}, {rp}')
                 print(f'has right pattern: {has_right_pattern}')
-            if len(lp.shape) == 1:
+            if lp is None:
+                cell_detection_fns.append(
+                    lambda m_cell: (True, CellFnReturn(detected=jnp.zeros_like(m_cell), force_idx=None, detected_meta_objs={}))
+                )
+            elif len(lp.shape) == 1:
                 for i, l_cell in enumerate(lp):
                     if l_cell == '...':
                         is_line_detector = True
@@ -1132,9 +1136,14 @@ def gen_subrules_meta(rule: Rule, n_objs, obj_to_idxs, meta_objs, coll_mat, rule
                 # Kernel-wide detected moving idxs are only fallen back on if a given input cell has no detected moving
                 # index. In this case, we assume there is only one detected moving index in the kernel, so we can take 
                 # the max to propagate these values across cells.
-                cell_detected_moving_idxs = jnp.stack(
-                    [cell_detect_out.detected_moving_idx for cell_detect_out in cell_detect_outs if cell_detect_out.detected_moving_idx is not None], axis=0)
-                detected_kernel_moving_idx = jnp.max(cell_detected_moving_idxs, axis=0)
+                cell_detected_moving_idxs = [cell_detect_out.detected_moving_idx for cell_detect_out in cell_detect_outs
+                                             if cell_detect_out.detected_moving_idx is not None]
+                if len(cell_detected_moving_idxs) == 0:
+                    # No detected moving idxs in the kernel
+                    detected_kernel_moving_idx = None
+                else:
+                    cell_detected_moving_idxs = jnp.stack(cell_detected_moving_idxs, axis=0)
+                    detected_kernel_moving_idx = jnp.max(cell_detected_moving_idxs, axis=0)
 
                 kernel_detect_out = KernelFnReturn(
                     detected_meta_objs=detected_kernel_meta_objs,
@@ -1287,13 +1296,19 @@ def gen_subrules_meta(rule: Rule, n_objs, obj_to_idxs, meta_objs, coll_mat, rule
                 detected_pattern_meta_objs.update(boardwide_kernel_meta_objs)
 
                 # Propagate the detected moving index across kernels.
-                detected_pattern_moving_idxs = jnp.stack(
-                    [kernel_detect_out.detected_moving_idx for kernel_detect_out in kernel_detect_outs], axis=0)
-                detected_pattern_moving_idx = jnp.max(detected_pattern_moving_idxs, axis=0)
-                # Now we have a board-shaped map of all the moving indices detected by *any* kernel.
-                # For a pattern-wide (presumed multi-kernel) function return, we can take the max of these indices to 
-                # get one board-wide detected moving index.
-                detected_pattern_moving_idx = jnp.max(detected_pattern_moving_idx, axis=(0,1))
+                detected_pattern_moving_idxs = [
+                    kernel_detect_out.detected_moving_idx for kernel_detect_out in kernel_detect_outs
+                    if kernel_detect_out.detected_moving_idx is not None]
+                if len(detected_pattern_moving_idxs) == 0:
+                    # No detected moving idxs in the kernel
+                    detected_pattern_moving_idx = None
+                else:
+                    detected_pattern_moving_idxs = jnp.stack(detected_pattern_moving_idxs, axis=0)
+                    detected_pattern_moving_idx = jnp.max(detected_pattern_moving_idxs, axis=0)
+                    # Now we have a board-shaped map of all the moving indices detected by *any* kernel.
+                    # For a pattern-wide (presumed multi-kernel) function return, we can take the max of these indices to 
+                    # get one board-wide detected moving index.
+                    detected_pattern_moving_idx = jnp.max(detected_pattern_moving_idx, axis=(0,1))
 
             pattern_out = PatternFnReturn(
                 detected_meta_objs=detected_pattern_meta_objs,
