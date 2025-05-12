@@ -16,10 +16,10 @@ from lark import Lark
 import numpy as np
 from skimage.transform import resize
 
-from conf.config import Config
+from conf.config import RLConfig
 from env import PSEnv
 from gen_tree import GenPSTree
-from parse_lark import TREES_DIR, DATA_DIR, TEST_GAMES, get_tree_from_txt
+from parse_lark import PS_LARK_GRAMMAR_PATH, TREES_DIR, DATA_DIR, TEST_GAMES, get_tree_from_txt
 from ps_game import PSGameTree
 from utils import to_binary_vectors
 from utils_rl import get_env_params_from_config
@@ -28,9 +28,16 @@ from utils_rl import get_env_params_from_config
 scratch_dir = 'scratch'
 os.makedirs(scratch_dir, exist_ok = True)
 
+JAX_VALIDATED_JS_SOLS_DIR = os.path.join('data', 'jax_validated_js_sols')
+JS_SOLS_DIR = os.path.join('data', 'js_sols')
+
 
 @hydra.main(version_base="1.3", config_path='./conf', config_name='config')
-def main(config: Config):
+def main(config: RLConfig):
+    # Initialize the Lark parser with the PuzzleScript grammar
+    with open(PS_LARK_GRAMMAR_PATH, "r", encoding='utf-8') as file:
+        puzzlescript_grammar = file.read()
+    parser = Lark(puzzlescript_grammar, start="ps_game", maybe_placeholders=False)
     with open(os.path.join('data', 'games_n_rules.json'), 'r') as f:
         games_n_rules = json.load(f)
     games_n_rules = sorted(games_n_rules, key=lambda x: x[1])
@@ -49,13 +56,11 @@ def main(config: Config):
 
     # tree_paths = [os.path.join(TREES_DIR, os.path.basename(path) + '.pkl') for path in sol_paths]
     # games = [os.path.basename(path)[:-4] for path in sol_paths]
-    js_sols_dir = os.path.join('data', 'js_sols')
-    jax_sols_dir = os.path.join('data', 'jax_sols')
-    sol_paths = [os.path.join(js_sols_dir, game) for game in games]
+    sol_paths = [os.path.join(JS_SOLS_DIR, game) for game in games]
 
     for sol_dir, game in zip(sol_paths, games):
         game_name = os.path.basename(game)
-        jax_sol_dir = os.path.join(jax_sols_dir, game)
+        jax_sol_dir = os.path.join(JAX_VALIDATED_JS_SOLS_DIR, game)
         os.makedirs(jax_sol_dir, exist_ok=True)
         compile_log_path = os.path.join(jax_sol_dir, 'compile_err.txt')
         if os.path.exists(compile_log_path) and not config.overwrite:
@@ -65,11 +70,6 @@ def main(config: Config):
             print(f"Skipping {game} because compile error log already exists")
             continue
 
-        with open("syntax.lark", "r", encoding='utf-8') as file:
-            puzzlescript_grammar = file.read()
-        # Initialize the Lark parser with the PuzzleScript grammar
-        parser = Lark(puzzlescript_grammar, start="ps_game", maybe_placeholders=False)
-        # min_parser = Lark(min_puzzlescript_grammar, start="ps_game")
         tree, success, err_msg = get_tree_from_txt(parser, game)
         og_path = os.path.join(DATA_DIR, 'scraped_games', game_name + '.txt')
 

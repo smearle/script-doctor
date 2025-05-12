@@ -18,7 +18,7 @@ import orbax.checkpoint as ocp
 import wandb
 # from tensorboardX import SummaryWriter
 
-from conf.config import Config, TrainConfig
+from conf.config import RLConfig, TrainConfig
 from purejaxrl.wrappers import LogWrapper
 from utils_rl import get_ckpt_dir, get_env_params_from_config, get_exp_dir, init_config, init_network, init_ps_env
 
@@ -78,7 +78,7 @@ def step_env_render(carry, _, network, n_render_eps, env_r):
         (env_state_r, reward_r, done_r, info_r, frames)
 
 
-def _render_frames(frames, i, metric, steps_prev_complete, env, config: Config):
+def _render_frames(frames, i, metric, steps_prev_complete, env, config: RLConfig):
     timesteps = metric["timestep"][metric["returned_episode"]
                             ] * config.n_envs
     if len(timesteps) > 0:
@@ -121,7 +121,7 @@ def _render_frames(frames, i, metric, steps_prev_complete, env, config: Config):
         print("Failed to save gif. Skipping...")
         return
 
-def log_callback(metric, steps_prev_complete, config: Config, train_start_time):
+def log_callback(metric, steps_prev_complete, config: RLConfig, train_start_time):
     timesteps = metric["timestep"][metric["returned_episode"]] * config.n_envs
     return_values = metric["returned_episode_returns"][metric["returned_episode"]]
 
@@ -538,7 +538,7 @@ def make_train(config: TrainConfig, restored_ckpt, checkpoint_manager):
 #     plt.savefig(os.path.join(get_exp_dir(config), "ep_returns.png"))
 
 
-def init_checkpointer(config: Config) -> Tuple[Any, dict]:
+def init_checkpointer(config: RLConfig) -> Tuple[Any, dict]:
     # This will not affect training, just for initializing dummy env etc. to load checkpoint.
     rng = jax.random.PRNGKey(30)
     # Set up checkpointing

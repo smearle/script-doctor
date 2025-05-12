@@ -1,13 +1,37 @@
-ScriptDoctor
+ScriptDoctor & PuzzleJax
 ============
 
 ## Setup
 
-Requires python 3.12
+Create a conda environment or whatnot running python 3.13, then:
 ```
 pip install -r requirements.txt
 ```
-(If you don't have cuda available, install `jax` instead of `jax[cuda]`.)
+But first! Make sure the lines requiring `jax` or `jax[cuda]` are (un)commented appropriately, depending on whether or not you have CUDA available on your system.
+
+
+## Usage
+
+First, collect games, both from the original PuzzleScript website/editor/javascript-engine repository, (which is checkpointed here under `src`) with the following command:
+```
+python collect_games.py
+```
+This will also attempt to scrape a dataset of ~900 games from an online database. For this, you will need a Github REST API key saved in `.env`.
+
+To play a game interactively on a local machine, using the jax environment to run the engine, run, e.g.:
+```
+python human_env.py game=sokoban_basic jit=True debug=False
+```
+Note that the first 2 timesteps will have jax trace and compile the engine's step function, which can be painfully slow (especially for games with more rules, objects, and larger levels).
+
+(TODO: Figure out why the first *2* timesteps, and not just the first, require compilation.)
+
+To train an agent using reinforcement learning to play a particular game level, run, e.g.:
+```
+python train.py game=sokoban_basic level=0 n_envs=600 model=conv2 render_freq=5 hidden_dims=[128,128] seed=0
+```
+This will attempt to log to wandb.
+
 
 ## Generate data for training a world model
 
@@ -26,12 +50,7 @@ TODO:
 ```
 python collect_games.py
 python parse_lark.py
-python gen_trees.py
 ```
-I'm still working on `gen_trees.py`
-- Convert games to canonical (graph-like) form
-- Determine if two games are functionally equivalent via this form
-- Reimplement game mechanics etc. in numpy and jax, as an RL environment
 
 ## Fine-tuning a model
 

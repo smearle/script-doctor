@@ -24,6 +24,7 @@ games_to_skip = set({'easyenigma', 'A_Plaid_Puzzle'})
 TEST_GAMES = []
 
 DATA_DIR = 'data'
+PS_LARK_GRAMMAR_PATH = "syntax.lark"
 GAMES_DIR = os.path.join(DATA_DIR, 'scraped_games')
 MIN_GAMES_DIR = os.path.join(DATA_DIR, 'min_games')
 CUSTOM_GAMES_DIR = os.path.join('custom_games')
@@ -54,10 +55,6 @@ def timeout_handler(seconds: int):
         signal.signal(signal.SIGALRM, previous_handler)  # Restore previous handler
 
 
-with open("syntax.lark", "r", encoding='utf-8') as file:
-    puzzlescript_grammar = file.read()
-with open("syntax_generate.lark", "r", encoding='utf-8') as file:
-    min_puzzlescript_grammar = file.read()
 
 class StripPuzzleScript(Transformer):
     """
@@ -528,6 +525,11 @@ if __name__ == "__main__":
     parser.add_argument('--overwrite', '-o', action='store_true', help='Overwrite existing parsed_games.txt')
     parser.add_argument('--game', '-g', type=str, help='Name of the game to parse')
     args = parser.parse_args()
+
+    with open(PS_LARK_GRAMMAR_PATH, "r", encoding='utf-8') as file:
+        puzzlescript_grammar = file.read()
+    with open("syntax_generate.lark", "r", encoding='utf-8') as file:
+        min_puzzlescript_grammar = file.read()
 
     # Initialize the Lark parser with the PuzzleScript grammar
     parser = Lark(puzzlescript_grammar, start="ps_game", maybe_placeholders=False)

@@ -15,7 +15,7 @@ import jax.numpy as jnp
 from lark import Lark
 import numpy as np
 
-from conf.config import Config
+from conf.config import RLConfig
 from env_render import render_solid_color, render_sprite
 from jax_utils import stack_leaves
 from marl.spaces import Box
@@ -308,10 +308,10 @@ class CellFnReturn:
     force_idx: np.ndarray
     # An array of detected objects, as many as there are overlapping objects in the cell
     # Note that we don't necessarily know these at compile-time because of meta-objects
-    detected_obj_idxs: chex.Array
     # A dictionary of the objects detected, mapping meta-object names to sub-object indices
     detected_meta_objs: dict
-    detected_moving_idx: int = None
+    detected_obj_idxs: Optional[chex.Array] = None
+    detected_moving_idx: Optional[int] = None
 
 @flax.struct.dataclass
 class KernelFnReturn:
@@ -788,7 +788,7 @@ def gen_subrules_meta(rule: Rule, n_objs, obj_to_idxs, meta_objs, coll_mat, rule
         kernel_meta_objs = kernel_detect_out.detected_meta_objs
         pattern_meta_objs = pattern_detect_out.detected_meta_objs
         if DEBUG:
-            jax.debug.print('meta objs: {meta_objs}', meta_objs=detected_meta_objs)
+            jax.debug.print('        meta objs: {meta_objs}', meta_objs=detected_meta_objs)
         if random:
             sub_objs = expand_meta_objs([obj], meta_objs, char_to_obj)
             obj_idxs = np.array([obj_to_idxs[so] for so in sub_objs])
@@ -797,26 +797,33 @@ def gen_subrules_meta(rule: Rule, n_objs, obj_to_idxs, meta_objs, coll_mat, rule
         else:
             obj_idx = disambiguate_meta(obj, detected_meta_objs, kernel_meta_objs, pattern_meta_objs, obj_to_idxs)
         if DEBUG:
-            jax.debug.print('projecting obj {obj}, disambiguated index: {obj_idx}', obj=obj, obj_idx=obj_idx)
+            jax.debug.print('        projecting obj {obj}, disambiguated index: {obj_idx}', obj=obj, obj_idx=obj_idx)
         if not jit:
             if obj_idx == -1:
                 breakpoint()
         m_cell = m_cell.at[obj_idx].set(1)
 
-        # FIXME: Somehow, amazingly, this ends up moving the projected object to a different POSITION?! But we
-        #    can't even SEE the position here! `m_cell` is just a 1D vector of booleans at a FIXED posisition in the map.
-        # Reassign any forces belonging to the detected object to the new object
-        # First, identify the forces of the detected object.
-        detected_forces = jax.lax.dynamic_slice(
-            m_cell, (n_objs + detected_obj_idx * N_FORCES,), (N_FORCES,)
-        )
-        # Then remove them from the detected object.
-        m_cell = jax.lax.dynamic_update_slice(
-            m_cell, jnp.zeros(N_FORCES, dtype=bool), (n_objs + detected_obj_idx * N_FORCES,)
-        )
-        # Then copy them to the new object.
-        m_cell = jax.lax.dynamic_update_slice(
-            m_cell, detected_forces, (n_objs + obj_idx * N_FORCES,)
+        def transfer_force(m_cell, obj_idx, detected_obj_idx):
+            # Reassign any forces belonging to the detected object to the new object
+            # First, identify the forces of the detected object.
+            detected_forces = jax.lax.dynamic_slice(
+                m_cell, (n_objs + detected_obj_idx * N_FORCES,), (N_FORCES,)
+            )
+            # Then remove them from the detected object.
+            m_cell = jax.lax.dynamic_update_slice(
+                m_cell, jnp.zeros(N_FORCES, dtype=bool), (n_objs + detected_obj_idx * N_FORCES,)
+            )
+            # Then copy them to the new object.
+            m_cell = jax.lax.dynamic_update_slice(
+                m_cell, detected_forces, (n_objs + obj_idx * N_FORCES,)
+            )
+            return m_cell
+
+        m_cell = jax.lax.cond(
+            detected_obj_idx != -1,
+            transfer_force,
+            lambda m_cell, _, __: m_cell,
+            m_cell, obj_idx, detected_obj_idx
         )
 
         m_cell = remove_colliding_objs(m_cell, obj_idx, coll_mat)
@@ -1109,7 +1116,6 @@ def gen_subrules_meta(rule: Rule, n_objs, obj_to_idxs, meta_objs, coll_mat, rule
                             lambda m_cell: (
                                 True,
                                 CellFnReturn(detected=jnp.zeros_like(m_cell), force_idx=None, detected_meta_objs={}),
-                                None,
                             )
                         )
             # FIXME: why is the normal way broken here?
@@ -1226,29 +1232,12 @@ def gen_subrules_meta(rule: Rule, n_objs, obj_to_idxs, meta_objs, coll_mat, rule
 
                 # @jax.jit
                 def project_cells_at(rng, xy, lvl):
-                    # patch_activations_xy = jnp.zeros_like(patch_activations)
-                    # patch_activations_xy = patch_activations_xy.at[*xy].set(1)
-                    # detect_outs = detect_outs[first_a[0]][first_a[1]]
                     cell_detect_outs_xy = [jax.tree.map(lambda x: x[xy[0]][xy[1]], cell_detect_out) for 
                         cell_detect_out in cell_detect_outs]
-                    # cell_detect_outs_xy = stack_leaves(cell_detect_outs_xy)
 
                     kernel_detect_outs_xy = jax.tree.map(lambda x: x[xy[0]][xy[1]], kernel_detect_outs)
 
-                    # pattern_detect_outs_xy = [jax.tree_map(lambda x: x[xy[0]][xy[1]], pattern_detect_out)]
                     pattern_detect_outs_xy = pattern_detect_out
-
-
-                    # pattern_meta_objs = {}
-                    # moving_idx = None
-                    # FIXME: Shouldn't this be a jnp array at this point when `jit=True`? And yet it's a list...?
-                    # for k in detect_outs_xy.meta_objs:
-                    #     pattern_meta_objs[k] = detect_outs_xy.meta_objs[k].max()
-                    # for cell_fn_out in detect_outs_xy:
-                    #     pattern_meta_objs.update(cell_fn_out.meta_objs)
-                    #     if cell_fn_out.moving_idx is not None:
-                    #         moving_idx = cell_fn_out.moving_idx
-                    # rule_fn_out = PatternFnReturn(meta_objs=pattern_meta_objs, moving_idx=moving_idx)
 
                     # Apply projection functions to the affected cells
                     out_cell_idxs = np.indices(in_patch_shape)
@@ -1273,8 +1262,9 @@ def gen_subrules_meta(rule: Rule, n_objs, obj_to_idxs, meta_objs, coll_mat, rule
                         cell_detect_out_i = cell_detect_outs_xy[i]
                         pattern_detect_out_i = pattern_detect_outs_xy
                         cell_xy = out_cell_idx + xy
+                        if DEBUG:
+                            jax.debug.print('        projecting cell {i} at position {cell_xy}', i=i, cell_xy=cell_xy)
                         m_cell = lvl[0, :, *cell_xy]
-                        m_cell = jnp.array(m_cell)
                         rng, m_cell = cell_proj_fn(
                             rng=rng, m_cell=m_cell, cell_i=i, cell_detect_out=cell_detect_out_i,
                             kernel_detect_out=kernel_detect_outs_xy,
@@ -1296,8 +1286,9 @@ def gen_subrules_meta(rule: Rule, n_objs, obj_to_idxs, meta_objs, coll_mat, rule
                 def project_kernel_at_xy(carry):               
                     rng, kernel_activ_xy_idx, lvl = carry
                     kernel_activ_xy = kernel_activ_xys[kernel_activ_xy_idx]
-                    # jax.debug.print('      kernel_activ_xys: {kernel_activ_xys}', kernel_activ_xys=kernel_activ_xys)
-                    # jax.debug.print('      projecting kernel at position index {kernel_activ_xy_idx}, position {xy}', xy=kernel_activ_xy, kernel_activ_xy_idx=kernel_activ_xy_idx)
+                    # jax.debug.print('        kernel_activ_xys: {kernel_activ_xys}', kernel_activ_xys=kernel_activ_xys)
+                    if DEBUG:
+                        jax.debug.print('        projecting kernel at position index {kernel_activ_xy_idx}, position {xy}', xy=kernel_activ_xy, kernel_activ_xy_idx=kernel_activ_xy_idx)
                     rng, lvl = project_cells_at(rng, kernel_activ_xy, lvl)
 
                     kernel_activ_xy_idx += 1
@@ -1383,7 +1374,7 @@ def gen_subrules_meta(rule: Rule, n_objs, obj_to_idxs, meta_objs, coll_mat, rule
                 # TODO: use a jax.lax.switch
                 for i, kernel_projection_fn in enumerate(kernel_projection_fns):
                     if DEBUG:
-                        jax.debug.print('      projecting kernel {i}', i=i)
+                        jax.debug.print('        projecting kernel {i}', i=i)
                     rng, lvl = kernel_projection_fn(
                         rng, lvl, kernel_activations[i], cell_detect_outs[i], kernel_detect_outs[i], pattern_detect_out)
                 return rng, lvl

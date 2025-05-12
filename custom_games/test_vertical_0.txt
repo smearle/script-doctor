@@ -75,8 +75,8 @@ Player, Wall, Crate
 RULES
 ======
 
-([ vertical Player] -> [Crate ])
-[ horizontal Player] -> [Crate ] 
+[ vertical Player| ] -> [Crate | ]
+([ horizontal Player] -> [Crate ] )
 
 ==============
 WINCONDITIONS

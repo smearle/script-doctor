@@ -10,9 +10,17 @@ from dataclasses import dataclass
 
 
 @dataclass
-class Config:
+class PSConfig:
     game: str = "sokoban_basic"
     level_i: int = 0
+
+    
+@dataclass
+BFSConfig:
+    pass
+
+@dataclass
+class RLConfig(PSConfig):
     lr: float = 1.0e-4
     n_envs: int = 400
     # How many steps do I take in all of my batched environments before doing a gradient update
@@ -90,7 +98,7 @@ class Config:
 
 
 @dataclass
-class EvoMapConfig(Config):
+class EvoMapConfig(RLConfig):
     n_generations: int = 100_000
     evo_pop_size: int = 100
     n_parents: int = 50
@@ -101,7 +109,7 @@ class EvoMapConfig(Config):
 
 
 @dataclass
-class TrainConfig(Config):
+class TrainConfig(RLConfig):
     overwrite: bool = False
 
     # WandB Params
@@ -221,7 +229,7 @@ class EnjoyRLConfig(MultiAgentConfig, EnjoyConfig):
     
 
 @dataclass
-class ProfileEnvConfig(Config):
+class ProfileEnvConfig(RLConfig):
     n_profile_steps: int = 5000
     reevaluate: bool = True
     render: bool = False
@@ -243,7 +251,7 @@ class GetTracesConfig(EnjoyConfig):
     render_ims: bool = False
 
 cs = ConfigStore.instance()
-cs.store(name="config", node=Config)
+cs.store(name="config", node=RLConfig)
 cs.store(name="ma_config", node=MultiAgentConfig)
 cs.store(name="enjoy_ma_pcgrl", node=EnjoyRLConfig)
 cs.store(name="get_traces_pcgrl", node=GetTracesConfig)

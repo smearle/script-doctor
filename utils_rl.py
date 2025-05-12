@@ -27,7 +27,7 @@ import hydra
 from omegaconf import DictConfig, OmegaConf
 from time import perf_counter
 
-from conf.config import Config, MultiAgentConfig, TrainConfig
+from conf.config import RLConfig, MultiAgentConfig, TrainConfig
 from env import PSEnv, PSObs, PSState, PSParams
 from marl.model import ActorCategorical, ActorMLP, ActorRNN, CriticRNN, MAConvForward2, ScannedRNN
 from models import NCA, AutoEncoder, ConvForward, ConvForward2, SeqNCA, ActorCriticPS, Dense
@@ -47,7 +47,7 @@ def get_exp_dir(config: TrainConfig):
     )
     return exp_dir
 
-def get_env_params_from_config(env: PSEnv, config: Config):
+def get_env_params_from_config(env: PSEnv, config: RLConfig):
     level = env.get_level(config.level_i)
     return PSParams(
         level=level
@@ -221,7 +221,7 @@ def init_run(env: PSEnv, config: MultiAgentConfig, ckpt_manager, latest_update_s
     return runner_state, actor_network, env, latest_update_step
 
 
-def init_network(env: PSEnv, env_params: PSParams, config: Config):
+def init_network(env: PSEnv, env_params: PSParams, config: RLConfig):
     action_dim = env.action_space.n
 
     if config.model == "dense":
@@ -402,7 +402,7 @@ def save_checkpoint(config: MultiAgentConfig, ckpt_manager, runner_state, t):
     ckpt_manager.wait_until_finished() 
 
 
-def init_ps_env(config: Config, verbose: bool = False) -> PSEnv:
+def init_ps_env(config: RLConfig, verbose: bool = False) -> PSEnv:
     start_time = timer()
     game = config.game
     level_i = config.level_i
