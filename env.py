@@ -306,6 +306,9 @@ class CellFnReturn:
     detected: np.ndarray
     # Return the force index so that, in default, non-direction-specific rules, we can project the correct force to output cells
     force_idx: np.ndarray
+    # An array of detected objects, as many as there are overlapping objects in the cell
+    # Note that we don't necessarily know these at compile-time because of meta-objects
+    detected_obj_idxs: chex.Array
     # A dictionary of the objects detected, mapping meta-object names to sub-object indices
     detected_meta_objs: dict
     detected_moving_idx: int = None
@@ -743,14 +746,15 @@ def gen_subrules_meta(rule: Rule, n_objs, obj_to_idxs, meta_objs, coll_mat, rule
             #     lambda: None,
             # )
 
-            ret = CellFnReturn(
+            cell_ret = CellFnReturn(
                 detected=detected,
+                detected_obj_idxs=detect_obj_outs.obj_idx,
                 force_idx=force_idx,
                 detected_meta_objs=detected_meta_objs,
                 detected_moving_idx=detected_moving_idx,
             )
             # jax.debug.print('detected: {detected}', detected=detected)
-            return activated, ret
+            return activated, cell_ret
 
         return detect_cell
 
@@ -770,8 +774,16 @@ def gen_subrules_meta(rule: Rule, n_objs, obj_to_idxs, meta_objs, coll_mat, rule
         remove_colliding_objs = remove_colliding_objs
 
     # @partial(jax.jit, static_argnums=(3))
-    def project_obj(rng, m_cell, cell_detect_out: CellFnReturn, kernel_detect_out: KernelFnReturn,
+    def project_obj(rng, m_cell, cell_i, cell_detect_out: CellFnReturn, kernel_detect_out: KernelFnReturn,
                     pattern_detect_out: PatternFnReturn, obj, random=False):
+        """
+        Project an object into a cell in the output pattern.
+            m_cell: an n_channels-size vector of all object and per-object force activations and player effect at the
+                current cell
+            cell_i: the index of the cell relative to its position in the kernel
+            cell_detect_out: the output of the corrsponding cell detection function
+        """
+        detected_obj_idx = cell_detect_out.detected_obj_idxs[cell_i]
         detected_meta_objs = cell_detect_out.detected_meta_objs
         kernel_meta_objs = kernel_detect_out.detected_meta_objs
         pattern_meta_objs = pattern_detect_out.detected_meta_objs
@@ -790,35 +802,54 @@ def gen_subrules_meta(rule: Rule, n_objs, obj_to_idxs, meta_objs, coll_mat, rule
             if obj_idx == -1:
                 breakpoint()
         m_cell = m_cell.at[obj_idx].set(1)
+
+        # Reassign any forces belonging to the detected object to the new object
+        # First, identify the forces of the detected object.
+        detected_forces = jax.lax.dynamic_slice(
+            m_cell, (n_objs + detected_obj_idx * N_FORCES,), (N_FORCES,)
+        )
+        # Then remove them from the detected object.
+        m_cell = jax.lax.dynamic_update_slice(
+            m_cell, jnp.zeros(N_FORCES, dtype=bool), (n_objs + detected_obj_idx * N_FORCES,)
+        )
+        # Then copy them to the new object.
+        m_cell = jax.lax.dynamic_update_slice(
+            m_cell, detected_forces, (n_objs + obj_idx * N_FORCES,)
+        )
+
         m_cell = remove_colliding_objs(m_cell, obj_idx, coll_mat)
         return rng, m_cell
 
     # @partial(jax.jit, static_argnums=(3))
-    def project_no_obj(rng, m_cell, cell_detect_out: CellFnReturn, kernel_detect_out: KernelFnReturn,
+    def project_no_obj(rng, m_cell, cell_i, cell_detect_out: CellFnReturn, kernel_detect_out: KernelFnReturn,
                        pattern_detect_out: PatternFnReturn, obj):
         meta_objs = cell_detect_out.detected_meta_objs
         kernel_meta_objs = kernel_detect_out.detected_meta_objs
         pattern_meta_objs = pattern_detect_out.detected_meta_objs
         obj_idx = disambiguate_meta(obj, meta_objs, kernel_meta_objs, pattern_meta_objs, obj_to_idxs)
+        # Remove the object
         m_cell = m_cell.at[obj_idx].set(0)
+        # Remove any existing forces from the object
         jax.lax.dynamic_update_slice(
-            m_cell, jnp.zeros(n_objs, dtype=bool), (n_objs + obj_idx * N_FORCES,)
+            m_cell, jnp.zeros(N_FORCES, dtype=bool), (n_objs + obj_idx * N_FORCES,)
         )
         return rng, m_cell
 
     # @partial(jax.jit, static_argnums=(3))
-    def project_no_meta(rng, m_cell: chex.Array, cell_detect_out, kernel_detect_out, pattern_detect_out, obj: int):
+    def project_no_meta(rng, m_cell: chex.Array, cell_i, cell_detect_out, kernel_detect_out, pattern_detect_out, obj: int):
         sub_objs = expand_meta_objs([obj], meta_objs, char_to_obj)
         obj_idxs = np.array([obj_to_idxs[so] for so in sub_objs])
+        # TODO: vmap this
         for obj_idx in obj_idxs:
             m_cell = m_cell.at[obj_idx].set(0)
+            # Remove any existing forces from the object
             jax.lax.dynamic_update_slice(
                 m_cell, jnp.zeros(N_FORCES, dtype=bool), (n_objs + obj_idx * N_FORCES,)
             )
         return rng, m_cell
 
     # @partial(jax.jit, static_argnums=(3, 4))
-    def project_force_obj(rng, m_cell, cell_detect_out: CellFnReturn, kernel_detect_out: KernelFnReturn,
+    def project_force_obj(rng, m_cell, cell_i, cell_detect_out: CellFnReturn, kernel_detect_out: KernelFnReturn,
                           pattern_detect_out: PatternFnReturn, obj, force_idx):
         meta_objs = cell_detect_out.detected_meta_objs
         kernel_meta_objs = kernel_detect_out.detected_meta_objs
@@ -838,7 +869,15 @@ def gen_subrules_meta(rule: Rule, n_objs, obj_to_idxs, meta_objs, coll_mat, rule
         m_cell = m_cell.at[-1].set(0)
 
         # Place the new force
-        m_cell = m_cell.at[n_objs + (obj_idx * N_FORCES) + force_idx].set(1)
+        # m_cell = m_cell.at[n_objs + (obj_idx * N_FORCES) + force_idx].set(1)
+
+        # Remove any existing forces from the object and add the new one
+        force_arr = jnp.zeros(N_FORCES, dtype=bool)
+        force_arr = force_arr.at[force_idx].set(1)
+        m_cell = jax.lax.dynamic_update_slice(
+            m_cell, force_arr, (n_objs + obj_idx * N_FORCES,)
+        )
+
         m_cell = remove_colliding_objs(m_cell, obj_idx, coll_mat)
 
         if jit:
@@ -857,7 +896,7 @@ def gen_subrules_meta(rule: Rule, n_objs, obj_to_idxs, meta_objs, coll_mat, rule
 
     # @partial(jax.jit, static_argnums=(3))
     # TODO: add kernel detect out
-    def project_moving_obj(rng, m_cell, cell_detect_out: CellFnReturn, kernel_detect_out: KernelFnReturn,
+    def project_moving_obj(rng, m_cell, cell_i, cell_detect_out: CellFnReturn, kernel_detect_out: KernelFnReturn,
                            pattern_detect_out: PatternFnReturn, obj):
         meta_objs = cell_detect_out.detected_meta_objs
         kernel_meta_objs = kernel_detect_out.detected_meta_objs
@@ -878,14 +917,22 @@ def gen_subrules_meta(rule: Rule, n_objs, obj_to_idxs, meta_objs, coll_mat, rule
         )
             
         m_cell = m_cell.at[obj_idx].set(1)
-        m_cell = m_cell.at[n_objs + (obj_idx * N_FORCES) + force_idx].set(1)
+
+        # Remove any existing forces from the object and add the new one
+        force_arr = jnp.zeros(N_FORCES, dtype=bool)
+        force_arr = force_arr.at[force_idx].set(1)
+        # m_cell = m_cell.at[n_objs + (obj_idx * N_FORCES) + force_idx].set(1)
+        m_cell = jax.lax.dynamic_update_slice(
+            m_cell, force_arr, (n_objs + obj_idx * N_FORCES,)
+        )
+
         if DEBUG:
             jax.debug.print('project_moving_obj, obj_idx: {obj_idx}, force_idx: {force_idx}',
                             obj_idx=obj_idx, force_idx=force_idx)
         m_cell = remove_colliding_objs(m_cell, obj_idx, coll_mat)
         return rng, m_cell
 
-    def project_stationary_obj(rng, m_cell, cell_detect_out: CellFnReturn, kernel_detect_out: KernelFnReturn,
+    def project_stationary_obj(rng, m_cell, cell_i, cell_detect_out: CellFnReturn, kernel_detect_out: KernelFnReturn,
                                pattern_detect_out: PatternFnReturn, obj):
         meta_objs = cell_detect_out.detected_meta_objs
         kernel_meta_objs = kernel_detect_out.detected_meta_objs
@@ -969,12 +1016,12 @@ def gen_subrules_meta(rule: Rule, n_objs, obj_to_idxs, meta_objs, coll_mat, rule
                 raise Exception(f'Invalid object `{obj}` in rule.')
         
         # @partial(jax.jit, static_argnums=())
-        def project_cell(rng, m_cell, cell_detect_out, kernel_detect_out, pattern_detect_out):
+        def project_cell(rng, m_cell, cell_i, cell_detect_out, kernel_detect_out, pattern_detect_out):
             m_cell = m_cell & ~cell_detect_out.detected
             assert len(m_cell.shape) == 1, f'Invalid cell shape {m_cell.shape}'
             for proj_fn in fns:
-                rng, m_cell = proj_fn(rng=rng, m_cell=m_cell, cell_detect_out=cell_detect_out, kernel_detect_out=kernel_detect_out,
-                                 pattern_detect_out=pattern_detect_out)
+                rng, m_cell = proj_fn(rng=rng, m_cell=m_cell, cell_i=cell_i, cell_detect_out=cell_detect_out,
+                                      kernel_detect_out=kernel_detect_out, pattern_detect_out=pattern_detect_out)
             # removed_something = jnp.any(cell_detect_out.detected)
             # jax.lax.cond(
             #     removed_something,
@@ -1041,7 +1088,10 @@ def gen_subrules_meta(rule: Rule, n_objs, obj_to_idxs, meta_objs, coll_mat, rule
                 print(f'has right pattern: {has_right_pattern}')
             if lp is None:
                 cell_detection_fns.append(
-                    lambda m_cell: (True, CellFnReturn(detected=jnp.zeros_like(m_cell), force_idx=None, detected_meta_objs={}))
+                    lambda m_cell: (
+                        True,  # detected by default
+                        CellFnReturn(detected=jnp.zeros_like(m_cell), force_idx=None, detected_meta_objs={})  # empty cell return
+                    )
                 )
             elif len(lp.shape) == 1:
                 for i, l_cell in enumerate(lp):
@@ -1054,7 +1104,11 @@ def gen_subrules_meta(rule: Rule, n_objs, obj_to_idxs, meta_objs, coll_mat, rule
                         cell_detection_fns.append(gen_cell_detection_fn(l_cell, force_idx))
                     else:
                         cell_detection_fns.append(
-                            lambda m_cell: (True, CellFnReturn(detected=jnp.zeros_like(m_cell), force_idx=None, detected_meta_objs={}))
+                            lambda m_cell: (
+                                True,
+                                CellFnReturn(detected=jnp.zeros_like(m_cell), force_idx=None, detected_meta_objs={}),
+                                None,
+                            )
                         )
             # FIXME: why is the normal way broken here?
             # if has_right_pattern:
@@ -1166,7 +1220,7 @@ def gen_subrules_meta(rule: Rule, n_objs, obj_to_idxs, meta_objs, coll_mat, rule
                 else:
                     kernel_activ_xys = np.argwhere(kernel_activations == 1)
                 kernel_activ_xy_idx = 0
-                kernel_activ_xy = kernel_activ_xys[kernel_activ_xy_idx]
+                # kernel_activ_xy = kernel_activ_xys[kernel_activ_xy_idx]
 
                 # @jax.jit
                 def project_cells_at(rng, xy, lvl):
@@ -1220,7 +1274,8 @@ def gen_subrules_meta(rule: Rule, n_objs, obj_to_idxs, meta_objs, coll_mat, rule
                         m_cell = lvl[0, :, *cell_xy]
                         m_cell = jnp.array(m_cell)
                         rng, m_cell = cell_proj_fn(
-                            rng, m_cell, cell_detect_out=cell_detect_out_i, kernel_detect_out=kernel_detect_outs_xy,
+                            rng=rng, m_cell=m_cell, cell_i=i, cell_detect_out=cell_detect_out_i,
+                            kernel_detect_out=kernel_detect_outs_xy,
                             pattern_detect_out=pattern_detect_out_i)
                         # m_cell = jax.lax.switch(i, cell_projection_fns, m_cell, cell_detect_out,
                         #                         pattern_detect_outs_xy)
@@ -1486,12 +1541,14 @@ class LoopRuleState:
     rng: chex.PRNGKey
     app_i: int  # Number of times a rule was applied in this loop
     rule_i: int  # The index (in the group) of the rule we're applying.
+    grp_i: int
+    block_i: int
 
-def apply_rule_fn(loop_rule_state: LoopRuleState, all_rule_fns, jit, n_prior_rules_arr, block_i, grp_i, obj_to_idxs, n_objs):
+def apply_rule_fn(loop_rule_state: LoopRuleState, all_rule_fns, jit, n_prior_rules_arr, obj_to_idxs, n_objs):
     """Apply an atomic rule once to the level."""
 
     prev_loop_rule_state = loop_rule_state
-    rule_i = loop_rule_state.rule_i
+    rule_i, grp_i, block_i = loop_rule_state.rule_i, loop_rule_state.grp_i, loop_rule_state.block_i
     rng, lvl = prev_loop_rule_state.rng, prev_loop_rule_state.lvl
     # Now we apply the atomic rule function.
     rule_state: RuleState
@@ -1516,7 +1573,6 @@ def apply_rule_fn(loop_rule_state: LoopRuleState, all_rule_fns, jit, n_prior_rul
     cancelled = rule_state.cancelled | prev_loop_rule_state.cancelled
     win = rule_state.win | prev_loop_rule_state.win
 
-    # print(f'      rule {rule_i} of group {grp_i} had effect: {rule_had_effect}')
     if DEBUG:
         jax.debug.print('      apply_rule_fn: rule {rule_i} had effect: {rule_had_effect}. again: {again}', rule_i=rule_i, rule_had_effect=rule_had_effect, again=again)
         if not jit:
@@ -1533,9 +1589,12 @@ def apply_rule_fn(loop_rule_state: LoopRuleState, all_rule_fns, jit, n_prior_rul
         app_i=loop_rule_state.app_i + 1,
         rng=rule_state.rng,
         rule_i=rule_i,
+        grp_i=grp_i,
+        block_i=block_i,
     )
 
     return loop_rule_state
+
 
 @flax.struct.dataclass
 class RuleGroupState:
@@ -1550,13 +1609,15 @@ class RuleGroupState:
     win: bool
     rng: chex.PRNGKey
     rule_i: int  # The index (in the group) of the rule we're applying.
+    grp_i: int
+    block_i: int
 
 
-def loop_rule_fn(rule_group_state: RuleGroupState, all_rule_fns, jit, n_prior_rules_arr, block_i, grp_i, obj_to_idxs, n_objs):
+def loop_rule_fn(rule_group_state: RuleGroupState, all_rule_fns, jit, n_prior_rules_arr, obj_to_idxs, n_objs):
     """Repeatedly apply an atomic rule to the level until it no longer has an effect."""
 
     _apply_rule_fn = partial(apply_rule_fn, all_rule_fns=all_rule_fns, n_prior_rules_arr=n_prior_rules_arr,
-                        block_i=block_i, grp_i=grp_i, jit=jit, obj_to_idxs=obj_to_idxs, n_objs=n_objs)
+                        jit=jit, obj_to_idxs=obj_to_idxs, n_objs=n_objs)
     
     loop_rule_state = LoopRuleState(
         lvl=rule_group_state.lvl,
@@ -1568,6 +1629,8 @@ def loop_rule_fn(rule_group_state: RuleGroupState, all_rule_fns, jit, n_prior_ru
         rng=rule_group_state.rng,
         app_i=0,
         rule_i=rule_group_state.rule_i,
+        grp_i=rule_group_state.grp_i,
+        block_i=rule_group_state.block_i,
     )
     loop_rule_state: LoopRuleState
 
@@ -1597,6 +1660,8 @@ def loop_rule_fn(rule_group_state: RuleGroupState, all_rule_fns, jit, n_prior_ru
         win=rule_group_state.win | loop_rule_state.win,
         rng=loop_rule_state.rng,
         rule_i=rule_group_state.rule_i + 1,
+        grp_i=rule_group_state.grp_i,
+        block_i=rule_group_state.block_i,
     )
 
     return rule_group_state
@@ -1611,12 +1676,16 @@ class LoopRuleGroupState:
     win: bool
     rng: chex.PRNGKey
     app_i: int  # Number of times this group was applied
+    grp_i: int
+    block_i: int
 
-def apply_rule_grp(loop_rule_group_state: LoopRuleGroupState, all_rule_fns, jit, n_prior_rules_arr, block_i, grp_i, n_rules_per_grp_arr, obj_to_idxs, n_objs):
+def apply_rule_grp(loop_rule_group_state: LoopRuleGroupState, all_rule_fns, jit, n_prior_rules_arr, n_rules_per_grp_arr, obj_to_idxs, n_objs):
     """Iterate through each rule in the group. Loop it until it no longer has an effect."""
 
     _loop_rule_fn = partial(loop_rule_fn, all_rule_fns=all_rule_fns, n_prior_rules_arr=n_prior_rules_arr,
-                        block_i=block_i, grp_i=grp_i, jit=jit, obj_to_idxs=obj_to_idxs, n_objs=n_objs)
+                        jit=jit, obj_to_idxs=obj_to_idxs, n_objs=n_objs)
+
+    block_i, grp_i = loop_rule_group_state.block_i, loop_rule_group_state.grp_i
 
     n_rules_in_grp = n_rules_per_grp_arr[block_i, grp_i]
 
@@ -1629,6 +1698,8 @@ def apply_rule_grp(loop_rule_group_state: LoopRuleGroupState, all_rule_fns, jit,
         win=loop_rule_group_state.win,
         rng=loop_rule_group_state.rng,
         rule_i=0,
+        grp_i=grp_i,
+        block_i=block_i,
     )
 
     if jit:
@@ -1670,6 +1741,8 @@ def apply_rule_grp(loop_rule_group_state: LoopRuleGroupState, all_rule_fns, jit,
         win=win,
         rng=rule_group_state.rng,
         app_i=loop_rule_group_state.app_i + 1,
+        grp_i=loop_rule_group_state.grp_i,
+        block_i=loop_rule_group_state.block_i,
     )
     return loop_rule_group_state
 
@@ -1682,16 +1755,27 @@ class RuleBlockState:
     again: bool
     win: bool
     rng: chex.PRNGKey
+    grp_i: int
+    block_i: int
 
-def loop_rule_grp(carry, grp_i, block_i, n_prior_rules_arr, n_rules_per_grp_arr, all_rule_fns, obj_to_idxs, n_objs,
-                  jit):
+def loop_rule_grp(rule_block_state: RuleBlockState, _,  n_prior_rules_arr, n_rules_per_grp_arr, all_rule_fns, obj_to_idxs,
+                  n_objs, jit):
     """Given a rule group, repeatedly attempt to apply the group (by looping each rule in sequence) until the group no longer has an effect."""
-    lvl, grp_applied_prev, _, cancelled, restart, prev_again, win, rng = carry
+    # lvl, grp_applied_prev, _, cancelled, restart, prev_again, win, rng = carry
+    lvl = rule_block_state.lvl
+    grp_applied_prev = rule_block_state.applied
+    cancelled = rule_block_state.cancelled
+    restart = rule_block_state.restart
+    prev_again = rule_block_state.again
+    rng = rule_block_state.rng
+    win = rule_block_state.win
+    grp_i = rule_block_state.grp_i
+    block_i = rule_block_state.block_i
 
     grp_applied = True
 
     _apply_rule_grp = partial(apply_rule_grp, all_rule_fns=all_rule_fns, n_prior_rules_arr=n_prior_rules_arr,
-                            block_i=block_i, grp_i=grp_i, n_rules_per_grp_arr=n_rules_per_grp_arr, obj_to_idxs=obj_to_idxs,
+                            n_rules_per_grp_arr=n_rules_per_grp_arr, obj_to_idxs=obj_to_idxs,
                             n_objs=n_objs, jit=jit)
 
     grp_app_i = 0
@@ -1706,6 +1790,8 @@ def loop_rule_grp(carry, grp_i, block_i, n_prior_rules_arr, n_rules_per_grp_arr,
         win=win,
         rng=rng,
         app_i=grp_app_i,
+        grp_i=grp_i,
+        block_i=block_i,
     )
 
     if jit:
@@ -1727,7 +1813,22 @@ def loop_rule_grp(carry, grp_i, block_i, n_prior_rules_arr, n_rules_per_grp_arr,
     grp_applied = loop_rule_group_state.app_i > 1
     block_applied = grp_applied_prev | grp_applied
 
-    return (lvl, block_applied, grp_app_i, cancelled, restart, again, win, rng), None
+    rule_block_state = RuleBlockState(
+        lvl=lvl,
+        applied=block_applied,
+        # cancelled=loop_rule_group_state.cancelled,  # Actually, this should be enough...
+        cancelled=cancelled | loop_rule_group_state.cancelled,
+        # restart=loop_rule_group_state.restart,  # This should be enough also...
+        restart=restart | loop_rule_group_state.restart,
+        again=again,
+        win=loop_rule_group_state.win | win,
+        rng=loop_rule_group_state.rng,
+        grp_i=grp_i + 1,
+        block_i=block_i,
+    )
+
+    # return (lvl, block_applied, grp_app_i, cancelled, restart, again, win, rng), None
+    return rule_block_state, _
 
 
 def apply_rule_block(carry, block_i, n_prior_rules_arr, n_rules_per_grp_arr, all_rule_fns, obj_to_idxs, n_objs, rule_grps, jit):
@@ -1736,24 +1837,42 @@ def apply_rule_block(carry, block_i, n_prior_rules_arr, n_rules_per_grp_arr, all
     block_applied = False
     win = False
 
-    _loop_rule_grp = partial(loop_rule_grp, block_i=block_i, n_prior_rules_arr=n_prior_rules_arr,
+    _loop_rule_grp = partial(loop_rule_grp, n_prior_rules_arr=n_prior_rules_arr,
                             n_rules_per_grp_arr=n_rules_per_grp_arr, all_rule_fns=all_rule_fns,
                             obj_to_idxs=obj_to_idxs, n_objs=n_objs, jit=jit)
 
-    init_carry = (lvl, block_applied, block_app_i, cancelled, restart, prev_again, win, rng)
+    # init_carry = (lvl, block_applied, block_app_i, cancelled, restart, prev_again, win, rng)
+    rule_block_state = RuleBlockState(
+        lvl=lvl,
+        applied=block_applied,
+        cancelled=cancelled,
+        restart=restart,
+        again=prev_again,
+        win=win,
+        rng=rng,
+        grp_i=0,
+        block_i=block_i,
+    )
     if jit:
         # FIXME: This should be a while that cancels if applicable
-        (lvl, block_applied, block_app_i, cancelled, restart, again, win, rng), _ = jax.lax.scan(
+        # (lvl, block_applied, block_app_i, cancelled, restart, again, win, rng), _ = jax.lax.scan(
+        rule_block_state, _ = jax.lax.scan(
             _loop_rule_grp,
-            init=init_carry,
+            init=rule_block_state,
             xs=jnp.arange(len(rule_grps)),
         )
+        lvl, block_applied, cancelled, restart, again, win, rng = \
+            rule_block_state.lvl, rule_block_state.applied, rule_block_state.cancelled, \
+            rule_block_state.restart, rule_block_state.again, rule_block_state.win, rule_block_state.rng
     else:
         again = False
         for grp_i in range(len(rule_grps)):
-            carry, _ = _loop_rule_grp(
-                init_carry, grp_i)
-            lvl, block_applied, block_app_i, cancelled, restart, again, win, rng = carry
+            rule_block_state, _ = _loop_rule_grp(
+                rule_block_state, grp_i)
+            # lvl, block_applied, block_app_i, cancelled, restart, again, win, rng = carry
+            lvl, block_applied, cancelled, restart, again, win, rng = \
+                rule_block_state.lvl, rule_block_state.applied, rule_block_state.cancelled, \
+                rule_block_state.restart, rule_block_state.again, rule_block_state.win, rule_block_state.rng
 
     again = prev_again | again
 
