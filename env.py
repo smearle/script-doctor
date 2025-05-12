@@ -367,8 +367,8 @@ def gen_perp_par_subrules(l_kerns, r_kerns):
         new_patterns[1][i] = (new_kerns_b)
     return new_patterns
 
-def gen_subrules_meta(rule: Rule, n_objs, obj_to_idxs, meta_objs, coll_mat, rule_name, char_to_obj, jit=True):
-    idxs_to_objs = {v: k for k, v in obj_to_idxs.items()}
+def gen_subrules_meta(rule: Rule, n_objs, obj_to_idxs, meta_objs, coll_mat, rule_name, char_to_obj,
+                      joint_tiles, jit=True):
     has_right_pattern = len(rule.right_kernels) > 0
 
     def is_obj_forceless(obj_idx, m_cell):
@@ -1383,7 +1383,10 @@ def gen_subrules_meta(rule: Rule, n_objs, obj_to_idxs, meta_objs, coll_mat, rule
 
 
     l_kerns, r_kerns = rule.left_kernels, rule.right_kernels
-    # Replace any empty lists in lp and rp with a None
+
+    # Expand joint objects in kernels into the corresponding subtitles (repeating object modifiers as necessary)
+    l_kerns, r_kerns = expand_joint_objs_in_pattern(l_kerns, joint_tiles), \
+        expand_joint_objs_in_pattern(r_kerns, joint_tiles)
 
     # Expand into appropriate subrules (with relative forces) if perpendicular or parallel keywords are present.
     if is_perp_or_par_in_pattern(l_kerns):
@@ -1391,6 +1394,7 @@ def gen_subrules_meta(rule: Rule, n_objs, obj_to_idxs, meta_objs, coll_mat, rule
     else:
         kern_tpls = [(l_kerns, r_kerns)]
 
+    # Replace any empty lists in lp and rp with a None
     for l_kerns, r_kerns in kern_tpls:
         l_kerns = [[[None] if len(l) == 0 else [' '.join(l)] for l in kernel] for kernel in l_kerns]
         if DEBUG:
@@ -1759,8 +1763,49 @@ def apply_rule_block(carry, block_i, n_prior_rules_arr, n_rules_per_grp_arr, all
 
 
     return lvl, block_applied, block_app_i, cancelled, restart, again, win, rng
+
+def expand_joint_objs(objs, joint_tiles):
+    """Expand a list of objects to include all the objects in the joint tiles."""
+    expanded_objs = []
+    for obj in objs:
+        if obj in joint_tiles:
+            expanded_objs.extend(expand_joint_objs(joint_tiles[obj], joint_tiles))
+        else:
+            expanded_objs.append(obj)
+    return expanded_objs
+
+def expand_joint_objs_in_pattern(pattern, joint_tiles):
+    new_pattern = []
+    for kernel in pattern:
+        new_kernel = []
+        for cell in kernel:
+            new_cell = []
+            for rule_content in cell:
+                modifier_obj = rule_content.split(' ')
+                if len(modifier_obj) == 1:
+                    modifier = None
+                    obj = modifier_obj[0]
+                elif len(modifier_obj) == 2:
+                    modifier = modifier_obj[0]
+                    obj = modifier_obj[1]
+                else:
+                    raise Exception(f'Invalid rule_content: {rule_content}. Lark parsing issue?')
+                obj = obj.lower()
+                if obj in joint_tiles:
+                    sub_objs = expand_joint_objs([obj], joint_tiles)
+                    for so in sub_objs:
+                        if modifier is not None:
+                            new_cell.append(f'{modifier} {so}')
+                        else:
+                            new_cell.append(so)
+                else:
+                    new_cell.append(rule_content)
+            new_kernel.append(new_cell)
+        new_pattern.append(new_kernel)
+    return new_pattern
+                
         
-def gen_tick_fn(obj_to_idxs, coll_mat, tree_rules, meta_objs, jit, n_objs, char_to_obj):
+def gen_tick_fn(obj_to_idxs, coll_mat, tree_rules, meta_objs, jit, n_objs, char_to_obj, joint_tiles):
     rule_blocks = []
     late_rule_grps = []
     for rule_block in tree_rules:
@@ -1773,7 +1818,7 @@ def gen_tick_fn(obj_to_idxs, coll_mat, tree_rules, meta_objs, jit, n_objs, char_
         rule_grps = []
         for rule in rule_block.rules:
             sub_rule_fns = gen_subrules_meta(rule, n_objs, obj_to_idxs, meta_objs, coll_mat, rule_name=str(rule), 
-                                                char_to_obj=char_to_obj, jit=jit)
+                                                char_to_obj=char_to_obj, joint_tiles=joint_tiles, jit=jit)
             if not 'late' in rule.prefixes:
                 rule_grps.append(sub_rule_fns)
             else:
@@ -2046,7 +2091,7 @@ class PSEnv:
         if DEBUG:
             print(f"Generating tick function for {self.title}")
         self.tick_fn = gen_tick_fn(self.obj_to_idxs, coll_mat, tree.rules, meta_objs, jit=self.jit, n_objs=self.n_objs,
-                                   char_to_obj=char_to_obj)
+                                   char_to_obj=char_to_obj, joint_tiles=joint_tiles)
         if DEBUG:
             print(f"Generating check win function for {self.title}")
         self.check_win = gen_check_win(tree.win_conditions, self.obj_to_idxs, meta_objs, self.char_to_obj, jit=self.jit)

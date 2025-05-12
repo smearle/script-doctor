@@ -82,20 +82,23 @@ rule_block_once: rule_data+
 rule_block_loop: STARTLOOP NEWLINES rule_data+ ENDLOOP NEWLINES
 
 // Rule Data
-rule_data: PLUS? (PREFIX | rule_part)+ THEN (PREFIX | command | rule_part)* message? NEWLINES
+// rule_data: PLUS? (PREFIX | rule_part)+ THEN (PREFIX | command | rule_part)* message? NEWLINES
 
-THEN: "->"
-PLUS: "+"
-
-message: "message"i STRING+
+rule_data: PLUS? RULE_PREFIX* (rule_part)+ THEN (command | rule_part)* NEWLINES
 
 rule_part: "[" (rule_content? cell_border*)+ "]"
 
+rule_content: (OBJECT_MODIFIER WS_INLINE)? ID
+
+THEN: "->"
+PLUS: "+"
 cell_border: "|"
 
-rule_content: (DIRECTIONAL WS_INLINE)? ID
+OBJECT_MODIFIER: DIRECTIONAL | "random"i | "randomDir"i | "horizontal"i | "vertical"i | "left"i | "right"i | "up"i
+       | "down"i | "perpendicular"i | "horizontal"i | "vertical"i | "no"i
 
 DIRECTIONAL: /[\^v<>]/
+
 ID: /[a-z0-9.A-Z#_\/\\@!]/+
 
 // Command
@@ -139,7 +142,7 @@ condition_id: ID
 legend_key: PIXEL
 
 KEYWORD_ID: /[a-z0-9.A-Z_]+/
-PREFIX: "late"i | "horizontal"i | "vertical"i | "left"i | "right"i | "up"i | "down"i | "+" | "random"i | ID
+RULE_PREFIX: "late"i | "horizontal"i | "vertical"i | "left"i | "right"i | "up"i | "down"i | "+" | "random"i
 
 prelude_data: PRELUDE_KEYWORD (" " STRING)* NEWLINES
 
