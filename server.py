@@ -519,6 +519,7 @@ TRANSITIONS_DIR = 'transitions'
 games_to_skip = set({'Broken Rigid Body', 
                      "Path_Finder",  # This one does not compile in the js engine
                      "Cold_Feet_Sokoban",  # Compiled in standalone JS. But weird bug when mode=gen_solutions...
+                     "Good_Example",  # Playable, but doesn't want to solve by BFS.
                      })
 
 @app.route('/get_player_action', methods=['POST'])

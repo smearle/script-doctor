@@ -1821,10 +1821,12 @@ def gen_tick_fn(obj_to_idxs, coll_mat, tree_rules, meta_objs, jit, n_objs, char_
         for rule in rule_block.rules:
             sub_rule_fns = gen_subrules_meta(rule, n_objs, obj_to_idxs, meta_objs, coll_mat, rule_name=str(rule), 
                                                 char_to_obj=char_to_obj, joint_tiles=joint_tiles, jit=jit)
-            if not 'late' in rule.prefixes:
-                rule_grps.append(sub_rule_fns)
-            else:
+            if '+' in rule.prefixes:
+                rule_grps[-1].extend(sub_rule_fns)
+            elif 'late' in rule.prefixes:
                 late_rule_grps.append(sub_rule_fns)
+            else:
+                rule_grps.append(sub_rule_fns)
         rule_blocks.append((looping, rule_grps))
 
     _move_rule_fn = partial(apply_movement, obj_to_idxs=obj_to_idxs, coll_mat=coll_mat, n_objs=n_objs, jit=jit)

@@ -84,10 +84,10 @@ rule_block_loop: STARTLOOP NEWLINES rule_data+ ENDLOOP NEWLINES
 // Rule Data
 // rule_data: PLUS? (PREFIX | rule_part)+ THEN (PREFIX | command | rule_part)* message? NEWLINES
 
-rule_data: PLUS? RULE_PREFIX* (rule_part)+ THEN (command | rule_part)* NEWLINES
+rule_data: RULE_PREFIX* (rule_part)+ THEN (command | rule_part)* NEWLINES
 
 RULE_PREFIX: "late"i | "horizontal"i | "vertical"i | "left"i | "right"i | "up"i | "down"i | "+" | "random"i
-       | "perpendicular"i | "parallel"i | "orthoganal"i | "rigid"i
+       | "perpendicular"i | "parallel"i | "orthoganal"i | "rigid"i | "+"
 
 rule_part: "[" (rule_content? cell_border*)+ "]"
 
@@ -97,7 +97,6 @@ rule_object_with_modifier.1: OBJECT_MODIFIER WS_INLINE+ ID
 rule_object.0: ID
 
 THEN: "->"
-PLUS: "+"
 cell_border: "|"
 
 OBJECT_MODIFIER: DIRECTIONAL | "random"i | "randomDir"i | "horizontal"i | "vertical"i | "left"i | "right"i | "up"i
