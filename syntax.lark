@@ -91,7 +91,7 @@ RULE_PREFIX: "late"i | "horizontal"i | "vertical"i | "left"i | "right"i | "up"i 
 
 rule_part: "[" (rule_content? cell_border*)+ "]"
 
-rule_content: rule_object_with_modifier | rule_object | "..."
+rule_content: rule_object_with_modifier | rule_object | "..." | "]" "..." "["
 
 rule_object_with_modifier.1: OBJECT_MODIFIER WS_INLINE+ ID
 rule_object.0: ID

@@ -18,6 +18,7 @@ from utils_rl import get_env_params_from_config, init_ps_env
 games = [
     # 'castlemouse',
     # 'atlas shrank',
+    'limerick',
     'sokoban_basic',
     'sokoban_match3',
     'slidings',
@@ -85,8 +86,11 @@ def profile(config: ProfileEnvConfig):
             start = timer()
             carry = (env_state, rng)
             carry, _ = _env_step_jitted(carry, None)
+            print(f'Finished 1st steps in {(timer() - start)} seconds.')
+            start = timer()
+            carry, _ = _env_step_jitted(carry, None)
+            print(f'Finished 2nd steps in {(timer() - start)} seconds.')
             carry[0].multihot_level.block_until_ready()
-            print(f'Finished 1 step in {(timer() - start)} seconds.')
 
             start = timer()
             carry, env_states = jax.lax.scan(
