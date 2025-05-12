@@ -333,8 +333,9 @@ def is_rel_force_in_kernel(k):
 def is_perp_or_par_in_pattern(p):
     for k in p:
         for c in k:
-            for o in c:
-                if o.lower() in ['perpendicular', 'orthogonal', 'parallel']:
+            for object_with_modifier in c:
+                modifier = object_with_modifier.split(' ')[0]
+                if modifier.lower() in ['perpendicular', 'orthogonal', 'parallel']:
                     return True
     return False
 
@@ -349,16 +350,17 @@ def gen_perp_par_subrules(l_kerns, r_kerns):
             for c in k:
                 c_a = []
                 c_b = []
-                for o in c:
-                    if o.lower() in ['perpendicular', 'orthogonal']:
+                for object_with_modifier in c:
+                    modifier = object_with_modifier.split(' ')[0].lower()
+                    if modifier.lower() in ['perpendicular', 'orthogonal']:
                         c_a.append('^')
                         c_b.append('v')
-                    elif o.lower() in ['parallel']:
+                    elif modifier.lower() in ['parallel']:
                         c_a.append('>')
                         c_b.append('<')
                     else:
-                        c_a.append(o)
-                        c_b.append(o)
+                        c_a.append(object_with_modifier)
+                        c_b.append(object_with_modifier)
                 l_kern_a.append(c_a)
                 l_kern_b.append(c_b)
             new_kerns_a.append(l_kern_a)

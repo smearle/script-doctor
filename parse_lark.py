@@ -298,6 +298,12 @@ class PrintPuzzleScript(Transformer):
     def rule_content(self, items):
         return ' '.join(items)
 
+    def rule_object(self, items):
+        return ' '.join(items)
+    
+    def rule_object_with_modifier(self, items):
+        return ' '.join(items)
+
     def levels_section(self, items):
         return 'LEVELS\n\n' + '\n'.join([i for i in items if i])
 

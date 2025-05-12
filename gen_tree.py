@@ -47,9 +47,17 @@ class GenPSTree(Transformer):
             sprite=sprite,
         )
 
-    def rule_content(self, items):
+    def rule_object_with_modifier(self, items):
         items = [it for it in items if not (isinstance(it, Token) and it.type == 'WS_INLINE')]
         return ' '.join(items)
+
+    def rule_object(self, items):
+        assert len(items) == 1
+        return str(items[0])
+
+    def rule_content(self, items):
+        assert len(items) == 1
+        return str(items[0])
 
     def cell_border(self, items):
         return '|'
@@ -111,7 +119,7 @@ class GenPSTree(Transformer):
             if isinstance(item, Token) and item.type == 'THEN':
                 rp = items[i+1:]
                 break
-            elif isinstance(item, Token) and item.type == 'PREFIX':
+            elif isinstance(item, Token) and item.type == 'RULE_PREFIX':
                 prefix = str(item).lower()
                 if prefix == 'rigid':
                     raise NotImplementedError('Rigid prefix not implemented')
