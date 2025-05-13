@@ -21,7 +21,6 @@ from jax_utils import stack_leaves
 from marl.spaces import Box
 from ps_game import LegendEntry, PSGameTree, PSObject, Rule, WinCondition
 from spaces import Discrete
-from utils import multihot_to_desc
 
 
 # Whether to print out a bunch of stuff, etc.
@@ -913,61 +912,62 @@ def apply_movement(rng, lvl, obj_to_idxs, coll_mat, n_objs, jit=True):
     # Rearrange the array, since we want to apply force to the "first" objects spatially on the map.
     force_arr = rearrange(force_arr, "c h w -> h w c")
     # Get the first x,y,c coordinates where force is present.
-    coords = jnp.argwhere(force_arr, size=n_lvl_cells, fill_value=-1)
+    x, y, c = jnp.argwhere(force_arr, size=1, fill_value=-1)[0]
 
-    def attempt_move(carry):
-        # NOTE: This depends on movement forces preceding any other forces (per object) in the channel dimension.
-        lvl, _, _, i = carry
-        x, y, c = coords[i]
-        is_force_present = x != -1
-        # Get the obj idx on which the force is applied.
-        obj_idx = c // (N_FORCES - 1)
-        # Determine where the object would move and whether such a move would be legal.
-        forces_to_deltas = jnp.array([[0, -1], [1, 0], [0, 1], [-1, 0]])
-        delta = forces_to_deltas[c % (N_FORCES - 1)]
-        x_1, y_1 = x + delta[0], y + delta[1]
-        would_collide = jnp.any(lvl[0, :n_objs, x_1, y_1] * coll_mat[obj_idx])
-        out_of_bounds = (x_1 < 0) | (x_1 >= lvl.shape[2]) | (y_1 < 0) | (y_1 >= lvl.shape[3])
-        can_move = is_force_present & ~would_collide & ~out_of_bounds
-        # Now, in the new level, move the object in the direction of the force.
-        new_lvl = lvl.at[0, obj_idx, x, y].set(0)
-        new_lvl = new_lvl.at[0, obj_idx,  x_1, y_1].set(1)
-        # And remove any forces that were applied to the object before it moved.
-        new_lvl = jax.lax.dynamic_update_slice(
-            new_lvl,
+    # NOTE: This depends on movement forces preceding any other forces (per object) in the channel dimension.
+    is_force_present = x != -1
+    # Get the obj idx on which the force is applied.
+    obj_idx = c // (N_FORCES - 1)
+    # Determine where the object would move and whether such a move would be legal.
+    forces_to_deltas = jnp.array([[0, -1], [1, 0], [0, 1], [-1, 0]])
+    delta = forces_to_deltas[c % (N_FORCES - 1)]
+    x_1, y_1 = x + delta[0], y + delta[1]
+    would_collide = jnp.any(lvl[0, :n_objs, x_1, y_1] * coll_mat[obj_idx])
+    out_of_bounds = (x_1 < 0) | (x_1 >= lvl.shape[2]) | (y_1 < 0) | (y_1 >= lvl.shape[3])
+    can_move = is_force_present & ~would_collide & ~out_of_bounds
+
+    def remove_force(lvl):
+        # Remove the force in question
+        lvl = jax.lax.dynamic_update_slice(
+            lvl,
             jnp.zeros((1, N_FORCES, 1, 1), dtype=bool),
             (0, n_objs + (obj_idx * N_FORCES), x, y)
         )
-        lvl = jax.lax.select(can_move, new_lvl, lvl)
-        i += 1
-        if DEBUG:
-            jax.debug.print('      at position {xy}, the object {obj} moved to {new_xy}', xy=(x, y), obj=obj_idx, new_xy=(x_1, y_1))
-            jax.debug.print('      would collide: {would_collide}, out of bounds: {out_of_bounds}, can_move: {can_move}',
-                            would_collide=would_collide, out_of_bounds=out_of_bounds, can_move=can_move)
-        return lvl, can_move, rng, i
+        return lvl
 
-    init_carry = (lvl, False, rng, 0)
+    def move_object(lvl):
+        # Supposing the object can move, then in the new level, move the object in the direction of the force.
+        lvl = lvl.at[0, obj_idx, x, y].set(0)
+        lvl = lvl.at[0, obj_idx,  x_1, y_1].set(1)
+        # And remove any forces that were applied to the object before it moved.
+        return lvl
 
-    # Iterate through possible moves until we apply one, or run out of possible moves.
-    if jit:
-        lvl, can_move, rng, i = jax.lax.while_loop(
-            lambda carry: (coords[carry[3], 0] != -1) & ~carry[1],
-            lambda carry: attempt_move(carry),
-            init_carry,
-        )
-    else:
-        i = init_carry[3]
-        can_move = init_carry[1]
-        carry = init_carry
-        while (coords[i, 0] != -1) and not can_move:
-            lvl, can_move, rng, i = attempt_move(carry)
-            carry = (lvl, can_move, rng, i)
-    
+    # If the object can move, then remove the force and move the object.
+    lvl = jax.lax.cond(
+        can_move, 
+        move_object,
+        lambda x: x,
+        lvl
+    )
+
+    # If the force is present but the object cannot move, then remove the force.
+    lvl = jax.lax.cond(
+        is_force_present & ~can_move,
+        remove_force,
+        lambda x: x,
+        lvl
+    )
+
     if DEBUG:
-        jax.debug.print('      applied movement: {can_move}', can_move=can_move)
+        jax.debug.print('      at position {xy}, the object {obj} moved to {new_xy}', xy=(x, y), obj=obj_idx, new_xy=(x_1, y_1))
+        jax.debug.print('      would collide: {would_collide}, out of bounds: {out_of_bounds}, can_move: {can_move}',
+                        would_collide=would_collide, out_of_bounds=out_of_bounds, can_move=can_move)
+    
+    # As long as we detected some force, we know we have changed the level somehow, and we will call this rule function
+    # again until we run out of forces to consider.
     rule_state = RuleState(
         lvl=lvl,
-        applied=can_move,
+        applied=is_force_present,
         cancelled=False,
         restart=False,
         again=False,
@@ -2610,3 +2610,67 @@ class PSEnv:
             tick_fn = jax.jit(tick_fn)
         return tick_fn
 
+
+def multihot_to_desc(multihot_level, objs_to_idxs, n_objs, show_background=False):
+    """Converts a multihot array to a 2D list of descriptions.
+    
+    Args:
+        multihot_level: A multihot array of shape [n_objects + n_forces, height, width].
+        obj_to_idxs: Dictionary mapping object names to their indices.
+    
+    Returns:
+        A 2D list where each cell contains a string describing all objects and forces present.
+    """
+    height, width = multihot_level.shape[1:]
+    
+    # Create a reverse mapping from indices to object names
+    idxs_to_obj = {idx: obj for obj, idx in objs_to_idxs.items()}
+    
+    # Create the description grid
+    desc_grid = []
+    for h in range(height):
+        row = []
+        for w in range(width):
+            cell_desc = []
+            
+            # Check which objects are active in this cell
+            for obj_idx in range(n_objs):
+                if multihot_level[obj_idx, h, w] > 0:
+                    obj_name = idxs_to_obj[obj_idx]
+                    if obj_name == 'background' and not show_background:
+                        continue
+                    obj_desc = obj_name
+                    
+                    # Check if there's a force applied to this object
+                    force_names = ["left", "down", "right", "up", "action"]
+                    forces = []
+                    for f_idx, force_name in enumerate(force_names):
+                        force_channel = n_objs + (obj_idx * N_FORCES) + f_idx
+                        if force_channel < multihot_level.shape[0] and multihot_level[force_channel, h, w] > 0:
+                            forces.append(f"force {force_name}")
+                    
+                    if forces:
+                        obj_desc += f" ({', '.join(forces)})"
+                    
+                    cell_desc.append(obj_desc)
+            
+            row.append(", ".join(cell_desc) if cell_desc else "empty")
+        desc_grid.append(row)
+    
+    # Find the maximum width for each column
+    column_widths = []
+    for w in range(width):
+        max_width = 0
+        for h in range(height):
+            max_width = max(max_width, len(desc_grid[h][w]))
+        column_widths.append(max_width)
+    
+    # Add padding to each cell
+    for h in range(height):
+        for w in range(width):
+            desc_grid[h][w] = desc_grid[h][w].ljust(column_widths[w])
+    
+    # Join rows with consistent spacing
+    desc_str = "\n".join([" || ".join(row) for row in desc_grid])
+    
+    return desc_str

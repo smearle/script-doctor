@@ -1,14 +1,11 @@
 from itertools import product
 
-import gym
-
 from gymnax.environments import environment
 import jax
 from lark import Lark
 import numpy as np
 from env import PSEnv, PSParams, PSState, multihot_to_desc
 from parse_lark import PS_LARK_GRAMMAR_PATH, get_tree_from_txt
-from purejaxrl.wrappers import GymnaxWrapper
 
 
 # class RepresentationWrapper(GymnaxWrapper, PSEnv):
