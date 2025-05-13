@@ -30,8 +30,10 @@ def main():
             #     parse_tree = pickle.load(f)
             # ps_tree: PSGameTree = GenPSTree().transform(parse_tree)
             ps_tree, err_msg, success = get_tree_from_txt(parser, game_name, test_env_init=False)
+            env = PSEnv(ps_tree)
+            has_randomness = env.has_randomness()
             n_rules = count_rules(ps_tree)
-            games_n_rules.append((game_name, n_rules))
+            games_n_rules.append((game_name, n_rules, has_randomness))
         except Exception as e:
             print(traceback.format_exc())
             print(f"Error parsing/initializing {og_game_path}: {e}")

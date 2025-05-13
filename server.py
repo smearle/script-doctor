@@ -117,6 +117,7 @@ def load_ideas():
         ideas = json.load(f)
     return ideas
 
+
 @app.route('/file_exists', methods=['POST'])
 def file_exists():
     data = request.json
@@ -124,6 +125,7 @@ def file_exists():
     exists = os.path.isfile(file_path)
     print(f"File {file_path} exists: {exists}")
     return jsonify({'exists': exists})
+
 
 @app.route('/load_game_from_file', methods=['POST'])
 def load_game_from_file():
@@ -552,7 +554,8 @@ def list_scraped_games():
     with open(GAMES_N_RULES_SORTED_PATH, 'r') as f:
         games_n_rules = json.load(f)
     games_n_rules = sorted(games_n_rules, key=lambda x: x[1])
-    game_files = [game[0] for game in games_n_rules]
+    # Exclude games with randomness for the purpose of tree search
+    game_files = [game[0] for game in games_n_rules if not game[1]]
     for filename in game_files:
         if filename.startswith('rigid_'):
             print(f"Skipping {filename} because it seems to be a pesky rigid body game")
