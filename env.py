@@ -2283,36 +2283,36 @@ class PSEnv:
 
         if DEBUG:
             print(f"Expanding collision layers for {self.title}")
-        collision_layers = expand_collision_layers(tree.collision_layers, meta_objs, char_to_obj)
+        self.collision_layers = collision_layers = expand_collision_layers(tree.collision_layers, meta_objs, char_to_obj)
         atomic_obj_names = [name for layer in collision_layers for name in layer]
         # atomic_obj_names = [name for name in tree.objects.keys()]
         # atomic_obj_names = [name for name in atomic_obj_names]
         self.atomic_obj_names = atomic_obj_names
-        objs, self.obj_to_idxs, coll_masks = assign_vecs_to_objs(collision_layers, atomic_obj_names)
+        objs, self.objs_to_idxs, coll_masks = assign_vecs_to_objs(collision_layers, atomic_obj_names)
         for obj, sub_objs in meta_objs.items():
             # Meta-objects that are actually just alternate names.
             if DEBUG:
                 print(f'sub_objs {sub_objs}')
             sub_objs = expand_meta_objs(sub_objs, meta_objs, char_to_obj)
-            if len(sub_objs) == 1 and (obj not in self.obj_to_idxs):
-                self.obj_to_idxs[obj] = self.obj_to_idxs[sub_objs[0]]
+            if len(sub_objs) == 1 and (obj not in self.objs_to_idxs):
+                self.objs_to_idxs[obj] = self.objs_to_idxs[sub_objs[0]]
         self.n_objs = len(atomic_obj_names)
         coll_mat = np.einsum('ij,ik->jk', coll_masks, coll_masks, dtype=bool)
         if DEBUG:
             print(f"Generating tick function for {self.title}")
-        self.tick_fn = gen_tick_fn(self.obj_to_idxs, coll_mat, tree.rules, meta_objs, jit=self.jit, n_objs=self.n_objs,
+        self.tick_fn = gen_tick_fn(self.objs_to_idxs, coll_mat, tree.rules, meta_objs, jit=self.jit, n_objs=self.n_objs,
                                    char_to_obj=char_to_obj, joint_tiles=joint_tiles)
         if DEBUG:
             print(f"Generating check win function for {self.title}")
-        self.check_win = gen_check_win(tree.win_conditions, self.obj_to_idxs, meta_objs, self.char_to_obj, jit=self.jit)
-        if 'player' in self.obj_to_idxs:
-            self.player_idxs = [self.obj_to_idxs['player']]
+        self.check_win = gen_check_win(tree.win_conditions, self.objs_to_idxs, meta_objs, self.char_to_obj, jit=self.jit)
+        if 'player' in self.objs_to_idxs:
+            self.player_idxs = [self.objs_to_idxs['player']]
         elif 'player' in meta_objs:
             player_objs = expand_meta_objs(['player'], meta_objs, char_to_obj)
-            self.player_idxs = [self.obj_to_idxs[p] for p in player_objs]
+            self.player_idxs = [self.objs_to_idxs[p] for p in player_objs]
         elif 'player' in joint_tiles: 
             sub_objs = joint_tiles['player']
-            self.player_idxs = [self.obj_to_idxs[sub_obj] for sub_obj in sub_objs]
+            self.player_idxs = [self.objs_to_idxs[sub_obj] for sub_obj in sub_objs]
         else: 
             raise ValueError("Cannot figure out what indices to assign to player.")
         self.player_idxs = np.array(self.player_idxs)
@@ -2321,7 +2321,7 @@ class PSEnv:
         sprite_stack = []
         if DEBUG:
             print(atomic_obj_names)
-            print(self.obj_to_idxs)
+            print(self.objs_to_idxs)
         # for obj_name in self.obj_to_idxs:
         for obj_key in atomic_obj_names:
             if obj_key not in tree.objects:
@@ -2364,8 +2364,8 @@ class PSEnv:
         # Generate vectors to detect atomic objects
         self.obj_vecs = np.eye(self.n_objs, dtype=bool)
         joint_obj_vecs = []
-        self.chars_to_idxs = {obj_to_char[k]: v for k, v in self.obj_to_idxs.items() if k in obj_to_char}
-        self.chars_to_idxs.update({k: v for k, v in self.obj_to_idxs.items() if len(k) == 1})
+        self.chars_to_idxs = {obj_to_char[k]: v for k, v in self.objs_to_idxs.items() if k in obj_to_char}
+        self.chars_to_idxs.update({k: v for k, v in self.objs_to_idxs.items() if len(k) == 1})
 
         # Generate vectors to detect joint objects
         for jo, subobjects in joint_tiles.items():
@@ -2374,7 +2374,7 @@ class PSEnv:
             for so in subobjects:
                 if DEBUG:
                     print(so)
-                vec += self.obj_vecs[self.obj_to_idxs[so]]
+                vec += self.obj_vecs[self.objs_to_idxs[so]]
             assert jo not in self.chars_to_idxs
             self.chars_to_idxs[jo] = self.obj_vecs.shape[0]
             self.obj_vecs = np.concatenate((self.obj_vecs, vec[None]), axis=0)
@@ -2404,7 +2404,7 @@ class PSEnv:
         background_sub_objs = expand_meta_objs(['background'], self.meta_objs, self.char_to_obj)
         sub_objs = background_sub_objs
         bg_obj = background_sub_objs[0]
-        bg_idx = self.obj_to_idxs[bg_obj]
+        bg_idx = self.objs_to_idxs[bg_obj]
         multihot_level[bg_idx] = 1
 
         multihot_level = multihot_level.astype(bool)
@@ -2552,7 +2552,7 @@ class PSEnv:
         final_lvl, tick_applied, turn_app_i, cancelled, restart, tick_win, rng = self.tick_fn(rng, lvl)
 
         accept_lvl_change = ((not self.require_player_movement) or 
-                             player_has_moved(init_lvl, final_lvl, self.obj_to_idxs, self.meta_objs, self.char_to_obj)) & ~cancelled
+                             player_has_moved(init_lvl, final_lvl, self.objs_to_idxs, self.meta_objs, self.char_to_obj)) & ~cancelled
         # if DEBUG:
         #     jax.debug.print('accept level change: {accept_lvl_change}', accept_lvl_change=accept_lvl_change) 
 
