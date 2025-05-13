@@ -27,11 +27,22 @@ class BFSConfig(PSConfig):
     render_live: bool = False
     all_games: bool = True
 
+
+@dataclass
+class ProfileJaxRandConfig(PSConfig):
+    all_games: bool = False
+    n_profile_steps: int = 5_000
+    # reevaluate: bool = True  # Whether to continue profiling, or just plot the results
+    overwrite: bool = False  # Whether to overwrite existing results
+    render: bool = False
+
+
     
 @dataclass
 class ProfileStandalone(PSConfig):
     game: Optional[str] = None
-    n_steps: int = 20_000
+    all_games: bool = False
+    n_profile_steps: int = 5_000
     overwrite: bool = False
 
 
@@ -243,15 +254,6 @@ class EnjoyConfig(EvalConfig):
 class EnjoyRLConfig(MultiAgentConfig, EnjoyConfig):
     pass
     
-
-@dataclass
-class ProfileEnvConfig(RLConfig):
-    all_games: bool = True
-    n_profile_steps: int = 5000
-    reevaluate: bool = True  # Whether to continue profiling, or just plot the results
-    render: bool = False
-
-
 @dataclass
 class SweepConfig(EnjoyConfig, EvalConfig):
     name: Optional[str] = None
@@ -270,6 +272,8 @@ class GetTracesConfig(EnjoyConfig):
 cs = ConfigStore.instance()
 cs.store(name="config", node=RLConfig)
 cs.store(name="bfs_config", node=BFSConfig)
+cs.store(name="profile_jax_config", node=ProfileJaxRandConfig)
+cs.store(name="profile_standalone_config", node=ProfileStandalone)
 cs.store(name="ma_config", node=MultiAgentConfig)
 cs.store(name="enjoy_ma_pcgrl", node=EnjoyRLConfig)
 cs.store(name="get_traces_pcgrl", node=GetTracesConfig)
@@ -279,6 +283,4 @@ cs.store(name="train_accel_pcgrl", node=TrainAccelConfig)
 cs.store(name="enjoy_pcgrl", node=EnjoyConfig)
 cs.store(name="eval_pcgrl", node=EvalConfig)
 # cs.store(name="eval_ma_pcgrl", node=MultiAgentEvalConfig)
-cs.store(name="profile_ps", node=ProfileEnvConfig)
-cs.store(name="profile_standalone", node=ProfileStandalone)
 cs.store(name="batch_pcgrl", node=SweepConfig)

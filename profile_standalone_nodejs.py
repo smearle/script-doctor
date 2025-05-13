@@ -9,29 +9,45 @@ import traceback
 import hydra
 from javascript import require
 
-from conf.config import ProfileEnvConfig, ProfileStandalone
-from parse_lark import GAMES_DIR
+from conf.config import ProfileJaxRandConfig, ProfileStandalone
+from parse_lark import GAMES_DIR, MIN_GAMES_DIR
 from utils import get_list_of_games_for_testing
 
-ps = require('./standalone/puzzlescript/engine.js')
+engine = require('./standalone/puzzlescript/engine.js')
 solver = require('./standalone/puzzlescript/solver.js')
 
 STANDALONE_NODEJS_RESULTS_PATH = os.path.join('data', 'standalone_nodejs_results.json')
 
-# algos = [solver.solveBFS, solver.solveAStar, solver.solveMCTS]:
-algos = [solver.solveBFS]
-
 def compile_game(game, level_i):
-    game_path = os.path.join(GAMES_DIR, f'{game}.txt')
+    game_path = os.path.join(MIN_GAMES_DIR, f'{game}.txt')
     with open(game_path, 'r') as f:
         game_text = f.read()
-    ps.compile(game_text, level_i)
+    engine.compile(game_text, level_i)
 
 def get_algo_name(algo):
     return str(algo).split(' ')[1].strip(']')
 
+actions = ["LEFT", "RIGHT", "UP", "DOWN", "ACTION"]
 
-@hydra.main(version_base="1.3", config_path='./', config_name='profile_standalone')
+def rand_rollout_from_python(engine, solver, n_steps, timeout=1000):
+    start_time = timer()
+    for i in range(n_steps):
+        # if (i % 1_000) and (timer() - start_time > timeout):
+        #     fps = i / (timer() - start_time)
+        #     return False, [], i, fps
+        action = random.randint(0, 5)
+        winning = solver.takeAction(engine, action)
+        if winning:
+            return True, [], i, start_time - timer()
+    return False, [], i, timer() - start_time
+        
+
+# algos = [solver.solveBFS, solver.solveAStar, solver.solveMCTS]:
+algos = [solver.randomRollout, rand_rollout_from_python, solver.solveBFS]
+
+
+# @hydra.main(version_base="1.3", config_path='./', config_name='profile_standalone')
+@hydra.main(version_base="1.3", config_path='./', config_name='profile_standalone_config')
 def main(cfg: ProfileStandalone):
     if cfg.game is None:
         games_to_test = get_list_of_games_for_testing(all_games=True)
@@ -51,9 +67,11 @@ def main(cfg: ProfileStandalone):
         # TODO: How to get the available number of levels from nodejs?
         level_i = 0
         print(f'Level: {level_i}')
-        for algo in [solver.solveBFS]:
+        for algo in algos:
             algo_name = get_algo_name(algo)
             print(f'Algorithm: {algo_name}')
+            if algo_name not in results:
+                results[algo_name] = {}
             if game not in results[algo_name]:
                 results[algo_name][game] = {}
             if str(level_i) in results[get_algo_name(algo)][game]:
@@ -67,7 +85,10 @@ def main(cfg: ProfileStandalone):
                 results[algo_name][game][level_i] = {"Error": traceback.print_exc()}
                 continue
 
-            result = algo(ps, timeout=1000)
+            if algo == rand_rollout_from_python:
+                result = rand_rollout_from_python(engine, solver, timeout=1000, n_steps=cfg.n_profile_steps)
+            else:
+                result = algo(engine, timeout=1000)
             result = {
                 'solved': result[0],
                 'actions': tuple(result[1]),

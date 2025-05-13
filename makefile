@@ -1,3 +1,9 @@
 sync_data_210:
-	rsync -arv ./data/js_sols 210:~/script-doctor/data && \
 	rsync -arv 210:~/script-doctor/data ./
+
+sync_data_greene:
+	rsync -arv greene:/scratch/se2161/script-doctor/data ./
+
+sync_data:
+	rsync -arv 210:~/script-doctor/data ./
+	rsync -arv greene:/scratch/se2161/script-doctor/data ./

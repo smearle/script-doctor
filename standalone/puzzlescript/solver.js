@@ -390,6 +390,36 @@ function getScoreNormalized(engine) {
 	return 1 - score / normal_value;
 }
 
+function takeAction(engine, action) {
+  let changed = engine.processInput(action);
+  if (engine.getWinning()) {
+    // console.log('Winning!');
+    return true;
+  }
+  return false;
+}
+
+function randomRollout(engine, maxIters=100_000) {
+  let i = 0;
+  let start_time = Date.now();
+  while (i < maxIters) {
+    let changed = engine.processInput(Math.min(5, Math.floor(Math.random() * 6)));
+    if (changed) {
+      if (engine.getWinning()) {
+        // console.log(`Winning! Solution:, ${new_action_seq}\n Iterations: ${i}`);
+        // console.log('FPS:', (i / (Date.now() - start_time) * 1000).toFixed(2));
+        return [true, [], i, ((Date.now() - start_time) / 1000)];
+      }
+    }
+    i++;
+  }
+  if(i >= maxIters) {
+    // console.log('Exceeded max iterations. Exiting.');
+    return [false, [], i, ((Date.now() - start_time) / 1000)];
+  }
+  return [false, [], i, ((Date.now() - start_time) / 1000)];
+}
+
 function solveBFS(engine, maxIters=100_000) {
   function hashState(state) {
     return JSON.stringify(state).split('').reduce((hash, char) => {
@@ -877,4 +907,6 @@ module.exports = {
   solveMCTS,
   solveAStar,
   solveBFS,
+  randomRollout,
+  takeAction,
 }

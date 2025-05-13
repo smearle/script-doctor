@@ -6,12 +6,15 @@ import time
 
 import dotenv
 import jax
+from lark import Lark
 import numpy as np
 from openai import AzureOpenAI
 import requests
 import tiktoken
 
+from env import PSEnv
 from globals import PRIORITY_GAMES
+from parse_lark import get_tree_from_txt
 from prompts import *
 
 
@@ -273,3 +276,33 @@ def get_list_of_games_for_testing(all_games=True):
     else:
         games = PRIORITY_GAMES
     return games
+
+import subprocess
+
+def get_current_commit_hash():
+  """Retrieves the full hash of the current Git commit.
+
+  Returns:
+    str: The full commit hash as a string, or None if an error occurs.
+  """
+  try:
+    full_hash = subprocess.check_output(['git', 'rev-parse', 'HEAD'])
+    full_hash_str = full_hash.decode('utf-8').strip()
+    return full_hash_str
+  except subprocess.CalledProcessError:
+    return None
+
+from timeit import default_timer as timer
+
+def init_ps_env(game, level_i, max_episode_steps):
+    start_time = timer()
+    with open("syntax.lark", "r", encoding='utf-8') as file:
+        puzzlescript_grammar = file.read()
+    # Initialize the Lark parser with the PuzzleScript grammar
+    parser = Lark(puzzlescript_grammar, start="ps_game", maybe_placeholders=False)
+    tree, success, err_msg = get_tree_from_txt(parser, game, test_env_init=False)
+    parse_time = timer()
+    print(f'Parsed PS file using Lark into python PSTree object in {(parse_time - start_time) / 1000} seconds.')
+    env = PSEnv(tree, jit=True, level_i=level_i, max_steps=max_episode_steps, print_score=False, debug=False)
+    print(f'Initialized PSEnv in {(timer() - parse_time) / 1000} seconds.')
+    return env
