@@ -430,7 +430,7 @@ function solveBFS(engine, maxIters=100_000) {
     for (const move of Array(5).keys()) {
       if (i > maxIters) {
         console.log('Exceeded 1M iterations. Exiting.');
-        return [[], i];
+        return [false, [], i];
       }
       engine.restoreLevel(level);
 
@@ -440,12 +440,12 @@ function solveBFS(engine, maxIters=100_000) {
         changed = engine.processInput(move);
       } catch (e) {
         console.log('Error while processing input:', e);
-        return [-2, i];
+        return [false, [], i];
       }
       if (engine.getWinning()) {
         console.log(`Winning! Solution:, ${new_action_seq}\n Iterations: ${i}`);
         console.log('FPS:', (i / (Date.now() - start_time) * 1000).toFixed(2));
-        return [new_action_seq, i];
+        return [true, new_action_seq, i];
       }
       else if (changed) {
         new_level = engine.backupLevel();
@@ -480,9 +480,9 @@ function solveBFS(engine, maxIters=100_000) {
   }
   if(i >= maxIters) {
     console.log('Exceeded max iterations. Exiting.');
-    return [[], i];
+    return [false, [], i];
   }
-  return [sol, i];
+  return [true, sol, i];
 }
 
 function solveAStar(engine, maxIters=100_000) {
@@ -618,7 +618,7 @@ function solveAStar(engine, maxIters=100_000) {
 					engine.setDeltaTime(oldDT);
 					DoRestartSearch(engine);
 					// redraw();
-					return [solution, totalIters];
+					return [true, solution, totalIters];
 				}
 				size++;
 				queue.add([getScore(engine), engine.getLevel().objects.slice(0), numSteps + 1]);
@@ -634,7 +634,7 @@ function solveAStar(engine, maxIters=100_000) {
 	deltatime = oldDT;
 	// redraw();
 	// cancelLink.hidden = true;
-  return [[], totalIters];
+  return [false, [], totalIters];
 }
 
 class MCTSNode{
@@ -773,7 +773,7 @@ function solveMCTS(engine, options = {}) {
     options = {};
   }
   let defaultOptions = {
-    "max_sim_length": 1000,
+    "max_sim_length": 100,
     "score_fn": true, 
     "explore_deadends": false, 
     "deadend_bonus": -100, 
@@ -809,7 +809,7 @@ function solveMCTS(engine, options = {}) {
       if(engine.getWinning()){
         let sol = currentNode.get_actions();
         console.log(`Winning! Solution:, ${sol}\n Iterations: ${i}\n Tree size: ${rootNode.tree_size()}`);
-        return [sol, i];
+        return [true, sol, i];
       }
       if(!options.explore_deadends && !changed){
         break;
@@ -830,7 +830,7 @@ function solveMCTS(engine, options = {}) {
         let sol = currentNode.get_actions();
         console.log(`Winning! Solution:, ${sol}\n Iterations: ${i}`);
         console.log('FPS:', (i / (Date.now() - start_time) * 1000).toFixed(2));
-        return [sol, i];
+        return [true, sol, i];
       }
       // if node is deadend, punish it
       if(!options.explore_deadends && !changed){
@@ -870,7 +870,7 @@ function solveMCTS(engine, options = {}) {
     actions.push(action);
     currentNode = currentNode.children[action];
   }
-  return [actions, options.max_iterations];
+  return [false, actions, options.max_iterations];
 }
 
 module.exports = {

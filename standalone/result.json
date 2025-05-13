@@ -1,1 +1,1 @@
-{"game":"games/sokoban.ps","level":1,"algorithm":"solveBFS","solution":[3,2,2,1,3,0,0,1,2,0,0,1,1,2,2,3],"iterations":900}
+{"game":"games/sokoban.ps","level":0,"algorithm":"solveMCTS","solution":[2,1,0,0,2,2,3,1,3,3,1,0],"iterations":100000}

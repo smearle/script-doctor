@@ -44,8 +44,9 @@ try {
       "game": process.argv[2],
       "level": targetLevel,
       "algorithm": algorithm.name,
-      "solution": result[0],
-      "iterations": result[1]
+      "isSolved": result[0],
+      "actions": result[1],
+      "iterations": result[2]
   };
   if(outputFile.length == 0){
     console.log(result);
