@@ -5346,7 +5346,7 @@ function unloadGame() {
 	level = new Level(0, 5, 5, 2, null);
 	level.objects = new Int32Array(0);
 	generateTitleScreen();
-	canvasResize();
+	// canvasResize();
 	redraw();
 }
 
@@ -5584,7 +5584,7 @@ function drawMessageScreen() {
 		titleImage[endPos]=xToContinueStr;
 	}
 	
-	canvasResize();
+	// canvasResize();
 }
 
 var loadedLevelSeed=0;
@@ -5645,7 +5645,7 @@ function loadLevelFromLevelDat(state,leveldat,randomseed,clearinputhistory) {
 		ignoreNotJustPressedAction=true;
 		tryPlayShowMessageSound();
 		drawMessageScreen();
-    	canvasResize();
+    	// canvasResize();
 	}
 
 	// if (clearinputhistory===true){
@@ -7497,7 +7497,7 @@ function showTempMessage() {
 	ignoreNotJustPressedAction=true;
 	tryPlayShowMessageSound();
 	drawMessageScreen();
-	canvasResize();
+	// canvasResize();
 }
 
 function processOutputCommands(commands) {
@@ -8295,7 +8295,7 @@ function nextLevel() {
 	if (state!==undefined && state.metadata.flickscreen!==undefined){
 		oldflickscreendat=[0,0,Math.min(state.metadata.flickscreen[0],level.width),Math.min(state.metadata.flickscreen[1],level.height)];
 	}
-	canvasResize();	
+	// canvasResize();	
 }
 
 function goToTitleScreen(){

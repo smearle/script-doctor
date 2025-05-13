@@ -27,6 +27,13 @@ class BFSConfig(PSConfig):
     render_live: bool = False
     all_games: bool = True
 
+    
+@dataclass
+class ProfileStandalone(PSConfig):
+    game: Optional[str] = None
+    n_steps: int = 20_000
+    overwrite: bool = False
+
 
 @dataclass
 class RLConfig(PSConfig):
@@ -241,7 +248,7 @@ class EnjoyRLConfig(MultiAgentConfig, EnjoyConfig):
 class ProfileEnvConfig(RLConfig):
     all_games: bool = True
     n_profile_steps: int = 5000
-    reevaluate: bool = True  # Whether to ontinue profiling, or just plot the results
+    reevaluate: bool = True  # Whether to continue profiling, or just plot the results
     render: bool = False
 
 
@@ -272,5 +279,6 @@ cs.store(name="train_accel_pcgrl", node=TrainAccelConfig)
 cs.store(name="enjoy_pcgrl", node=EnjoyConfig)
 cs.store(name="eval_pcgrl", node=EvalConfig)
 # cs.store(name="eval_ma_pcgrl", node=MultiAgentEvalConfig)
-cs.store(name="profile_pcgrl", node=ProfileEnvConfig)
+cs.store(name="profile_ps", node=ProfileEnvConfig)
+cs.store(name="profile_standalone", node=ProfileStandalone)
 cs.store(name="batch_pcgrl", node=SweepConfig)

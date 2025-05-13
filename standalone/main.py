@@ -9,5 +9,9 @@ with open(game_path, 'r') as f:
 
 ps.compile(game_text, 0)
 ret = solver.solveBFS(ps)
+print(ret)
+
+ps.compile(game_text, 0)
+ret = solver.solveBFS(ps)
 
 print(ret)

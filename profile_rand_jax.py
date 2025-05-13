@@ -32,7 +32,7 @@ batch_sizes = [
 JAX_N_ENVS_TO_FPS_PATH = os.path.join('data', 'jax_n_envs_to_fps.json')
 
 
-@hydra.main(version_base=None, config_path='./', config_name='profile_pcgrl')
+@hydra.main(version_base=None, config_path='./', config_name='profile_ps')
 def profile(config: ProfileEnvConfig):
     games = get_list_of_games_for_testing(all_games=config.all_games)
 
