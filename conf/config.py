@@ -15,15 +15,17 @@ import numpy as np
 class PSConfig:
     game: str = "sokoban_basic"
     level_i: int = 0
-    max_episode_steps: np.int32 = np.iinfo(np.int32).max
+    max_episode_steps: int = np.iinfo(np.int32).max
 
     
 @dataclass
-class BFSConfig:
+class BFSConfig(PSConfig):
+    game: Optional[str] = None
     max_steps: int = 100_000
     n_best_to_keep: int = 1
-    render_gif: bool = False
+    render_gif: bool = True
     render_live: bool = False
+    all_games: bool = True
 
 
 @dataclass

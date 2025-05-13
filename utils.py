@@ -246,7 +246,7 @@ def save_gif_from_states(env, states, save_path):
     for i, js_frame in enumerate(frames):
         imageio.imsave(os.path.join(frames_dir, f'{i:03d}.png'), js_frame)
 
-    gif_path = os.path.join(frames_dir, 'save_path.gif')
+    gif_path = os.path.join(f'{save_path}.gif')
     imageio.mimsave(gif_path, frames, duration=0.1, loop=0)
 
 
