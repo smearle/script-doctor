@@ -2602,7 +2602,7 @@ class PSEnv:
         multihot_level = self.char_level_to_multihot(level)
         return multihot_level
 
-def multihot_to_desc(multihot_level, obj_to_idxs, n_objs):
+def multihot_to_desc(multihot_level, obj_to_idxs, n_objs, show_background=False):
     """Converts a multihot array to a 2D list of descriptions.
     
     Args:
@@ -2628,6 +2628,8 @@ def multihot_to_desc(multihot_level, obj_to_idxs, n_objs):
             for obj_idx in range(n_objs):
                 if multihot_level[obj_idx, h, w] > 0:
                     obj_name = idxs_to_obj[obj_idx]
+                    if obj_name == 'background' and not show_background:
+                        continue
                     obj_desc = obj_name
                     
                     # Check if there's a force applied to this object

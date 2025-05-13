@@ -34,6 +34,7 @@ from client import open_browser
 import game_gen
 from parse_lark import GAMES_DIR, MIN_GAMES_DIR, PrintPuzzleScript, RepairPuzzleScript, StripPuzzleScript, add_empty_sounds_section, preprocess_ps, TEST_GAMES
 from prompts import *
+from sort_games_by_n_rules import GAMES_N_RULES_SORTED_PATH
 from utils import extract_ps_code, gen_fewshot_examples, llm_text_query, num_tokens_from_string, save_prompts, truncate_str_to_token_len
 
 
@@ -520,6 +521,7 @@ games_to_skip = set({'Broken Rigid Body',
                      "Path_Finder",  # This one does not compile in the js engine
                      "Cold_Feet_Sokoban",  # Compiled in standalone JS. But weird bug when mode=gen_solutions...
                      "Good_Example",  # Playable, but doesn't want to solve by BFS.
+                     "Candy_Bomb",  # STRIDE_MOV undefined error during compilation.
                      })
 
 # Games with tons of levels, redundant mechanics, or that we'll otherwise leave out for tha sake of rapid validation
@@ -547,7 +549,7 @@ def list_scraped_games():
     # random.shuffle(game_files)
     # test_game_files = [f"{test_game}.txt" for test_game in TEST_GAMES]
     # game_files = test_game_files + game_files
-    with open(os.path.join('data', 'games_n_rules.json'), 'r') as f:
+    with open(GAMES_N_RULES_SORTED_PATH, 'r') as f:
         games_n_rules = json.load(f)
     games_n_rules = sorted(games_n_rules, key=lambda x: x[1])
     game_files = [game[0] for game in games_n_rules]

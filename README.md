@@ -23,14 +23,30 @@ To play a game interactively on a local machine, using the jax environment to ru
 python human_env.py game=sokoban_basic jit=True debug=False
 ```
 Note that the first 2 timesteps will have jax trace and compile the engine's step function, which can be painfully slow (especially for games with more rules, objects, and larger levels).
-
 (TODO: Figure out why the first *2* timesteps, and not just the first, require compilation.)
+
+You can toggle the `jit` and `debug` command line arguments to replace jitted functions with traditional python control loops, and print out verbose logging about rule applications, etc., respectively. (When `jit=False`, we're also able to print out text representations of intermediary level states, which is useful for fine-grained engine debugging, and understanding the rule execution order.)
+
+### Tree search
+
+To generate solutions for games using the javascript version of puzzlescript, run:
+```
+python server.py mode=gen_solutions auto_launch_client=True headless=True port=8001
+```
+This will launch a (headless) browser that runs PS in JS.
+
+Note that this requires first sorting games according to the number of rules in each. This can be achieved with:
+```
+python sort_games_by_n_rules.py
+```
+
+### Reinforcement learning
 
 To train an agent using reinforcement learning to play a particular game level, run, e.g.:
 ```
 python train.py game=sokoban_basic level=0 n_envs=600 model=conv2 render_freq=5 hidden_dims=[128,128] seed=0
 ```
-This will attempt to log to wandb.
+This will attempt to log plots and gifs to wandb.
 
 
 ## Generate data for training a world model

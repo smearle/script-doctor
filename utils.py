@@ -5,6 +5,7 @@ import re
 import time
 
 import dotenv
+import jax
 import numpy as np
 from openai import AzureOpenAI
 import requests
@@ -226,3 +227,24 @@ def llm_text_query(system_prompt, prompt, seed, model):
                 )
                 successful_query = True
             return completion.choices[0].message.content
+
+
+import imageio
+from jax import numpy as jnp
+
+
+def save_gif_from_states(env, states, save_path):
+    frames = jax.vmap(env.render, in_axes=(0, None))(states, None)
+    frames = frames.astype(np.uint8)
+
+    scale = 10
+    frames = jnp.repeat(frames, scale, axis=1)
+    frames = jnp.repeat(frames, scale, axis=2)
+
+    frames_dir = os.path.join(save_path, 'frames')
+    os.makedirs(frames_dir, exist_ok=True)
+    for i, js_frame in enumerate(frames):
+        imageio.imsave(os.path.join(frames_dir, f'{i:03d}.png'), js_frame)
+
+    gif_path = os.path.join(frames_dir, 'save_path.gif')
+    imageio.mimsave(gif_path, frames, duration=0.1, loop=0)

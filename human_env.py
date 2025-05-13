@@ -173,7 +173,7 @@ def play_game(game: str, level: int = 0, jit: bool = False, profile: bool = Fals
     parser = Lark(puzzlescript_grammar, start="ps_game", maybe_placeholders=False)
     # min_parser = Lark(min_puzzlescript_grammar, start="ps_game")
     print(f"""Parsing game: \"{game}\"""")
-    tree, success, err_msg = get_tree_from_txt(parser, game, overwrite=True)
+    tree, success, err_msg = get_tree_from_txt(parser, game, overwrite=True, test_env_init=False)
     print(f"Initializing environment for game: {game}")
     env = PSEnv(tree, jit=jit, debug=debug, print_score=True)
     print(f"Playing game: {game}")

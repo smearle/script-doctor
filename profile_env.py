@@ -18,8 +18,8 @@ from utils_rl import get_env_params_from_config, init_ps_env
 games = [
     # 'castlemouse',
     # 'atlas shrank',
-    'limerick',
     'sokoban_basic',
+    'limerick',
     'sokoban_match3',
     'slidings',
     'tiny treasure hunt',

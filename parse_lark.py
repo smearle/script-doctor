@@ -403,7 +403,7 @@ def strip_comments(text):
             new_text += c
     return new_text
 
-def count_rules(tree):
+def count_rules(tree: PSGameTree):
     n_rules = 0
     for rule_block in tree.rules:
         n_rules += len(rule_block[0].rules)
@@ -416,7 +416,7 @@ class PSErrors(IntEnum):
     ENV_ERROR = 3
     TIMEOUT = 4
 
-def get_tree_from_txt(parser, game, log_dir: str = None, overwrite: bool = True):
+def get_tree_from_txt(parser, game, log_dir: str = None, overwrite: bool = True, test_env_init: bool = True):
     filepath = os.path.join(CUSTOM_GAMES_DIR, game + '.txt')
     if not os.path.exists(filepath):
         filepath = os.path.join(GAMES_DIR, game + '.txt')
@@ -507,12 +507,13 @@ def get_tree_from_txt(parser, game, log_dir: str = None, overwrite: bool = True)
         traceback.print_exc()
         print(f"Error transforming tree: {game}")
         return None, PSErrors.TREE_ERROR, gen_error_str(e)
-    try:
-        env = PSEnv(tree, level_i=0)
-    except Exception as e:
-        traceback.print_exc()
-        print(f"Error initializing environment for {game}: {e}")
-        return tree, PSErrors.ENV_ERROR, gen_error_str(e)
+    if test_env_init:
+        try:
+            env = PSEnv(tree, level_i=0)
+        except Exception as e:
+            traceback.print_exc()
+            print(f"Error initializing environment for {game}: {e}")
+            return tree, PSErrors.ENV_ERROR, gen_error_str(e)
 
     print(f"Parsed {game} successfully")
     return tree, PSErrors.SUCCESS, ""

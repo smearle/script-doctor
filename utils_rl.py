@@ -410,7 +410,7 @@ def init_ps_env(config: RLConfig, verbose: bool = False) -> PSEnv:
         puzzlescript_grammar = file.read()
     # Initialize the Lark parser with the PuzzleScript grammar
     parser = Lark(puzzlescript_grammar, start="ps_game", maybe_placeholders=False)
-    tree, success, err_msg = get_tree_from_txt(parser, game)
+    tree, success, err_msg = get_tree_from_txt(parser, game, test_env_init=False)
     parse_time = timer()
     print(f'Parsed PS file using Lark into python PSTree object in {(parse_time - start_time) / 1000} seconds.')
     env = PSEnv(tree, jit=True, level_i=level_i, max_steps=config.max_episode_steps, print_score=False, debug=False)

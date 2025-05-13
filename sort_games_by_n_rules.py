@@ -12,6 +12,9 @@ from parse_lark import TREES_DIR, GAMES_DIR, count_rules, get_tree_from_txt
 from ps_game import PSGameTree
 
 
+GAMES_N_RULES_SORTED_PATH = os.path.join('data', 'games_n_rules.json')
+
+
 def main():
     with open("syntax.lark", "r", encoding='utf-8') as file:
         puzzlescript_grammar = file.read()
@@ -23,23 +26,22 @@ def main():
         game_name = os.path.basename(game_tree_path)[:-4]
         og_game_path = os.path.join(GAMES_DIR, game_name + '.txt')
         try:
-            with open(game_tree_path, "rb") as f:
-                parse_tree = pickle.load(f)
-            # parse_tree = get_tree_from_txt(parser, game_name)
-            tree: PSGameTree = GenPSTree().transform(parse_tree)
-            env = PSEnv(tree, level_i=0)
-            n_rules = count_rules(tree)
+            # with open(game_tree_path, "rb") as f:
+            #     parse_tree = pickle.load(f)
+            # ps_tree: PSGameTree = GenPSTree().transform(parse_tree)
+            ps_tree, err_msg, success = get_tree_from_txt(parser, game_name, test_env_init=False)
+            n_rules = count_rules(ps_tree)
             games_n_rules.append((game_name, n_rules))
         except Exception as e:
             print(traceback.format_exc())
-            print(f"Error parsing {game_name}: {e}")
+            print(f"Error parsing/initializing {og_game_path}: {e}")
             pass
         
     print(f"Total games: {len(games_n_rules)}")
     games_n_rules = sorted(games_n_rules, key=lambda x: x[1])
 
     # Save the sorted list to a json
-    with open('data', 'games_n_rules.json', 'w') as f:
+    with open(GAMES_N_RULES_SORTED_PATH, 'w') as f:
         json.dump(games_n_rules, f, indent=4)
 
 
