@@ -1157,7 +1157,7 @@ recompute_stats = Config.recompute_stats
 # 
 from LLM_agent import LLMAgent, ReinforcementWrapper, StateVisualizer
 
-# 初始化智能体系统
+# Initialize agent system
 llm_agent = LLMAgent(model_name="gpt-4o")
 rl_wrapper = ReinforcementWrapper(llm_agent)
 
@@ -1169,19 +1169,19 @@ def llm_action():
             'entities': llm_agent._extract_entities(data['state'])
         })
         
-        # 处理游戏状态
+        # Process game state
         processed_state = llm_agent.process_state(state_repr)
         
-        # 生成决策
+        # Generate decision
         action = llm_agent.choose_action(
             processed_state=processed_state,
             goal=data.get('goal', '')
         )
         
-        # 记录历史
+        # Record history
         llm_agent.update_history(action, "pending")
         
-        # 强化学习更新
+        # Reinforcement learning update
         if 'reward' in data:
             rl_wrapper.reinforce(data['reward'])
         
@@ -1205,7 +1205,7 @@ def get_action_history():
 def retrain_agent():
     try:
         training_data = request.json
-        # TODO: 实现训练逻辑
+        # TODO: Implement training logic
         return jsonify({'status': 'training_started'})
     except Exception as e:
         return jsonify({'error': str(e)}), 500
@@ -1219,14 +1219,14 @@ def get_state():
     if not game_hash or not state_hash:
         return jsonify({'error': 'Missing parameters'}), 400
 
-    # 尝试在 init 里找
+    # Try to find in init
     init_path = os.path.join('transitions', game_hash, str(game_level), 'images', f'{state_hash}.txt')
     if os.path.isfile(init_path):
         with open(init_path, 'r', encoding='utf-8') as f:
             return jsonify({'state': f.read()})
 
-    # 尝试在 transition 中找（可以拓展）
-    # 你可以把 transition 状态文本也存在 images 里或单独的路径
+    # Try to find in transition (can be extended)
+    # You can store transition state text in images directory or a separate path
     trans_path = os.path.join('transitions', game_hash, str(game_level), 'images', f'{state_hash}.txt')
     if os.path.isfile(trans_path):
         with open(trans_path, 'r', encoding='utf-8') as f:

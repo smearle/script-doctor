@@ -93,38 +93,38 @@ client = None
 
 def llm_text_query(system_prompt, prompt, seed, model):
     """
-    使用Portkey API调用LLM
+    Use Portkey API to call LLM
     
-    参数:
-        system_prompt: 系统提示
-        prompt: 用户提示
-        seed: 随机种子
-        model: 模型名称，可以是 "o3-mini", "gpt-4o-mini", "vertex-ai"
+    Parameters:
+        system_prompt: System prompt
+        prompt: User prompt
+        seed: Random seed
+        model: Model name, can be "o3-mini", "gpt-4o-mini", "vertex-ai"
         
-    返回:
-        LLM的响应文本
+    Returns:
+        LLM response text
     """
-    # 准备消息
+    # Prepare messages
     messages = [
         {"role": "system", "content": system_prompt},
         {"role": "user", "content": prompt},
     ]
     
-    # 根据model参数选择不同的虚拟密钥
-    virtual_key = "o3-mini-5791cb"  # 默认使用o3-mini
+    # Select different virtual keys based on the model parameter
+    virtual_key = "o3-mini-5791cb"  # Default to using o3-mini
     if model == "gpt-4o-mini":
         virtual_key = "gpt-4o-mini-efbb71"
     elif model == "vertex-ai":
         virtual_key = "vertex-ai-3e806d"
     
-    # 尝试使用Portkey API
+    # Try using Portkey API
     try:
         import requests
         import json
         
         print(f'Querying API using model {model} with virtual key {virtual_key}...')
         
-        # 准备请求
+        # Prepare request
         url = "https://ai-gateway.apps.cloud.rt.nyu.edu/v1/chat/completions"
         headers = {
             "Content-Type": "application/json",
@@ -137,7 +137,7 @@ def llm_text_query(system_prompt, prompt, seed, model):
             "messages": messages
         }
         
-        # 发送请求，设置超时时间和重试次数
+        # Send request, set timeout and retry count
         max_retries = 3
         retry_count = 0
         
@@ -145,7 +145,7 @@ def llm_text_query(system_prompt, prompt, seed, model):
             try:
                 response = requests.post(url, headers=headers, json=payload, timeout=60)
                 
-                # 检查响应状态
+                # Check response status
                 if response.status_code == 200:
                     response_data = response.json()
                     print('Query completed successfully.')
@@ -153,31 +153,31 @@ def llm_text_query(system_prompt, prompt, seed, model):
                 elif response.status_code == 504:  # Gateway Timeout
                     print(f"Gateway timeout (504), retrying... ({retry_count+1}/{max_retries})")
                     retry_count += 1
-                    time.sleep(5)  # 等待5秒后重试
+                    time.sleep(5)  # Wait 5 seconds before retrying
                 else:
                     print(f"Request failed with status code: {response.status_code}")
                     print(f"Response text: {response.text}")
-                    # 如果是404错误且是vertex-ai模型，尝试回退到o3-mini
+                    # If it's a 404 error and the model is vertex-ai, try falling back to o3-mini
                     if response.status_code == 404 and model == "vertex-ai":
                         print("Vertex AI model not found, falling back to o3-mini...")
                         return llm_text_query(system_prompt, prompt, seed, "o3-mini")
-                    # 其他错误，抛出异常
+                    # For other errors, throw an exception
                     raise Exception(f"API request failed with status code: {response.status_code}")
             except requests.exceptions.Timeout:
                 print(f"Request timed out, retrying... ({retry_count+1}/{max_retries})")
                 retry_count += 1
-                time.sleep(5)  # 等待5秒后重试
+                time.sleep(5)  # Wait 5 seconds before retrying
             except requests.exceptions.RequestException as e:
                 print(f"Request exception: {e}")
                 retry_count += 1
-                time.sleep(5)  # 等待5秒后重试
+                time.sleep(5)  # Wait 5 seconds before retrying
         
-        # 如果重试次数用完仍然失败，回退到原始实现
+        # If still failing after maximum retries, fall back to original implementation
         print(f"Failed after {max_retries} retries, falling back to original implementation")
         raise Exception("Failed after maximum retries")
         
     except ImportError:
-        # 如果没有安装portkey，回退到原始实现
+        # If portkey is not installed, fall back to original implementation
         print("Portkey not installed, falling back to original implementation")
         messages = [
             {"role": "system", "content": system_prompt},
