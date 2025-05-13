@@ -10,6 +10,7 @@ from env import PSEnv
 from gen_tree import GenPSTree
 from parse_lark import TREES_DIR, GAMES_DIR, count_rules, get_tree_from_txt
 from ps_game import PSGameTree
+from utils import GAMES_N_RULES_SORTED_PATH
 
 
 GAMES_N_RULES_SORTED_PATH = os.path.join('data', 'games_n_rules.json')

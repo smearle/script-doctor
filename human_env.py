@@ -10,8 +10,9 @@ import jax
 from lark import Lark
 import numpy as np
 
-from env import PSEnv, PSParams, multihot_to_desc
+from env import PSEnv, PSParams
 from parse_lark import TREES_DIR, DATA_DIR, TEST_GAMES, get_tree_from_txt
+from utils import multihot_to_desc
 
 
 @dataclass

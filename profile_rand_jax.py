@@ -20,8 +20,8 @@ priority_games = [
     # 'castlemouse',
     # 'atlas shrank',
     'sokoban_basic',
-    'limerick',
     'sokoban_match3',
+    'limerick',
     'slidings',
     'tiny treasure hunt',
     'test',
@@ -29,7 +29,7 @@ priority_games = [
 # game_paths = glob.glob(os.path.join('data', 'scraped_games', '*.txt'))
 # games = [os.path.basename(p) for p in game_paths]
 
-n_envss= [
+batch_sizes = [
     600,
     400,
     200,
@@ -51,10 +51,13 @@ def profile(config: ProfileEnvConfig):
     else:
         games = priority_games
 
+    global batch_sizes
     hparams = itertools.product(
+        batch_sizes,
         games,
-        n_envss,
     )
+    batch_sizes, games = zip(*hparams)
+
     vids_dir = 'vids'
     if config.render:
         os.makedirs(vids_dir, exist_ok=True)
@@ -67,7 +70,7 @@ def profile(config: ProfileEnvConfig):
         game_n_envs_to_fps = {}
         results[f'{config.n_profile_steps}-step_rollout'] = game_n_envs_to_fps
 
-        for (game, n_envs) in hparams:
+        for (game, n_envs) in zip(games, batch_sizes):
             config.game = game
             config.n_envs= n_envs
 

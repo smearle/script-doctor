@@ -519,6 +519,15 @@ def gen_game_from_plan():
 
 TRANSITIONS_DIR = 'transitions'
 
+@app.route('/get_player_action', methods=['POST'])
+def get_player_action():
+    data = request.json
+    obs = data['obs']
+    # TODO
+    # action = ...
+    action = random.randint(0, 5)
+    return jsonify({'action': action})
+
 games_to_skip = set({'Broken Rigid Body', 
                      "Path_Finder",  # This one does not compile in the js engine
                      "Cold_Feet_Sokoban",  # Compiled in standalone JS. But weird bug when mode=gen_solutions...
@@ -532,14 +541,10 @@ games_to_skip_for_speed = set({
     "Microban_I",
 })
 
-@app.route('/get_player_action', methods=['POST'])
-def get_player_action():
-    data = request.json
-    obs = data['obs']
-    # TODO
-    # action = ...
-    action = random.randint(0, 5)
-    return jsonify({'action': action})
+priority_games = [
+    'blocks',
+    'limerick',
+]
 
 @app.route('/list_scraped_games', methods=['POST'])
 def list_scraped_games():
@@ -555,8 +560,9 @@ def list_scraped_games():
         games_n_rules = json.load(f)
     games_n_rules = sorted(games_n_rules, key=lambda x: x[1])
     # Exclude games with randomness for the purpose of tree search
-    game_files = [game[0] for game in games_n_rules if not game[1]]
-    for filename in game_files:
+    game_names = [game[0] for game in games_n_rules if not game[1]]
+    game_names = priority_games + [game for game in game_names if game not in priority_games]
+    for filename in game_names:
         if filename.startswith('rigid_'):
             print(f"Skipping {filename} because it seems to be a pesky rigid body game")
             continue

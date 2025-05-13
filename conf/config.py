@@ -22,7 +22,8 @@ class PSConfig:
 class BFSConfig:
     max_steps: int = 100_000
     n_best_to_keep: int = 1
-    render: bool = False
+    render_gif: bool = False
+    render_live: bool = False
 
 
 @dataclass
@@ -236,8 +237,9 @@ class EnjoyRLConfig(MultiAgentConfig, EnjoyConfig):
 
 @dataclass
 class ProfileEnvConfig(RLConfig):
+    all_games: bool = True
     n_profile_steps: int = 5000
-    reevaluate: bool = True
+    reevaluate: bool = True  # Whether to ontinue profiling, or just plot the results
     render: bool = False
 
 

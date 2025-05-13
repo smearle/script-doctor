@@ -32,6 +32,9 @@ os.makedirs(scratch_dir, exist_ok = True)
 JAX_VALIDATED_JS_SOLS_DIR = os.path.join('data', 'jax_validated_js_sols')
 JS_SOLS_DIR = os.path.join('data', 'js_sols')
 
+games_to_skip = set({
+    '2048',  # hangs
+})
 
 @hydra.main(version_base="1.3", config_path='./conf', config_name='config')
 def main(config: RLConfig):
@@ -61,6 +64,9 @@ def main(config: RLConfig):
 
     for sol_dir, game in zip(sol_paths, games):
         game_name = os.path.basename(game)
+        if game_name in games_to_skip:
+            print(f"Skipping {game_name} because it is in the skip list")
+            continue
         jax_sol_dir = os.path.join(JAX_VALIDATED_JS_SOLS_DIR, game)
         os.makedirs(jax_sol_dir, exist_ok=True)
         compile_log_path = os.path.join(jax_sol_dir, 'compile_err.txt')
