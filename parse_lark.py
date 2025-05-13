@@ -483,20 +483,41 @@ def get_tree_from_txt(parser, game, log_dir: str = None, overwrite: bool = True)
     min_parse_tree = StripPuzzleScript().transform(parse_tree)
     min_tree_path = os.path.join(TREES_DIR, game + '.pkl')
     print(f"Writing parse tree to {min_tree_path}")
-    with open(min_tree_path, "wb") as f:
-        pickle.dump(min_parse_tree, f)
+
+    try:
+        os.makedirs(TREES_DIR, exist_ok=True)
+        with open(min_tree_path, "wb") as f:
+            pickle.dump(min_parse_tree, f)
+    except PermissionError as e:
+        print(f"Permission error writing to {min_tree_path}: {e}")
+    except Exception as e:
+        print(f"Error writing parse tree: {e}")
+
     pretty_parse_tree_str = min_parse_tree.pretty()
     pretty_tree_filename = os.path.join(pretty_trees_dir, game)
     print(f"Writing pretty tree to {pretty_tree_filename}")
-    with open(pretty_tree_filename, "w", encoding='utf-8') as file:
-        file.write(pretty_parse_tree_str)
-    # print(min_parse_tree.pretty())
+
+    try:
+        os.makedirs(pretty_trees_dir, exist_ok=True)
+        with open(pretty_tree_filename, "w", encoding='utf-8') as file:
+            file.write(pretty_parse_tree_str)
+    except PermissionError as e:
+        print(f"Permission error writing to {pretty_tree_filename}: {e}")
+    except Exception as e:
+        print(f"Error writing pretty tree: {e}")
+
     ps_str = PrintPuzzleScript().transform(min_parse_tree)
     ps_str = add_empty_sounds_section(ps_str)
     min_filename = os.path.join(MIN_GAMES_DIR, game + '.txt')
     # print(f"Writing minified game to {min_filename}")
-    with open(min_filename, "w", encoding='utf-8') as file:
-        file.write(ps_str)
+    try:
+        os.makedirs(MIN_GAMES_DIR, exist_ok=True)
+        with open(min_filename, "w", encoding='utf-8') as file:
+            file.write(ps_str)
+    except PermissionError as e:
+        print(f"Permission error writing to {min_filename}: {e}")
+    except Exception as e:
+        print(f"Error writing minified game: {e}")
 
     # with open(parsed_games_filename, 'a') as file:
     #     file.write(game + "\n")
@@ -526,6 +547,18 @@ if __name__ == "__main__":
     parser.add_argument('--overwrite', '-o', action='store_true', help='Overwrite existing parsed_games.txt')
     parser.add_argument('--game', '-g', type=str, help='Name of the game to parse')
     args = parser.parse_args()
+    required_dirs = [DATA_DIR, TREES_DIR, pretty_trees_dir, MIN_GAMES_DIR]
+    for directory in required_dirs:
+        try:
+            os.makedirs(directory, exist_ok=True)
+            test_file = os.path.join(directory, '.write_test')
+            with open(test_file, 'w') as f:
+                f.write('test')
+            os.remove(test_file)
+            print(f"Confirmed write access to {directory}")
+        except (PermissionError, OSError) as e:
+            print(f"WARNING: Cannot write to {directory}: {e}")
+            print("This may cause problems later in the script")
 
     with open(PS_LARK_GRAMMAR_PATH, "r", encoding='utf-8') as file:
         puzzlescript_grammar = file.read()
