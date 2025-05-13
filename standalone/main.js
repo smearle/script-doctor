@@ -6,23 +6,26 @@ try {
   const gameText = fs.readFileSync(process.argv[2], 'utf8');
   let targetLevel = 0;
   let algorithm = solver.solveBFS;
-  let type = ""
+  let outputFile = "";
+  let numRuns = 1;
+
+  let type = "";
   for(let i=3; i<process.argv.length; i++) {
     if(i%2 == 1){
-      type = process.argv[i];
+      type = process.argv[i].toLowerCase();
     }
     else{
       if(type == "--level" || type == "-l"){
         targetLevel = parseInt(process.argv[i]);
       }
       if(type == "--algo" || type == "-a" || type == "--algorithm"){
-        if(process.argv[i] == "bfs" || process.argv[i] == "BFS"){
+        if(process.argv[i].toLowerCase() == "bfs"){
           algorithm = solver.solveBFS;
         }
-        else if(process.argv[i] == "AStar" || process.argv[i] == "ASTAR" || process.argv[i] == "A*" || process.argv[i] == "a*"){
+        else if(process.argv[i].toLowerCase() == "astar"){
           algorithm = solver.solveAStar;
         }
-        else if(process.argv[i] == "mcts" || process.argv[i] == "MCTS"){
+        else if(process.argv[i].toLowerCase() == "mcts"){
           algorithm = solver.solveMCTS;
         }
         else{
@@ -30,10 +33,26 @@ try {
           return;
         }
       }
+      if(type == "--output" || type == "-o"){
+        outputFile = process.argv[i];
+      }
     }
   }
   puzzlescript.compile(gameText, targetLevel);
-  console.log(algorithm(puzzlescript));
+  let result = algorithm(puzzlescript);
+  result = {
+      "game": process.argv[2],
+      "level": targetLevel,
+      "algorithm": algorithm.name,
+      "solution": result[0],
+      "iterations": result[1]
+  };
+  if(outputFile.length == 0){
+    console.log(result);
+  }
+  else{
+    fs.writeFileSync(outputFile, JSON.stringify(result));
+  }
 } catch (err) {
   console.error(err);
 }
