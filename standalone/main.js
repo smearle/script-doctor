@@ -47,7 +47,8 @@ try {
       "isSolved": result[0],
       "actions": result[1],
       "iterations": result[2],
-      "fps": result[3],
+      "time": result[3].toFixed(2),
+      "fps": (result[2] / result[3]).toFixed(2)
   };
   if(outputFile.length == 0){
     console.log(result);

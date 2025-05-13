@@ -430,7 +430,7 @@ function solveBFS(engine, maxIters=100_000) {
     for (const move of Array(5).keys()) {
       if (i > maxIters) {
         // console.log('Exceeded 1M iterations. Exiting.');
-        return [false, [], i, (i / (Date.now() - start_time) * 1000).toFixed(2)];
+        return [false, [], i, ((Date.now() - start_time) / 1000)];
       }
       engine.restoreLevel(level);
 
@@ -440,12 +440,12 @@ function solveBFS(engine, maxIters=100_000) {
         changed = engine.processInput(move);
       } catch (e) {
         // console.log('Error while processing input:', e);
-        return [false, [], i, (i / (Date.now() - start_time) * 1000).toFixed(2)];
+        return [false, [], i, ((Date.now() - start_time) / 1000)];
       }
       if (engine.getWinning()) {
         // console.log(`Winning! Solution:, ${new_action_seq}\n Iterations: ${i}`);
         // console.log('FPS:', (i / (Date.now() - start_time) * 1000).toFixed(2));
-        return [true, new_action_seq, i, (i / (Date.now() - start_time) * 1000).toFixed(2)];
+        return [true, new_action_seq, i, ((Date.now() - start_time) / 1000)];
       }
       else if (changed) {
         new_level = engine.backupLevel();
@@ -480,9 +480,9 @@ function solveBFS(engine, maxIters=100_000) {
   }
   if(i >= maxIters) {
     // console.log('Exceeded max iterations. Exiting.');
-    return [false, [], i, (i / (Date.now() - start_time) * 1000).toFixed(2)];
+    return [false, [], i, ((Date.now() - start_time) / 1000)];
   }
-  return [true, sol, i, (i / (Date.now() - start_time) * 1000).toFixed(2)];
+  return [true, sol, i, ((Date.now() - start_time) / 1000)];
 }
 
 function solveAStar(engine, maxIters=100_000) {
@@ -566,7 +566,7 @@ function solveAStar(engine, maxIters=100_000) {
 	var iters = 0;
 	var size = 1;
 
-	var startTime = performance.now();
+	var start_time = Date.now();
 
 	while (!queue.isEmpty() && totalIters < maxIters) {
     if (totalIters > maxIters) {
@@ -618,7 +618,7 @@ function solveAStar(engine, maxIters=100_000) {
 					engine.setDeltaTime(oldDT);
 					DoRestartSearch(engine);
 					// redraw();
-					return [true, solution, totalIters, (i / (Date.now() - start_time) * 1000).toFixed(2)];
+					return [true, solution, totalIters, ((Date.now() - start_time) / 1000)];
 				}
 				size++;
 				queue.add([getScore(engine), engine.getLevel().objects.slice(0), numSteps + 1]);
@@ -634,7 +634,7 @@ function solveAStar(engine, maxIters=100_000) {
 	deltatime = oldDT;
 	// redraw();
 	// cancelLink.hidden = true;
-  return [false, [], totalIters, (i / (Date.now() - start_time) * 1000).toFixed(2)];
+  return [false, [], totalIters, ((Date.now() - start_time) / 1000)];
 }
 
 class MCTSNode{
@@ -809,7 +809,7 @@ function solveMCTS(engine, options = {}) {
       if(engine.getWinning()){
         let sol = currentNode.get_actions();
         // console.log(`Winning! Solution:, ${sol}\n Iterations: ${i}\n Tree size: ${rootNode.tree_size()}`);
-        return [true, sol, i, (i / (Date.now() - start_time) * 1000).toFixed(2)];
+        return [true, sol, i, ((Date.now() - start_time) / 1000)];
       }
       if(!options.explore_deadends && !changed){
         break;
@@ -830,7 +830,7 @@ function solveMCTS(engine, options = {}) {
         let sol = currentNode.get_actions();
         // console.log(`Winning! Solution:, ${sol}\n Iterations: ${i}`);
         // console.log('FPS:', (i / (Date.now() - start_time) * 1000).toFixed(2));
-        return [true, sol, i, (i / (Date.now() - start_time) * 1000).toFixed(2)];
+        return [true, sol, i, ((Date.now() - start_time) / 1000)];
       }
       // if node is deadend, punish it
       if(!options.explore_deadends && !changed){
@@ -870,7 +870,7 @@ function solveMCTS(engine, options = {}) {
     actions.push(action);
     currentNode = currentNode.children[action];
   }
-  return [false, actions, options.max_iterations, (options.max_iterations / (Date.now() - start_time) * 1000).toFixed(2)];
+  return [false, actions, options.max_iterations, ((Date.now() - start_time) / 1000)];
 }
 
 module.exports = {
