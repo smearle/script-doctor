@@ -21,6 +21,7 @@ from env import PSEnv
 from gen_tree import GenPSTree
 from parse_lark import PS_LARK_GRAMMAR_PATH, TREES_DIR, DATA_DIR, TEST_GAMES, get_tree_from_txt
 from ps_game import PSGameTree
+from sort_games_by_n_rules import GAMES_N_RULES_SORTED_PATH
 from utils import to_binary_vectors
 from utils_rl import get_env_params_from_config
 
@@ -31,6 +32,9 @@ os.makedirs(scratch_dir, exist_ok = True)
 JAX_VALIDATED_JS_SOLS_DIR = os.path.join('data', 'jax_validated_js_sols')
 JS_SOLS_DIR = os.path.join('data', 'js_sols')
 
+games_to_skip = set({
+    '2048',  # hangs
+})
 
 @hydra.main(version_base="1.3", config_path='./conf', config_name='config')
 def main(config: RLConfig):
@@ -38,7 +42,7 @@ def main(config: RLConfig):
     with open(PS_LARK_GRAMMAR_PATH, "r", encoding='utf-8') as file:
         puzzlescript_grammar = file.read()
     parser = Lark(puzzlescript_grammar, start="ps_game", maybe_placeholders=False)
-    with open(os.path.join('data', 'games_n_rules.json'), 'r') as f:
+    with open(GAMES_N_RULES_SORTED_PATH, 'r') as f:
         games_n_rules = json.load(f)
     games_n_rules = sorted(games_n_rules, key=lambda x: x[1])
     games = [game for game, n_rules in games_n_rules]
@@ -60,6 +64,9 @@ def main(config: RLConfig):
 
     for sol_dir, game in zip(sol_paths, games):
         game_name = os.path.basename(game)
+        if game_name in games_to_skip:
+            print(f"Skipping {game_name} because it is in the skip list")
+            continue
         jax_sol_dir = os.path.join(JAX_VALIDATED_JS_SOLS_DIR, game)
         os.makedirs(jax_sol_dir, exist_ok=True)
         compile_log_path = os.path.join(jax_sol_dir, 'compile_err.txt')
@@ -70,7 +77,7 @@ def main(config: RLConfig):
             print(f"Skipping {game} because compile error log already exists")
             continue
 
-        tree, success, err_msg = get_tree_from_txt(parser, game)
+        tree, success, err_msg = get_tree_from_txt(parser, game, test_env_init=False)
         og_path = os.path.join(DATA_DIR, 'scraped_games', game_name + '.txt')
 
         print(f"Processing solution for game: {og_path}")

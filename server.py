@@ -34,6 +34,7 @@ from client import open_browser
 import game_gen
 from parse_lark import GAMES_DIR, MIN_GAMES_DIR, PrintPuzzleScript, RepairPuzzleScript, StripPuzzleScript, add_empty_sounds_section, preprocess_ps, TEST_GAMES
 from prompts import *
+from sort_games_by_n_rules import GAMES_N_RULES_SORTED_PATH
 from utils import extract_ps_code, gen_fewshot_examples, llm_text_query, num_tokens_from_string, save_prompts, truncate_str_to_token_len
 
 
@@ -116,6 +117,7 @@ def load_ideas():
         ideas = json.load(f)
     return ideas
 
+
 @app.route('/file_exists', methods=['POST'])
 def file_exists():
     data = request.json
@@ -123,6 +125,7 @@ def file_exists():
     exists = os.path.isfile(file_path)
     print(f"File {file_path} exists: {exists}")
     return jsonify({'exists': exists})
+
 
 @app.route('/load_game_from_file', methods=['POST'])
 def load_game_from_file():
@@ -516,18 +519,6 @@ def gen_game_from_plan():
 
 TRANSITIONS_DIR = 'transitions'
 
-games_to_skip = set({'Broken Rigid Body', 
-                     "Path_Finder",  # This one does not compile in the js engine
-                     "Cold_Feet_Sokoban",  # Compiled in standalone JS. But weird bug when mode=gen_solutions...
-                     "Good_Example",  # Playable, but doesn't want to solve by BFS.
-                     })
-
-# Games with tons of levels, redundant mechanics, or that we'll otherwise leave out for tha sake of rapid validation
-# TODO: Add these back in later to fully validate the engine.
-games_to_skip_for_speed = set({
-    "Microban_I",
-})
-
 @app.route('/get_player_action', methods=['POST'])
 def get_player_action():
     data = request.json
@@ -536,6 +527,24 @@ def get_player_action():
     # action = ...
     action = random.randint(0, 5)
     return jsonify({'action': action})
+
+games_to_skip = set({'Broken Rigid Body', 
+                     "Path_Finder",  # This one does not compile in the js engine
+                     "Cold_Feet_Sokoban",  # Compiled in standalone JS. But weird bug when mode=gen_solutions...
+                     "Good_Example",  # Playable, but doesn't want to solve by BFS.
+                     "Candy_Bomb",  # STRIDE_MOV undefined error during compilation.
+                     })
+
+# Games with tons of levels, redundant mechanics, or that we'll otherwise leave out for tha sake of rapid validation
+# TODO: Add these back in later to fully validate the engine.
+games_to_skip_for_speed = set({
+    "Microban_I",
+})
+
+priority_games = [
+    'blocks',
+    'limerick',
+]
 
 @app.route('/list_scraped_games', methods=['POST'])
 def list_scraped_games():
@@ -547,11 +556,13 @@ def list_scraped_games():
     # random.shuffle(game_files)
     # test_game_files = [f"{test_game}.txt" for test_game in TEST_GAMES]
     # game_files = test_game_files + game_files
-    with open(os.path.join('data', 'games_n_rules.json'), 'r') as f:
+    with open(GAMES_N_RULES_SORTED_PATH, 'r') as f:
         games_n_rules = json.load(f)
     games_n_rules = sorted(games_n_rules, key=lambda x: x[1])
-    game_files = [game[0] for game in games_n_rules]
-    for filename in game_files:
+    # Exclude games with randomness for the purpose of tree search
+    game_names = [game[0] for game in games_n_rules if not game[1]]
+    game_names = priority_games + [game for game in game_names if game not in priority_games]
+    for filename in game_names:
         if filename.startswith('rigid_'):
             print(f"Skipping {filename} because it seems to be a pesky rigid body game")
             continue
@@ -1146,7 +1157,7 @@ recompute_stats = Config.recompute_stats
 # 
 from LLM_agent import LLMAgent, ReinforcementWrapper, StateVisualizer
 
-# 初始化智能体系统
+# Initialize agent system
 llm_agent = LLMAgent(model_name="gpt-4o")
 rl_wrapper = ReinforcementWrapper(llm_agent)
 
@@ -1158,19 +1169,19 @@ def llm_action():
             'entities': llm_agent._extract_entities(data['state'])
         })
         
-        # 处理游戏状态
+        # Process game state
         processed_state = llm_agent.process_state(state_repr)
         
-        # 生成决策
+        # Generate decision
         action = llm_agent.choose_action(
             processed_state=processed_state,
             goal=data.get('goal', '')
         )
         
-        # 记录历史
+        # Record history
         llm_agent.update_history(action, "pending")
         
-        # 强化学习更新
+        # Reinforcement learning update
         if 'reward' in data:
             rl_wrapper.reinforce(data['reward'])
         
@@ -1194,7 +1205,7 @@ def get_action_history():
 def retrain_agent():
     try:
         training_data = request.json
-        # TODO: 实现训练逻辑
+        # TODO: Implement training logic
         return jsonify({'status': 'training_started'})
     except Exception as e:
         return jsonify({'error': str(e)}), 500
@@ -1208,14 +1219,14 @@ def get_state():
     if not game_hash or not state_hash:
         return jsonify({'error': 'Missing parameters'}), 400
 
-    # 尝试在 init 里找
+    # Try to find in init
     init_path = os.path.join('transitions', game_hash, str(game_level), 'images', f'{state_hash}.txt')
     if os.path.isfile(init_path):
         with open(init_path, 'r', encoding='utf-8') as f:
             return jsonify({'state': f.read()})
 
-    # 尝试在 transition 中找（可以拓展）
-    # 你可以把 transition 状态文本也存在 images 里或单独的路径
+    # Try to find in transition (can be extended)
+    # You can store transition state text in images directory or a separate path
     trans_path = os.path.join('transitions', game_hash, str(game_level), 'images', f'{state_hash}.txt')
     if os.path.isfile(trans_path):
         with open(trans_path, 'r', encoding='utf-8') as f:

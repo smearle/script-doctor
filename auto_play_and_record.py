@@ -16,7 +16,7 @@ import hydra
 from hydra.core.config_store import ConfigStore
 from dataclasses import dataclass
 
-# 导入LLM代理
+# Import LLM agent
 from LLM_agent import LLMAgent, ReinforcementWrapper, StateVisualizer
 
 @dataclass
@@ -27,25 +27,25 @@ class Config:
     maximize_browser: bool = True
     save_gifs: bool = True
     gif_output_dir: str = "gifs"
-    game: str = "sokoban_basic"  # 默认游戏
-    play_all: bool = False  # 是否玩所有游戏
+    game: str = "sokoban_basic"  # Default game
+    play_all: bool = False  # Whether to play all games
 
 cs = ConfigStore.instance()
 cs.store(name="config", node=Config)
 
-# 创建Flask应用
+# Create Flask application
 app = Flask(__name__)
 
-# 全局变量
+# Global variables
 driver = None
 llm_agent = None
 rl_wrapper = None
 is_recording = False
 current_game_state = None
 game_rules = None
-cfg = None  # 全局配置对象
+cfg = None  # Global configuration object
 
-# 路由：提供静态文件
+# Route: Serve static files
 @app.route('/')
 def serve_doctor():
     return send_from_directory('src', 'doctor.html')
@@ -54,29 +54,29 @@ def serve_doctor():
 def serve_static(filename):
     return send_from_directory('src', filename)
 
-# 从data/min_games目录加载游戏规则
+# Load game rules from data/min_games directory
 def load_game_rules(game_name):
     try:
-        # 构建文件路径
+        # Build file path
         file_path = os.path.join('data', 'min_games', f"{game_name}.txt")
         
-        # 检查文件是否存在
+        # Check if file exists
         if not os.path.exists(file_path):
             print(f"Game file not found: {file_path}")
             return {}
         
-        # 读取文件内容
+        # Read file content
         with open(file_path, 'r', encoding='utf-8') as f:
             game_code = f.read()
         
-        # 提取规则部分
+        # Extract rules section
         rules_match = re.search(r'======\s*RULES\s*======\s*([\s\S]*?)(?:======\s*(?:WINCONDITIONS|LEVELS)\s*======)', game_code)
         legend_match = re.search(r'======\s*LEGEND\s*======\s*([\s\S]*?)(?:======\s*(?:SOUNDS|COLLISIONLAYERS)\s*======)', game_code)
         objects_match = re.search(r'======\s*OBJECTS\s*======\s*([\s\S]*?)(?:======\s*(?:LEGEND)\s*======)', game_code)
         collision_layers_match = re.search(r'======\s*COLLISIONLAYERS\s*======\s*([\s\S]*?)(?:======\s*(?:RULES)\s*======)', game_code)
         win_conditions_match = re.search(r'======\s*WINCONDITIONS\s*======\s*([\s\S]*?)(?:======\s*(?:LEVELS)\s*======|$)', game_code)
         
-        # 组合所有部分到规则对象
+        # Combine all parts into rules object
         return {
             'objects': objects_match.group(1).strip() if objects_match else "",
             'legend': legend_match.group(1).strip() if legend_match else "",
@@ -88,29 +88,29 @@ def load_game_rules(game_name):
         print(f"Error loading game rules: {e}")
         return {}
 
-# LLM动作API
+# LLM action API
 @app.route('/llm_action', methods=['POST'])
 def llm_action():
     try:
         data = request.json
         state_repr = data['state']
-        game_name = data.get('game_name', 'sokoban_basic')  # 默认使用sokoban_basic
+        game_name = data.get('game_name', 'sokoban_basic')  # Default to sokoban_basic
         goal = data.get('goal', 'Solve the puzzle by following the game rules and win conditions.')
         
-        # 从data/min_games目录加载规则
+        # Load rules from data/min_games directory
         rules = load_game_rules(game_name)
         
-        # 处理游戏状态
+        # Process game state
         processed_state = {
             'raw_state': state_repr,
             'entities': llm_agent._extract_entities(state_repr),
             'metrics': {'complexity': len(state_repr)}
         }
         
-        # 生成决策
+        # Generate decision
         action = llm_agent.choose_action(processed_state=processed_state, goal=goal)
         
-        # 记录历史
+        # Record history
         llm_agent.update_history(action, "pending")
         
         return jsonify({
@@ -121,33 +121,33 @@ def llm_action():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
-# LLM反馈API
+# LLM feedback API
 @app.route('/llm_feedback', methods=['POST'])
 def llm_feedback():
     try:
         data = request.json
         state_repr = data['state']
-        game_name = data.get('game_name', 'sokoban_basic')  # 默认使用sokoban_basic
+        game_name = data.get('game_name', 'sokoban_basic')  # Default to sokoban_basic
         result = data.get('result', 'in_progress')
         reward = data.get('reward', 0.0)
         
-        # 从data/min_games目录加载规则
+        # Load rules from data/min_games directory
         rules = load_game_rules(game_name)
         
-        # 处理游戏状态
+        # Process game state
         processed_state = {
             'raw_state': state_repr,
             'entities': llm_agent._extract_entities(state_repr),
             'metrics': {'complexity': len(state_repr)}
         }
         
-        # 更新LLM代理的历史记录
+        # Update LLM agent's history record
         if result == 'success':
             llm_agent.update_history(llm_agent.action_history[-1]['action'] if llm_agent.action_history else 'none', "success")
         else:
             llm_agent.update_history(llm_agent.action_history[-1]['action'] if llm_agent.action_history else 'none', "in_progress")
         
-        # 应用强化学习奖励
+        # Apply reinforcement learning reward
         if rl_wrapper and reward != 0.0:
             rl_wrapper.reinforce(reward)
         
@@ -159,7 +159,7 @@ def llm_feedback():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
-# 保存GIF的API
+# API for saving GIF
 @app.route('/save_gif', methods=['POST'])
 def save_gif():
     try:
@@ -167,13 +167,13 @@ def save_gif():
         gif_data = data['gif_data']
         level = data.get('level', 0)
         
-        # 解码Base64数据
+        # Decode Base64 data
         gif_binary = base64.b64decode(gif_data.split(',')[1])
         
-        # 确保输出目录存在
+        # Ensure output directory exists
         os.makedirs(cfg.gif_output_dir, exist_ok=True)
         
-        # 保存GIF文件
+        # Save GIF file
         filename = f"level_{level}_{int(time.time())}.gif"
         filepath = os.path.join(cfg.gif_output_dir, filename)
         
@@ -189,11 +189,11 @@ def save_gif():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
-# 打开浏览器函数
+# Function to open browser
 def open_browser(url, cfg):
     global driver
     
-    # 设置Selenium WebDriver选项
+    # Set Selenium WebDriver options
     options = Options()
     if cfg.auto_open_devtools:
         options.add_argument("--auto-open-devtools-for-tabs")
@@ -204,36 +204,36 @@ def open_browser(url, cfg):
     
     options.add_experimental_option("detach", True)
     
-    # 创建WebDriver
+    # Create WebDriver
     driver = webdriver.Chrome(options=options)
     
-    # 打开URL
+    # Open URL
     driver.get(url)
     
-    # 等待页面加载完成
+    # Wait for page to load completely
     WebDriverWait(driver, 30).until(
         EC.presence_of_element_located((By.ID, "gameCanvas"))
     )
     
-    # 注入自定义JavaScript以增强GIF录制功能
+    # Inject custom JavaScript to enhance GIF recording functionality
     inject_gif_recorder(driver)
     
     print(f"Browser opened at {url}")
     return driver
 
-# 检查makegif.js是否存在并注入GIF录制增强脚本
+# Check if makegif.js exists and inject GIF recording enhancement script
 def inject_gif_recorder(driver):
-    # 首先等待页面完全加载
+    # First wait for the page to fully load
     time.sleep(3)
     
-    # 检查makeGIF函数是否已加载
+    # Check if makeGIF function is loaded
     check_script = """
     console.log('Checking if makegif.js is loaded...');
     console.log('makeGIF exists:', typeof makeGIF !== 'undefined');
     return typeof makeGIF !== 'undefined';
     """
     
-    # 尝试执行检查脚本
+    # Try to execute check script
     try:
         is_loaded = driver.execute_script(check_script)
         print(f"makegif.js loaded: {is_loaded}")
@@ -245,35 +245,35 @@ def inject_gif_recorder(driver):
         print("Warning: makegif.js not loaded or makeGIF function not found")
         return False
     
-    # 这个脚本会增强makegif.js的功能，使其能够自动将GIF数据发送到我们的服务器
+    # This script enhances makegif.js functionality to automatically send GIF data to our server
     script = """
     console.log('Enhancing GIF recorder...');
     
-    // 创建一个简单的录制函数，直接调用makeGIF函数
+    // Create a simple recording function that directly calls the makeGIF function
     window.startGifRecording = function() {
         console.log('Starting GIF recording manually');
         if (typeof makeGIF === 'function') {
             console.log('makeGIF function found, calling...');
             
-            // 保存原始的consolePrint函数
+            // Save the original consolePrint function
             var originalConsolePrint = window.consolePrint;
             
-            // 重写consolePrint函数以捕获GIF数据
+            // Override consolePrint function to capture GIF data
             window.consolePrint = function(text) {
-                // 调用原始函数
+                // Call original function
                 originalConsolePrint.apply(this, arguments);
                 
-                // 检查是否包含GIF数据
+                // Check if it contains GIF data
                 if (typeof text === 'string' && text.includes('data:image/gif;base64,')) {
                     console.log('GIF data found in console output');
                     
-                    // 提取GIF数据
+                    // Extract GIF data
                     var gifDataMatch = text.match(/src="(data:image\/gif;base64,[^"]+)"/);
                     if (gifDataMatch && gifDataMatch[1]) {
                         var gifData = gifDataMatch[1];
                         
                         console.log('Sending GIF data to server');
-                        // 发送到服务器
+                        // Send to server
                         fetch('/save_gif', {
                             method: 'POST',
                             headers: {
@@ -292,13 +292,13 @@ def inject_gif_recorder(driver):
                             console.error('Error saving GIF:', error);
                         });
                         
-                        // 恢复原始consolePrint函数
+                        // Restore original consolePrint function
                         window.consolePrint = originalConsolePrint;
                     }
                 }
             };
             
-            // 调用makeGIF函数
+            // Call makeGIF function
             makeGIF();
             return true;
         } else {
@@ -319,9 +319,9 @@ def inject_gif_recorder(driver):
         print(f"Error enhancing GIF recorder: {e}")
         return False
 
-# 启动LLM玩家
+# Start LLM player
 def start_llm_player(driver):
-    # 点击LLM PLAY按钮
+    # Click LLM PLAY button
     try:
         llm_play_button = WebDriverWait(driver, 10).until(
             EC.element_to_be_clickable((By.ID, "llmPlayClickLink"))
@@ -333,9 +333,9 @@ def start_llm_player(driver):
         print(f"Error starting LLM player: {e}")
         return False
 
-# 运行游戏
+# Run game
 def run_game(driver):
-    # 点击RUN按钮
+    # Click RUN button
     try:
         run_button = WebDriverWait(driver, 10).until(
             EC.element_to_be_clickable((By.ID, "runClickLink"))
@@ -347,10 +347,10 @@ def run_game(driver):
         print(f"Error running game: {e}")
         return False
 
-# 开始录制GIF
+# Start recording GIF
 def start_recording_gif(driver):
     try:
-        # 调用我们注入的录制函数
+        # Call our injected recording function
         result = driver.execute_script("return window.startGifRecording();")
         if result:
             print("GIF recording started successfully")
@@ -361,10 +361,10 @@ def start_recording_gif(driver):
         print(f"Error starting GIF recording: {e}")
         return False
 
-# 检查游戏是否已经赢了
+# Check if the game has been won
 def check_game_won(driver):
     try:
-        # 检查是否有胜利消息
+        # Check if there is a victory message
         script = """
         return typeof winning !== 'undefined' && winning;
         """
@@ -372,10 +372,10 @@ def check_game_won(driver):
     except:
         return False
 
-# 选择游戏示例
+# Select game example
 def select_example_game(driver, game_name="sokoban_basic"):
     try:
-        # 打开示例下拉菜单
+        # Open example dropdown menu
         script = """
         console.log('Selecting example game:', arguments[0]);
         var dropdown = document.getElementById('exampleDropdown');
@@ -384,10 +384,10 @@ def select_example_game(driver, game_name="sokoban_basic"):
             return false;
         }
         
-        // 设置下拉菜单值
+        // Set dropdown menu value
         dropdown.value = arguments[0];
         
-        // 触发change事件
+        // Trigger change event
         var event = new Event('change', { bubbles: true });
         dropdown.dispatchEvent(event);
         
@@ -405,13 +405,13 @@ def select_example_game(driver, game_name="sokoban_basic"):
         print(f"Error selecting example game: {e}")
         return False
 
-# 模拟按空格键开始游戏并点击游戏画布
+# Simulate pressing space key to start game and click game canvas
 def press_space_key_and_click_canvas(driver):
     try:
         from selenium.webdriver.common.keys import Keys
         from selenium.webdriver.common.action_chains import ActionChains
         
-        # 首先确保游戏画布获得焦点
+        # First ensure game canvas has focus
         script = """
         var gameCanvas = document.getElementById('gameCanvas');
         if (gameCanvas) {
@@ -426,7 +426,7 @@ def press_space_key_and_click_canvas(driver):
             print("Failed to focus on game canvas")
             return False
         
-        # 获取游戏画布的位置和大小
+        # Get position and size of game canvas
         script = """
         var gameCanvas = document.getElementById('gameCanvas');
         if (gameCanvas) {
@@ -446,7 +446,7 @@ def press_space_key_and_click_canvas(driver):
             print("Failed to get canvas position")
             return False
         
-        # 多次点击游戏画布中心
+        # Click center of game canvas multiple times
         for i in range(3):
             actions = ActionChains(driver)
             actions.move_to_element_with_offset(
@@ -459,7 +459,7 @@ def press_space_key_and_click_canvas(driver):
             print(f"Canvas clicked (attempt {i+1})")
             time.sleep(0.5)
         
-        # 多次按空格键
+        # Press space key multiple times
         for i in range(3):
             actions = ActionChains(driver)
             actions.send_keys(Keys.SPACE)
@@ -467,11 +467,11 @@ def press_space_key_and_click_canvas(driver):
             print(f"Space key pressed (attempt {i+1})")
             time.sleep(0.5)
         
-        # 直接使用JavaScript模拟按键和点击
+        # Directly use JavaScript to simulate key press and click
         script = """
         var gameCanvas = document.getElementById('gameCanvas');
         if (gameCanvas) {
-            // 模拟点击
+            // Simulate click
             var rect = gameCanvas.getBoundingClientRect();
             var clickEvent = new MouseEvent('click', {
                 bubbles: true,
@@ -482,7 +482,7 @@ def press_space_key_and_click_canvas(driver):
             });
             gameCanvas.dispatchEvent(clickEvent);
             
-            // 模拟按空格键
+            // Simulate pressing space key
             var spaceKeyEvent = new KeyboardEvent('keydown', {
                 key: ' ',
                 code: 'Space',
@@ -493,7 +493,7 @@ def press_space_key_and_click_canvas(driver):
             });
             gameCanvas.dispatchEvent(spaceKeyEvent);
             
-            // 短暂延迟后发送keyup事件
+            // Send keyup event after a short delay
             setTimeout(function() {
                 var keyUpEvent = new KeyboardEvent('keyup', {
                     key: ' ',
@@ -518,7 +518,7 @@ def press_space_key_and_click_canvas(driver):
         print(f"Error in press_space_key_and_click_canvas: {e}")
         return False
 
-# 获取可用游戏列表
+# Get list of available games
 def get_available_games(driver):
     try:
         script = """
@@ -547,63 +547,63 @@ def get_available_games(driver):
         print(f"Error getting available games: {e}")
         return []
 
-# 自动玩游戏并录制
+# Automatically play and record game
 def auto_play_and_record(driver, cfg, game_name=None):
-    # 等待页面完全加载
+    # Wait for page to fully load
     time.sleep(3)
     print("Page loaded, starting game automation")
     
-    # 如果没有指定游戏，则获取所有可用游戏
+    # If no game specified, get all available games
     if not game_name:
         games = get_available_games(driver)
         if not games:
             print("No games available")
             return False
         
-        # 遍历所有游戏
+        # Iterate through all games
         for game in games:
             print(f"Playing game: {game['name']} ({game['value']})")
             play_single_game(driver, cfg, game['value'])
-            time.sleep(2)  # 等待游戏结束后再开始下一个游戏
+            time.sleep(2)  # Wait for game to end before starting the next one
         
         return True
     else:
-        # 玩单个指定的游戏
+        # Play a single specified game
         return play_single_game(driver, cfg, game_name)
 
-# 玩单个游戏
+# Play a single game
 def play_single_game(driver, cfg, game_name):
-    # 选择示例游戏
+    # Select example game
     if not select_example_game(driver, game_name):
         print(f"Failed to select example game: {game_name}")
         return False
     
-    # 等待示例游戏加载
+    # Wait for example game to load
     time.sleep(2)
     
-    # 运行游戏
+    # Run game
     if not run_game(driver):
         print("Failed to run game")
         return False
     
-    # 等待游戏加载
+    # Wait for game to load
     time.sleep(3)
     print("Game should be running now")
     
-    # 检查游戏是否正在运行
+    # Check if game is running
     try:
         is_running = driver.execute_script("return typeof gameRunning !== 'undefined' && gameRunning;")
         print(f"Game running status: {is_running}")
     except Exception as e:
         print(f"Error checking game status: {e}")
     
-    # 尝试直接使用JavaScript启动游戏
+    # Try to start game directly using JavaScript
     try:
         script = """
-        // 尝试多种方法启动游戏
+        // Try multiple methods to start game
         console.log('Attempting to start game using JavaScript...');
         
-        // 方法1: 尝试调用游戏的内部函数
+        // Method 1: Try to call game's internal functions
         if (typeof canvasResize === 'function') {
             console.log('Calling canvasResize()');
             canvasResize();
@@ -614,18 +614,18 @@ def play_single_game(driver, cfg, game_name):
             redraw();
         }
         
-        // 方法2: 尝试模拟按键事件
+        // Method 2: Try to simulate key events
         var gameCanvas = document.getElementById('gameCanvas');
         if (gameCanvas) {
-            // 确保游戏画布获得焦点
+            // Ensure game canvas has focus
             gameCanvas.focus();
             
-            // 模拟按各种可能的按键
-            var keyCodes = [32, 13, 38, 40, 37, 39, 88, 90]; // 空格, 回车, 上下左右, X, Z
+            // Simulate pressing various possible keys
+            var keyCodes = [32, 13, 38, 40, 37, 39, 88, 90]; // Space, Enter, Up, Down, Left, Right, X, Z
             for (var i = 0; i < keyCodes.length; i++) {
                 var keyCode = keyCodes[i];
                 
-                // 创建并分发keydown事件
+                // Create and dispatch keydown event
                 var keyDownEvent = new KeyboardEvent('keydown', {
                     keyCode: keyCode,
                     which: keyCode,
@@ -635,7 +635,7 @@ def play_single_game(driver, cfg, game_name):
                     cancelable: true
                 });
                 
-                // 尝试直接调用游戏的按键处理函数
+                // Try to directly call game's key handling function
                 if (typeof onKeyDown === 'function') {
                     console.log('Calling onKeyDown() with keyCode ' + keyCode);
                     onKeyDown(keyDownEvent);
@@ -645,7 +645,7 @@ def play_single_game(driver, cfg, game_name):
                     gameCanvas.dispatchEvent(keyDownEvent);
                 }
                 
-                // 短暂延迟后发送keyup事件
+                // Send keyup event after a short delay
                 setTimeout(function(kc) {
                     return function() {
                         var keyUpEvent = new KeyboardEvent('keyup', {
@@ -667,7 +667,7 @@ def play_single_game(driver, cfg, game_name):
                 }(keyCode), 100);
             }
             
-            // 模拟点击游戏画布中心
+            // Simulate clicking center of game canvas
             var rect = gameCanvas.getBoundingClientRect();
             var clickEvent = new MouseEvent('click', {
                 bubbles: true,
@@ -679,7 +679,7 @@ def play_single_game(driver, cfg, game_name):
             gameCanvas.dispatchEvent(clickEvent);
         }
         
-        // 方法3: 尝试直接设置游戏状态变量
+        // Method 3: Try to directly set game state variables
         if (typeof gameRunning !== 'undefined') {
             console.log('Setting gameRunning = true');
             gameRunning = true;
@@ -695,7 +695,7 @@ def play_single_game(driver, cfg, game_name):
             titleScreen = false;
         }
         
-        // 辅助函数
+        // Helper functions
         function getKeyCodeString(keyCode) {
             switch (keyCode) {
                 case 32: return 'Space';
@@ -732,8 +732,8 @@ def play_single_game(driver, cfg, game_name):
     except Exception as e:
         print(f"Error in JavaScript game start attempt: {e}")
     
-    # 确保游戏画布获得焦点并点击
-    for attempt in range(3):  # 尝试多次以确保成功
+    # Ensure game canvas has focus and click it
+    for attempt in range(3):  # Try multiple times to ensure success
         if press_space_key_and_click_canvas(driver):
             print(f"Successfully focused and clicked game canvas on attempt {attempt+1}")
             break
@@ -741,17 +741,17 @@ def play_single_game(driver, cfg, game_name):
             print(f"Failed to focus and click game canvas on attempt {attempt+1}, retrying...")
             time.sleep(0.5)
     
-    # 等待游戏真正开始
+    # Wait for game to actually start
     time.sleep(1)
     
-    # 再次确保游戏画布获得焦点
+    # Ensure game canvas has focus again
     try:
         script = """
         var gameCanvas = document.getElementById('gameCanvas');
         if (gameCanvas) {
             gameCanvas.focus();
             
-            // 模拟点击游戏画布中心
+            // Simulate clicking center of game canvas
             var rect = gameCanvas.getBoundingClientRect();
             var clickEvent = new MouseEvent('click', {
                 bubbles: true,
@@ -771,45 +771,45 @@ def play_single_game(driver, cfg, game_name):
     except Exception as e:
         print(f"Error in additional focus attempt: {e}")
     
-    # 开始录制GIF
+    # Start recording GIF
     if cfg.save_gifs:
         if not start_recording_gif(driver):
             print("Failed to start GIF recording, but continuing...")
     
-    # 启动LLM玩家
+    # Start LLM player
     if not start_llm_player(driver):
         print("Failed to start LLM player")
         return False
     
-    # 等待游戏结束或超时
-    timeout = 300  # 5分钟超时
+    # Wait for game to end or timeout
+    timeout = 300  # 5 minute timeout
     start_time = time.time()
     
     print("Waiting for game to complete...")
     while time.time() - start_time < timeout:
         if check_game_won(driver):
             print("Game won!")
-            # 等待GIF生成完成
+            # Wait for GIF generation to complete
             time.sleep(2)
             return True
-        time.sleep(1)  # 每秒检查一次
+        time.sleep(1)  # Check once per second
     
     print("Game timed out")
     return False
 
-# 主函数
+# Main function
 @hydra.main(config_name="config", version_base="1.3")
 def main(cfg_param: Config):
     global llm_agent, rl_wrapper, driver, cfg
     
-    # 设置全局配置对象
+    # Set global configuration object
     cfg = cfg_param
     
-    # 初始化LLM代理
+    # Initialize LLM agent
     llm_agent = LLMAgent(model_name="gpt-4o")
     rl_wrapper = ReinforcementWrapper(llm_agent)
     
-    # 创建浏览器线程
+    # Create browser thread
     url = f"http://127.0.0.1:{cfg.port}"
     browser_thread = threading.Thread(
         target=partial(open_browser, url=url, cfg=cfg)
@@ -817,13 +817,13 @@ def main(cfg_param: Config):
     browser_thread.daemon = True
     browser_thread.start()
     
-    # 等待浏览器启动
+    # Wait for browser to start
     browser_ready = threading.Event()
     
     def wait_for_browser():
         global driver
         start_time = time.time()
-        while time.time() - start_time < 30:  # 30秒超时
+        while time.time() - start_time < 30:  # 30 second timeout
             if driver is not None:
                 browser_ready.set()
                 break
@@ -833,7 +833,7 @@ def main(cfg_param: Config):
     wait_thread.daemon = True
     wait_thread.start()
     
-    # 注册关闭浏览器的函数
+    # Register function to close browser
     def close_browser():
         global driver
         if driver:
@@ -845,25 +845,25 @@ def main(cfg_param: Config):
     
     atexit.register(close_browser)
     
-    # 创建自动玩游戏的线程
+    # Create thread for automatically playing game
     def auto_play_thread():
-        # 等待浏览器准备好
-        if browser_ready.wait(30):  # 等待最多30秒
-            # 等待页面完全加载
+        # Wait for browser to be ready
+        if browser_ready.wait(30):  # Wait up to 30 seconds
+            # Wait for the page to fully load
             time.sleep(3)
-            # 自动玩游戏并录制
+            # Automatically play and record the game
             if cfg.play_all:
                 print("Playing all available games")
-                auto_play_and_record(driver, cfg)  # 不指定游戏名称，将玩所有游戏
+                auto_play_and_record(driver, cfg)  # No specific game name, will play all games
             else:
                 print(f"Playing game: {cfg.game}")
-                auto_play_and_record(driver, cfg, cfg.game)  # 玩指定的游戏
+                auto_play_and_record(driver, cfg, cfg.game)  # Play the specified game
     
     play_thread = threading.Thread(target=auto_play_thread)
     play_thread.daemon = True
     play_thread.start()
     
-    # 运行Flask应用
+    # Run the Flask application
     print(f"Starting server on port {cfg.port}")
     app.run(port=cfg.port)
 
