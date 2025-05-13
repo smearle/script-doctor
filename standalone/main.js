@@ -46,7 +46,8 @@ try {
       "algorithm": algorithm.name,
       "isSolved": result[0],
       "actions": result[1],
-      "iterations": result[2]
+      "iterations": result[2],
+      "fps": result[3],
   };
   if(outputFile.length == 0){
     console.log(result);

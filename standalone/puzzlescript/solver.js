@@ -411,11 +411,11 @@ function solveBFS(engine, maxIters=100_000) {
   // action_seqs.enqueue([]);
 
   sol = [];
-  console.log(sol.length);
+  // console.log(sol.length);
   visited = new Set([hashState(init_level_map)]);
   i = 0;
   start_time = Date.now();
-  console.log(frontier.size())
+  // console.log(frontier.size())
   while (frontier.size() > 0 && i < maxIters) {
     backups = [];
 
@@ -425,12 +425,12 @@ function solveBFS(engine, maxIters=100_000) {
     // const action_seq = action_seqs.dequeue();
 
     if (!action_seq) {
-      console.log(`Action sequence is empty. Length of frontier: ${frontier.size()}`);
+      // console.log(`Action sequence is empty. Length of frontier: ${frontier.size()}`);
     }
     for (const move of Array(5).keys()) {
       if (i > maxIters) {
-        console.log('Exceeded 1M iterations. Exiting.');
-        return [false, [], i];
+        // console.log('Exceeded 1M iterations. Exiting.');
+        return [false, [], i, (i / (Date.now() - start_time) * 1000).toFixed(2)];
       }
       engine.restoreLevel(level);
 
@@ -439,13 +439,13 @@ function solveBFS(engine, maxIters=100_000) {
       try {
         changed = engine.processInput(move);
       } catch (e) {
-        console.log('Error while processing input:', e);
-        return [false, [], i];
+        // console.log('Error while processing input:', e);
+        return [false, [], i, (i / (Date.now() - start_time) * 1000).toFixed(2)];
       }
       if (engine.getWinning()) {
-        console.log(`Winning! Solution:, ${new_action_seq}\n Iterations: ${i}`);
-        console.log('FPS:', (i / (Date.now() - start_time) * 1000).toFixed(2));
-        return [true, new_action_seq, i];
+        // console.log(`Winning! Solution:, ${new_action_seq}\n Iterations: ${i}`);
+        // console.log('FPS:', (i / (Date.now() - start_time) * 1000).toFixed(2));
+        return [true, new_action_seq, i, (i / (Date.now() - start_time) * 1000).toFixed(2)];
       }
       else if (changed) {
         new_level = engine.backupLevel();
@@ -460,29 +460,29 @@ function solveBFS(engine, maxIters=100_000) {
           frontier.enqueue([new_level, new_action_seq]);
           // frontier.enqueue(new_level);
           if (!new_action_seq) {
-            console.log(`New action sequence is undefined when pushing.`);
+            // console.log(`New action sequence is undefined when pushing.`);
           }
           // action_seqs.enqueue(new_action_seq);
           visited.add(newHash);
         } 
       }
     }
-    if (i % 10000 == 0) {
-      now = Date.now();
-      console.log('Iteration:', i);
-      console.log('FPS:', (i / (now - start_time) * 1000).toFixed(2));
-      console.log(`Size of frontier: ${frontier.size()}`);
-      console.log(`Visited states: ${visited.size}`);
-      // await new Promise(resolve => setTimeout(resolve, 1)); // Small delay for live feedback
-      // redraw();
-    }
+    // if (i % 10000 == 0) {
+    //   now = Date.now();
+    //   console.log('Iteration:', i);
+    //   console.log('FPS:', (i / (now - start_time) * 1000).toFixed(2));
+    //   console.log(`Size of frontier: ${frontier.size()}`);
+    //   console.log(`Visited states: ${visited.size}`);
+    //   // await new Promise(resolve => setTimeout(resolve, 1)); // Small delay for live feedback
+    //   // redraw();
+    // }
     i++;
   }
   if(i >= maxIters) {
-    console.log('Exceeded max iterations. Exiting.');
-    return [false, [], i];
+    // console.log('Exceeded max iterations. Exiting.');
+    return [false, [], i, (i / (Date.now() - start_time) * 1000).toFixed(2)];
   }
-  return [true, sol, i];
+  return [true, sol, i, (i / (Date.now() - start_time) * 1000).toFixed(2)];
 }
 
 function solveAStar(engine, maxIters=100_000) {
@@ -570,7 +570,7 @@ function solveAStar(engine, maxIters=100_000) {
 
 	while (!queue.isEmpty() && totalIters < maxIters) {
     if (totalIters > maxIters) {
-      console.log('Exceeded max iterations. Exiting.');
+      // console.log('Exceeded max iterations. Exiting.');
       break;
     }
 		iters++;
@@ -605,7 +605,7 @@ function solveAStar(engine, maxIters=100_000) {
 
 				exploredStates[engine.getLevel().objects] = [parentState, actions[i]];
 				if (engine.getWinning() || engine.getHasUsedCheckpoint()) {
-          console.log('Winning!');
+          // console.log('Winning!');
 					muted = false;
 					solving = false;
 					winning = false;
@@ -618,7 +618,7 @@ function solveAStar(engine, maxIters=100_000) {
 					engine.setDeltaTime(oldDT);
 					DoRestartSearch(engine);
 					// redraw();
-					return [true, solution, totalIters];
+					return [true, solution, totalIters, (i / (Date.now() - start_time) * 1000).toFixed(2)];
 				}
 				size++;
 				queue.add([getScore(engine), engine.getLevel().objects.slice(0), numSteps + 1]);
@@ -629,12 +629,12 @@ function solveAStar(engine, maxIters=100_000) {
 	muted = false;
 	solving = false;
 	DoRestartSearch(engine);
-	console.log("no solution found");
+	// console.log("no solution found");
 	// solvingProgress.innerHTML = "";
 	deltatime = oldDT;
 	// redraw();
 	// cancelLink.hidden = true;
-  return [false, [], totalIters];
+  return [false, [], totalIters, (i / (Date.now() - start_time) * 1000).toFixed(2)];
 }
 
 class MCTSNode{
@@ -776,7 +776,7 @@ function solveMCTS(engine, options = {}) {
     "max_sim_length": 100,
     "score_fn": true, 
     "explore_deadends": false, 
-    "deadend_bonus": -100, 
+    "deadend_bonus": -25, 
     "win_bonus": 100,
     "most_visited": true,
     "c": Math.sqrt(2), 
@@ -808,8 +808,8 @@ function solveMCTS(engine, options = {}) {
       changed = engine.processInput(currentNode.action);
       if(engine.getWinning()){
         let sol = currentNode.get_actions();
-        console.log(`Winning! Solution:, ${sol}\n Iterations: ${i}\n Tree size: ${rootNode.tree_size()}`);
-        return [true, sol, i];
+        // console.log(`Winning! Solution:, ${sol}\n Iterations: ${i}\n Tree size: ${rootNode.tree_size()}`);
+        return [true, sol, i, (i / (Date.now() - start_time) * 1000).toFixed(2)];
       }
       if(!options.explore_deadends && !changed){
         break;
@@ -828,9 +828,9 @@ function solveMCTS(engine, options = {}) {
       changed = engine.processInput(currentNode.action);
       if(engine.getWinning()){
         let sol = currentNode.get_actions();
-        console.log(`Winning! Solution:, ${sol}\n Iterations: ${i}`);
-        console.log('FPS:', (i / (Date.now() - start_time) * 1000).toFixed(2));
-        return [true, sol, i];
+        // console.log(`Winning! Solution:, ${sol}\n Iterations: ${i}`);
+        // console.log('FPS:', (i / (Date.now() - start_time) * 1000).toFixed(2));
+        return [true, sol, i, (i / (Date.now() - start_time) * 1000).toFixed(2)];
       }
       // if node is deadend, punish it
       if(!options.explore_deadends && !changed){
@@ -846,15 +846,15 @@ function solveMCTS(engine, options = {}) {
       }
     }
     // print progress
-    if (i % 10000 == 0) {
-      now = Date.now();
-      console.log('Iteration:', i);
-      console.log('FPS:', (i / (now - start_time) * 1000).toFixed(2));
-      console.log(`Visited Deadends: ${deadend_nodes}`);
+    // if (i % 10000 == 0) {
+      // now = Date.now();
+      // console.log('Iteration:', i);
+      // console.log('FPS:', (i / (now - start_time) * 1000).toFixed(2));
+      // console.log(`Visited Deadends: ${deadend_nodes}`);
       // console.log(`Visited states: ${visited.size}`);
       // await new Promise(resolve => setTimeout(resolve, 1)); // Small delay for live feedback
       // redraw();
-    }
+    // }
     i+= 1;
   }
   let actions = [];
@@ -870,7 +870,7 @@ function solveMCTS(engine, options = {}) {
     actions.push(action);
     currentNode = currentNode.children[action];
   }
-  return [false, actions, options.max_iterations];
+  return [false, actions, options.max_iterations, (options.max_iterations / (Date.now() - start_time) * 1000).toFixed(2)];
 }
 
 module.exports = {
