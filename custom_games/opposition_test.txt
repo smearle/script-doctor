@@ -1,0 +1,70 @@
+title Opposition
+author Matthew VanDevander
+homepage www.lowtideproductions.com
+
+========
+OBJECTS
+========
+
+Background
+GREY LIGHTGREEN
+11111
+11111
+11111
+11111
+11111
+
+Player
+Black Brown Red
+..1..
+.222.
+10001
+.222.
+.1.1.
+
+BluePlayer
+Black Brown Blue
+..1..
+.222.
+10001
+.222.
+.1.1.
+
+=======
+LEGEND
+=======
+
+. = Background
+R = Player
+B = BluePlayer
+
+=======
+SOUNDS
+=======
+
+================
+COLLISIONLAYERS
+================
+
+Background
+Player, BluePlayer
+
+======
+RULES
+======
+
+[ > Player ] [ BluePlayer ] -> [ > Player ] [ < BluePlayer ]
+
+
+==============
+WINCONDITIONS
+==============
+
+=======
+LEVELS
+=======
+
+
+b.r
+...
+...

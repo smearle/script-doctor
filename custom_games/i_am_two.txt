@@ -1,0 +1,676 @@
+(NOT BY INCREPARE, A TWEAKED VERSION TRYING TO FIX A BUG https://github.com/increpare/PuzzleScript/issues/1044 )
+
+title I am Two
+author nebu soku
+homepage www.puzzlescript.net
+
+realtime_interval 0.2
+run_rules_on_level_Start
+
+========
+OBJECTS
+========
+
+Background
+#141618 black
+11111
+11111
+10001
+10101
+10001
+
+blank
+black
+
+
+Target
+black purple darkgray darkblue
+.....
+.....
+.101.
+.010.
+.101.
+
+Wall 
+darkgray gray #929292
+01110
+11121
+11111
+12111
+11111
+
+
+WallU
+darkgray gray #929292
+00000
+11121
+11111
+12111
+11111
+
+Hall
+black darkgray darkblue
+12121
+20202
+00000
+00000
+00000
+
+
+PlayerR
+white lightbrown lightgray Blue brown blue #153759
+.2000
+24515
+.4111
+.0330
+.3.6.
+
+WalkR1
+white lightbrown lightgray Blue brown blue #153759
+.2000
+24515
+.4111
+.303.
+3...6
+
+WalkR2
+white lightbrown lightgray Blue brown blue #153759
+.2000
+24515
+.4111
+.0332
+.6.3.
+
+WalkR3
+white lightbrown lightgray Blue brown blue #153759
+.2000
+24515
+.4111
+03330
+6...3
+
+PlayerL
+white lightbrown lightgray Blue brown blue #153759
+2200.
+51540
+1114.
+0330.
+.6.3.
+
+WalkL1
+white lightbrown lightgray Blue brown blue #153759
+2200.
+51540
+1114.
+.303.
+6...3
+
+WalkL2
+white lightbrown lightgray Blue brown blue #153759
+2200.
+51540
+1114.
+2330.
+.3.6.
+
+WalkL3
+white lightbrown lightgray Blue brown blue #153759
+2200.
+51540
+1114.
+03330
+3...6
+
+UnmovableR
+white lightbrown lightgray Blue brown blue #153759
+.2000
+24515
+.4111
+.303.
+3...6
+
+UnmovableL
+white lightbrown lightgray Blue brown blue #153759
+2200.
+51540
+1114.
+.303.
+6...3
+
+CloneR
+white lightbrown lightgray Blue brown gray #153759
+.2222
+22525
+.2222
+.2222
+.2.2.
+
+CloneL
+white lightbrown lightgray Blue brown gray #153759
+2222.
+52522
+2222.
+2222.
+.2.2.
+
+ActivateR
+white lightbrown lightgray Blue brown gray #153759
+.2222
+22525
+.2222
+.2222
+.2.2.
+
+ActivateL
+white lightbrown lightgray Blue brown gray #153759
+2222.
+52522
+2222.
+2222.
+.2.2.
+
+AfterimageR1
+white lightbrown lightgray Blue brown gray #153759
+.0000
+00000
+.0000
+.0000
+.0.0.
+
+AfterimageR2
+white lightbrown lightgray Blue brown gray #153759
+.0000
+00000
+.0000
+.0000
+.0.0.
+
+AfterimageL1
+white lightbrown lightgray Blue brown gray #153759
+0000.
+00000
+0000.
+0000.
+.0.0.
+
+AfterimageL2
+white lightbrown lightgray Blue brown gray #153759
+0000.
+00000
+0000.
+0000.
+.0.0.
+
+Appear1
+white
+.....
+.....
+..0..
+.....
+.....
+
+Appear2
+white
+.....
+.000.
+.000.
+.000.
+.....
+
+Appear3
+white
+.0000
+00000
+.0000
+.0000
+.0.0.
+
+CloneCol
+black
+.....
+.....
+.....
+.....
+.....
+
+Cloned
+green
+.....
+.....
+.....
+.....
+.....
+
+ClonedCol
+black
+.....
+.....
+.....
+.....
+.....
+
+BlueOrb
+#56c2ec #1098cd white #2259a2
+.111.
+12201
+12013
+30113
+.333.
+
+YellowOrb
+yellow lightbrown white orange
+.111.
+12201
+12013
+30113
+.333.
+
+YellowOrbR
+yellow lightbrown white orange
+.111.
+12201
+12013
+30113
+.333.
+
+YellowOrbL
+yellow lightbrown white orange
+.111.
+12201
+12013
+30113
+.333.
+
+YellowOrbU
+yellow lightbrown white orange
+.111.
+12201
+12013
+30113
+.333.
+
+YellowOrbD
+yellow lightbrown white orange
+.111.
+12201
+12013
+30113
+.333.
+
+BelowWall
+darkblue black
+01010
+.....
+.....
+.....
+.....
+
+AboveWall
+lightgray
+.....
+.....
+.....
+.....
+00000
+
+WallD
+lightgray darkgray darkblue
+.....
+.....
+.....
+00000
+12121
+
+WallL
+lightgray
+0....
+0....
+0....
+0....
+0....
+
+WallR
+lightgray
+....0
+....0
+....0
+....0
+....0
+
+WallLR
+lightgray
+0...0
+0...0
+0...0
+0...0
+0...0
+
+AboveWallL
+lightgray
+.....
+.....
+.....
+0....
+0....
+
+AboveWallR
+lightgray
+.....
+.....
+.....
+....0
+....0
+
+AboveWallLR
+lightgray
+.....
+.....
+.....
+0...0
+0...0
+
+AboveWallLRwithR
+lightgray
+....0
+....0
+....0
+0...0
+0...0
+
+AboveWallLRwithL
+lightgray
+0....
+0....
+0....
+0...0
+0...0
+
+=======
+LEGEND
+=======
+
+Player = PlayerR or PlayerL or WalkR1 or WalkR2 or WalkR3 or WalkL1 or WalkL2 or WalkL3
+WalkR = WalkR1 or WalkR2 or WalkR3
+WalkL = WalkL1 or WalkL2 or WalkL3
+
+Clone = CloneR or CloneL
+Orb = BlueOrb or YellowOrb
+Orbs = BlueOrb or YellowOrb or YellowOrbR or YellowOrbL or YellowOrbU or YellowOrbD
+Obstacles = Wall or Orbs or CloneR or CloneL
+
+AboveDecoration = AboveWall or AboveWallL or AboveWallR or WallL or WallR or WallLR
+
+
+. = Background
+# = Wall
+P = Appear1
+O = Target
+@ = BlueOrb
+_ = blank
+~ = Hall
+Y = YellowOrb
+
+
+=======
+SOUNDS
+=======
+
+Player MOVE 45846907
+Orbs MOVE 16278507
+Wall move 95612108
+Target move 6622108
+Hall move 10354501
+
+sfx0 24539902
+sfx1 31523909
+sfx2 75988708
+
+restart 75988708
+undo 12286707
+startlevel 75988708
+endlevel 6210100
+endgame 75988708
+
+================
+COLLISIONLAYERS
+================
+
+Background
+blank
+BelowWall
+Target
+CloneR, CloneL
+Player, Wall, Hall, BlueOrb, YellowOrb, YellowOrbR, YellowOrbL, YellowOrbU, YellowOrbD, CloneCol, UnmovableR, UnmovableL
+Appear1, Appear2, Appear3
+WallU
+AboveDecoration
+WallD, AboveWallLR, AboveWallLRwithR, AboveWallLRwithL
+AfterimageR1, AfterimageR2, AfterimageL1, AfterimageL2
+ActivateR, ActivateL
+Cloned, ClonedCol
+
+======
+RULES
+======
+
+
+
+[ > Player | BlueOrb ClonedCol ] -> [ > Player | > BlueOrb > ClonedCol ]
+
+[ wall no ClonedCol ] -> [ Wall ClonedCol ]
+[ Orbs no ClonedCol ] -> [ Orbs ClonedCol ]
+
+(Appear)
+
+[ stationary Appear3 ] -> [ PlayerR ]
+[ stationary Appear2 ] -> [ Appear3 ]
+[ stationary Appear1 ] -> [ Appear2 ]
+
+(YellowOrb)
+
+right [ > Player Cloned| YellowOrb ClonedCol ] -> [ > UnmovableR > Cloned | > YellowOrbR > ClonedCol ]
+right [ > Player | YellowOrb ClonedCol ] -> [ > UnmovableR | > YellowOrbR > ClonedCol ]
+left [ > Player Cloned | YellowOrb ClonedCol ] -> [ > UnmovableL > Cloned | > YellowOrbL > ClonedCol ]
+left [ > Player | YellowOrb ClonedCol ] -> [ > UnmovableL | > YellowOrbL > ClonedCol ]
+up [ > Player Cloned | YellowOrb ClonedCol ] -> [ > UnmovableR > Cloned | > YellowOrbU > ClonedCol ]
+up [ > Player | YellowOrb ClonedCol ] -> [ > UnmovableR | > YellowOrbU > ClonedCol ]
+down [ > Player Cloned | YellowOrb ClonedCol ] -> [ > UnmovableR > Cloned | > YellowOrbD > ClonedCol ]
+down [ > Player | YellowOrb ClonedCol ] -> [ > UnmovableR | > YellowOrbD > ClonedCol ]
+
+right [ stationary YellowOrbR ClonedCol | no Obstacles ] -> [ > YellowOrbR > ClonedCol | ]
+right [ YellowOrbR | Obstacles ] [ UnmovableR ] -> [ YellowOrb | Obstacles ] [ PlayerR ]
+
+left [ stationary YellowOrbL ClonedCol | no Obstacles ] -> [ > YellowOrbL > ClonedCol | ]
+left [ YellowOrbL | Obstacles ] [ UnmovableL ] -> [ YellowOrb | Obstacles ] [ PlayerL ]
+
+up [ stationary YellowOrbU ClonedCol | no Obstacles ] -> [ > YellowOrbU > ClonedCol | ]
+up [ YellowOrbU | Obstacles ] [ UnmovableR ] -> [ YellowOrb | Obstacles ] [ PlayerR ]
+
+down [ stationary YellowOrbD ClonedCol | no Obstacles ] -> [ > YellowOrbD > ClonedCol | ]
+down [ YellowOrbD | Obstacles ] [ UnmovableR ] -> [ YellowOrb | Obstacles ] [ PlayerR ]
+
+(Clone)
+
+[ Clone no Player ] -> [ Clone CloneCol ClonedCol ]
+
+[ stationary ActivateR ] -> [ ]
+[ stationary ActivateL ] -> [ ]
+
+[ action PlayerR no Cloned ] -> [ PlayerR CloneR Cloned ActivateR ] sfx0
+[ action WalkR no Cloned ] -> [ WalkR CloneR Cloned ActivateR ] sfx0
+[ action PlayerL no Cloned ] -> [ PlayerL CloneL Cloned ActivateL ] sfx0
+[ action WalkL no Cloned ] -> [ WalkL CloneL Cloned ActivateL ] sfx0
+
+[ stationary AfterimageR2 ] -> [ PlayerR ]
+[ stationary AfterimageL2 ] -> [ PlayerL ]
+[ stationary AfterimageR1 ] -> [ ]
+[ stationary AfterimageL1 ] -> [ ]
+
+[ > Player Cloned ] -> [ > Player > Cloned ]
+[ action PlayerR Cloned ] [ CloneR CloneCol ClonedCol ] -> [ AfterimageR1 ] [ AfterimageR2 ] sfx1
+[ action PlayerL Cloned ] [ CloneR CloneCol ClonedCol ] -> [ AfterimageL1 ] [ AfterimageR2 ] sfx1
+[ action WalkR Cloned ] [ CloneR CloneCol ClonedCol ] -> [ AfterimageR1 ] [ AfterimageR2 ] sfx1
+[ action WalkL Cloned ] [ CloneR CloneCol ClonedCol ] -> [ AfterimageL1 ] [ AfterimageR2 ] sfx1
+[ action PlayerR Cloned ] [ CloneL CloneCol ClonedCol ] -> [ AfterimageR1 ] [ AfterimageL2 ] sfx1
+[ action PlayerL Cloned ] [ CloneL CloneCol ClonedCol ] -> [ AfterimageL1 ] [ AfterimageL2 ] sfx1
+[ action WalkR Cloned ] [ CloneL CloneCol ClonedCol ] -> [ AfterimageR1 ] [ AfterimageL2 ] sfx1
+[ action WalkL Cloned ] [ CloneL CloneCol ClonedCol ] -> [ AfterimageL1 ] [ AfterimageL2 ] sfx1
+
+(Wall)
+
+down [ Wall | no Wall ] -> [ Wall WallD | BelowWall ]
+up [ Wall | no Wall ] -> [ Wall | AboveWall ]
+left [ Wall | no Wall ] -> [ Wall WallL | ]
+right [ Wall WallL | no Wall ] -> [ Wall WallLR | ]
+right [ Wall no AboveDecoration | no Wall ] -> [ Wall WallR | ]
+
+up [ WallL | Wall no AboveDecoration ] -> [ WallL | Wall AboveWallL ]
+up [ WallR | Wall no AboveDecoration ] -> [ WallR | Wall AboveWallR ]
+up [ WallLR | Wall ] -> [ WallLR | Wall AboveWallLR ]
+
+up [ WallL | Wall WallR ] -> [ WallL | Wall AboveWallLRwithR ]
+up [ WallR | Wall WallL ] -> [ WallR | Wall AboveWallLRwithL ]
+
+up [ Wall | AboveWall ] -> [ Wall WallU | AboveWall ]
+
+
+(Walking anim)
+
+left [ > PlayerR ] -> [ > PlayerL ]
+left [ > WalkR1 ] -> [ > WalkL1 ]
+left [ > WalkR2 ] -> [ > WalkL2 ]
+left [ > WalkR3 ] -> [ > WalkL3 ]
+right [ > PlayerL ] -> [ > PlayerR ]
+right [ > WalkL1 ] -> [ > WalkR1 ]
+right [ > WalkL2 ] -> [ > WalkR2 ]
+right [ > WalkL3 ] -> [ > WalkR3 ]
+
+[ > PlayerR ] -> [ > WalkR1 ]
+[ stationary walkR3 ] -> [ action PlayerR ]
+[ stationary WalkR2 ] -> [ action walkR3 ]
+[ stationary WalkR1 ] -> [ action walkR2 ]
+
+[ > PlayerL ] -> [ > WalkL1 ]
+[ stationary walkL3 ] -> [ action PlayerL ]
+[ stationary WalkL2 ] -> [ action walkL3 ]
+[ stationary WalkL1 ] -> [ action walkL2 ]
+
+
+==============
+WINCONDITIONS
+==============
+
+All Target on Orb
+
+=======
+LEVELS
+=======
+
+message X to put a clone.
+message Again X to be replaced with the clone.
+message Level 1 of 8
+
+_____________
+_____________
+__###________
+__#.#######__
+__#....@..#__
+__#o..p...#__
+__#.......#__
+__#########__
+_____________
+_____________
+
+message Level 2 of 8
+
+_____________
+_____________
+____####_____
+____#..#_____
+___##.@##____
+___#.p@.#____
+___##...#____
+____#.oo#____
+____#####____
+_____________
+
+message Level 3 of 8
+
+_____________
+_____________
+____###______
+__###.##_____
+__#..@.###___
+__#p@....#___
+__##@#.#.#___
+___#..ooo#___
+___#######___
+_____________
+
+message Level 4 of 8
+
+_____________
+__########___
+__#...#.o#___
+__#.....o###_
+__#@@@#.o..#_
+_##.#..#####_
+_#...p.#_____
+_####..#_____
+____####_____
+_____________
+
+message Level 5 of 8
+
+_____________
+_____________
+___####______
+___#..####___
+___#...y.#___
+___##..p.#___
+____#o...#___
+____######___
+_____________
+_____________
+
+message Level 6 of 8
+
+_____________
+_____________
+____#####____
+___##.#.##___
+__##.....#___
+__#...@y.#___
+__#oo.#..#___
+__#####p.#___
+______####___
+_____________
+
+message Level 7 of 8
+
+_____________
+_____________
+____####_____
+___##o.#_____
+___#.@.###___
+___#..p.o#___
+___##oy@.#___
+____#..###___
+____####_____
+_____________
+
+message Level 8 of 8
+
+_____________
+_____________
+__######_____
+__#....#_____
+_##pyyy####__
+_#....ooo.#__
+_#...#...##__
+_#########___
+_____________
+_____________
+
+message Thanks for playing!
+

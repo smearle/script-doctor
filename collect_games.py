@@ -30,7 +30,7 @@ if __name__ == '__main__':
 
     # Collect games already in the repo
     example_games_dir = os.path.join('src', 'demo')
-    custom_games_dir = os.path.join('data', 'custom_games')
+    custom_games_dir = 'custom_games'
     for game_dir in [custom_games_dir, example_games_dir]:
         games = glob.glob(os.path.join(game_dir, '*.txt'))
         for eg in games:
@@ -40,7 +40,7 @@ if __name__ == '__main__':
     # Load github token to scrape gists
     load_dotenv()
 
-    ps_urls_path = "ps_urls.txt"
+    ps_urls_path = os.path.join("data", "ps_urls.txt")
     if args.update or not os.path.isfile(ps_urls_path):
 
         # URL of the JS file
@@ -119,6 +119,7 @@ if __name__ == '__main__':
                 breakpoint()
             title = title_match.groups()[0]
             # Replace invalid characters for filenames with underscores
+            title = title.replace(' ', '_')
             filename =  sanitize_filename(title, replacement_text='_')
             script_path = os.path.join('data/scraped_games', filename)
 

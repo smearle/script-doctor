@@ -74,7 +74,7 @@ async function playTest() {
   setEditorClean();
   unloadGame();
   console.log('Solving level:', n_level, ' with BFS');
-  [sol_a, n_search_iters_a] = await solveLevelBFS(n_level);
+  [sol_a, won, score, n_search_iters_a] = await solveLevelBFS(n_level);
   // const [sol, n_search_iters] = await solveLevelBFS(n_level);
   // gameToLoad = '/demo/sokoban_match3.txt';
   // gameToLoad = '/misc/3d_sokoban.txt';
@@ -151,7 +151,10 @@ function hashStateObjects(state) {
 
 
 async function solveLevelBFS(levelIdx, captureStates=false, maxIters=1_000_000) {
+  const timeout_ms = 60 * 1000;
   console.log('max iters:', maxIters);
+  console.log('timeout:', timeout_ms);
+  clearInputHistory();
 	precalcDistances();
 
   // Load the level
@@ -170,15 +173,24 @@ async function solveLevelBFS(levelIdx, captureStates=false, maxIters=1_000_000) 
   // action_seqs.enqueue([]);
 
   var sol = [];
-  var bestScore = -10000;
+  var bestState = init_level;
+  var bestScore = Infinity;
   console.log(sol.length);
   // visited = new Set([hashState(init_level_map)]);
   visited = {};
-  // visited[level.objects] = true;
+  visited[level.objects] = true;
   i = 0;
   start_time = Date.now();
   console.log(frontier.size())
   while (frontier.size() > 0) {
+    const elapsed_time = Date.now() - start_time;
+    if (elapsed_time > timeout_ms) {
+      console.log(`Timeout after ${elapsed_time / 1000} seconds. Returning best result found so far.`);
+      return [sol, false, bestScore, bestState, i, true];
+    }
+
+    // This is a global variable of previous states. Clear it to be safe (though processInputSearch shouldn't be using 
+    // it)
     backups = [];
 
     // const level = frontier.shift();
@@ -192,7 +204,7 @@ async function solveLevelBFS(levelIdx, captureStates=false, maxIters=1_000_000) 
     for (const move of Array(5).keys()) {
       if (i > maxIters) {
         console.log('Exceeded ' + maxIters + ' iterations. Exiting.');
-        return [-1, i];
+        return [sol, winning, bestScore, bestState, i, false];
       }
       restoreLevel(parent_level);
 
@@ -211,7 +223,7 @@ async function solveLevelBFS(levelIdx, captureStates=false, maxIters=1_000_000) 
       if (winning) {
         console.log(`Winning! Solution:, ${new_action_seq}\n Iterations: ${i}`);
         console.log('FPS:', (i / (Date.now() - start_time) * 1000).toFixed(2));
-        return [new_action_seq, i];
+        return [new_action_seq, winning, score, backupLevel(), i, false];
       }
       else if (changed) {
         new_level = backupLevel();
@@ -235,11 +247,24 @@ async function solveLevelBFS(levelIdx, captureStates=false, maxIters=1_000_000) 
 
           // visited.add(newHash);
           visited[level.objects] = true;
+          score = getScore();
+          // This is counter-intuitive, but we're curious about long action sequences that explore many diverse states,
+          // all else being equal, for the sake of validating the accuracy of our jax environment.
+          if ((score < bestScore) | (score == bestScore && new_action_seq.length > sol.length)) {
+            bestScore = score;
+            bestState = new_level;
+            sol = new_action_seq;
+          }
         } 
         // console.log('State already visited:', level.objects);
       }
     }
-    if (i % 10000 == 0) {
+    // Every 1k iterations, yield to the event loop to allow for UI updates
+    if (i % 1000 == 0) {
+      await new Promise(resolve => setTimeout(resolve, 1)); // Small delay for live feedback
+    }
+
+    if (i % 10_000 == 0) {
       now = Date.now();
       console.log('Iteration:', i);
       console.log('FPS:', (i / (now - start_time) * 1000).toFixed(2));
@@ -250,7 +275,7 @@ async function solveLevelBFS(levelIdx, captureStates=false, maxIters=1_000_000) 
     }
     i++;
   }
-  return [sol, i];
+  return [sol, winning, bestScore, bestState, i, false];
 }
 
 class MCTSNode{
@@ -489,11 +514,13 @@ async function testBFS() {
   // Determine how many levels are available in this game
   const n_levels = state.levels.length;
   console.log('Number of levels:', n_levels);
+  const objList = state.idDict;
   // Iterate through levels
   for (let i = 0; i < n_levels; i++) {
     compile(['loadLevel', i], editor.getValue());
     console.log('Solving level:', i, ' with BFS');
-    var [sol, nSearchIters] = await solveLevelBFS(i);
+    initState = level;
+    var [sol, won, score, bestState, nSearchIters, timeout] = await solveLevelBFS(i);
     console.log('Solution:', sol);
     console.log('Iterations:', nSearchIters);
     inputHistory = sol;
@@ -505,8 +532,14 @@ async function testBFS() {
       body: JSON.stringify({
         levelIdx: i,
         sol: sol,
+        won: won,
+        score: score,
+        initState: initState,
+        bestState: bestState,
+        objList: objList,
         solDir: solDir,
         dataURL: dataURL,
+        timeout: timeout,
       })
     });
   }
@@ -540,7 +573,6 @@ async function solveLevelBestFirst(captureStates=false, gameHash=0, levelI=0, ma
 	// restartTarget = backupLevel();
 	DoRestartSearch();
 	hasUsedCheckpoint = false;
-	backups = [];
 	var oldDT = deltatime;
 	deltatime = 0;
 	var actions = [0, 1, 2, 3, 4];
@@ -857,7 +889,7 @@ async function genGame(config) {
         } else {
           clearConsole();
           console.log(`Solving level ${level_i}...`);
-          [sol, nSearchIters] = await solveLevelBFS(level_i);
+          [sol, won, score, state, nSearchIters, timeout] = await solveLevelBFS(level_i);
           if (sol.length > 0) {
             console.log(`Solution for level ${level_i}:`, sol);
             console.log(`Saving gif for level ${level_i}.`);
@@ -1069,7 +1101,7 @@ async function evolve2() {
       } else {
         clearConsole();
         console.log(`Solving level ${level_i}...`);
-        [sol, nSearchIters] = await solveLevelBFS(level_i);
+        [sol, won, score, state, nSearchIters, timeout] = await solveLevelBFS(level_i);
         if (sol.length > 0) {
           console.log(`Solution for level ${level_i}:`, sol);
           console.log(`Saving gif for level ${level_i}.`);
@@ -1405,6 +1437,9 @@ async function fromPlanSweep() {
 }
 
 async function collectGameData(gamePath, captureStates=true) {
+  console.log(`Heap at the top of collectGameData: ${(performance.memory.usedJSHeapSize / 1e6).toFixed(2)} MB`);
+  redraw();
+
   // Load game
   const response = await fetch('/load_game_from_file', {
     method: 'POST',
@@ -1415,23 +1450,26 @@ async function collectGameData(gamePath, captureStates=true) {
   const code = await response.text();
   
   // Initialize game
+  editor.clearHistory();
   editor.setValue(code);
   clearConsole();
   setEditorClean();
   unloadGame();
   compile(['restart'], code);
-
+  gameCompiled = true;
+  
   // Process each level
-  for (let level = 0; level < state.levels.length; level++) {
-    if (!state.levels[level].hasOwnProperty('height')) {
+  for (let levelIdx = 0; levelIdx < state.levels.length; levelIdx++) {
+    clearConsole();
+    if (!state.levels[levelIdx].hasOwnProperty('height')) {
       continue;
     }
+    console.log(`Heap in CollectGameData when solving level: ${(performance.memory.usedJSHeapSize / 1e6).toFixed(2)} MB`);
     
-    console.log(`Processing level ${level} of game ${gamePath}`);
-    compile(['loadLevel', level], code);
+    console.log(`Processing level ${levelIdx} of game ${gamePath}`);
     // const [sol, n_iters] = await solveLevelAStar(captureStates=captureStates, gameHash=gamePath, level_i=level, maxIters=1_000_000);
-    const solDir = `sols/${gamePath}`;
-    const solPath = `${solDir}/level-${level}.json`;
+    const solDir = `data/js_sols/${gamePath}`;
+    const solPath = `${solDir}/level-${levelIdx}.json`;
     // If the solution exists, skip it
     const solExists = await fetch('/file_exists', {
       method: 'POST',
@@ -1440,23 +1478,31 @@ async function collectGameData(gamePath, captureStates=true) {
     });
     const solExistsData = await solExists.json();
     if (solExistsData.exists) {
-      console.log(`Solution for level ${level} already exists. Skipping.`);
+      console.log(`Solution for level ${levelIdx} already exists. Skipping.`);
       continue;
     }
     // If the solution does not exist, solve it
-    const [sol, n_iters] = await solveLevelBFS(level, captureStates=captureStates, maxIters=100_000);
-    console.log(`Finished processing level ${level}`);
+    compile(['loadLevel', levelIdx], code);
+    console.log(`Solving level ${levelIdx} of game ${gamePath}`);
+    const [sol, won, score, bestState, n_iters, timeout] = await solveLevelBFS(levelIdx, captureStates=captureStates, maxIters=100_000);
+    console.log(`Finished processing level ${levelIdx}`);
     if (sol.length > 0) {
-      console.log(`Solution for level ${level}:`, sol);
-      console.log(`Saving gif for level ${level}.`);
+      console.log(`Solution for level ${levelIdx}:`, sol);
+      console.log(`Saving gif for level ${levelIdx}.`);
       inputHistory = sol;
       const [ dataURL, filename ] = makeGIFDoctor();
       await fetch ('/save_sol', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          levelIdx: level,
+          levelIdx: levelIdx,
           sol: sol,
+          won: won,
+          score: score,
+          bestState: bestState,
+          objList: state.idDict,
+          iters: n_iters,
+          timeout: timeout,
           solDir: solDir,
           dataURL: dataURL,
         })
@@ -1532,7 +1578,29 @@ function sweepClick() {
   sweepGeneral();
 }
 
- const expSeed = 0;
+async function init() {
+  response = await fetch('/get_mode', {
+    method: 'GET',
+  });
+  const data = await response.json();
+  const mode = data.mode;
+  if (mode == 'sweep') {
+    sweepGeneral();
+  } else if (mode == 'evolve') {
+    interactiveEvo();
+  } else if (mode == 'playtest') {
+    playTest();
+  } else if (mode == 'gen_solutions') {
+    processAllGames();
+  } else if (mode == null) {
+    console.log('No mode specified. Serving webpage and awaiting user input.');
+  }
+  else {
+    console.log('Unknown mode:', mode);
+  }
+}
+
+const expSeed = 0;
 
 // sweepGeneral();
 // sweep();
@@ -1541,6 +1609,7 @@ function sweepClick() {
 // playTest();
 // evolve(expSeed);
 // evolve2();
-processAllGames();
-
+// processAllGames();
 // genGame('init', [], 'test_99', 99, fewshot=true, cot=true, maxGenAttempts=20);
+
+init();

@@ -3,12 +3,16 @@ import os
 import random
 import re
 import time
+
 import dotenv
+import jax
+import numpy as np
 from openai import AzureOpenAI
 import requests
 import tiktoken
 
 from prompts import *
+
 
 dotenv.load_dotenv()
 
@@ -69,6 +73,10 @@ def gen_fewshot_examples(system_prompt, prompt, max_tokens):
     if n_games_included == 0:
         fewshow_examples_prompt_i = ''
     return fewshot_examples_prompt_i
+
+def to_binary_vectors(arr_2d, num_bits):
+    arr_2d = np.asarray(arr_2d)
+    return ((arr_2d[..., None] & (1 << np.arange(num_bits)[::-1])) > 0).astype(int)
 
 
 GPT4V_ENDPOINT = "https://aoai-physics.openai.azure.com/openai/deployments/gpt4o/chat/completions?api-version=2024-02-15-preview"
@@ -219,3 +227,35 @@ def llm_text_query(system_prompt, prompt, seed, model):
                 )
                 successful_query = True
             return completion.choices[0].message.content
+
+
+import imageio
+from jax import numpy as jnp
+
+
+def save_gif_from_states(env, states, save_path):
+    frames = jax.vmap(env.render, in_axes=(0, None))(states, None)
+    frames = frames.astype(np.uint8)
+
+    scale = 10
+    frames = jnp.repeat(frames, scale, axis=1)
+    frames = jnp.repeat(frames, scale, axis=2)
+
+    frames_dir = os.path.join(save_path, 'frames')
+    os.makedirs(frames_dir, exist_ok=True)
+    for i, js_frame in enumerate(frames):
+        imageio.imsave(os.path.join(frames_dir, f'{i:03d}.png'), js_frame)
+
+    gif_path = os.path.join(frames_dir, 'save_path.gif')
+    imageio.mimsave(gif_path, frames, duration=0.1, loop=0)
+
+
+GAMES_N_RULES_SORTED_PATH = os.path.join('data', 'games_n_rules.json')
+
+
+def load_games_n_rules_sorted():
+    with open(GAMES_N_RULES_SORTED_PATH, 'r') as f:
+        games_n_rules = json.load(f)
+    games_n_rules = sorted(games_n_rules, key=lambda x: x[1])
+    return games_n_rules
+

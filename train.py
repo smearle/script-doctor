@@ -13,14 +13,14 @@ from omegaconf import OmegaConf
 import optax
 from flax.training.train_state import TrainState
 from flax.training import orbax_utils
+import numpy as np
 import orbax.checkpoint as ocp
 import wandb
 # from tensorboardX import SummaryWriter
 
-from conf.config import Config, TrainConfig
-from env import init_ps_env
+from conf.config import RLConfig, TrainConfig
 from purejaxrl.wrappers import LogWrapper
-from utils_rl import get_ckpt_dir, get_env_params_from_config, get_exp_dir, init_config, init_network
+from utils_rl import get_ckpt_dir, get_env_params_from_config, get_exp_dir, init_config, init_network, init_ps_env
 
 
 class RunnerState(struct.PyTreeNode):
@@ -44,19 +44,19 @@ class Transition(NamedTuple):
     # rng_act: jnp.ndarray
 
 
-def _render_episodes(network_params, network, env_r, rng_r, obsv_r, env_state_r, n_render_eps):
+def _render_episodes(network_params, network, env_r, rng_r, obsv_r, env_state_r, n_render_eps, env_params):
     _step_env_render = partial(
-        step_env_render, network=network, env_r=env_r, n_render_eps=n_render_eps,
+        step_env_render, network=network, env_r=env_r, n_render_eps=n_render_eps
     )
     _, (states, rewards, dones, infos, frames) = jax.lax.scan(
-        _step_env_render, (rng_r, obsv_r, env_state_r, network_params),
+        _step_env_render, (rng_r, obsv_r, env_state_r, network_params, env_params),
         None, 1*env_r.max_steps)
 
     frames = jnp.concatenate(jnp.stack(frames, axis=1))
     return frames, states
 
 def step_env_render(carry, _, network, n_render_eps, env_r):
-    rng_r, obs_r, env_state_r, network_params = carry
+    rng_r, obs_r, env_state_r, network_params, env_params = carry
     rng_r, _rng_r = jax.random.split(rng_r)
 
     pi, value = network.apply(network_params, obs_r)
@@ -65,20 +65,20 @@ def step_env_render(carry, _, network, n_render_eps, env_r):
     rng_step = jax.random.split(_rng_r, n_render_eps)
 
     # rng_step_r = rng_step_r.reshape((config.n_gpus, -1) + rng_step_r.shape[1:])
-    vmap_step_fn = jax.vmap(env_r.step, in_axes=(0, 0, 0))
+    vmap_step_fn = jax.vmap(env_r.step, in_axes=(0, 0, 0, None))
     # pmap_step_fn = jax.pmap(vmap_step_fn, in_axes=(0, 0, 0, None))
     obs_r, env_state_r, reward_r, done_r, info_r = vmap_step_fn(
-                    rng_step, env_state_r, action_r)
-    vmap_render_fn = jax.vmap(env_r.render, in_axes=(0,))
+                    rng_step, env_state_r, action_r, env_params)
+    vmap_render_fn = jax.vmap(partial(env_r.render, cv2=False), in_axes=(0,))
     # pmap_render_fn = jax.pmap(vmap_render_fn, in_axes=(0,))
     frames = vmap_render_fn(env_state_r)
     # Get rid of the gpu dimension
     # frames = jnp.concatenate(jnp.stack(frames, 1))
-    return (rng_r, obs_r, env_state_r, network_params),\
+    return (rng_r, obs_r, env_state_r, network_params, env_params),\
         (env_state_r, reward_r, done_r, info_r, frames)
 
 
-def _render_frames(frames, i, metric, steps_prev_complete, env, config):
+def _render_frames(frames, i, metric, steps_prev_complete, env, config: RLConfig):
     timesteps = metric["timestep"][metric["returned_episode"]
                             ] * config.n_envs
     if len(timesteps) > 0:
@@ -93,9 +93,10 @@ def _render_frames(frames, i, metric, steps_prev_complete, env, config):
         "Not enough frames collected"
 
     # Save gifs.
+    all_frames = []
     for ep_is in range(config.n_render_eps):
-        gif_name = f"{config._exp_dir}/update-{i}_ep-{ep_is}.gif"
         ep_frames = frames[ep_is*env.max_steps:(ep_is+1)*env.max_steps]
+        all_frames.extend(ep_frames)
 
         # new_frames = []
         # for i, frame in enumerate(frames):
@@ -104,21 +105,23 @@ def _render_frames(frames, i, metric, steps_prev_complete, env, config):
         #     new_frames.append(frame)
         # frames = new_frames
 
-        try:
-            imageio.v3.imwrite(
-                gif_name,
-                ep_frames,
-                duration=config.gif_frame_duration,
-                loop=0,
-            )
-            wandb.log({'video': wandb.Video(gif_name, format='gif')})
+    gif_name = f"{config._exp_dir}/update-{i}.gif"
 
-        except jax.errors.TracerArrayConversionError:
-            print("Failed to save gif. Skipping...")
-            return
-    print(f"Done rendering episode gifs at update {i}")
+    try:
+        imageio.v3.imwrite(
+            gif_name,
+            np.array(all_frames),
+            duration=config.gif_frame_duration,
+            loop=0,
+        )
+        wandb.log({'video': wandb.Video(gif_name, format='gif')})
+        print(f"Done rendering episode gifs at update {i}")
 
-def log_callback(metric, steps_prev_complete, config: Config, train_start_time):
+    except jax.errors.TracerArrayConversionError:
+        print("Failed to save gif. Skipping...")
+        return
+
+def log_callback(metric, steps_prev_complete, config: RLConfig, train_start_time):
     timesteps = metric["timestep"][metric["returned_episode"]] * config.n_envs
     return_values = metric["returned_episode_returns"][metric["returned_episode"]]
 
@@ -159,7 +162,7 @@ def log_callback(metric, steps_prev_complete, config: Config, train_start_time):
             step=t,
         )
 
-        print(f"fps: {fps:,}")
+        print(f"fps: {round(fps):,}")
         # for k, v in zip(env.prob.metric_names, env.prob.stats):
         #     writer.add_scalar(k, v, t)
 
@@ -172,7 +175,7 @@ def make_train(config: TrainConfig, restored_ckpt, checkpoint_manager):
         config.n_envs * config.num_steps // config.NUM_MINIBATCHES
     )
     # Don't need to wrap the version of the environment we'll use for rendering
-    env_r = init_ps_env(config)
+    env_r = init_ps_env(config, verbose=False)
     env_params = get_env_params_from_config(env_r, config)
     env = LogWrapper(env_r)
 
@@ -245,7 +248,7 @@ def make_train(config: TrainConfig, restored_ckpt, checkpoint_manager):
 
         render_episodes = partial(
             _render_episodes, env_r=env_r, network=network, n_render_eps=config.n_render_eps,
-            rng_r=rng_r, obsv_r=obsv_r, env_state_r=env_state_r)
+            rng_r=rng_r, obsv_r=obsv_r, env_state_r=env_state_r, env_params=env_params)
         render_frames = partial(
             _render_frames, env=env_r, config=config)
         
@@ -535,7 +538,7 @@ def make_train(config: TrainConfig, restored_ckpt, checkpoint_manager):
 #     plt.savefig(os.path.join(get_exp_dir(config), "ep_returns.png"))
 
 
-def init_checkpointer(config: Config) -> Tuple[Any, dict]:
+def init_checkpointer(config: RLConfig) -> Tuple[Any, dict]:
     # This will not affect training, just for initializing dummy env etc. to load checkpoint.
     rng = jax.random.PRNGKey(30)
     # Set up checkpointing
@@ -650,10 +653,10 @@ def main_chunk(config, rng, exp_dir):
         wandb_run_id = None
         wandb_resume = None
         progress_csv_path = os.path.join(exp_dir, "progress.csv")
-        assert not os.path.exists(progress_csv_path), "Progress csv already exists, but have no checkpoint to restore " +\
-            "from. Run with `overwrite=True` to delete the progress csv."
+        # assert not os.path.exists(progress_csv_path), "Progress csv already exists, but have no checkpoint to restore " +\
+        #     "from. Run with `overwrite=True` to delete the progress csv."
         # Create csv for logging progress
-        with open(os.path.join(exp_dir, "progress.csv"), "w") as f:
+        with open(progress_csv_path, "w") as f:
             f.write("timestep,ep_return\n")
 
     else:

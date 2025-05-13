@@ -1,8 +1,14 @@
+
+import atexit
+import time
+from selenium import webdriver
+
+
+url = 'http://127.0.0.1:8000'
 import json
 import os
 import random
 import re
-import time
 import requests
 import tiktoken
 from typing import List, Dict, Optional, Union, Any
@@ -13,6 +19,7 @@ from dotenv import load_dotenv
 # Load environment variables
 load_dotenv()
 
+
 # Azure OpenAI configuration
 GPT4V_ENDPOINT = "https://aoai-physics.openai.azure.com/openai/deployments/gpt4o/chat/completions?api-version=2024-02-15-preview"
 GPT4V_KEY = os.environ.get("AZURE_OPENAI_API_KEY")
@@ -21,6 +28,47 @@ AZURE_HEADERS = {
     "api-key": GPT4V_KEY,
 }
 
+def open_browser(url=url, headless=False):
+
+    # Set up Selenium WebDriver
+    options = webdriver.ChromeOptions()
+    if headless:
+
+        # Enable browser console logging
+        options.set_capability("goog:loggingPrefs", {"browser": "ALL"})
+
+        options.add_argument("--headless")  # Run in headless mode
+        options.add_argument("--disable-gpu")
+        options.add_argument("--no-sandbox")
+        options.add_argument("--disable-dev-shm-usage")
+    else:
+        options.add_argument("--auto-open-devtools-for-tabs")  # Open developer tools
+        options.add_argument("--start-maximized")  # Open browser maximized
+
+    driver = webdriver.Chrome(options=options)
+    driver.get(url)  # Open the URL
+
+    # Switch to the "console" tab of the developer tools
+    # driver.execute_script("window.open('');")
+    # driver.switch_to.window(driver.window_handles[1])
+    # driver.get('chrome://devtools/console')
+    atexit.register(_safe_quit, driver)
+
+    seen = set()
+    print("Streaming JS console output...\n")
+
+    try:
+        while True:
+            logs = driver.get_log("browser")
+            for entry in logs:
+                print(f"[{entry['level']}] {entry['message']}")
+            time.sleep(0.5)
+    except KeyboardInterrupt:
+        print("\nStopped.")
+    finally:
+        driver.quit()  
+
+    return driver
 # Azure OpenAI other model configurations
 O_ENDPOINT = os.getenv("ENDPOINT_URL", "https://sc-pn-m898m3wl-eastus2.openai.azure.com/")
 O_KEY = os.getenv("O3_MINI_KEY")

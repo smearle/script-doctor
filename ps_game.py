@@ -13,6 +13,8 @@ class PSObject:
             alt_name = alt_name.lower()
         self.alt_name = alt_name
         if legend_key is not None:
+            # if len(legend_key) > 1:
+            #     breakpoint()
             assert len(legend_key) == 1, "Legend key must be a single character"
             legend_key = legend_key.lower()
         self.legend_key = legend_key 
@@ -36,7 +38,7 @@ class LegendEntry:
         self.operator = operator
 
     def __repr__(self):
-        return f"{self.key} = {f' {self.operator} '.join(self.obj_names)}"
+        return f"{f' {self.operator} '.join(self.obj_names)}"
 
 class RuleBlock:
     def __init__(self, rules: List[Union["Rule", "RuleBlock"]], looping=False):

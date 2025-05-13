@@ -34,6 +34,7 @@ from client import open_browser
 import game_gen
 from parse_lark import GAMES_DIR, MIN_GAMES_DIR, PrintPuzzleScript, RepairPuzzleScript, StripPuzzleScript, add_empty_sounds_section, preprocess_ps, TEST_GAMES
 from prompts import *
+from sort_games_by_n_rules import GAMES_N_RULES_SORTED_PATH
 from utils import extract_ps_code, gen_fewshot_examples, llm_text_query, num_tokens_from_string, save_prompts, truncate_str_to_token_len
 
 
@@ -48,6 +49,8 @@ class Config:
     provider: str = 'portkey'
     model: str = 'gemini-2.0-flash-exp'
     viz_feedback: bool = True
+    headless: bool = True
+    auto_launch_client: bool = True
 
 
 @dataclass
@@ -71,6 +74,11 @@ app = Flask(__name__)
 @app.route('/')
 def serve_doctor():
     return send_from_directory('src', 'doctor.html')
+
+@app.route('/get_mode', methods=['GET'])
+def get_mode():
+    global global_cfg
+    return jsonify({'mode': global_cfg.mode})
 
 # Route to serve JavaScript files dynamically
 @app.route('/<path:filename>')
@@ -109,21 +117,24 @@ def load_ideas():
         ideas = json.load(f)
     return ideas
 
+
 @app.route('/file_exists', methods=['POST'])
 def file_exists():
     data = request.json
     file_path = data['filePath']
     exists = os.path.isfile(file_path)
+    print(f"File {file_path} exists: {exists}")
     return jsonify({'exists': exists})
+
 
 @app.route('/load_game_from_file', methods=['POST'])
 def load_game_from_file():
     data = request.json
     game = data['game']
     game_path = os.path.join(MIN_GAMES_DIR, f'{game}.txt')
-    with open(game_path, 'r') as f:
+    with open(game_path, 'r', encoding='utf-8') as f:
         code = f.read()
-    print(code)
+    print(f"Serving game from {game_path}")
     return code
 
 
@@ -508,8 +519,6 @@ def gen_game_from_plan():
 
 TRANSITIONS_DIR = 'transitions'
 
-games_to_skip = set({'Broken Rigid Body'})
-
 @app.route('/get_player_action', methods=['POST'])
 def get_player_action():
     data = request.json
@@ -518,6 +527,24 @@ def get_player_action():
     # action = ...
     action = random.randint(0, 5)
     return jsonify({'action': action})
+
+games_to_skip = set({'Broken Rigid Body', 
+                     "Path_Finder",  # This one does not compile in the js engine
+                     "Cold_Feet_Sokoban",  # Compiled in standalone JS. But weird bug when mode=gen_solutions...
+                     "Good_Example",  # Playable, but doesn't want to solve by BFS.
+                     "Candy_Bomb",  # STRIDE_MOV undefined error during compilation.
+                     })
+
+# Games with tons of levels, redundant mechanics, or that we'll otherwise leave out for tha sake of rapid validation
+# TODO: Add these back in later to fully validate the engine.
+games_to_skip_for_speed = set({
+    "Microban_I",
+})
+
+priority_games = [
+    'blocks',
+    'limerick',
+]
 
 @app.route('/list_scraped_games', methods=['POST'])
 def list_scraped_games():
@@ -529,20 +556,27 @@ def list_scraped_games():
     # random.shuffle(game_files)
     # test_game_files = [f"{test_game}.txt" for test_game in TEST_GAMES]
     # game_files = test_game_files + game_files
-    with open('games_n_rules.json', 'r') as f:
+    with open(GAMES_N_RULES_SORTED_PATH, 'r') as f:
         games_n_rules = json.load(f)
     games_n_rules = sorted(games_n_rules, key=lambda x: x[1])
-    game_files = [game[0] for game in games_n_rules]
-    for filename in game_files:
+    # Exclude games with randomness for the purpose of tree search
+    game_names = [game[0] for game in games_n_rules if not game[1]]
+    game_names = priority_games + [game for game in game_names if game not in priority_games]
+    for filename in game_names:
         if filename.startswith('rigid_'):
+            print(f"Skipping {filename} because it seems to be a pesky rigid body game")
             continue
-        if filename.endswith('.txt'):
-            filename = filename[:-4]
-            if filename not in games_set:
-                if filename in games_to_skip:
-                    print(f"Skipping {filename}")
-                    continue
-                games_set.add(filename)
+        if filename in games_to_skip:
+            print(f"Skipping {filename} because we have marked it to be skipped.")
+            continue
+        if filename in games_set:
+            print(f"Skipping {filename} because it is already in the set.")
+            continue
+        if filename in games_to_skip_for_speed:
+            print(f"Skipping {filename} because we have marked it to be skipped for speed.")
+            print("NOTE: Add this back in later to fully validate the engine!")
+            continue
+        games_set.add(filename)
         games.append(filename)
     print(games)
     return jsonify(games)
@@ -673,6 +707,7 @@ class CtxSweep2(Sweep):
 class VizSweep(Sweep):
     viz_feedback = [True, False]
 
+global_cfg = None
 exp_config = ExpConfig()
 
 all_hypers = {
@@ -980,14 +1015,54 @@ def save_game_stats():
     exp_dir, game_dir, stats = data['expDir'], data['gameDir'], data['gameInd']
     return _save_game_stats(exp_dir, game_dir, stats)
 
+def level_to_int_arr(level: dict):
+    level_arr = []
+    for x in range(level['width']):
+        level_arr.append([])
+        for y in range(level['height']):
+            flat_idx = x * level['height'] + y
+            level_arr[x].append(level['dat'][str(flat_idx)])
+    return np.array(level_arr)
+
+@app.route('/log_error', methods=['POST'])
+def log_error():
+    data = request.json
+    context = data['context']
+    error = data['error']
+    log_dir = data['logDir']
+    level_idx = data['levelIdx']
+    os.makedirs(log_dir, exist_ok=True)
+    if level_idx is None:
+        error_path = os.path.join(log_dir, 'js_error.txt')
+    else:
+        error_path = os.path.join(log_dir, f'level-{level_idx}_js_error.txt')
+    with open(error_path, 'w') as f:
+        f.write(context + '\n\n' + error)
+    print(f"Saved error to {error_path}")
+    return jsonify({})
+
 @app.route('/save_sol', methods=['POST'])
 def save_sol():
     data = request.json
-    sol_dir, level_i, sol, gif_url = data['solDir'], data['levelIdx'], data['sol'], data['dataURL']
+    sol_dir, level_i, sol, gif_url, end_state, timeout, obj_list = (
+        data['solDir'], data['levelIdx'], data['sol'], data['dataURL'], data['bestState'], 
+        data['timeout'], data['objList'])
+    won, score = data['won'], data['score']
     os.makedirs(sol_dir, exist_ok=True)
     sol_path = os.path.join(sol_dir, f'level-{level_i}.json')
+    end_level_arr = level_to_int_arr(end_state)
+    # end_level_arr = to_binary_vectors(end_level_arr.flatten(), 8) 
+    end_level_arr
+    sol_dict = {
+        'won': won,
+        'score': score,
+        'sol': sol,
+        'timeout': timeout,
+        'objs': obj_list,
+        'state': end_level_arr.tolist(),
+    }
     with open(sol_path, 'w') as f:
-        json.dump(sol, f, indent=4)
+        json.dump(sol_dict, f, indent=4)
     print(f"Saved solution to {sol_path}")
     gif_data = base64.b64decode(gif_url.split(',')[1])
     gif_path = os.path.join(sol_dir, f'level-{level_i}_sol.gif')
@@ -1078,38 +1153,6 @@ def instance_to_dict(instance):
 sweep_name = Config.sweep
 recompute_stats = Config.recompute_stats
 
-@hydra.main(config_name="config", version_base="1.3")
-def main(cfg: Config):
-    global hypers, hypers_ks, hypers_lst, sweep_name, recompute_stats, max_gen_attempts
-    max_gen_attempts = cfg.max_gen_attempts
-    hypers = all_hypers[cfg.sweep]
-    sweep_name = cfg.sweep
-    recompute_stats = cfg.recompute_stats
-    sweep_dict = instance_to_dict(hypers)
-    hypers_ks = list(sweep_dict)
-    hypers_lst = list(itertools.product(*sweep_dict.values()))
-    save_dir = f'sweep-{sweep_i}'
-    stats_dir = os.path.join('logs', save_dir, 'stats', sweep_name)
-    if cfg.mode == 'compute_novelty':
-        os.makedirs(stats_dir, exist_ok=True)
-        stats_path = os.path.join(stats_dir, 'sweep_stats.json')
-        compute_edit_distances(stats_path, hypers_ks, hypers_lst)
-    elif cfg.mode == 'eval':
-        os.makedirs(stats_dir, exist_ok=True)
-        stats_path = os.path.join(stats_dir, 'sweep_stats_and_dists.json')
-        eval_sweep(stats_path, hypers_ks, hypers_lst)
-    elif cfg.mode == 'viz_evo':
-        viz_evo_stats()
-    elif cfg.mode == 'generate':
-
-        browser_thread = threading.Thread(
-            target=partial(open_browser, url=f"http://127.0.0.1:{cfg.port}")
-        )
-        browser_thread.daemon = True
-        browser_thread.start()
-
-        app.run(port=cfg.port)
-
 #LLM agents
 # 
 from LLM_agent import LLMAgent, ReinforcementWrapper, StateVisualizer
@@ -1191,6 +1234,42 @@ def get_state():
 
     return jsonify({'error': 'State not found'}), 404
 
+
+@hydra.main(config_name="config", version_base="1.3")
+def main(cfg: Config):
+    global global_cfg
+    global_cfg = cfg
+    global hypers, hypers_ks, hypers_lst, sweep_name, recompute_stats, max_gen_attempts
+    max_gen_attempts = cfg.max_gen_attempts
+    hypers = all_hypers[cfg.sweep]
+    sweep_name = cfg.sweep
+    recompute_stats = cfg.recompute_stats
+    sweep_dict = instance_to_dict(hypers)
+    hypers_ks = list(sweep_dict)
+    hypers_lst = list(itertools.product(*sweep_dict.values()))
+    save_dir = f'sweep-{sweep_i}'
+    stats_dir = os.path.join('logs', save_dir, 'stats', sweep_name)
+    if cfg.mode == 'compute_novelty':
+        os.makedirs(stats_dir, exist_ok=True)
+        stats_path = os.path.join(stats_dir, 'sweep_stats.json')
+        compute_edit_distances(stats_path, hypers_ks, hypers_lst)
+    elif cfg.mode == 'eval':
+        os.makedirs(stats_dir, exist_ok=True)
+        stats_path = os.path.join(stats_dir, 'sweep_stats_and_dists.json')
+        eval_sweep(stats_path, hypers_ks, hypers_lst)
+    elif cfg.mode == 'viz_evo':
+        viz_evo_stats()
+    # elif cfg.mode == 'generate':
+    else:
+
+        if cfg.auto_launch_client:
+            browser_thread = threading.Thread(
+                target=partial(open_browser, url=f"http://127.0.0.1:{cfg.port}", headless=cfg.headless)
+            )
+            browser_thread.daemon = True
+            browser_thread.start()
+
+        app.run(port=cfg.port)
 
 if __name__ == '__main__':
     main()

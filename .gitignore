@@ -4,7 +4,6 @@ bin/
 .vscode
 .build
 logs*
-sols/
 
 *.swp
 src - Kopie
@@ -12,7 +11,6 @@ node_modules/
 __pycache__
 
 data*
-!data/custom_games/
 scraped_puzzles
 scraped_games
 scrape_logs
@@ -28,5 +26,4 @@ simplified_games
 script-doctor-py
 script-doctor
 scratch
-transitions
-vids
+sols

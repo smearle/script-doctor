@@ -20,6 +20,8 @@ pandas
 pathvalidate
 Pillow
 python-dotenv
+scikit-image
+selenium
 tiktoken
 wandb
 # web-browser

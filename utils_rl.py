@@ -27,7 +27,7 @@ import hydra
 from omegaconf import DictConfig, OmegaConf
 from time import perf_counter
 
-from conf.config import Config, MultiAgentConfig, TrainConfig
+from conf.config import RLConfig, MultiAgentConfig, TrainConfig
 from env import PSEnv, PSObs, PSState, PSParams
 from marl.model import ActorCategorical, ActorMLP, ActorRNN, CriticRNN, MAConvForward2, ScannedRNN
 from models import NCA, AutoEncoder, ConvForward, ConvForward2, SeqNCA, ActorCriticPS, Dense
@@ -47,7 +47,7 @@ def get_exp_dir(config: TrainConfig):
     )
     return exp_dir
 
-def get_env_params_from_config(env: PSEnv, config: Config):
+def get_env_params_from_config(env: PSEnv, config: RLConfig):
     level = env.get_level(config.level_i)
     return PSParams(
         level=level
@@ -221,7 +221,7 @@ def init_run(env: PSEnv, config: MultiAgentConfig, ckpt_manager, latest_update_s
     return runner_state, actor_network, env, latest_update_step
 
 
-def init_network(env: PSEnv, env_params: PSParams, config: Config):
+def init_network(env: PSEnv, env_params: PSParams, config: RLConfig):
     action_dim = env.action_space.n
 
     if config.model == "dense":
@@ -402,7 +402,7 @@ def save_checkpoint(config: MultiAgentConfig, ckpt_manager, runner_state, t):
     ckpt_manager.wait_until_finished() 
 
 
-def init_ps_env(config: Config, verbose: bool = False) -> PSEnv:
+def init_ps_env(config: RLConfig, verbose: bool = False) -> PSEnv:
     start_time = timer()
     game = config.game
     level_i = config.level_i
@@ -410,9 +410,9 @@ def init_ps_env(config: Config, verbose: bool = False) -> PSEnv:
         puzzlescript_grammar = file.read()
     # Initialize the Lark parser with the PuzzleScript grammar
     parser = Lark(puzzlescript_grammar, start="ps_game", maybe_placeholders=False)
-    tree = get_tree_from_txt(parser, game)
+    tree, success, err_msg = get_tree_from_txt(parser, game, test_env_init=False)
     parse_time = timer()
     print(f'Parsed PS file using Lark into python PSTree object in {(parse_time - start_time) / 1000} seconds.')
-    env = PSEnv(tree, jit=True, level_i=level_i, max_steps=config.max_episode_steps)
+    env = PSEnv(tree, jit=True, level_i=level_i, max_steps=config.max_episode_steps, print_score=False, debug=False)
     print(f'Initialized PSEnv in {(timer() - parse_time) / 1000} seconds.')
     return env

@@ -7,68 +7,98 @@ import random
 import shutil
 import traceback
 
+from einops import rearrange
 import hydra
 import imageio
 import jax
 import jax.numpy as jnp
 from lark import Lark
 import numpy as np
+from skimage.transform import resize
 
-from conf.config import Config
+from conf.config import RLConfig
 from env import PSEnv
 from gen_tree import GenPSTree
-from parse_lark import TREES_DIR, DATA_DIR, TEST_GAMES, get_tree_from_txt
+from parse_lark import PS_LARK_GRAMMAR_PATH, TREES_DIR, DATA_DIR, TEST_GAMES, get_tree_from_txt
 from ps_game import PSGameTree
+from sort_games_by_n_rules import GAMES_N_RULES_SORTED_PATH
+from utils import to_binary_vectors
 from utils_rl import get_env_params_from_config
 
 
 scratch_dir = 'scratch'
 os.makedirs(scratch_dir, exist_ok = True)
 
+JAX_VALIDATED_JS_SOLS_DIR = os.path.join('data', 'jax_validated_js_sols')
+JS_SOLS_DIR = os.path.join('data', 'js_sols')
+
+games_to_skip = set({
+    '2048',  # hangs
+})
 
 @hydra.main(version_base="1.3", config_path='./conf', config_name='config')
-def main(config: Config):
-    sol_paths = glob.glob(os.path.join('sols', '*'))
-    random.shuffle(sol_paths)
-    games = [os.path.basename(path) for path in sol_paths]
+def main(config: RLConfig):
+    # Initialize the Lark parser with the PuzzleScript grammar
+    with open(PS_LARK_GRAMMAR_PATH, "r", encoding='utf-8') as file:
+        puzzlescript_grammar = file.read()
+    parser = Lark(puzzlescript_grammar, start="ps_game", maybe_placeholders=False)
+    with open(GAMES_N_RULES_SORTED_PATH, 'r') as f:
+        games_n_rules = json.load(f)
+    games_n_rules = sorted(games_n_rules, key=lambda x: x[1])
+    games = [game for game, n_rules in games_n_rules]
+    results = {
+        'compile_error': [],
+        'runtime_error': {},
+        'solution_error': {},
+        'state_error': {},
+        'score_error': {},
+        'success': {},
+    }
+    val_results_path = os.path.join('data', 'validation_results.json')
+    if os.path.isfile(val_results_path):
+        shutil.copy(val_results_path, val_results_path[:-5] + '_bkp.json')
+
     # tree_paths = [os.path.join(TREES_DIR, os.path.basename(path) + '.pkl') for path in sol_paths]
     # games = [os.path.basename(path)[:-4] for path in sol_paths]
-    sols_dir = os.path.join('vids', 'jax_sols')
-    shutil.rmtree(sols_dir, ignore_errors=True)
+    sol_paths = [os.path.join(JS_SOLS_DIR, game) for game in games]
 
     for sol_dir, game in zip(sol_paths, games):
+        game_name = os.path.basename(game)
+        if game_name in games_to_skip:
+            print(f"Skipping {game_name} because it is in the skip list")
+            continue
+        jax_sol_dir = os.path.join(JAX_VALIDATED_JS_SOLS_DIR, game)
+        os.makedirs(jax_sol_dir, exist_ok=True)
+        compile_log_path = os.path.join(jax_sol_dir, 'compile_err.txt')
+        if os.path.exists(compile_log_path) and not config.overwrite:
+            with open(compile_log_path, 'r') as f:
+                compile_log = f.read()
+            results['compile_error'].append((game, compile_log))
+            print(f"Skipping {game} because compile error log already exists")
+            continue
 
-        traj_dir = os.path.join('vids', 'jax_sols', game)
-        os.makedirs(traj_dir)
-
-        with open("syntax.lark", "r", encoding='utf-8') as file:
-            puzzlescript_grammar = file.read()
-        # Initialize the Lark parser with the PuzzleScript grammar
-        parser = Lark(puzzlescript_grammar, start="ps_game", maybe_placeholders=False)
-        # min_parser = Lark(min_puzzlescript_grammar, start="ps_game")
-        tree = get_tree_from_txt(parser, game)
-        og_path = os.path.join(DATA_DIR, 'scraped_games', os.path.basename(game) + '.txt')
+        tree, success, err_msg = get_tree_from_txt(parser, game, test_env_init=False)
+        og_path = os.path.join(DATA_DIR, 'scraped_games', game_name + '.txt')
 
         print(f"Processing solution for game: {og_path}")
 
         try:
-            env = PSEnv(tree)
+            env = PSEnv(tree, debug=False, print_score=False)
         except KeyboardInterrupt as e:
             raise e
         except bdb.BdbQuit as e:
             raise e
         except Exception as e:
             err_log = traceback.format_exc()
-            with open(os.path.join(traj_dir, 'error.txt'), 'w') as f:
+            with open(os.path.join(jax_sol_dir, 'error.txt'), 'w') as f:
                 f.write(err_log)
             traceback.print_exc()
             print(f"Error creating env: {og_path}")
-            log_path = os.path.join(traj_dir)
+            results['compile_error'].append((game, err_log))
             continue
 
         key = jax.random.PRNGKey(0)
         params = get_env_params_from_config(env, config)
-        obs, state = env.reset(key, params)
 
         # 0 - left
         # 1 - down
@@ -79,60 +109,160 @@ def main(config: Config):
 
         key = jax.random.PRNGKey(0)
 
+        # Get all level solutions previously generated by tree search in javascript.
         level_sols = glob.glob(os.path.join(sol_dir, 'level-*.json'))
 
+        if len(level_sols) == 0:
+            print(f"No js solutions found for {game_name}")
+            continue
+
         for level_sol_path in level_sols:
+            level_i = int(os.path.basename(level_sol_path).split('-')[1].split('.')[0])
+            sol_log_path = os.path.join(jax_sol_dir, f'level-{level_i}_solution_err.txt')
+            score_log_path = os.path.join(jax_sol_dir, f'level-{level_i}_score_err.txt')
+            run_log_path = os.path.join(jax_sol_dir, f'level-{level_i}_runtime_err.txt')
+            state_log_path = os.path.join(jax_sol_dir, f'level-{level_i}_state_err.txt')
+            gif_path = os.path.join(jax_sol_dir, f'level-{level_i}.gif')
+            if (os.path.exists(gif_path) or os.path.exists(sol_log_path) or os.path.exists(score_log_path) \
+                    or os.path.exists(run_log_path) or os.path.exists(state_log_path)) and not config.overwrite:
+                if os.path.exists(run_log_path):
+                    with open(run_log_path, 'r') as f:
+                        run_log = f.read()
+                    if game_name not in results['runtime_error']:
+                        results['runtime_error'][game_name] = []
+                    results['runtime_error'][game_name].append((level_i, run_log))
+                elif os.path.exists(sol_log_path):
+                    if game_name not in results['solution_error']:
+                        results['solution_error'][game_name] = []
+                    results['solution_error'][game_name].append(level_i)
+                elif os.path.exists(state_log_path):
+                    if game_name not in results['state_error']:
+                        results['state_error'][game_name] = []
+                    results['state_error'][game_name].append(level_i)
+                elif os.path.exists(score_log_path):
+                    with open(score_log_path, 'r') as f:
+                        score_log = f.read()
+                    if game_name not in results['score_error']:
+                        results['score_error'][game_name] = []
+                    results['score_error'][game_name].append((level_i, score_log))
+                else:
+                    if game_name not in results['success']:
+                        results['success'][game_name] = []
+                    results['success'][game_name].append(level_i)
+                print(f"Skipping level {level_i} because gif or error log already exists")
+                continue
+
             with open(level_sol_path, 'r') as f:
-                level_sol = json.load(f)
+                sol_dict = json.load(f)
+            level_sol = sol_dict['sol']
+            level_win = sol_dict['won']
+            level_score = sol_dict['score']
+            level_state = sol_dict['state']
+            obj_list = sol_dict['objs']
+            level_state = np.array(level_state).T
+            level_multihot = to_binary_vectors(level_state, len(obj_list))
+            level_multihot = rearrange(level_multihot, 'h w c -> c h w')
+            level_multihot = np.flip(level_multihot, 0)
             actions = level_sol
             actions = [action_remap[a] for a in actions]
             actions = jnp.array([int(a) for a in actions])
 
-            level_i = int(os.path.basename(level_sol_path).split('-')[1].split('.')[0])
+
+            js_gif_path = os.path.join(sol_dir, f'level-{level_i}_sol.gif')
             level = env.get_level(level_i)
             params = params.replace(level=level)
             print(f"Level {level_i} solution: {actions}")
 
-            def step_env(carry, action):
-                state, _ = carry
-                obs, state, reward, done, info = env.step(key, state, action, params)
-                return (state, done), state
+            def step_env(state, action):
+                obs, state, reward, done, info = env.step_env(key, state, action, params)
+                return state, state
 
             try:
                 obs, state = env.reset(key, params)
-                (state, done), state_v = jax.lax.scan(step_env, (state, False), actions)
-                # if not state.win:
-                if not done:
-                    log_path = os.path.join(traj_dir, f'level-{level_i}_solution_err.txt')
-                    with open(log_path, 'w') as f:
-                        f.write(f"Level {level_i} solution failed\n")
-                        f.write(f"Actions: {actions}\n")
+                state, state_v = jax.lax.scan(step_env, state, actions)
+                if level_win and not state.win:
+                # if not done:
+                    sol_log = f"Level {level_i} solution failed\nActions: {actions}\n"
+                    with open(sol_log_path, 'w') as f:
+                        f.write(sol_log)
+                    if game_name not in results['solution_error']:
+                        results['solution_error'][game_name] = []
+                    results['solution_error'][game_name].append(level_i)
                         # f.write(f"State: {state}\n")
                     print(f"Level {level_i} solution failed")
+                elif np.any(level_multihot != state.multihot_level):
+                    js_state = state.replace(multihot_level=level_multihot)
+                    js_frame = env.render(js_state, cv2=False)
+                    js_frame = np.array(js_frame, dtype=np.uint8)
+                    imageio.imsave(os.path.join(jax_sol_dir, f'level-{level_i}_state_js.png'), js_frame)
+                    jax_frame = env.render(state, cv2=False)
+                    jax_frame = np.array(jax_frame, dtype=np.uint8)
+                    imageio.imsave(os.path.join(jax_sol_dir, f'level-{level_i}_state_jax.png'), jax_frame)
+                    with open(sol_log_path, 'w') as f:
+                        f.write(f"Level {level_i} solution failed\n")
+                        f.write(f"Actions: {actions}\n")
+                        f.write(f"State: {state}\n")
+                        if game_name not in results['state_error']:
+                            results['state_error'][game_name] = []
+                        results['state_error'][game_name].append(level_i)
+                    print(f"Level {level_i} solution failed")
+                # # FIXME: There is a discrepancy between the way we compute scores in js (I actually don't understand
+                # # how we're getting that number) and the way we compute scores in jax, so this will always fail.
+                elif not level_win and (state.heuristic != level_score):
+                    with open(score_log_path, 'w') as f:
+                        f.write(f"Level {level_i} solution score mismatch\n")
+                        f.write(f"Actions: {actions}\n")
+                        f.write(f"Jax score: {state.score}\n")
+                        f.write(f"JS score: {level_score}\n")
+                        if game_name not in results['score_error']:
+                            results['score_error'][game_name] = []
+                        results['score_error'][game_name].append(level_i)
+                else:
+                    if game_name not in results['success']:
+                        results['success'][game_name] = []
+                    results['success'][game_name].append(level_i)
+                    print(f"Level {level_i} solution succeeded")
             except Exception as e:
                 traceback.print_exc()
                 print(f"Error running solution: {og_path}")
                 err_log = traceback.format_exc()
-                log_path = os.path.join(traj_dir, f'level-{level_i}_runtime_err.txt')
-                with open(log_path, 'w') as f:
+                if game_name not in results['runtime_error']:
+                    results['runtime_error'][game_name] = []
+                results['runtime_error'][game_name].append((level_i, err_log))
+                with open(run_log_path, 'w') as f:
                     f.write(err_log)
                 continue
 
             # Use jax tree map to add the initial state
-            state_v = jax.tree_map(lambda x, y: jnp.concatenate([x[None], y]), state, state_v)
+            state_v = jax.tree.map(lambda x, y: jnp.concatenate([x[None], y]), state, state_v)
 
             frames = jax.vmap(env.render, in_axes=(0, None))(state_v, None)
             frames = frames.astype(np.uint8)
 
-            frames_dir = os.path.join(traj_dir, 'frames')
+            # Scale up the frames
+            print(f"Scaling up frames for level {level_i}")
+            scale = 10
+            frames = jnp.repeat(frames, scale, axis=1)
+            frames = jnp.repeat(frames, scale, axis=2)
+
+            # Save the frames
+            print(f"Saving frames for level {level_i}")
+            frames_dir = os.path.join(jax_sol_dir, 'frames')
             os.makedirs(frames_dir, exist_ok=True)
-            for i, frame in enumerate(frames):
-                imageio.imsave(os.path.join(frames_dir, f'level-{level_i}_sol_{i:03d}.png'), frame)
+            for i, js_frame in enumerate(frames):
+                imageio.imsave(os.path.join(frames_dir, f'level-{level_i}_sol_{i:03d}.png'), js_frame)
 
             # Make a gif out of the frames
-            gif_path = os.path.join(traj_dir, f'level-{level_i}.gif')
-            imageio.mimsave(gif_path, frames, duration=0.1, loop=1)
-            # exit()
+            imageio.mimsave(gif_path, frames, duration=0.1, loop=0)
+
+            # Copy over the js gif
+            shutil.copy(js_gif_path, os.path.join(jax_sol_dir, f'level-{level_i}_js.gif'))
+
+            with open(val_results_path, 'w') as f:
+                json.dump(results, f, indent=4)
+
+
+    print(f"Finished validating solutions in jax.")
 
 
 if __name__ == '__main__':

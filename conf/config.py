@@ -1,6 +1,8 @@
-from typing import Iterable, List, Optional, Tuple, Union
-from hydra.core.config_store import ConfigStore
 from dataclasses import dataclass
+from typing import Iterable, List, Optional, Tuple, Union
+
+from hydra.core.config_store import ConfigStore
+import numpy as np
 
 
 # @dataclass
@@ -10,9 +12,23 @@ from dataclasses import dataclass
 
 
 @dataclass
-class Config:
+class PSConfig:
     game: str = "sokoban_basic"
     level_i: int = 0
+    max_episode_steps: np.int32 = np.iinfo(np.int32).max
+
+    
+@dataclass
+class BFSConfig:
+    max_steps: int = 100_000
+    n_best_to_keep: int = 1
+    render_gif: bool = False
+    render_live: bool = False
+
+
+@dataclass
+class RLConfig(PSConfig):
+    max_episode_steps: int = 100
     lr: float = 1.0e-4
     n_envs: int = 400
     # How many steps do I take in all of my batched environments before doing a gradient update
@@ -56,10 +72,9 @@ class Config:
     n_freezies: int = 0
     n_agents: int = 1  # multi-agent is fake and broken
     multiagent: bool = False
-    max_episode_steps: int = 100
 
     # How many milliseconds to wait between frames of the rendered gifs
-    gif_frame_duration: int = 25
+    gif_frame_duration: float = 0.1
 
     # To make the task simpler, always start with an empty map
     empty_start: bool = False
@@ -81,6 +96,8 @@ class Config:
 
     reward_freq: int = 1
 
+    overwrite: bool = False
+
 
     """ DO NOT USE. WILL BE OVERWRITTEN. """
     _exp_dir: Optional[str] = None
@@ -88,7 +105,7 @@ class Config:
 
 
 @dataclass
-class EvoMapConfig(Config):
+class EvoMapConfig(RLConfig):
     n_generations: int = 100_000
     evo_pop_size: int = 100
     n_parents: int = 50
@@ -99,7 +116,7 @@ class EvoMapConfig(Config):
 
 
 @dataclass
-class TrainConfig(Config):
+class TrainConfig(RLConfig):
     overwrite: bool = False
 
     # WandB Params
@@ -219,9 +236,10 @@ class EnjoyRLConfig(MultiAgentConfig, EnjoyConfig):
     
 
 @dataclass
-class ProfileEnvConfig(Config):
+class ProfileEnvConfig(RLConfig):
+    all_games: bool = True
     n_profile_steps: int = 5000
-    reevaluate: bool = True
+    reevaluate: bool = True  # Whether to ontinue profiling, or just plot the results
     render: bool = False
 
 
@@ -241,7 +259,8 @@ class GetTracesConfig(EnjoyConfig):
     render_ims: bool = False
 
 cs = ConfigStore.instance()
-cs.store(name="config", node=Config)
+cs.store(name="config", node=RLConfig)
+cs.store(name="bfs_config", node=BFSConfig)
 cs.store(name="ma_config", node=MultiAgentConfig)
 cs.store(name="enjoy_ma_pcgrl", node=EnjoyRLConfig)
 cs.store(name="get_traces_pcgrl", node=GetTracesConfig)

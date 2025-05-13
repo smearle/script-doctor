@@ -43,11 +43,15 @@ color_hex_map = {
 
 def render_solid_color(color):
     color = color.lower()
-    if color in color_hex_map:
+    alpha = 255
+    if color == 'transparent':
+        c = color_hex_map[color]
+        alpha = 0
+    elif color in color_hex_map:
         c = color_hex_map[color]
     else:
         c = '#000000'
-    c = hex_to_rgba(c, 255)
+    c = hex_to_rgba(c, alpha)
     im = np.zeros((5, 5, 4), dtype=np.uint8)
     im[:, :, :] = np.array(c)
     return im
@@ -61,7 +65,7 @@ def render_sprite(colors, sprite):
         alpha = 255
         if c in color_hex_map:
             if c == 'transparent':
-                alpha = 255
+                alpha = 0
             c = color_hex_map[c]
         c = hex_to_rgba(c, alpha)
         colors_vec[i] = np.array(c)

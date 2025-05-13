@@ -47,8 +47,19 @@ class GenPSTree(Transformer):
             sprite=sprite,
         )
 
-    def rule_content(self, items):
+    def rule_object_with_modifier(self, items):
+        items = [it for it in items if not (isinstance(it, Token) and it.type == 'WS_INLINE')]
         return ' '.join(items)
+
+    def rule_object(self, items):
+        assert len(items) == 1
+        return str(items[0])
+
+    def rule_content(self, items):
+        if len(items) == 0:
+            return ''  # ... I guess?
+        assert len(items) == 1
+        return str(items[0])
 
     def cell_border(self, items):
         return '|'
@@ -76,7 +87,7 @@ class GenPSTree(Transformer):
         return cells
 
     def legend_data(self, items):
-        key = items[0].lower()
+        key = items[0].rstrip(' =')
         # The first entry in this legend key's mapping is just an object name
         assert len(items[1].children) == 1
         obj_names = [str(items[1].children[0]).lower()]
@@ -92,7 +103,7 @@ class GenPSTree(Transformer):
             else:
                 operator = new_op
 
-        return LegendEntry(key=key, obj_names=obj_names, operator=operator)
+        return LegendEntry(key=key.lower(), obj_names=obj_names, operator=operator)
 
     def prefix(self, items):
         out = str(items[0])
@@ -106,12 +117,15 @@ class GenPSTree(Transformer):
         lp = []
         for i, item in enumerate(items):
             if isinstance(item, Token) and item.type == 'RULE':
-                breakpoint()
+                raise Exception(f'Unrecognized item in rule data (RULE within a rule?): {item}')
             if isinstance(item, Token) and item.type == 'THEN':
                 rp = items[i+1:]
                 break
-            elif isinstance(item, Token) and item.type == 'PREFIX':
-                prefixes.append(str(item).lower())
+            elif isinstance(item, Token) and item.type == 'RULE_PREFIX':
+                prefix = str(item).lower()
+                if prefix == 'rigid':
+                    raise NotImplementedError('Rigid prefix not implemented')
+                prefixes.append(prefix)
                 continue
             # else:
             #     raise Exception(f'Unrecognized item in rule data: {item}')

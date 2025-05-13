@@ -19,14 +19,17 @@ class Config:
     jit: bool = True
     game: Optional[str] = None
     profile: bool = False
+    debug: bool = False
+    level: int = 0
 
 
 cs = ConfigStore.instance()
 cs.store(name="config", node=Config)
 
+SCALING_FACTOR = 10
 
-def human_loop(env: PSEnv, profile=False):
-    lvl_i = 0 
+def human_loop(env: PSEnv, level: int = 0, profile=False):
+    lvl_i = level
     level = env.get_level(lvl_i)
     params = PSParams(level=level)
     rng = jax.random.PRNGKey(0)
@@ -36,7 +39,7 @@ def human_loop(env: PSEnv, profile=False):
     im = np.array(im, dtype=np.uint8)
     
     # Resize the image by a factor of 5
-    new_h, new_w = tuple(np.array(im.shape[:2]) * 10)
+    new_h, new_w = tuple(np.array(im.shape[:2]) * SCALING_FACTOR)
     im = cv2.resize(im, (new_w, new_h), interpolation=cv2.INTER_NEAREST)
     state_hist = []
     
@@ -54,7 +57,7 @@ def human_loop(env: PSEnv, profile=False):
         action = None
         do_reset = False
         print("\n\n========= STEP =========\n")
-        print(multihot_to_desc(state.multihot_level, env.obj_to_idxs, env.n_objs))
+        print(multihot_to_desc(state.multihot_level, env.objs_to_idxs, env.n_objs))
 
         # If the user presses ESC (ASCII 27), exit the loop.
         print("Player input:")
@@ -95,6 +98,7 @@ def human_loop(env: PSEnv, profile=False):
                 state = state_hist[-1]
             im = env.render(state)
             im = np.array(im, dtype=np.uint8)
+            new_h, new_w = tuple(np.array(im.shape[:2]) * SCALING_FACTOR)
             im = cv2.resize(im, (new_w, new_h), interpolation=cv2.INTER_NEAREST)
             cv2.imshow(env.title, im)
 
@@ -118,9 +122,10 @@ def human_loop(env: PSEnv, profile=False):
             else:
                 obs, state, reward, done, info = env.step(rng, state, action, params)
             win = state.win
-            print(multihot_to_desc(state.multihot_level, env.obj_to_idxs, env.n_objs))
+            print(multihot_to_desc(state.multihot_level, env.objs_to_idxs, env.n_objs))
             im = env.render(state)
             im = np.array(im, dtype=np.uint8)
+            new_h, new_w = tuple(np.array(im.shape[:2]) * SCALING_FACTOR)
             im = cv2.resize(im, (new_w, new_h), interpolation=cv2.INTER_NEAREST)
             cv2.imshow(env.title, im)
             # Add a short waitKey here to allow the window to update.
@@ -134,10 +139,11 @@ def human_loop(env: PSEnv, profile=False):
 
         if do_reset:
             obs, state = env.reset(rng, params)
-            print(multihot_to_desc(state.multihot_level, env.obj_to_idxs, env.n_objs))
+            print(multihot_to_desc(state.multihot_level, env.objs_to_idxs, env.n_objs))
             state_hist.append(state)
             im = env.render(state)
             im = np.array(im, dtype=np.uint8)
+            new_h, new_w = tuple(np.array(im.shape[:2]) * SCALING_FACTOR)
             im = cv2.resize(im, (new_w, new_h), interpolation=cv2.INTER_NEAREST)
             cv2.imshow(env.title, im)
     
@@ -153,30 +159,31 @@ def human_loop(env: PSEnv, profile=False):
             obs, state = env.reset(rng, params)
             im = env.render(state)
             im = np.array(im, dtype=np.uint8)
+            new_h, new_w = tuple(np.array(im.shape[:2]) * SCALING_FACTOR)
             im = cv2.resize(im, (new_w, new_h), interpolation=cv2.INTER_NEAREST)
             cv2.imshow(env.title, im)
     # Close the image window
     cv2.destroyAllWindows()
 
 
-def play_game(game: str, jit: bool = False, profile: bool = False):
+def play_game(game: str, level: int = 0, jit: bool = False, profile: bool = False, debug: bool = False):
     with open("syntax.lark", "r", encoding='utf-8') as file:
         puzzlescript_grammar = file.read()
     # Initialize the Lark parser with the PuzzleScript grammar
     parser = Lark(puzzlescript_grammar, start="ps_game", maybe_placeholders=False)
     # min_parser = Lark(min_puzzlescript_grammar, start="ps_game")
-    print(f"Parsing game: {game}")
-    tree = get_tree_from_txt(parser, game)
+    print(f"""Parsing game: \"{game}\"""")
+    tree, success, err_msg = get_tree_from_txt(parser, game, overwrite=True, test_env_init=False)
     print(f"Initializing environment for game: {game}")
-    env = PSEnv(tree, jit=jit)
+    env = PSEnv(tree, jit=jit, debug=debug, print_score=True)
     print(f"Playing game: {game}")
-    human_loop(env, profile=profile)
+    human_loop(env, profile=profile, level=level)
 
 @hydra.main(config_name="config", version_base="1.3")
 def main(cfg: Config):
 
     if cfg.game is not None:
-        play_game(cfg.game, jit=cfg.jit, profile=cfg.profile)
+        play_game(cfg.game, level=cfg.level, jit=cfg.jit, profile=cfg.profile, debug=cfg.debug)
 
     else:
         tree_paths = glob.glob(os.path.join(TREES_DIR, '*'))
@@ -185,7 +192,7 @@ def main(cfg: Config):
         tree_paths = test_game_paths + tree_paths
         game_paths = [os.path.basename(tree_path)[:-4] for tree_path in tree_paths]
         for tree_path in game_paths:
-            play_game(tree_path, jit=cfg.jit)
+            play_game(tree_path, jit=cfg.jit, debug=cfg.debug)
     
 
 

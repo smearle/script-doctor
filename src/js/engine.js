@@ -400,6 +400,7 @@ function drawMessageScreen() {
 var loadedLevelSeed=0;
 
 function loadLevelFromLevelDat(state,leveldat,randomseed,clearinputhistory) {	
+	precalcDistances();
 	if (randomseed==null) {
 		randomseed = (Math.random() + Date.now()).toString();
 	}
@@ -2930,6 +2931,10 @@ function processInput(dir,dontDoWin,dontModify) {
 	if (winning) {
 		againing=false;
 	}
+
+	// For debugging (trying to understand how this score actually workd)
+	// score = getScore();
+	// console.log("Score: "+score);
 
 	return modified;
 }
