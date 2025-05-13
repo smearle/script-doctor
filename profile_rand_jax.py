@@ -12,20 +12,10 @@ from timeit import default_timer as timer
 
 from conf.config import ProfileEnvConfig
 from env import PSState
-from utils import load_games_n_rules_sorted
+from utils import get_list_of_games_for_testing, load_games_n_rules_sorted
 from utils_rl import get_env_params_from_config, init_ps_env
 
 
-priority_games = [
-    # 'castlemouse',
-    # 'atlas shrank',
-    'sokoban_basic',
-    'sokoban_match3',
-    'limerick',
-    'slidings',
-    'tiny treasure hunt',
-    'test',
-]
 # game_paths = glob.glob(os.path.join('data', 'scraped_games', '*.txt'))
 # games = [os.path.basename(p) for p in game_paths]
 
@@ -44,12 +34,7 @@ JAX_N_ENVS_TO_FPS_PATH = os.path.join('data', 'jax_n_envs_to_fps.json')
 
 @hydra.main(version_base=None, config_path='./', config_name='profile_pcgrl')
 def profile(config: ProfileEnvConfig):
-    if config.all_games:
-        games_n_rules = load_games_n_rules_sorted()
-        games = [game for game, n_rules, has_randomness in games_n_rules]
-        games = priority_games + [game for game in games if game not in priority_games]
-    else:
-        games = priority_games
+    games = get_list_of_games_for_testing(all_games=config.all_games)
 
     global batch_sizes
     hparams = itertools.product(

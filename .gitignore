@@ -5,6 +5,8 @@ bin/
 .build
 logs*
 
+script-doctor-nodejs
+
 *.swp
 src - Kopie
 node_modules/

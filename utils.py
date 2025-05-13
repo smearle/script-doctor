@@ -11,6 +11,7 @@ from openai import AzureOpenAI
 import requests
 import tiktoken
 
+from globals import PRIORITY_GAMES
 from prompts import *
 
 
@@ -259,3 +260,16 @@ def load_games_n_rules_sorted():
     games_n_rules = sorted(games_n_rules, key=lambda x: x[1])
     return games_n_rules
 
+
+def get_list_of_games_for_testing(all_games=True):
+    if all_games:
+        with open(GAMES_N_RULES_SORTED_PATH, 'r') as f:
+            games_n_rules = json.load(f)
+        # We'll test on simpler games first.
+        games_n_rules = sorted(games_n_rules, key=lambda x: x[1])
+        games = [game for game, n_rules, has_randomness in games_n_rules]
+        # Throw our hand-picked set of games at the top to analyze them first.
+        games = PRIORITY_GAMES + [game for game in games if game not in PRIORITY_GAMES]
+    else:
+        games = PRIORITY_GAMES
+    return games

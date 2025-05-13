@@ -10,22 +10,13 @@ import json
 import pandas as pd
 from timeit import default_timer as timer
 
+from globals import PRIORITY_GAMES
 from conf.config import ProfileEnvConfig
 from env import PSState
 from utils import load_games_n_rules_sorted
 from utils_rl import get_env_params_from_config, init_ps_env
 
 
-priority_games = [
-    # 'castlemouse',
-    # 'atlas shrank',
-    'sokoban_basic',
-    'limerick',
-    'sokoban_match3',
-    'slidings',
-    'tiny treasure hunt',
-    'test',
-]
 # game_paths = glob.glob(os.path.join('data', 'scraped_games', '*.txt'))
 # games = [os.path.basename(p) for p in game_paths]
 
@@ -47,9 +38,9 @@ def profile(config: ProfileEnvConfig):
     if config.all_games:
         games_n_rules = load_games_n_rules_sorted()
         games = [game for game, n_rules, has_randomness in games_n_rules]
-        games = priority_games + [game for game in games if game not in priority_games]
+        games = PRIORITY_GAMES + [game for game in games if game not in PRIORITY_GAMES]
     else:
-        games = priority_games
+        games = PRIORITY_GAMES
 
     hparams = itertools.product(
         games,

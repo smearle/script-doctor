@@ -24,13 +24,6 @@ from validate_sols import JS_SOLS_DIR
 
 JAX_BFS_SOLS_DIR = os.path.join('data', 'jax_bfs_sols')
 
-priority_games = [
-    'blocks',
-    'sokoban_basic',
-    'sokoban_match3',
-    'limerick',
-]
-
 def hash_state(state: PSState):
     """Hash the state to a string."""
     byte_string = state.multihot_level.tobytes()
@@ -117,9 +110,9 @@ def main(cfg: BFSConfig):
         games_n_rules = sorted(games_n_rules, key=lambda x: x[1])
         games = [game for game, n_rules, has_randomness in games_n_rules if not has_randomness]
         # Throw these ones at the top to analyze first
-        games = priority_games + [game for game in games if game not in priority_games]
+        games = PRIORITY_GAMES + [game for game in games if game not in PRIORITY_GAMES]
     else:
-        games = priority_games
+        games = PRIORITY_GAMES
     js_sols_dirs = [os.path.join(JS_SOLS_DIR, game) for game in games]
 
     for js_sol_dir, game in zip(js_sols_dirs, games):
