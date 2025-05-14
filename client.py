@@ -439,23 +439,6 @@ class EnhancedLLMAgent:
         }
         return entity_types.get(symbol, 'unknown')
     
-    def _calculate_metrics(self, state: str) -> Dict:
-        """Calculate basic state metrics"""
-        entities = self._extract_entities(state)
-        
-        # Calculate number of boxes and targets
-        boxes = sum(1 for e in entities if e['type'] in ['box', 'box_on_target'])
-        targets = sum(1 for e in entities if e['type'] in ['target', 'box_on_target', 'player_on_target'])
-        boxes_on_target = sum(1 for e in entities if e['type'] == 'box_on_target')
-        
-        return {
-            'complexity': len(state.replace(' ', '')),
-            'diversity': len(set(state)) - 1,  # Exclude space
-            'boxes': boxes,
-            'targets': targets,
-            'boxes_on_target': boxes_on_target,
-            'completion_percentage': (boxes_on_target / boxes) * 100 if boxes > 0 else 0
-        }
     
     def choose_action(self, processed_state: dict, goal: str = "") -> str:
         """Core decision-making logic"""
@@ -587,101 +570,6 @@ class EnhancedLLMAgent:
             print(f"Failed to load agent state: {e}")
             return False
 
-
-class ReinforcementWrapper:
-    """
-    Reinforcement learning wrapper
-    """
-    def __init__(self, base_agent: EnhancedLLMAgent):
-        self.base_agent = base_agent
-        self.q_table = {}
-        self.learning_rate = 0.1
-        self.discount_factor = 0.9
-        self.exploration_rate = 0.2
-        self.exploration_decay = 0.995
-        self.min_exploration_rate = 0.01
-        self.state_action_history = []
-    
-    def choose_action(self, state_hash: str, available_actions: List[str] = None) -> str:
-        """
-        Choose action using Q-learning
-        """
-        if available_actions is None:
-            available_actions = ['up', 'down', 'left', 'right']
-        
-        # Exploration vs exploitation
-        if random.random() < self.exploration_rate:
-            # Exploration: choose random action
-            return random.choice(available_actions)
-        else:
-            # Exploitation: choose action with highest Q-value
-            if state_hash not in self.q_table:
-                self.q_table[state_hash] = {action: 0.0 for action in available_actions}
-            
-            # Find action with highest Q-value
-            best_action = max(self.q_table[state_hash].items(), key=lambda x: x[1])[0]
-            return best_action
-    
-    def update_q_value(self, state_hash: str, action: str, reward: float, next_state_hash: str):
-        """
-        Update Q-value
-        """
-        # Initialize state in Q-table if not present
-        if state_hash not in self.q_table:
-            self.q_table[state_hash] = {'up': 0.0, 'down': 0.0, 'left': 0.0, 'right': 0.0}
-        
-        if next_state_hash not in self.q_table:
-            self.q_table[next_state_hash] = {'up': 0.0, 'down': 0.0, 'left': 0.0, 'right': 0.0}
-        
-        # Calculate current Q-value
-        current_q = self.q_table[state_hash][action]
-        
-        # Calculate maximum Q-value for next state
-        max_next_q = max(self.q_table[next_state_hash].values())
-        
-        # Update Q-value
-        new_q = current_q + self.learning_rate * (reward + self.discount_factor * max_next_q - current_q)
-        self.q_table[state_hash][action] = new_q
-    
-    def reinforce(self, state_hash: str, action: str, reward: float, next_state_hash: str):
-        """
-        Update Q-value based on recent action and reward
-        """
-        # Record state-action pair
-        self.state_action_history.append((state_hash, action, reward, next_state_hash))
-        
-        # Update Q-value
-        self.update_q_value(state_hash, action, reward, next_state_hash)
-        
-        # Decay exploration rate
-        self.exploration_rate = max(self.min_exploration_rate, 
-                                   self.exploration_rate * self.exploration_decay)
-    
-    def save_q_table(self, path: str):
-        """
-        Save Q-table to file
-        """
-        with open(path, 'w') as f:
-            json.dump({
-                'q_table': self.q_table,
-                'exploration_rate': self.exploration_rate,
-                'state_action_history': self.state_action_history[-100:]  # Only save the most recent 100 records
-            }, f)
-    
-    def load_q_table(self, path: str):
-        """
-        Load Q-table from file
-        """
-        try:
-            with open(path, 'r') as f:
-                data = json.load(f)
-                self.q_table = data.get('q_table', {})
-                self.exploration_rate = data.get('exploration_rate', self.exploration_rate)
-                self.state_action_history = data.get('state_action_history', [])
-            return True
-        except Exception as e:
-            print(f"Failed to load Q-table: {e}")
-            return False
 
 
 class StateVisualizer:

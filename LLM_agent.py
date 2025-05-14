@@ -1,84 +1,45 @@
-import json
-import os
 from typing import List, Dict
-import numpy as np
+from utils import llm_text_query
 
-class LLMAgent:
+class LLMGameAgent:
+    """
+    LLM agent for games: given ascii_map, mapping, rules, and action_space, returns an action id (1-5).
+    """
+
     def __init__(self, model_name: str = "gpt-4o"):
         self.model_name = model_name
-        self.action_history = []
-        self.state_memory = []
-        
-    def process_state(self, state_repr: str) -> dict:
-        """Parse game state representation"""
-        return {
-            'raw_state': state_repr,
-            'entities': self._extract_entities(state_repr),
-            'metrics': self._calculate_metrics(state_repr)
-        }
-    
-    def _extract_entities(self, state: str) -> List[Dict]:
-        """Identify game objects from state string"""
-        # Basic entity extraction logic
-        entities = []
-        for y, line in enumerate(state.split('\n')):
-            for x, char in enumerate(line):
-                if char != ' ':
-                    entities.append({
-                        'type': 'object',
-                        'symbol': char,
-                        'position': (x, y)
-                    })
-        return entities
-    
-    def _calculate_metrics(self, state: str) -> Dict:
-        """Calculate basic state metrics"""
-        return {
-            'complexity': len(state.replace(' ', '')),
-            'diversity': len(set(state)) - 1  # Exclude space
-        }
-    
-    def choose_action(self, processed_state: dict, goal: str = "") -> str:
-        """Core decision-making logic"""
-        # Placeholder for actual LLM integration
-        return np.random.choice(['up', 'down', 'left', 'right', 'use'])
-    
-    def update_history(self, action: str, result: str):
-        """Maintain action-result history"""
-        self.action_history.append({
-            'action': action,
-            'result': result,
-            'timestamp': len(self.action_history)
-        })
-    
-    def save_agent_state(self, path: str):
-        """Persist agent state to disk"""
-        with open(path, 'w') as f:
-            json.dump({
-                'history': self.action_history,
-                'model': self.model_name
-            }, f)
 
-class ReinforcementWrapper:
-    def __init__(self, base_agent: LLMAgent):
-        self.base_agent = base_agent
-        self.q_table = {}
-        
-    def reinforce(self, reward: float):
-        """Update Q-values based on recent actions"""
-        if len(self.base_agent.action_history) > 0:
-            last_action = self.base_agent.action_history[-1]['action']
-            self.q_table[last_action] = self.q_table.get(last_action, 0) + reward
-
-class StateVisualizer:
-    @staticmethod
-    def render_ascii(state: dict) -> str:
-        """Convert processed state back to ASCII"""
-        max_x = max(e['position'][0] for e in state['entities'])
-        max_y = max(e['position'][1] for e in state['entities'])
-        
-        grid = [[' ' for _ in range(max_x+1)] for _ in range(max_y+1)]
-        for e in state['entities']:
-            x, y = e['position']
-            grid[y][x] = e['symbol']
-        return '\n'.join(''.join(row) for row in grid)
+    def choose_action(self, ascii_map: str, mapping: Dict[str, str], rules: str, action_space: List[int], action_meanings: Dict[int, str]) -> int:
+        """
+        Query the LLM to select an action id from action_space, given ascii_map, mapping, rules, and action_meanings.
+        Returns an integer action id.
+        """
+        system_prompt = (
+            "You are an expert game-playing agent. "
+            "Given the current game state, the ASCII map, the legend mapping, the game rules, and the action meanings, "
+            "your task is to select the best action. "
+            "Only respond with the action id (an integer from the provided action_space)."
+        )
+        mapping_str = "\n".join([f"{k}: {v}" for k, v in mapping.items()])
+        action_space_str = ", ".join(str(a) for a in action_space)
+        # Provide action mapping (number to meaning) dynamically
+        action_map_str = ", ".join([f"{k}={v}" for k, v in action_meanings.items()])
+        prompt = (
+            f"Game state (ASCII map):\n{ascii_map}\n\n"
+            f"Legend mapping:\n{mapping_str}\n\n"
+            f"Game rules:\n{rules}\n\n"
+            f"Available actions (action_space): {action_space_str}\n"
+            f"Action mapping: {action_map_str}\n"
+            f"Please select the best action and ONLY return the action id (an integer from action_space)."
+        )
+        # Use a fixed seed for reproducibility if needed
+        response = llm_text_query(system_prompt, prompt, seed=42, model=self.model_name)
+        # Extract the first integer in the response as the action id
+        import re
+        # Accept any valid action id from action_space
+        action_pattern = r"\b(" + "|".join(str(a) for a in action_space) + r")\b"
+        match = re.search(action_pattern, response)
+        if match:
+            return int(match.group(1))
+        # Fallback: pick the first action if LLM output is not as expected
+        return action_space[0]

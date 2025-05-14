@@ -77,6 +77,30 @@ class RepresentationWrapper(PSEnv):
             legend_lines.append(f"{repr(char)}: {', '.join(obj_names)}")
         return "\n".join(legend_lines)
 
+    def get_ascii_mapping(self):
+        """
+        Return a dictionary mapping each ASCII character to a list of object names.
+        Example: {'@': ['player'], '#': ['wall'], ...}
+        """
+        mapping = {}
+        for char, vec in self.chars_to_vecs.items():
+            obj_idxs = [i for i, val in enumerate(vec) if val]
+            if not obj_idxs:
+                obj_names = ["empty"]
+            else:
+                obj_names = [obj for obj, idx in self.objs_to_idxs.items() if idx in obj_idxs and obj != "background"]
+            if not obj_names:
+                obj_names = ["background"]
+            mapping[char] = obj_names
+        return mapping
+
+    def get_action_meanings(self):
+        """
+        Return a dictionary mapping action index to its meaning.
+        Example: {0: "left", 1: "down", 2: "right", 3: "up", 4: "action"}
+        """
+        return {0: "left", 1: "down", 2: "right", 3: "up", 4: "action"}
+
 
     def print_ascii_legend(self):
         print(self.ascii_legend_str)
