@@ -28,6 +28,9 @@ try {
         else if(process.argv[i].toLowerCase() == "mcts"){
           algorithm = solver.solveMCTS;
         }
+        else if(process.argv[i].toLowerCase() == "random"){
+          algorithm = solver.solveRandom;
+        }
         else{
           console.log("Unknown algorithm: ", process.argv[i]);
           return;

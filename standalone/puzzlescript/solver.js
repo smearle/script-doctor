@@ -440,6 +440,44 @@ function processInputSearch(engine, action){
  return changedSomething;
 }
 
+function solveRandom(engine, maxLength=100, maxIters=100_000) {
+  let i = 0;
+  let start_time = Date.now();
+  const timeout_ms = 60 * 1000;
+  let solution = [];
+  while (i < maxIters) {
+    if (i % maxLength == 0){
+      DoRestartSearch(engine);
+      solution = [];
+    }
+    // if (i % 1000 == 0) {
+    elapsed_time = Date.now() - start_time;
+    if (elapsed_time > timeout_ms) {
+      console.log(`Timeout after ${elapsed_time / 1000} seconds. Returning.`);
+      return [false, [], i, ((Date.now() - start_time) / 1000)];
+    }
+    // }
+    // let changed = engine.processInput(Math.min(5, Math.floor(Math.random() * 6)));
+    let action = Math.min(5, Math.floor(Math.random() * 6));
+    solution.push(action);
+    let changed = processInputSearch(engine, action);
+    if (changed) {
+      if (engine.getWinning()) {
+        // console.log(`Winning! Solution:, ${new_action_seq}\n Iterations: ${i}`);
+        // console.log('FPS:', (i / (Date.now() - start_time) * 1000).toFixed(2));
+        return [true, solution, i, ((Date.now() - start_time) / 1000)];
+        
+      }
+    }
+    i++;
+  }
+  if(i >= maxIters) {
+    // console.log('Exceeded max iterations. Exiting.');
+    return [false, [], i, ((Date.now() - start_time) / 1000)];
+  }
+  return [false, [], i, ((Date.now() - start_time) / 1000)];
+}
+
 function solveBFS(engine, maxIters=100_000) {
   const timeout_ms = 60 * 1000;
   function hashState(state) {
@@ -937,6 +975,7 @@ module.exports = {
   solveMCTS,
   solveAStar,
   solveBFS,
+  solveRandom,
   randomRollout,
   takeAction,
 }

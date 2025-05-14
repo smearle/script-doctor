@@ -1,1 +1,1 @@
-{"game":"games/sokoban.ps","level":1,"algorithm":"solveMCTS","isSolved":true,"actions":[0,3,2,0,2,2,2,2,0,1,3,2,0,0,0,1,2,0,0,3,1,1,1,2,2,3],"iterations":13906,"time":"3.16","fps":"4399.24"}
+{"game":"games/sokoban.ps","level":1,"algorithm":"solveRandom","isSolved":false,"actions":[],"iterations":100000,"time":"0.40","fps":"250000.00"}
