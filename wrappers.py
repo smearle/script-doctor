@@ -18,8 +18,15 @@ class RepresentationWrapper(PSEnv):
 
         # Generate a set of all possible ASCII characters
         ascii_chars = set(chr(i) for i in range(32, 127))
+        background_char = '.'
+        ascii_chars.remove(background_char)
 
         self.idxs_to_chars = {v: k for k, v in self.chars_to_idxs.items()}
+        
+        # If any atomic object is not already mapped to an ASCII character, assign it to one
+        for obj, idx in self.objs_to_idxs.items():
+            if idx not in self.idxs_to_chars:
+                self.idxs_to_chars[idx] = ascii_chars.pop()
 
         # By default, background is always overlapping with everything
         background_idx = self.objs_to_idxs['background']
@@ -35,7 +42,7 @@ class RepresentationWrapper(PSEnv):
         # the user.
         vecs = [tuple([int(i) for i in v]) for v in obj_vecs]
         # vecs = [tuple([int(i) for i in v]) for v in obj_vecs[:-1]]
-        self.vecs_to_chars = {vec: self.idxs_to_chars.get(i, '?') for i, vec in enumerate(vecs)}
+        self.vecs_to_chars = {vec: self.idxs_to_chars.get(i) for i, vec in enumerate(vecs)}
 
         # Remove all used ASCII characters from the set
         ascii_chars -= set(self.vecs_to_chars.values())
@@ -60,16 +67,6 @@ class RepresentationWrapper(PSEnv):
             vec[list(combo)] = 1
             all_combinations.append(vec)
 
-        # Now handle combinations within layers (multiple objects from same layer)
-        for layer in self.collision_layers:
-            layer_objs = [self.objs_to_idxs[obj] for obj in layer]
-            # Generate all non-empty subsets of the layer
-            for r in range(1, len(layer_objs)+1):
-                for subset in combinations(layer_objs, r):
-                    vec = np.zeros(self.n_objs, dtype=int)
-                    vec[list(subset)] = 1
-                    all_combinations.append(vec)
-
         # Add background to all combinations
         background_idx = self.objs_to_idxs['background']
         for vec in all_combinations:
@@ -87,7 +84,7 @@ class RepresentationWrapper(PSEnv):
 
         # Handle empty cells (no objects except background)
         empty_vec = tuple([1 if i == background_idx else 0 for i in range(self.n_objs)])
-        self.vecs_to_chars[empty_vec] = ' '
+        self.vecs_to_chars[empty_vec] = background_char
 
         self.chars_to_vecs = {v: k for k, v in self.vecs_to_chars.items()}
         self.ascii_legend_str = self.get_ascii_legend()
@@ -151,7 +148,7 @@ class RepresentationWrapper(PSEnv):
 
 
 def test_log_wrapper():
-    game = 'sokoban_basic'
+    game = 'limerick'
     with open(PS_LARK_GRAMMAR_PATH, 'r') as f:
         puzzlescript_grammar = f.read()
     parser = Lark(puzzlescript_grammar, start="ps_game", maybe_placeholders=False)

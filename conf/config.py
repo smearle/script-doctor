@@ -31,7 +31,7 @@ class BFSConfig(PSConfig):
 @dataclass
 class ProfileJaxRandConfig(PSConfig):
     all_games: bool = False
-    n_profile_steps: int = 5_000
+    n_steps: int = 5_000
     # reevaluate: bool = True  # Whether to continue profiling, or just plot the results
     overwrite: bool = False  # Whether to overwrite existing results
     render: bool = False

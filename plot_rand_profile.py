@@ -59,7 +59,8 @@ def main():
 
                     n_envs = list(n_envs_to_fps.keys())
                     n_envs = [int(n_env) for n_env in n_envs]
-                    fps = list(n_envs_to_fps.values())
+                    fpss = list(n_envs_to_fps.values())
+                    fps = [f[-1] for f in fpss]
                     sorted_idxs = sorted(range(len(n_envs)), key=lambda k: int(n_envs[k]))
                     n_envs = [n_envs[i] for i in sorted_idxs]
                     fps = [fps[i] for i in sorted_idxs]

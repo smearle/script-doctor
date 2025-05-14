@@ -18,9 +18,8 @@ import numpy as np
 from conf.config import RLConfig
 from env_render import render_solid_color, render_sprite
 from jax_utils import stack_leaves
-from marl.spaces import Box
 from ps_game import LegendEntry, PSGameTree, PSObject, Rule, WinCondition
-from spaces import Discrete
+from spaces import Discrete, Box
 
 
 # Whether to print out a bunch of stuff, etc.
@@ -176,8 +175,8 @@ def compute_manhattan_dists(lvl, src, trg):
     dists = jnp.abs(src_coords - trg_coords)
     dists = jnp.sum(dists, axis=-1)
     # Exclude any dists corresponding to cells without src/trg nodes
-    dists = jnp.where(jnp.all(src_coords == -1, axis=-1), jnp.nan, dists)
-    dists = jnp.where(jnp.all(trg_coords == -1, axis=-1), jnp.nan, dists)
+    dists = jnp.where(jnp.all(src_coords == -1, axis=-1), np.iinfo(np.int32).max, dists)
+    dists = jnp.where(jnp.all(trg_coords == -1, axis=-1), np.iinfo(np.int32).max, dists)
     return dists
 
 def compute_sum_of_manhattan_dists(lvl, src, trg):
@@ -564,7 +563,8 @@ def loop_rule_fn(
     if jit:
         # For the current rule in the group, apply it as many times as possible.
         loop_rule_state = jax.lax.while_loop(
-            cond_fun=lambda loop_rule_state: loop_rule_state.applied & ~loop_rule_state.cancelled & ~loop_rule_state.restart,
+            cond_fun=lambda loop_rule_state: loop_rule_state.applied & ~loop_rule_state.cancelled & ~loop_rule_state.restart \
+                & (loop_rule_state.app_i < MAX_LOOPS),
             body_fun=lambda loop_rule_state: _apply_rule_fn(loop_rule_state),
             init_val=loop_rule_state,
         )
@@ -750,12 +750,12 @@ def loop_rule_grp(
 
     if jit:
         loop_rule_group_state = jax.lax.while_loop(
-            cond_fun=lambda x: x.applied & ~x.cancelled & ~x.restart & (x.app_i < 200),
+            cond_fun=lambda x: x.applied & ~x.cancelled & ~x.restart & (x.app_i < MAX_LOOPS),
             body_fun=_apply_rule_grp,
             init_val=loop_rule_group_state,
         )
     else:
-        while loop_rule_group_state.applied and not loop_rule_group_state.cancelled and not loop_rule_group_state.restart and loop_rule_group_state.app_i < 200:
+        while loop_rule_group_state.applied and not loop_rule_group_state.cancelled and not loop_rule_group_state.restart and loop_rule_group_state.app_i < MAX_LOOPS:
             loop_rule_group_state = \
                 _apply_rule_grp(loop_rule_group_state)
             if DEBUG:
@@ -783,6 +783,8 @@ def loop_rule_grp(
     # return (lvl, block_applied, grp_app_i, cancelled, restart, again, win, rng), None
     return rule_block_state
 
+MAX_LOOPS = 200
+
 @flax.struct.dataclass
 class LoopRuleBlockState:
     lvl: chex.Array
@@ -794,9 +796,10 @@ class LoopRuleBlockState:
     win: bool
     rng: chex.PRNGKey
     block_i: int
+    app_i: int
 
 def apply_rule_block(
-        rule_block_state: LoopRuleBlockState, 
+        loop_rule_block_state: LoopRuleBlockState, 
         ### COMPILE VS RUNTIME ###
         # n_prior_rules_arr, n_rules_per_grp_arr, n_grps_per_block_arr, all_rule_fns,
         rule_block,
@@ -804,9 +807,9 @@ def apply_rule_block(
         obj_to_idxs, n_objs, jit):
 
     lvl, block_app_i, cancelled, restart, prev_again, win, rng, block_i = \
-        rule_block_state.lvl, rule_block_state.block_app_i, rule_block_state.cancelled, \
-        rule_block_state.restart, rule_block_state.again, rule_block_state.win, \
-        rule_block_state.rng, rule_block_state.block_i
+        loop_rule_block_state.lvl, loop_rule_block_state.block_app_i, loop_rule_block_state.cancelled, \
+        loop_rule_block_state.restart, loop_rule_block_state.again, loop_rule_block_state.win, \
+        loop_rule_block_state.rng, loop_rule_block_state.block_i
 
     block_app_i += 1
     block_applied = False
@@ -875,6 +878,7 @@ def apply_rule_block(
         win=win,
         rng=rng,
         block_i=block_i,
+        app_i=loop_rule_block_state.app_i + 1,
     )
 
     return rule_block_state
@@ -919,29 +923,45 @@ def loop_rule_block(
         win=prev_win,
         rng=rng,
         block_i=block_i,
+        app_i=0,
     )
-    if jit:
-        def apply_block_loop():
-            return jax.lax.while_loop(
-                cond_fun=lambda x: x.applied & ~x.cancelled & ~x.restart,
+    ### COMPILE VS RUN-TIME ###
+    if looping:
+        if jit:
+            loop_block_state = jax.lax.while_loop(
+                cond_fun=lambda x: x.applied & ~x.cancelled & ~x.restart & (x.app_i < MAX_LOOPS),
                 body_fun=_apply_rule_block,
                 init_val=loop_block_state,
             )
-
-        def apply_block():
-            return _apply_rule_block(loop_block_state)
-        
-        loop_block_state = jax.lax.cond(
-            looping,
-            apply_block_loop,
-            apply_block,
-        )
-    else:
-        if looping:
+        else:
             while loop_block_state.applied and not loop_block_state.cancelled and not loop_block_state.restart:
                 loop_block_state = _apply_rule_block(loop_block_state)
-        else:
-            loop_block_state = _apply_rule_block(loop_block_state)
+    else:
+        loop_block_state = _apply_rule_block(loop_block_state)
+
+    # if jit:
+    #     def apply_block_loop():
+    #         return jax.lax.while_loop(
+    #             cond_fun=lambda x: x.applied & ~x.cancelled & ~x.restart,
+    #             body_fun=_apply_rule_block,
+    #             init_val=loop_block_state,
+    #         )
+
+    #     def apply_block():
+    #         return _apply_rule_block(loop_block_state)
+        
+    #     loop_block_state = jax.lax.cond(
+    #         looping,
+    #         apply_block_loop,
+    #         apply_block,
+    #     )
+    # else:
+    #     if looping:
+    #         while loop_block_state.applied and not loop_block_state.cancelled and not loop_block_state.restart:
+    #             loop_block_state = _apply_rule_block(loop_block_state)
+    #     else:
+    #         loop_block_state = _apply_rule_block(loop_block_state)
+    ### COMPILE VS RUN-TIME ###
     lvl, block_applied, block_app_i, cancelled, restart, block_again, win, rng, block_i = \
         loop_block_state.lvl, loop_block_state.applied, loop_block_state.block_app_i, \
         loop_block_state.cancelled, loop_block_state.restart, loop_block_state.again, \
@@ -969,18 +989,20 @@ def loop_rule_block(
     return lvl, applied, again, cancelled, restart, win, rng, block_i + 1
 
 
-def apply_movement(rng, lvl, obj_to_idxs, coll_mat, n_objs, jit=True):
+def apply_movement(rng, lvl, coll_mat, n_objs, obj_force_masks, jit=True):
     coll_mat = jnp.array(coll_mat, dtype=bool)
-    n_lvl_cells = lvl.shape[2] * lvl.shape[3]
+    # Upper bound on the number of forces that might exist in the level at any given time.
+    max_possible_forces = n_objs * lvl.shape[2] * lvl.shape[3]
     force_arr = lvl[0, n_objs:-1]
     # Mask out all forces corresponding to ACTION.
     force_mask = np.ones((force_arr.shape[0],), dtype=bool)
     force_mask[ACTION::N_FORCES] = 0
     force_arr = force_arr[force_mask]
     # Rearrange the array, since we want to apply force to the "first" objects spatially on the map.
-    force_arr = rearrange(force_arr, "c h w -> h w c")
+    # force_arr = rearrange(force_arr, "c h w -> h w c")
+    force_arr = force_arr.transpose(1, 2, 0)
     # Get the first x,y,c coordinates where force is present.
-    coords = jnp.argwhere(force_arr, size=n_lvl_cells, fill_value=-1)
+    coords = jnp.argwhere(force_arr, size=max_possible_forces+1, fill_value=-1)
 
     def attempt_move(carry):
         # NOTE: This depends on movement forces preceding any other forces (per object) in the channel dimension.
@@ -997,20 +1019,27 @@ def apply_movement(rng, lvl, obj_to_idxs, coll_mat, n_objs, jit=True):
         out_of_bounds = (x_1 < 0) | (x_1 >= lvl.shape[2]) | (y_1 < 0) | (y_1 >= lvl.shape[3])
         can_move = is_force_present & ~would_collide & ~out_of_bounds
         # Now, in the new level, move the object in the direction of the force.
-        new_lvl = lvl.at[0, obj_idx, x, y].set(0)
-        new_lvl = new_lvl.at[0, obj_idx,  x_1, y_1].set(1)
+        new_lvl = lvl.at[0, obj_idx, x, y].set(False)
+        new_lvl = new_lvl.at[0, obj_idx,  x_1, y_1].set(True)
+
         # And remove any forces that were applied to the object before it moved.
         new_lvl = jax.lax.dynamic_update_slice(
             new_lvl,
             jnp.zeros((1, N_FORCES, 1, 1), dtype=bool),
             (0, n_objs + (obj_idx * N_FORCES), x, y)
         )
+        # Use the force mask instead
+        # obj_force_mask = obj_force_masks[obj_idx]
+        # new_lvl = new_lvl.at[0, :, x, y].set(
+        #     jnp.where(obj_force_mask, 0, new_lvl[0, :, x, y])
+        # )
+
         lvl = jax.lax.select(can_move, new_lvl, lvl)
         i += 1
-        if DEBUG:
-            jax.debug.print('      at position {xy}, the object {obj} moved to {new_xy}', xy=(x, y), obj=obj_idx, new_xy=(x_1, y_1))
-            jax.debug.print('      would collide: {would_collide}, out of bounds: {out_of_bounds}, can_move: {can_move}',
-                            would_collide=would_collide, out_of_bounds=out_of_bounds, can_move=can_move)
+        # if DEBUG:
+        #     jax.debug.print('      at position {xy}, the object {obj} moved to {new_xy}', xy=(x, y), obj=obj_idx, new_xy=(x_1, y_1))
+        #     jax.debug.print('      would collide: {would_collide}, out of bounds: {out_of_bounds}, can_move: {can_move}',
+        #                     would_collide=would_collide, out_of_bounds=out_of_bounds, can_move=can_move)
         return lvl, can_move, rng, i
 
     init_carry = (lvl, False, rng, 0)
@@ -1075,6 +1104,16 @@ def get_names_to_alts(objects):
     return names_to_alts
 
 
+def gen_obj_force_masks(n_objs):
+    # Generate a mask corresponding to the channels denoting the forces that can be applied to a given object
+    obj_force_masks = np.zeros((n_objs, n_objs + n_objs * N_FORCES + 1), dtype=bool)
+    for i in range(n_objs):
+        obj_force_mask = np.zeros((n_objs + n_objs * N_FORCES + 1,), dtype=bool)
+        obj_force_mask[n_objs + i * N_FORCES:n_objs + (i + 1) * N_FORCES] = 1
+        obj_force_masks[i] = obj_force_mask
+    return jnp.array(obj_force_masks)
+
+
 class PSEnv:
     def __init__(self, tree: PSGameTree, jit: bool = True, level_i: int = 0, max_steps: int = np.inf,
                  debug: bool = False, print_score: bool = True):
@@ -1114,7 +1153,9 @@ class PSEnv:
         # atomic_obj_names = [name for name in tree.objects.keys()]
         # atomic_obj_names = [name for name in atomic_obj_names]
         self.atomic_obj_names = atomic_obj_names
+        self.n_objs = len(atomic_obj_names)
         objs, self.objs_to_idxs, coll_masks = assign_vecs_to_objs(collision_layers, atomic_obj_names)
+        self.obj_force_masks = gen_obj_force_masks(self.n_objs)
         for obj, sub_objs in meta_objs.items():
             # Meta-objects that are actually just alternate names.
             if DEBUG:
@@ -1122,7 +1163,6 @@ class PSEnv:
             sub_objs = expand_meta_objs(sub_objs, meta_objs, char_to_obj)
             if len(sub_objs) == 1 and (obj not in self.objs_to_idxs):
                 self.objs_to_idxs[obj] = self.objs_to_idxs[sub_objs[0]]
-        self.n_objs = len(atomic_obj_names)
         self.coll_mat = np.einsum('ij,ik->jk', coll_masks, coll_masks, dtype=bool)
         if DEBUG:
             print(f"Generating tick function for {self.title}")
@@ -1312,7 +1352,7 @@ class PSEnv:
         
         def place_force(force_map, action):
             # This is a map-shape array of the obj-indices corresponding to the player objects active on these respective cells.
-            player_int_mask = (self.player_idxs[...,None,None] + 1) * multihot_level[self.player_idxs]
+            player_int_mask = (self.player_idxs[...,None,None] + 1) * multihot_level[self.player_idxs].astype(int)
 
             # Turn the int mask into coords, by flattening it, and appending it with xy coords
             xy_coords = jnp.indices(force_map.shape[1:])
@@ -1323,13 +1363,13 @@ class PSEnv:
 
             player_force_mask = jnp.concatenate((player_force_mask[None], xy_coords), axis=0)
             player_coords = player_force_mask.reshape(3, -1).T
-            force_map = force_map.at[tuple(player_coords.T)].set(1)
+            force_map = force_map.at[tuple(player_coords.T)].set(True)
 
             # Similarly, activate the player_effect channel (the last channel) wherever this action is applied.
-            player_effect_mask = (player_int_mask > 0) * (force_map.shape[0] - 1)
+            player_effect_mask = (player_int_mask > 0).astype(int) * (force_map.shape[0] - 1)
             player_effect_mask = jnp.concatenate((player_effect_mask[None], xy_coords), axis=0)
             player_effect_mask = player_effect_mask.reshape(3, -1).T
-            force_map = force_map.at[tuple(player_effect_mask.T)].set(1)
+            force_map = force_map.at[tuple(player_effect_mask.T)].set(True)
 
             # force_map_sum = force_map.sum()
             # jax.debug.print('force_map: {force_map}', force_map=force_map)
@@ -1337,7 +1377,7 @@ class PSEnv:
             return force_map
 
         # apply movement (<4) and/or action (if not noaction)
-        should_apply_force = (action != -1) & ((action < 4) | (~self.tree.prelude.noaction))
+        should_apply_force = (action != -1) & (action < 4) | (not self.tree.prelude.noaction)
 
         if self.jit:
             force_map = jax.lax.cond(
@@ -1412,7 +1452,7 @@ class PSEnv:
         reward = heuristic - state.prev_heuristic
         # reward += 10 if win else 0
         reward = jax.lax.select(win, reward + 1, reward)
-        reward -= 0.01
+        reward = reward.astype(float) - 0.01
 
         done = win | ((state.step_i + 1) >= self.max_steps)
         info = {}
@@ -1448,17 +1488,19 @@ class PSEnv:
 
         def is_obj_forceless(obj_idx, m_cell):
             # note that `action` does not count as a force
-            return jnp.sum(jax.lax.dynamic_slice(m_cell, (self.n_objs + (obj_idx * N_FORCES),), (4,))) == 0
+            # return jnp.sum(jax.lax.dynamic_slice(m_cell, (self.n_objs + (obj_idx * N_FORCES),), (4,))) == 0
+            obj_force_mask = self.obj_force_masks[obj_idx]
+            return jnp.sum(m_cell[obj_force_mask]) == 0
 
         ### Functions for detecting regular atomic objects
         # @partial(jax.jit, static_argnames='obj_idx')
         def detect_obj_in_cell(m_cell, obj_idx):
             # active = m_cell[obj_idx] == 1 & is_obj_forceless(obj_idx, m_cell)
             detected = jnp.zeros_like(m_cell)
-            active = m_cell[obj_idx] == 1
+            active = m_cell[obj_idx]
             detected = jax.lax.cond(
                 active,
-                lambda: detected.at[obj_idx].set(1),
+                lambda: detected.at[obj_idx].set(True),
                 lambda: detected,
             )
             # jax.lax.cond(
@@ -1476,8 +1518,8 @@ class PSEnv:
 
         # @partial(jax.jit, static_argnames=('obj_idx', 'force_idx'))
         def detect_force_on_obj(m_cell, obj_idx, force_idx):
-            obj_is_present = m_cell[obj_idx] == 1
-            force_is_present = m_cell[self.n_objs + (obj_idx * N_FORCES) + force_idx] == 1
+            obj_is_present = m_cell[obj_idx]
+            force_is_present = m_cell[self.n_objs + (obj_idx * N_FORCES) + force_idx]
             active = obj_is_present & force_is_present
             is_detected = np.zeros(m_cell.shape, dtype=bool)
             is_detected[obj_idx] = 1
@@ -1512,7 +1554,7 @@ class PSEnv:
             # m_cell_forceless = m_cell.at[:n_objs].set(m_cell_forceless_objs * m_cell[:n_objs])
             obj_idx = jnp.argwhere(objs_vec[:self.n_objs] * m_cell[:self.n_objs] > 0, size=1, fill_value=-1)[0, 0]
             detected = jnp.zeros(m_cell.shape, bool)
-            is_detected = detected.at[obj_idx].set(1)
+            is_detected = detected.at[obj_idx].set(True)
             active = obj_idx != -1
             # obj_idx = jax.lax.select(
             #     active,
@@ -1542,8 +1584,8 @@ class PSEnv:
             dummy_force_obj_vec = jnp.zeros(self.n_objs + self.n_objs * N_FORCES + 1, dtype=bool)
 
             def force_obj_vec_fn(obj_idx):
-                force_obj_vec = dummy_force_obj_vec.at[obj_idx].set(1)
-                force_obj_vec = force_obj_vec.at[self.n_objs + obj_idx * N_FORCES + force_idx].set(1)
+                force_obj_vec = dummy_force_obj_vec.at[obj_idx].set(True)
+                force_obj_vec = force_obj_vec.at[self.n_objs + obj_idx * N_FORCES + force_idx].set(True)
                 return force_obj_vec
             
             force_obj_vecs = jax.vmap(force_obj_vec_fn)(obj_idxs)
@@ -1558,8 +1600,8 @@ class PSEnv:
                 -1,
             )
             is_detected = jnp.zeros(m_cell.shape, dtype=bool)
-            is_detected = is_detected.at[obj_idx].set(1)
-            is_detected = is_detected.at[self.n_objs + (obj_idx * N_FORCES) + force_idx].set(1)
+            is_detected = is_detected.at[obj_idx].set(True)
+            is_detected = is_detected.at[self.n_objs + (obj_idx * N_FORCES) + force_idx].set(True)
             detected = jax.lax.cond(
                 active,
                 lambda: is_detected,
@@ -1601,7 +1643,7 @@ class PSEnv:
 
                 detected = jax.lax.select(
                     obj_active,
-                    detected.at[obj_idx].set(1),
+                    detected.at[obj_idx].set(True),
                     detected,
                 )
                 # note that this takes the last-detected active sub-object
@@ -1640,7 +1682,9 @@ class PSEnv:
             for obj_idx in obj_idxs:
 
                 obj_is_present = m_cell[obj_idx] == 1
-                obj_forces = jax.lax.dynamic_slice(m_cell, (self.n_objs + (obj_idx * N_FORCES),), (4,))
+                # obj_forces = jax.lax.dynamic_slice(m_cell, (self.n_objs + (obj_idx * N_FORCES),), (4,))
+                obj_force_mask = self.obj_force_masks[obj_idx]
+                obj_forces = m_cell[obj_force_mask]
                 if vertical:
                     vertical_mask = np.array([0, 1, 0, 1], dtype=bool)
                     obj_forces = jnp.logical_and(obj_forces, vertical_mask)
@@ -1650,8 +1694,8 @@ class PSEnv:
                 force_idx = jnp.argwhere(obj_forces, size=1, fill_value=-1)[0, 0]
                 obj_active = obj_is_present & (force_idx != -1)
 
-                active_detected = detected.at[obj_idx].set(1)
-                active_detected = active_detected.at[self.n_objs + (obj_idx * N_FORCES) + force_idx].set(1)
+                active_detected = detected.at[obj_idx].set(True)
+                active_detected = active_detected.at[self.n_objs + (obj_idx * N_FORCES) + force_idx].set(True)
 
                 detected = jax.lax.select(
                     obj_active,
@@ -1784,11 +1828,11 @@ class PSEnv:
             # @partial(jax.jit)
             def detect_cell(m_cell):
 
-                def apply_cell_fn_switch(i):
-                    return jax.lax.switch(i, fns, m_cell)
+                # def apply_cell_fn_switch(i):
+                #     return jax.lax.switch(i, fns, m_cell)
+                # detect_obj_outs: ObjFnReturn = jax.vmap(apply_cell_fn_switch, in_axes=0)(jnp.arange(len(fns)))
+                detect_obj_outs: List[ObjFnReturn] = stack_leaves([fn(m_cell=m_cell) for fn in fns])
 
-                # detect_obj_outs: List[ObjFnReturn] = [fn(m_cell=m_cell) for fn in fns]
-                detect_obj_outs: ObjFnReturn = jax.vmap(apply_cell_fn_switch, in_axes=0)(jnp.arange(len(fns)))
                 activated = jnp.all(detect_obj_outs.active, axis=0)
                 detected = jnp.any(detect_obj_outs.detected, axis=0)
                 force_idx = detect_obj_outs.force_idx[jnp.argwhere(detect_obj_outs.force_idx != -1, size=1)]
@@ -1833,7 +1877,7 @@ class PSEnv:
             # FIXME: We should make this collision matrix static...
             coll_mat = jnp.array(coll_mat)
             coll_vec = coll_mat[:, obj_idx]
-            coll_vec = coll_vec.at[obj_idx].set(0)
+            coll_vec = coll_vec.at[obj_idx].set(False)
             # print('various shapes lol', m_cell.shape, n_objs, obj_idx, coll_vec.shape, coll_mat.shape)
             m_cell = m_cell.at[:self.n_objs].set(m_cell[:self.n_objs] * ~coll_vec)
             return m_cell
@@ -1871,7 +1915,7 @@ class PSEnv:
             if not self.jit:
                 if obj_idx == -1:
                     breakpoint()
-            m_cell = m_cell.at[obj_idx].set(1)
+            m_cell = m_cell.at[obj_idx].set(True)
 
             def transfer_force(m_cell, obj_idx, detected_obj_idx):
                 # Reassign any forces belonging to the detected object to the new object
@@ -1879,14 +1923,18 @@ class PSEnv:
                 detected_forces = jax.lax.dynamic_slice(
                     m_cell, (self.n_objs + detected_obj_idx * N_FORCES,), (N_FORCES,)
                 )
+                # obj_force_mask = self.obj_force_masks[detected_obj_idx]
+                # detected_forces = m_cell[obj_force_mask]
                 # Then remove them from the detected object.
                 m_cell = jax.lax.dynamic_update_slice(
                     m_cell, jnp.zeros(N_FORCES, dtype=bool), (self.n_objs + detected_obj_idx * N_FORCES,)
                 )
+                # m_cell = m_cell.at[obj_force_mask].set(0)
                 # Then copy them to the new object.
                 m_cell = jax.lax.dynamic_update_slice(
                     m_cell, detected_forces, (self.n_objs + obj_idx * N_FORCES,)
                 )
+                # m_cell = jnp.where(obj_force_mask, detected_forces, m_cell)
                 return m_cell
 
             m_cell = jax.lax.cond(
@@ -1907,11 +1955,13 @@ class PSEnv:
             pattern_meta_objs = pattern_detect_out.detected_meta_objs
             obj_idx = disambiguate_meta(obj, meta_objs, kernel_meta_objs, pattern_meta_objs, self.objs_to_idxs)
             # Remove the object
-            m_cell = m_cell.at[obj_idx].set(0)
+            m_cell = m_cell.at[obj_idx].set(False)
             # Remove any existing forces from the object
-            jax.lax.dynamic_update_slice(
-                m_cell, jnp.zeros(N_FORCES, dtype=bool), (self.n_objs + obj_idx * N_FORCES,)
-            )
+            # jax.lax.dynamic_update_slice(
+            #     m_cell, jnp.zeros(N_FORCES, dtype=bool), (self.n_objs + obj_idx * N_FORCES,)
+            # )
+            force_mask = self.obj_force_masks[obj_idx]
+            m_cell = m_cell.at[force_mask].set(False)
             return rng, m_cell
 
         # @partial(jax.jit, static_argnums=(3))
@@ -1920,11 +1970,13 @@ class PSEnv:
             obj_idxs = np.array([self.objs_to_idxs[so] for so in sub_objs])
             # TODO: vmap this
             for obj_idx in obj_idxs:
-                m_cell = m_cell.at[obj_idx].set(0)
+                m_cell = m_cell.at[obj_idx].set(False)
                 # Remove any existing forces from the object
-                jax.lax.dynamic_update_slice(
-                    m_cell, jnp.zeros(N_FORCES, dtype=bool), (self.n_objs + obj_idx * N_FORCES,)
-                )
+                # jax.lax.dynamic_update_slice(
+                #     m_cell, jnp.zeros(N_FORCES, dtype=bool), (self.n_objs + obj_idx * N_FORCES,)
+                # )
+                force_mask = self.obj_force_masks[obj_idx]
+                m_cell = m_cell.at[force_mask].set(0)
             return rng, m_cell
 
         # @partial(jax.jit, static_argnums=(3, 4))
@@ -1935,7 +1987,7 @@ class PSEnv:
             pattern_meta_objs = pattern_detect_out.detected_meta_objs
             obj_idx = disambiguate_meta(obj, meta_objs, kernel_meta_objs, pattern_meta_objs, self.objs_to_idxs)
             # Add the object
-            m_cell = m_cell.at[obj_idx].set(1)
+            m_cell = m_cell.at[obj_idx].set(True)
             if force_idx is None:
                 # Generate random movement.
                 force_idx = jax.random.randint(rng, (1,), 0, N_FORCES-1)[0]
@@ -1944,15 +1996,17 @@ class PSEnv:
             m_cell = jax.lax.dynamic_update_slice(
                 m_cell, jnp.zeros(N_FORCES, dtype=bool), (self.n_objs + obj_idx * N_FORCES,)
             )
+            # force_mask = self.obj_force_masks[obj_idx]
+            # m_cell = jnp.where(force_mask, False, m_cell)
             # Also remove player action mask
-            m_cell = m_cell.at[-1].set(0)
+            m_cell = m_cell.at[-1].set(False)
 
             # Place the new force
             # m_cell = m_cell.at[n_objs + (obj_idx * N_FORCES) + force_idx].set(1)
 
             # Remove any existing forces from the object and add the new one
             force_arr = jnp.zeros(N_FORCES, dtype=bool)
-            force_arr = force_arr.at[force_idx].set(1)
+            force_arr = force_arr.at[force_idx].set(True)
             m_cell = jax.lax.dynamic_update_slice(
                 m_cell, force_arr, (self.n_objs + obj_idx * N_FORCES,)
             )
@@ -1995,11 +2049,11 @@ class PSEnv:
                 force_idx,
             )
                 
-            m_cell = m_cell.at[obj_idx].set(1)
+            m_cell = m_cell.at[obj_idx].set(True)
 
             # Remove any existing forces from the object and add the new one
             force_arr = jnp.zeros(N_FORCES, dtype=bool)
-            force_arr = force_arr.at[force_idx].set(1)
+            force_arr = force_arr.at[force_idx].set(True)
             # m_cell = m_cell.at[self.n_objs + (obj_idx * N_FORCES) + force_idx].set(1)
             m_cell = jax.lax.dynamic_update_slice(
                 m_cell, force_arr, (self.n_objs + obj_idx * N_FORCES,)
@@ -2017,8 +2071,8 @@ class PSEnv:
             kernel_meta_objs = kernel_detect_out.detected_meta_objs
             pattern_meta_objs = pattern_detect_out.detected_meta_objs
             obj_idx = disambiguate_meta(obj, meta_objs, kernel_meta_objs, pattern_meta_objs, self.objs_to_idxs)
-            m_cell = m_cell.at[obj_idx].set(1)
-            m_cell = m_cell.at[self.n_objs + (obj_idx * N_FORCES): self.n_objs + ((obj_idx + 1) * N_FORCES)].set(0)
+            m_cell = m_cell.at[obj_idx].set(True)
+            m_cell = m_cell.at[self.n_objs + (obj_idx * N_FORCES): self.n_objs + ((obj_idx + 1) * N_FORCES)].set(False)
             m_cell = remove_colliding_objs(m_cell, obj_idx, self.coll_mat)
             return rng, m_cell
 
@@ -2233,7 +2287,8 @@ class PSEnv:
                         )
                         assert patches.shape[0] == 1
                         patches = patches[0]
-                        patches = rearrange(patches, "c h w -> h w c")
+                        # patches = rearrange(patches, "c h w -> h w c")
+                        patches = patches.transpose(1, 2, 0)
 
                         if self.jit:
                             kernel_activations, cell_detect_outs = jax.vmap(jax.vmap(detect_cells))(patches)
@@ -2296,9 +2351,9 @@ class PSEnv:
                     n_tiles = np.prod(lvl.shape[-2:])
                     # Ensure we always have some invalid coordinates so that the loop will break even when all tiles are active
                     if self.jit:
-                        kernel_activ_xys = jnp.argwhere(kernel_activations == 1, size=n_tiles+1, fill_value=-1)
+                        kernel_activ_xys = jnp.argwhere(kernel_activations, size=n_tiles+1, fill_value=-1)
                     else:
-                        kernel_activ_xys = np.argwhere(kernel_activations == 1)
+                        kernel_activ_xys = np.argwhere(kernel_activations)
                     kernel_activ_xy_idx = 0
                     # kernel_activ_xy = kernel_activ_xys[kernel_activ_xy_idx]
 
@@ -2313,7 +2368,8 @@ class PSEnv:
 
                         # Apply projection functions to the affected cells
                         out_cell_idxs = np.indices(in_patch_shape)
-                        out_cell_idxs = rearrange(out_cell_idxs, "xy h w -> h w xy")
+                        # out_cell_idxs = rearrange(out_cell_idxs, "xy h w -> h w xy")
+                        out_cell_idxs = out_cell_idxs.transpose(1, 2, 0)
                         if lp_is_vertical:
                             out_cell_idxs = out_cell_idxs[:, 0]
                         elif lp_is_horizontal:
@@ -2604,8 +2660,8 @@ class PSEnv:
                     rule_grps.append(sub_rule_fns)
             rule_blocks.append((looping, rule_grps))
 
-        _move_rule_fn = partial(apply_movement, obj_to_idxs=self.objs_to_idxs, coll_mat=self.coll_mat,
-                                n_objs=self.n_objs, jit=self.jit)
+        _move_rule_fn = partial(apply_movement, coll_mat=self.coll_mat,
+                                n_objs=self.n_objs, obj_force_masks=self.obj_force_masks, jit=self.jit)
         rule_blocks.append((False, [[_move_rule_fn]]))
         # Can we have loops in late rules? I hope not.
         rule_blocks.append((False, late_rule_grps))

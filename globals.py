@@ -1,17 +1,21 @@
 PRIORITY_GAMES = [
+    # 'blank',
     'sokoban_basic',
     'sokoban_match3',
     'limerick',
     'blocks',
     'slidings',
     'notsnake',
+    'Travelling_salesman',
     'Zen_Puzzle_Garden',
     'tiny treasure hunt',
     # 'Sokodig',
     # 'Watch_Your_Step',
+    'Multi-word_Dictionary_Game',
     'Take_Heart_Lass',
     'atlas shrank',
     'castlemouse',
+    'Indigestion',
 ]
 
 import os
