@@ -1,4 +1,5 @@
 PRIORITY_GAMES = [
+    # 'blank',
     'sokoban_basic',
     'sokoban_match3',
     'limerick',

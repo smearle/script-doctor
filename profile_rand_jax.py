@@ -34,6 +34,7 @@ batch_sizes = [
     400,
     600,
     1_200,
+    # 1_500,
 ]
 batch_sizes = batch_sizes[::-1]
 
@@ -63,7 +64,10 @@ def profile(cfg: ProfileJaxRandConfig):
     assert len(devices) == 1, f'JAX is not using a single device. Found {len(devices)} devices: {devices}. This is unexpected.'
     device_name = devices[0].device_kind
 
-    games = get_list_of_games_for_testing(all_games=cfg.all_games)
+    if cfg.game is None:
+        games = get_list_of_games_for_testing(all_games=cfg.all_games)
+    else:
+        games = [cfg.game]
 
     global batch_sizes
     hparams = itertools.product(
@@ -107,7 +111,8 @@ def profile(cfg: ProfileJaxRandConfig):
         print(f'\nGame: {game}, n_envs: {n_envs}.')
         env = init_ps_env(cfg)
 
-        for level_i in range(len(env.levels[:1])):
+        # for level_i in range(len(env.levels[:1])):
+        for level_i in range(len(env.levels)):
 
             level_str = get_level_str(level_i)
             if game not in game_n_envs_to_fps:
@@ -155,12 +160,14 @@ def profile(cfg: ProfileJaxRandConfig):
                 print(f'Finished 2nd step in {(timer() - start)} seconds.')
 
                 start = timer()
+                # with jax.profiler.trace("/tmp/jax-trace", create_perfetto_link=True):
                 carry, _ = _env_step_jitted(carry, None)
+                # carry[0].multihot_level.block_until_ready()
                 print(f'Finished 3rd step in {(timer() - start)} seconds.')
 
                 n_env_steps = cfg.n_steps * n_envs
                 times = []
-                for i in range(5):
+                for i in range(3):
                     start = timer()
                     # carry, env_states = jax.lax.scan(
                     carry, _ = jax.lax.scan(
@@ -200,4 +207,5 @@ def profile(cfg: ProfileJaxRandConfig):
             results = json.load(f)
 
 if __name__ == '__main__':
-    profile() 
+    with jax.numpy_dtype_promotion('strict'):
+        profile() 
