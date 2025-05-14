@@ -16,9 +16,8 @@ from lark.reconstruct import Reconstructor
 
 from env import PSEnv
 from gen_tree import GenPSTree
+from globals import GAMES_TO_SKIP
 from ps_game import PSGameTree
-
-games_to_skip = set({'easyenigma', 'A_Plaid_Puzzle'})
 
 # TEST_GAMES = ['blockfaker', 'sokoban_match3', 'notsnake', 'sokoban_basic']
 TEST_GAMES = []
@@ -415,6 +414,7 @@ class PSErrors(IntEnum):
     TREE_ERROR = 2
     ENV_ERROR = 3
     TIMEOUT = 4
+    SKIPPED = 5
 
 def get_tree_from_txt(parser, game, log_dir: str = None, overwrite: bool = True, test_env_init: bool = True):
     filepath = os.path.join(CUSTOM_GAMES_DIR, game + '.txt')
@@ -425,8 +425,9 @@ def get_tree_from_txt(parser, game, log_dir: str = None, overwrite: bool = True,
         ps_text = f.read()
     simp_filename = game + '_simplified.txt' 
     # if game in parsed_games or os.path.basename(game) in games_to_skip:
-    #     print(f"Skipping {filepath}")
-    #     return
+    if os.path.basename(game) in GAMES_TO_SKIP:
+        print(f"Skipping {filepath} because it has been marked for skippping in `GAMES_TO_SKIP`")
+        return None, PSErrors.SKIPPED, "Game marked for skipping in GAMES_TO_SKIP"
 
     # print(f"Parsing game {filepath} ({i+1}/{len(game_files)})")
     simp_filepath = os.path.join(SIMPLIFIED_GAMES_DIR, simp_filename)
