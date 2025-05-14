@@ -1,0 +1,17 @@
+{
+  "model": "o3-mini",
+  "game": "sokoban_match3",
+  "win": false,
+  "action_sequence": [
+    2
+  ],
+  "reward_sequence": [
+    -0.009999999776482582
+  ],
+  "score_sequence": [
+    1
+  ],
+  "heuristic_sequence": [
+    -1
+  ]
+}

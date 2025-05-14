@@ -134,9 +134,9 @@ def main():
 
                 # Detect deadlock/loop: if state repeats, break
                 h = hash(state.multihot_level.tobytes())
-                if h in state_history:
-                    print("Terminal state detected: repeated state (deadlock/loop).")
-                    break
+                # if h in state_history:
+                #     print("Terminal state detected: repeated state (deadlock/loop).")
+                #     break
                 state_history.add(h)
 
                 action_id = agent.choose_action(
