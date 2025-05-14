@@ -163,10 +163,12 @@ def main():
                 result["initial_ascii"] = ascii_state.split('\n')  # 存储为列表方便阅读
             result["final_ascii"] = ascii_state.split('\n')  # 每次更新最终状态
 
+            # 记录heuristic原始值到序列
+            result["heuristic_sequence"].append(float(next_state.heuristic.item()))  # 确保提取标量值
+            
             # 简化状态数据
             result["state_data"] = {
                 "score": int(next_state.score),
-                "heuristic": int(next_state.heuristic),
                 "win": bool(next_state.win),
                 "step": step + 1
             }
@@ -181,10 +183,10 @@ def main():
 
             current_state = next_state
 
-        # 最终清理和格式整理
+        # 保留并转换heuristic数据
+        result["heuristics"] = [float(h) for h in result["heuristic_sequence"]]
         del result["heuristic_sequence"]
-        del result["score_sequence"]
-        del result["state_data"]["heuristic"]
+        del result["score_sequence"] 
         
         # 确保最终ASCII状态是最后一步的状态
         result["final_ascii"] = ascii_state.split('\n')

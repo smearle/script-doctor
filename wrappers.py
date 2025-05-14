@@ -1,4 +1,4 @@
-from itertools import product
+from itertools import product, combinations
 
 from gymnax.environments import environment
 import jax
@@ -45,20 +45,49 @@ class RepresentationWrapper(PSEnv):
         # Now, get all possible combinations of non-colliding objects and assign them ASCII characters if not already
         # present in our mapping.
 
-        # Get indices for each object in each collision layer
-        layer_obj_idxs = [
-            [self.objs_to_idxs[obj] for obj in cl]
-            for cl in self.collision_layers
-        ]
-
-        for obj_combo in product(*layer_obj_idxs):
+        # Generate all possible non-colliding combinations including same-layer objects
+        all_combinations = []
+        
+        # First handle combinations where we pick one object from each collision layer
+        for layer in self.collision_layers:
+            layer_objs = [self.objs_to_idxs[obj] for obj in layer]
+            if layer_objs:
+                all_combinations.append(layer_objs)
+        
+        # Generate combinations across layers
+        for combo in product(*all_combinations):
             vec = np.zeros(self.n_objs, dtype=int)
-            vec[list(obj_combo)] = 1
-            vec_tuple = tuple([int(i) for i in vec])
+            vec[list(combo)] = 1
+            all_combinations.append(vec)
+
+        # Now handle combinations within layers (multiple objects from same layer)
+        for layer in self.collision_layers:
+            layer_objs = [self.objs_to_idxs[obj] for obj in layer]
+            # Generate all non-empty subsets of the layer
+            for r in range(1, len(layer_objs)+1):
+                for subset in combinations(layer_objs, r):
+                    vec = np.zeros(self.n_objs, dtype=int)
+                    vec[list(subset)] = 1
+                    all_combinations.append(vec)
+
+        # Add background to all combinations
+        background_idx = self.objs_to_idxs['background']
+        for vec in all_combinations:
+            vec[background_idx] = 1
+
+        # Now process all unique combinations
+        unique_vecs = set(tuple(v) for v in all_combinations)
+        for vec_tuple in unique_vecs:
             if vec_tuple not in self.vecs_to_chars:
                 if not ascii_chars:
-                    raise ValueError("Ran out of ASCII characters for object combinations.")
-                self.vecs_to_chars[vec_tuple] = ascii_chars.pop()
+                    # Fallback to '?' for unhandled combinations
+                    self.vecs_to_chars[vec_tuple] = '?'
+                else:
+                    self.vecs_to_chars[vec_tuple] = ascii_chars.pop()
+
+        # Handle empty cells (no objects except background)
+        empty_vec = tuple([1 if i == background_idx else 0 for i in range(self.n_objs)])
+        self.vecs_to_chars[empty_vec] = ' '
 
         self.chars_to_vecs = {v: k for k, v in self.vecs_to_chars.items()}
         self.ascii_legend_str = self.get_ascii_legend()
