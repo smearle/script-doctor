@@ -1,37 +1,22 @@
-import dataclasses
 from timeit import default_timer as timer
-from functools import partial
-import math
-import os
-import pickle
-import shutil
-from typing import Sequence, NamedTuple, Any, Tuple, Union, Dict
+from typing import Tuple, Dict
 
-import chex
 import imageio
 import jax
 import jax.numpy as jnp
-import flax.linen as nn
 from flax import struct
 from flax.training import orbax_utils
-from lark import Lark
 import numpy as np
 from jax_utils import stack_leaves
-import optax
 import orbax.checkpoint as ocp
 from parse_lark import get_tree_from_txt
 import wandb
-import functools
 from flax.training.train_state import TrainState
-import hydra
-from omegaconf import DictConfig, OmegaConf
 from time import perf_counter
 
 from conf.config import RLConfig, MultiAgentConfig, TrainConfig
 from env import PSEnv, PSObs, PSState, PSParams
-from marl.model import ActorCategorical, ActorMLP, ActorRNN, CriticRNN, MAConvForward2, ScannedRNN
 from models import NCA, AutoEncoder, ConvForward, ConvForward2, SeqNCA, ActorCriticPS, Dense
-from purejaxrl.wrappers import LogWrapper
 
 N_AGENTS = 1
 
@@ -93,132 +78,6 @@ def linear_schedule(config, count):
     )
     return config["LR"] * frac
 
-
-def init_run(env: PSEnv, config: MultiAgentConfig, ckpt_manager, latest_update_step, rng):
-    # Create PCGRL environment
-    env = init_ps_env(config)
-    env_params = get_env_params_from_config(env, config)
-
-    # Wrap environment with JAXMARL wrapper
-    # env = MultiAgentWrapper(env, env_params)
-
-    # Wrap environment with LogWrapper
-    # env = MALogWrapper(env)
-    env = LogWrapper(env)
-
-    # Configure training
-    config._num_actors = N_AGENTS * config.n_envs
-    
-    config._num_updates = int(
-        config.total_timesteps // config.num_steps // config.n_envs
-    )
-    config._minibatch_size = (
-        config._num_actors * config.num_steps // config.NUM_MINIBATCHES
-    )
-    config.CLIP_EPS = (
-        config.CLIP_EPS / N_AGENTS
-        if config.scale_clip_eps
-        else config.CLIP_EPS
-    )
-
-    # INIT ENV
-    rng, _rng = jax.random.split(rng)
-    reset_rng = jax.random.split(_rng, config.n_envs)
-    obsv, env_state = jax.vmap(env.reset, in_axes=(0))(reset_rng)
- 
-    if config._is_recurrent:
-        actor_network = ActorCategorical(env.action_space(env.agents[0]).n,
-                                subnet=ActorRNN(env.action_space(env.agents[0]).n, config=config,
-                                #  subnet=ActorMLP(env.action_space(env.agents[0]).shape[0], config=config,
-                                                ))
-        critic_network = CriticRNN(config=config)
-        rng, _rng_actor, _rng_critic = jax.random.split(rng, 3)
-        # ac_init_x = (
-        #     jnp.zeros((1, config.n_envs, env.observation_space(env.agents[0]).shape[0])),
-        #     jnp.zeros((1, config.n_envs)),
-        #     jnp.zeros((1, config.n_envs, env.action_space(env.agents[0]).n)),
-        # )
-        # ac_init_hstate = ScannedRNN.initialize_carry(config.n_envs, config.hidden_dims[0])
-        ac_init_x, ac_init_hstate = env.gen_dummy_obs(config)
-        actor_network_params = actor_network.init(_rng_actor, ac_init_hstate, ac_init_x)
-
-        print(actor_network.subnet.tabulate(rngs=_rng_actor, x=ac_init_x, hidden=ac_init_hstate))
-
-        cr_init_x = (
-            jnp.zeros((1, config.n_envs, env.world_state_size,)),  
-            jnp.zeros((1, config.n_envs)),
-        )
-        cr_init_hstate = ScannedRNN.initialize_carry(config.n_envs, config.hidden_dims[0])
-        critic_network_params = critic_network.init(_rng_critic, cr_init_hstate, cr_init_x)
-        _linear_schedule = partial(linear_schedule, config)
-        if config.ANNEAL_LR:
-            actor_tx = optax.chain(
-                optax.clip_by_global_norm(config.MAX_GRAD_NORM),
-                optax.adam(learning_rate=_linear_schedule, eps=1e-5),
-            )
-            critic_tx = optax.chain(
-                optax.clip_by_global_norm(config.MAX_GRAD_NORM),
-                optax.adam(learning_rate=_linear_schedule, eps=1e-5),
-            )
-        else:
-            actor_tx = optax.chain(
-                optax.clip_by_global_norm(config.MAX_GRAD_NORM),
-                optax.adam(config.lr, eps=1e-5),
-            )
-            critic_tx = optax.chain(
-                optax.clip_by_global_norm(config.MAX_GRAD_NORM),
-                optax.adam(config.lr, eps=1e-5),
-            )
-        actor_train_state = TrainState.create(
-            apply_fn=actor_network.apply,
-            params=actor_network_params,
-            tx=actor_tx,
-        )
-        critic_train_state = TrainState.create(
-            apply_fn=actor_network.apply,
-            params=critic_network_params,
-            tx=critic_tx,
-        )
-        train_states = (actor_train_state, critic_train_state)
-        ac_init_hstate = ScannedRNN.initialize_carry(config._num_actors, config.hidden_dims[0])
-        cr_init_hstate = ScannedRNN.initialize_carry(config._num_actors, config.hidden_dims[0])
-    else:
-        network = init_network(env, env_params, config)
-        actor_network = network
-
-        init_x = env._env._env.gen_dummy_obs(env_params)
-        # init_x = env.observation_space(env_params).sample(_rng)[None, ]
-        avail_actions = env.get_avail_actions(env_state)
-        avail_actions = jax.lax.stop_gradient(
-            batchify(avail_actions, env.agents, len(env.agents))
-        )[np.newaxis]
-        network_params = network.init(rng, init_x, avail_actions=avail_actions)
-        print(network.subnet.tabulate(_rng, init_x.map_obs, init_x.flat_obs))
-    
-        tx = optax.chain(
-            optax.clip_by_global_norm(config.MAX_GRAD_NORM),
-            optax.adam(config.lr, eps=1e-5),
-        )
-        train_state = TrainState.create(
-            apply_fn=network.apply,
-            params=network_params,
-            tx=tx,
-        )
-        train_states = (train_state,)
-        ac_init_hstate = None
-        cr_init_hstate = None
-
-    rng, _rng = jax.random.split(rng)
-    runner_state = RunnerState(
-        train_states,
-        env_state,
-        obsv,
-        jnp.zeros((config._num_actors), dtype=bool, ),
-        (ac_init_hstate, cr_init_hstate),
-        _rng,
-    )
-
-    return runner_state, actor_network, env, latest_update_step
 
 
 def init_network(env: PSEnv, env_params: PSParams, config: RLConfig):

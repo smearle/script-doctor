@@ -18,9 +18,8 @@ import numpy as np
 from conf.config import RLConfig
 from env_render import render_solid_color, render_sprite
 from jax_utils import stack_leaves
-from marl.spaces import Box
 from ps_game import LegendEntry, PSGameTree, PSObject, Rule, WinCondition
-from spaces import Discrete
+from spaces import Discrete, Box
 
 
 # Whether to print out a bunch of stuff, etc.
@@ -920,28 +919,43 @@ def loop_rule_block(
         rng=rng,
         block_i=block_i,
     )
-    if jit:
-        def apply_block_loop():
-            return jax.lax.while_loop(
+    ### COMPILE VS RUN-TIME ###
+    if looping:
+        if jit:
+            loop_block_state = jax.lax.while_loop(
                 cond_fun=lambda x: x.applied & ~x.cancelled & ~x.restart,
                 body_fun=_apply_rule_block,
                 init_val=loop_block_state,
             )
-
-        def apply_block():
-            return _apply_rule_block(loop_block_state)
-        
-        loop_block_state = jax.lax.cond(
-            looping,
-            apply_block_loop,
-            apply_block,
-        )
-    else:
-        if looping:
+        else:
             while loop_block_state.applied and not loop_block_state.cancelled and not loop_block_state.restart:
                 loop_block_state = _apply_rule_block(loop_block_state)
-        else:
-            loop_block_state = _apply_rule_block(loop_block_state)
+    else:
+        loop_block_state = _apply_rule_block(loop_block_state)
+
+    # if jit:
+    #     def apply_block_loop():
+    #         return jax.lax.while_loop(
+    #             cond_fun=lambda x: x.applied & ~x.cancelled & ~x.restart,
+    #             body_fun=_apply_rule_block,
+    #             init_val=loop_block_state,
+    #         )
+
+    #     def apply_block():
+    #         return _apply_rule_block(loop_block_state)
+        
+    #     loop_block_state = jax.lax.cond(
+    #         looping,
+    #         apply_block_loop,
+    #         apply_block,
+    #     )
+    # else:
+    #     if looping:
+    #         while loop_block_state.applied and not loop_block_state.cancelled and not loop_block_state.restart:
+    #             loop_block_state = _apply_rule_block(loop_block_state)
+    #     else:
+    #         loop_block_state = _apply_rule_block(loop_block_state)
+    ### COMPILE VS RUN-TIME ###
     lvl, block_applied, block_app_i, cancelled, restart, block_again, win, rng, block_i = \
         loop_block_state.lvl, loop_block_state.applied, loop_block_state.block_app_i, \
         loop_block_state.cancelled, loop_block_state.restart, loop_block_state.again, \

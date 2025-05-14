@@ -275,9 +275,6 @@ def save_gif_from_states(env, states, save_path):
     imageio.mimsave(gif_path, frames, duration=0.1, loop=0)
 
 
-GAMES_N_RULES_SORTED_PATH = os.path.join('data', 'games_n_rules.json')
-
-
 def load_games_n_rules_sorted():
     with open(GAMES_N_RULES_SORTED_PATH, 'r') as f:
         games_n_rules = json.load(f)
