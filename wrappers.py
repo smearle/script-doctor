@@ -35,7 +35,7 @@ class RepresentationWrapper(PSEnv):
         # the user.
         vecs = [tuple([int(i) for i in v]) for v in obj_vecs]
         # vecs = [tuple([int(i) for i in v]) for v in obj_vecs[:-1]]
-        self.vecs_to_chars = {vec: self.idxs_to_chars[i] for i, vec in enumerate(vecs)}
+        self.vecs_to_chars = {vec: self.idxs_to_chars.get(i, '?') for i, vec in enumerate(vecs)}
 
         # Remove all used ASCII characters from the set
         ascii_chars -= set(self.vecs_to_chars.values())

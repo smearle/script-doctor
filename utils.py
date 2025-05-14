@@ -160,10 +160,12 @@ def llm_text_query(system_prompt, prompt, seed, model):
             }
 
             # Send request, set timeout and retry count
-            max_retries = 3
+            max_retries = 5   # 最大重试次数保持5次
             retry_count = 0
+            base_wait = 2     # 将初始等待时间设为2秒
 
             while retry_count < max_retries:
+                wait_time = base_wait * (2 ** retry_count)  # 指数退避策略2^n
                 try:
                     response = requests.post(url, headers=headers, json=payload, timeout=60)
 
@@ -186,17 +188,18 @@ def llm_text_query(system_prompt, prompt, seed, model):
                         # For other errors, throw an exception
                         raise Exception(f"API request failed with status code: {response.status_code}")
                 except requests.exceptions.Timeout:
-                    print(f"Request timed out, retrying... ({retry_count+1}/{max_retries})")
-                    retry_count += 1
-                    time.sleep(5)  # Wait 5 seconds before retrying
+                        print(f"Request timed out, retrying in {wait_time}s ({retry_count+1}/{max_retries})")
+                        time.sleep(wait_time)
+                        retry_count += 1
                 except requests.exceptions.RequestException as e:
                     print(f"Request exception: {e}")
                     retry_count += 1
                     time.sleep(5)  # Wait 5 seconds before retrying
 
-            # If still failing after maximum retries, fall back to original implementation
-            print(f"Failed after {max_retries} retries, falling back to original implementation")
-            raise Exception("Failed after maximum retries")
+            # Reset and retry from beginning with exponential backoff
+            print(f"Failed after {max_retries} retries, restarting with exponential backoff...")
+            time.sleep(wait_time)
+            return llm_text_query(system_prompt, prompt, seed, model)
 
     except ImportError:
         # If portkey is not installed, fall back to original implementation
