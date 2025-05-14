@@ -3,9 +3,14 @@ PRIORITY_GAMES = [
     'sokoban_match3',
     'limerick',
     'blocks',
-    'slidings',
+    # 'slidings',
     'tiny treasure hunt',
     'castlemouse',
     'atlas shrank',
+    'Zen_Puzzle_Garden',
+    'take_heart_lass',
+    'Sokodig',
     # 'test',
 ]
+
+PLOTS_DIR = 'plots'

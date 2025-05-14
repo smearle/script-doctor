@@ -1,3 +1,4 @@
+import glob
 import json
 import os
 import random
@@ -12,6 +13,7 @@ from openai import AzureOpenAI
 import requests
 import tiktoken
 
+from collect_games import GALLERY_GAMES_DIR
 from env import PSEnv
 from globals import PRIORITY_GAMES
 from parse_lark import get_tree_from_txt
@@ -265,14 +267,16 @@ def load_games_n_rules_sorted():
 
 
 def get_list_of_games_for_testing(all_games=True):
+    gallery_games = glob.glob(os.path.join(GALLERY_GAMES_DIR, '*.txt'))
+    gallery_games = [os.path.basename(g)[:-4] for g in gallery_games]
     if all_games:
         with open(GAMES_N_RULES_SORTED_PATH, 'r') as f:
             games_n_rules = json.load(f)
-        # We'll test on simpler games first.
-        games_n_rules = sorted(games_n_rules, key=lambda x: x[1])
-        games = [game for game, n_rules, has_randomness in games_n_rules]
-        # Throw our hand-picked set of games at the top to analyze them first.
-        games = PRIORITY_GAMES + [game for game in games if game not in PRIORITY_GAMES]
+        # Sort so that at the front of the list, we have games from our priority list, then the gallery then the rest of
+        # our dataset, with each subset in order of increasing complexity.
+        games_in_gallery_n_rules = [(game, game in PRIORITY_GAMES, game in gallery_games, n_rules) 
+                                    for game, n_rules, has_randomness in games_n_rules if not has_randomness]
+        games = sorted(games_in_gallery_n_rules, key=lambda x: (not x[0], not x[1], x[2]))
     else:
         games = PRIORITY_GAMES
     return games

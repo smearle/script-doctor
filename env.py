@@ -2411,6 +2411,17 @@ class PSEnv:
                         # No detected moving idxs in the kernel
                         detected_pattern_moving_idx = None
                     else:
+                        # If these tensors do not all have the same shape, then pad them with `-1s` as necessary
+                        max_detected_pattern_moving_idx_shape = max([k.shape for k in detected_pattern_moving_idxs])     
+                        detected_pattern_moving_idxs = [
+                            jnp.pad(k, 
+                                    ((0, max_detected_pattern_moving_idx_shape[0] - k.shape[0]),
+                                     (0, max_detected_pattern_moving_idx_shape[1] - k.shape[1]),
+                                     (0, 0),
+                                     (0, 0),
+                                     )) 
+                            for k in detected_pattern_moving_idxs]
+
                         detected_pattern_moving_idxs = jnp.stack(detected_pattern_moving_idxs, axis=0)
                         detected_pattern_moving_idx = jnp.max(detected_pattern_moving_idxs, axis=0)
                         # Now we have a board-shaped map of all the moving indices detected by *any* kernel.

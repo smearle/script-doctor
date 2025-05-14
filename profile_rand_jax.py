@@ -2,11 +2,15 @@
 import functools
 import glob
 import itertools
+import logging
 import os
+import traceback
+
 import hydra
 import imageio
 import jax
 import json
+import jaxlib
 import pandas as pd
 from timeit import default_timer as timer
 
@@ -20,21 +24,38 @@ from utils_rl import get_env_params_from_config, init_ps_env
 # games = [os.path.basename(p) for p in game_paths]
 
 batch_sizes = [
-    1_200,
-    600,
-    400,
-    200,
-    100,
-    50,
-    10,
     1,
+    10,
+    50,
+    100,
+    200,
+    400,
+    600,
+    1_200,
 ]
 
 JAX_N_ENVS_TO_FPS_PATH = os.path.join('data', 'jax_n_envs_to_fps.json')
 
 
+def get_step_str(s):
+    return f'{s}-step_rollout'
+
+def get_step_int(step_str):
+    return int(step_str.split('-')[0])
+
+def get_level_str(level_i):
+    return f'level-{level_i}'
+
+def get_level_int(level_str):
+    return int(level_str.split('-')[1])
+
+def save_results(results):
+    with open(JAX_N_ENVS_TO_FPS_PATH, 'w') as f:
+        json.dump(results, f, indent=4)
+
 @hydra.main(version_base="1.3", config_path='./conf', config_name='profile_jax')
 def profile(cfg: ProfileJaxRandConfig):
+    logging.getLogger().setLevel(logging.WARNING)
     devices = jax.devices()
     assert len(devices) == 1, f'JAX is not using a single device. Found {len(devices)} devices: {devices}. This is unexpected.'
     device_name = devices[0].device_kind
@@ -55,23 +76,41 @@ def profile(cfg: ProfileJaxRandConfig):
     # if config.overwrite:
 
     rng = jax.random.PRNGKey(42)
+    step_str = get_step_str(cfg.n_profile_steps)
 
-    results = {}
-    game_n_envs_to_fps = {}
-    if device_name not in results:
-        results[device_name] = {}
-    results[device_name][f'{cfg.n_profile_steps}-step_rollout'] = game_n_envs_to_fps
+
+    if cfg.overwrite or not os.path.isfile(JAX_N_ENVS_TO_FPS_PATH):
+        results = {}
+        game_n_envs_to_fps = {}
+        step_str = get_step_str(cfg.n_profile_steps)
+        if device_name not in results:
+            results[device_name] = {}
+        results[device_name][step_str] = game_n_envs_to_fps
+    else:
+        with open(JAX_N_ENVS_TO_FPS_PATH, 'r') as f:
+            results = json.load(f)
+        game_n_envs_to_fps = results[device_name][step_str]
 
     for (game, n_envs) in zip(games, batch_sizes):
+
+        if n_envs >= 1_200 and game in ['limerick']:
+            continue
+
         cfg.game = game
 
         print(f'\nGame: {game}, n_envs: {n_envs}.')
-        start = timer()
         env = init_ps_env(cfg)
 
-        for level_i in range(len(env.levels[:-1])):
+        for level_i in range(len(env.levels[:1])):
 
-            if not cfg.overwrite and game in game_n_envs_to_fps and level_i in game_n_envs_to_fps[game]:
+            level_str = get_level_str(level_i)
+            if game not in game_n_envs_to_fps:
+                game_n_envs_to_fps[game] = {}
+
+            if level_str not in game_n_envs_to_fps[game]:
+                game_n_envs_to_fps[game][level_str] = {}
+
+            if not cfg.overwrite and str(n_envs) in game_n_envs_to_fps[game][level_str]:
                 continue
 
             env_params = get_env_params_from_config(env, cfg)
@@ -79,7 +118,6 @@ def profile(cfg: ProfileJaxRandConfig):
             # INIT ENV
             rng, _rng = jax.random.split(rng)
             reset_rng = jax.random.split(_rng, n_envs)
-            obsv, env_state = jax.vmap(env.reset, in_axes=(0, None))(reset_rng, env_params)
 
             def _env_step(carry, unused):
                 env_state, rng = carry
@@ -97,25 +135,34 @@ def profile(cfg: ProfileJaxRandConfig):
 
             _env_step_jitted = jax.jit(_env_step)
 
-            print(f'Initialized and reset jitted PSEnv in {(timer() - start)} seconds.')
-
             start = timer()
-            carry = (env_state, rng)
-            carry, _ = _env_step_jitted(carry, None)
-            print(f'Finished 1st step in {(timer() - start)} seconds.')
 
-            start = timer()
-            carry, _ = _env_step_jitted(carry, None)
-            print(f'Finished 2nd step in {(timer() - start)} seconds.')
+            try:
+                obsv, env_state = jax.vmap(env.reset, in_axes=(0, None))(reset_rng, env_params)
+                carry = (env_state, rng)
 
-            start = timer()
-            carry, _ = _env_step_jitted(carry, None)
-            print(f'Finished 3rd step in {(timer() - start)} seconds.')
+                carry, _ = _env_step_jitted(carry, None)
+                print(f'Finished 1st step in {(timer() - start)} seconds.')
+                
+                start = timer()
+                carry, _ = _env_step_jitted(carry, None)
+                print(f'Finished 2nd step in {(timer() - start)} seconds.')
 
-            start = timer()
-            carry, env_states = jax.lax.scan(
-                _env_step_jitted, carry, None, cfg.n_profile_steps
-            )
+                start = timer()
+                carry, _ = _env_step_jitted(carry, None)
+                print(f'Finished 3rd step in {(timer() - start)} seconds.')
+
+                start = timer()
+                carry, env_states = jax.lax.scan(
+                    _env_step_jitted, carry, None, cfg.n_profile_steps
+                )
+
+            except jaxlib.xla_extension.XlaRuntimeError as e:
+                err_msg = traceback.format_exc()
+                print(f'Error in first step: {err_msg}')
+                results[device_name][step_str][game][level_str][n_envs] = None
+                save_results(results)
+                continue
 
             n_env_steps = cfg.n_profile_steps * n_envs
 
@@ -135,16 +182,8 @@ def profile(cfg: ProfileJaxRandConfig):
                 imageio.mimsave(gif_path, frames, duration=cfg.gif_frame_duration)
                 print(f'Finished saving gif in {timer() - start} seconds.')
 
-            if game not in game_n_envs_to_fps:
-                game_n_envs_to_fps[game] = {}
-            level_str = f'level-{level_i}'
-            if level_str not in game_n_envs_to_fps[game]:
-                game_n_envs_to_fps[game][level_str] = {}
             game_n_envs_to_fps[game][level_str][n_envs] = fps
-
-            # Save as json
-            with open(JAX_N_ENVS_TO_FPS_PATH, 'w') as f:
-                json.dump(results, f, indent=4)
+            save_results(results)
 
     else:
         # Load from json
