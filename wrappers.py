@@ -20,6 +20,7 @@ class RepresentationWrapper(PSEnv):
         ascii_chars = set(chr(i) for i in range(32, 127))
         background_char = '.'
         ascii_chars.remove(background_char)
+        ascii_chars.remove(' ')
 
         self.idxs_to_chars = {v: k for k, v in self.chars_to_idxs.items()}
         
@@ -72,15 +73,14 @@ class RepresentationWrapper(PSEnv):
         for vec in all_combinations:
             vec[background_idx] = 1
 
-        # Now process all unique combinations
-        unique_vecs = set(tuple(v) for v in all_combinations)
-        for vec_tuple in unique_vecs:
-            if vec_tuple not in self.vecs_to_chars:
-                if not ascii_chars:
-                    # Fallback to '?' for unhandled combinations
-                    self.vecs_to_chars[vec_tuple] = '?'
+        # Now assign ASCII characters to all combinations
+        for vec in all_combinations:
+            vec = tuple([int(i) for i in vec])
+            if vec not in self.vecs_to_chars:
+                if ascii_chars:
+                    self.vecs_to_chars[vec] = ascii_chars.pop()
                 else:
-                    self.vecs_to_chars[vec_tuple] = ascii_chars.pop()
+                    raise ValueError("Not enough ASCII characters to represent all object combinations.")
 
         # Handle empty cells (no objects except background)
         empty_vec = tuple([1 if i == background_idx else 0 for i in range(self.n_objs)])
