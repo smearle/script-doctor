@@ -20,7 +20,10 @@ class LLMGameAgent:
             "your task is to select the best action. "
             "Only respond with the action id (an integer from the provided action_space)."
         )
-        mapping_str = "\n".join([f"{k}: {v}" for k, v in mapping.items()])
+        try: 
+            mapping_str = "\n".join([f"{k}: {v}" for k, v in mapping.items()])
+        except:
+            mapping_str = mapping
         action_space_str = ", ".join(str(a) for a in action_space)
         # Provide action mapping (number to meaning) dynamically
         action_map_str = ", ".join([f"{k}={v}" for k, v in action_meanings.items()])

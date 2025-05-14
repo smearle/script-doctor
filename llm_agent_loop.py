@@ -128,20 +128,28 @@ def main():
 
         state_history = set()
         current_state = state
-
+        current_mapping = env.get_ascii_mapping()
+        current_legend = current_mapping
         for step in range(args.max_steps):
             print(f"\nStep {step+1}/{args.max_steps}")
 
             h = hash(state.multihot_level.tobytes())
             state_history.add(h)
 
+            # Get dynamically updated ASCII mapping info
+
+            current_legend = env.ascii_legend_str           
+
             action_id = agent.choose_action(
                 ascii_map=ascii_state,
-                mapping=mapping,
+                mapping=current_legend,  # 使用运行时生成的映射
                 rules=rules,
                 action_space=action_space,
-                action_meanings=action_meanings
+                action_meanings=action_meanings,
+             
             )
+
+     
             action_str = action_meanings[action_id]
             print(f"LLM chose action id: {action_id} ({action_str})")
             result["action_sequence"].append(int(action_id))
@@ -155,18 +163,18 @@ def main():
             print(ascii_state)
             print(f"Reward: {rew} | Win: {next_state.win}")
 
-            # 提取JAX数组中的实际奖励值并转换类型
+            # Extract actual reward values from JAX array and convert types
             result["reward_sequence"].append(float(rew.item()))  # 使用.item()提取标量值
             
-            # 记录初始和最终ASCII状态
+            # Record initial and final ASCII states
             if step == 0:
                 result["initial_ascii"] = ascii_state.split('\n')  # 存储为列表方便阅读
             result["final_ascii"] = ascii_state.split('\n')  # 每次更新最终状态
 
-            # 记录heuristic原始值到序列
+            # Record raw heuristic values to sequence
             result["heuristic_sequence"].append(float(next_state.heuristic.item()))  # 确保提取标量值
             
-            # 简化状态数据
+            # Simplify state data
             result["state_data"] = {
                 "score": int(next_state.score),
                 "win": bool(next_state.win),
@@ -183,12 +191,12 @@ def main():
 
             current_state = next_state
 
-        # 保留并转换heuristic数据
+        # Preserve and convert heuristic data
         result["heuristics"] = [float(h) for h in result["heuristic_sequence"]]
         del result["heuristic_sequence"]
         del result["score_sequence"] 
         
-        # 确保最终ASCII状态是最后一步的状态
+        # Ensure final ASCII state is from last step
         result["final_ascii"] = ascii_state.split('\n')
         
         save_dir = "llm_agent_results"
