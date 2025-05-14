@@ -1,0 +1,40 @@
+{
+  "model": "4o-mini",
+  "game": "slidings",
+  "win": false,
+  "action_sequence": [
+    2,
+    1,
+    3,
+    2
+  ],
+  "reward_sequence": [
+    -0.009999999776482582,
+    0.9900000095367432,
+    -1.0099999904632568,
+    -0.009999999776482582
+  ],
+  "initial_ascii": [
+    "#mmmn#",
+    "#pa  #",
+    "#  o #",
+    "d####e"
+  ],
+  "final_ascii": [
+    "#mn###",
+    "#pa  #",
+    "#  o #",
+    "d####e"
+  ],
+  "state_data": {
+    "score": 0,
+    "win": false,
+    "step": 4
+  },
+  "heuristics": [
+    -3.0,
+    -2.0,
+    -3.0,
+    -3.0
+  ]
+}
