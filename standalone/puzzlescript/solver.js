@@ -391,10 +391,12 @@ function getScoreNormalized(engine) {
 }
 
 function takeAction(engine, action) {
-  let changed = engine.processInput(action);
+  // let changed = engine.processInput(action);
+  let changed = processInputSearch(engine, action);
   if (engine.getWinning()) {
+    DoRestartSearch(engine);
     // console.log('Winning!');
-    return true;
+    // return true;
   }
   return false;
 }
@@ -402,13 +404,23 @@ function takeAction(engine, action) {
 function randomRollout(engine, maxIters=100_000) {
   let i = 0;
   let start_time = Date.now();
+  const timeout_ms = 60 * 1000;
   while (i < maxIters) {
-    let changed = engine.processInput(Math.min(5, Math.floor(Math.random() * 6)));
+    // if (i % 1000 == 0) {
+    elapsed_time = Date.now() - start_time;
+    if (elapsed_time > timeout_ms) {
+      console.log(`Timeout after ${elapsed_time / 1000} seconds. Returning.`);
+      return [false, [], i, ((Date.now() - start_time) / 1000)];
+    }
+    // }
+    // let changed = engine.processInput(Math.min(5, Math.floor(Math.random() * 6)));
+    let changed = processInputSearch(engine, Math.min(5, Math.floor(Math.random() * 6)));
     if (changed) {
       if (engine.getWinning()) {
         // console.log(`Winning! Solution:, ${new_action_seq}\n Iterations: ${i}`);
         // console.log('FPS:', (i / (Date.now() - start_time) * 1000).toFixed(2));
-        return [true, [], i, ((Date.now() - start_time) / 1000)];
+        // return [true, [], i, ((Date.now() - start_time) / 1000)];
+        DoRestartSearch(engine);
       }
     }
     i++;
@@ -420,7 +432,16 @@ function randomRollout(engine, maxIters=100_000) {
   return [false, [], i, ((Date.now() - start_time) / 1000)];
 }
 
+function processInputSearch(engine, action){
+  var changedSomething = engine.processInput(action);
+  while (engine.getAgaining()) {
+    changedSomething = engine.processInput(-1) || changedSomething;
+  }
+ return changedSomething;
+}
+
 function solveBFS(engine, maxIters=100_000) {
+  const timeout_ms = 60 * 1000;
   function hashState(state) {
     return JSON.stringify(state).split('').reduce((hash, char) => {
       return (hash * 31 + char.charCodeAt(0)) % 1_000_000_003; // Simple hash
@@ -447,6 +468,11 @@ function solveBFS(engine, maxIters=100_000) {
   start_time = Date.now();
   // console.log(frontier.size())
   while (frontier.size() > 0 && i < maxIters) {
+    if (i % 1000 == 0) {
+      if (elapsed_time > timeout_ms) {
+        console.log(`Timeout after ${elapsed_time / 1000} seconds. Returning best result found so far.`);
+      }
+    }
     backups = [];
 
     // const level = frontier.shift();
@@ -467,7 +493,7 @@ function solveBFS(engine, maxIters=100_000) {
       new_action_seq = action_seq.slice();
       new_action_seq.push(move);
       try {
-        changed = engine.processInput(move);
+        changed = processInputSearch(engine, move);
       } catch (e) {
         // console.log('Error while processing input:', e);
         return [false, [], i, ((Date.now() - start_time) / 1000)];
@@ -515,6 +541,30 @@ function solveBFS(engine, maxIters=100_000) {
   return [true, sol, i, ((Date.now() - start_time) / 1000)];
 }
 
+function DoRestartSearch(engine, force) {
+  if (engine.getRestarting()){
+    return;
+  }
+  if (force!==true && ('norestart' in engine.getState().metadata)) {
+    return;
+  }
+  engine.setRestarting(true);
+  if (force!==true) {
+    engine.addUndoState(engine.backupLevel());
+  }
+
+  engine.restoreLevel(engine.getRestartTarget());
+  // tryPlayRestartSound();
+
+  if ('run_rules_on_level_start' in engine.getState().metadata) {
+    engine.processInput(-1,true);
+  }
+  
+  engine.getLevel().commandQueue=[];
+  engine.getLevel().commandQueueSourceRules=[];
+  engine.setRestarting(false);
+}
+
 function solveAStar(engine, maxIters=100_000) {
   function MakeSolution(state) {
     var sol = [];
@@ -528,30 +578,6 @@ function solveAStar(engine, maxIters=100_000) {
       }
     }
     return sol;
-  }
-
-  function DoRestartSearch(engine, force) {
-    if (engine.getRestarting()){
-      return;
-    }
-    if (force!==true && ('norestart' in engine.getState().metadata)) {
-      return;
-    }
-    engine.setRestarting(true);
-    if (force!==true) {
-      engine.addUndoState(engine.backupLevel());
-    }
-  
-    engine.restoreLevel(engine.getRestartTarget());
-    // tryPlayRestartSound();
-  
-    if ('run_rules_on_level_start' in engine.getState().metadata) {
-      engine.processInput(-1,true);
-    }
-    
-    engine.getLevel().commandQueue=[];
-    engine.getLevel().commandQueueSourceRules=[];
-    engine.setRestarting(false);
   }
 
   function byScoreAndLength(a, b) {
@@ -574,7 +600,7 @@ function solveAStar(engine, maxIters=100_000) {
 	muted = true;
 	solving = true;
 	// restartTarget = backupLevel();
-	DoRestartSearch(engine);
+	DoRestartSearch(engine, 0);
 	hasUsedCheckpoint = false;
 	backups = [];
 	var oldDT = engine.getDeltaTime();
@@ -620,10 +646,11 @@ function solveAStar(engine, maxIters=100_000) {
 			for (var k = 0, len2 = parentState.length; k < len2; k++) {
 				engine.getLevel().objects[k] = parentState[k];
 			}
-			var changedSomething = engine.processInput(actions[i]);
-			while (engine.getAgaining()) {
-				changedSomething = engine.processInput(-1) || changedSomething;
-			}
+			// var changedSomething = engine.processInput(actions[i]);
+			// while (engine.getAgaining()) {
+			// 	changedSomething = engine.processInput(-1) || changedSomething;
+			// }
+      var changedSomething = processInputSearch(engine, actions[i]);
 
 			if (changedSomething) {
 				if (engine.getLevel().objects in exploredStates) {
@@ -732,7 +759,8 @@ class MCTSNode{
   simulate(engine, max_length, score_fn, win_bonus){
     let changes = 0;
     for(let i=0; i<max_length; i++){
-      let changed = engine.processInput(Math.min(5, Math.floor(Math.random() * 6)));
+      // let changed = engine.processInput(Math.min(5, Math.floor(Math.random() * 6)));
+      let changed = processInputSearch(engine, Math.min(5, Math.floor(Math.random() * 6)));
       if(changed){
         changes += 1;
       }
@@ -835,7 +863,8 @@ function solveMCTS(engine, options = {}) {
     // selecting next node
     while(currentNode.is_fully_expanded()){
       currentNode = currentNode.select(options.c);
-      changed = engine.processInput(currentNode.action);
+      // changed = engine.processInput(currentNode.action);
+      changed = processInputSearch(engine, currentNode.action);
       if(engine.getWinning()){
         let sol = currentNode.get_actions();
         // console.log(`Winning! Solution:, ${sol}\n Iterations: ${i}\n Tree size: ${rootNode.tree_size()}`);
@@ -855,7 +884,8 @@ function solveMCTS(engine, options = {}) {
     //otherwise expand
     else{
       currentNode = currentNode.expand();
-      changed = engine.processInput(currentNode.action);
+      // changed = engine.processInput(currentNode.action);
+      changed = processInputSearch(engine, currentNode.action);
       if(engine.getWinning()){
         let sol = currentNode.get_actions();
         // console.log(`Winning! Solution:, ${sol}\n Iterations: ${i}`);

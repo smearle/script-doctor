@@ -28,7 +28,7 @@ PS_LARK_GRAMMAR_PATH = "syntax.lark"
 GAMES_DIR = os.path.join(DATA_DIR, 'scraped_games')
 MIN_GAMES_DIR = os.path.join(DATA_DIR, 'min_games')
 CUSTOM_GAMES_DIR = os.path.join('custom_games')
-simpd_dir = os.path.join(DATA_DIR, 'simplified_games')
+SIMPLIFIED_GAMES_DIR = os.path.join(DATA_DIR, 'simplified_games')
 TREES_DIR = os.path.join(DATA_DIR, 'game_trees')
 pretty_trees_dir = os.path.join(DATA_DIR, 'pretty_trees')
 # parsed_games_filename = os.path.join(DATA_DIR, "parsed_games.txt")
@@ -429,8 +429,8 @@ def get_tree_from_txt(parser, game, log_dir: str = None, overwrite: bool = True,
     #     return
 
     # print(f"Parsing game {filepath} ({i+1}/{len(game_files)})")
-    simp_filepath = os.path.join(simpd_dir, simp_filename)
-    os.makedirs(simpd_dir, exist_ok=True)
+    simp_filepath = os.path.join(SIMPLIFIED_GAMES_DIR, simp_filename)
+    os.makedirs(SIMPLIFIED_GAMES_DIR, exist_ok=True)
     if overwrite or not (simp_filename in simpd_games):
         # Now save the simplified version of the file
         content = preprocess_ps(ps_text)
@@ -482,7 +482,7 @@ def get_tree_from_txt(parser, game, log_dir: str = None, overwrite: bool = True,
 
     min_parse_tree = StripPuzzleScript().transform(parse_tree)
     min_tree_path = os.path.join(TREES_DIR, game + '.pkl')
-    print(f"Writing parse tree to {min_tree_path}")
+    # print(f"Writing parse tree to {min_tree_path}")
     with open(min_tree_path, "wb") as f:
         pickle.dump(min_parse_tree, f)
     pretty_parse_tree_str = min_parse_tree.pretty()
@@ -572,10 +572,10 @@ if __name__ == "__main__":
     test_game_files = [f"{test_game}.txt" for test_game in TEST_GAMES]
     game_files = test_game_files + game_files
 
-    os.makedirs(simpd_dir, exist_ok=True)
+    os.makedirs(SIMPLIFIED_GAMES_DIR, exist_ok=True)
     scrape_log_dir = 'scrape_logs'
     os.makedirs(scrape_log_dir, exist_ok=True)
-    simpd_games = set(os.listdir(simpd_dir))
+    simpd_games = set(os.listdir(SIMPLIFIED_GAMES_DIR))
     for i, filename in enumerate(game_files):
         game_name = os.path.basename(filename)
         og_game_path = os.path.join(GAMES_DIR, filename)

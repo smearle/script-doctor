@@ -44,6 +44,7 @@ class ProfileStandalone(PSConfig):
     all_games: bool = False
     n_profile_steps: int = 5_000
     overwrite: bool = False
+    include_randomness: bool = True
 
 
 @dataclass
