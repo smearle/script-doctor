@@ -183,10 +183,12 @@ async function solveLevelBFS(levelIdx, captureStates=false, maxIters=1_000_000) 
   start_time = Date.now();
   console.log(frontier.size())
   while (frontier.size() > 0) {
-    const elapsed_time = Date.now() - start_time;
-    if (elapsed_time > timeout_ms) {
-      console.log(`Timeout after ${elapsed_time / 1000} seconds. Returning best result found so far.`);
-      return [sol, false, bestScore, bestState, i, true];
+    // if (i % 1000) {
+      const elapsed_time = Date.now() - start_time;
+      if (elapsed_time > timeout_ms) {
+        console.log(`Timeout after ${elapsed_time / 1000} seconds. Returning best result found so far.`);
+        return [sol, false, bestScore, bestState, i, true];
+      // }
     }
 
     // This is a global variable of previous states. Clear it to be safe (though processInputSearch shouldn't be using 

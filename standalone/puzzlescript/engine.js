@@ -33,6 +33,18 @@ function doSetupTitleScreenLevelContinue(){
 
 doSetupTitleScreenLevelContinue();
 
+function consolePrint(msg, lineNumber) {
+    console.log(msg);
+}
+function logWarning(msg, lineNumber) {
+    console.log("Warning: " + msg);
+}
+function logError(msg, lineNumber) {
+    console.log("Error: " + msg);
+}
+function logErrorCacheable(msg, lineNumber) {
+    return logError(msg, lineNumber);
+}
 
 var verbose_logging=false;
 var throttle_movement=false;
@@ -2396,24 +2408,24 @@ function generateExtraMembers(state) {
         var key = state.metadata[i];
         var val = state.metadata[i + 1];
         if (key === 'color_palette') {
-            if (val in colorPalettesAliases) {
-                val = colorPalettesAliases[val];
-            }
+            // if (val in colorPalettesAliases) {
+            //     val = colorPalettesAliases[val];
+            // }
             if (colorPalettes[val] === undefined) {
                 logError('Palette "' + val + '" not found, defaulting to arnecolors.', 0);
             } else {
                 colorPalette = colorPalettes[val];
             }
         } else if (key === 'debug') {
-            if (IDE && unitTesting===false){
-                debugMode = true;
-                cache_console_messages = true;
-            }
+            // if (IDE && unitTesting===false){
+            //     debugMode = true;
+            //     cache_console_messages = true;
+            // }
         } else if (key === 'verbose_logging') {
-            if (IDE && unitTesting===false){
-                verbose_logging = true;
-                cache_console_messages = true;
-            }
+            // if (IDE && unitTesting===false){
+            //     verbose_logging = true;
+            //     cache_console_messages = true;
+            // }
         } else if (key === 'throttle_movement') {
             throttle_movement = true;
         }
@@ -5707,10 +5719,10 @@ var sprites = [
 ];
 
 function tryPlaySimpleSound(soundname) {
-	if (state.sfx_Events[soundname]!==undefined) {
-		var seed = state.sfx_Events[soundname];
-		playSound(seed,true);
-	}
+	// if (state.sfx_Events[soundname]!==undefined) {
+	// 	var seed = state.sfx_Events[soundname];
+	// 	playSound(seed,true);
+	// }
 }
 function tryPlayTitleSound() {
 	tryPlaySimpleSound("titlescreen");

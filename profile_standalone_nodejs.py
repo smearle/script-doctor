@@ -1,4 +1,5 @@
 import json
+import multiprocessing as mp
 import os
 
 import random
@@ -10,7 +11,7 @@ import hydra
 from javascript import require
 
 from conf.config import ProfileJaxRandConfig, ProfileStandalone
-from parse_lark import GAMES_DIR, MIN_GAMES_DIR
+from parse_lark import GAMES_DIR, SIMPLIFIED_GAMES_DIR
 from utils import get_list_of_games_for_testing
 
 engine = require('./standalone/puzzlescript/engine.js')
@@ -18,39 +19,39 @@ solver = require('./standalone/puzzlescript/solver.js')
 
 STANDALONE_NODEJS_RESULTS_PATH = os.path.join('data', 'standalone_nodejs_results.json')
 
-def compile_game(game, level_i):
-    game_path = os.path.join(MIN_GAMES_DIR, f'{game}.txt')
-    with open(game_path, 'r') as f:
+
+def compile_game(engine, game, level_i):
+    game_path = os.path.join(SIMPLIFIED_GAMES_DIR, f'{game}.txt')
+    with open(f'{game_path[:-4]}_simplified.txt', 'r') as f:
         game_text = f.read()
     engine.compile(game_text, level_i)
+    return game_text
 
 def get_algo_name(algo):
     return str(algo).split(' ')[1].strip(']')
 
 actions = ["LEFT", "RIGHT", "UP", "DOWN", "ACTION"]
 
-def rand_rollout_from_python(engine, solver, n_steps, timeout=1000):
+def rand_rollout_from_python(engine, solver, game_text, level_i, n_steps, timeout=1000):
     start_time = timer()
     for i in range(n_steps):
-        # if (i % 1_000) and (timer() - start_time > timeout):
-        #     fps = i / (timer() - start_time)
-        #     return False, [], i, fps
+        if (i % 1_000) and (timer() - start_time > timeout):
+            fps = i / (timer() - start_time)
+            return False, [], i, fps
         action = random.randint(0, 5)
-        winning = solver.takeAction(engine, action)
-        if winning:
-            return True, [], i, start_time - timer()
+        solver.takeAction(engine, action)
     return False, [], i, timer() - start_time
         
 
 # algos = [solver.solveBFS, solver.solveAStar, solver.solveMCTS]:
-algos = [solver.randomRollout, rand_rollout_from_python, solver.solveBFS]
+algos = [solver.randomRollout, rand_rollout_from_python]
 
 
 # @hydra.main(version_base="1.3", config_path='./', config_name='profile_standalone')
 @hydra.main(version_base="1.3", config_path='./', config_name='profile_standalone_config')
 def main(cfg: ProfileStandalone):
     if cfg.game is None:
-        games_to_test = get_list_of_games_for_testing(all_games=True)
+        games_to_test = get_list_of_games_for_testing(all_games=cfg.all_games, include_random=cfg.include_randomness)
     else:
         games_to_test = [cfg.game]
     results = {get_algo_name(algo): {} for algo in algos}
@@ -78,17 +79,16 @@ def main(cfg: ProfileStandalone):
                 print(f'Already solved {game} level {level_i} with {get_algo_name(algo)}, skipping.')
                 continue
             try:
-                compile_game(game, level_i)
+                game_text = compile_game(engine, game, level_i)
             except Exception as e:
                 print(f'Error compiling game {game} level {level_i}: {e}')
-                print(traceback.print_exc())
                 results[algo_name][game][level_i] = {"Error": traceback.print_exc()}
                 continue
 
             if algo == rand_rollout_from_python:
-                result = rand_rollout_from_python(engine, solver, timeout=1000, n_steps=cfg.n_profile_steps)
+                result = rand_rollout_from_python(engine, solver, game_text, level_i, timeout=1000, n_steps=cfg.n_profile_steps)
             else:
-                result = algo(engine, timeout=1000)
+                result = algo(engine, timeout=10000)
             result = {
                 'solved': result[0],
                 'actions': tuple(result[1]),

@@ -13,6 +13,7 @@ from openai import AzureOpenAI
 import requests
 import tiktoken
 
+from globals import GAMES_TO_N_RULES_PATH, GAMES_N_RULES_SORTED_PATH
 from collect_games import GALLERY_GAMES_DIR
 from env import PSEnv
 from globals import PRIORITY_GAMES
@@ -266,7 +267,7 @@ def load_games_n_rules_sorted():
     return games_n_rules
 
 
-def get_list_of_games_for_testing(all_games=True):
+def get_list_of_games_for_testing(all_games=True, include_random=False):
     gallery_games = glob.glob(os.path.join(GALLERY_GAMES_DIR, '*.txt'))
     gallery_games = [os.path.basename(g)[:-4] for g in gallery_games]
     if all_games:
@@ -275,8 +276,9 @@ def get_list_of_games_for_testing(all_games=True):
         # Sort so that at the front of the list, we have games from our priority list, then the gallery then the rest of
         # our dataset, with each subset in order of increasing complexity.
         games_in_gallery_n_rules = [(game, game in PRIORITY_GAMES, game in gallery_games, n_rules) 
-                                    for game, n_rules, has_randomness in games_n_rules if not has_randomness]
-        games = sorted(games_in_gallery_n_rules, key=lambda x: (not x[0], not x[1], x[2]))
+                                    for game, n_rules, has_randomness in games_n_rules if not has_randomness or include_random]
+        games = sorted(games_in_gallery_n_rules, key=lambda x: (not x[1], not x[2], x[3]))
+        games = [g[0] for g in games]
     else:
         games = PRIORITY_GAMES
     return games
@@ -306,7 +308,16 @@ def init_ps_env(game, level_i, max_episode_steps):
     parser = Lark(puzzlescript_grammar, start="ps_game", maybe_placeholders=False)
     tree, success, err_msg = get_tree_from_txt(parser, game, test_env_init=False)
     parse_time = timer()
-    print(f'Parsed PS file using Lark into python PSTree object in {(parse_time - start_time) / 1000} seconds.')
+    # print(f'Parsed PS file using Lark into python PSTree object in {(parse_time - start_time) / 1000} seconds.')
     env = PSEnv(tree, jit=True, level_i=level_i, max_steps=max_episode_steps, print_score=False, debug=False)
-    print(f'Initialized PSEnv in {(timer() - parse_time) / 1000} seconds.')
+    # print(f'Initialized PSEnv in {(timer() - parse_time) / 1000} seconds.')
     return env
+
+    
+if __name__ == '__main__':
+    with open(GAMES_N_RULES_SORTED_PATH, 'r') as f:
+        games_n_rules = json.load(f)
+    games_to_n_rules = {game: (n_rules, has_randomness) for game, n_rules, has_randomness in games_n_rules}
+
+    with open(GAMES_TO_N_RULES_PATH, 'w') as f:
+        json.dump(games_to_n_rules, f, indent=4)

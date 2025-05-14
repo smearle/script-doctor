@@ -4,6 +4,7 @@ bin/
 .vscode
 .build
 logs*
+plots/
 
 script-doctor-nodejs
 

@@ -11,9 +11,7 @@ from gen_tree import GenPSTree
 from parse_lark import TREES_DIR, GAMES_DIR, count_rules, get_tree_from_txt
 from ps_game import PSGameTree
 from utils import GAMES_N_RULES_SORTED_PATH
-
-
-GAMES_N_RULES_SORTED_PATH = os.path.join('data', 'games_n_rules.json')
+from globals import GAMES_TO_N_RULES_PATH, GAMES_N_RULES_SORTED_PATH
 
 
 def main():
@@ -46,6 +44,10 @@ def main():
     # Save the sorted list to a json
     with open(GAMES_N_RULES_SORTED_PATH, 'w') as f:
         json.dump(games_n_rules, f, indent=4)
+
+    games_to_n_rules = {game: n_rules for game, n_rules, _ in games_n_rules}
+    with open(GAMES_TO_N_RULES_PATH, 'w') as f:
+        json.dump(games_to_n_rules, f, indent=4)
 
 
 if __name__ == '__main__':
