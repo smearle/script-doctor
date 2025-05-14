@@ -1152,11 +1152,11 @@ recompute_stats = Config.recompute_stats
 
 #LLM agents
 # 
-from LLM_agent import LLMAgent, ReinforcementWrapper, StateVisualizer
+from LLM_agent import LLMAgent, StateVisualizer
 
 # Initialize agent system
 llm_agent = LLMAgent(model_name="gpt-4o")
-rl_wrapper = ReinforcementWrapper(llm_agent)
+
 
 @app.route('/llm_action', methods=['POST'])
 def llm_action():

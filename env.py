@@ -1190,6 +1190,11 @@ class PSEnv:
         self.chars_to_idxs = {obj_to_char[k]: v for k, v in self.objs_to_idxs.items() if k in obj_to_char}
         self.chars_to_idxs.update({k: v for k, v in self.objs_to_idxs.items() if len(k) == 1})
 
+        # Automatically assign unused ASCII characters to joint objects
+        ascii_chars = set(chr(i) for i in range(32, 127))
+        # Remove already used characters
+        ascii_chars -= set(self.chars_to_idxs.keys())
+
         # Generate vectors to detect joint objects
         for jo, subobjects in joint_tiles.items():
             vec = np.zeros(self.n_objs, dtype=bool)
@@ -1199,7 +1204,14 @@ class PSEnv:
                     print(so)
                 vec += self.obj_vecs[self.objs_to_idxs[so]]
             assert jo not in self.chars_to_idxs
-            self.chars_to_idxs[jo] = self.obj_vecs.shape[0]
+            # Assign an unused ASCII character
+            if not ascii_chars:
+                raise ValueError("Ran out of ASCII characters for joint objects.")
+            assigned_char = ascii_chars.pop()
+            joint_idx = self.obj_vecs.shape[0]  # index before append
+            self.chars_to_idxs[assigned_char] = joint_idx
+            obj_to_char[jo] = assigned_char
+            self.chars_to_idxs[jo] = joint_idx  # For compatibility
             self.obj_vecs = np.concatenate((self.obj_vecs, vec[None]), axis=0)
 
         if self.jit:

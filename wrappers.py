@@ -35,7 +35,7 @@ class RepresentationWrapper(PSEnv):
         # the user.
         vecs = [tuple([int(i) for i in v]) for v in obj_vecs]
         # vecs = [tuple([int(i) for i in v]) for v in obj_vecs[:-1]]
-        self.vecs_to_chars = {vec: self.idxs_to_chars[i] for i, vec in enumerate(vecs)}
+        self.vecs_to_chars = {vec: self.idxs_to_chars.get(i, '?') for i, vec in enumerate(vecs)}
 
         # Remove all used ASCII characters from the set
         ascii_chars -= set(self.vecs_to_chars.values())
@@ -76,6 +76,30 @@ class RepresentationWrapper(PSEnv):
                 obj_names = ["background"]
             legend_lines.append(f"{repr(char)}: {', '.join(obj_names)}")
         return "\n".join(legend_lines)
+
+    def get_ascii_mapping(self):
+        """
+        Return a dictionary mapping each ASCII character to a list of object names.
+        Example: {'@': ['player'], '#': ['wall'], ...}
+        """
+        mapping = {}
+        for char, vec in self.chars_to_vecs.items():
+            obj_idxs = [i for i, val in enumerate(vec) if val]
+            if not obj_idxs:
+                obj_names = ["empty"]
+            else:
+                obj_names = [obj for obj, idx in self.objs_to_idxs.items() if idx in obj_idxs and obj != "background"]
+            if not obj_names:
+                obj_names = ["background"]
+            mapping[char] = obj_names
+        return mapping
+
+    def get_action_meanings(self):
+        """
+        Return a dictionary mapping action index to its meaning.
+        Example: {0: "left", 1: "down", 2: "right", 3: "up", 4: "action"}
+        """
+        return {0: "left", 1: "down", 2: "right", 3: "up", 4: "action"}
 
 
     def print_ascii_legend(self):
