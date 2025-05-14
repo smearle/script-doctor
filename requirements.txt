@@ -7,7 +7,9 @@ flax
 gym
 gymnax
 hydra-core
+hydra-submitit-launcher
 imageio
+javascript
 # jax[cuda]  # or `jax` if no CUDA is not an option
 jax
 lark

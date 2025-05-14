@@ -41,6 +41,17 @@ Similarly, you can launch the javascript PuzzleScript editor with:
 ```
 python server.py mode=None headless=False auto_launch_client=True port=8002
 ```
+, then copy games into the editor and compile and playtest them there manually. (TODO: could be nice to automatically load a game from a command-line argument.)
+
+## Validating the jax engine
+
+To generate solutions for games using the javascript version of puzzlescript, run:
+```
+python server.py mode=gen_solutions auto_launch_client=True headless=True port=8001
+```
+This will launch a (headless) browser that runs PS in JS, and save the resultant solutions.
+
+We can then validate that these solutions lead to the same win conditions
 
 ## Profiling the speed of random actions
 ```
@@ -52,11 +63,6 @@ python profile_rand_nodejs.py
 
 ## Tree search
 
-To generate solutions for games using the javascript version of puzzlescript, run:
-```
-python server.py mode=gen_solutions auto_launch_client=True headless=True port=8001
-```
-This will launch a (headless) browser that runs PS in JS.
 
 
 ## Reinforcement learning

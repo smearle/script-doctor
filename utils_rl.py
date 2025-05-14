@@ -402,17 +402,7 @@ def save_checkpoint(config: MultiAgentConfig, ckpt_manager, runner_state, t):
     ckpt_manager.wait_until_finished() 
 
 
+import utils
+
 def init_ps_env(config: RLConfig, verbose: bool = False) -> PSEnv:
-    start_time = timer()
-    game = config.game
-    level_i = config.level_i
-    with open("syntax.lark", "r", encoding='utf-8') as file:
-        puzzlescript_grammar = file.read()
-    # Initialize the Lark parser with the PuzzleScript grammar
-    parser = Lark(puzzlescript_grammar, start="ps_game", maybe_placeholders=False)
-    tree, success, err_msg = get_tree_from_txt(parser, game, test_env_init=False)
-    parse_time = timer()
-    print(f'Parsed PS file using Lark into python PSTree object in {(parse_time - start_time) / 1000} seconds.')
-    env = PSEnv(tree, jit=True, level_i=level_i, max_steps=config.max_episode_steps, print_score=False, debug=False)
-    print(f'Initialized PSEnv in {(timer() - parse_time) / 1000} seconds.')
-    return env
+    return utils.init_ps_env(config.game, config.level_i, config.max_episode_steps)

@@ -15,15 +15,35 @@ import numpy as np
 class PSConfig:
     game: str = "sokoban_basic"
     level_i: int = 0
-    max_episode_steps: np.int32 = np.iinfo(np.int32).max
+    max_episode_steps: int = np.iinfo(np.int32).max
 
     
 @dataclass
-class BFSConfig:
+class BFSConfig(PSConfig):
+    game: Optional[str] = None
     max_steps: int = 100_000
     n_best_to_keep: int = 1
-    render_gif: bool = False
+    render_gif: bool = True
     render_live: bool = False
+    all_games: bool = True
+
+
+@dataclass
+class ProfileJaxRandConfig(PSConfig):
+    all_games: bool = False
+    n_profile_steps: int = 5_000
+    # reevaluate: bool = True  # Whether to continue profiling, or just plot the results
+    overwrite: bool = False  # Whether to overwrite existing results
+    render: bool = False
+
+
+    
+@dataclass
+class ProfileStandalone(PSConfig):
+    game: Optional[str] = None
+    all_games: bool = False
+    n_profile_steps: int = 5_000
+    overwrite: bool = False
 
 
 @dataclass
@@ -234,15 +254,6 @@ class EnjoyConfig(EvalConfig):
 class EnjoyRLConfig(MultiAgentConfig, EnjoyConfig):
     pass
     
-
-@dataclass
-class ProfileEnvConfig(RLConfig):
-    all_games: bool = True
-    n_profile_steps: int = 5000
-    reevaluate: bool = True  # Whether to ontinue profiling, or just plot the results
-    render: bool = False
-
-
 @dataclass
 class SweepConfig(EnjoyConfig, EvalConfig):
     name: Optional[str] = None
@@ -261,6 +272,8 @@ class GetTracesConfig(EnjoyConfig):
 cs = ConfigStore.instance()
 cs.store(name="config", node=RLConfig)
 cs.store(name="bfs_config", node=BFSConfig)
+cs.store(name="profile_jax_config", node=ProfileJaxRandConfig)
+cs.store(name="profile_standalone_config", node=ProfileStandalone)
 cs.store(name="ma_config", node=MultiAgentConfig)
 cs.store(name="enjoy_ma_pcgrl", node=EnjoyRLConfig)
 cs.store(name="get_traces_pcgrl", node=GetTracesConfig)
@@ -270,5 +283,4 @@ cs.store(name="train_accel_pcgrl", node=TrainAccelConfig)
 cs.store(name="enjoy_pcgrl", node=EnjoyConfig)
 cs.store(name="eval_pcgrl", node=EvalConfig)
 # cs.store(name="eval_ma_pcgrl", node=MultiAgentEvalConfig)
-cs.store(name="profile_pcgrl", node=ProfileEnvConfig)
 cs.store(name="batch_pcgrl", node=SweepConfig)

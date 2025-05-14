@@ -32,6 +32,7 @@ import requests
 
 from client import open_browser
 import game_gen
+from globals import PRIORITY_GAMES
 from parse_lark import GAMES_DIR, MIN_GAMES_DIR, PrintPuzzleScript, RepairPuzzleScript, StripPuzzleScript, add_empty_sounds_section, preprocess_ps, TEST_GAMES
 from prompts import *
 from sort_games_by_n_rules import GAMES_N_RULES_SORTED_PATH
@@ -541,10 +542,6 @@ games_to_skip_for_speed = set({
     "Microban_I",
 })
 
-priority_games = [
-    'blocks',
-    'limerick',
-]
 
 @app.route('/list_scraped_games', methods=['POST'])
 def list_scraped_games():
@@ -561,7 +558,7 @@ def list_scraped_games():
     games_n_rules = sorted(games_n_rules, key=lambda x: x[1])
     # Exclude games with randomness for the purpose of tree search
     game_names = [game[0] for game in games_n_rules if not game[1]]
-    game_names = priority_games + [game for game in game_names if game not in priority_games]
+    game_names = PRIORITY_GAMES + [game for game in game_names if game not in PRIORITY_GAMES]
     for filename in game_names:
         if filename.startswith('rigid_'):
             print(f"Skipping {filename} because it seems to be a pesky rigid body game")
