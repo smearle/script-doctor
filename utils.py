@@ -98,15 +98,15 @@ o_key = os.getenv("O3_MINI_KEY")
 
 client = None
 
-def llm_text_query(system_prompt, prompt, seed, model):
+def llm_text_query(system_prompt, prompt, model, api_key=None, base_url=None, model_type=None):
     """
     Use Portkey API to call LLM
     
     Parameters:
         system_prompt: System prompt
         prompt: User prompt
-        seed: Random seed
-        model: Model name, can be "o3-mini", "gpt-4o-mini", "vertex-ai"
+
+        model: Model name, can be "o3-mini", "4o-mini", "gemini"
         
     Returns:
         LLM response text
@@ -119,28 +119,14 @@ def llm_text_query(system_prompt, prompt, seed, model):
     
     # Select different virtual keys based on the model parameter
     virtual_key = os.environ.get("PORTKEY_O3MINI_KEY", "")
-    if model == "gpt-4o-mini":
+    if model == "4o-mini":
         virtual_key = os.environ.get("PORTKEY_GPT4O_KEY", "")
-    elif model == "vertex-ai":
+    elif model == "gemini":
         virtual_key = os.environ.get("PORTKEY_VERTEX_KEY", "")
-    
+        model ="gemini-2.0-flash-exp"
     # Try using Portkey API
     try:
-        if model == "gemini-2.0-flash-exp":
-            from portkey_ai import Portkey
-            print(f'Querying Portkey Gemini model: {model}')
-            portkey = Portkey(
-                api_key=os.environ.get("PORTKEY_BEARER", ""),
-                virtual_key=os.environ.get("PORTKEY_VERTEX_KEY", ""),
-                base_url=os.environ.get("PORTKEY_BASE_URL", "https://ai-gateway.apps.cloud.rt.nyu.edu")
-            )
-            completion = portkey.chat.completions.create(
-                messages=messages,
-                model="gemini-2.0-flash-exp",
-                max_tokens=512
-            )
-            return completion.choices[0].message.content
-        else:
+       
             import requests
             import json
 
@@ -160,9 +146,9 @@ def llm_text_query(system_prompt, prompt, seed, model):
             }
 
             # Send request, set timeout and retry count
-            max_retries = 5   # 最大重试次数保持5次
+            max_retries = 8   # 增加最大重试次数
             retry_count = 0
-            base_wait = 2     # 将初始等待时间设为2秒
+            base_wait = 5     # 延长基础等待时间到5秒
 
             while retry_count < max_retries:
                 wait_time = base_wait * (2 ** retry_count)  # 指数退避策略2^n
@@ -174,18 +160,16 @@ def llm_text_query(system_prompt, prompt, seed, model):
                         response_data = response.json()
                         print('Query completed successfully.')
                         return response_data['choices'][0]['message']['content']
-                    elif response.status_code == 504:  # Gateway Timeout
-                        print(f"Gateway timeout (504), retrying... ({retry_count+1}/{max_retries})")
+                    elif response.status_code in [429, 504]:  # Rate limit or Gateway Timeout
+                        wait_time = int(response.headers.get('Retry-After', base_wait * (2 ** retry_count)))
+                        print(f"Rate limited (429), retrying in {wait_time}s ({retry_count+1}/{max_retries})")
+                        time.sleep(wait_time)
                         retry_count += 1
-                        time.sleep(5)  # Wait 5 seconds before retrying
                     else:
                         print(f"Request failed with status code: {response.status_code}")
                         print(f"Response text: {response.text}")
-                        # If it's a 404 error and the model is vertex-ai, try falling back to o3-mini
-                        if response.status_code == 404 and model == "vertex-ai":
-                            print("Vertex AI model not found, falling back to o3-mini...")
-                            return llm_text_query(system_prompt, prompt, seed, "o3-mini")
-                        # For other errors, throw an exception
+                        if response.status_code == 429:  # Special handling for Gemini quota limits
+                            time.sleep(30)  # Additional cooldown
                         raise Exception(f"API request failed with status code: {response.status_code}")
                 except requests.exceptions.Timeout:
                         print(f"Request timed out, retrying in {wait_time}s ({retry_count+1}/{max_retries})")
@@ -196,10 +180,24 @@ def llm_text_query(system_prompt, prompt, seed, model):
                     retry_count += 1
                     time.sleep(5)  # Wait 5 seconds before retrying
 
-            # Reset and retry from beginning with exponential backoff
-            print(f"Failed after {max_retries} retries, restarting with exponential backoff...")
-            time.sleep(wait_time)
-            return llm_text_query(system_prompt, prompt, seed, model)
+            # 增加指数退避时间并继续重试
+            # 针对Vertex AI的配额限制增加更长的退避时间
+            if model == "gemini":
+                print("检测到Gemini模型配额限制，启用增强退避策略")
+                max_retries = 5  # 减少最大重试次数但增加等待时间
+                base_wait = 60  # 基础等待时间增加到60秒
+                wait_time = base_wait * (2 ** retry_count)
+                if retry_count >= max_retries:
+                    raise Exception("Vertex AI配额限制已达最大重试次数，请稍后再试或申请增加配额")
+                print(f"Gemini配额限制重试 {retry_count}/{max_retries}，等待 {wait_time} 秒")
+                time.sleep(wait_time)
+                retry_count += 1
+            else:
+                retry_count += 1
+                wait_time = base_wait * (2 ** retry_count)
+                print(f"Retry {retry_count} with exponential backoff: {wait_time} seconds")
+                time.sleep(wait_time)
+            return llm_text_query(system_prompt, prompt, model)
 
     except ImportError:
         # If portkey is not installed, fall back to original implementation

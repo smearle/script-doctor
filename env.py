@@ -1094,7 +1094,9 @@ class PSEnv:
         names_to_alts = get_names_to_alts(tree.objects)
         alts_to_names = {v: k for k, v in names_to_alts.items()}
         self.meta_objs = meta_objs
-        self.max_steps = max_steps
+        self.max_steps = max_steps  
+        self.state_history = []  
+        self.total_reward = 0  
 
         # Add to the legend any objects to whose keys are specified in their object definition
         for obj_key, obj in tree.objects.items():

@@ -33,7 +33,11 @@ class LLMGameAgent:
             f"Please select the best action and ONLY return the action id (an integer from action_space)."
         )
         # Use a fixed seed for reproducibility if needed
-        response = llm_text_query(system_prompt, prompt, seed=42, model=self.model_name)
+        response = llm_text_query(
+            system_prompt,
+            prompt,
+            model=self.model_name,
+        )
         # Extract the first integer in the response as the action id
         import re
         # Accept any valid action id from action_space
