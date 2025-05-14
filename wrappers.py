@@ -1,4 +1,6 @@
+import copy
 from itertools import product, combinations
+import itertools
 
 from gymnax.environments import environment
 import jax
@@ -8,7 +10,16 @@ from env import PSEnv, PSParams, PSState, multihot_to_desc
 from parse_lark import PS_LARK_GRAMMAR_PATH, get_tree_from_txt
 
 
-# class RepresentationWrapper(GymnaxWrapper, PSEnv):
+def vec_to_obj_names(vec, idxs_to_objs):
+    """Convert a binary vector to a list of object names."""
+    obj_names = []
+    for i, val in enumerate(vec):
+        if val:
+            obj_name = idxs_to_objs.get(i)
+            if obj_name:
+                obj_names.append(obj_name)
+    return obj_names
+
 class RepresentationWrapper(PSEnv):
     """Log the episode returns and lengths."""
 
@@ -54,19 +65,25 @@ class RepresentationWrapper(PSEnv):
         # present in our mapping.
 
         # Generate all possible non-colliding combinations including same-layer objects
-        all_combinations = []
+        all_combinations_ints = []
         
         # First handle combinations where we pick one object from each collision layer
         for layer in self.collision_layers:
-            layer_objs = [self.objs_to_idxs[obj] for obj in layer]
+            layer_objs = [self.objs_to_idxs[obj] for obj in layer] + [-1]
             if layer_objs:
-                all_combinations.append(layer_objs)
+                all_combinations_ints.append(layer_objs)
+        all_combinations_ints = list(itertools.product(*all_combinations_ints))
         
         # Generate combinations across layers
-        for combo in product(*all_combinations):
+        all_combinations = []
+        print(f'all combinations ints: {all_combinations_ints}')
+        for combo in all_combinations_ints:
+            print(f'combo: {combo}')
+            combo = [i for i in combo if i != -1]
             vec = np.zeros(self.n_objs, dtype=int)
             vec[list(combo)] = 1
             all_combinations.append(vec)
+        print(f'all combinations: {all_combinations}')
 
         # Add background to all combinations
         background_idx = self.objs_to_idxs['background']
@@ -88,6 +105,7 @@ class RepresentationWrapper(PSEnv):
 
         self.chars_to_vecs = {v: k for k, v in self.vecs_to_chars.items()}
         self.ascii_legend_str = self.get_ascii_legend()
+
 
     def get_ascii_legend(self) -> str:
         """Return a human-readable legend mapping ASCII chars to object combinations."""
@@ -148,17 +166,19 @@ class RepresentationWrapper(PSEnv):
 
 
 def test_log_wrapper():
-    game = 'limerick'
+    game = 'slidings'
     with open(PS_LARK_GRAMMAR_PATH, 'r') as f:
         puzzlescript_grammar = f.read()
     parser = Lark(puzzlescript_grammar, start="ps_game", maybe_placeholders=False)
     tree, success, err_msg = get_tree_from_txt(parser, game, test_env_init=False)
+    print('Initializing environment')
     env = RepresentationWrapper(tree, debug=False, print_score=False)
     level = env.get_level(0)
     env_params = PSParams(
         level=level,
     )
     rng = jax.random.PRNGKey(0)
+    print(f'Resetting')
     obs, state = env.reset(rng=rng, params=env_params)
 
     env.print_ascii_legend()
