@@ -1,9 +1,13 @@
 import copy
+import os
+from typing import List
 import hydra
+import pandas as pd
 import submitit
 
-from conf.config import TrainConfig
+from conf.config import SweepRLConfig, TrainConfig
 from train import main as main_train
+from utils_rl import init_config
 
 
 game_to_n_envs = {
@@ -12,8 +16,17 @@ game_to_n_envs = {
 }
 
 
-@hydra.main(version_base="1.3", config_path="conf", config_name="train")
-def main(cfg: TrainConfig):
+def plot_rl_runs(cfgs: List[SweepRLConfig]):
+    cfgs = [init_config(cfg) for cfg in cfgs]
+    for cfg in cfgs:
+        exp_dir = cfg._exp_dir
+        progress_csv = os.path.join(exp_dir, "progress.csv")
+        df = pd.read_csv(progress_csv)
+        breakpoint()
+
+
+@hydra.main(version_base="1.3", config_path="conf", config_name="sweep_rl_config")
+def main(cfg: SweepRLConfig):
 
     seeds = list(range(0, 5))
 
@@ -34,6 +47,8 @@ def main(cfg: TrainConfig):
         cfg_i = copy.deepcopy(cfg)
         cfg_i.seed = seed
         sweep_configs.append(cfg_i)
+
+    if cfg.plot:
 
     executor.map_array(
         main_train,
