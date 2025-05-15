@@ -30,6 +30,7 @@ class BFSConfig(PSConfig):
 
 @dataclass
 class ProfileJaxRandConfig(PSConfig):
+    game: Optional[str] = None
     all_games: bool = False
     n_steps: int = 5_000
     # reevaluate: bool = True  # Whether to continue profiling, or just plot the results

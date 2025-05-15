@@ -189,7 +189,7 @@ def compute_sum_of_manhattan_dists(lvl, src, trg):
 
 def compute_min_manhattan_dist(lvl, src, trg):
     dists = compute_manhattan_dists(lvl, src, trg)
-    dists = jnp.where(jnp.isnan(dists), jnp.inf, dists)
+    dists = jnp.where(jnp.isnan(dists), jnp.iinfo(np.int32).max, dists)
     min_dist = jnp.min(dists).astype(np.int32)
     return min_dist
 
