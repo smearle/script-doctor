@@ -189,7 +189,7 @@ def compute_sum_of_manhattan_dists(lvl, src, trg):
 
 def compute_min_manhattan_dist(lvl, src, trg):
     dists = compute_manhattan_dists(lvl, src, trg)
-    dists = jnp.where(jnp.isnan(dists), jnp.inf, dists)
+    dists = jnp.where(jnp.isnan(dists), jnp.iinfo(np.int32).max, dists)
     min_dist = jnp.min(dists).astype(np.int32)
     return min_dist
 
@@ -463,8 +463,8 @@ def apply_rule_fn(
     # Now we apply the atomic rule function.
     rule_state: RuleState
 
-    if DEBUG:
-        jax.debug.print('      applying rule {rule_i} of group {grp_i}, block {block_i}')
+    # if DEBUG:
+    #     jax.debug.print('      applying rule {loop_rule_sttate.rule_i} of group {grp_i}, block {block_i}')
 
     ### COMPILE VS RUNTIME ###
     # if jit:
@@ -1980,8 +1980,41 @@ class PSEnv:
             return rng, m_cell
 
         # @partial(jax.jit, static_argnums=(3, 4))
-        def project_force_obj(rng, m_cell, cell_i, cell_detect_out: CellFnReturn, kernel_detect_out: KernelFnReturn,
-                            pattern_detect_out: PatternFnReturn, obj, force_idx):
+        def project_force_obj(rng, m_cell, cell_i, obj_idx: int, force_idx: int, cell_detect_out: CellFnReturn,
+                              kernel_detect_out: KernelFnReturn, pattern_detect_out: PatternFnReturn):
+            # Add the object
+            m_cell = m_cell.at[obj_idx].set(True)
+            if force_idx is None:
+                # Generate random movement.
+                force_idx = jax.random.randint(rng, (1,), 0, N_FORCES-1)[0]
+                rng, _ = jax.random.split(rng)
+
+            force_mask = self.obj_force_masks[obj_idx]
+            # Remove any existing forces from the object and add the new one
+            m_cell = jnp.where(force_mask, False, m_cell)
+            m_cell = m_cell.at[self.n_objs + obj_idx * N_FORCES + force_idx].set(True)
+            # Also remove player action mask if it exists.
+            m_cell = m_cell.at[-1].set(False)
+
+            m_cell = remove_colliding_objs(m_cell, obj_idx, self.coll_mat)
+
+            if self.jit:
+                if DEBUG:
+                    jax.debug.print('project_force_on_obj: {obj_idx}', obj_idx=obj_idx)
+
+            else:
+                pass
+                # jax.debug.print('project_force_on_obj: {obj_idx}', obj_idx=obj_idx)
+                # TODO: jax this
+                # obj_name = idxs_to_objs[obj_idx]
+                # jax.debug.print('project_force_on_obj: {obj_name}', obj_name=obj_name)
+                # print(f'project_force_on_obj: {obj_idx}')
+
+            return rng, m_cell
+
+        # @partial(jax.jit, static_argnums=(3, 4))
+        def project_force_meta(rng, m_cell, cell_i, obj: str, cell_detect_out: CellFnReturn, kernel_detect_out: KernelFnReturn,
+                            pattern_detect_out: PatternFnReturn, force_idx):
             meta_objs = cell_detect_out.detected_meta_objs
             kernel_meta_objs = kernel_detect_out.detected_meta_objs
             pattern_meta_objs = pattern_detect_out.detected_meta_objs
@@ -1993,13 +2026,11 @@ class PSEnv:
                 force_idx = jax.random.randint(rng, (1,), 0, N_FORCES-1)[0]
                 rng, _ = jax.random.split(rng)
             # Remove any existing forces from the object
-            m_cell = jax.lax.dynamic_update_slice(
-                m_cell, jnp.zeros(N_FORCES, dtype=bool), (self.n_objs + obj_idx * N_FORCES,)
-            )
+            # m_cell = jax.lax.dynamic_update_slice(
+            #     m_cell, jnp.zeros(N_FORCES, dtype=bool), (self.n_objs + obj_idx * N_FORCES,)
+            # )
             # force_mask = self.obj_force_masks[obj_idx]
             # m_cell = jnp.where(force_mask, False, m_cell)
-            # Also remove player action mask
-            m_cell = m_cell.at[-1].set(False)
 
             # Place the new force
             # m_cell = m_cell.at[n_objs + (obj_idx * N_FORCES) + force_idx].set(1)
@@ -2010,6 +2041,8 @@ class PSEnv:
             m_cell = jax.lax.dynamic_update_slice(
                 m_cell, force_arr, (self.n_objs + obj_idx * N_FORCES,)
             )
+            # Also remove player action mask
+            m_cell = m_cell.at[-1].set(False)
 
             m_cell = remove_colliding_objs(m_cell, obj_idx, self.coll_mat)
 
@@ -2125,7 +2158,11 @@ class PSEnv:
                             raise Exception(f'Invalid object `{obj}` in rule.')
                         no = False
                     elif force:
-                        fns.append(partial(project_force_obj, obj=obj, force_idx=force_idx))
+                        if obj in self.objs_to_idxs:
+                            obj_idx = self.objs_to_idxs[obj]
+                            fns.append(partial(project_force_obj, obj_idx=obj_idx, force_idx=force_idx))
+                        else:
+                            fns.append(partial(project_force_meta, obj=obj, force_idx=force_idx))
                         force = False
                     elif moving:
                         fns.append(partial(project_moving_obj, obj=obj))
@@ -2143,7 +2180,7 @@ class PSEnv:
                         fns.append(partial(project_obj, obj=obj, random=True))
                         random = False
                     elif random_dir:
-                        fns.append(partial(project_force_obj, obj=obj, force_idx=None))
+                        fns.append(partial(project_force_meta, obj=obj, force_idx=None))
                         random_dir = False
                     else:
                         fns.append(partial(project_obj, obj=obj))
@@ -2155,7 +2192,7 @@ class PSEnv:
                 m_cell = m_cell & ~cell_detect_out.detected
                 assert len(m_cell.shape) == 1, f'Invalid cell shape {m_cell.shape}'
                 for proj_fn in fns:
-                    rng, m_cell = proj_fn(rng=rng, m_cell=m_cell, cell_i=cell_i, cell_detect_out=cell_detect_out,
+                    rng, m_cell = proj_fn(rng=rng, cell_i=cell_i, m_cell=m_cell, cell_detect_out=cell_detect_out,
                                         kernel_detect_out=kernel_detect_out, pattern_detect_out=pattern_detect_out)
                 # removed_something = jnp.any(cell_detect_out.detected)
                 # jax.lax.cond(

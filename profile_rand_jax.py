@@ -207,5 +207,5 @@ def profile(cfg: ProfileJaxRandConfig):
             results = json.load(f)
 
 if __name__ == '__main__':
-    with jax.numpy_dtype_promotion('strict'):
-        profile() 
+    # with jax.numpy_dtype_promotion('strict'):
+    profile() 
