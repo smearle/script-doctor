@@ -114,7 +114,7 @@ def main():
         env_params = PSParams(level=level)
         rng = jax.random.PRNGKey(0)
         obs, state = env.reset(rng=rng, params=env_params)
-        ascii_state = env.render_ascii(state)
+        ascii_state = env.render_ascii_and_legend(state)
 
         result = {
             "model": args.model,
@@ -137,12 +137,10 @@ def main():
             state_history.add(h)
 
             # Get dynamically updated ASCII mapping info
-
-            current_legend = env.ascii_legend_str           
+   
 
             action_id = agent.choose_action(
                 ascii_map=ascii_state,
-                mapping=current_legend,  # 使用运行时生成的映射
                 rules=rules,
                 action_space=action_space,
                 action_meanings=action_meanings,
@@ -158,7 +156,7 @@ def main():
             obs, next_state, rew, done, info = env.step_env(
                 rng=rng, action=action_id, state=current_state, params=env_params
             )
-            ascii_state = env.render_ascii(next_state)
+            ascii_state = env.render_ascii_and_legend(next_state)
             print("New state (ASCII):")
             print(ascii_state)
             print(f"Reward: {rew} | Win: {next_state.win}")
