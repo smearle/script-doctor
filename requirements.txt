@@ -24,6 +24,7 @@ Pillow
 python-dotenv
 scikit-image
 selenium
+submitit
 tiktoken
 wandb
 # web-browser

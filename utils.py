@@ -17,7 +17,7 @@ from globals import GAMES_TO_N_RULES_PATH, GAMES_N_RULES_SORTED_PATH
 from collect_games import GALLERY_GAMES_DIR
 from env import PSEnv
 from globals import PRIORITY_GAMES
-from parse_lark import get_tree_from_txt
+from preprocess_games import get_tree_from_txt
 from prompts import *
 
 

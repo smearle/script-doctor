@@ -10,14 +10,14 @@ import traceback
 import hydra
 from javascript import require
 
-from conf.config import ProfileJaxRandConfig, ProfileStandalone
-from parse_lark import GAMES_DIR, SIMPLIFIED_GAMES_DIR
+from conf.config import ProfileStandalone
+from globals import STANDALONE_NODEJS_RESULTS_PATH
+from preprocess_games import SIMPLIFIED_GAMES_DIR
 from utils import get_list_of_games_for_testing
+
 
 engine = require('./standalone/puzzlescript/engine.js')
 solver = require('./standalone/puzzlescript/solver.js')
-
-STANDALONE_NODEJS_RESULTS_PATH = os.path.join('data', 'standalone_nodejs_results.json')
 
 
 def compile_game(engine, game, level_i):

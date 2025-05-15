@@ -1,28 +1,45 @@
+"""
+DEPRECATED
+
+This all happens in the preprocess_games.py file now.
+"""
 import glob
 import json
 import os
 import pickle
 import traceback
 
+import hydra
 from lark import Lark
 
+from conf.config import PreprocessConfig
 from env import PSEnv
 from gen_tree import GenPSTree
-from parse_lark import TREES_DIR, GAMES_DIR, count_rules, get_tree_from_txt
+from preprocess_games import TREES_DIR, GAMES_DIR, count_rules, get_tree_from_txt
 from ps_game import PSGameTree
 from utils import GAMES_N_RULES_SORTED_PATH
 from globals import GAMES_TO_N_RULES_PATH, GAMES_N_RULES_SORTED_PATH
 
 
-def main():
+@hydra.main(version_base="1.3", config_path="conf", config_name="preprocess_config")
+def main(cfg: PreprocessConfig):
     with open("syntax.lark", "r", encoding='utf-8') as file:
         puzzlescript_grammar = file.read()
-    game_tree_paths = glob.glob(os.path.join(TREES_DIR, '*'))
+    scraped_games_paths = glob.glob(os.path.join(GAMES_DIR, '*'))
     parser = Lark(puzzlescript_grammar, start="ps_game", maybe_placeholders=False)
-    games_n_rules = []
-    for game_tree_path in game_tree_paths:
-        print(game_tree_path)
-        game_name = os.path.basename(game_tree_path)[:-4]
+    if cfg.overwrite:
+        games_n_rules = []
+    else:
+        with open(GAMES_N_RULES_SORTED_PATH, 'r') as f:
+            games_n_rules = json.load(f)
+        games_n_rules_dict = {game: (n_rules, has_randomness) for game, n_rules, has_randomness in games_n_rules}
+        print(f"Loaded {len(games_n_rules)} games from {GAMES_N_RULES_SORTED_PATH}")
+    for game_path in scraped_games_paths:
+        print(f"Processing {game_path}")
+        game_name = os.path.basename(game_path)[:-4]
+        if game_name in games_n_rules_dict:
+            print(f"Skipping {game_name}: already in the list")
+            continue
         og_game_path = os.path.join(GAMES_DIR, game_name + '.txt')
         try:
             # with open(game_tree_path, "rb") as f:
@@ -45,7 +62,7 @@ def main():
     with open(GAMES_N_RULES_SORTED_PATH, 'w') as f:
         json.dump(games_n_rules, f, indent=4)
 
-    games_to_n_rules = {game: n_rules for game, n_rules, _ in games_n_rules}
+    games_to_n_rules = {game: (n_rules, has_randomness) for game, n_rules, has_randomness in games_n_rules}
     with open(GAMES_TO_N_RULES_PATH, 'w') as f:
         json.dump(games_to_n_rules, f, indent=4)
 

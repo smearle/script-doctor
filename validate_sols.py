@@ -19,7 +19,7 @@ from skimage.transform import resize
 from conf.config import RLConfig
 from env import PSEnv
 from gen_tree import GenPSTree
-from parse_lark import PS_LARK_GRAMMAR_PATH, TREES_DIR, DATA_DIR, TEST_GAMES, get_tree_from_txt
+from preprocess_games import PS_LARK_GRAMMAR_PATH, TREES_DIR, DATA_DIR, TEST_GAMES, get_tree_from_txt
 from ps_game import PSGameTree
 from sort_games_by_n_rules import GAMES_N_RULES_SORTED_PATH
 from utils import get_list_of_games_for_testing, to_binary_vectors

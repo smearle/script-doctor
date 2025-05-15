@@ -1,4 +1,5 @@
 from functools import partial
+import logging
 import os
 import shutil
 from timeit import default_timer as timer
@@ -685,8 +686,9 @@ def main_chunk(config, rng, exp_dir):
     return out
 
     
-@hydra.main(version_base="1.3", config_path='./conf', config_name='train_pcgrl')
+@hydra.main(version_base="1.3", config_path='./conf', config_name='train')
 def main(config: TrainConfig):
+    logging.getLogger().setLevel(logging.WARNING)
     config = init_config(config)
     if config.model == 'rnn':
         raise NotImplementedError("Single agent training script does not support `rnn` model.")

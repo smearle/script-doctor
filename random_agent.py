@@ -9,7 +9,7 @@ import jax.numpy as jnp
 import numpy as np
 
 from gen_tree import GenPSTree, PSEnv
-from parse_lark import TREES_DIR, TEST_GAMES, DATA_DIR
+from preprocess_games import TREES_DIR, TEST_GAMES, DATA_DIR
 from ps_game import PSGameTree
 
 

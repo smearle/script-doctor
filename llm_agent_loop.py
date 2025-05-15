@@ -6,7 +6,7 @@ import jax
 from lark import Lark
 from wrappers import RepresentationWrapper
 from env import PSParams
-from parse_lark import PS_LARK_GRAMMAR_PATH, get_tree_from_txt
+from preprocess_games import PS_LARK_GRAMMAR_PATH, get_tree_from_txt
 from LLM_agent import LLMGameAgent
 from globals import PRIORITY_GAMES
 

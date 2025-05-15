@@ -1,3 +1,4 @@
+import os
 from timeit import default_timer as timer
 from typing import Tuple, Dict
 
@@ -9,12 +10,12 @@ from flax.training import orbax_utils
 import numpy as np
 from jax_utils import stack_leaves
 import orbax.checkpoint as ocp
-from parse_lark import get_tree_from_txt
+from preprocess_games import get_tree_from_txt
 import wandb
 from flax.training.train_state import TrainState
 from time import perf_counter
 
-from conf.config import RLConfig, MultiAgentConfig, TrainConfig
+from conf.config import RLConfig, TrainConfig
 from env import PSEnv, PSObs, PSState, PSParams
 from models import NCA, AutoEncoder, ConvForward, ConvForward2, SeqNCA, ActorCriticPS, Dense
 
@@ -23,7 +24,8 @@ N_AGENTS = 1
 def get_exp_dir(config: TrainConfig):
     exp_dir = os.path.join(
         "rl_logs", 
-        "game",
+        f"{config.game}",
+        f"level-{config.level}",
         (
             f"n-envs-{config.n_envs}_"
             f"{config.model}-{'-'.join([str(hd) for hd in config.hidden_dims])}_"
@@ -33,7 +35,7 @@ def get_exp_dir(config: TrainConfig):
     return exp_dir
 
 def get_env_params_from_config(env: PSEnv, config: RLConfig):
-    level = env.get_level(config.level_i)
+    level = env.get_level(config.level)
     return PSParams(
         level=level
     )
@@ -87,14 +89,6 @@ def init_network(env: PSEnv, env_params: PSParams, config: RLConfig):
         network = Dense(
             action_dim, activation=config.activation,
         )
-    elif config.model == "rnn":
-        # TODO: Standardize everything to take and return (by default None/unused) hidden states. Enable multi-agent 
-        #   script to use non-RNN networks.
-        network = ActorCategorical(action_dim,
-                             subnet=ActorRNN(env.action_space(env.agents[0]).n, config=config,
-                            #  subnet=ActorMLP(env.action_space(env.agents[0]).shape[0], config=config,
-                                             ))
-        return network
     elif config.model == "conv":
         network = ConvForward(
             action_dim=action_dim, activation=config.activation,
@@ -133,102 +127,6 @@ def init_network(env: PSEnv, env_params: PSParams, config: RLConfig):
     network = ActorCriticPS(network)
     return network
 
- 
-
-
-def restore_run(config: MultiAgentConfig, runner_state: RunnerState, ckpt_manager, latest_update_step: int, load_wandb: bool = True):
-    wandb_run_id=None
-    if latest_update_step is not None:
-        runner_state = ckpt_manager.restore(latest_update_step, args=ocp.args.StandardRestore(runner_state))
-        if load_wandb: 
-            with open(os.path.join(config._exp_dir, "wandb_run_id.txt"), "r") as f:
-                wandb_run_id = f.read()
-
-    return runner_state, wandb_run_id
-
-
-def make_sim_render_episode(config: MultiAgentConfig, actor_network, env: PSEnv):
-    
-    # FIXME: Shouldn't hardcode this
-    max_episode_len = env.max_steps
-    
-    # remaining_timesteps = init_state.env_state.remaining_timesteps
-    # actor_params = runner_state.train_states[0].params
-    # actor_hidden = runner_state.hstates[0]
-
-    def sim_render_episode(actor_params, actor_hidden):
-        rng = jax.random.PRNGKey(0)
-        
-        init_obs, init_state = env.reset(rng)
-        
-        def step_env(carry, _):
-            rng, obs, state, done, actor_hidden = carry
-            # print(obs.shape)
-
-            # traj = datatypes.dynamic_index(
-            #     state.env_state.sim_trajectory, state.env_state.timestep, axis=-1, keepdims=True
-            # )
-            avail_actions = env.get_avail_actions(state.env_state)
-            if config._is_recurrent:
-                avail_actions = jax.lax.stop_gradient(
-                    batchify(avail_actions, env.agents, len(env.agents))
-                )
-                obs = batchify(obs, env.agents, N_AGENTS)
-                ac_in = (
-                    obs[np.newaxis, :],
-                    # obs,
-                    done[np.newaxis, :],
-                    # done,
-                    avail_actions[np.newaxis, :],
-                )
-                actor_hidden, pi = actor_network.apply(actor_params, actor_hidden, ac_in)            
-            else:
-                avail_actions = jax.tree.map(lambda x: x[jnp.newaxis], avail_actions)
-                avail_actions = jax.lax.stop_gradient(
-                    batchify(avail_actions, env.agents, len(env.agents))
-                )
-                obs = jax.tree.map(lambda x: x[jnp.newaxis], obs)
-                obs = batchify(obs, env.agents, N_AGENTS)
-                # obs = obs.replace(flat_obs=obs.flat_obs[..., jnp.newaxis])
-                pi, _ = actor_network.apply(actor_params, obs, avail_actions)
-            action = pi.sample(seed=rng)
-            env_act = unbatchify(
-                action, env.agents, 1, N_AGENTS
-            )
-            env_act = {k: v.squeeze() for k, v in env_act.items()}
-
-            # outputs = [
-            #     jit_select_action({}, state, obs, None, rng)
-            #     for jit_select_action in jit_select_action_list
-            # ]
-            # action = agents.merge_actions(outputs)
-            obs, next_state, reward, done, info = env.step(state=state, action=env_act, key=rng)
-            rng, _ = jax.random.split(rng)
-            done = batchify(done, env.agents, N_AGENTS)[:, 0]
-
-            return (rng, obs, next_state, done, actor_hidden), next_state
-
-            
-        done = jnp.zeros((len(env.agents),), dtype=bool)
-
-        _, states = jax.lax.scan(step_env, (rng, init_obs, init_state, done, actor_hidden), None, length=max_episode_len)
-
-        # Concatenate the init_state to the states
-        states = jax.tree.map(lambda x, y: jnp.concatenate([x[None], y], axis=0), init_state, states)
-
-        frames = jax.vmap(env.render)(states.env_state)
-
-        return frames
-
-    return jax.jit(sim_render_episode)
-
-# states = []
-# rng, obs, state, done, actor_hidden = (rng, init_obs, init_state, done, actor_hidden)
-# for i in range(remaining_timesteps):
-#     carry, state = step_env((rng, obs, state, done, actor_hidden), None)
-#     rng, obs, state, done, actor_hidden = carry
-#     states.append(state)
-
     
 def render_callback(env: PSEnv, frames, save_dir: str, t: int, max_steps: int):
 
@@ -236,12 +134,12 @@ def render_callback(env: PSEnv, frames, save_dir: str, t: int, max_steps: int):
     wandb.log({"video": wandb.Video(os.path.join(save_dir, f"enjoy_{t}.gif"), fps=20, format="gif")})
 
 
-def get_ckpt_dir(config: MultiAgentConfig):
+def get_ckpt_dir(config: TrainConfig):
     ckpts_dir = os.path.abspath(os.path.join(config._exp_dir, "ckpts"))
     return ckpts_dir
 
     
-def init_config(config: MultiAgentConfig):
+def init_config(config: TrainConfig) -> TrainConfig:
     # config._num_eval_actors = config.n_eval_envs * config.n_agents
     config._exp_dir = get_exp_dir(config)
     config._ckpt_dir = get_ckpt_dir(config)
@@ -255,13 +153,12 @@ def init_config(config: MultiAgentConfig):
     return config
 
     
-def save_checkpoint(config: MultiAgentConfig, ckpt_manager, runner_state, t):
+def save_checkpoint(config: TrainConfig, ckpt_manager, runner_state, t):
     save_args = orbax_utils.save_args_from_target(runner_state)
     ckpt_manager.save(t.item(), args=ocp.args.StandardSave(runner_state))
     ckpt_manager.wait_until_finished() 
 
-
 import utils
 
 def init_ps_env(config: RLConfig, verbose: bool = False) -> PSEnv:
-    return utils.init_ps_env(config.game, config.level_i, config.max_episode_steps)
+    return utils.init_ps_env(config.game, config.level, config.max_episode_steps)
