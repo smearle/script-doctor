@@ -200,13 +200,13 @@ def main():
             
             # Ensure final ASCII state is from last step
             result["final_ascii"] = ascii_state.split('\n')
-        
-        save_dir = "llm_agent_results"
-        os.makedirs(save_dir, exist_ok=True)
-        save_path = os.path.join(save_dir, f"{args.model}_{game_name}_run_{run_idx + 1}.json") # Added run_idx
-        with open(save_path, "w", encoding="utf-8") as f:
-            json.dump(result, f, indent=2, default=lambda o: f"<{type(o).__name__} instance>")
-        print(f"Result saved to {save_path}")
+            
+            save_dir = "llm_agent_results"
+            os.makedirs(save_dir, exist_ok=True)
+            save_path = os.path.join(save_dir, f"{args.model}_{game_name}_run_{run_idx + 1}.json") # Added run_idx
+            with open(save_path, "w", encoding="utf-8") as f:
+                json.dump(result, f, indent=2, default=lambda o: f"<{type(o).__name__} instance>")
+            print(f"Result saved to {save_path}")
 
 if __name__ == "__main__":
     main()
