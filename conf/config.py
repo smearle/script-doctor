@@ -155,6 +155,9 @@ class TrainConfig(RLConfig):
     ###########################################################################
 
 
+class SweepRLConfig(TrainConfig):
+    plot: bool = False
+
 
 cs = ConfigStore.instance()
 cs.store(name="preprocess_config", node=PreprocessConfig)
@@ -165,3 +168,4 @@ cs.store(name="bfs_config", node=BFSConfig)
 cs.store(name="profile_jax_config", node=ProfileJaxRandConfig)
 cs.store(name="profile_standalone_config", node=ProfileStandalone)
 cs.store(name="train_config", node=TrainConfig)
+cs.store(name="sweep_rl_config", node=SweepRLConfig)

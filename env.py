@@ -175,8 +175,8 @@ def compute_manhattan_dists(lvl, src, trg):
     dists = jnp.abs(src_coords - trg_coords)
     dists = jnp.sum(dists, axis=-1)
     # Exclude any dists corresponding to cells without src/trg nodes
-    dists = jnp.where(jnp.all(src_coords == -1, axis=-1), np.iinfo(np.int32).max, dists)
-    dists = jnp.where(jnp.all(trg_coords == -1, axis=-1), np.iinfo(np.int32).max, dists)
+    dists = jnp.where(jnp.all(src_coords == -1, axis=-1), np.nan, dists)
+    dists = jnp.where(jnp.all(trg_coords == -1, axis=-1), np.nan, dists)
     return dists
 
 def compute_sum_of_manhattan_dists(lvl, src, trg):
@@ -1245,7 +1245,7 @@ class PSEnv:
                 if DEBUG:
                     print(so)
                 vec += self.obj_vecs[self.objs_to_idxs[so]]
-            assert jo not in self.chars_to_idxs
+            # assert jo not in self.chars_to_idxs
             # Assign an unused ASCII character
             if not ascii_chars:
                 raise ValueError("Ran out of ASCII characters for joint objects.")
@@ -1322,7 +1322,7 @@ class PSEnv:
             multihot_level=lvl,
             win=jnp.array(False),
             score=0,
-            heuristic=np.iinfo(np.int32).min,
+            heuristic=init_heuristic,
             restart=jnp.array(False),
             step_i=0,
             init_heuristic=init_heuristic,
@@ -1486,9 +1486,12 @@ class PSEnv:
     def gen_subrules_meta(self, rule: Rule, rule_name: str):
         has_right_pattern = len(rule.right_kernels) > 0
 
+        def is_meta_subobj_forceless(obj_idx, m_cell):
+            """ `obj_idx` is dynamic."""
+            return jnp.sum(jax.lax.dynamic_slice(m_cell, (self.n_objs + (obj_idx * N_FORCES),), (4,))) == 0
+
         def is_obj_forceless(obj_idx, m_cell):
-            # note that `action` does not count as a force
-            # return jnp.sum(jax.lax.dynamic_slice(m_cell, (self.n_objs + (obj_idx * N_FORCES),), (4,))) == 0
+            """ `obj_idx` is static."""
             obj_force_mask = self.obj_force_masks[obj_idx]
             return jnp.sum(m_cell[obj_force_mask]) == 0
 
@@ -1624,11 +1627,41 @@ class PSEnv:
 
             return ObjFnReturn(active=active, detected=detected, obj_idx=obj_idx, force_idx=force_idx)
 
+        def detect_stationary_obj(m_cell, obj_idx):
+            """Version of the above that assumes `obj_idx` is static."""
+
+            detected = jnp.zeros(m_cell.shape, dtype=bool)
+
+            obj_is_present = m_cell[obj_idx] == 1
+            obj_is_forceless = is_meta_subobj_forceless(obj_idx, m_cell)
+            obj_active = obj_is_present & obj_is_forceless
+
+            detected = jax.lax.select(
+                obj_active,
+                detected.at[obj_idx].set(True),
+                detected,
+            )
+            # note that this takes the last-detected active sub-object
+            active_obj_idx = jax.lax.select(
+                obj_active,
+                obj_idx,
+                -1,
+            )
+
+            active = active_obj_idx != -1
+            if DEBUG:
+                jax.lax.cond(
+                    active,
+                    lambda: jax.debug.print('detected stationary obj_idx: {obj_idx}', obj_idx=active_obj_idx),
+                    lambda: None,
+                )
+            return ObjFnReturn(active=active, detected=detected, obj_idx=active_obj_idx)
+
         # @partial(jax.jit, static_argnames=('obj_idxs'))
         def detect_stationary_meta(m_cell, obj_idxs):
             # TODO: vmap this?
 
-            def detect_stationary_obj(m_cell, obj_idx):
+            def detect_stationary_meta_subobj(m_cell, obj_idx):
                 # if not m_cell[obj_idx]:
                 #     continue
                 # if not is_obj_forceless(obj_idx, m_cell):
@@ -1638,7 +1671,7 @@ class PSEnv:
                 detected = jnp.zeros(m_cell.shape, dtype=bool)
 
                 obj_is_present = m_cell[obj_idx] == 1
-                obj_is_forceless = is_obj_forceless(obj_idx, m_cell)
+                obj_is_forceless = is_meta_subobj_forceless(obj_idx, m_cell)
                 obj_active = obj_is_present & obj_is_forceless
 
                 detected = jax.lax.select(
@@ -1654,7 +1687,7 @@ class PSEnv:
                 )
                 return detected, active_obj_idx
 
-            detecteds, active_obj_idxs = jax.vmap(detect_stationary_obj, in_axes=(None, 0))(m_cell, obj_idxs)
+            detecteds, active_obj_idxs = jax.vmap(detect_stationary_meta_subobj, in_axes=(None, 0))(m_cell, obj_idxs)
             detected = jnp.any(detecteds, axis=0)
             active_obj_i = jnp.argwhere(active_obj_idxs != -1, size=1, fill_value=-1)[0][0]
             active_obj_idx = jax.lax.select(
@@ -1682,9 +1715,9 @@ class PSEnv:
             for obj_idx in obj_idxs:
 
                 obj_is_present = m_cell[obj_idx] == 1
-                # obj_forces = jax.lax.dynamic_slice(m_cell, (self.n_objs + (obj_idx * N_FORCES),), (4,))
-                obj_force_mask = self.obj_force_masks[obj_idx]
-                obj_forces = m_cell[obj_force_mask]
+                obj_forces = jax.lax.dynamic_slice(m_cell, (self.n_objs + (obj_idx * N_FORCES),), (4,))
+                # obj_force_mask = self.obj_force_masks[obj_idx]
+                # obj_forces = m_cell[obj_force_mask]
                 if vertical:
                     vertical_mask = np.array([0, 1, 0, 1], dtype=bool)
                     obj_forces = jnp.logical_and(obj_forces, vertical_mask)
@@ -1713,6 +1746,55 @@ class PSEnv:
                     force_idx,
                     active_force_idx,
                 )
+            active = active_obj_idx != -1
+            if DEBUG:
+                jax.lax.cond(
+                    active,
+                    lambda: jax.debug.print('detected moving_meta obj_idx: {obj_idx}, force_idx: {moving_idx}',
+                                            obj_idx=active_obj_idx, moving_idx=active_force_idx),
+                    lambda: None,
+                )
+            return ObjFnReturn(active=active, detected=detected, obj_idx=active_obj_idx, moving_idx=active_force_idx)
+
+        def detect_moving_obj(m_cell, obj_idx, vertical=False, horizontal=False):
+            # TODO: vmap this?
+            active_obj_idx = -1
+            active_force_idx = -1
+            detected = jnp.zeros(m_cell.shape, dtype=bool)
+
+
+            obj_is_present = m_cell[obj_idx] == 1
+            obj_forces = jax.lax.dynamic_slice(m_cell, (self.n_objs + (obj_idx * N_FORCES),), (4,))
+            # obj_force_mask = self.obj_force_masks[obj_idx]
+            # obj_forces = m_cell[obj_force_mask]
+            if vertical:
+                vertical_mask = np.array([0, 1, 0, 1], dtype=bool)
+                obj_forces = jnp.logical_and(obj_forces, vertical_mask)
+            elif horizontal:
+                horizontal_mask = np.array([1, 0, 1, 0], dtype=bool)
+                obj_forces = jnp.logical_and(obj_forces, horizontal_mask)
+            force_idx = jnp.argwhere(obj_forces, size=1, fill_value=-1)[0, 0]
+            obj_active = obj_is_present & (force_idx != -1)
+
+            active_detected = detected.at[obj_idx].set(True)
+            active_detected = active_detected.at[self.n_objs + (obj_idx * N_FORCES) + force_idx].set(True)
+
+            detected = jax.lax.select(
+                obj_active,
+                active_detected,
+                detected,
+            )
+            # note that this takes the last-detected active sub-object
+            active_obj_idx = jax.lax.select(
+                obj_active,
+                obj_idx,
+                active_obj_idx,
+            )
+            active_force_idx = jax.lax.select(
+                obj_active,
+                force_idx,
+                active_force_idx,
+            )
             active = active_obj_idx != -1
             if DEBUG:
                 jax.lax.cond(
@@ -1792,16 +1874,16 @@ class PSEnv:
                             fns.append(partial(detect_force_on_obj, obj_idx=obj_idx, force_idx=force_idx))
                             force = False
                         elif stationary:
-                            fns.append(partial(detect_stationary_meta, obj_idxs=obj_idxs))
+                            fns.append(partial(detect_stationary_obj, obj_idx=obj_idx))
                             stationary = False
                         elif moving:
-                            fns.append(partial(detect_moving_meta, obj_idxs=obj_idxs))
+                            fns.append(partial(detect_moving_obj, obj_idx=obj_idx))
                             moving = False
                         elif vertical:
-                            fns.append(partial(detect_moving_meta, obj_idxs=obj_idxs, vertical=True))
+                            fns.append(partial(detect_moving_obj, obj_idx=obj_idx, vertical=True))
                             vertical = False
                         elif horizontal:
-                            fns.append(partial(detect_moving_meta, obj_idxs=obj_idxs, horizontal=True))
+                            fns.append(partial(detect_moving_obj, obj_idx=obj_idx, horizontal=True))
                             horizontal = False
                         else:
                             fns.append(partial(detect_obj_in_cell, obj_idx=obj_idx))
@@ -1820,6 +1902,12 @@ class PSEnv:
                         elif moving:
                             fns.append(partial(detect_moving_meta, obj_idxs=obj_idxs))
                             moving = False
+                        elif vertical:
+                            fns.append(partial(detect_moving_meta, obj_idxs=obj_idxs, vertical=True))
+                            vertical = False
+                        elif horizontal:
+                            fns.append(partial(detect_moving_meta, obj_idxs=obj_idxs, horizontal=True))
+                            horizontal = False
                         else:
                             fns.append(partial(detect_any_objs_in_cell, objs_vec=obj_vec))
                     else:
@@ -2670,7 +2758,6 @@ class PSEnv:
                     for kern in r_kerns:
                         kern = np.rot90(kern, rot, axes=(0, 1))
                         r_kerns_rot.append(kern)
-
                 rule_fns.append(gen_rotated_rule_fn(l_kerns_rot, r_kerns_rot, rot, rule.command))
 
         return rule_fns
