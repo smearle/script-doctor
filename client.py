@@ -28,6 +28,13 @@ AZURE_HEADERS = {
     "api-key": GPT4V_KEY,
 }
 
+def _safe_quit(browser):
+    """Best‑effort shutdown that won’t crash if the driver is already gone."""
+    try:
+        browser.quit()
+    except Exception:
+        pass
+
 def open_browser(url=url, headless=False):
 
     # Set up Selenium WebDriver

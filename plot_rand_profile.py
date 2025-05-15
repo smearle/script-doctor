@@ -1,14 +1,31 @@
 import json
 import os
 
+import hydra
 from matplotlib import pyplot as plt
 
+from conf.config import PlotRandProfileConfig
 from globals import PLOTS_DIR, GAMES_TO_N_RULES_PATH
 from profile_rand_jax import JAX_N_ENVS_TO_FPS_PATH, get_step_int, get_level_int
-from profile_standalone_nodejs import STANDALONE_NODEJS_RESULTS_PATH
+from globals import STANDALONE_NODEJS_RESULTS_PATH
 
 
-def main():
+GAMES_TO_PLOT = [
+    'sokoban_basic',
+    'sokoban_match3',
+    'limerick',
+    'blocks',
+    'slidings',
+    'notsnake',
+    'Travelling_salesman',
+    'Zen_Puzzle_Garden',
+    # 'Multi-word_Dictionary_Game',
+    'Take_Heart_Lass',
+]
+
+
+@hydra.main(version_base="1.3", config_path="conf", config_name="plot_rand_profile_config")
+def main(cfg: PlotRandProfileConfig):
     with open(JAX_N_ENVS_TO_FPS_PATH, 'r') as f:
         results = json.load(f)
 
@@ -26,9 +43,19 @@ def main():
         rollout_len_str = results[device].keys()
         for rollout_len_str in rollout_len_str:
             print(f'Rollout len: {rollout_len_str}')
-            games = results[device][rollout_len_str].keys()
 
-            games_n_rules = [(game, games_to_n_rules[game]) for game in games]
+            if cfg.all_games:
+                games = results[device][rollout_len_str].keys()
+            else:
+                games = GAMES_TO_PLOT
+
+            games_n_rules = []
+            for game in games:
+                if game not in games_to_n_rules:
+                    print(f'Game {game} not found in games_to_n_rules. You may need to run sort_games_by_n_rules.py first.')
+                    continue
+                games_n_rules.append((game, games_to_n_rules[game]))
+
             games_n_rules = sorted(games_n_rules, key=lambda x: x[1][0])
 
             n_games = len(games)
@@ -107,7 +134,7 @@ def main():
             rollout_len = get_step_int(rollout_len_str)
             fig.suptitle(f'{device} -- {rollout_len}-step random rollout', fontsize=16)
             fig.tight_layout()
-            fig.savefig(f'plots/{device}_{rollout_len_str}.png')
+            fig.savefig(f'plots/{device}_{rollout_len_str}{('_select' if not cfg.all_games else '')}.png')
 
             
 if __name__ == '__main__':

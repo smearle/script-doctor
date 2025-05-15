@@ -34,7 +34,7 @@ batch_sizes = [
     400,
     600,
     1_200,
-    # 1_500,
+    1_500,
 ]
 batch_sizes = batch_sizes[::-1]
 
@@ -103,8 +103,8 @@ def profile(cfg: ProfileJaxRandConfig):
 
     for (game, n_envs) in zip(games, batch_sizes):
 
-        if n_envs >= 1_200 and game in ['limerick']:
-            continue
+        # if n_envs >= 1_200 and game in ['limerick']:
+        #     continue
 
         cfg.game = game
 

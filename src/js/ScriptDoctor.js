@@ -1438,7 +1438,7 @@ async function fromPlanSweep() {
   saveStats(saveDir + '/fromPlan', results);
 }
 
-async function collectGameData(gamePath, captureStates=true) {
+async function collectGameData(gamePath, maxIters, captureStates=true) {
   console.log(`Heap at the top of collectGameData: ${(performance.memory.usedJSHeapSize / 1e6).toFixed(2)} MB`);
   redraw();
 
@@ -1486,7 +1486,7 @@ async function collectGameData(gamePath, captureStates=true) {
     // If the solution does not exist, solve it
     compile(['loadLevel', levelIdx], code);
     console.log(`Solving level ${levelIdx} of game ${gamePath}`);
-    const [sol, won, score, bestState, n_iters, timeout] = await solveLevelBFS(levelIdx, captureStates=captureStates, maxIters=100_000);
+    const [sol, won, score, bestState, n_iters, timeout] = await solveLevelBFS(levelIdx, captureStates=captureStates, maxIters=maxIters);
     console.log(`Finished processing level ${levelIdx}`);
     if (sol.length > 0) {
       console.log(`Solution for level ${levelIdx}:`, sol);
@@ -1521,14 +1521,16 @@ async function processAllGames() {
       target_dir: 'min_games',
     }),
   });
-  const games = await response.json();
+  const data = await response.json();
+  games = data.games;
+  maxIters = data.max_iters;
 
   // Shuffle the games
   // games.sort(() => Math.random() - 0.5);
   
   for (const game of games) {
     console.log(`Processing game: ${game}`);
-    await collectGameData(game, captureStates=false);
+    await collectGameData(game, maxIters, captureStates=false);
   }
 }
 // var experimentDropdown = document.getElementById("experimentDropdown");

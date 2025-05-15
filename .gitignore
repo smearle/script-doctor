@@ -5,6 +5,8 @@ bin/
 .build
 logs*
 plots/
+multirun
+submitit_logs
 
 script-doctor-nodejs
 

@@ -23,7 +23,7 @@ This will also attempt to scrape a dataset of ~900 games from an online database
 
 To preprocess these files, so that we can validate, profile and benchmark them in the jax, nodejs, and javascript versions of PuzzleScript, run:
 ```
-python sort_games_by_n_rules.py
+python preprocess_games.py
 ```
 
 ## Interactive playtesting 
