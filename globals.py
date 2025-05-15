@@ -30,4 +30,5 @@ PLOTS_DIR = 'plots'
 GAMES_N_RULES_SORTED_PATH = os.path.join('data', 'games_n_rules.json')
 GAMES_TO_N_RULES_PATH = os.path.join('data', 'games_to_n_rules.json')
 STANDALONE_NODEJS_RESULTS_PATH = os.path.join('data', 'standalone_nodejs_results.json')
+GAMES_N_LEVELS_PATH = os.path.join('data', 'games_n_levels.json')
 

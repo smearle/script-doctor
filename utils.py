@@ -1,6 +1,7 @@
 import glob
 import json
 import os
+import pickle
 import random
 import re
 import time
@@ -13,11 +14,11 @@ from openai import AzureOpenAI
 import requests
 import tiktoken
 
-from globals import GAMES_TO_N_RULES_PATH, GAMES_N_RULES_SORTED_PATH
+from globals import GAMES_TO_N_RULES_PATH, GAMES_N_RULES_SORTED_PATH, PRIORITY_GAMES, GAMES_N_LEVELS_PATH
 from collect_games import GALLERY_GAMES_DIR
 from env import PSEnv
-from globals import PRIORITY_GAMES
-from preprocess_games import get_tree_from_txt
+from gen_tree import GenPSTree
+from preprocess_games import get_tree_from_txt, get_env_from_ps_file, TREES_DIR
 from prompts import *
 
 
@@ -358,10 +359,42 @@ def init_ps_env(game, level_i, max_episode_steps):
     return env
 
     
-if __name__ == '__main__':
-    with open(GAMES_N_RULES_SORTED_PATH, 'r') as f:
-        games_n_rules = json.load(f)
-    games_to_n_rules = {game: (n_rules, has_randomness) for game, n_rules, has_randomness in games_n_rules}
+def init_ps_lark_parser():
+    with open("syntax.lark", "r", encoding='utf-8') as file:
+        puzzlescript_grammar = file.read()
+    # Initialize the Lark parser with the PuzzleScript grammar
+    parser = Lark(puzzlescript_grammar, start="ps_game", maybe_placeholders=False)
+    return parser
 
-    with open(GAMES_TO_N_RULES_PATH, 'w') as f:
-        json.dump(games_to_n_rules, f, indent=4)
+    
+def get_n_levels_per_game():
+    if os.path.exists(GAMES_N_LEVELS_PATH):
+        with open(GAMES_N_LEVELS_PATH, 'r') as f:
+            n_levels_per_game = json.load(f)
+        return n_levels_per_game
+
+    parser = init_ps_lark_parser()
+    games = get_list_of_games_for_testing(all_games=True)
+    n_levels_per_game = {}
+    for game in games:
+        min_tree_path = os.path.join(TREES_DIR, game + '.pkl')
+        if os.path.exists(min_tree_path):
+            with open(min_tree_path, 'rb') as f:
+                tree = pickle.load(f)
+            tree = GenPSTree().transform(tree)
+            env = PSEnv(tree)
+            n_levels = len(env.levels)
+            n_levels_per_game[game] = n_levels
+    with open(GAMES_N_LEVELS_PATH, 'w') as f:
+        json.dump(n_levels_per_game, f, indent=4)
+    return n_levels_per_game
+
+    
+if __name__ == '__main__':
+    games_n_levels = get_n_levels_per_game()
+    # with open(GAMES_N_RULES_SORTED_PATH, 'r') as f:
+    #     games_n_rules = json.load(f)
+    # games_to_n_rules = {game: (n_rules, has_randomness) for game, n_rules, has_randomness in games_n_rules}
+
+    # with open(GAMES_TO_N_RULES_PATH, 'w') as f:
+    #     json.dump(games_to_n_rules, f, indent=4)

@@ -49,6 +49,7 @@ def main(cfg: SweepRLConfig):
         sweep_configs.append(cfg_i)
 
     if cfg.plot:
+        plot_rl_runs(sweep_configs)
 
     executor.map_array(
         main_train,
