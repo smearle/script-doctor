@@ -1,6 +1,7 @@
 import copy
 from itertools import product, combinations
 import itertools
+import unicodedata
 
 from gymnax.environments import environment
 import jax
@@ -20,6 +21,25 @@ def vec_to_obj_names(vec, idxs_to_objs):
                 obj_names.append(obj_name)
     return obj_names
 
+def get_extended_chars():
+    return set(chr(i) for i in range(160, 592)  # U+00A0 to U+024F
+            if unicodedata.category(chr(i))[0] in {'L', 'S', 'P'})
+
+def get_box_drawing_and_shapes():
+    return set([chr(i) for i in range(0x2500, 0x2600)])
+
+def get_braille_chars():
+    return set(chr(i) for i in range(0x2800, 0x28FF + 1))
+
+def get_llm_friendly_chars():
+    chars = set()
+    for i in range(33, 0x2B00):  # Skip control chars
+        c = chr(i)
+        cat = unicodedata.category(c)
+        if cat[0] in {'L', 'S', 'P'} and not c.isspace():
+            chars.add(c)
+    return chars
+
 class RepresentationWrapper(PSEnv):
     """Log the episode returns and lengths."""
 
@@ -29,19 +49,33 @@ class RepresentationWrapper(PSEnv):
 
         # Generate a set of all possible ASCII characters
         ascii_chars = set(chr(i) for i in range(32, 127))
-        background_char = '.'
-        ascii_chars.remove(background_char)
-        ascii_chars.remove(' ')
+        extended_chars = get_extended_chars()
+        box_drawing_chars = get_box_drawing_and_shapes()
+        braille_chars = get_braille_chars()
+        llm_friendly_chars = get_llm_friendly_chars()
+        all_chars = ascii_chars | extended_chars | box_drawing_chars | braille_chars | llm_friendly_chars
+
+        all_chars.remove(' ')
 
         self.idxs_to_chars = {v: k for k, v in self.chars_to_idxs.items()}
         
         # If any atomic object is not already mapped to an ASCII character, assign it to one
         for obj, idx in self.objs_to_idxs.items():
             if idx not in self.idxs_to_chars:
-                self.idxs_to_chars[idx] = ascii_chars.pop()
+                self.idxs_to_chars[idx] = all_chars.pop()
 
         # By default, background is always overlapping with everything
         background_idx = self.objs_to_idxs['background']
+        user_assigned_chars = set(self.idxs_to_chars.values())
+        if background_idx not in self.idxs_to_chars:
+            background_char = '.'
+            if background_char in user_assigned_chars:
+                background_char = all_chars.pop()
+            else:
+                all_chars.remove(background_char)
+        else:
+            background_char = self.idxs_to_chars[background_idx]
+
         obj_vecs = self.obj_vecs
         obj_vecs[:, background_idx] = 1
 
@@ -57,7 +91,7 @@ class RepresentationWrapper(PSEnv):
         self.vecs_to_chars = {vec: self.idxs_to_chars.get(i) for i, vec in enumerate(vecs)}
 
         # Remove all used ASCII characters from the set
-        ascii_chars -= set(self.vecs_to_chars.values())
+        all_chars -= set(self.vecs_to_chars.values())
 
         # self.vecs_to_chars[tuple([int(i) for i in empty_vec])] = " "
 
@@ -76,14 +110,11 @@ class RepresentationWrapper(PSEnv):
         
         # Generate combinations across layers
         all_combinations = []
-        print(f'all combinations ints: {all_combinations_ints}')
         for combo in all_combinations_ints:
-            print(f'combo: {combo}')
             combo = [i for i in combo if i != -1]
             vec = np.zeros(self.n_objs, dtype=int)
             vec[list(combo)] = 1
             all_combinations.append(vec)
-        print(f'all combinations: {all_combinations}')
 
         # Add background to all combinations
         background_idx = self.objs_to_idxs['background']
@@ -94,8 +125,8 @@ class RepresentationWrapper(PSEnv):
         for vec in all_combinations:
             vec = tuple([int(i) for i in vec])
             if vec not in self.vecs_to_chars:
-                if ascii_chars:
-                    self.vecs_to_chars[vec] = ascii_chars.pop()
+                if all_chars:
+                    self.vecs_to_chars[vec] = all_chars.pop()
                 else:
                     raise ValueError("Not enough ASCII characters to represent all object combinations.")
 
@@ -104,12 +135,14 @@ class RepresentationWrapper(PSEnv):
         self.vecs_to_chars[empty_vec] = background_char
 
         self.chars_to_vecs = {v: k for k, v in self.vecs_to_chars.items()}
-        self.ascii_legend_str = self.get_ascii_legend()
+        self.ascii_legend, legend_lines = self.get_ascii_legend()
+        self.full_ascii_legend_str = "\n".join(legend_lines)
 
 
     def get_ascii_legend(self) -> str:
         """Return a human-readable legend mapping ASCII chars to object combinations."""
         legend_lines = ["ASCII legend:"]
+        legend = {}
         for char, vec in self.chars_to_vecs.items():
             obj_idxs = [i for i, val in enumerate(vec) if val]
             if not obj_idxs:
@@ -118,8 +151,9 @@ class RepresentationWrapper(PSEnv):
                 obj_names = [obj for obj, idx in self.objs_to_idxs.items() if idx in obj_idxs and obj != "background"]
             if not obj_names:
                 obj_names = ["background"]
-            legend_lines.append(f"{repr(char)}: {', '.join(obj_names)}")
-        return "\n".join(legend_lines)
+            legend[char] = obj_names
+            legend_lines.append(f"{char}: {', '.join(obj_names)}")
+        return legend, legend_lines
 
     def get_ascii_mapping(self):
         """
@@ -146,8 +180,8 @@ class RepresentationWrapper(PSEnv):
         return {0: "left", 1: "down", 2: "right", 3: "up", 4: "action"}
 
 
-    def print_ascii_legend(self):
-        print(self.ascii_legend_str)
+    def print_full_ascii_legend(self):
+        print(self.full_ascii_legend_str)
 
 
     def render_ascii(self, state: PSState):
@@ -161,13 +195,34 @@ class RepresentationWrapper(PSEnv):
         return "\n".join("".join(row) for row in ascii_map)
 
 
+    def render_ascii_and_legend(self, state: PSState):
+        """Render the game state as ASCII art."""
+        map_arr = state.multihot_level
+        ascii_map = np.full(map_arr.shape[1:], " ", dtype="<U1")
+        partial_legend = {}
+        partial_legend_lines = []
+        for i in range(map_arr.shape[1]):
+            for j in range(map_arr.shape[2]):
+                vec = tuple([int(i) for i in map_arr[:, i, j]])
+                char = self.vecs_to_chars[vec]
+                ascii_map[i, j] = char
+                if char not in partial_legend:
+                    obj_name = self.ascii_legend[char]
+                    partial_legend[char] = obj_name
+                    partial_legend_lines.append(f"{char}: {', '.join(obj_name)}")
+
+        legend_str = "\n".join(partial_legend_lines)
+        map_str = "\n".join("".join(row) for row in ascii_map)
+        return f"LEGEND:\n{legend_str}\n\nMAP:\n{map_str}"
+
+
     def render_text(self, state: PSState):
         return multihot_to_desc(state.multihot_level, self.objs_to_idxs, self.n_objs, show_background=False)
 
 
 def test_log_wrapper():
-    game = 'slidings'
-    with open(PS_LARK_GRAMMAR_PATH, 'r') as f:
+    game = 'limerick'
+    with open(PS_LARK_GRAMMAR_PATH, 'r', encoding='utf-8') as f:
         puzzlescript_grammar = f.read()
     parser = Lark(puzzlescript_grammar, start="ps_game", maybe_placeholders=False)
     tree, success, err_msg = get_tree_from_txt(parser, game, test_env_init=False)
@@ -181,14 +236,15 @@ def test_log_wrapper():
     print(f'Resetting')
     obs, state = env.reset(rng=rng, params=env_params)
 
-    env.print_ascii_legend()
+    env.print_full_ascii_legend()
 
-    for i in range(10):
+    for i in range(100):
         action = env.action_space.sample(rng)
         rng, _rng = jax.random.split(rng)
         obs, state, rew, done, info = env.step_env(rng=rng, action=action, state=state, params=env_params)
 
-        print(f"ASCII Game State:\n{env.render_ascii(state)}")
+        # print(f"ASCII Game State:\n{env.render_ascii(state)}")
+        print(f"ASCII Game State:\n{env.render_ascii_and_legend(state)}")
         print(f"Text Game State:\n{env.render_text(state)}")
 
         print(f"Reward: {rew}")
