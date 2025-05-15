@@ -221,7 +221,7 @@ class RepresentationWrapper(PSEnv):
 
 
 def test_log_wrapper():
-    game = 'limerick'
+    game = 'Take_Heart_Lass'
     with open(PS_LARK_GRAMMAR_PATH, 'r', encoding='utf-8') as f:
         puzzlescript_grammar = f.read()
     parser = Lark(puzzlescript_grammar, start="ps_game", maybe_placeholders=False)
