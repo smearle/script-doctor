@@ -63,137 +63,147 @@ def main():
                         help='LLM model alias (4o-mini=4o-mini, o3=O3-mini, gemini=Gemini-2.0)')
     parser.add_argument('--max_steps', type=int, default=100,
                         help='Maximum steps per episode (default: 100)')
+    parser.add_argument('--num_runs', type=int, default=10,
+                        help='Number of runs per game (default: 10)')
     args = parser.parse_args()
 
     game_names = PRIORITY_GAMES
     action_space = [0, 1, 2, 3, 4]
     action_meanings = {0: "left", 1: "down", 2: "right", 3: "up", 4: "action"}
 
-    print(f"\n=== Running LLM agent with model: {args.model} ===")
+    print(f"\n=== Running LLM agent with model: {args.model} for {args.num_runs} runs per game ===")
     agent = LLMGameAgent(model_name= args.model)
 
-    for game_name in game_names:
-        game_path = os.path.join(CUSTOM_GAMES_DIR, f"{game_name}.txt")
-        if not os.path.exists(game_path):
-            print(f"Skipping {game_name}: File not found.")
-            continue
+    for run_idx in range(args.num_runs): # Outer loop for multiple runs
+        print(f"\n--- STARTING RUN {run_idx + 1}/{args.num_runs} ---")
+        for game_name in game_names:
+            game_path = os.path.join(CUSTOM_GAMES_DIR, f"{game_name}.txt")
+            if not os.path.exists(game_path):
+                print(f"Skipping {game_name}: File not found.")
+                continue
 
-        # Extract sections for LLM agent
-        rules_lines = extract_section(game_path, "RULES")
-        legend_lines = extract_section(game_path, "LEGEND")
-        level_lines = extract_section(game_path, "LEVELS")
-        rules = "\n".join(rules_lines)
-        mapping = parse_legend(legend_lines)
-        ascii_map = extract_first_level(level_lines)
+            # Extract sections for LLM agent
+            rules_lines = extract_section(game_path, "RULES")
+            legend_lines = extract_section(game_path, "LEGEND")
+            level_lines = extract_section(game_path, "LEVELS")
+            rules = "\n".join(rules_lines)
+            mapping = parse_legend(legend_lines)
+            ascii_map = extract_first_level(level_lines)
 
-        if not rules or not mapping or not ascii_map:
-            print(f"Skipping {game_name}: Missing rules, mapping, or level.")
-            continue
+            if not rules or not mapping or not ascii_map:
+                print(f"Skipping {game_name}: Missing rules, mapping, or level.")
+                continue
 
-        print(f"\n--- Playing game: {game_name} ---")
-        print("Extracted RULES section:")
-        print(rules)
-        print("Legend mapping (per game):")
-        for k, v in mapping.items():
-            print(f"{repr(k)}: {', '.join(v)}")
-        print("Initial game state (ASCII):")
-        print(ascii_map)
+            print(f"\n--- Playing game: {game_name} (Run {run_idx + 1}) ---")
+            print("Extracted RULES section:")
+            print(rules)
+            print("Legend mapping (per game):")
+            for k, v in mapping.items():
+                print(f"{repr(k)}: {', '.join(v)}")
+            print("Initial game state (ASCII):")
+            print(ascii_map)
 
-        # Initialize environment
-        with open(PS_LARK_GRAMMAR_PATH, 'r', encoding='utf-8') as f:
-            puzzlescript_grammar = f.read()
-        parser = Lark(puzzlescript_grammar, start="ps_game", maybe_placeholders=False)
-        tree, success, err_msg = get_tree_from_txt(parser, game_name, test_env_init=False)
-        if success != 0:
-            print(f"Skipping {game_name}: Failed to parse game file.")
-            print(f"Parse error: {err_msg}, code: {success}")
-            continue
+            # Initialize environment
+            with open(PS_LARK_GRAMMAR_PATH, 'r', encoding='utf-8') as f:
+                puzzlescript_grammar = f.read()
+            parser = Lark(puzzlescript_grammar, start="ps_game", maybe_placeholders=False)
+            tree, success, err_msg = get_tree_from_txt(parser, game_name, test_env_init=False)
+            if success != 0:
+                print(f"Skipping {game_name}: Failed to parse game file.")
+                print(f"Parse error: {err_msg}, code: {success}")
+                continue
 
-        env = RepresentationWrapper(tree, debug=False, print_score=False)
-        level = env.get_level(0)
-        env_params = PSParams(level=level)
-        rng = jax.random.PRNGKey(0)
-        obs, state = env.reset(rng=rng, params=env_params)
-        ascii_state = env.render_ascii(state)
+            env = RepresentationWrapper(tree, debug=False, print_score=False)
+            level = env.get_level(0)
+            env_params = PSParams(level=level)
+            rng = jax.random.PRNGKey(run_idx) # Use run_idx for varied seed per run
+            obs, state = env.reset(rng=rng, params=env_params)
+            ascii_state = env.render_ascii_and_legend(state)
 
-        result = {
-            "model": args.model,
-            "game": game_name,
-            "win": False,
-            "action_sequence": [],
-            "reward_sequence": [],
-            "score_sequence": [],
-            "heuristic_sequence": []
-        }
-
-        state_history = set()
-        current_state = state
-
-        for step in range(args.max_steps):
-            print(f"\nStep {step+1}/{args.max_steps}")
-
-            h = hash(state.multihot_level.tobytes())
-            state_history.add(h)
-
-            action_id = agent.choose_action(
-                ascii_map=ascii_state,
-                mapping=mapping,
-                rules=rules,
-                action_space=action_space,
-                action_meanings=action_meanings
-            )
-            action_str = action_meanings[action_id]
-            print(f"LLM chose action id: {action_id} ({action_str})")
-            result["action_sequence"].append(int(action_id))
-
-            rng, _rng = jax.random.split(rng)
-            obs, next_state, rew, done, info = env.step_env(
-                rng=rng, action=action_id, state=current_state, params=env_params
-            )
-            ascii_state = env.render_ascii(next_state)
-            print("New state (ASCII):")
-            print(ascii_state)
-            print(f"Reward: {rew} | Win: {next_state.win}")
-
-            # 提取JAX数组中的实际奖励值并转换类型
-            result["reward_sequence"].append(float(rew.item()))  # 使用.item()提取标量值
-            
-            # 记录初始和最终ASCII状态
-            if step == 0:
-                result["initial_ascii"] = ascii_state.split('\n')  # 存储为列表方便阅读
-            result["final_ascii"] = ascii_state.split('\n')  # 每次更新最终状态
-
-            # 记录heuristic原始值到序列
-            result["heuristic_sequence"].append(float(next_state.heuristic.item()))  # 确保提取标量值
-            
-            # 简化状态数据
-            result["state_data"] = {
-                "score": int(next_state.score),
-                "win": bool(next_state.win),
-                "step": step + 1
+            result = {
+                "model": args.model,
+                "game": game_name,
+                "win": False,
+                "action_sequence": [],
+                "reward_sequence": [],
+                "score_sequence": [],
+                "heuristic_sequence": []
             }
+
+            state_history = set()
+            current_state = state
+            current_mapping = env.get_ascii_mapping()
+            current_legend = current_mapping
+            for step in range(args.max_steps):
+                print(f"\nStep {step+1}/{args.max_steps}")
+
+                h = hash(state.multihot_level.tobytes())
+                state_history.add(h)
+
+                # Get dynamically updated ASCII mapping info
+   
+
+                action_id = agent.choose_action(
+                    ascii_map=ascii_state,
+                    rules=rules,
+                    action_space=action_space,
+                    action_meanings=action_meanings,
+                 
+                )
+
+     
+                action_str = action_meanings[action_id]
+                print(f"LLM chose action id: {action_id} ({action_str})")
+                result["action_sequence"].append(int(action_id))
+
+                rng, _rng = jax.random.split(rng)
+                obs, next_state, rew, done, info = env.step_env(
+                    rng=rng, action=action_id, state=current_state, params=env_params
+                )
+                ascii_state = env.render_ascii_and_legend(next_state)
+                print("New state (ASCII):")
+                print(ascii_state)
+                print(f"Reward: {rew} | Win: {next_state.win}")
+
+                # Extract actual reward values from JAX array and convert types
+                result["reward_sequence"].append(float(rew.item()))  # 使用.item()提取标量值
+                
+                # Record initial and final ASCII states
+                if step == 0:
+                    result["initial_ascii"] = ascii_state.split('\n')  # 存储为列表方便阅读
+                result["final_ascii"] = ascii_state.split('\n')  # 每次更新最终状态
+
+                # Record raw heuristic values to sequence
+                result["heuristic_sequence"].append(float(next_state.heuristic.item()))  # 确保提取标量值
+                
+                # Simplify state data
+                result["state_data"] = {
+                    "score": int(next_state.score),
+                    "win": bool(next_state.win),
+                    "step": step + 1
+                }
+                
+                if next_state.win:
+                    print(f"Game completed in {step+1} steps! (Win)")
+                    result["win"] = True
+                    break
+                if done:
+                    print(f"Game ended in {step+1} steps (done=True, not win).")
+                    break
+
+                current_state = next_state
+
+            # Preserve and convert heuristic data
+            result["heuristics"] = [float(h) for h in result["heuristic_sequence"]]
+            del result["heuristic_sequence"]
+            del result["score_sequence"] 
             
-            if next_state.win:
-                print(f"Game completed in {step+1} steps! (Win)")
-                result["win"] = True
-                break
-            if done:
-                print(f"Game ended in {step+1} steps (done=True, not win).")
-                break
-
-            current_state = next_state
-
-        # 保留并转换heuristic数据
-        result["heuristics"] = [float(h) for h in result["heuristic_sequence"]]
-        del result["heuristic_sequence"]
-        del result["score_sequence"] 
-        
-        # 确保最终ASCII状态是最后一步的状态
-        result["final_ascii"] = ascii_state.split('\n')
+            # Ensure final ASCII state is from last step
+            result["final_ascii"] = ascii_state.split('\n')
         
         save_dir = "llm_agent_results"
         os.makedirs(save_dir, exist_ok=True)
-        save_path = os.path.join(save_dir, f"{args.model}_{game_name}.json")
+        save_path = os.path.join(save_dir, f"{args.model}_{game_name}_run_{run_idx + 1}.json") # Added run_idx
         with open(save_path, "w", encoding="utf-8") as f:
             json.dump(result, f, indent=2, default=lambda o: f"<{type(o).__name__} instance>")
         print(f"Result saved to {save_path}")

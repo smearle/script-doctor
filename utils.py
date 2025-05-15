@@ -146,9 +146,9 @@ def llm_text_query(system_prompt, prompt, model, api_key=None, base_url=None, mo
             }
 
             # Send request, set timeout and retry count
-            max_retries = 8   # 增加最大重试次数
+            max_retries = 8   # Increase max retry count
             retry_count = 0
-            base_wait = 5     # 延长基础等待时间到5秒
+            base_wait = 5     # Extend base wait time to 5 seconds
 
             while retry_count < max_retries:
                 wait_time = base_wait * (2 ** retry_count)  # 指数退避策略2^n
@@ -183,13 +183,13 @@ def llm_text_query(system_prompt, prompt, model, api_key=None, base_url=None, mo
             # 增加指数退避时间并继续重试
             # 针对Vertex AI的配额限制增加更长的退避时间
             if model == "gemini":
-                print("检测到Gemini模型配额限制，启用增强退避策略")
-                max_retries = 5  # 减少最大重试次数但增加等待时间
-                base_wait = 60  # 基础等待时间增加到60秒
+                print("Detected Gemini model quota limit, enabling enhanced backoff strategy")
+                max_retries = 5  # Reduce max retries but increase wait time
+                base_wait = 60  # Increase base wait time to 60 seconds
                 wait_time = base_wait * (2 ** retry_count)
                 if retry_count >= max_retries:
-                    raise Exception("Vertex AI配额限制已达最大重试次数，请稍后再试或申请增加配额")
-                print(f"Gemini配额限制重试 {retry_count}/{max_retries}，等待 {wait_time} 秒")
+                    raise Exception("Vertex AI quota limit reached max retries, please try again later or request quota increase")
+                print(f"Gemini quota limit retry {retry_count}/{max_retries}, waiting {wait_time} seconds")
                 time.sleep(wait_time)
                 retry_count += 1
             else:

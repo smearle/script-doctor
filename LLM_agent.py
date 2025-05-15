@@ -1,4 +1,4 @@
-from typing import List, Dict
+from typing import List, Dict, Optional
 from utils import llm_text_query
 
 class LLMGameAgent:
@@ -9,7 +9,7 @@ class LLMGameAgent:
     def __init__(self, model_name: str = "gpt-4o"):
         self.model_name = model_name
 
-    def choose_action(self, ascii_map: str, mapping: Dict[str, str], rules: str, action_space: List[int], action_meanings: Dict[int, str]) -> int:
+    def choose_action(self, ascii_map: str, rules: str, action_space: List[int], action_meanings: Dict[int, str]) -> int:
         """
         Query the LLM to select an action id from action_space, given ascii_map, mapping, rules, and action_meanings.
         Returns an integer action id.
@@ -20,13 +20,13 @@ class LLMGameAgent:
             "your task is to select the best action. "
             "Only respond with the action id (an integer from the provided action_space)."
         )
-        mapping_str = "\n".join([f"{k}: {v}" for k, v in mapping.items()])
+
         action_space_str = ", ".join(str(a) for a in action_space)
         # Provide action mapping (number to meaning) dynamically
         action_map_str = ", ".join([f"{k}={v}" for k, v in action_meanings.items()])
         prompt = (
-            f"Game state (ASCII map):\n{ascii_map}\n\n"
-            f"Legend mapping:\n{mapping_str}\n\n"
+            f"Game state (ASCII map) and Legend:\n{ascii_map}\n\n"
+  
             f"Game rules:\n{rules}\n\n"
             f"Available actions (action_space): {action_space_str}\n"
             f"Action mapping: {action_map_str}\n"
