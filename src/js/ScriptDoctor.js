@@ -174,7 +174,8 @@ async function solveLevelBFS(levelIdx, captureStates=false, maxIters=1_000_000) 
 
   var sol = [];
   var bestState = init_level;
-  var bestScore = Infinity;
+  score = getScore();
+  var bestScore = score;
   console.log(sol.length);
   // visited = new Set([hashState(init_level_map)]);
   visited = {};
@@ -222,13 +223,14 @@ async function solveLevelBFS(levelIdx, captureStates=false, maxIters=1_000_000) 
 			while (againing) {
 				changed = processInputSearch(-1) || changedSomething;
 			}
-      if (winning) {
-        console.log(`Winning! Solution:, ${new_action_seq}\n Iterations: ${i}`);
-        console.log('FPS:', (i / (Date.now() - start_time) * 1000).toFixed(2));
-        return [new_action_seq, winning, score, backupLevel(), i, false];
-      }
-      else if (changed) {
+      if (changed) {
         new_level = backupLevel();
+        if (winning) {
+          console.log(`Winning! Solution:, ${new_action_seq}\n Iterations: ${i}`);
+          console.log('FPS:', (i / (Date.now() - start_time) * 1000).toFixed(2));
+          score = getScore();
+          return [new_action_seq, winning, score, new_level, i, false];
+        }
         // new_level_map = new_level['dat'];
         // const newHash = hashState(new_level_map);
         // if (!visited.has(newHash)) {

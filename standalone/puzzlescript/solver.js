@@ -393,29 +393,37 @@ function getScoreNormalized(engine) {
 function takeAction(engine, action) {
   // let changed = engine.processInput(action);
   let changed = processInputSearch(engine, action);
+  level_map = engine.backupLevel()['dat'];
+  score = getScore(engine);
   if (engine.getWinning()) {
     DoRestartSearch(engine);
     // console.log('Winning!');
     // return true;
   }
-  return false;
+  // Dummy values for winning, solution, iterations, and elapsed time
+  return [false, [], 0, 0, score, level_map];
 }
 
 function randomRollout(engine, maxIters=100_000) {
+  precalcDistances(engine);
   let i = 0;
   let start_time = Date.now();
   const timeout_ms = 60 * 1000;
+  var score = getScore(engine);
+  var level_map = engine.backupLevel()['dat'];
   while (i < maxIters) {
     // if (i % 1000 == 0) {
     elapsed_time = Date.now() - start_time;
     if (elapsed_time > timeout_ms) {
       console.log(`Timeout after ${elapsed_time / 1000} seconds. Returning.`);
-      return [false, [], i, ((Date.now() - start_time) / 1000)];
+      return [false, [], i, ((Date.now() - start_time) / 1000), score, level_map];
     }
     // }
     // let changed = engine.processInput(Math.min(5, Math.floor(Math.random() * 6)));
     let changed = processInputSearch(engine, Math.min(5, Math.floor(Math.random() * 6)));
     if (changed) {
+      score = getScore(engine);
+      new_level = engine.backupLevel()['dat'];
       if (engine.getWinning()) {
         // console.log(`Winning! Solution:, ${new_action_seq}\n Iterations: ${i}`);
         // console.log('FPS:', (i / (Date.now() - start_time) * 1000).toFixed(2));
@@ -427,9 +435,10 @@ function randomRollout(engine, maxIters=100_000) {
   }
   if(i >= maxIters) {
     // console.log('Exceeded max iterations. Exiting.');
-    return [false, [], i, ((Date.now() - start_time) / 1000)];
+    return [false, [], i, ((Date.now() - start_time) / 1000), score, level_map];
   }
-  return [false, [], i, ((Date.now() - start_time) / 1000)];
+  // Dummy values for winning and solution
+  return [false, [], i, ((Date.now() - start_time) / 1000), score, level_map];
 }
 
 function processInputSearch(engine, action){
@@ -478,8 +487,9 @@ function solveRandom(engine, maxLength=100, maxIters=100_000) {
   return [false, [], i, ((Date.now() - start_time) / 1000)];
 }
 
-function solveBFS(engine, maxIters=100_000) {
-  const timeout_ms = 60 * 1000;
+function solveBFS(engine, maxIters, timeoutJS) {
+  precalcDistances(engine);
+  timeout_ms = timeoutJS;
   function hashState(state) {
     return JSON.stringify(state).split('').reduce((hash, char) => {
       return (hash * 31 + char.charCodeAt(0)) % 1_000_000_003; // Simple hash
@@ -499,7 +509,9 @@ function solveBFS(engine, maxIters=100_000) {
   frontier.enqueue([init_level, []]);
   // action_seqs.enqueue([]);
 
-  sol = [];
+  var sol = [];
+  var bestState = init_level;
+  var bestScore = getScore(engine);
   // console.log(sol.length);
   visited = new Set([hashState(init_level_map)]);
   i = 0;
@@ -507,8 +519,10 @@ function solveBFS(engine, maxIters=100_000) {
   // console.log(frontier.size())
   while (frontier.size() > 0 && i < maxIters) {
     if (i % 1000 == 0) {
-      if (elapsed_time > timeout_ms) {
+      elapsed_time = Date.now() - start_time;
+      if ((timeout_ms > 0) && (elapsed_time > timeout_ms)) {
         console.log(`Timeout after ${elapsed_time / 1000} seconds. Returning best result found so far.`);
+        return [false, sol, i, ((Date.now() - start_time) / 1000), bestScore, bestState];
       }
     }
     backups = [];
@@ -524,7 +538,7 @@ function solveBFS(engine, maxIters=100_000) {
     for (const move of Array(5).keys()) {
       if (i > maxIters) {
         // console.log('Exceeded 1M iterations. Exiting.');
-        return [false, [], i, ((Date.now() - start_time) / 1000)];
+        return [false, sol, i, ((Date.now() - start_time) / 1000), bestScore, bestState];
       }
       engine.restoreLevel(level);
 
@@ -534,16 +548,17 @@ function solveBFS(engine, maxIters=100_000) {
         changed = processInputSearch(engine, move);
       } catch (e) {
         // console.log('Error while processing input:', e);
-        return [false, [], i, ((Date.now() - start_time) / 1000)];
+        return [false, sol, i, ((Date.now() - start_time) / 1000), bestScore, bestState];
       }
-      if (engine.getWinning()) {
-        // console.log(`Winning! Solution:, ${new_action_seq}\n Iterations: ${i}`);
-        // console.log('FPS:', (i / (Date.now() - start_time) * 1000).toFixed(2));
-        return [true, new_action_seq, i, ((Date.now() - start_time) / 1000)];
-      }
-      else if (changed) {
+      if (changed) {
         new_level = engine.backupLevel();
         new_level_map = new_level['dat'];
+        if (engine.getWinning()) {
+          // console.log(`Winning! Solution:, ${new_action_seq}\n Iterations: ${i}`);
+          // console.log('FPS:', (i / (Date.now() - start_time) * 1000).toFixed(2));
+          score = getScore(engine);
+          return [true, new_action_seq, i, ((Date.now() - start_time) / 1000), score, new_level_map];
+        }
         const newHash = hashState(new_level_map);
         if (!visited.has(newHash)) {
           
@@ -554,29 +569,35 @@ function solveBFS(engine, maxIters=100_000) {
           frontier.enqueue([new_level, new_action_seq]);
           // frontier.enqueue(new_level);
           if (!new_action_seq) {
-            // console.log(`New action sequence is undefined when pushing.`);
+            console.log(`New action sequence is undefined when pushing.`);
           }
           // action_seqs.enqueue(new_action_seq);
           visited.add(newHash);
+          score = getScore(engine);
+          // Use this condition if we want short and maximlly good sequences
+          // if ((score < bestScore) | (score == bestScore && new_action_seq.length > sol.length)) {
+          // Use this condition if we want maximally long sequences to validate the jax engine, for example
+          if ((score < bestScore) | (score == bestScore && new_action_seq.length > sol.length)) {
+            bestScore = score;
+            bestState = new_level_map;
+            sol = new_action_seq;
+          }
         } 
       }
     }
-    // if (i % 10000 == 0) {
-    //   now = Date.now();
-    //   console.log('Iteration:', i);
-    //   console.log('FPS:', (i / (now - start_time) * 1000).toFixed(2));
-    //   console.log(`Size of frontier: ${frontier.size()}`);
-    //   console.log(`Visited states: ${visited.size}`);
-    //   // await new Promise(resolve => setTimeout(resolve, 1)); // Small delay for live feedback
-    //   // redraw();
-    // }
+    if (i % 10000 == 0) {
+      now = Date.now();
+      console.log('Iteration:', i);
+      console.log('FPS:', (i / (now - start_time) * 1000).toFixed(2));
+      console.log(`Size of frontier: ${frontier.size()}`);
+      console.log(`Visited states: ${visited.size}`);
+    }
     i++;
   }
   if(i >= maxIters) {
-    // console.log('Exceeded max iterations. Exiting.');
-    return [false, [], i, ((Date.now() - start_time) / 1000)];
+    return [false, sol, i, ((Date.now() - start_time) / 1000), bestScore, bestState];
   }
-  return [true, sol, i, ((Date.now() - start_time) / 1000)];
+  return [false, sol, i, ((Date.now() - start_time) / 1000), bestScore, bestState];
 }
 
 function DoRestartSearch(engine, force) {
@@ -969,6 +990,16 @@ function solveMCTS(engine, options = {}) {
     currentNode = currentNode.children[action];
   }
   return [false, actions, options.max_iterations, ((Date.now() - start_time) / 1000)];
+}
+
+function getNLevels(engine) {
+  let n_levels = 0;
+  for (let i = 0; i < engine.getLevel().n_tiles; i++) {
+    if (engine.getLevel().getCellInto(i, engine.get_o10()).data != 0) {
+      n_levels++;
+    }
+  }
+  return n_levels;
 }
 
 module.exports = {

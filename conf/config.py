@@ -16,6 +16,10 @@ class PlotRandProfileConfig:
     all_games: bool = True  # Plot as many games as we have (partial) results for
 
 @dataclass
+class PlotStandaloneBFS:
+    all_games: bool = True
+
+@dataclass
 class PSConfig:
     game: str = "sokoban_basic"
     level: int = 0
@@ -44,11 +48,13 @@ class ProfileJaxRandConfig(PSConfig):
     
 @dataclass
 class ProfileStandalone(PSConfig):
+    algo: str = "random"  # 'bfs', 'random'
     game: Optional[str] = None
     all_games: bool = False
-    n_profile_steps: int = 5_000
+    n_steps: int = 5_000
     overwrite: bool = False
     include_randomness: bool = True
+    timeout: int = 10_000
 
 
 @dataclass
@@ -155,6 +161,7 @@ class TrainConfig(RLConfig):
     ###########################################################################
 
 
+@dataclass
 class SweepRLConfig(TrainConfig):
     plot: bool = False
 
@@ -162,6 +169,7 @@ class SweepRLConfig(TrainConfig):
 cs = ConfigStore.instance()
 cs.store(name="preprocess_config", node=PreprocessConfig)
 cs.store(name="plot_rand_profile_config", node=PlotRandProfileConfig)
+cs.store(name="plot_standalone_bfs_config", node=PlotStandaloneBFS)
 cs.store(name="ps_config", node=PSConfig)
 cs.store(name="config", node=RLConfig)
 cs.store(name="bfs_config", node=BFSConfig)

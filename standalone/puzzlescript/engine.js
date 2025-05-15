@@ -569,6 +569,10 @@ function blankLineHandle(state) {
     }
 }
 
+function getNumLevels() {
+    return state.levels.length;
+}
+
 //returns null if not delcared, otherwise declaration
 //note to self: I don't think that aggregates or properties know that they're aggregates or properties in and of themselves.
 function wordAlreadyDeclared(state,n) {
@@ -8379,5 +8383,6 @@ module.exports = {
     compile, backupLevel, restoreLevel, processInput, addUndoState, 
     getWinning, setWinning, getLevel, getState, getRestarting, setRestarting, 
     getRestartTarget, getDeltaTime, setDeltaTime, getAgaining,
-    getHasUsedCheckpoint, setHasUsedCheckpoint, get_o10
+    getHasUsedCheckpoint, setHasUsedCheckpoint, get_o10,
+    getNumLevels,
 }
