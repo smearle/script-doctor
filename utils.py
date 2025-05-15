@@ -124,61 +124,92 @@ def llm_text_query(system_prompt, prompt, model, api_key=None, base_url=None, mo
     elif model == "gemini":
         virtual_key = os.environ.get("PORTKEY_VERTEX_KEY", "")
         model ="gemini-2.0-flash-exp"
-    # Try using Portkey API
+    elif model == "deepseek":
+        pass  # DeepSeek will be handled separately
+    elif model == "qwen":
+        pass  # Qwen will be handled separately
+    # Try using Portkey API, DeepSeek API or Qwen API
     try:
-       
-            import requests
-            import json
+        import requests
+        import json
 
+        if model == "deepseek":
+            print(f'Querying DeepSeek API using model {model}...')
+            url = "https://api.deepseek.com/chat/completions"
+            api_key = os.environ.get("DEEPSEEK_API_KEY")
+            if not api_key:
+                raise ValueError("DEEPSEEK_API_KEY not found in environment variables.")
+            headers = {
+                "Content-Type": "application/json",
+                "Authorization": f"Bearer {api_key}",
+            }
+            payload = {
+                "model": "deepseek-chat", # Or the specific deepseek model name you intend to use
+                "messages": messages,
+            }
+        elif model == "qwen":
+            print(f'Querying Qwen API using model qwen-plus...')
+            url = "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions"
+            api_key = os.environ.get("QWEN_API_KEY")
+            if not api_key:
+                raise ValueError("QWEN_API_KEY not found in environment variables.")
+            headers = {
+                "Content-Type": "application/json",
+                "Authorization": f"Bearer {api_key}",
+            }
+            payload = {
+                "model": "qwen-plus", # Defaulting to qwen-plus as per provided client code
+                "messages": messages,
+                # Qwen specific parameters like temperature, max_tokens can be added here if needed
+                # "temperature": 0.7, # Example
+            }
+        else:
             print(f'Querying API using model {model} with virtual key {virtual_key}...')
-
-            # Prepare request
             url = "https://ai-gateway.apps.cloud.rt.nyu.edu/v1/chat/completions"
             headers = {
                 "Content-Type": "application/json",
                 "Authorization": f"Bearer {os.environ.get('PORTKEY_BEARER', '')}",
                 "x-portkey-virtual-key": virtual_key
             }
-
             payload = {
                 "model": model,
                 "messages": messages
             }
 
-            # Send request, set timeout and retry count
-            max_retries = 8   # Increase max retry count
-            retry_count = 0
-            base_wait = 5     # Extend base wait time to 5 seconds
+        # Send request, set timeout and retry count
+        max_retries = 8   # Increase max retry count
+        retry_count = 0
+        base_wait = 5     # Extend base wait time to 5 seconds
 
-            while retry_count < max_retries:
-                wait_time = base_wait * (2 ** retry_count)  # 指数退避策略2^n
-                try:
-                    response = requests.post(url, headers=headers, json=payload, timeout=60)
+        while retry_count < max_retries:
+            wait_time = base_wait * (2 ** retry_count)  # 指数退避策略2^n
+            try:
+                response = requests.post(url, headers=headers, json=payload, timeout=60)
 
-                    # Check response status
-                    if response.status_code == 200:
-                        response_data = response.json()
-                        print('Query completed successfully.')
-                        return response_data['choices'][0]['message']['content']
-                    elif response.status_code in [429, 504]:  # Rate limit or Gateway Timeout
-                        wait_time = int(response.headers.get('Retry-After', base_wait * (2 ** retry_count)))
-                        print(f"Rate limited (429), retrying in {wait_time}s ({retry_count+1}/{max_retries})")
-                        time.sleep(wait_time)
-                        retry_count += 1
-                    else:
-                        print(f"Request failed with status code: {response.status_code}")
-                        print(f"Response text: {response.text}")
-                        if response.status_code == 429:  # Special handling for Gemini quota limits
-                            time.sleep(30)  # Additional cooldown
-                        raise Exception(f"API request failed with status code: {response.status_code}")
-                except requests.exceptions.Timeout:
-                        print(f"Request timed out, retrying in {wait_time}s ({retry_count+1}/{max_retries})")
-                        time.sleep(wait_time)
-                        retry_count += 1
-                except requests.exceptions.RequestException as e:
-                    print(f"Request exception: {e}")
+                # Check response status
+                if response.status_code == 200:
+                    response_data = response.json()
+                    print('Query completed successfully.')
+                    return response_data['choices'][0]['message']['content']
+                elif response.status_code in [429, 504]:  # Rate limit or Gateway Timeout
+                    wait_time = int(response.headers.get('Retry-After', base_wait * (2 ** retry_count)))
+                    print(f"Rate limited (429), retrying in {wait_time}s ({retry_count+1}/{max_retries})")
+                    time.sleep(wait_time)
                     retry_count += 1
-                    time.sleep(5)  # Wait 5 seconds before retrying
+                else:
+                    print(f"Request failed with status code: {response.status_code}")
+                    print(f"Response text: {response.text}")
+                    if response.status_code == 429:  # Special handling for Gemini quota limits
+                        time.sleep(30)  # Additional cooldown
+                    raise Exception(f"API request failed with status code: {response.status_code}")
+            except requests.exceptions.Timeout:
+                print(f"Request timed out, retrying in {wait_time}s ({retry_count+1}/{max_retries})")
+                time.sleep(wait_time)
+                retry_count += 1
+            except requests.exceptions.RequestException as e:
+                print(f"Request exception: {e}")
+                retry_count += 1
+                time.sleep(5)  # Wait 5 seconds before retrying
 
             # 增加指数退避时间并继续重试
             # 针对Vertex AI的配额限制增加更长的退避时间
