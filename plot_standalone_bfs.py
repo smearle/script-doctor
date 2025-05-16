@@ -20,6 +20,9 @@ def plot(cfg: PlotStandaloneBFS):
     os.makedirs(PLOTS_DIR, exist_ok=True)
 
     sorted_games = get_list_of_games_for_testing(cfg.all_games) 
+    # Build a sorting key for each index based on the sorted_games list
+    game_order = {game: i for i, game in enumerate(sorted_games)}
+
 
     for run_name in results.keys():
         run_results = results[run_name]
@@ -46,6 +49,10 @@ def plot(cfg: PlotStandaloneBFS):
             if len(game_results) == 0:
                 print(f'No results for {game}. Skipping.')
                 continue
+                
+            if game not in sorted_games:
+                print(f'Game {game} not in sorted games. Skipping.')
+                continue
 
             for level in level_keys:
                 level_results = game_results[level]
@@ -69,9 +76,14 @@ def plot(cfg: PlotStandaloneBFS):
         df = pd.DataFrame(df_rows, columns=df_col_keys, index=pd.MultiIndex.from_tuples(df_row_indices, names=df_row_headers))
 
         # Sort games according to their ordering in `sorted_games`
-        df = df.reindex(sorted_games, level='game')
         # Sort levels according to their integer value. Convert them to integers here!
-        df = df.reindex(sorted(df.index.levels[1], key=lambda x: int(x)), level='level')
+        df = df.sort_values(
+            by=['game', 'level'],
+            key=lambda col: (
+                col.map(game_order) if col.name == 'game'
+                else col.astype(int)  # assumes levels like '0', '1', ...
+            )
+        )
 
         algo_name, n_steps, device_name = get_standalone_run_params_from_name(run_name)
         concise_run_name = f'{algo_name}_{n_steps}-steps'
@@ -86,8 +98,34 @@ def plot(cfg: PlotStandaloneBFS):
         # Save to a latex table
         latex_file_name = f'{concise_run_name}.tex'
         latex_file_path = os.path.join(PLOTS_DIR, latex_file_name)
-        df.to_latex(latex_file_path, index=True, float_format="%.2f", escape=False)
-        print(f'Saved latex table to {latex_file_path}')
+        # df.to_latex(latex_file_path, index=True, float_format="%.2f", escape=False)
+        # print(f'Saved latex table to {latex_file_path}')
+
+        # Split the dataframe roughly in half
+        split_index = len(df) // 2
+        df1 = df.iloc[:split_index]
+        df2 = df.iloc[split_index:]
+
+        # Build LaTeX minipage output
+        latex_output = r"""
+\centering
+\begin{subtable}[t]{0.48\linewidth}
+\centering
+""" + df1.to_latex(index=True, float_format="%.2f", escape=False, caption=False) + r"""
+\end{subtable}%
+\hfill
+\begin{subtable}[t]{0.48\linewidth}
+\centering
+""" + df2.to_latex(index=True, float_format="%.2f", escape=False, caption=False) + r"""
+\end{subtable}
+        """
+
+        latex_file_name = f'{concise_run_name}_split.tex'
+        latex_file_path = os.path.join(PLOTS_DIR, latex_file_name)
+        with open(latex_file_path, 'w') as f:
+            f.write(latex_output)
+
+        print(f'Saved split latex table to {latex_file_path}')
 
     
 if __name__ == "__main__":

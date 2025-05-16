@@ -163,7 +163,9 @@ class TrainConfig(RLConfig):
 
 @dataclass
 class SweepRLConfig(TrainConfig):
+    all_games: bool = False
     plot: bool = False
+    slurm: bool = True
 
 
 cs = ConfigStore.instance()
