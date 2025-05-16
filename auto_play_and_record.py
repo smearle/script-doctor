@@ -17,8 +17,7 @@ from hydra.core.config_store import ConfigStore
 from dataclasses import dataclass
 
 # Import LLM agent
-from LLM_agent import LLMAgent, ReinforcementWrapper, StateVisualizer
-
+from LLM_agent import LLMAgent
 @dataclass
 class Config:
     port: int = 8000
@@ -807,7 +806,7 @@ def main(cfg_param: Config):
     
     # Initialize LLM agent
     llm_agent = LLMAgent(model_name="gpt-4o")
-    rl_wrapper = ReinforcementWrapper(llm_agent)
+
     
     # Create browser thread
     url = f"http://127.0.0.1:{cfg.port}"

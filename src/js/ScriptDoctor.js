@@ -174,7 +174,8 @@ async function solveLevelBFS(levelIdx, captureStates=false, maxIters=1_000_000) 
 
   var sol = [];
   var bestState = init_level;
-  var bestScore = Infinity;
+  score = getScore();
+  var bestScore = score;
   console.log(sol.length);
   // visited = new Set([hashState(init_level_map)]);
   visited = {};
@@ -183,10 +184,12 @@ async function solveLevelBFS(levelIdx, captureStates=false, maxIters=1_000_000) 
   start_time = Date.now();
   console.log(frontier.size())
   while (frontier.size() > 0) {
-    const elapsed_time = Date.now() - start_time;
-    if (elapsed_time > timeout_ms) {
-      console.log(`Timeout after ${elapsed_time / 1000} seconds. Returning best result found so far.`);
-      return [sol, false, bestScore, bestState, i, true];
+    // if (i % 1000) {
+      const elapsed_time = Date.now() - start_time;
+      if (elapsed_time > timeout_ms) {
+        console.log(`Timeout after ${elapsed_time / 1000} seconds. Returning best result found so far.`);
+        return [sol, false, bestScore, bestState, i, true];
+      // }
     }
 
     // This is a global variable of previous states. Clear it to be safe (though processInputSearch shouldn't be using 
@@ -220,13 +223,14 @@ async function solveLevelBFS(levelIdx, captureStates=false, maxIters=1_000_000) 
 			while (againing) {
 				changed = processInputSearch(-1) || changedSomething;
 			}
-      if (winning) {
-        console.log(`Winning! Solution:, ${new_action_seq}\n Iterations: ${i}`);
-        console.log('FPS:', (i / (Date.now() - start_time) * 1000).toFixed(2));
-        return [new_action_seq, winning, score, backupLevel(), i, false];
-      }
-      else if (changed) {
+      if (changed) {
         new_level = backupLevel();
+        if (winning) {
+          console.log(`Winning! Solution:, ${new_action_seq}\n Iterations: ${i}`);
+          console.log('FPS:', (i / (Date.now() - start_time) * 1000).toFixed(2));
+          score = getScore();
+          return [new_action_seq, winning, score, new_level, i, false];
+        }
         // new_level_map = new_level['dat'];
         // const newHash = hashState(new_level_map);
         // if (!visited.has(newHash)) {
@@ -1436,7 +1440,7 @@ async function fromPlanSweep() {
   saveStats(saveDir + '/fromPlan', results);
 }
 
-async function collectGameData(gamePath, captureStates=true) {
+async function collectGameData(gamePath, maxIters, captureStates=true) {
   console.log(`Heap at the top of collectGameData: ${(performance.memory.usedJSHeapSize / 1e6).toFixed(2)} MB`);
   redraw();
 
@@ -1484,7 +1488,7 @@ async function collectGameData(gamePath, captureStates=true) {
     // If the solution does not exist, solve it
     compile(['loadLevel', levelIdx], code);
     console.log(`Solving level ${levelIdx} of game ${gamePath}`);
-    const [sol, won, score, bestState, n_iters, timeout] = await solveLevelBFS(levelIdx, captureStates=captureStates, maxIters=100_000);
+    const [sol, won, score, bestState, n_iters, timeout] = await solveLevelBFS(levelIdx, captureStates=captureStates, maxIters=maxIters);
     console.log(`Finished processing level ${levelIdx}`);
     if (sol.length > 0) {
       console.log(`Solution for level ${levelIdx}:`, sol);
@@ -1519,14 +1523,16 @@ async function processAllGames() {
       target_dir: 'min_games',
     }),
   });
-  const games = await response.json();
+  const data = await response.json();
+  games = data.games;
+  maxIters = data.max_iters;
 
   // Shuffle the games
   // games.sort(() => Math.random() - 0.5);
   
   for (const game of games) {
     console.log(`Processing game: ${game}`);
-    await collectGameData(game, captureStates=false);
+    await collectGameData(game, maxIters, captureStates=false);
   }
 }
 // var experimentDropdown = document.getElementById("experimentDropdown");

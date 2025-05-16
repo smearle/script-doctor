@@ -10,6 +10,7 @@ from dotenv import load_dotenv
 from pathvalidate import sanitize_filename
 
 
+GALLERY_GAMES_DIR = os.path.join('src', 'demo')
 SCRAPED_GAMES_DIR = os.path.join('data', 'scraped_games')
 
 def return_keyval(d, key):
@@ -29,9 +30,8 @@ if __name__ == '__main__':
     os.makedirs(SCRAPED_GAMES_DIR, exist_ok = True)
 
     # Collect games already in the repo
-    example_games_dir = os.path.join('src', 'demo')
     custom_games_dir = 'custom_games'
-    for game_dir in [custom_games_dir, example_games_dir]:
+    for game_dir in [custom_games_dir, GALLERY_GAMES_DIR]:
         games = glob.glob(os.path.join(game_dir, '*.txt'))
         for eg in games:
             shutil.copy(eg, os.path.join(SCRAPED_GAMES_DIR, os.path.basename(eg)))

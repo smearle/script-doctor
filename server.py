@@ -32,10 +32,11 @@ import requests
 
 from client import open_browser
 import game_gen
-from parse_lark import GAMES_DIR, MIN_GAMES_DIR, PrintPuzzleScript, RepairPuzzleScript, StripPuzzleScript, add_empty_sounds_section, preprocess_ps, TEST_GAMES
+from globals import PRIORITY_GAMES
+from preprocess_games import GAMES_DIR, MIN_GAMES_DIR, PrintPuzzleScript, RepairPuzzleScript, StripPuzzleScript, add_empty_sounds_section, preprocess_ps, TEST_GAMES
 from prompts import *
 from sort_games_by_n_rules import GAMES_N_RULES_SORTED_PATH
-from utils import extract_ps_code, gen_fewshot_examples, llm_text_query, num_tokens_from_string, save_prompts, truncate_str_to_token_len
+from utils import extract_ps_code, gen_fewshot_examples, get_list_of_games_for_testing, llm_text_query, num_tokens_from_string, save_prompts, truncate_str_to_token_len
 
 
 @dataclass
@@ -51,6 +52,7 @@ class Config:
     viz_feedback: bool = True
     headless: bool = True
     auto_launch_client: bool = True
+    max_iters: int = 100_000
 
 
 @dataclass
@@ -541,13 +543,10 @@ games_to_skip_for_speed = set({
     "Microban_I",
 })
 
-priority_games = [
-    'blocks',
-    'limerick',
-]
 
 @app.route('/list_scraped_games', methods=['POST'])
 def list_scraped_games():
+    global global_cfg
     data = request.json
     target_dir = data['target_dir']
     games_set = set()
@@ -556,12 +555,7 @@ def list_scraped_games():
     # random.shuffle(game_files)
     # test_game_files = [f"{test_game}.txt" for test_game in TEST_GAMES]
     # game_files = test_game_files + game_files
-    with open(GAMES_N_RULES_SORTED_PATH, 'r') as f:
-        games_n_rules = json.load(f)
-    games_n_rules = sorted(games_n_rules, key=lambda x: x[1])
-    # Exclude games with randomness for the purpose of tree search
-    game_names = [game[0] for game in games_n_rules if not game[1]]
-    game_names = priority_games + [game for game in game_names if game not in priority_games]
+    game_names = get_list_of_games_for_testing(all_games=True, include_random=False)
     for filename in game_names:
         if filename.startswith('rigid_'):
             print(f"Skipping {filename} because it seems to be a pesky rigid body game")
@@ -578,8 +572,11 @@ def list_scraped_games():
             continue
         games_set.add(filename)
         games.append(filename)
-    print(games)
-    return jsonify(games)
+    # print(games)
+    return jsonify({
+        'games': games,
+        'max_iters': global_cfg.max_iters,
+    })
 
 @app.route('/save_init_state', methods=['POST'])
 def save_init_state():
@@ -1155,51 +1152,51 @@ recompute_stats = Config.recompute_stats
 
 #LLM agents
 # 
-from LLM_agent import LLMAgent, ReinforcementWrapper, StateVisualizer
+# from LLM_agent import LLMAgent, StateVisualizer
 
 # Initialize agent system
-llm_agent = LLMAgent(model_name="gpt-4o")
-rl_wrapper = ReinforcementWrapper(llm_agent)
+# llm_agent = LLMAgent(model_name="gpt-4o")
 
-@app.route('/llm_action', methods=['POST'])
-def llm_action():
-    try:
-        data = request.json
-        state_repr = StateVisualizer.render_ascii({
-            'entities': llm_agent._extract_entities(data['state'])
-        })
+
+# @app.route('/llm_action', methods=['POST'])
+# def llm_action():
+#     try:
+#         data = request.json
+#         state_repr = StateVisualizer.render_ascii({
+#             'entities': llm_agent._extract_entities(data['state'])
+#         })
         
-        # Process game state
-        processed_state = llm_agent.process_state(state_repr)
+#         # Process game state
+#         processed_state = llm_agent.process_state(state_repr)
         
-        # Generate decision
-        action = llm_agent.choose_action(
-            processed_state=processed_state,
-            goal=data.get('goal', '')
-        )
+#         # Generate decision
+#         action = llm_agent.choose_action(
+#             processed_state=processed_state,
+#             goal=data.get('goal', '')
+#         )
         
-        # Record history
-        llm_agent.update_history(action, "pending")
+#         # Record history
+#         llm_agent.update_history(action, "pending")
         
-        # Reinforcement learning update
-        if 'reward' in data:
-            rl_wrapper.reinforce(data['reward'])
+#         # Reinforcement learning update
+#         if 'reward' in data:
+#             rl_wrapper.reinforce(data['reward'])
         
-        return jsonify({
-            'action': action,
-            'state_hash': hash(state_repr),
-            'complexity': processed_state['metrics']['complexity']
-        })
+#         return jsonify({
+#             'action': action,
+#             'state_hash': hash(state_repr),
+#             'complexity': processed_state['metrics']['complexity']
+#         })
     
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
+#     except Exception as e:
+#         return jsonify({'error': str(e)}), 500
 
-@app.route('/agent_history', methods=['GET'])
-def get_action_history():
-    return jsonify({
-        'history': llm_agent.action_history,
-        'q_table': rl_wrapper.q_table
-    })
+# @app.route('/agent_history', methods=['GET'])
+# def get_action_history():
+#     return jsonify({
+#         'history': llm_agent.action_history,
+#         'q_table': rl_wrapper.q_table
+#     })
 
 @app.route('/retrain', methods=['POST'])
 def retrain_agent():

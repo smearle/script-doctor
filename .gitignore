@@ -4,6 +4,11 @@ bin/
 .vscode
 .build
 logs*
+plots/
+multirun
+submitit_logs
+
+script-doctor-nodejs
 
 *.swp
 src - Kopie

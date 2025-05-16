@@ -19,10 +19,10 @@ from skimage.transform import resize
 from conf.config import RLConfig
 from env import PSEnv
 from gen_tree import GenPSTree
-from parse_lark import PS_LARK_GRAMMAR_PATH, TREES_DIR, DATA_DIR, TEST_GAMES, get_tree_from_txt
+from preprocess_games import PS_LARK_GRAMMAR_PATH, TREES_DIR, DATA_DIR, TEST_GAMES, get_tree_from_txt
 from ps_game import PSGameTree
 from sort_games_by_n_rules import GAMES_N_RULES_SORTED_PATH
-from utils import to_binary_vectors
+from utils import get_list_of_games_for_testing, to_binary_vectors
 from utils_rl import get_env_params_from_config
 
 
@@ -42,11 +42,9 @@ def main(config: RLConfig):
     with open(PS_LARK_GRAMMAR_PATH, "r", encoding='utf-8') as file:
         puzzlescript_grammar = file.read()
     parser = Lark(puzzlescript_grammar, start="ps_game", maybe_placeholders=False)
-    with open(GAMES_N_RULES_SORTED_PATH, 'r') as f:
-        games_n_rules = json.load(f)
-    games_n_rules = sorted(games_n_rules, key=lambda x: x[1])
-    games = [game for game, n_rules in games_n_rules]
+    games = get_list_of_games_for_testing(all_games=True)
     results = {
+        'stats': {},
         'compile_error': [],
         'runtime_error': {},
         'solution_error': {},
@@ -62,6 +60,14 @@ def main(config: RLConfig):
     # games = [os.path.basename(path)[:-4] for path in sol_paths]
     sol_paths = [os.path.join(JS_SOLS_DIR, game) for game in games]
 
+    n_levels = 0
+    n_compile_error = 0
+    n_runtime_error = 0
+    n_solution_error = 0
+    n_state_error = 0
+    n_score_error = 0
+    n_success = 0
+
     for sol_dir, game in zip(sol_paths, games):
         game_name = os.path.basename(game)
         if game_name in games_to_skip:
@@ -74,6 +80,8 @@ def main(config: RLConfig):
             with open(compile_log_path, 'r') as f:
                 compile_log = f.read()
             results['compile_error'].append((game, compile_log))
+            n_compile_error += 1
+            n_levels += 1
             print(f"Skipping {game} because compile error log already exists")
             continue
 
@@ -95,6 +103,8 @@ def main(config: RLConfig):
             traceback.print_exc()
             print(f"Error creating env: {og_path}")
             results['compile_error'].append((game, err_log))
+            n_compile_error += 1
+            n_levels += 1
             continue
 
         key = jax.random.PRNGKey(0)
@@ -117,6 +127,7 @@ def main(config: RLConfig):
             continue
 
         for level_sol_path in level_sols:
+            n_levels += 1
             level_i = int(os.path.basename(level_sol_path).split('-')[1].split('.')[0])
             sol_log_path = os.path.join(jax_sol_dir, f'level-{level_i}_solution_err.txt')
             score_log_path = os.path.join(jax_sol_dir, f'level-{level_i}_score_err.txt')
@@ -131,24 +142,29 @@ def main(config: RLConfig):
                     if game_name not in results['runtime_error']:
                         results['runtime_error'][game_name] = []
                     results['runtime_error'][game_name].append((level_i, run_log))
+                    n_runtime_error += 1
                 elif os.path.exists(sol_log_path):
                     if game_name not in results['solution_error']:
                         results['solution_error'][game_name] = []
                     results['solution_error'][game_name].append(level_i)
+                    n_solution_error += 1
                 elif os.path.exists(state_log_path):
                     if game_name not in results['state_error']:
                         results['state_error'][game_name] = []
                     results['state_error'][game_name].append(level_i)
+                    n_state_error += 1
                 elif os.path.exists(score_log_path):
                     with open(score_log_path, 'r') as f:
                         score_log = f.read()
                     if game_name not in results['score_error']:
                         results['score_error'][game_name] = []
                     results['score_error'][game_name].append((level_i, score_log))
+                    n_score_error += 1
                 else:
                     if game_name not in results['success']:
                         results['success'][game_name] = []
                     results['success'][game_name].append(level_i)
+                    n_success += 1
                 print(f"Skipping level {level_i} because gif or error log already exists")
                 continue
 
@@ -188,6 +204,7 @@ def main(config: RLConfig):
                     if game_name not in results['solution_error']:
                         results['solution_error'][game_name] = []
                     results['solution_error'][game_name].append(level_i)
+                    n_solution_error += 1
                         # f.write(f"State: {state}\n")
                     print(f"Level {level_i} solution failed")
                 elif np.any(level_multihot != state.multihot_level):
@@ -205,6 +222,7 @@ def main(config: RLConfig):
                         if game_name not in results['state_error']:
                             results['state_error'][game_name] = []
                         results['state_error'][game_name].append(level_i)
+                        n_state_error += 1
                     print(f"Level {level_i} solution failed")
                 # # FIXME: There is a discrepancy between the way we compute scores in js (I actually don't understand
                 # # how we're getting that number) and the way we compute scores in jax, so this will always fail.
@@ -217,10 +235,12 @@ def main(config: RLConfig):
                         if game_name not in results['score_error']:
                             results['score_error'][game_name] = []
                         results['score_error'][game_name].append(level_i)
+                        n_score_error += 1
                 else:
                     if game_name not in results['success']:
                         results['success'][game_name] = []
                     results['success'][game_name].append(level_i)
+                    n_success += 1
                     print(f"Level {level_i} solution succeeded")
             except Exception as e:
                 traceback.print_exc()
@@ -229,6 +249,7 @@ def main(config: RLConfig):
                 if game_name not in results['runtime_error']:
                     results['runtime_error'][game_name] = []
                 results['runtime_error'][game_name].append((level_i, err_log))
+                n_runtime_error += 1
                 with open(run_log_path, 'w') as f:
                     f.write(err_log)
                 continue
@@ -257,6 +278,15 @@ def main(config: RLConfig):
 
             # Copy over the js gif
             shutil.copy(js_gif_path, os.path.join(jax_sol_dir, f'level-{level_i}_js.gif'))
+
+            results['stats']['total_games'] = len(games)
+            results['stats']['total_levels'] = n_levels
+            results['stats']['successful_solutions'] = n_success
+            results['stats']['compile_error'] = n_compile_error
+            results['stats']['runtime_error'] = n_runtime_error
+            results['stats']['solution_error'] = n_solution_error
+            results['stats']['state_error'] = n_state_error
+            results['stats']['score_error'] = n_score_error
 
             with open(val_results_path, 'w') as f:
                 json.dump(results, f, indent=4)

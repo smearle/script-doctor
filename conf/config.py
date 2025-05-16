@@ -5,18 +5,26 @@ from hydra.core.config_store import ConfigStore
 import numpy as np
 
 
-# @dataclass
-# class EnvConfig:
-#     problem: str = "binary"
-#     representation: str = "nca"
+@dataclass
+class PreprocessConfig:
+    game: Optional[str] = None
+    overwrite: bool = False
 
+    
+@dataclass
+class PlotRandProfileConfig:
+    all_games: bool = True  # Plot as many games as we have (partial) results for
+
+@dataclass
+class PlotStandaloneBFS:
+    all_games: bool = True
 
 @dataclass
 class PSConfig:
     game: str = "sokoban_basic"
-    level_i: int = 0
+    level: int = 0
     max_episode_steps: int = np.iinfo(np.int32).max
-
+    overwrite: bool = False  # Whether to overwrite existing results
     
 @dataclass
 class BFSConfig(PSConfig):
@@ -26,6 +34,27 @@ class BFSConfig(PSConfig):
     render_gif: bool = True
     render_live: bool = False
     all_games: bool = True
+
+
+@dataclass
+class ProfileJaxRandConfig(PSConfig):
+    game: Optional[str] = None
+    all_games: bool = False
+    n_steps: int = 5_000
+    # reevaluate: bool = True  # Whether to continue profiling, or just plot the results
+    render: bool = False
+
+
+    
+@dataclass
+class ProfileStandalone(PSConfig):
+    algo: str = "random"  # 'bfs', 'random'
+    game: Optional[str] = None
+    all_games: bool = False
+    n_steps: int = 5_000
+    overwrite: bool = False
+    include_randomness: bool = True
+    timeout: int = 10_000
 
 
 @dataclass
@@ -52,7 +81,7 @@ class RLConfig(PSConfig):
     exp_name: str = "0"
     seed: int = 0
 
-    model: str = "conv"
+    model: str = "conv2"
 
     map_width: int = 16
     randomize_map_shape: bool = False
@@ -107,17 +136,6 @@ class RLConfig(PSConfig):
 
 
 @dataclass
-class EvoMapConfig(RLConfig):
-    n_generations: int = 100_000
-    evo_pop_size: int = 100
-    n_parents: int = 50
-    mut_rate: float = 0.3
-    render_freq: int = 10_000
-    log_freq: int = 1_000
-    callbacks: bool = True
-
-
-@dataclass
 class TrainConfig(RLConfig):
     overwrite: bool = False
 
@@ -129,14 +147,9 @@ class TrainConfig(RLConfig):
     # Save a checkpoint after (at least) this many timesteps
     ckpt_freq: int = int(1e7)
     # Render after this many update steps
-    render_freq: int = 1000
+    render_freq: int = 50
     n_render_eps: int = 3
 
-    # eval the model on pre-made eval freezie maps to see how it's doing
-    eval_freq: int = 100
-    n_eval_maps: int = 6
-    eval_map_path: str = "user_defined_freezies/binary_eval_maps.json"
-    # discount factor for regret value calculation is the same as GAMMA
 
     # NOTE: DO NOT MODIFY THESE. WILL BE SET AUTOMATICALLY AT RUNTIME. ########
     _num_updates: Optional[int] = None
@@ -149,128 +162,20 @@ class TrainConfig(RLConfig):
 
 
 @dataclass
-class MultiAgentConfig(TrainConfig):
-    multiagent: bool = False
-    # lr: float = 3e-4
-    # update_epochs: int = 4
-    # num_steps: int = 521
-    # gamma: float = 0.99
-    # gae_lambda: float = 0.95
-    # clip_eps: float = 0.2
-    # scale_clip_eps: bool = False
-    # ent_coef: float = 0.0
-    # vf_coef: float = 0.5
-    # max_grad_norm: float = 0.25
-
-    model: str = 'rnn'
-    n_agents: int = 1
-    n_envs: int = 4
-    n_eval_envs: int = 10
-    scale_clip_eps: bool = False
-    hidden_dims: Tuple[int] = (512, -1)
-
-    # Save a checkpoint after (at least) this many ***update*** steps
-    ckpt_freq: int = 40
-    render_freq: int = 20
-
-    # NOTE: DO NOT MODIFY THESE. WILL BE SET AUTOMATICALLY AT RUNTIME. ########
-    _num_actors: int = -1
-    _num_eval_actors: int = -1
-    _minibatch_size: int = -1
-    _num_updates: int = -1
-    _exp_dir: Optional[str] = None
-    _vid_dir: Optional[str] = None
-    ###########################################################################
-
-
-@dataclass
-class TrainAccelConfig(TrainConfig):
-    evo_freq: int = 10
-    evo_pop_size: int = 10
-    evo_mutate_prob: float = 0.1
-
-
-@dataclass
-class EvalConfig(TrainConfig):
-    reevaluate: bool = True
-    random_agent: bool = False
-    # In how many bins to divide up each metric being evaluated
-    n_bins: int = 10
-    n_eps: int = 5
-    eval_map_width: Optional[int] = None
-    eval_max_board_scans: Optional[float] = None
-    eval_randomize_map_shape: Optional[bool] = None
-    eval_seed: int = 0
-
-    # Which eval metric to keep in our generated table if sweeping over eval hyperparams (in which case we want to 
-    # save space). Only applied when running `cross_eval.py`
-    # metrics_to_keep = [
-    #     # 'min_min_loss',
-    #     'mean_ep_reward',
-    # ]
-
-    # metrics_to_keep: Tuple[str] = ('mean_ep_reward',)
-    metrics_to_keep: Tuple[str] = ('mean_fps',)
-
-
-@dataclass
-class MultiAgentEvalConfig(EvalConfig, MultiAgentConfig):
-    multiagent = True
-    pass
-
-
-@dataclass
-class EnjoyConfig(EvalConfig):
-    random_agent: bool = False
-    # How many episodes to render as gifs
-    n_eps: int = 5
-    eval_map_width: Optional[int] = None
-    # Add debugging text showing the current/target values for various stats to each frame of the episode (this is really slow)
-    render_stats: bool = False
-    n_enjoy_envs: int = 1
-    render_ims: bool = False
-    a_freezer: bool = False
-
-
-@dataclass
-class EnjoyRLConfig(MultiAgentConfig, EnjoyConfig):
-    pass
-    
-
-@dataclass
-class ProfileEnvConfig(RLConfig):
-    all_games: bool = True
-    n_profile_steps: int = 5000
-    reevaluate: bool = True  # Whether to ontinue profiling, or just plot the results
-    render: bool = False
-
-
-@dataclass
-class SweepConfig(EnjoyConfig, EvalConfig):
-    name: Optional[str] = None
-    mode: str = 'train'
+class SweepRLConfig(TrainConfig):
+    all_games: bool = False
+    plot: bool = False
     slurm: bool = True
-    overwrite: bool = False
 
-@dataclass
-class GetTracesConfig(EnjoyConfig):
-    len_trace: int = 3 # deprecated, will filter the dataset later, just leave it here in case
-    n_enjoy_envs: int = 1
-    n_eps: int = 1  # keep it at 1 for each trace
-    render_stats: bool = False
-    render_ims: bool = False
 
 cs = ConfigStore.instance()
+cs.store(name="preprocess_config", node=PreprocessConfig)
+cs.store(name="plot_rand_profile_config", node=PlotRandProfileConfig)
+cs.store(name="plot_standalone_bfs_config", node=PlotStandaloneBFS)
+cs.store(name="ps_config", node=PSConfig)
 cs.store(name="config", node=RLConfig)
 cs.store(name="bfs_config", node=BFSConfig)
-cs.store(name="ma_config", node=MultiAgentConfig)
-cs.store(name="enjoy_ma_pcgrl", node=EnjoyRLConfig)
-cs.store(name="get_traces_pcgrl", node=GetTracesConfig)
-cs.store(name="evo_map_pcgrl", node=EvoMapConfig)
-cs.store(name="train_pcgrl", node=TrainConfig)
-cs.store(name="train_accel_pcgrl", node=TrainAccelConfig)
-cs.store(name="enjoy_pcgrl", node=EnjoyConfig)
-cs.store(name="eval_pcgrl", node=EvalConfig)
-# cs.store(name="eval_ma_pcgrl", node=MultiAgentEvalConfig)
-cs.store(name="profile_pcgrl", node=ProfileEnvConfig)
-cs.store(name="batch_pcgrl", node=SweepConfig)
+cs.store(name="profile_jax_config", node=ProfileJaxRandConfig)
+cs.store(name="profile_standalone_config", node=ProfileStandalone)
+cs.store(name="train_config", node=TrainConfig)
+cs.store(name="sweep_rl_config", node=SweepRLConfig)
