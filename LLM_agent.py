@@ -38,6 +38,12 @@ class LLMGameAgent:
             prompt,
             model=self.model_name,
         )
+
+        # Handle cases where llm_text_query returns None (e.g., after max retries)
+        if response is None:
+            print("LLM query failed after multiple retries. Falling back to the first action.")
+            return action_space[0]
+
         # Extract the first integer in the response as the action id
         import re
         # Accept any valid action id from action_space
@@ -45,5 +51,7 @@ class LLMGameAgent:
         match = re.search(action_pattern, response)
         if match:
             return int(match.group(1))
+        
         # Fallback: pick the first action if LLM output is not as expected
+        print(f"LLM response did not contain a valid action. Response: '{response}'. Falling back to the first action.")
         return action_space[0]
