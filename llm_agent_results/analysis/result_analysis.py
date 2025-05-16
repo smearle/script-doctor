@@ -155,11 +155,15 @@ def main():
         axis=1
     ).values.reshape(heatmap_plot_data.shape)
 
-    sns.heatmap(heatmap_plot_data, annot=annot_data_llm, fmt="", cmap="RdYlGn", vmin=0, vmax=1, cbar_kws={'label': 'Average Win Rate'}, annot_kws={"size": 10})
+    # Customize the heatmap with tighter color bar
+    sns.heatmap(heatmap_plot_data, annot=annot_data_llm, fmt="", cmap="RdYlGn", vmin=0, vmax=1, 
+                cbar_kws={'label': 'Average Win Rate', 'shrink': 0.8, 'pad': 0.01}, 
+                annot_kws={"size": 10})
     plt.title("Average Win Rate per LLM")
     plt.ylabel("LLM Model")
     plt.xticks([])
-    plt.tight_layout()
+    # 调整布局，使颜色条更靠近图表
+    plt.tight_layout(pad=1.2, rect=[0, 0, 0.9, 1])  # 右侧留出更少空间让颜色条贴近
     
     output_path = os.path.join(current_script_path, "llm_win_rate_heatmap.png")
     try:
@@ -180,13 +184,16 @@ def main():
         axis=1
     ).values.reshape(heatmap_steps_data.shape)
 
-    # Use Blues colormap for steps (more steps = darker blue)
+    # Use Blues colormap for steps (more steps = darker blue) with tighter color bar
     sns.heatmap(heatmap_steps_data, annot=annot_data_llm_steps, fmt="", cmap="Blues", 
-                vmin=max(0, min_steps), vmax=max_steps, cbar_kws={'label': 'Average Steps'}, annot_kws={"size": 10})
+                vmin=max(0, min_steps), vmax=max_steps, 
+                cbar_kws={'label': 'Average Steps', 'shrink': 0.8, 'pad': 0.01}, 
+                annot_kws={"size": 10})
     plt.title("Average Steps per LLM")
     plt.ylabel("LLM Model")
     plt.xticks([])
-    plt.tight_layout()
+    # 调整布局，使颜色条更靠近图表
+    plt.tight_layout(pad=1.2, rect=[0, 0, 0.9, 1])  # 右侧留出更少空间让颜色条贴近
     
     output_path_steps = os.path.join(current_script_path, "llm_steps_heatmap.png")
     try:
@@ -233,13 +240,16 @@ def main():
 
             plt.figure(figsize=(final_fig_w2, fig_h2))
             sns.heatmap(llm_game_win_rates_plot, annot=pd.DataFrame(annot_data_game_win, index=llm_game_win_rates_plot.index, columns=llm_game_win_rates_plot.columns), 
-                        fmt="", cmap="RdYlGn", vmin=0, vmax=1, cbar_kws={'label': 'Average Win Rate'}, annot_kws={"size": 9})
+                        fmt="", cmap="RdYlGn", vmin=0, vmax=1, 
+                        cbar_kws={'label': 'Average Win Rate', 'shrink': 0.8, 'pad': 0.01}, 
+                        annot_kws={"size": 9})
             plt.title("Average Win Rate: LLM vs. Game")
-            plt.xlabel("Game")
+            plt.xlabel("Game", labelpad=10)  # 增加labelpad让标签往上移
             plt.ylabel("LLM Model")
             plt.xticks(rotation=45, ha="right")
             plt.yticks(rotation=0)
-            plt.tight_layout()
+            # 调整布局，使颜色条更靠近图表
+            plt.tight_layout(pad=1.2, rect=[0, 0, 0.9, 1])  # 右侧留出更少空间让颜色条贴近
             
             output_path_game_win = os.path.join(current_script_path, "llm_vs_game_win_rate_heatmap.png")
             try:
@@ -267,11 +277,12 @@ def main():
             sns.heatmap(llm_game_steps_plot, annot=pd.DataFrame(annot_data_game_steps, index=llm_game_steps_plot.index, columns=llm_game_steps_plot.columns), 
                         fmt="", cmap="Blues", vmin=max(0, min_steps), vmax=max_steps, cbar_kws={'label': 'Average Steps'}, annot_kws={"size": 9})
             plt.title("Average Steps: LLM vs. Game")
-            plt.xlabel("Game")
+            plt.xlabel("Game", labelpad=10)  # 增加labelpad让标签往上移
             plt.ylabel("LLM Model")
             plt.xticks(rotation=45, ha="right")
             plt.yticks(rotation=0)
-            plt.tight_layout()
+            # 调整布局，使颜色条更靠近图表
+            plt.tight_layout(pad=1.2, rect=[0, 0, 0.9, 1])  # 右侧留出更少空间让颜色条贴近
             
             output_path_game_steps = os.path.join(current_script_path, "llm_vs_game_steps_heatmap.png")
             try:
@@ -347,11 +358,12 @@ def main():
             safe_game_name = safe_game_name.replace(' ', '_')
 
             plt.title(f"Average Win Rate: LLM vs Level for Game: {game_name}")
-            plt.xlabel("Level")
+            plt.xlabel("Level", labelpad=10)  # 增加labelpad让标签往上移
             plt.ylabel("LLM Model")
             plt.xticks(rotation=45, ha="right")
             plt.yticks(rotation=0)
-            plt.tight_layout()
+            # 调整布局，使颜色条更靠近图表
+            plt.tight_layout(pad=1.2, rect=[0, 0, 0.9, 1])  # 右侧留出更少空间让颜色条贴近
             
             output_path_game_level_win = os.path.join(current_script_path, f"game_{safe_game_name}_llm_vs_level_win_rate_heatmap.png")
             try:
@@ -380,11 +392,12 @@ def main():
                         fmt="", cmap="Blues", vmin=max(0, min_steps), vmax=max_steps, cbar_kws={'label': 'Average Steps'}, annot_kws={"size": 9})
                         
             plt.title(f"Average Steps: LLM vs Level for Game: {game_name}")
-            plt.xlabel("Level")
+            plt.xlabel("Level", labelpad=10)  # 增加labelpad让标签往上移
             plt.ylabel("LLM Model")
             plt.xticks(rotation=45, ha="right")
             plt.yticks(rotation=0)
-            plt.tight_layout()
+            # 调整布局，使颜色条更靠近图表
+            plt.tight_layout(pad=1.2, rect=[0, 0, 0.9, 1])  # 右侧留出更少空间让颜色条贴近
             
             output_path_game_level_steps = os.path.join(current_script_path, f"game_{safe_game_name}_llm_vs_level_steps_heatmap.png")
             try:
