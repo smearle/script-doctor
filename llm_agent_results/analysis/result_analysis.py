@@ -28,44 +28,9 @@ def parse_filename(filename):
                     game_name = f"atlas shrank_{game_name}" # Reconstruct game name
                 level_number = '0'
 
-
-        # Handle cases where game name might be part of the llm_model string initially
-        # e.g., "4o-mini_atlas shrank" where "atlas shrank" is the game.
-        # The initial regex might capture "4o-mini" as llm and "atlas shrank" as game.
-        # Or "4o-mini" as llm and "limerick" as game.
-        # We need to be careful if the game name itself has underscores.
-        # The current regex tries to capture the longest possible llm_model name first.
-
-        # If llm_model still contains game-like parts separated by underscore
-        # and game_name is simple (no underscores), it might be a parsing issue.
-        # However, the prompt examples "4o-mini_atlas shrank_run_1" and "4o-mini_limerick_run_1_level_1"
-        # suggest the first part before the game is the model.
-
-        # Let's refine the game name extraction for multi-word games
-        # The regex (.*?)_(.*?)_run_ might be too greedy for the first part.
-        # A more robust way might be to identify known game names or assume the part after llm is the game.
-
-        # Based on "4o-mini_atlas shrank_run_1", llm="4o-mini", game="atlas shrank"
-        # Based on "4o-mini_limerick_run_1_level_1", llm="4o-mini", game="limerick"
-
-        # The provided regex: r"^(.*?)_(.*?)_run_(\d+)(?:_level_(\d+))?\.json$"
-        # For "4o-mini_atlas shrank_run_1.json":
-        #   llm_model = "4o-mini"
-        #   game_name = "atlas shrank"
-        #   run_number = "1"
-        #   level_number = None -> will be set to '0'
-
-        # For "4o-mini_limerick_run_1_level_1.json":
-        #   llm_model = "4o-mini"
-        #   game_name = "limerick"
-        #   run_number = "1"
-        #   level_number = "1"
         return llm_model, game_name, int(run_number), int(level_number)
 
     # Fallback for filenames that might not perfectly match the primary pattern
-    # e.g. if "level" is missing but implied, or if game name has "run" in it.
-    # This part needs careful consideration based on actual filename variations.
-    # For now, we rely on the primary regex.
     print(f"Warning: Could not parse filename: {filename}")
     return None, None, None, None
 
@@ -75,7 +40,6 @@ def collect_results(results_dir):
     Collects results from all .json files in the specified results_dir.
     """
     data = []
-    # parent_dir = os.path.dirname(results_dir) # Get the parent directory (llm_agent_results)
 
     if not os.path.isdir(results_dir):
         print(f"Error: Directory '{results_dir}' not found.")
@@ -88,6 +52,11 @@ def collect_results(results_dir):
 
             if not llm or not game:
                 print(f"Skipping unparsable file: {filename}")
+                continue
+                
+            # Skip Gemini results
+            if "gemini" in llm.lower():
+                print(f"Skipping Gemini result file: {filename}")
                 continue
 
             try:
@@ -124,18 +93,14 @@ def main():
         print("No data collected. Exiting.")
         return
 
-    # Map LLM names
+    # Map LLM names (remove Gemini from mapping)
     llm_name_mapping = {
         "4o-mini": "ChatGPT 4o-mini",
         "deepseek": "Deepseek-chat",
-        "gemini": "Gemini-flash 2.0 exp",
         "qwen": "Qwen-plus" 
     }
     df['llm'] = df['llm'].replace(llm_name_mapping)
 
-    # Calculate average win rate per LLM
-    # We group by LLM and game, then calculate win rate for that, then average for the LLM.
-    # Or, if we want overall win rate per LLM across all games and levels:
     # Calculate average win rate and average steps per LLM
     llm_agg_data = df.groupby("llm").agg(
         average_win_rate=('win', 'mean'),
@@ -145,19 +110,7 @@ def main():
     print("\nAverage Win Rates and Steps per LLM:")
     print(llm_agg_data)
 
-    # Create heatmap
-    # For the heatmap, we need a matrix: LLMs vs Games, with win rate as values.
-    # If you want a single bar for each LLM showing its overall average win rate,
-    # a heatmap might not be the best viz unless you have another dimension.
-    # The request was "heatmap showing each llm, average win rate".
-    # This implies LLMs on one axis, and their win rate represented by color.
-    # A simple bar chart might be more direct for LLM vs. average_win_rate.
-    # If the intention is LLM vs Game heatmap, the pivot is different.
-
-    # Let's assume a heatmap where each LLM is a row, and the color represents its average win rate.
-    # This is essentially a colored table.
-
-    if llm_agg_data.empty: # Changed llm_win_rates to llm_agg_data
+    if llm_agg_data.empty:
         print("No win rates to plot. Exiting.")
         return
 
@@ -188,13 +141,13 @@ def main():
         axis=1
     ).values.reshape(heatmap_plot_data.shape)
 
-    sns.heatmap(heatmap_plot_data, annot=annot_data_llm, fmt="", cmap="RdYlGn", vmin=0, vmax=1, cbar_kws={'label': 'Average Win Rate'}, annot_kws={"size": 10}) # Increased font size
-    plt.title("Average Win Rate (Color) and Avg Steps (Text) per LLM") # Clarified title
+    sns.heatmap(heatmap_plot_data, annot=annot_data_llm, fmt="", cmap="RdYlGn", vmin=0, vmax=1, cbar_kws={'label': 'Average Win Rate'}, annot_kws={"size": 10})
+    plt.title("Average Win Rate (Color) and Avg Steps (Text) per LLM")
     plt.ylabel("LLM Model")
-    plt.xticks([]) # No x-axis labels needed for a single column heatmap
+    plt.xticks([])
     plt.tight_layout()
     
-    output_path = os.path.join(current_script_path, "llm_win_rate_steps_heatmap.png") # Updated filename
+    output_path = os.path.join(current_script_path, "llm_win_rate_steps_heatmap.png")
     try:
         plt.savefig(output_path)
         print(f"\nHeatmap saved to {output_path}")
@@ -216,15 +169,14 @@ def main():
             for r_idx, row_name in enumerate(llm_game_win_rates_plot.index):
                 annot_row = []
                 for c_idx, col_name in enumerate(llm_game_win_rates_plot.columns):
-                    # win_val = llm_game_win_rates_plot.iat[r_idx, c_idx] # Color is based on this
                     step_val = llm_game_steps_plot.iat[r_idx, c_idx]
                     if pd.notnull(step_val):
                         annot_str = f"{step_val:.0f}"
                         annot_row.append(annot_str)
-                    elif pd.notnull(llm_game_win_rates_plot.iat[r_idx, c_idx]): # If there's a win rate but no steps
+                    elif pd.notnull(llm_game_win_rates_plot.iat[r_idx, c_idx]):
                         annot_row.append("N/A steps")
-                    else: # If no win rate either (cell should be blank or NaN color)
-                        annot_row.append("") # Empty string for annotation if no data
+                    else:
+                        annot_row.append("")
                 annot_data_game.append(annot_row)
 
             # --- Heatmap 2: LLM vs Game ---
@@ -240,14 +192,14 @@ def main():
 
             plt.figure(figsize=(final_fig_w2, fig_h2))
             sns.heatmap(llm_game_win_rates_plot, annot=pd.DataFrame(annot_data_game, index=llm_game_win_rates_plot.index, columns=llm_game_win_rates_plot.columns), 
-                        fmt="", cmap="RdYlGn", vmin=0, vmax=1, cbar_kws={'label': 'Average Win Rate'}, annot_kws={"size": 9}) # Increased font size
-            plt.title("Avg Win Rate (Color) and Avg Steps (Text): LLM vs. Game") # Clarified title
+                        fmt="", cmap="RdYlGn", vmin=0, vmax=1, cbar_kws={'label': 'Average Win Rate'}, annot_kws={"size": 9})
+            plt.title("Avg Win Rate (Color) and Avg Steps (Text): LLM vs. Game")
             plt.xlabel("Game")
             plt.ylabel("LLM Model")
             plt.xticks(rotation=45, ha="right")
             plt.yticks(rotation=0)
             plt.tight_layout()
-            output_path_game = os.path.join(current_script_path, "llm_vs_game_win_rate_steps_heatmap.png") # Updated filename
+            output_path_game = os.path.join(current_script_path, "llm_vs_game_win_rate_steps_heatmap.png")
             try:
                 plt.savefig(output_path_game)
                 print(f"LLM vs Game (with steps) heatmap saved to {output_path_game}")
@@ -293,7 +245,6 @@ def main():
             for r_idx, row_name in enumerate(llm_level_win_rates_plot.index):
                 annot_row = []
                 for c_idx, col_name in enumerate(llm_level_win_rates_plot.columns):
-                    # win_val = llm_level_win_rates_plot.iat[r_idx, c_idx] # Color is based on this
                     step_val = llm_level_steps_plot.iat[r_idx, c_idx]
                     if pd.notnull(step_val):
                         annot_str = f"{step_val:.0f}"
@@ -317,19 +268,19 @@ def main():
             
             plt.figure(figsize=(final_fig_w3, fig_h3))
             sns.heatmap(llm_level_win_rates_plot, annot=pd.DataFrame(annot_data_level, index=llm_level_win_rates_plot.index, columns=llm_level_win_rates_plot.columns), 
-                        fmt="", cmap="RdYlGn", vmin=0, vmax=1, cbar_kws={'label': 'Average Win Rate'}, annot_kws={"size": 9}) # Increased font size
+                        fmt="", cmap="RdYlGn", vmin=0, vmax=1, cbar_kws={'label': 'Average Win Rate'}, annot_kws={"size": 9})
             
             safe_game_name = "".join(c if c.isalnum() or c in (' ', '_') else '_' for c in game_name).rstrip()
             safe_game_name = safe_game_name.replace(' ', '_')
 
-            plt.title(f"Avg Win Rate (Color) & Steps (Text): LLM vs Level for Game: {game_name}") # Clarified title
+            plt.title(f"Avg Win Rate (Color) & Steps (Text): LLM vs Level for Game: {game_name}")
             plt.xlabel("Level")
             plt.ylabel("LLM Model")
             plt.xticks(rotation=45, ha="right")
             plt.yticks(rotation=0)
             plt.tight_layout()
             
-            output_path_game_level = os.path.join(current_script_path, f"game_{safe_game_name}_llm_vs_level_steps_heatmap.png") # Updated filename
+            output_path_game_level = os.path.join(current_script_path, f"game_{safe_game_name}_llm_vs_level_steps_heatmap.png")
             try:
                 plt.savefig(output_path_game_level)
                 print(f"LLM vs Level (with steps) heatmap for game '{game_name}' saved to {output_path_game_level}")
