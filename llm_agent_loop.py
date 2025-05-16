@@ -13,6 +13,16 @@ from globals import PRIORITY_GAMES
 CUSTOM_GAMES_DIR = "data/scraped_games"
 
 def extract_section(filepath, section):
+    """
+    Extract a specific section from a PuzzleScript game file.
+    
+    Args:
+        filepath: Path to the game file
+        section: Section name to extract (e.g., "RULES", "LEGEND", "LEVELS")
+        
+    Returns:
+        List of lines in the specified section
+    """
     with open(filepath, "r", encoding="utf-8") as f:
         lines = f.readlines()
     section_lines = []
@@ -32,6 +42,15 @@ def extract_section(filepath, section):
     return section_lines
 
 def parse_legend(legend_lines):
+    """
+    Parse the LEGEND section from a PuzzleScript game file.
+    
+    Args:
+        legend_lines: Lines from the LEGEND section
+        
+    Returns:
+        Dictionary mapping legend keys to objects
+    """
     mapping = {}
     for line in legend_lines:
         if "=" in line:
@@ -42,6 +61,15 @@ def parse_legend(legend_lines):
     return mapping
 
 def extract_first_level(level_lines):
+    """
+    Extract the first level from the LEVELS section.
+    
+    Args:
+        level_lines: Lines from the LEVELS section
+        
+    Returns:
+        String representation of the first level
+    """
     levels = []
     current = []
     for line in level_lines:
@@ -62,6 +90,16 @@ def check_run_file_exists(save_dir, model, game_name, run_id, level_index):
     Check if the specified run file exists, supporting two naming formats:
     1. With level marker: model_game_run_X_level_Y.json
     2. Without level marker: model_game_run_X.json (assumed to be level 0)
+    
+    Args:
+        save_dir: Directory to check
+        model: Model name
+        game_name: Game name
+        run_id: Run ID
+        level_index: Level index
+        
+    Returns:
+        Boolean indicating if file exists
     """
     # Format the game name by replacing spaces with underscores for file paths
     formatted_game_name = game_name.replace(" ", "_")
@@ -92,6 +130,16 @@ def check_run_file_exists(save_dir, model, game_name, run_id, level_index):
 def get_run_file_path(save_dir, model, game_name, run_id, level_index):
     """
     Get file path for saving run results, always using the format with level marker
+    
+    Args:
+        save_dir: Directory to save to
+        model: Model name
+        game_name: Game name
+        run_id: Run ID
+        level_index: Level index
+        
+    Returns:
+        File path string
     """
     # Format the game name by replacing spaces with underscores for file paths
     formatted_game_name = game_name.replace(" ", "_")
@@ -102,6 +150,16 @@ def get_run_file_path(save_dir, model, game_name, run_id, level_index):
 def get_existing_and_missing_runs(save_dir, model, game_name, level_index, num_runs):
     """
     Determine which runs exist and which are missing for a specific game level
+    
+    Args:
+        save_dir: Directory to check
+        model: Model name
+        game_name: Game name
+        level_index: Level index
+        num_runs: Total number of runs to check
+        
+    Returns:
+        Tuple of (existing_runs, missing_runs) lists
     """
     existing_runs = []
     missing_runs = []
@@ -114,6 +172,26 @@ def get_existing_and_missing_runs(save_dir, model, game_name, level_index, num_r
             
     return existing_runs, missing_runs
 
+def find_next_available_run_id(save_dir, model, game_name, level_index, initial_run_id):
+    """
+    Find the next available run ID that doesn't conflict with existing files.
+    
+    Args:
+        save_dir: Directory where run results are saved
+        model: Model name
+        game_name: Game name
+        level_index: Level index
+        initial_run_id: The initial run ID we'd like to use
+        
+    Returns:
+        int: The next available run ID
+    """
+    run_id = initial_run_id
+    while check_run_file_exists(save_dir, model, game_name, run_id, level_index):
+        print(f"Run {run_id} already exists for Game: {game_name}, Level: {level_index}. Trying next run ID.")
+        run_id += 1
+    return run_id
+
 def main():
     parser = argparse.ArgumentParser(description='LLM agent loop experiment (env+rules/ascii/mapping)')
     parser.add_argument('--model', type=str, required=True, choices=['4o-mini', 'o3-mini', 'gemini', 'deepseek', 'qwen'],
@@ -124,7 +202,7 @@ def main():
                         help='Number of runs per game (default: 10)')
     parser.add_argument('--reverse', action='store_true',
                         help='Process games in reverse order')
-    parser.add_argument('--resume_game_name', type=str, default='atlas_shrank',
+    parser.add_argument('--resume_game_name', type=str, default='',
                         help='Name of the game to resume from (default: atlas_shrank)')
     parser.add_argument('--level', type=int, default=0,
                         help='Optional: Level number to resume from (default: 0)')
@@ -218,49 +296,49 @@ def main():
         for level_index in range(start_level, len(env.levels)):
             print(f"\n=== Processing Game: {game_name}, Level: {level_index} ===")
             
-            # 持续处理这个级别，直到所有运行都完成（或强制模式下处理完一轮）
+            # Continue processing this level until all runs are complete (or processed once in force mode)
             while True:
-                # 每次循环开始时重新检查哪些运行已存在，哪些缺失
+                # Re-check which runs exist and which are missing at the beginning of each loop
                 existing_runs, missing_runs = get_existing_and_missing_runs(
                     save_dir_main, args.model, game_name, level_index, args.num_runs
                 )
                 
-                # 打印详细信息
+                # Print detailed information
                 if existing_runs:
                     print(f"Found existing runs: {existing_runs}")
                 
-                # 确定是否需要继续处理这个级别
+                # Determine if we need to continue processing this level
                 if not missing_runs and not args.force:
                     print(f"All {args.num_runs} runs complete for this level. Moving to next level.")
-                    break  # 退出while循环，进入下一个级别
+                    break  # Exit the while loop, move to next level
                 elif args.force and len(existing_runs) == args.num_runs:
-                    # 如果是强制模式，且所有运行都已处理过一次，则完成
+                    # If in force mode and all runs have been processed once, complete
                     print(f"Force mode: All {args.num_runs} runs have been processed once. Moving to next level.")
-                    break  # 退出while循环，进入下一个级别
+                    break  # Exit the while loop, move to next level
                 
-                # 确定下一个要处理的运行ID
+                # Determine the next run ID to process
                 if args.force:
-                    # 强制模式下，如果有未处理的运行，优先处理；否则选择第一个已存在的运行重新处理
+                    # In force mode, prioritize missing runs; otherwise select first existing run to reprocess
                     target_run_id = missing_runs[0] if missing_runs else existing_runs[0]
                 else:
-                    # 非强制模式下，只处理缺失的运行
+                    # In non-force mode, only process missing runs
                     target_run_id = missing_runs[0]
                 
                 print(f"\n--- Processing Game: {game_name}, Level: {level_index} (Run ID: {target_run_id}/{args.num_runs}) ---")
                 
-                # 获取保存结果的路径
+                # Get the path for saving results
                 current_run_filepath = get_run_file_path(save_dir_main, args.model, game_name, target_run_id, level_index)
                 
-                # 尝试处理一个运行
+                # Try to process one run
                 try:
-                    # 确保level_index是有效的
+                    # Ensure level_index is valid
                     if level_index < 0 or level_index >= len(env.levels):
                         print(f"Warning: Invalid level_index {level_index} for game '{game_name}' (max index {len(env.levels)-1}). Skipping level.")
-                        break  # 从while循环中退出
+                        break  # Exit from the while loop
                     
                     level = env.get_level(level_index)
                     env_params = PSParams(level=level)
-                    # 使用target_run_id作为种子以确保唯一性
+                    # Use target_run_id as seed to ensure uniqueness
                     rng = jax.random.PRNGKey(target_run_id * 1000 + level_index)
                     
                     obs, state = env.reset(rng=rng, params=env_params)
@@ -280,7 +358,7 @@ def main():
                     state_history = set()
                     current_state = state
                     
-                    # 主要行动循环
+                    # Main action loop
                     for step in range(args.max_steps):
                         print(f"\nStep {step+1}/{args.max_steps}")
                         
@@ -330,22 +408,35 @@ def main():
                         
                         current_state = next_state
                     
-                    # 处理最终结果
+                    # Process final results
                     result["heuristics"] = [float(h) for h in result["heuristic_sequence"]]
                     if "heuristic_sequence" in result:
                         del result["heuristic_sequence"]
                     result["final_ascii"] = ascii_state.split('\n')
                     
-                    # 保存结果
+                    # Find the next available run ID (starting from the current target_run_id)
+                    available_run_id = find_next_available_run_id(save_dir_main, args.model, game_name, level_index, target_run_id)
+                    
+                    if available_run_id != target_run_id:
+                        print(f"Original run ID {target_run_id} already exists. Using run ID {available_run_id} instead.")
+                        # Update the run ID in the result dictionary
+                        result["run"] = available_run_id
+                    
+                    # Get the file path with the updated run ID
+                    current_run_filepath = get_run_file_path(save_dir_main, args.model, game_name, available_run_id, level_index)
+                    
+                    # Save results
                     with open(current_run_filepath, "w", encoding="utf-8") as f:
                         json.dump(result, f, indent=2, default=lambda o: f"<{type(o).__name__} instance>")
-                    print(f"Result saved to {current_run_filepath}")
+                    print(f"Result saved to {current_run_filepath} (Run ID: {available_run_id})")
                     
                 except Exception as e:
                     print(f"!!! ERROR during Game: {game_name}, Level: {level_index} (Run ID: {target_run_id}) !!!")
                     print(f"Error type: {type(e).__name__}, Message: {e}")
-                    # 如果处理过程中出错，继续处理其他运行
+                    # If an error occurs during processing, continue with other runs
                     continue
+
+    print("\n=== All runs for all games and levels have been processed ===")
 
 if __name__ == "__main__":
     main()
