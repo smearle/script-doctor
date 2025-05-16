@@ -16,9 +16,10 @@ from lark import Lark
 import numpy as np
 from skimage.transform import resize
 
-from conf.config import RLConfig
+from conf.config import JaxValidationConfig, RLConfig
 from env import PSEnv
 from gen_tree import GenPSTree
+from globals import SOLUTION_REWARDS_PATH
 from preprocess_games import PS_LARK_GRAMMAR_PATH, TREES_DIR, DATA_DIR, TEST_GAMES, get_tree_from_txt
 from ps_game import PSGameTree
 from sort_games_by_n_rules import GAMES_N_RULES_SORTED_PATH
@@ -36,13 +37,13 @@ games_to_skip = set({
     '2048',  # hangs
 })
 
-@hydra.main(version_base="1.3", config_path='./conf', config_name='config')
-def main(config: RLConfig):
+@hydra.main(version_base="1.3", config_path='./conf', config_name='jax_validation_config')
+def main(cfg: JaxValidationConfig):
     # Initialize the Lark parser with the PuzzleScript grammar
     with open(PS_LARK_GRAMMAR_PATH, "r", encoding='utf-8') as file:
         puzzlescript_grammar = file.read()
     parser = Lark(puzzlescript_grammar, start="ps_game", maybe_placeholders=False)
-    games = get_list_of_games_for_testing(all_games=True)
+    games = get_list_of_games_for_testing(all_games=cfg.all_games)
     results = {
         'stats': {},
         'compile_error': [],
@@ -68,7 +69,16 @@ def main(config: RLConfig):
     n_score_error = 0
     n_success = 0
 
+    if os.path.exists(SOLUTION_REWARDS_PATH):
+        with open(SOLUTION_REWARDS_PATH, 'r') as f:
+            solution_rewards_dict = json.load(f)    
+    else:
+        solution_rewards_dict = {}
+    
+
     for sol_dir, game in zip(sol_paths, games):
+        if game not in solution_rewards_dict:
+            solution_rewards_dict[game] = {}
         game_name = os.path.basename(game)
         if game_name in games_to_skip:
             print(f"Skipping {game_name} because it is in the skip list")
@@ -76,7 +86,7 @@ def main(config: RLConfig):
         jax_sol_dir = os.path.join(JAX_VALIDATED_JS_SOLS_DIR, game)
         os.makedirs(jax_sol_dir, exist_ok=True)
         compile_log_path = os.path.join(jax_sol_dir, 'compile_err.txt')
-        if os.path.exists(compile_log_path) and not config.overwrite:
+        if os.path.exists(compile_log_path) and not cfg.overwrite:
             with open(compile_log_path, 'r') as f:
                 compile_log = f.read()
             results['compile_error'].append((game, compile_log))
@@ -108,7 +118,7 @@ def main(config: RLConfig):
             continue
 
         key = jax.random.PRNGKey(0)
-        params = get_env_params_from_config(env, config)
+        params = get_env_params_from_config(env, cfg)
 
         # 0 - left
         # 1 - down
@@ -135,7 +145,7 @@ def main(config: RLConfig):
             state_log_path = os.path.join(jax_sol_dir, f'level-{level_i}_state_err.txt')
             gif_path = os.path.join(jax_sol_dir, f'level-{level_i}.gif')
             if (os.path.exists(gif_path) or os.path.exists(sol_log_path) or os.path.exists(score_log_path) \
-                    or os.path.exists(run_log_path) or os.path.exists(state_log_path)) and not config.overwrite:
+                    or os.path.exists(run_log_path) or os.path.exists(state_log_path)) and not cfg.overwrite:
                 if os.path.exists(run_log_path):
                     with open(run_log_path, 'r') as f:
                         run_log = f.read()
@@ -191,11 +201,14 @@ def main(config: RLConfig):
 
             def step_env(state, action):
                 obs, state, reward, done, info = env.step_env(key, state, action, params)
-                return state, state
+                return state, (state, reward)
 
             try:
                 obs, state = env.reset(key, params)
-                state, state_v = jax.lax.scan(step_env, state, actions)
+                state, (state_v, reward_v) = jax.lax.scan(step_env, state, actions)
+                reward = float(reward_v.sum().item())
+                if level_i not in solution_rewards_dict or cfg.overwrite:
+                    solution_rewards_dict[game][level_i] = reward
                 if level_win and not state.win:
                 # if not done:
                     sol_log = f"Level {level_i} solution failed\nActions: {actions}\n"
@@ -290,6 +303,9 @@ def main(config: RLConfig):
 
             with open(val_results_path, 'w') as f:
                 json.dump(results, f, indent=4)
+
+            with open(SOLUTION_REWARDS_PATH, 'w') as f:
+                json.dump(solution_rewards_dict, f, indent=4)
 
 
     print(f"Finished validating solutions in jax.")

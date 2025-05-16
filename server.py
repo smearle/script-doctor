@@ -1044,6 +1044,7 @@ def save_sol():
     sol_dir, level_i, sol, gif_url, end_state, timeout, obj_list = (
         data['solDir'], data['levelIdx'], data['sol'], data['dataURL'], data['bestState'], 
         data['timeout'], data['objList'])
+    iterations = data['i']
     won, score = data['won'], data['score']
     os.makedirs(sol_dir, exist_ok=True)
     sol_path = os.path.join(sol_dir, f'level-{level_i}.json')

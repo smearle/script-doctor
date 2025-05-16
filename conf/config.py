@@ -25,6 +25,11 @@ class PSConfig:
     level: int = 0
     max_episode_steps: int = np.iinfo(np.int32).max
     overwrite: bool = False  # Whether to overwrite existing results
+
+
+@dataclass
+class JaxValidationConfig(PSConfig):
+    all_games: bool = True
     
 @dataclass
 class BFSConfig(PSConfig):
@@ -51,10 +56,12 @@ class ProfileStandalone(PSConfig):
     algo: str = "random"  # 'bfs', 'random'
     game: Optional[str] = None
     all_games: bool = False
+    random_order: bool = False
     n_steps: int = 5_000
     overwrite: bool = False
     include_randomness: bool = True
-    timeout: int = 10_000
+    timeout: int = 60
+    gen_solutions_for_validation: bool = False
 
 
 @dataclass
@@ -173,6 +180,7 @@ cs.store(name="preprocess_config", node=PreprocessConfig)
 cs.store(name="plot_rand_profile_config", node=PlotRandProfileConfig)
 cs.store(name="plot_standalone_bfs_config", node=PlotStandaloneBFS)
 cs.store(name="ps_config", node=PSConfig)
+cs.store(name="jax_validation_config", node=JaxValidationConfig)
 cs.store(name="config", node=RLConfig)
 cs.store(name="bfs_config", node=BFSConfig)
 cs.store(name="profile_jax_config", node=ProfileJaxRandConfig)

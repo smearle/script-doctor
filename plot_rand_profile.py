@@ -106,6 +106,7 @@ def main(cfg: PlotRandProfileConfig):
                     print(f'Game: {game}')
 
                     # Plot each of the random rollout FPS's from nodejs as broken lines running horizontally
+                    
                     if game in results_standalone['randomRollout']:
                         if str(level_i) in results_standalone['randomRollout'][game]:
                             if "Error" in results_standalone['randomRollout'][game][str(level_i)]:

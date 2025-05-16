@@ -35,6 +35,7 @@ batch_sizes = [
     600,
     1_200,
     1_500,
+    1_800,
 ]
 batch_sizes = batch_sizes[::-1]
 

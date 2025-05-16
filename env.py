@@ -2548,6 +2548,7 @@ class PSEnv:
                         return rng, kernel_activ_xy_idx, lvl
 
 
+                    # TODO: Should we vmap this instead???
                     carry = (rng, kernel_activ_xy_idx, lvl)
                     if self.jit:
                         rng, _, lvl = jax.lax.while_loop(

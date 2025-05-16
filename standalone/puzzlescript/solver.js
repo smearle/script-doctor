@@ -522,7 +522,7 @@ function solveBFS(engine, maxIters, timeoutJS) {
       elapsed_time = Date.now() - start_time;
       if ((timeout_ms > 0) && (elapsed_time > timeout_ms)) {
         console.log(`Timeout after ${elapsed_time / 1000} seconds. Returning best result found so far.`);
-        return [false, sol, i, ((Date.now() - start_time) / 1000), bestScore, bestState];
+        return [false, sol, i, ((Date.now() - start_time) / 1000), bestScore, bestState, true, engine.getState().idDict];
       }
     }
     backups = [];
@@ -538,7 +538,7 @@ function solveBFS(engine, maxIters, timeoutJS) {
     for (const move of Array(5).keys()) {
       if (i > maxIters) {
         // console.log('Exceeded 1M iterations. Exiting.');
-        return [false, sol, i, ((Date.now() - start_time) / 1000), bestScore, bestState];
+        return [false, sol, i, ((Date.now() - start_time) / 1000), bestScore, bestState, false, engine.getState().idDict];
       }
       engine.restoreLevel(level);
 
@@ -548,7 +548,7 @@ function solveBFS(engine, maxIters, timeoutJS) {
         changed = processInputSearch(engine, move);
       } catch (e) {
         // console.log('Error while processing input:', e);
-        return [false, sol, i, ((Date.now() - start_time) / 1000), bestScore, bestState];
+        return [false, sol, i, ((Date.now() - start_time) / 1000), bestScore, bestState, false, engine.getState().idDict];
       }
       if (changed) {
         new_level = engine.backupLevel();
@@ -557,7 +557,7 @@ function solveBFS(engine, maxIters, timeoutJS) {
           // console.log(`Winning! Solution:, ${new_action_seq}\n Iterations: ${i}`);
           // console.log('FPS:', (i / (Date.now() - start_time) * 1000).toFixed(2));
           score = getScore(engine);
-          return [true, new_action_seq, i, ((Date.now() - start_time) / 1000), score, new_level_map];
+          return [true, new_action_seq, i, ((Date.now() - start_time) / 1000), score, new_level_map, false, engine.getState().idDict];
         }
         const newHash = hashState(new_level_map);
         if (!visited.has(newHash)) {
@@ -595,9 +595,9 @@ function solveBFS(engine, maxIters, timeoutJS) {
     i++;
   }
   if(i >= maxIters) {
-    return [false, sol, i, ((Date.now() - start_time) / 1000), bestScore, bestState];
+    return [false, sol, i, ((Date.now() - start_time) / 1000), bestScore, bestState, false, engine.getState().idDict];
   }
-  return [false, sol, i, ((Date.now() - start_time) / 1000), bestScore, bestState];
+  return [false, sol, i, ((Date.now() - start_time) / 1000), bestScore, bestState, false, engine.getState().idDict];
 }
 
 function DoRestartSearch(engine, force) {

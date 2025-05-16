@@ -167,6 +167,14 @@ def log_callback(metric, steps_prev_complete, config: RLConfig, train_start_time
         # for k, v in zip(env.prob.metric_names, env.prob.stats):
         #     writer.add_scalar(k, v, t)
 
+def preprocess_ckpt(ckpt):
+    runner_state = ckpt['runner_state']
+    runner_state.env_state = runner_state.env_state.replace(
+        env_state=runner_state.env_state.env_state.replace(
+            
+        )
+        
+    )
 
 def make_train(config: TrainConfig, restored_ckpt, checkpoint_manager):
     config._num_updates = (
@@ -293,7 +301,7 @@ def make_train(config: TrainConfig, restored_ckpt, checkpoint_manager):
                     print(f"Saving checkpoint at step {t}")
                     ckpt = {'runner_state': runner_state,
                             # 'config': OmegaConf.to_container(config),
-                            'step_i': t}
+                            'step_i': jnp.array(t, dtype=jnp.int32)}
                     # ckpt = {'step_i': t}
                     # save_args = orbax_utils.save_args_from_target(ckpt)
                     # checkpoint_manager.save(t, ckpt, save_kwargs={
@@ -577,7 +585,7 @@ def init_checkpointer(config: RLConfig) -> Tuple[Any, dict]:
     runner_state = RunnerState(train_state=train_state, env_state=env_state, last_obs=obsv,
                                # ep_returns=jnp.full(config.num_envs, jnp.nan), 
                                rng=rng, update_i=0)
-    target = {'runner_state': runner_state, 'step_i': 0}
+    target = {'runner_state': runner_state, 'step_i': jnp.array(0, dtype=jnp.int32)}
     # Get absolute path
     ckpt_dir = os.path.abspath(ckpt_dir)
     options = ocp.CheckpointManagerOptions(
@@ -596,7 +604,7 @@ def init_checkpointer(config: RLConfig) -> Tuple[Any, dict]:
         restored_ckpt = checkpoint_manager.restore(
             # steps_prev_complete, items=target)
             steps_prev_complete, args=ocp.args.StandardRestore(target))
-        target = {'runner_state': runner_state, 'step_i': 0}
+        target = {'runner_state': runner_state, 'step_i': jnp.array(0, dtype=jnp.int32)}
         restored_ckpt = checkpoint_manager.restore(
             steps_prev_complete, items=target)
             

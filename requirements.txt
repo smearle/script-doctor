@@ -18,9 +18,11 @@ matplotlib
 openai
 opencv-python
 optax
+orbax-checkpoint==0.11.9
 pandas
 pathvalidate
 Pillow
+py-cpuinfo
 python-dotenv
 scikit-image
 selenium

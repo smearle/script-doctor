@@ -304,7 +304,7 @@ def load_games_n_rules_sorted():
     return games_n_rules
 
 
-def get_list_of_games_for_testing(all_games=True, include_random=False):
+def get_list_of_games_for_testing(all_games=True, include_random=False, random_order=False):
     gallery_games = glob.glob(os.path.join(GALLERY_GAMES_DIR, '*.txt'))
     gallery_games = [os.path.basename(g)[:-4] for g in gallery_games]
     if all_games:
@@ -318,7 +318,12 @@ def get_list_of_games_for_testing(all_games=True, include_random=False):
         games = [g[0] for g in games]
     else:
         games = PRIORITY_GAMES
+    if random_order:
+        random.shuffle(games)
+    # HACK why is this happening??
+    games = [game[:-4] for game in games if game.endswith('.txt')]
     return games
+
 
 import subprocess
 

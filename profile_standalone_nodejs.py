@@ -11,11 +11,13 @@ import cpuinfo
 import hydra
 from javascript import require
 from javascript.proxy import Proxy
+import numpy as np
 
 from conf.config import ProfileStandalone
 from globals import STANDALONE_NODEJS_RESULTS_PATH
 from preprocess_games import SIMPLIFIED_GAMES_DIR
 from utils import get_list_of_games_for_testing
+from validate_sols import JS_SOLS_DIR
 
 
 engine = require('./standalone/puzzlescript/engine.js')
@@ -71,7 +73,8 @@ def main(cfg: ProfileStandalone):
 
     cpu_name = cpuinfo.get_cpu_info()['brand_raw']
     if cfg.game is None:
-        games_to_test = get_list_of_games_for_testing(all_games=cfg.all_games, include_random=cfg.include_randomness)
+        games_to_test = get_list_of_games_for_testing(all_games=cfg.all_games, include_random=cfg.include_randomness,
+                                                      random_order=cfg.random_order)
     else:
         games_to_test = [cfg.game]
     results = {get_algo_name(algo): {} for algo in algos}
@@ -103,11 +106,17 @@ def main(cfg: ProfileStandalone):
                 continue
 
             n_levels = engine.getNumLevels()
+            game_js_sols_dir = os.path.join(JS_SOLS_DIR, game)
+            os.makedirs(game_js_sols_dir, exist_ok=True)
 
             for level_i in range(n_levels):
+                level_js_sol_path = os.path.join(game_js_sols_dir, f'level-{level_i}.json')
                 print(f'Level: {level_i}')
-                if not cfg.overwrite and str(level_i) in results[run_name][game]:
-                    print(f'Already solved {game} level {level_i} with {run_name}, skipping.')
+                if cfg.gen_solutions_for_validation and not cfg.overwrite and os.path.isfile(level_js_sol_path):
+                    print(f'Already solved {game} level (for validation) {level_i} with {run_name}, skipping.')
+                    continue
+                if not cfg.gen_solutions_for_validation and not cfg.overwrite and str(level_i) in results[run_name][game]:
+                    print(f'Already solved {game} level (for profiling) {level_i} with {run_name}, skipping.')
                     continue
                 engine.compile(game_text, level_i)
                 if algo == rand_rollout_from_python:
@@ -125,7 +134,32 @@ def main(cfg: ProfileStandalone):
                     'FPS': result[2] / (result[3] if result[3] > 0 else 1e4),
                     'score': result[4],
                     'state': result[5],
+                    'timeout': result[6],
+                    'objs': result[7],
                 }
+
+                if os.path.isfile(level_js_sol_path):
+                    with open(level_js_sol_path, 'r') as f:
+                        level_js_sol_dict = json.load(f)
+                    best_solve = level_js_sol_dict['won']
+                    best_score = level_js_sol_dict['score']
+                else:
+                    best_solve = False
+                    best_score = -np.inf
+                
+                if result['solved'] > best_solve or result['score'] > best_score:
+                    result_dict = {
+                        'won': result['solved'],
+                        'score': result['score'],
+                        'timeout': None,  # TODO
+                        'objs': result['objs'],
+                        'state': result['state'],
+                    }
+                    with open(level_js_sol_path, 'w') as f:
+                        json.dump(result_dict, f, indent=4)
+                    print(f"Saved solution to {level_js_sol_path}")
+
+
                 print(json.dumps(result))
                 results[run_name][game][level_i] = result
 

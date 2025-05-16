@@ -6164,10 +6164,10 @@ function consolidateDiff(before,after){
 }
 
 function addUndoState(state){
-	backups.push(state);
-	if(backups.length>2 && !backups[backups.length-1].hasOwnProperty("diff")){
-		backups[backups.length-3]=consolidateDiff(backups[backups.length-3],backups[backups.length-2]);
-	}
+	// backups.push(state);
+	// if(backups.length>2 && !backups[backups.length-1].hasOwnProperty("diff")){
+	// 	backups[backups.length-3]=consolidateDiff(backups[backups.length-3],backups[backups.length-2]);
+	// }
 }
 
 function DoRestart(force) {

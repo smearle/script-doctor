@@ -185,10 +185,10 @@ async function solveLevelBFS(levelIdx, captureStates=false, maxIters=1_000_000) 
   console.log(frontier.size())
   while (frontier.size() > 0) {
     // if (i % 1000) {
-      const elapsed_time = Date.now() - start_time;
-      if (elapsed_time > timeout_ms) {
-        console.log(`Timeout after ${elapsed_time / 1000} seconds. Returning best result found so far.`);
-        return [sol, false, bestScore, bestState, i, true];
+      // const elapsed_time = Date.now() - start_time;
+      // if (elapsed_time > timeout_ms) {
+      //   console.log(`Timeout after ${elapsed_time / 1000} seconds. Returning best result found so far.`);
+      //   return [sol, false, bestScore, bestState, i, true];
       // }
     }
 
