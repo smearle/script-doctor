@@ -1,0 +1,80 @@
+{
+  "model": "deepseek",
+  "game": "atlas shrank",
+  "win": true,
+  "action_sequence": [
+    2,
+    2,
+    3,
+    2,
+    2,
+    2,
+    2
+  ],
+  "reward_sequence": [
+    0.9900000095367432,
+    0.9900000095367432,
+    -0.009999999776482582,
+    1.9900000095367432,
+    1.9900000095367432,
+    1.9900000095367432,
+    2.990000009536743
+  ],
+  "initial_ascii": [
+    "LEGEND:",
+    "#: wallsolo",
+    "\u078e: wallrl",
+    "\u0e25: wallud",
+    ".: background",
+    "o: exit",
+    "\u092d: wallr",
+    "\u153c: wallm",
+    "\u1cb3: playerr",
+    "*: crate, massive",
+    "\u1a0c: walld",
+    "",
+    "MAP:",
+    "#\u078e\u078e\u078e\u078e\u078e\u078e\u078e\u078e\u078e\u078e\u078e\u078e\u078e#",
+    "\u0e25.......o.....\u0e25",
+    "\u0e25.......#.....\u0e25",
+    "\u0e25......#\u092d.....\u0e25",
+    "\u0e25.....#\u153c\u092d.....\u0e25",
+    "\u0e25..\u1cb3.#\u153c\u153c\u092d**...\u0e25",
+    "#\u078e\u078e\u078e\u078e\u1a0c\u1a0c\u1a0c\u1a0c\u078e\u078e\u078e\u078e\u078e#"
+  ],
+  "final_ascii": [
+    "LEGEND:",
+    "#: wallsolo",
+    "\u078e: wallrl",
+    "\u0e25: wallud",
+    ".: background",
+    "\u1181: exit, playerr",
+    "\u092d: wallr",
+    "\u153c: wallm",
+    "*: crate, massive",
+    "\u1a0c: walld",
+    "",
+    "MAP:",
+    "#\u078e\u078e\u078e\u078e\u078e\u078e\u078e\u078e\u078e\u078e\u078e\u078e\u078e#",
+    "\u0e25.......\u1181.....\u0e25",
+    "\u0e25.......#.....\u0e25",
+    "\u0e25......#\u092d.....\u0e25",
+    "\u0e25.....#\u153c\u092d.....\u0e25",
+    "\u0e25....#\u153c\u153c\u092d**...\u0e25",
+    "#\u078e\u078e\u078e\u078e\u1a0c\u1a0c\u1a0c\u1a0c\u078e\u078e\u078e\u078e\u078e#"
+  ],
+  "state_data": {
+    "score": 1,
+    "win": true,
+    "step": 7
+  },
+  "heuristics": [
+    -9.0,
+    -8.0,
+    -8.0,
+    -6.0,
+    -4.0,
+    -2.0,
+    0.0
+  ]
+}

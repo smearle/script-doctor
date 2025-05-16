@@ -176,59 +176,51 @@ def llm_text_query(system_prompt, prompt, model, api_key=None, base_url=None, mo
                 "messages": messages
             }
 
-        # Send request, set timeout and retry count
-        max_retries = 8   # Increase max retry count
+        max_retries = 8
         retry_count = 0
-        base_wait = 5     # Extend base wait time to 5 seconds
+        base_wait = 5
+
+        if model == "gemini-2.0-flash-exp":
+            print("Detected Gemini model, enabling enhanced backoff strategy")
+            max_retries = 5
+            base_wait = 60
 
         while retry_count < max_retries:
-            wait_time = base_wait * (2 ** retry_count)  # 指数退避策略2^n
             try:
                 response = requests.post(url, headers=headers, json=payload, timeout=60)
 
-                # Check response status
                 if response.status_code == 200:
                     response_data = response.json()
                     print('Query completed successfully.')
                     return response_data['choices'][0]['message']['content']
-                elif response.status_code in [429, 504]:  # Rate limit or Gateway Timeout
-                    wait_time = int(response.headers.get('Retry-After', base_wait * (2 ** retry_count)))
-                    print(f"Rate limited (429), retrying in {wait_time}s ({retry_count+1}/{max_retries})")
-                    time.sleep(wait_time)
-                    retry_count += 1
-                else:
-                    print(f"Request failed with status code: {response.status_code}")
-                    print(f"Response text: {response.text}")
-                    if response.status_code == 429:  # Special handling for Gemini quota limits
-                        time.sleep(30)  # Additional cooldown
-                    raise Exception(f"API request failed with status code: {response.status_code}")
-            except requests.exceptions.Timeout:
-                print(f"Request timed out, retrying in {wait_time}s ({retry_count+1}/{max_retries})")
+                
+                # For any other status code (including 429, 502, 504, etc.), log and prepare for a retry.
+                print(f"Request failed with status code: {response.status_code}")
+                print(f"Response text: {response.text}")
+
+                # Determine wait time
+                # Use Retry-After header if present (common for 429, 503), otherwise exponential backoff.
+                wait_time_default = base_wait * (2 ** retry_count)
+                wait_time = int(response.headers.get('Retry-After', wait_time_default))
+                
+                print(f"Retrying in {wait_time}s ({retry_count+1}/{max_retries})")
                 time.sleep(wait_time)
-                retry_count += 1
+
+            except requests.exceptions.Timeout:
+                wait_time = base_wait * (2 ** retry_count)
+                print(f"Timeout, retrying in {wait_time}s ({retry_count+1}/{max_retries})")
+                time.sleep(wait_time)
+
             except requests.exceptions.RequestException as e:
                 print(f"Request exception: {e}")
-                retry_count += 1
-                time.sleep(5)  # Wait 5 seconds before retrying
+                wait_time = base_wait
+                time.sleep(wait_time)
 
-            # 增加指数退避时间并继续重试
-            # 针对Vertex AI的配额限制增加更长的退避时间
-            if model == "gemini":
-                print("Detected Gemini model quota limit, enabling enhanced backoff strategy")
-                max_retries = 5  # Reduce max retries but increase wait time
-                base_wait = 60  # Increase base wait time to 60 seconds
-                wait_time = base_wait * (2 ** retry_count)
-                if retry_count >= max_retries:
-                    raise Exception("Vertex AI quota limit reached max retries, please try again later or request quota increase")
-                print(f"Gemini quota limit retry {retry_count}/{max_retries}, waiting {wait_time} seconds")
-                time.sleep(wait_time)
-                retry_count += 1
-            else:
-                retry_count += 1
-                wait_time = base_wait * (2 ** retry_count)
-                print(f"Retry {retry_count} with exponential backoff: {wait_time} seconds")
-                time.sleep(wait_time)
-            return llm_text_query(system_prompt, prompt, model)
+            retry_count += 1
+
+        print("Max retries reached. Returning None.")
+        return None
+
 
     except ImportError:
         # If portkey is not installed, fall back to original implementation
