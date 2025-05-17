@@ -378,7 +378,7 @@ def process_game_level(agent, game_info, level_index, run_id, save_dir, model, m
 
 def main():
     parser = argparse.ArgumentParser(description='LLM agent loop experiment (env+rules/ascii/mapping)')
-    parser.add_argument('--model', type=str, required=True, choices=['4o-mini', 'o3-mini', 'gemini', 'deepseek', 'qwen'],
+    parser.add_argument('--model', type=str, required=True, choices=['4o-mini', 'o3-mini', 'gemini', 'deepseek', 'qwen', 'deepseek-r1'],
                         help='LLM model alias (4o-mini=4o-mini, o3=O3-mini, gemini=Gemini-2.0, deepseek=DeepSeek, qwen=Qwen)')
     parser.add_argument('--max_steps', type=int, default=100,
                         help='Maximum steps per episode (default: 100)')
@@ -421,7 +421,7 @@ def main():
     
     agent = LLMGameAgent(model_name=args.model)
 
-    save_dir_main = "llm_agent_results"
+    save_dir_main = "llm_agent_results/"+ args.model
     os.makedirs(save_dir_main, exist_ok=True)
 
     # Starting level from CLI argument
