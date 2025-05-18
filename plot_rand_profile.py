@@ -106,24 +106,27 @@ def main(cfg: PlotRandProfileConfig):
                     print(f'Game: {game}')
 
                     # Plot each of the random rollout FPS's from nodejs as broken lines running horizontally
+                    run_names = results_standalone.keys()
+                    run_name = 'algo-randomRollout_5000-steps_11th Gen Intel(R) Core(TM) i9-11900K @ 3.50GHz'
+                    run_name_python = 'algo-rand_rollout_from_python_5000-steps_11th Gen Intel(R) Core(TM) i9-11900K @ 3.50GHz'
                     
-                    if game in results_standalone['randomRollout']:
-                        if str(level_i) in results_standalone['randomRollout'][game]:
-                            if "Error" in results_standalone['randomRollout'][game][str(level_i)]:
-                                print(f'Error in nodejs results for game {game} level {level_i}: {results_standalone["randomRollout"][game][str(level_i)]["Error"]}')
+                    if game in results_standalone[run_name]:
+                        if str(level_i) in results_standalone[run_name][game]:
+                            if "Error" in results_standalone[run_name][game][str(level_i)]:
+                                print(f'Error in nodejs results for game {game} level {level_i}: {results_standalone[run_name][game][str(level_i)]["Error"]}')
                             else:
-                                nodejs_rand_rollout_fps = results_standalone['randomRollout'][game][str(level_i)]['FPS']
+                                nodejs_rand_rollout_fps = results_standalone[run_name][game][str(level_i)]['FPS']
                                 ax.axhline(y=nodejs_rand_rollout_fps, color='r', linestyle='--', label='NodeJS FPS')
                         else:
                             print(f'Level {level_i} not found in nodejs results for game {game}')
                     else:
                         print(f'Game {game} not found in nodejs results')
-                    if game in results_standalone['rand_rollout_from_python']:
-                        if str(level_i) in results_standalone['rand_rollout_from_python'][game]:
-                            if "Error" in results_standalone['rand_rollout_from_python'][game][str(level_i)]:
-                                print(f'Error in nodejs results for game {game} level {level_i}: {results_standalone["rand_rollout_from_python"][game][str(level_i)]["Error"]}')
+                    if game in results_standalone[run_name_python]:
+                        if str(level_i) in results_standalone[run_name_python][game]:
+                            if "Error" in results_standalone[run_name_python][game][str(level_i)]:
+                                print(f'Error in nodejs results for game {game} level {level_i}: {results_standalone[run_name_python][game][str(level_i)]["Error"]}')
                             else:
-                                nodejs_rand_rollout_python_fps = results_standalone['rand_rollout_from_python'][game][str(level_i)]['FPS']
+                                nodejs_rand_rollout_python_fps = results_standalone[run_name_python][game][str(level_i)]['FPS']
                                 ax.axhline(y=nodejs_rand_rollout_python_fps, color='g', linestyle='--', label='Python-NodeJS FPS')
                         else:
                             print(f'Level {level_i} not found in nodejs results for game {game}')

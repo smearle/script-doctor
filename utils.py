@@ -321,7 +321,7 @@ def get_list_of_games_for_testing(all_games=True, include_random=False, random_o
     if random_order:
         random.shuffle(games)
     # HACK why is this happening??
-    games = [game[:-4] for game in games if game.endswith('.txt')]
+    games = [game[:-4] if game.endswith('.txt') else game for game in games]
     return games
 
 
