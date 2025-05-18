@@ -1,13 +1,15 @@
 from dataclasses import dataclass
 from functools import partial
+import itertools
 import os
 from timeit import default_timer as timer
-from typing import Dict, Iterable, List, Optional, Tuple, Union
+from typing import Callable, Dict, Iterable, List, Optional, Tuple, Union
 
 import PIL
 import chex
 from einops import rearrange
 import flax
+import flax.struct
 import imageio
 import jax
 from jax.experimental import checkify
@@ -46,9 +48,8 @@ def disambiguate_meta(obj, cell_meta_objs, kernel_meta_objs, pattern_meta_objs, 
     else:
         # assert obj in pattern_meta_objs, f"Meta-object `{obj}` not found in meta_objs or pattern_meta_objs."
         if obj not in pattern_meta_objs:
-            print(f"When compiling a meta-object projection rule, the meta-object `{obj}` in the output pattern is " 
+            raise Exception(f"When compiling a meta-object projection rule, the meta-object `{obj}` in the output pattern is " 
                   "not found in the return of the compiled detection function (either in meta_objs or pattern_meta_objs).")
-            breakpoint()
         return pattern_meta_objs[obj]
     # FIXME: as above, but jax (this is broken. is it necessary?)
     # obj_idx = jax.lax.select_n(
@@ -314,6 +315,13 @@ class CellFnReturn:
 
 @flax.struct.dataclass
 class KernelFnReturn:
+    detected_meta_objs: dict
+    detected_moving_idx: Optional[int] = None
+
+@flax.struct.dataclass
+class LineKernelFnReturn:
+    subkernel_activations: chex.Array
+    subkernel_detect_outs: List[KernelFnReturn]
     detected_meta_objs: dict
     detected_moving_idx: Optional[int] = None
 
@@ -1198,7 +1206,6 @@ class PSEnv:
                     obj_key = names_to_alts[obj_key]
                 else:
                     raise ValueError(f"Object {obj_key} not found in tree.objects")
-                    # breakpoint()
             obj = tree.objects[obj_key]
             if obj.sprite is not None:
                 if DEBUG:
@@ -2002,7 +2009,7 @@ class PSEnv:
                 jax.debug.print('        projecting obj {obj}, disambiguated index: {obj_idx}', obj=obj, obj_idx=obj_idx)
             if not self.jit:
                 if obj_idx == -1:
-                    breakpoint()
+                    raise RuntimeError(f'Object `{obj}` not found in cell {cell_i}.')
             m_cell = m_cell.at[obj_idx].set(True)
 
             def transfer_force(m_cell, obj_idx, detected_obj_idx):
@@ -2295,6 +2302,56 @@ class PSEnv:
 
         def gen_rotated_rule_fn(lps, rps, rot, r_command):
 
+            def gen_rotated_line_kernel_fns(lp, rp, rot):
+                lp_is_horizontal = lp.shape[0] == 1 and lp.shape[1] > 1
+                lp_is_vertical = lp.shape[0] > 1 and lp.shape[1] == 1
+                assert lp_is_horizontal or lp_is_vertical, f'Invalid kernel shape {lp.shape} for a kernel including a line detector.'
+                lp_subkernels = [[]]
+                for l_cell_row in lp:
+                    for l_cell in l_cell_row:
+                        if l_cell == '...':
+                            lp_subkernels.append([])
+                        else:
+                            lp_subkernels[-1].append(l_cell)
+                rp_subkernels = [[]]
+                for r_cell_row in rp:
+                    for r_cell in r_cell_row:
+                        if r_cell == '...':
+                            rp_subkernels.append([])
+                        else:
+                            rp_subkernels[-1].append(r_cell)
+                # Now put these subkernels back in the correct shape
+                lp_subkernels = [np.array(lps) for lps in lp_subkernels]
+                rp_subkernels = [np.array(rps) for rps in rp_subkernels]
+                if lp_is_horizontal:
+                    lp_subkernels = [lps[None] for lps in lp_subkernels]
+                    rp_subkernels = [rps[None] for rps in rp_subkernels]
+                elif lp_is_vertical:
+                    lp_subkernels = [lps[:, None] for lps in lp_subkernels]
+                    rp_subkernels = [rps[:, None] for rps in rp_subkernels]
+                
+                subkernel_detection_fns = []
+                subkernel_projection_fns = []
+                for lp, rp in zip(lp_subkernels, rp_subkernels):
+                    subkernel_detection_fn, subkernel_projection_fn = gen_rotated_kernel_fns(lp, rp, rot)
+                    subkernel_detection_fns.append(subkernel_detection_fn)
+                    subkernel_projection_fns.append(subkernel_projection_fn)
+                
+                detect_kernel = partial(
+                    self.detect_line_kernel,
+                    subkernel_detection_fns=subkernel_detection_fns,
+                    lp_is_horizontal=lp_is_horizontal,
+                    lp_is_vertical=lp_is_vertical,
+                )
+                project_kernel = partial(
+                    self.project_line_kernel,
+                    subkernel_projection_fns=subkernel_projection_fns,
+                    lp_is_horizontal=lp_is_horizontal,
+                    lp_is_vertical=lp_is_vertical,
+                )
+                return detect_kernel, project_kernel
+
+
             def gen_rotated_kernel_fns(lp, rp, rot):
                 lp, rp = np.array(lp), np.array(rp)
                 # is_horizontal = np.all([lps[i].shape[0] == 1 for i in range(len(lps))])
@@ -2381,187 +2438,27 @@ class PSEnv:
                         else:
                             cell_projection_fns.append(gen_cell_projection_fn(r_cell, force_idx))
 
-                def detect_kernel(lvl):
-                    n_chan = lvl.shape[1]
-                    # @jax.jit
-                    def detect_cells(in_patch):
-                        cell_outs_patch = []
-                        patch_active = True
-                        for i, cell_fn in enumerate(cell_detection_fns):
-                            in_patch = in_patch.reshape((n_chan, *in_patch_shape))
-                            if lp_is_vertical:
-                                m_cell = in_patch[:, i, 0]
-                            if lp_is_horizontal:
-                                m_cell = in_patch[:, 0, i]
-                            if lp_is_single:
-                                m_cell = in_patch[:, 0, 0]
-                            cell_active, cell_out = cell_fn(m_cell=m_cell)
-                            patch_active = patch_active & cell_active
-                            cell_outs_patch.append(cell_out)
-                        return patch_active, cell_outs_patch
 
-                    def detect_line(in_line):
-                        for i, cell_fn in enumerate(cell_detection_fns):
-                            cell_fn_activs, cell_fn_rets = jax.vmap(cell_fn)(in_line)
-                            breakpoint()
+                detect_kernel = partial(
+                    self.detect_kernel,
+                    in_patch_shape=in_patch_shape,
+                    cell_detection_fns=cell_detection_fns,
+                    lp_is_horizontal=lp_is_horizontal,
+                    lp_is_vertical=lp_is_vertical,
+                    lp_is_single=lp_is_single,
+                    lp=lp,
+                )
 
-                    if not is_line_detector:
-
-                        patches = jax.lax.conv_general_dilated_patches(
-                            lvl, in_patch_shape, window_strides=(1, 1), padding='VALID',
-                        )
-                        assert patches.shape[0] == 1
-                        patches = patches[0]
-                        # patches = rearrange(patches, "c h w -> h w c")
-                        patches = patches.transpose(1, 2, 0)
-
-                        if self.jit:
-                            kernel_activations, cell_detect_outs = jax.vmap(jax.vmap(detect_cells))(patches)
-
-                        else:
-                            kernel_activations = jnp.zeros((patches.shape[0], patches.shape[1]), dtype=bool)
-                            # What's up with this???
-                            cell_detect_outs = [[None for _ in range(patches.shape[0])] for _ in range(patches.shape[1])]
-                            for i in range(patches.shape[0]):
-                                for j in range(patches.shape[1]):
-                                    patch = patches[i, j]
-                                    patch_active, cell_out = detect_cells(patch)
-                                    kernel_activations = kernel_activations.at[i, j].set(patch_active)
-                                    cell_detect_outs[j][i] = cell_out
-                            cell_detect_outs = stack_leaves(stack_leaves(cell_detect_outs))
-
-                    else:
-                        # TODO:
-                        breakpoint()
-
-                    # eliminate all but one activation
-                    kernel_detected = kernel_activations.sum() > 0
-                    if DEBUG:
-                        jax.lax.cond(
-                            # True,
-                            kernel_detected,
-                            lambda: jax.debug.print('      Rule {rule_name} left kernel {lp} detected: {kernel_detected}',
-                                                    rule_name=self.rule_name, kernel_detected=kernel_detected, lp=lp),
-                            lambda: None,
-                        )
-                    cancelled = False
-                    detected_kernel_meta_objs = {}
-                    for cell_detect_out in cell_detect_outs:
-                        detected_kernel_meta_objs.update(cell_detect_out.detected_meta_objs)
-
-                    # Kernel-wide detected moving idxs are only fallen back on if a given input cell has no detected moving
-                    # index. In this case, we assume there is only one detected moving index in the kernel, so we can take 
-                    # the max to propagate these values across cells.
-                    cell_detected_moving_idxs = [cell_detect_out.detected_moving_idx for cell_detect_out in cell_detect_outs
-                                                if cell_detect_out.detected_moving_idx is not None]
-                    if len(cell_detected_moving_idxs) == 0:
-                        # No detected moving idxs in the kernel
-                        detected_kernel_moving_idx = None
-                    else:
-                        cell_detected_moving_idxs = jnp.stack(cell_detected_moving_idxs, axis=0)
-                        detected_kernel_moving_idx = jnp.max(cell_detected_moving_idxs, axis=0)
-
-                    kernel_detect_out = KernelFnReturn(
-                        detected_meta_objs=detected_kernel_meta_objs,
-                        detected_moving_idx=detected_kernel_moving_idx,
-                    )
-                    return kernel_activations, cell_detect_outs, kernel_detect_out
-
-
-                def project_kernel(rng, lvl, kernel_activations, 
-                                cell_detect_outs: List[CellFnReturn],
-                                kernel_detect_outs: List[KernelFnReturn], 
-                                pattern_detect_out: List[PatternFnReturn]
-                                ):
-                    n_tiles = np.prod(lvl.shape[-2:])
-                    # Ensure we always have some invalid coordinates so that the loop will break even when all tiles are active
-                    if self.jit:
-                        kernel_activ_xys = jnp.argwhere(kernel_activations, size=n_tiles+1, fill_value=-1)
-                    else:
-                        kernel_activ_xys = np.argwhere(kernel_activations)
-                    kernel_activ_xy_idx = 0
-                    # kernel_activ_xy = kernel_activ_xys[kernel_activ_xy_idx]
-
-                    # @jax.jit
-                    def project_cells_at(rng, xy, lvl):
-                        cell_detect_outs_xy = [jax.tree.map(lambda x: x[xy[0]][xy[1]], cell_detect_out) for 
-                            cell_detect_out in cell_detect_outs]
-
-                        kernel_detect_outs_xy = jax.tree.map(lambda x: x[xy[0]][xy[1]], kernel_detect_outs)
-
-                        pattern_detect_outs_xy = pattern_detect_out
-
-                        # Apply projection functions to the affected cells
-                        out_cell_idxs = np.indices(in_patch_shape)
-                        # out_cell_idxs = rearrange(out_cell_idxs, "xy h w -> h w xy")
-                        out_cell_idxs = out_cell_idxs.transpose(1, 2, 0)
-                        if lp_is_vertical:
-                            out_cell_idxs = out_cell_idxs[:, 0]
-                        elif lp_is_horizontal:
-                            out_cell_idxs = out_cell_idxs[0, :]
-                        elif lp_is_single:
-                            out_cell_idxs = out_cell_idxs[0, :]
-
-                        # Either the rule has no right pattern, or it should detect as many cells as there are cell projection functions
-                        if not (~has_right_pattern or (len(cell_detect_outs) == len(out_cell_idxs) == len(cell_projection_fns))):
-                            print(f"Warning: rule {rule} with has_right_pattern {has_right_pattern} results in len(cell_detect_outs) {len(cell_detect_outs)} != len(out_cell_idxs) {len(out_cell_idxs)} != len(cell_projection_fns) {len(cell_projection_fns)}")
-                            breakpoint()
-                        init_lvl = lvl
-
-                        #TODO: vmap this. But then we risk overlapping? But we do here, too.
-                        for i, (out_cell_idx, cell_proj_fn) in enumerate(zip(out_cell_idxs, cell_projection_fns)):
-                        # def apply_cell_proj_fn(lvl, i):
-                            # FIXME: a cell at position `i` may not exist in the input kernel!! So here, it's just referring to the ``last'' cell in the input (?)
-                            cell_detect_out_i = cell_detect_outs_xy[i]
-                            pattern_detect_out_i = pattern_detect_outs_xy
-                            cell_xy = out_cell_idx + xy
-                            if DEBUG:
-                                jax.debug.print('        projecting cell {i} at position {cell_xy}', i=i, cell_xy=cell_xy)
-                            m_cell = lvl[0, :, *cell_xy]
-                            rng, m_cell = cell_proj_fn(
-                                rng=rng, m_cell=m_cell, cell_i=i, cell_detect_out=cell_detect_out_i,
-                                kernel_detect_out=kernel_detect_outs_xy,
-                                pattern_detect_out=pattern_detect_out_i)
-                            # m_cell = jax.lax.switch(i, cell_projection_fns, m_cell, cell_detect_out,
-                            #                         pattern_detect_outs_xy)
-                            lvl = lvl.at[0, :, *cell_xy].set(m_cell)
-                            # return lvl, None
-                        
-                        # lvl, _ = jax.lax.scan(apply_cell_proj_fn, lvl, jnp.arange(len(out_cell_idxs)))
-
-                        lvl_changed = jnp.any(lvl != init_lvl)
-                        if DEBUG:
-                            jax.debug.print('      at position {xy}, the level changed: {lvl_changed}', xy=xy, lvl_changed=lvl_changed)
-                        # if not jit:
-                        #     print('\n' + multihot_to_desc(lvl[0], obj_to_idxs=obj_to_idxs, n_objs=n_objs))
-                        return rng, lvl
-
-                    def project_kernel_at_xy(carry):               
-                        rng, kernel_activ_xy_idx, lvl = carry
-                        kernel_activ_xy = kernel_activ_xys[kernel_activ_xy_idx]
-                        # jax.debug.print('        kernel_activ_xys: {kernel_activ_xys}', kernel_activ_xys=kernel_activ_xys)
-                        if DEBUG:
-                            jax.debug.print('        projecting kernel at position index {kernel_activ_xy_idx}, position {xy}', xy=kernel_activ_xy, kernel_activ_xy_idx=kernel_activ_xy_idx)
-                        rng, lvl = project_cells_at(rng, kernel_activ_xy, lvl)
-
-                        kernel_activ_xy_idx += 1
-                        return rng, kernel_activ_xy_idx, lvl
-
-
-                    # TODO: Should we vmap this instead???
-                    carry = (rng, kernel_activ_xy_idx, lvl)
-                    if self.jit:
-                        rng, _, lvl = jax.lax.while_loop(
-                            lambda carry: jnp.all(kernel_activ_xys[carry[1]] != -1),  
-                            lambda carry: project_kernel_at_xy(carry),
-                            carry,
-                        )
-                    else:
-                        while kernel_activ_xy_idx < len(kernel_activ_xys):
-                            carry = project_kernel_at_xy(carry)
-                            rng, kernel_activ_xy_idx, lvl = carry
-                    return rng, lvl
-
+                project_kernel = partial(
+                    self.project_kernel,
+                    in_patch_shape=in_patch_shape,
+                    cell_projection_fns=cell_projection_fns,
+                    lp_is_horizontal=lp_is_horizontal,
+                    lp_is_vertical=lp_is_vertical,
+                    lp_is_single=lp_is_single,
+                    has_right_pattern=has_right_pattern,
+                    rule=rule,
+                )
                 return detect_kernel, project_kernel
 
 
@@ -2570,7 +2467,14 @@ class PSEnv:
             if DEBUG:
                 print('rps', rps)
                 print('lps', lps)
-            kernel_fns = [gen_rotated_kernel_fns(lp, rp, rot) for lp, rp in zip(lps, rps)]
+
+            # kernel_fns = [gen_rotated_kernel_fns(lp, rp, rot) for lp, rp in zip(lps, rps)]
+            kernel_fns = []
+            for lp, rp in zip(lps, rps):
+                if is_line_detector_in_kernel(lp):
+                    kernel_fns.append(gen_rotated_line_kernel_fns(lp, rp, rot))
+                else:
+                    kernel_fns.append(gen_rotated_kernel_fns(lp, rp, rot))
             kernel_detection_fns, kernel_projection_fns = zip(*kernel_fns)
 
             def detect_pattern(lvl):
@@ -2636,7 +2540,6 @@ class PSEnv:
                 pattern_detected = jnp.all(jnp.sum(kernel_activations, axis=(1,2)) > 0)
 
                 def project_kernels(rng, lvl, kernel_activations, kernel_detect_outs):
-                    # TODO: use a jax.lax.switch
                     for i, kernel_projection_fn in enumerate(kernel_projection_fns):
                         if DEBUG:
                             jax.debug.print('        projecting kernel {i}', i=i)
@@ -2664,18 +2567,18 @@ class PSEnv:
                     next_lvl = lvl
                     rule_applied = False
                     # assert rule.command is not None
-                    if rule.command is None and not np.all([r is None for r in rps]):
+                    if r_command is None and not np.all([r is None for r in rps]):
                         print(rps)
 
-                    if rule.command == 'cancel':
+                    if r_command == 'cancel':
                         cancel = pattern_detected
-                    elif rule.command == 'restart':
+                    elif r_command == 'restart':
                         restart = pattern_detected
-                if rule.command == 'again':
+                if r_command == 'again':
                     again = rule_applied
                     if DEBUG:
-                        jax.debug.print('applying the {command} command: {rule_applied}', command=rule.command, rule_applied=rule_applied)
-                elif rule.command == 'win':
+                        jax.debug.print('applying the {command} command: {rule_applied}', command=r_command, rule_applied=rule_applied)
+                elif r_command == 'win':
                     win = True
 
                 rule_state = RuleState(
@@ -2896,6 +2799,325 @@ class PSEnv:
             tick_fn = jax.jit(tick_fn)
         return tick_fn
 
+    def detect_line_kernel(self, lvl: chex.Array, subkernel_detection_fns: List[Callable], lp_is_vertical: bool, lp_is_horizontal: bool):
+        """
+            subkernel_detection_fns: List of functions that detect the subkernels in the line kernel. These need to be detected in sequence, along some line.
+        """
+        subkernel_activations = []
+        subkernel_cell_detect_outs = []
+        subkernel_detect_outs = []
+        for subkernel_detection_fn in subkernel_detection_fns:
+            subkernel_activations_i, cell_detect_outs_i, subkernel_detect_out_i = subkernel_detection_fn(lvl)
+            subkernel_activations.append(subkernel_activations_i)
+            subkernel_cell_detect_outs.append(cell_detect_outs_i)
+            subkernel_detect_outs.append(subkernel_detect_out_i)
+
+        subkernel_activations = jnp.stack(subkernel_activations, axis=0)
+
+        if lp_is_vertical:
+            dim = 2
+        elif lp_is_horizontal:
+            dim = 1
+
+        new_subkernel_activations = jnp.zeros_like(subkernel_activations)
+        for i in range(subkernel_activations.shape[dim]):
+            if dim == 1:
+                new_subkernel_activations = new_subkernel_activations.at[:, i].set(mask_to_valid_sequences(subkernel_activations[:, i], jit=self.jit))
+            elif dim == 2:
+                new_subkernel_activations = new_subkernel_activations.at[:, :, i].set(mask_to_valid_sequences(subkernel_activations[:, :, i], jit=self.jit))
+
+        detected_kernel_meta_objs = {}
+        detected_kernel_moving_idx = None
+
+        for subkernel_detect_out in subkernel_detect_outs:
+            # Each kernel has detected meta-objects at different coordinates on the board.
+            # To get pattern-wide meta-objs, take any detected meta-object index that is not -1 (indicating no meta-object was detected) 
+            # (We can take the max here because we assume that if a meta-tile in the right pattern is not specified in the corresponding left kernel, it is only specified once in the rest of the left pattern)
+            # FIXME: We should be stacking then maxing these too. Currently we might overwrite a meta-obj dict entry
+            # with one from a kernel where the meta-obj is not detected? (Wait, is this ever a thing?)
+            boardwide_kernel_meta_objs = {k: v.max() for k, v in subkernel_detect_out.detected_meta_objs.items()}
+            detected_kernel_meta_objs.update(boardwide_kernel_meta_objs)
+
+            # Propagate the detected moving index across kernels.
+            detected_kernel_moving_idxs = [
+                subkernel_detect_out.detected_moving_idx for subkernel_detect_out in subkernel_detect_outs
+                if subkernel_detect_out.detected_moving_idx is not None]
+            if len(detected_kernel_moving_idxs) == 0:
+                # No detected moving idxs in the kernel
+                detected_kernel_moving_idx = None
+            else:
+                # If these tensors do not all have the same shape, then pad them with `-1s` as necessary
+                max_detected_kernel_moving_idx_shape = max([k.shape for k in detected_kernel_moving_idxs])     
+                detected_kernel_moving_idxs = [
+                    jnp.pad(k, 
+                            ((0, max_detected_kernel_moving_idx_shape[0] - k.shape[0]),
+                                (0, max_detected_kernel_moving_idx_shape[1] - k.shape[1]),
+                                (0, 0),
+                                (0, 0),
+                                )) 
+                    for k in detected_kernel_moving_idxs]
+
+                detected_kernel_moving_idxs = jnp.stack(detected_kernel_moving_idxs, axis=0)
+                detected_kernel_moving_idx = jnp.max(detected_kernel_moving_idxs, axis=0)
+        
+        kernel_detect_out = LineKernelFnReturn(
+            subkernel_activations=new_subkernel_activations,
+            subkernel_detect_outs=subkernel_detect_outs,
+            detected_meta_objs=detected_kernel_meta_objs,
+            detected_moving_idx=detected_kernel_moving_idx,
+        )
+        kernel_activations = new_subkernel_activations.any(axis=0)
+
+        return kernel_activations, subkernel_cell_detect_outs, kernel_detect_out
+
+
+    def project_line_kernel(self, rng, lvl, kernel_activations, subkernel_cell_detect_outs, kernel_detect_out: LineKernelFnReturn, pattern_detect_out,
+                            subkernel_projection_fns: List[Callable], lp_is_vertical: bool, lp_is_horizontal: bool):
+
+        for i, subkernel_projection_fn in enumerate(subkernel_projection_fns):
+            rng, lvl = subkernel_projection_fn(
+                rng, lvl, kernel_detect_out.subkernel_activations[i], subkernel_cell_detect_outs[i], kernel_detect_out.subkernel_detect_outs[i], pattern_detect_out
+            )
+        return rng, lvl
+
+    def detect_kernel(self, lvl, cell_detection_fns, lp_is_vertical, lp_is_horizontal, lp_is_single, in_patch_shape, lp):
+        n_chan = lvl.shape[1]
+        # @jax.jit
+        def detect_cells(in_patch: chex.Array):
+            cell_outs_patch = []
+            patch_active = True
+            for i, cell_fn in enumerate(cell_detection_fns):
+                in_patch = in_patch.reshape((n_chan, *in_patch_shape))
+                if lp_is_vertical:
+                    m_cell = in_patch[:, i, 0]
+                if lp_is_horizontal:
+                    m_cell = in_patch[:, 0, i]
+                if lp_is_single:
+                    m_cell = in_patch[:, 0, 0]
+                cell_active, cell_out = cell_fn(m_cell=m_cell)
+                patch_active = patch_active & cell_active
+                cell_outs_patch.append(cell_out)
+            return patch_active, cell_outs_patch
+
+        patches = jax.lax.conv_general_dilated_patches(
+            lvl, in_patch_shape, window_strides=(1, 1), padding='VALID',
+        )
+        assert patches.shape[0] == 1
+        patches = patches[0]
+        # patches = rearrange(patches, "c h w -> h w c")
+        patches = patches.transpose(1, 2, 0)
+
+        if self.jit:
+            kernel_activations, cell_detect_outs = jax.vmap(jax.vmap(detect_cells))(patches)
+
+        else:
+            kernel_activations = jnp.zeros((patches.shape[0], patches.shape[1]), dtype=bool)
+            # What's up with this???
+            cell_detect_outs = [[None for _ in range(patches.shape[0])] for _ in range(patches.shape[1])]
+            for i in range(patches.shape[0]):
+                for j in range(patches.shape[1]):
+                    patch = patches[i, j]
+                    patch_active, cell_out = detect_cells(patch)
+                    kernel_activations = kernel_activations.at[i, j].set(patch_active)
+                    cell_detect_outs[j][i] = cell_out
+            cell_detect_outs = stack_leaves(stack_leaves(cell_detect_outs))
+
+        # eliminate all but one activation
+        kernel_detected = kernel_activations.sum() > 0
+        if DEBUG:
+            jax.lax.cond(
+                # True,
+                kernel_detected,
+                lambda: jax.debug.print('      Rule {rule_name} left kernel {lp} detected: {kernel_detected}',
+                                        rule_name=self.rule_name, kernel_detected=kernel_detected, lp=lp),
+                lambda: None,
+            )
+        cancelled = False
+        detected_kernel_meta_objs = {}
+        for cell_detect_out in cell_detect_outs:
+            detected_kernel_meta_objs.update(cell_detect_out.detected_meta_objs)
+
+        # Kernel-wide detected moving idxs are only fallen back on if a given input cell has no detected moving
+        # index. In this case, we assume there is only one detected moving index in the kernel, so we can take 
+        # the max to propagate these values across cells.
+        cell_detected_moving_idxs = [cell_detect_out.detected_moving_idx for cell_detect_out in cell_detect_outs
+                                    if cell_detect_out.detected_moving_idx is not None]
+        if len(cell_detected_moving_idxs) == 0:
+            # No detected moving idxs in the kernel
+            detected_kernel_moving_idx = None
+        else:
+            cell_detected_moving_idxs = jnp.stack(cell_detected_moving_idxs, axis=0)
+            detected_kernel_moving_idx = jnp.max(cell_detected_moving_idxs, axis=0)
+
+        kernel_detect_out = KernelFnReturn(
+            detected_meta_objs=detected_kernel_meta_objs,
+            detected_moving_idx=detected_kernel_moving_idx,
+        )
+        return kernel_activations, cell_detect_outs, kernel_detect_out
+
+
+    def project_kernel(self, rng, lvl, kernel_activations, 
+                    cell_detect_outs: List[CellFnReturn],
+                    kernel_detect_outs: List[KernelFnReturn], 
+                    pattern_detect_out: List[PatternFnReturn],
+                    cell_projection_fns: List[Callable],
+                    lp_is_vertical: bool, lp_is_horizontal: bool, lp_is_single: bool,
+                    has_right_pattern: bool, in_patch_shape: Tuple[int, int], rule: str,
+                    ):
+        n_tiles = np.prod(lvl.shape[-2:])
+        # Ensure we always have some invalid coordinates so that the loop will break even when all tiles are active
+        if self.jit:
+            kernel_activ_xys = jnp.argwhere(kernel_activations, size=n_tiles+1, fill_value=-1)
+        else:
+            kernel_activ_xys = np.argwhere(kernel_activations)
+        kernel_activ_xy_idx = 0
+        # kernel_activ_xy = kernel_activ_xys[kernel_activ_xy_idx]
+
+        # @jax.jit
+        def project_cells_at(rng, xy, lvl):
+            cell_detect_outs_xy = [jax.tree.map(lambda x: x[xy[0]][xy[1]], cell_detect_out) for 
+                cell_detect_out in cell_detect_outs]
+
+            kernel_detect_outs_xy = jax.tree.map(lambda x: x[xy[0]][xy[1]], kernel_detect_outs)
+
+            pattern_detect_outs_xy = pattern_detect_out
+
+            # Apply projection functions to the affected cells
+            out_cell_idxs = np.indices(in_patch_shape)
+            # out_cell_idxs = rearrange(out_cell_idxs, "xy h w -> h w xy")
+            out_cell_idxs = out_cell_idxs.transpose(1, 2, 0)
+            if lp_is_vertical:
+                out_cell_idxs = out_cell_idxs[:, 0]
+            elif lp_is_horizontal:
+                out_cell_idxs = out_cell_idxs[0, :]
+            elif lp_is_single:
+                out_cell_idxs = out_cell_idxs[0, :]
+
+            # Either the rule has no right pattern, or it should detect as many cells as there are cell projection functions
+            if not (~has_right_pattern or (len(cell_detect_outs) == len(out_cell_idxs) == len(cell_projection_fns))):
+                raise RuntimeError(f"Warning: rule {rule} with has_right_pattern {has_right_pattern} results in len(cell_detect_outs) {len(cell_detect_outs)} != len(out_cell_idxs) {len(out_cell_idxs)} != len(cell_projection_fns) {len(cell_projection_fns)}")
+            init_lvl = lvl
+
+            #TODO: vmap this. But then we risk overlapping? But we do here, too.
+            for i, (out_cell_idx, cell_proj_fn) in enumerate(zip(out_cell_idxs, cell_projection_fns)):
+            # def apply_cell_proj_fn(lvl, i):
+                # FIXME: a cell at position `i` may not exist in the input kernel!! So here, it's just referring to the ``last'' cell in the input (?)
+                cell_detect_out_i = cell_detect_outs_xy[i]
+                pattern_detect_out_i = pattern_detect_outs_xy
+                cell_xy = out_cell_idx + xy
+                if DEBUG:
+                    jax.debug.print('        projecting cell {i} at position {cell_xy}', i=i, cell_xy=cell_xy)
+                m_cell = lvl[0, :, *cell_xy]
+                rng, m_cell = cell_proj_fn(
+                    rng=rng, m_cell=m_cell, cell_i=i, cell_detect_out=cell_detect_out_i,
+                    kernel_detect_out=kernel_detect_outs_xy,
+                    pattern_detect_out=pattern_detect_out_i)
+                # m_cell = jax.lax.switch(i, cell_projection_fns, m_cell, cell_detect_out,
+                #                         pattern_detect_outs_xy)
+                lvl = lvl.at[0, :, *cell_xy].set(m_cell)
+                # return lvl, None
+            
+            # lvl, _ = jax.lax.scan(apply_cell_proj_fn, lvl, jnp.arange(len(out_cell_idxs)))
+
+            lvl_changed = jnp.any(lvl != init_lvl)
+            if DEBUG:
+                jax.debug.print('      at position {xy}, the level changed: {lvl_changed}', xy=xy, lvl_changed=lvl_changed)
+            # if not jit:
+            #     print('\n' + multihot_to_desc(lvl[0], obj_to_idxs=obj_to_idxs, n_objs=n_objs))
+            return rng, lvl
+
+        def project_kernel_at_xy(carry):               
+            rng, kernel_activ_xy_idx, lvl = carry
+            kernel_activ_xy = kernel_activ_xys[kernel_activ_xy_idx]
+            # jax.debug.print('        kernel_activ_xys: {kernel_activ_xys}', kernel_activ_xys=kernel_activ_xys)
+            if DEBUG:
+                jax.debug.print('        projecting kernel at position index {kernel_activ_xy_idx}, position {xy}', xy=kernel_activ_xy, kernel_activ_xy_idx=kernel_activ_xy_idx)
+            rng, lvl = project_cells_at(rng, kernel_activ_xy, lvl)
+
+            kernel_activ_xy_idx += 1
+            return rng, kernel_activ_xy_idx, lvl
+
+
+        carry = (rng, kernel_activ_xy_idx, lvl)
+        if self.jit:
+            rng, _, lvl = jax.lax.while_loop(
+                lambda carry: jnp.all(kernel_activ_xys[carry[1]] != -1),  
+                lambda carry: project_kernel_at_xy(carry),
+                carry,
+            )
+        else:
+            while kernel_activ_xy_idx < len(kernel_activ_xys):
+                carry = project_kernel_at_xy(carry)
+                rng, kernel_activ_xy_idx, lvl = carry
+        return rng, lvl
+
+
+def is_line_detector_in_kernel(kernel):
+    # Note that the kernel has been rotated, and is 2D
+    for cell_row in kernel:
+        for cell in cell_row:
+            if cell == '...':
+                return True
+    return False
+
+def generate_index_sequences(N, M):
+    assert N <= M, "N must be less than or equal to M"
+    
+    valid_indices = list(range(N))
+    result = []
+
+    # Step 1: Choose positions in the M-length vector to place the N valid indices
+    for positions in itertools.combinations(range(M), N):
+        # Step 2: Generate increasing permutations of valid indices (fixed order)
+        for values in itertools.permutations(valid_indices):
+            if list(values) != sorted(values):
+                continue  # skip non-increasing permutations
+            arr = np.full(M, -1, dtype=int)
+            arr[list(positions)] = values
+            result.append(arr)
+    
+    return np.array(result)
+
+
+def one_hot_sequences(sequences, num_classes):
+    M = sequences.shape[1]
+    result = []
+
+    for seq in sequences:
+        one_hot = np.zeros((M, num_classes), dtype=int)
+        for i, val in enumerate(seq):
+            if val != -1:
+                one_hot[i, val] = 1
+        result.append(one_hot)
+    
+    return np.array(result, dtype=bool)
+
+
+def mask_to_valid_sequences(binary_matrix, jit=True):
+    N, M = binary_matrix.shape
+
+    # Generate valid index sequences
+    sequences = generate_index_sequences(N, M)
+    one_hot_masks = one_hot_sequences(sequences, num_classes=N)  # shape: (K, M, N)
+
+    # Transpose to match binary_matrix shape (N, M)
+    one_hot_masks = one_hot_masks.transpose(0, 2, 1)  # shape: (K, N, M)
+
+    valid_mask = jnp.zeros_like(binary_matrix)
+
+    for mask in one_hot_masks:
+        if not jit:
+            if jnp.all((mask & binary_matrix) == mask):  # check if mask is a subset
+                valid_mask |= mask  # elementwise OR
+        else:
+            valid_mask = jax.lax.cond(
+                jnp.all((mask & binary_matrix) == mask),
+                lambda: valid_mask | mask,
+                lambda: valid_mask,
+            )
+
+    return valid_mask
+
 
 def multihot_to_desc(multihot_level, objs_to_idxs, n_objs, show_background=False):
     """Converts a multihot array to a 2D list of descriptions.
@@ -2960,3 +3182,13 @@ def multihot_to_desc(multihot_level, objs_to_idxs, n_objs, show_background=False
     desc_str = "\n".join([" || ".join(row) for row in desc_grid])
     
     return desc_str
+
+
+if __name__ == "__main__":
+    binary_matrix = np.array([
+        [1, 0, 0, 0],  # row for index 0
+        [1, 1, 0, 1]   # row for index 1
+    ])
+
+    masked = mask_to_valid_sequences(binary_matrix)
+    print(masked)

@@ -123,7 +123,7 @@ class RLConfig(PSConfig):
     # each episode.
     pinpoints: bool = False
 
-    hidden_dims: Tuple[int] = (64, 256)
+    hidden_dims: Tuple[int] = (128, 128)
 
     # TODO: Implement this. Just a placeholder for now.
     reward_every: int = 1
