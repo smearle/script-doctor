@@ -61,9 +61,9 @@ def collect_results(results_dir):
                     continue
                     
                 # Skip Gemini results
-                if "gemini" in llm.lower():
-                    print(f"Skipping Gemini result file: {filename}")
-                    continue
+                # if "gemini" in llm.lower():
+                #     print(f"Skipping Gemini result file: {filename}")
+                #     continue
 
                 # Normalize game name for atlas shrank cases
                 if "atlas shrank" in game or "atlas_shrank" in game:
