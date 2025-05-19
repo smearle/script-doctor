@@ -41,7 +41,7 @@ def parse_filename(filename):
 
 def collect_results(results_dir):
     """
-    Collects results from all .json files in the specified results_dir.
+    Collects results from all .json files in the specified results_dir **and all its subdirectories**.
     """
     data = []
 
@@ -49,46 +49,49 @@ def collect_results(results_dir):
         print(f"Error: Directory '{results_dir}' not found.")
         return pd.DataFrame()
 
-    for filename in os.listdir(results_dir):
-        if filename.endswith(".json"):
-            filepath = os.path.join(results_dir, filename)
-            llm, game, run, level = parse_filename(filename)
+    # 遍历所有子目录和文件
+    for root, dirs, files in os.walk(results_dir):
+        for filename in files:
+            if filename.endswith(".json"):
+                filepath = os.path.join(root, filename)
+                llm, game, run, level = parse_filename(filename)
 
-            if not llm or not game:
-                print(f"Skipping unparsable file: {filename}")
-                continue
-                
-            # Skip Gemini results
-            if "gemini" in llm.lower():
-                print(f"Skipping Gemini result file: {filename}")
-                continue
+                if not llm or not game:
+                    print(f"Skipping unparsable file: {filename}")
+                    continue
+                    
+                # Skip Gemini results
+                if "gemini" in llm.lower():
+                    print(f"Skipping Gemini result file: {filename}")
+                    continue
 
-            # Normalize game name for atlas shrank cases
-            if "atlas shrank" in game or "atlas_shrank" in game:
-                game = "atlas_shrank"
+                # Normalize game name for atlas shrank cases
+                if "atlas shrank" in game or "atlas_shrank" in game:
+                    game = "atlas_shrank"
 
-            try:
-                with open(filepath, 'r') as f:
-                    content = json.load(f)
-                
-                win_status = content.get("win", content.get("state_data", {}).get("win", False))
-                steps = content.get("state_data", {}).get("step", float('nan')) # Get steps, use NaN if not found
+                try:
+                    with open(filepath, 'r') as f:
+                        content = json.load(f)
+                    
+                    win_status = content.get("win", content.get("state_data", {}).get("win", False))
+                    steps = content.get("state_data", {}).get("step", float('nan')) # Get steps, use NaN if not found
 
-                data.append({
-                    "llm": llm,
-                    "game": game,
-                    "run": run,
-                    "level": level,
-                    "win": win_status,
-                    "steps": steps,
-                    "filename": filename
-                })
-            except json.JSONDecodeError:
-                print(f"Error decoding JSON from file: {filepath}")
-            except Exception as e:
-                print(f"Error processing file {filepath}: {e}")
+                    data.append({
+                        "llm": llm,
+                        "game": game,
+                        "run": run,
+                        "level": level,
+                        "win": win_status,
+                        "steps": steps,
+                        "filename": filename
+                    })
+                except json.JSONDecodeError:
+                    print(f"Error decoding JSON from file: {filepath}")
+                except Exception as e:
+                    print(f"Error processing file {filepath}: {e}")
     
     return pd.DataFrame(data)
+
 
 def main():
     # The script is in llm_agent_results/analysis/, so results_dir is ../
