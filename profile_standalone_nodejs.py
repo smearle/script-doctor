@@ -79,12 +79,11 @@ def main(cfg: ProfileStandalone):
         games_to_test = [cfg.game]
     results = {get_algo_name(algo): {} for algo in algos}
     if os.path.isfile(STANDALONE_NODEJS_RESULTS_PATH):
-        if os.path.isfile(STANDALONE_NODEJS_RESULTS_PATH):
-            shutil.copyfile(STANDALONE_NODEJS_RESULTS_PATH, STANDALONE_NODEJS_RESULTS_PATH[:-5] + '_bkp.json')
-            with open(STANDALONE_NODEJS_RESULTS_PATH, 'r') as f:
-                results = json.load(f)
-        else:
-            results = {}
+        shutil.copyfile(STANDALONE_NODEJS_RESULTS_PATH, STANDALONE_NODEJS_RESULTS_PATH[:-5] + '_bkp.json')
+        with open(STANDALONE_NODEJS_RESULTS_PATH, 'r') as f:
+            results = json.load(f)
+    else:
+        results = {}
 
     for game in games_to_test:
 
@@ -113,10 +112,10 @@ def main(cfg: ProfileStandalone):
                 level_js_sol_path = os.path.join(game_js_sols_dir, f'level-{level_i}.json')
                 print(f'Level: {level_i}')
                 if cfg.gen_solutions_for_validation and not cfg.overwrite and os.path.isfile(level_js_sol_path):
-                    print(f'Already solved {game} level (for validation) {level_i} with {run_name}, skipping.')
+                    print(f'Already solved (for validation) {game} level {level_i} with {run_name}, skipping.')
                     continue
                 if not cfg.gen_solutions_for_validation and not cfg.overwrite and str(level_i) in results[run_name][game]:
-                    print(f'Already solved {game} level (for profiling) {level_i} with {run_name}, skipping.')
+                    print(f'Already solved (for profiling) {game} level {level_i} with {run_name}, skipping.')
                     continue
                 engine.compile(game_text, level_i)
                 if algo == rand_rollout_from_python:

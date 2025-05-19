@@ -30,6 +30,7 @@ class PSConfig:
 @dataclass
 class JaxValidationConfig(PSConfig):
     all_games: bool = True
+    slurm: bool = False
     
 @dataclass
 class BFSConfig(PSConfig):

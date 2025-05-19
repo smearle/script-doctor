@@ -15,6 +15,7 @@ import jax.numpy as jnp
 from lark import Lark
 import numpy as np
 from skimage.transform import resize
+import submitit
 
 from conf.config import JaxValidationConfig, RLConfig
 from env import PSEnv
@@ -38,6 +39,22 @@ games_to_skip = set({
 })
 
 @hydra.main(version_base="1.3", config_path='./conf', config_name='jax_validation_config')
+def main_launch(cfg: JaxValidationConfig):
+    if cfg.slurm:
+        executor = submitit.AutoExecutor(folder="submitit_logs")
+        executor.update_parameters(
+            slurm_job_name=f"validate_sols",
+            mem_gb=30,
+            tasks_per_node=1,
+            cpus_per_task=1,
+            timeout_min=1440,
+            slurm_gres='gpu:1',
+            slurm_account='pr_174_tandon_advanced', 
+        )
+        executor.submit(main, cfg)
+    else:
+        main(cfg)
+
 def main(cfg: JaxValidationConfig):
     # Initialize the Lark parser with the PuzzleScript grammar
     with open(PS_LARK_GRAMMAR_PATH, "r", encoding='utf-8') as file:
@@ -312,4 +329,4 @@ def main(cfg: JaxValidationConfig):
 
 
 if __name__ == '__main__':
-    main()
+    main_launch()

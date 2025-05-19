@@ -588,15 +588,14 @@ def main(cfg: PreprocessConfig):
     os.makedirs(SIMPLIFIED_GAMES_DIR, exist_ok=True)
     scrape_log_dir = 'scrape_logs'
     os.makedirs(scrape_log_dir, exist_ok=True)
+    games_n_rules_sorted = []
+    games_to_n_rules = {}
     if not cfg.overwrite:
         if os.path.exists(GAMES_N_RULES_SORTED_PATH):
             with open(GAMES_N_RULES_SORTED_PATH, 'r') as f:
                 games_n_rules_sorted = json.load(f)
             games_to_n_rules = {game: (n_rules, has_randomness) for game, n_rules, has_randomness in games_n_rules_sorted}
             print(f"Loaded {len(games_n_rules_sorted)} games from {GAMES_N_RULES_SORTED_PATH}")
-        else:
-            games_n_rules_sorted = []
-            games_to_n_rules = {}
         if os.path.exists(parse_results_path):
             with open(parse_results_path, 'r') as f:
                 parse_results = json.load(f)
