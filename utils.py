@@ -134,7 +134,8 @@ def llm_text_query(system_prompt, prompt, model, api_key=None, base_url=None, mo
         import requests
         import json
 
-        if model == "deepseek":
+        if model == "deepseek" or model == "deepseek-r1":
+            model_name ='deepseek-chat' if model =="deepseek" else 'deepseek-reasoner'
             print(f'Querying DeepSeek API using model {model}...')
             url = "https://api.deepseek.com/chat/completions"
             api_key = os.environ.get("DEEPSEEK_API_KEY")
@@ -145,7 +146,7 @@ def llm_text_query(system_prompt, prompt, model, api_key=None, base_url=None, mo
                 "Authorization": f"Bearer {api_key}",
             }
             payload = {
-                "model": "deepseek-chat", # Or the specific deepseek model name you intend to use
+                "model": model_name, # Or the specific deepseek model name you intend to use
                 "messages": messages,
             }
         elif model == "qwen":
