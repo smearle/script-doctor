@@ -31,6 +31,7 @@ class PSConfig:
 class JaxValidationConfig(PSConfig):
     all_games: bool = True
     slurm: bool = False
+    n_games_per_job: int = 100
     
 @dataclass
 class BFSConfig(PSConfig):
@@ -64,6 +65,7 @@ class ProfileStandalone(PSConfig):
     timeout: int = 60
     gen_solutions_for_validation: bool = False
     slurm: bool = False
+    n_games_per_job: int = 100
 
 
 @dataclass

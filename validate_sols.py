@@ -6,6 +6,7 @@ import pickle
 import random
 import shutil
 import traceback
+from typing import List, Optional
 
 from einops import rearrange
 import hydra
@@ -40,6 +41,9 @@ games_to_skip = set({
 
 @hydra.main(version_base="1.3", config_path='./conf', config_name='jax_validation_config')
 def main_launch(cfg: JaxValidationConfig):
+    games = get_list_of_games_for_testing(all_games=cfg.all_games)
+    # Get sub-lists of games to distribute across nodes.
+    games = [games[i:i + cfg.n_games_per_job] for i in range(0, len(games), cfg.n_games_per_job)]
     if cfg.slurm:
         executor = submitit.AutoExecutor(folder=os.path.join("submitit_logs", "validate_sols"))
         executor.update_parameters(
@@ -51,16 +55,21 @@ def main_launch(cfg: JaxValidationConfig):
             slurm_gres='gpu:1',
             slurm_account='pr_174_tandon_advanced', 
         )
-        executor.submit(main, cfg)
+        executor.map_array(main, [cfg] * len(games), games)
     else:
         main(cfg)
 
-def main(cfg: JaxValidationConfig):
+def main(cfg: JaxValidationConfig, games: Optional[List[str]] = None):
     # Initialize the Lark parser with the PuzzleScript grammar
     with open(PS_LARK_GRAMMAR_PATH, "r", encoding='utf-8') as file:
         puzzlescript_grammar = file.read()
     parser = Lark(puzzlescript_grammar, start="ps_game", maybe_placeholders=False)
-    games = get_list_of_games_for_testing(all_games=cfg.all_games)
+    if games is not None:
+        games = games
+    elif cfg.game is None:
+        games = get_list_of_games_for_testing(all_games=cfg.all_games)
+    else:
+        games = [cfg.game]
     results = {
         'stats': {},
         'compile_error': [],

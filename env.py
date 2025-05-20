@@ -1495,7 +1495,7 @@ class PSEnv:
 
         def is_meta_subobj_forceless(obj_idx, m_cell):
             """ `obj_idx` is dynamic."""
-            return jnp.sum(jax.lax.dynamic_slice(m_cell, (self.n_objs + (obj_idx * N_FORCES),), (4,))) == 0
+            return jnp.sum(jax.lax.dynamic_slice(m_cell, (self.n_objs + (obj_idx * N_FORCES),), (N_FORCES,))) == 0
 
         def is_obj_forceless(obj_idx, m_cell):
             """ `obj_idx` is static."""
@@ -1983,16 +1983,20 @@ class PSEnv:
             remove_colliding_objs = remove_colliding_objs
 
         # @partial(jax.jit, static_argnums=(3))
-        def project_obj(rng, m_cell, cell_i, cell_detect_out: CellFnReturn, kernel_detect_out: KernelFnReturn,
+        def project_obj(rng, m_cell, obj_pos: int, cell_i: int, cell_detect_out: CellFnReturn, kernel_detect_out: KernelFnReturn,
                         pattern_detect_out: PatternFnReturn, obj, random=False):
             """
             Project an object into a cell in the output pattern.
                 m_cell: an n_channels-size vector of all object and per-object force activations and player effect at the
                     current cell
+                obj_pos: the position of the object in the cell
                 cell_i: the index of the cell relative to its position in the kernel
                 cell_detect_out: the output of the corrsponding cell detection function
             """
-            detected_obj_idx = cell_detect_out.detected_obj_idxs[cell_i]
+            if cell_detect_out.detected_obj_idxs is None:
+                detected_obj_idx = -1
+            else:
+                detected_obj_idx = cell_detect_out.detected_obj_idxs[obj_pos]
             detected_meta_objs = cell_detect_out.detected_meta_objs
             kernel_meta_objs = kernel_detect_out.detected_meta_objs
             pattern_meta_objs = pattern_detect_out.detected_meta_objs
@@ -2004,7 +2008,10 @@ class PSEnv:
                 obj_idx = jax.random.choice(rng, obj_idxs, shape=(1,), replace=False)[0]
                 rng, _ = jax.random.split(rng)
             else:
-                obj_idx = disambiguate_meta(obj, detected_meta_objs, kernel_meta_objs, pattern_meta_objs, self.objs_to_idxs)
+                if obj in self.objs_to_idxs:
+                    obj_idx = self.objs_to_idxs[obj]
+                else:
+                    obj_idx = disambiguate_meta(obj, detected_meta_objs, kernel_meta_objs, pattern_meta_objs, self.objs_to_idxs)
             if DEBUG:
                 jax.debug.print('        projecting obj {obj}, disambiguated index: {obj_idx}', obj=obj, obj_idx=obj_idx)
             if not self.jit:
@@ -2043,40 +2050,40 @@ class PSEnv:
             return rng, m_cell
 
         # @partial(jax.jit, static_argnums=(3))
-        def project_no_obj(rng, m_cell, cell_i, cell_detect_out: CellFnReturn, kernel_detect_out: KernelFnReturn,
-                        pattern_detect_out: PatternFnReturn, obj):
-            meta_objs = cell_detect_out.detected_meta_objs
-            kernel_meta_objs = kernel_detect_out.detected_meta_objs
-            pattern_meta_objs = pattern_detect_out.detected_meta_objs
-            obj_idx = disambiguate_meta(obj, meta_objs, kernel_meta_objs, pattern_meta_objs, self.objs_to_idxs)
+        def project_no_obj(rng, m_cell, obj_pos, cell_i, cell_detect_out: CellFnReturn,
+                           kernel_detect_out: KernelFnReturn,
+                        pattern_detect_out: PatternFnReturn, obj: str):
+            obj_idx = self.objs_to_idxs[obj]
             # Remove the object
             m_cell = m_cell.at[obj_idx].set(False)
             # Remove any existing forces from the object
-            # jax.lax.dynamic_update_slice(
-            #     m_cell, jnp.zeros(N_FORCES, dtype=bool), (self.n_objs + obj_idx * N_FORCES,)
-            # )
             force_mask = self.obj_force_masks[obj_idx]
             m_cell = m_cell.at[force_mask].set(False)
             return rng, m_cell
 
         # @partial(jax.jit, static_argnums=(3))
-        def project_no_meta(rng, m_cell: chex.Array, cell_i, cell_detect_out, kernel_detect_out, pattern_detect_out, obj: int):
-            sub_objs = expand_meta_objs([obj], self.meta_objs, self.char_to_obj)
-            obj_idxs = np.array([self.objs_to_idxs[so] for so in sub_objs])
-            # TODO: vmap this
-            for obj_idx in obj_idxs:
-                m_cell = m_cell.at[obj_idx].set(False)
-                # Remove any existing forces from the object
-                # jax.lax.dynamic_update_slice(
-                #     m_cell, jnp.zeros(N_FORCES, dtype=bool), (self.n_objs + obj_idx * N_FORCES,)
-                # )
-                force_mask = self.obj_force_masks[obj_idx]
-                m_cell = m_cell.at[force_mask].set(0)
+        def project_no_meta(rng, m_cell: chex.Array, obj_pos, cell_i, cell_detect_out, kernel_detect_out,
+                            pattern_detect_out, obj: str):
+            meta_objs = cell_detect_out.detected_meta_objs
+            kernel_meta_objs = kernel_detect_out.detected_meta_objs
+            pattern_meta_objs = pattern_detect_out.detected_meta_objs
+            obj_idx = disambiguate_meta(obj, meta_objs, kernel_meta_objs, pattern_meta_objs, self.objs_to_idxs)
+            # sub_objs = expand_meta_objs([obj], self.meta_objs, self.char_to_obj)
+            # obj_idxs = np.array([self.objs_to_idxs[so] for so in sub_objs])
+            # TODO: vmap this (?) Actually, no, this obj_idx will always be a single value
+            # for obj_idx in obj_idxs:
+            m_cell = m_cell.at[obj_idx].set(False)
+            # Remove any existing forces from the object
+            # Here we need to use a dynamic update slice, since we don't know the obj_idx at compile time
+            m_cell = jax.lax.dynamic_update_slice(
+                m_cell, jnp.zeros(N_FORCES, dtype=bool), (self.n_objs + obj_idx * N_FORCES,)
+            )
             return rng, m_cell
 
         # @partial(jax.jit, static_argnums=(3, 4))
-        def project_force_obj(rng, m_cell, cell_i, obj_idx: int, force_idx: int, cell_detect_out: CellFnReturn,
-                              kernel_detect_out: KernelFnReturn, pattern_detect_out: PatternFnReturn):
+        def project_force_obj(
+                rng, m_cell, obj_pos: int, cell_i: int, obj_idx: int, force_idx: int, cell_detect_out: CellFnReturn,
+                kernel_detect_out: KernelFnReturn, pattern_detect_out: PatternFnReturn):
             # Add the object
             m_cell = m_cell.at[obj_idx].set(True)
             if force_idx is None:
@@ -2108,8 +2115,9 @@ class PSEnv:
             return rng, m_cell
 
         # @partial(jax.jit, static_argnums=(3, 4))
-        def project_force_meta(rng, m_cell, cell_i, obj: str, cell_detect_out: CellFnReturn, kernel_detect_out: KernelFnReturn,
-                            pattern_detect_out: PatternFnReturn, force_idx):
+        def project_force_meta(
+                rng, m_cell, obj_pos: int, cell_i: int, obj: str, cell_detect_out: CellFnReturn,
+                kernel_detect_out: KernelFnReturn, pattern_detect_out: PatternFnReturn, force_idx):
             meta_objs = cell_detect_out.detected_meta_objs
             kernel_meta_objs = kernel_detect_out.detected_meta_objs
             pattern_meta_objs = pattern_detect_out.detected_meta_objs
@@ -2157,8 +2165,9 @@ class PSEnv:
 
         # @partial(jax.jit, static_argnums=(3))
         # TODO: add kernel detect out
-        def project_moving_obj(rng, m_cell, cell_i, cell_detect_out: CellFnReturn, kernel_detect_out: KernelFnReturn,
-                            pattern_detect_out: PatternFnReturn, obj):
+        def project_moving_obj(
+                rng, m_cell, obj_pos: int, cell_i: int, cell_detect_out: CellFnReturn,
+                kernel_detect_out: KernelFnReturn, pattern_detect_out: PatternFnReturn, obj):
             meta_objs = cell_detect_out.detected_meta_objs
             kernel_meta_objs = kernel_detect_out.detected_meta_objs
             pattern_meta_objs = pattern_detect_out.detected_meta_objs
@@ -2193,8 +2202,8 @@ class PSEnv:
             m_cell = remove_colliding_objs(m_cell, obj_idx, self.coll_mat)
             return rng, m_cell
 
-        def project_stationary_obj(rng, m_cell, cell_i, cell_detect_out: CellFnReturn, kernel_detect_out: KernelFnReturn,
-                                pattern_detect_out: PatternFnReturn, obj):
+        def project_stationary_obj(rng, m_cell: chex.Array, obj_pos: int, cell_i: int, cell_detect_out: CellFnReturn,
+                                   kernel_detect_out: KernelFnReturn, pattern_detect_out: PatternFnReturn, obj):
             meta_objs = cell_detect_out.detected_meta_objs
             kernel_meta_objs = kernel_detect_out.detected_meta_objs
             pattern_meta_objs = pattern_detect_out.detected_meta_objs
@@ -2286,8 +2295,8 @@ class PSEnv:
             def project_cell(rng, m_cell, cell_i, cell_detect_out, kernel_detect_out, pattern_detect_out):
                 m_cell = m_cell & ~cell_detect_out.detected
                 assert len(m_cell.shape) == 1, f'Invalid cell shape {m_cell.shape}'
-                for proj_fn in fns:
-                    rng, m_cell = proj_fn(rng=rng, cell_i=cell_i, m_cell=m_cell, cell_detect_out=cell_detect_out,
+                for obj_pos, proj_fn in enumerate(fns):
+                    rng, m_cell = proj_fn(rng=rng, obj_pos=obj_pos, cell_i=cell_i, m_cell=m_cell, cell_detect_out=cell_detect_out,
                                         kernel_detect_out=kernel_detect_out, pattern_detect_out=pattern_detect_out)
                 # removed_something = jnp.any(cell_detect_out.detected)
                 # jax.lax.cond(
@@ -2342,6 +2351,7 @@ class PSEnv:
                     subkernel_detection_fns=subkernel_detection_fns,
                     lp_is_horizontal=lp_is_horizontal,
                     lp_is_vertical=lp_is_vertical,
+                    rule_name=rule_name,
                 )
                 project_kernel = partial(
                     self.project_line_kernel,
@@ -2446,7 +2456,7 @@ class PSEnv:
                     lp_is_horizontal=lp_is_horizontal,
                     lp_is_vertical=lp_is_vertical,
                     lp_is_single=lp_is_single,
-                    lp=lp,
+                    lp=lp, rule_name=rule_name,
                 )
 
                 project_kernel = partial(
@@ -2457,7 +2467,7 @@ class PSEnv:
                     lp_is_vertical=lp_is_vertical,
                     lp_is_single=lp_is_single,
                     has_right_pattern=has_right_pattern,
-                    rule=rule,
+                    rule_name=rule_name,
                 )
                 return detect_kernel, project_kernel
 
@@ -2579,7 +2589,7 @@ class PSEnv:
                     if DEBUG:
                         jax.debug.print('applying the {command} command: {rule_applied}', command=r_command, rule_applied=rule_applied)
                 elif r_command == 'win':
-                    win = True
+                    win = pattern_detected
 
                 rule_state = RuleState(
                     lvl=next_lvl,
@@ -2799,7 +2809,8 @@ class PSEnv:
             tick_fn = jax.jit(tick_fn)
         return tick_fn
 
-    def detect_line_kernel(self, lvl: chex.Array, subkernel_detection_fns: List[Callable], lp_is_vertical: bool, lp_is_horizontal: bool):
+    def detect_line_kernel(self, lvl: chex.Array, subkernel_detection_fns: List[Callable], lp_is_vertical: bool,
+                           lp_is_horizontal: bool, rule_name: str):
         """
             subkernel_detection_fns: List of functions that detect the subkernels in the line kernel. These need to be detected in sequence, along some line.
         """
@@ -2880,7 +2891,8 @@ class PSEnv:
             )
         return rng, lvl
 
-    def detect_kernel(self, lvl, cell_detection_fns, lp_is_vertical, lp_is_horizontal, lp_is_single, in_patch_shape, lp):
+    def detect_kernel(self, lvl, cell_detection_fns, lp_is_vertical, lp_is_horizontal, lp_is_single, in_patch_shape, lp,
+                      rule_name: str):
         n_chan = lvl.shape[1]
         # @jax.jit
         def detect_cells(in_patch: chex.Array):
@@ -2929,7 +2941,7 @@ class PSEnv:
                 # True,
                 kernel_detected,
                 lambda: jax.debug.print('      Rule {rule_name} left kernel {lp} detected: {kernel_detected}',
-                                        rule_name=self.rule_name, kernel_detected=kernel_detected, lp=lp),
+                                        rule_name=rule_name, kernel_detected=kernel_detected, lp=lp),
                 lambda: None,
             )
         cancelled = False
@@ -2962,7 +2974,7 @@ class PSEnv:
                     pattern_detect_out: List[PatternFnReturn],
                     cell_projection_fns: List[Callable],
                     lp_is_vertical: bool, lp_is_horizontal: bool, lp_is_single: bool,
-                    has_right_pattern: bool, in_patch_shape: Tuple[int, int], rule: str,
+                    has_right_pattern: bool, in_patch_shape: Tuple[int, int], rule_name: str,
                     ):
         n_tiles = np.prod(lvl.shape[-2:])
         # Ensure we always have some invalid coordinates so that the loop will break even when all tiles are active
@@ -2995,7 +3007,7 @@ class PSEnv:
 
             # Either the rule has no right pattern, or it should detect as many cells as there are cell projection functions
             if not (~has_right_pattern or (len(cell_detect_outs) == len(out_cell_idxs) == len(cell_projection_fns))):
-                raise RuntimeError(f"Warning: rule {rule} with has_right_pattern {has_right_pattern} results in len(cell_detect_outs) {len(cell_detect_outs)} != len(out_cell_idxs) {len(out_cell_idxs)} != len(cell_projection_fns) {len(cell_projection_fns)}")
+                raise RuntimeError(f"Warning: rule {rule_name} with has_right_pattern {has_right_pattern} results in len(cell_detect_outs) {len(cell_detect_outs)} != len(out_cell_idxs) {len(out_cell_idxs)} != len(cell_projection_fns) {len(cell_projection_fns)}")
             init_lvl = lvl
 
             #TODO: vmap this. But then we risk overlapping? But we do here, too.

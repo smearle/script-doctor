@@ -7,6 +7,7 @@ import re
 import shutil
 from timeit import default_timer as timer
 import traceback
+from typing import List, Optional
 
 import cpuinfo
 import hydra
@@ -59,6 +60,10 @@ def get_standalone_run_params_from_name(run_name: str):
 @hydra.main(version_base="1.3", config_path='./', config_name='profile_standalone_config')
 def main_launch(cfg: ProfileStandalone):
     if cfg.slurm:
+        games = get_list_of_games_for_testing(
+            all_games=cfg.all_games, include_random=cfg.include_randomness, random_order=cfg.random_order)
+        # Get sub-lists of batches of games to distribute across nodes.
+        games = [games[i:i + cfg.n_games_per_job] for i in range(0, len(games), cfg.n_games_per_job)]
         executor = submitit.AutoExecutor(folder=os.path.join("submitit_logs", "profile_nodejs"))
         executor.update_parameters(
             slurm_job_name=f"profile_nodejs",
@@ -68,13 +73,12 @@ def main_launch(cfg: ProfileStandalone):
             timeout_min=1440,
             slurm_account='pr_174_tandon_advanced', 
         )
-        executor.submit(main, cfg)
-        # executor.map_array(main, [cfg])
+        executor.map_array(main, [cfg] * len(games), games)
     else:
         main(cfg)
 
 
-def main(cfg: ProfileStandalone):
+def main(cfg: ProfileStandalone, games: Optional[List[str]] = None):
     engine = require('./standalone/puzzlescript/engine.js')
     solver = require('./standalone/puzzlescript/solver.js')
     timeout_ms = cfg.timeout * 1_000 if cfg.timeout > 0 else -1
@@ -85,12 +89,13 @@ def main(cfg: ProfileStandalone):
         # algos = [solver.solveBFS, solver.solveAStar, solver.solveMCTS]:
     elif cfg.algo == 'random':
         algos = [solver.randomRollout, rand_rollout_from_python]
-        
-
     cpu_name = cpuinfo.get_cpu_info()['brand_raw']
-    if cfg.game is None:
-        games_to_test = get_list_of_games_for_testing(all_games=cfg.all_games, include_random=cfg.include_randomness,
-                                                      random_order=cfg.random_order)
+
+    if games is not None:
+        games_to_test = games
+    elif cfg.game is None:
+        games_to_test = get_list_of_games_for_testing(
+            all_games=cfg.all_games, include_random=cfg.include_randomness, random_order=cfg.random_order)
     else:
         games_to_test = [cfg.game]
     results = {get_algo_name(algo): {} for algo in algos}
