@@ -100,7 +100,7 @@ THEN: "->"
 cell_border: "|"
 
 OBJECT_MODIFIER: DIRECTIONAL | "random"i | "randomDir"i | "horizontal"i | "vertical"i | "left"i | "right"i | "up"i
-       | "down"i | "perpendicular"i | "horizontal"i | "vertical"i | "no"i
+       | "down"i | "perpendicular"i | "parallel"i | "orthoganal"i| "horizontal"i | "vertical"i | "no"i
 
 DIRECTIONAL: /[\^v<>]/
 

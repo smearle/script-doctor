@@ -31,7 +31,8 @@ class PSConfig:
 class JaxValidationConfig(PSConfig):
     all_games: bool = True
     slurm: bool = False
-    n_games_per_job: int = 100
+    n_games_per_job: int = 50
+    game: Optional[str] = None
     
 @dataclass
 class BFSConfig(PSConfig):

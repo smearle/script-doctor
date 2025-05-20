@@ -13,7 +13,8 @@ from typing import Optional
 
 import hydra
 import lark
-from lark.reconstruct import Reconstructor
+from lark import Lark, Transformer, Tree, Token, Visitor
+import numpy as np
 
 from conf.config import PreprocessConfig
 from env import PSEnv
@@ -33,9 +34,6 @@ SIMPLIFIED_GAMES_DIR = os.path.join(DATA_DIR, 'simplified_games')
 TREES_DIR = os.path.join(DATA_DIR, 'game_trees')
 pretty_trees_dir = os.path.join(DATA_DIR, 'pretty_trees')
 # parsed_games_filename = os.path.join(DATA_DIR, "parsed_games.txt")
-
-from lark import Lark, Transformer, Tree, Token, Visitor
-import numpy as np
 
 
 @contextlib.contextmanager
@@ -351,7 +349,7 @@ def preprocess_ps(txt):
     txt = re.sub(r'^=+\n', '', txt, flags=re.MULTILINE)
 
     # Replace any pairs of commas, separated by whitespace, with a single comma
-    txt = re.sub(r',\s*,', ',', txt)
+    # txt = re.sub(r',\s*,', ',', txt)
 
     txt = txt.replace('\u00A0', ' ')
     # If the file does not end with 2 newlines, fix this
@@ -409,6 +407,29 @@ def count_rules(tree: PSGameTree):
     for rule_block in tree.rules:
         n_rules += len(rule_block[0].rules)
     return n_rules
+
+def get_n_levels_per_game():
+    if os.path.exists(GAMES_N_LEVELS_PATH):
+        with open(GAMES_N_LEVELS_PATH, 'r') as f:
+            n_levels_per_game = json.load(f)
+        return n_levels_per_game
+
+    parser = init_ps_lark_parser()
+    games = get_list_of_games_for_testing(all_games=True)
+    n_levels_per_game = {}
+    for game in games:
+        min_tree_path = os.path.join(TREES_DIR, game + '.pkl')
+        if os.path.exists(min_tree_path):
+            with open(min_tree_path, 'rb') as f:
+                tree = pickle.load(f)
+            tree = GenPSTree().transform(tree)
+            env = PSEnv(tree)
+            n_levels = len(env.levels)
+            n_levels_per_game[game] = n_levels
+    with open(GAMES_N_LEVELS_PATH, 'w') as f:
+        json.dump(n_levels_per_game, f, indent=4)
+    return n_levels_per_game
+
 
 class PSErrors(IntEnum):
     SUCCESS = 0
@@ -659,6 +680,8 @@ def main(cfg: PreprocessConfig):
         json.dump(games_n_rules_sorted, f, indent=4)
     with open(GAMES_TO_N_RULES_PATH, 'w', encoding='utf-8') as f:
         json.dump(games_to_n_rules, f, indent=4) 
+
+    get_n_levels_per_game()
 
     print(f"Attempted to parse and initialize {len(game_files)} games.")
     print(f"Initialized {len(parse_results['success'])} games successfully as jax envs")

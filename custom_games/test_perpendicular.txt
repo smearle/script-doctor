@@ -77,6 +77,7 @@ RULES
 
 ([ Perpendicular Player | Crate ] -> [ Perpendicular Player | Perpendicular Crate ])
 [ Parallel Player | Crate ] -> [ Parallel Player | Parallel Crate ]
+[ Perpendicular Player | Crate ] -> [ Parallel Player | Parallel Crate ]
 
 ==============
 WINCONDITIONS

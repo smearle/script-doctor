@@ -59,9 +59,6 @@ def disambiguate_meta(obj, cell_meta_objs, kernel_meta_objs, pattern_meta_objs, 
     # return obj_idx
     
 
-def level_to_multihot(level):
-    pass
-
 def assign_vecs_to_objs(collision_layers, atomic_obj_names):
     n_lyrs = len(collision_layers)
     n_objs = len(atomic_obj_names)
@@ -363,16 +360,16 @@ def gen_perp_par_subrules(l_kerns, r_kerns):
                 for object_with_modifier in c:
                     object_with_modifier_tpl = object_with_modifier.split(' ')
                     if len(object_with_modifier_tpl) == 2:
-                        modifier, object = object_with_modifier_tpl
+                        modifier, obj = object_with_modifier_tpl
                         modifier = modifier.lower()
-                        object = object.lower()
+                        obj = obj.lower()
                         if modifier in ['perpendicular', 'orthogonal']:
-                            c_a.append(f'^ {object}')
-                            c_b.append(f'v {object}')
+                            c_a.append(f'^ {obj}')
+                            c_b.append(f'v {obj}')
                             continue
-                        elif modifier.lower() in ['parallel']:
-                            c_a.append(f'> {object}')
-                            c_b.append(f'< {object}')
+                        elif modifier in ['parallel']:
+                            c_a.append(f'> {obj}')
+                            c_b.append(f'< {obj}')
                             continue
                     c_a.append(object_with_modifier)
                     c_b.append(object_with_modifier)
@@ -1024,13 +1021,14 @@ def apply_movement(rng, lvl, coll_mat, n_objs, obj_force_masks, jit=True):
         is_force_present = x != -1
         # Get the obj idx on which the force is applied.
         obj_idx = c // (N_FORCES - 1)
+        obj_exists = lvl[0, obj_idx, x, y]
         # Determine where the object would move and whether such a move would be legal.
         forces_to_deltas = jnp.array([[0, -1], [1, 0], [0, 1], [-1, 0]])
         delta = forces_to_deltas[c % (N_FORCES - 1)]
         x_1, y_1 = x + delta[0], y + delta[1]
         would_collide = jnp.any(lvl[0, :n_objs, x_1, y_1] * coll_mat[obj_idx])
         out_of_bounds = (x_1 < 0) | (x_1 >= lvl.shape[2]) | (y_1 < 0) | (y_1 >= lvl.shape[3])
-        can_move = is_force_present & ~would_collide & ~out_of_bounds
+        can_move = obj_exists & is_force_present & ~would_collide & ~out_of_bounds
         # Now, in the new level, move the object in the direction of the force.
         new_lvl = lvl.at[0, obj_idx, x, y].set(False)
         new_lvl = new_lvl.at[0, obj_idx,  x_1, y_1].set(True)
@@ -1257,16 +1255,12 @@ class PSEnv:
                 if DEBUG:
                     print(so)
                 vec += self.obj_vecs[self.objs_to_idxs[so]]
-            # assert jo not in self.chars_to_idxs
-            # Assign an unused ASCII character
-            if not ascii_chars:
-                raise ValueError("Ran out of ASCII characters for joint objects.")
-            assigned_char = ascii_chars.pop()
             joint_idx = self.obj_vecs.shape[0]  # index before append
-            self.chars_to_idxs[assigned_char] = joint_idx
-            obj_to_char[jo] = assigned_char
-            self.chars_to_idxs[jo] = joint_idx  # For compatibility
             self.obj_vecs = np.concatenate((self.obj_vecs, vec[None]), axis=0)
+            self.objs_to_idxs[jo] = joint_idx
+            if jo in obj_to_char:
+                jo_char = obj_to_char[jo]
+                self.chars_to_idxs[jo_char] = joint_idx
 
         if self.jit:
             self.step = jax.jit(self.step)
@@ -1516,8 +1510,9 @@ class PSEnv:
 
             def mark_obj_as_detected():
                 new_detected = detected.at[obj_idx].set(True)
-                obj_force_mask = self.obj_force_masks[obj_idx]
-                new_detected = jnp.where(obj_force_mask, m_cell, new_detected)
+                # Actually, we don't mark force as detected, since we need to transfer forces if object transforms.
+                # obj_force_mask = self.obj_force_masks[obj_idx]
+                # new_detected = jnp.where(obj_force_mask, m_cell, new_detected)
                 return new_detected
 
             detected = jax.lax.cond(
@@ -1579,16 +1574,16 @@ class PSEnv:
 
             def mark_obj_as_detected():
                 new_detected = detected.at[obj_idx].set(True)
-                detected_forces = jax.lax.dynamic_slice(
-                    m_cell,
-                    (self.n_objs + (obj_idx * N_FORCES),),
-                    (N_FORCES,)
-                )
-                new_detected = jax.lax.dynamic_update_slice(
-                    new_detected,
-                    detected_forces,
-                    (self.n_objs + (obj_idx * N_FORCES),)
-                )
+                # detected_forces = jax.lax.dynamic_slice(
+                #     m_cell,
+                #     (self.n_objs + (obj_idx * N_FORCES),),
+                #     (N_FORCES,)
+                # )
+                # new_detected = jax.lax.dynamic_update_slice(
+                #     new_detected,
+                #     detected_forces,
+                #     (self.n_objs + (obj_idx * N_FORCES),)
+                # )
                 return new_detected
 
             active = obj_idx != -1
@@ -2319,6 +2314,8 @@ class PSEnv:
             
             # @partial(jax.jit, static_argnums=())
             def project_cell(rng, m_cell, cell_i, cell_detect_out, kernel_detect_out, pattern_detect_out):
+                # This is hackish. Instead, we should probably expand rules out to include `no objA` if objA is present
+                # on the left side but not the right.
                 m_cell = m_cell & ~cell_detect_out.detected
                 assert len(m_cell.shape) == 1, f'Invalid cell shape {m_cell.shape}'
                 for obj_pos, proj_fn in enumerate(fns):
@@ -2378,6 +2375,7 @@ class PSEnv:
                     lp_is_horizontal=lp_is_horizontal,
                     lp_is_vertical=lp_is_vertical,
                     rule_name=rule_name,
+                    rot=rot,
                 )
                 project_kernel = partial(
                     self.project_line_kernel,
@@ -2836,7 +2834,7 @@ class PSEnv:
         return tick_fn
 
     def detect_line_kernel(self, lvl: chex.Array, subkernel_detection_fns: List[Callable], lp_is_vertical: bool,
-                           lp_is_horizontal: bool, rule_name: str):
+                           lp_is_horizontal: bool, rule_name: str, rot: int):
         """
             subkernel_detection_fns: List of functions that detect the subkernels in the line kernel. These need to be detected in sequence, along some line.
         """
@@ -2854,15 +2852,20 @@ class PSEnv:
         if lp_is_vertical:
             dim = 2
             one_hot_masks = gen_one_hot_masks(*subkernel_activations[:, :, 0].shape)
+            if rot == 2:
+                # Flip so that "closer" subkernel line patterns take precedence
+                one_hot_masks = jnp.flip(one_hot_masks, 0)
 
         elif lp_is_horizontal:
             dim = 1
             one_hot_masks = gen_one_hot_masks(*subkernel_activations[:, 0].shape)
+            if rot == 3:
+                # Flip so that "closer" subkernel line patterns take precedence
+                one_hot_masks = jnp.flip(one_hot_masks, 0)
 
         new_subkernel_activations = jnp.zeros_like(subkernel_activations)
 
         if not self.jit:
-        # if True:
             for i in range(subkernel_activations.shape[dim]):
                 if dim == 1:
                     new_subkernel_activations = new_subkernel_activations.at[:, i].set(mask_to_valid_sequences(
@@ -3177,17 +3180,18 @@ def mask_to_valid_sequences(binary_matrix, one_hot_masks=None, jit=True):
                     lambda: init_valid_mask,
                 )
     else:
-        def body_fun(valid_mask, mask):
-            valid_mask = jax.lax.cond(
-                jnp.all((mask & binary_matrix) == mask),
-                lambda: valid_mask | mask,
-                lambda: valid_mask,
+        def body_fun(carry, mask):
+            valid_mask, remaining_activations = carry
+            valid_mask, remaining_activations = jax.lax.cond(
+                jnp.all((mask & remaining_activations) == mask),
+                lambda: (valid_mask | mask, remaining_activations ^ mask),
+                lambda: (valid_mask, remaining_activations),
             )
-            return valid_mask, None
+            return (valid_mask, remaining_activations), None
 
-        init_valid_mask, _ = jax.lax.scan(
+        (init_valid_mask, _), _ = jax.lax.scan(
             body_fun,
-            init_valid_mask,
+            (init_valid_mask, binary_matrix),
             one_hot_masks,
         )
 
