@@ -73,7 +73,7 @@ Player, Wall, EyeBall
 RULES
 ======
 
-[ Eyeball | ... | Player ] -> [ > Eyeball | ... | Player ]
+[ Eyeball | ... | Perpendicular Player ] -> [ > Eyeball | ... | Player ]
 
 ==============
 WINCONDITIONS

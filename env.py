@@ -361,16 +361,21 @@ def gen_perp_par_subrules(l_kerns, r_kerns):
                 c_a = []
                 c_b = []
                 for object_with_modifier in c:
-                    modifier = object_with_modifier.split(' ')[0].lower()
-                    if modifier.lower() in ['perpendicular', 'orthogonal']:
-                        c_a.append('^')
-                        c_b.append('v')
-                    elif modifier.lower() in ['parallel']:
-                        c_a.append('>')
-                        c_b.append('<')
-                    else:
-                        c_a.append(object_with_modifier)
-                        c_b.append(object_with_modifier)
+                    object_with_modifier_tpl = object_with_modifier.split(' ')
+                    if len(object_with_modifier_tpl) == 2:
+                        modifier, object = object_with_modifier_tpl
+                        modifier = modifier.lower()
+                        object = object.lower()
+                        if modifier in ['perpendicular', 'orthogonal']:
+                            c_a.append(f'^ {object}')
+                            c_b.append(f'v {object}')
+                            continue
+                        elif modifier.lower() in ['parallel']:
+                            c_a.append(f'> {object}')
+                            c_b.append(f'< {object}')
+                            continue
+                    c_a.append(object_with_modifier)
+                    c_b.append(object_with_modifier)
                 l_kern_a.append(c_a)
                 l_kern_b.append(c_b)
             new_kerns_a.append(l_kern_a)
