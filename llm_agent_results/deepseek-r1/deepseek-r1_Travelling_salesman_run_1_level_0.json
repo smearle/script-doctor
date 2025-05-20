@@ -1,0 +1,72 @@
+{
+  "model": "deepseek-r1",
+  "game": "Travelling_salesman",
+  "level": 0,
+  "run": 1,
+  "win": true,
+  "action_sequence": [
+    1,
+    0,
+    1,
+    0,
+    3,
+    3,
+    2
+  ],
+  "reward_sequence": [
+    1.9900000095367432,
+    0.9900000095367432,
+    0.9900000095367432,
+    0.9900000095367432,
+    0.9900000095367432,
+    0.9900000095367432,
+    1.9900000095367432
+  ],
+  "initial_ascii": [
+    "LEGEND:",
+    "o: node",
+    "-: hlink",
+    "\u2240: nodeseen",
+    "|: vlink",
+    ".: background",
+    "\u0279: vlinkseen",
+    "\u0e81: nodeseen, player",
+    "",
+    "MAP:",
+    "o-o-\u2240",
+    "|...\u0279",
+    "o-o-\u0e81",
+    "|.|..",
+    "o-o.."
+  ],
+  "state_data": {
+    "score": 0,
+    "win": true,
+    "step": 7
+  },
+  "heuristics": [
+    -6.0,
+    -5.0,
+    -4.0,
+    -3.0,
+    -2.0,
+    -1.0,
+    0.0
+  ],
+  "final_ascii": [
+    "LEGEND:",
+    "\u2240: nodeseen",
+    "\u166a: hlinkseen",
+    "\u0e81: nodeseen, player",
+    "-: hlink",
+    "\u0279: vlinkseen",
+    ".: background",
+    "",
+    "MAP:",
+    "\u2240\u166a\u0e81-\u2240",
+    "\u0279...\u0279",
+    "\u2240-\u2240\u166a\u2240",
+    "\u0279.\u0279..",
+    "\u2240\u166a\u2240.."
+  ]
+}
