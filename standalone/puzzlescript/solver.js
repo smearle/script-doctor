@@ -538,7 +538,8 @@ function solveBFS(engine, maxIters, timeoutJS) {
     for (const move of Array(5).keys()) {
       if (i > maxIters) {
         // console.log('Exceeded 1M iterations. Exiting.');
-        return [false, sol, i, ((Date.now() - start_time) / 1000), bestScore, bestState, false, engine.getState().idDict];
+        return [false, sol, i, ((Date.now() - start_time) / 1000), bestScore, bestState, false,
+          Arra.from(engine.getState().idDict)];
       }
       engine.restoreLevel(level);
 
@@ -548,7 +549,8 @@ function solveBFS(engine, maxIters, timeoutJS) {
         changed = processInputSearch(engine, move);
       } catch (e) {
         // console.log('Error while processing input:', e);
-        return [false, sol, i, ((Date.now() - start_time) / 1000), bestScore, bestState, false, engine.getState().idDict];
+        return [false, sol, i, ((Date.now() - start_time) / 1000), bestScore, bestState, false,
+          Array.from(engine.getState().idDict)];
       }
       if (changed) {
         new_level = engine.backupLevel();
@@ -557,7 +559,8 @@ function solveBFS(engine, maxIters, timeoutJS) {
           // console.log(`Winning! Solution:, ${new_action_seq}\n Iterations: ${i}`);
           // console.log('FPS:', (i / (Date.now() - start_time) * 1000).toFixed(2));
           score = getScore(engine);
-          return [true, new_action_seq, i, ((Date.now() - start_time) / 1000), score, new_level_map, false, engine.getState().idDict];
+          return [true, new_action_seq, i, ((Date.now() - start_time) / 1000), score, new_level, false,
+            Array.from(engine.getState().idDict)];
         }
         const newHash = hashState(new_level_map);
         if (!visited.has(newHash)) {
@@ -579,7 +582,8 @@ function solveBFS(engine, maxIters, timeoutJS) {
           // Use this condition if we want maximally long sequences to validate the jax engine, for example
           if ((score < bestScore) | (score == bestScore && new_action_seq.length > sol.length)) {
             bestScore = score;
-            bestState = new_level_map;
+            // bestState = new_level_map;
+            bestState = new_level;
             sol = new_action_seq;
           }
         } 
@@ -595,9 +599,11 @@ function solveBFS(engine, maxIters, timeoutJS) {
     i++;
   }
   if(i >= maxIters) {
-    return [false, sol, i, ((Date.now() - start_time) / 1000), bestScore, bestState, false, engine.getState().idDict];
+    return [false, sol, i, ((Date.now() - start_time) / 1000), bestScore, bestState, false,
+      Array.from(engine.getState().idDict)];
   }
-  return [false, sol, i, ((Date.now() - start_time) / 1000), bestScore, bestState, false, engine.getState().idDict];
+  return [false, sol, i, ((Date.now() - start_time) / 1000), bestScore, bestState, false,
+    Array.from(engine.getState().idDict)];
 }
 
 function DoRestartSearch(engine, force) {

@@ -36,7 +36,8 @@ from globals import PRIORITY_GAMES
 from preprocess_games import GAMES_DIR, MIN_GAMES_DIR, PrintPuzzleScript, RepairPuzzleScript, StripPuzzleScript, add_empty_sounds_section, preprocess_ps, TEST_GAMES
 from prompts import *
 from sort_games_by_n_rules import GAMES_N_RULES_SORTED_PATH
-from utils import extract_ps_code, gen_fewshot_examples, get_list_of_games_for_testing, llm_text_query, num_tokens_from_string, save_prompts, truncate_str_to_token_len
+from utils import (extract_ps_code, gen_fewshot_examples, get_list_of_games_for_testing, llm_text_query,
+                   num_tokens_from_string, save_prompts, truncate_str_to_token_len, level_to_int_arr)
 
 
 @dataclass
@@ -1012,14 +1013,6 @@ def save_game_stats():
     exp_dir, game_dir, stats = data['expDir'], data['gameDir'], data['gameInd']
     return _save_game_stats(exp_dir, game_dir, stats)
 
-def level_to_int_arr(level: dict):
-    level_arr = []
-    for x in range(level['width']):
-        level_arr.append([])
-        for y in range(level['height']):
-            flat_idx = x * level['height'] + y
-            level_arr[x].append(level['dat'][str(flat_idx)])
-    return np.array(level_arr)
 
 @app.route('/log_error', methods=['POST'])
 def log_error():

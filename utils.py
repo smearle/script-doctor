@@ -387,6 +387,16 @@ def get_n_levels_per_game():
         json.dump(n_levels_per_game, f, indent=4)
     return n_levels_per_game
 
+
+def level_to_int_arr(level: dict):
+    level_arr = []
+    for x in range(level['width']):
+        level_arr.append([])
+        for y in range(level['height']):
+            flat_idx = x * level['height'] + y
+            level_arr[x].append(level['dat'][str(flat_idx)])
+    return np.array(level_arr)
+
     
 if __name__ == '__main__':
     games_n_levels = get_n_levels_per_game()

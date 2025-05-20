@@ -1,3 +1,4 @@
+import copy
 import os
 import json
 import multiprocessing as mp
@@ -12,16 +13,13 @@ import hydra
 from javascript import require
 from javascript.proxy import Proxy
 import numpy as np
+import submitit
 
 from conf.config import ProfileStandalone
 from globals import STANDALONE_NODEJS_RESULTS_PATH
 from preprocess_games import SIMPLIFIED_GAMES_DIR
-from utils import get_list_of_games_for_testing
+from utils import get_list_of_games_for_testing, level_to_int_arr
 from validate_sols import JS_SOLS_DIR
-
-
-engine = require('./standalone/puzzlescript/engine.js')
-solver = require('./standalone/puzzlescript/solver.js')
 
 
 def compile_game(engine, game, level_i):
@@ -57,10 +55,28 @@ def get_standalone_run_params_from_name(run_name: str):
     return algo_name, n_steps, device_name
 
 
-
 # @hydra.main(version_base="1.3", config_path='./', config_name='profile_standalone')
 @hydra.main(version_base="1.3", config_path='./', config_name='profile_standalone_config')
+def main_launch(cfg: ProfileStandalone):
+    if cfg.slurm:
+        executor = submitit.AutoExecutor(folder=os.path.join("submitit_logs", "profile_nodejs"))
+        executor.update_parameters(
+            slurm_job_name=f"profile_nodejs",
+            mem_gb=30,
+            tasks_per_node=1,
+            cpus_per_task=1,
+            timeout_min=1440,
+            slurm_account='pr_174_tandon_advanced', 
+        )
+        executor.submit(main, cfg)
+        # executor.map_array(main, [cfg])
+    else:
+        main(cfg)
+
+
 def main(cfg: ProfileStandalone):
+    engine = require('./standalone/puzzlescript/engine.js')
+    solver = require('./standalone/puzzlescript/solver.js')
     timeout_ms = cfg.timeout * 1_000 if cfg.timeout > 0 else -1
     print(f'Timeout: {timeout_ms} ms')
 
@@ -125,6 +141,7 @@ def main(cfg: ProfileStandalone):
                     result = algo(engine,
                                   cfg.n_steps, timeout_ms,
                                   timeout=timeout_ms*1.5 if timeout_ms > 0 else None,)
+                end_level_state = level_to_int_arr(result[5]).tolist()
                 result = {
                     'solved': result[0],
                     'actions': tuple(result[1]),
@@ -132,9 +149,9 @@ def main(cfg: ProfileStandalone):
                     'time': result[3],
                     'FPS': result[2] / (result[3] if result[3] > 0 else 1e4),
                     'score': result[4],
-                    'state': result[5],
+                    'state': end_level_state,
                     'timeout': result[6],
-                    'objs': result[7],
+                    'objs': list(result[7]),
                 }
 
                 if os.path.isfile(level_js_sol_path):
@@ -142,13 +159,16 @@ def main(cfg: ProfileStandalone):
                         level_js_sol_dict = json.load(f)
                     best_solve = level_js_sol_dict['won']
                     best_score = level_js_sol_dict['score']
+                    solution_exists = 'sol' in level_js_sol_dict or 'actions' in level_js_sol_dict
                 else:
                     best_solve = False
                     best_score = -np.inf
+                    solution_exists = False
                 
-                if result['solved'] > best_solve or result['score'] > best_score:
+                if not solution_exists or result['solved'] > best_solve or result['score'] > best_score:
                     result_dict = {
                         'won': result['solved'],
+                        'actions': result['actions'],
                         'score': result['score'],
                         'timeout': None,  # TODO
                         'objs': result['objs'],
@@ -168,4 +188,4 @@ def main(cfg: ProfileStandalone):
 
 
 if __name__ == "__main__":
-    main()
+    main_launch()

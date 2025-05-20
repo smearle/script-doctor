@@ -63,6 +63,7 @@ class ProfileStandalone(PSConfig):
     include_randomness: bool = True
     timeout: int = 60
     gen_solutions_for_validation: bool = False
+    slurm: bool = False
 
 
 @dataclass
