@@ -1513,9 +1513,16 @@ class PSEnv:
             # active = m_cell[obj_idx] == 1 & is_obj_forceless(obj_idx, m_cell)
             detected = jnp.zeros_like(m_cell)
             active = m_cell[obj_idx]
+
+            def mark_obj_as_detected():
+                new_detected = detected.at[obj_idx].set(True)
+                obj_force_mask = self.obj_force_masks[obj_idx]
+                new_detected = jnp.where(obj_force_mask, m_cell, new_detected)
+                return new_detected
+
             detected = jax.lax.cond(
                 active,
-                lambda: detected.at[obj_idx].set(True),
+                mark_obj_as_detected,
                 lambda: detected,
             )
             # jax.lax.cond(
@@ -1569,7 +1576,21 @@ class PSEnv:
             # m_cell_forceless = m_cell.at[:n_objs].set(m_cell_forceless_objs * m_cell[:n_objs])
             obj_idx = jnp.argwhere(objs_vec[:self.n_objs] * m_cell[:self.n_objs] > 0, size=1, fill_value=-1)[0, 0]
             detected = jnp.zeros(m_cell.shape, bool)
-            is_detected = detected.at[obj_idx].set(True)
+
+            def mark_obj_as_detected():
+                new_detected = detected.at[obj_idx].set(True)
+                detected_forces = jax.lax.dynamic_slice(
+                    m_cell,
+                    (self.n_objs + (obj_idx * N_FORCES),),
+                    (N_FORCES,)
+                )
+                new_detected = jax.lax.dynamic_update_slice(
+                    new_detected,
+                    detected_forces,
+                    (self.n_objs + (obj_idx * N_FORCES),)
+                )
+                return new_detected
+
             active = obj_idx != -1
             # obj_idx = jax.lax.select(
             #     active,
@@ -1578,7 +1599,7 @@ class PSEnv:
             # )
             detected = jax.lax.cond(
                 active,
-                lambda: is_detected,
+                mark_obj_as_detected,
                 lambda: detected,
             )
             # jax.lax.cond(
@@ -2832,15 +2853,30 @@ class PSEnv:
 
         if lp_is_vertical:
             dim = 2
+            one_hot_masks = gen_one_hot_masks(*subkernel_activations[:, :, 0].shape)
+
         elif lp_is_horizontal:
             dim = 1
+            one_hot_masks = gen_one_hot_masks(*subkernel_activations[:, 0].shape)
 
         new_subkernel_activations = jnp.zeros_like(subkernel_activations)
-        for i in range(subkernel_activations.shape[dim]):
+
+        if not self.jit:
+        # if True:
+            for i in range(subkernel_activations.shape[dim]):
+                if dim == 1:
+                    new_subkernel_activations = new_subkernel_activations.at[:, i].set(mask_to_valid_sequences(
+                        subkernel_activations[:, i], jit=self.jit, one_hot_masks=one_hot_masks))
+                elif dim == 2:
+                    new_subkernel_activations = new_subkernel_activations.at[:, :, i].set(mask_to_valid_sequences(
+                        subkernel_activations[:, :, i], jit=self.jit, one_hot_masks=one_hot_masks))
+        else:
+            new_subkernel_activations = jax.vmap(mask_to_valid_sequences, in_axes=(dim, None, None))(
+                subkernel_activations, one_hot_masks, True)
             if dim == 1:
-                new_subkernel_activations = new_subkernel_activations.at[:, i].set(mask_to_valid_sequences(subkernel_activations[:, i], jit=self.jit))
+                new_subkernel_activations = jnp.transpose(new_subkernel_activations, (1, 0, 2))
             elif dim == 2:
-                new_subkernel_activations = new_subkernel_activations.at[:, :, i].set(mask_to_valid_sequences(subkernel_activations[:, :, i], jit=self.jit))
+                new_subkernel_activations = jnp.transpose(new_subkernel_activations, (1, 2, 0))
 
         detected_kernel_meta_objs = {}
         detected_kernel_moving_idx = None
@@ -3110,30 +3146,52 @@ def one_hot_sequences(sequences, num_classes):
     return np.array(result, dtype=bool)
 
 
-def mask_to_valid_sequences(binary_matrix, jit=True):
-    N, M = binary_matrix.shape
-
+def gen_one_hot_masks(N, M):
     # Generate valid index sequences
     sequences = generate_index_sequences(N, M)
     one_hot_masks = one_hot_sequences(sequences, num_classes=N)  # shape: (K, M, N)
 
     # Transpose to match binary_matrix shape (N, M)
     one_hot_masks = one_hot_masks.transpose(0, 2, 1)  # shape: (K, N, M)
+    return one_hot_masks
 
-    valid_mask = jnp.zeros_like(binary_matrix)
 
-    for mask in one_hot_masks:
-        if not jit:
-            if jnp.all((mask & binary_matrix) == mask):  # check if mask is a subset
-                valid_mask |= mask  # elementwise OR
-        else:
+def mask_to_valid_sequences(binary_matrix, one_hot_masks=None, jit=True):
+    N, M = binary_matrix.shape
+
+    if one_hot_masks is None:
+        one_hot_masks = gen_one_hot_masks(N, M)
+
+    init_valid_mask = jnp.zeros_like(binary_matrix)
+
+    if not jit:
+    # if True:
+        for mask in one_hot_masks:
+            if not jit:
+                if jnp.all((mask & binary_matrix) == mask):  # check if mask is a subset
+                    init_valid_mask |= mask  # elementwise OR
+            else:    
+                init_valid_mask = jax.lax.cond(
+                    jnp.all((mask & binary_matrix) == mask),
+                    lambda: init_valid_mask | mask,
+                    lambda: init_valid_mask,
+                )
+    else:
+        def body_fun(valid_mask, mask):
             valid_mask = jax.lax.cond(
                 jnp.all((mask & binary_matrix) == mask),
                 lambda: valid_mask | mask,
                 lambda: valid_mask,
             )
+            return valid_mask, None
 
-    return valid_mask
+        init_valid_mask, _ = jax.lax.scan(
+            body_fun,
+            init_valid_mask,
+            one_hot_masks,
+        )
+
+    return init_valid_mask
 
 
 def multihot_to_desc(multihot_level, objs_to_idxs, n_objs, show_background=False):
