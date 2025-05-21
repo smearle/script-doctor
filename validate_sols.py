@@ -38,6 +38,13 @@ games_to_skip = set({
     '2048',  # hangs
 })
 
+def multihot_level_from_js_state(level_state, obj_list):
+    level_state = np.array(level_state).T
+    level_multihot = to_binary_vectors(level_state, len(obj_list))
+    level_multihot = rearrange(level_multihot, 'h w c -> c h w')
+    level_multihot = np.flip(level_multihot, 0)
+    return level_multihot
+
 @hydra.main(version_base="1.3", config_path='./conf', config_name='jax_validation_config')
 def main_launch(cfg: JaxValidationConfig):
     games = get_list_of_games_for_testing(all_games=cfg.all_games)
@@ -48,7 +55,7 @@ def main_launch(cfg: JaxValidationConfig):
         executor = submitit.AutoExecutor(folder=os.path.join("submitit_logs", "validate_sols"))
         executor.update_parameters(
             slurm_job_name=f"validate_sols",
-            mem_gb=30,
+            mem_gb=50,
             tasks_per_node=1,
             cpus_per_task=1,
             timeout_min=180,
@@ -97,12 +104,13 @@ def main(cfg: JaxValidationConfig, games: Optional[List[str]] = None):
     n_state_error = 0
     n_score_error = 0
     n_success = 0
+    n_unvalidated_levels = 0
 
-    if os.path.exists(SOLUTION_REWARDS_PATH):
-        with open(SOLUTION_REWARDS_PATH, 'r') as f:
-            solution_rewards_dict = json.load(f)    
-    else:
-        solution_rewards_dict = {}
+    # if os.path.exists(SOLUTION_REWARDS_PATH):
+    #     with open(SOLUTION_REWARDS_PATH, 'r') as f:
+    #         solution_rewards_dict = json.load(f)    
+    # else:
+    solution_rewards_dict = {}
     
 
     key = jax.random.PRNGKey(0)
@@ -118,6 +126,8 @@ def main(cfg: JaxValidationConfig, games: Optional[List[str]] = None):
         n_rules = None
         if game in games_to_n_rules:
             n_rules = games_to_n_rules[game]
+        if game + ".txt" in games_to_n_rules:
+            n_rules = games_to_n_rules[game + ".txt"]
         if game not in solution_rewards_dict:
             solution_rewards_dict[game] = {}
         game_name = os.path.basename(game)
@@ -147,7 +157,6 @@ def main(cfg: JaxValidationConfig, games: Optional[List[str]] = None):
             print(f"No js solutions found for {game_name}")
             continue
 
-        tree, success, err_msg = get_tree_from_txt(parser, game, test_env_init=False)
         og_path = os.path.join(DATA_DIR, 'scraped_games', game_name + '.txt')
 
         print(f"Processing solution for game: {og_path}")
@@ -168,6 +177,7 @@ def main(cfg: JaxValidationConfig, games: Optional[List[str]] = None):
                 results['stats']['solution_error'] = n_solution_error
                 results['stats']['state_error'] = n_state_error
                 results['stats']['score_error'] = n_score_error
+                results['stats']['unvalidated_levels'] = n_unvalidated_levels
 
                 with open(val_results_path, 'w') as f:
                     json.dump(results, f, indent=4)
@@ -225,12 +235,15 @@ def main(cfg: JaxValidationConfig, games: Optional[List[str]] = None):
                 print(f"Skipping level {level_i} because gif or error log already exists")
                 continue
 
-            if cfg.aggregate_results:
+            if cfg.aggregate:
                 # In this case, don't run any new validations, just aggregate results for the ones we've already run.
+                n_unvalidated_levels += 1
+                game_success = False
                 continue
 
             # Otherwise, let's initialize the environment (if on level 0) and run the solution.
             if env is None:
+                tree, success, err_msg = get_tree_from_txt(parser, game, test_env_init=False)
                 try:
                     env = PSEnv(tree, debug=False, print_score=False)
                 except KeyboardInterrupt as e:
@@ -260,10 +273,7 @@ def main(cfg: JaxValidationConfig, games: Optional[List[str]] = None):
             level_score = sol_dict['score']
             level_state = sol_dict['state']
             obj_list = sol_dict['objs']
-            level_state = np.array(level_state).T
-            level_multihot = to_binary_vectors(level_state, len(obj_list))
-            level_multihot = rearrange(level_multihot, 'h w c -> c h w')
-            level_multihot = np.flip(level_multihot, 0)
+            level_multihot = multihot_level_from_js_state(level_state, obj_list)
             actions = level_sol
             actions = [action_remap[a] for a in actions]
             actions = jnp.array([int(a) for a in actions])

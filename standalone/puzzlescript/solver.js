@@ -393,15 +393,17 @@ function getScoreNormalized(engine) {
 function takeAction(engine, action) {
   // let changed = engine.processInput(action);
   let changed = processInputSearch(engine, action);
-  level_map = engine.backupLevel()['dat'];
-  score = getScore(engine);
+  level = engine.backupLevel();
+  level_map = level['dat'];
+  // score = getScore(engine);
+  score = 0;
   if (engine.getWinning()) {
     DoRestartSearch(engine);
     // console.log('Winning!');
     // return true;
   }
   // Dummy values for winning, solution, iterations, and elapsed time
-  return [false, [], 0, 0, score, level_map];
+  return [false, [], 0, 0, score, level];
 }
 
 function randomRollout(engine, maxIters=100_000) {
@@ -1015,4 +1017,5 @@ module.exports = {
   solveRandom,
   randomRollout,
   takeAction,
+  precalcDistances,
 }

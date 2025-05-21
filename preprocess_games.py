@@ -346,6 +346,10 @@ def preprocess_rules(txt):
     txt = re.sub(r'\]\s*\|\s*\[', '] [', txt)
     return txt
 
+def preprocess_collisionlayers(txt):
+    # Replace any pairs of commas, separated by whitespace, with a single comma
+    txt = re.sub(r',\s*,', ',', txt)
+    return txt
 
 def preprocess_ps(txt):
 
@@ -364,28 +368,25 @@ def preprocess_ps(txt):
     if not re.search(r'^LEGEND\n', txt, flags=re.MULTILINE | re.IGNORECASE):
         txt = re.sub(r'^LEGEND\s*.*\n', 'LEGEND\n', txt, flags=re.MULTILINE | re.IGNORECASE)
 
-    # Replace any pairs of commas, separated by whitespace, with a single comma
-    # txt = re.sub(r',\s*,', ',', txt)
-
     txt = txt.replace('\u00A0', ' ')
     # If the file does not end with 2 newlines, fix this
     for i in range(2):
         if not txt.endswith("\n\n"):
             txt += "\n"
 
-    ## Strip any comments
-    txt = strip_comments(txt)
-
     # Remove any lines beginning with "message" (case insensitive)
-    txt = re.sub(r'^message.*\n', '', txt, flags=re.MULTILINE | re.IGNORECASE)
+    txt = re.sub(r'^message.*\n', '\n', txt, flags=re.MULTILINE | re.IGNORECASE)
 
     # Truncate lines ending with "message"
     txt = re.sub(r'message.*\n', '\n', txt, flags=re.MULTILINE | re.IGNORECASE)
 
+    ## Strip any comments
+    txt = strip_comments(txt)
+
     # Remove any lines that are just whitespace
     txt = re.sub(r'^\s*\n', '\n', txt, flags=re.MULTILINE)
 
-    # any more-than-double newlines should be replaced by a single newline
+    # any more-than-double newlines should be replaced by a double newline
     txt = re.sub(r'\n{3,}', '\n\n', txt)
 
     # Remove any lines that are just a single character. (Very niche patch, this one is. But we know such lines can 
@@ -410,6 +411,7 @@ def preprocess_ps(txt):
         winconditions_section, levels_section = sections
 
     rules_section = preprocess_rules(rules_section)
+    collisionlayers_section = preprocess_collisionlayers(collisionlayers_section)
 
     # Now put the sections back together
     txt = (f"{prelude_section}\n"

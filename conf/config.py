@@ -33,7 +33,7 @@ class JaxValidationConfig(PSConfig):
     slurm: bool = False
     n_games_per_job: int = 50
     game: Optional[str] = None
-    aggregate_results: bool = False  # Don't run any new validations, just aggregate existing results.
+    aggregate: bool = False  # Don't run any new validations, just aggregate existing results.
     
 @dataclass
 class BFSConfig(PSConfig):
@@ -61,11 +61,14 @@ class ProfileStandalone(PSConfig):
     game: Optional[str] = None
     all_games: bool = False
     random_order: bool = False
-    n_steps: int = 5_000
+    # n_steps: int = 5_000
+    n_steps: int = 100_000
     overwrite: bool = False
     include_randomness: bool = True
-    timeout: int = 60
-    for_validation: bool = False
+    # timeout: int = 60
+    timeout: int = -1
+    # for_validation: bool = False
+    for_validation: bool = True
     slurm: bool = False
     n_games_per_job: int = 100
 
