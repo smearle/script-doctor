@@ -18,7 +18,7 @@ from globals import GAMES_TO_N_RULES_PATH, GAMES_N_RULES_SORTED_PATH, PRIORITY_G
 from collect_games import GALLERY_GAMES_DIR
 from env import PSEnv
 from gen_tree import GenPSTree
-from preprocess_games import get_tree_from_txt, get_env_from_ps_file, TREES_DIR, get_n_levels_per_game
+from preprocess_games import get_tree_from_txt, get_env_from_ps_file, TREES_DIR
 from prompts import *
 
 
@@ -373,6 +373,29 @@ def level_to_int_arr(level: dict):
             flat_idx = x * level['height'] + y
             level_arr[x].append(level['dat'][str(flat_idx)])
     return np.array(level_arr)
+
+def get_n_levels_per_game():
+    if os.path.exists(GAMES_N_LEVELS_PATH):
+        with open(GAMES_N_LEVELS_PATH, 'r') as f:
+            n_levels_per_game = json.load(f)
+        return n_levels_per_game
+
+    parser = init_ps_lark_parser()
+    games = get_list_of_games_for_testing(all_games=True)
+    n_levels_per_game = {}
+    for game in games:
+        min_tree_path = os.path.join(TREES_DIR, game + '.pkl')
+        if os.path.exists(min_tree_path):
+            with open(min_tree_path, 'rb') as f:
+                tree = pickle.load(f)
+            tree = GenPSTree().transform(tree)
+            env = PSEnv(tree)
+            n_levels = len(env.levels)
+            n_levels_per_game[game] = n_levels
+    with open(GAMES_N_LEVELS_PATH, 'w') as f:
+        json.dump(n_levels_per_game, f, indent=4)
+    return n_levels_per_game
+
 
     
 if __name__ == '__main__':

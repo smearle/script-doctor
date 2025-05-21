@@ -64,7 +64,7 @@ class ProfileStandalone(PSConfig):
     overwrite: bool = False
     include_randomness: bool = True
     timeout: int = 60
-    gen_solutions_for_validation: bool = False
+    for_validation: bool = False
     slurm: bool = False
     n_games_per_job: int = 100
 

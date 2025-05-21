@@ -342,6 +342,8 @@ def add_empty_sounds_section(txt):
 def preprocess_rules(txt):
     # Replace any occurrence of `]...[` with `|...|`
     txt = re.sub(r'\]\s*\.\.\.\s*\[', ' | ... | ', txt)
+    # Replace any occurrence of `] | [` with `] [`
+    txt = re.sub(r'\]\s*\|\s*\[', '] [', txt)
     return txt
 
 
@@ -362,17 +364,6 @@ def preprocess_ps(txt):
     if not re.search(r'^LEGEND\n', txt, flags=re.MULTILINE | re.IGNORECASE):
         txt = re.sub(r'^LEGEND\s*.*\n', 'LEGEND\n', txt, flags=re.MULTILINE | re.IGNORECASE)
 
-    pattern = r"""
-        ^OBJECTS\n|
-        ^LEGEND\n|
-        ^SOUNDS\n|
-        ^COLLISIONLAYERS\n|
-        ^RULES\n|
-        ^WINCONDITIONS\n|
-        ^LEVELS\n
-    """
-
-
     # Replace any pairs of commas, separated by whitespace, with a single comma
     # txt = re.sub(r',\s*,', ',', txt)
 
@@ -382,14 +373,14 @@ def preprocess_ps(txt):
         if not txt.endswith("\n\n"):
             txt += "\n"
 
+    ## Strip any comments
+    txt = strip_comments(txt)
+
     # Remove any lines beginning with "message" (case insensitive)
     txt = re.sub(r'^message.*\n', '', txt, flags=re.MULTILINE | re.IGNORECASE)
 
     # Truncate lines ending with "message"
     txt = re.sub(r'message.*\n', '\n', txt, flags=re.MULTILINE | re.IGNORECASE)
-
-    ## Strip any comments
-    txt = strip_comments(txt)
 
     # Remove any lines that are just whitespace
     txt = re.sub(r'^\s*\n', '\n', txt, flags=re.MULTILINE)
@@ -404,7 +395,17 @@ def preprocess_ps(txt):
     # Remove everything until "objects" (case insensitive)
     # txt = re.sub(r'^.*OBJECTS', 'OBJECTS', txt, flags=re.MULTILINE | re.DOTALL | re.IGNORECASE)
 
-    sections = re.split(pattern, txt, flags=re.MULTILINE | re.VERBOSE | re.IGNORECASE)
+    sections_pattern = r"""
+        ^OBJECTS\n|
+        ^LEGEND\n|
+        ^SOUNDS\n|
+        ^COLLISIONLAYERS\n|
+        ^RULES\n|
+        ^WINCONDITIONS\n|
+        ^LEVELS\n
+    """
+
+    sections = re.split(sections_pattern, txt, flags=re.MULTILINE | re.VERBOSE | re.IGNORECASE)
     prelude_section, objects_section, legend_section, sounds_section, collisionlayers_section, rules_section, \
         winconditions_section, levels_section = sections
 
@@ -412,13 +413,13 @@ def preprocess_ps(txt):
 
     # Now put the sections back together
     txt = (f"{prelude_section}\n"
-           f"OBJECTS\n{objects_section}\n"
-           f"LEGEND\n{legend_section}\n"
-           f"SOUNDS\n{sounds_section}\n"
-           f"COLLISIONLAYERS\n{collisionlayers_section}\n"
-           f"RULES\n{rules_section}\n"
-           f"WINCONDITIONS\n{winconditions_section}\n"
-           f"LEVELS\n{levels_section}\n")
+           f"OBJECTS\n{objects_section}"
+           f"LEGEND\n{legend_section}"
+           f"SOUNDS\n{sounds_section}"
+           f"COLLISIONLAYERS\n{collisionlayers_section}"
+           f"RULES\n{rules_section}"
+           f"WINCONDITIONS\n{winconditions_section}"
+           f"LEVELS\n{levels_section}")
 
     return txt.lstrip()
 
@@ -449,29 +450,6 @@ def count_rules(tree: PSGameTree):
         n_rules += len(rule_block[0].rules)
     return n_rules
 
-def get_n_levels_per_game():
-    if os.path.exists(GAMES_N_LEVELS_PATH):
-        with open(GAMES_N_LEVELS_PATH, 'r') as f:
-            n_levels_per_game = json.load(f)
-        return n_levels_per_game
-
-    parser = init_ps_lark_parser()
-    games = get_list_of_games_for_testing(all_games=True)
-    n_levels_per_game = {}
-    for game in games:
-        min_tree_path = os.path.join(TREES_DIR, game + '.pkl')
-        if os.path.exists(min_tree_path):
-            with open(min_tree_path, 'rb') as f:
-                tree = pickle.load(f)
-            tree = GenPSTree().transform(tree)
-            env = PSEnv(tree)
-            n_levels = len(env.levels)
-            n_levels_per_game[game] = n_levels
-    with open(GAMES_N_LEVELS_PATH, 'w') as f:
-        json.dump(n_levels_per_game, f, indent=4)
-    return n_levels_per_game
-
-
 class PSErrors(IntEnum):
     SUCCESS = 0
     PARSE_ERROR = 1
@@ -479,6 +457,7 @@ class PSErrors(IntEnum):
     ENV_ERROR = 3
     TIMEOUT = 4
     SKIPPED = 5
+    PREPROCESSING_ERROR = 6
 
 def get_env_from_ps_file(parser, game, log_dir: str = None, overwrite: bool = True):
     tree, success, err_msg = get_tree_from_txt(parser, game, log_dir, overwrite, test_env_init=False)
@@ -511,7 +490,11 @@ def get_tree_from_txt(parser, game, log_dir: str = None, overwrite: bool = True,
     os.makedirs(SIMPLIFIED_GAMES_DIR, exist_ok=True)
     if overwrite or not os.path.exists(simp_filepath):
         # Now save the simplified version of the file
-        content = preprocess_ps(ps_text)
+        try:
+            content = preprocess_ps(ps_text)
+        except ValueError as e:
+            print(f"Error preprocessing {filepath}: {e}")
+            return None, PSErrors.PREPROCESSING_ERROR, gen_error_str(e)
         with open(simp_filepath, "w", encoding='utf-8') as file:
             file.write(content)
     else:
@@ -620,6 +603,7 @@ def main(cfg: PreprocessConfig):
     parse_results = {
         'stats': {},
         'success': [],
+        'preprocess_error': {},
         'parse_error': {},
         'tree_error': {},
         'env_error': {},
@@ -697,8 +681,12 @@ def main(cfg: PreprocessConfig):
         elif success == PSErrors.SKIPPED:
             print(f"Skipping {game_name} because it has been marked for skipping in `GAMES_TO_SKIP`")
             continue
+        elif success == PSErrors.PREPROCESSING_ERROR:
+            if err_msg not in parse_results['parse_error']:
+                parse_results['parse_error'][err_msg] = []
+            parse_results['parse_error'][err_msg].append(game_name)
         else:
-            breakpoint()
+            raise Exception(f"Unknown error while parsing game: {success}")
 
         n_success = len(parse_results['success'])
         n_env_errors = np.sum([len(v) for k, v in parse_results['env_error'].items()]).item()
@@ -721,8 +709,6 @@ def main(cfg: PreprocessConfig):
         json.dump(games_n_rules_sorted, f, indent=4)
     with open(GAMES_TO_N_RULES_PATH, 'w', encoding='utf-8') as f:
         json.dump(games_to_n_rules, f, indent=4) 
-
-    get_n_levels_per_game()
 
     print(f"Attempted to parse and initialize {len(game_files)} games.")
     print(f"Initialized {len(parse_results['success'])} games successfully as jax envs")

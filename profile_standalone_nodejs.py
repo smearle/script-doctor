@@ -63,7 +63,7 @@ def main_launch(cfg: ProfileStandalone):
         games = get_list_of_games_for_testing(
             all_games=cfg.all_games, include_random=cfg.include_randomness, random_order=cfg.random_order)
         # Get sub-lists of batches of games to distribute across nodes.
-        games = [games[i:i + cfg.n_games_per_job] for i in range(0, len(games), cfg.n_games_per_job)]
+        games = [games[i::cfg.n_games_per_job] for i in range(cfg.n_games_per_job)]
         executor = submitit.AutoExecutor(folder=os.path.join("submitit_logs", "profile_nodejs"))
         executor.update_parameters(
             slurm_job_name=f"profile_nodejs",
@@ -132,10 +132,10 @@ def main(cfg: ProfileStandalone, games: Optional[List[str]] = None):
             for level_i in range(n_levels):
                 level_js_sol_path = os.path.join(game_js_sols_dir, f'level-{level_i}.json')
                 print(f'Level: {level_i}')
-                if cfg.gen_solutions_for_validation and not cfg.overwrite and os.path.isfile(level_js_sol_path):
+                if cfg.for_validation and not cfg.overwrite and os.path.isfile(level_js_sol_path):
                     print(f'Already solved (for validation) {game} level {level_i}.')
                     continue
-                if not cfg.gen_solutions_for_validation and not cfg.overwrite and str(level_i) in results[run_name][game]:
+                if not cfg.for_validation and not cfg.overwrite and str(level_i) in results[run_name][game]:
                     print(f'Already solved (for profiling) {game} level {level_i} with {run_name}, skipping.')
                     continue
                 engine.compile(game_text, level_i)

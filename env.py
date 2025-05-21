@@ -2085,7 +2085,8 @@ class PSEnv:
             m_cell = m_cell.at[obj_idx].set(False)
             # Remove any existing forces from the object
             force_mask = self.obj_force_masks[obj_idx]
-            m_cell = m_cell.at[force_mask].set(False)
+            # m_cell = m_cell.at[force_mask].set(False)
+            m_cell = jnp.where(force_mask, False, m_cell)
             return rng, m_cell
 
         # @partial(jax.jit, static_argnums=(3))
