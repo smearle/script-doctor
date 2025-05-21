@@ -51,7 +51,7 @@ def main_launch(cfg: JaxValidationConfig):
             mem_gb=30,
             tasks_per_node=1,
             cpus_per_task=1,
-            timeout_min=1440,
+            timeout_min=180,
             # slurm_gres='gpu:1',
             slurm_account='pr_174_tandon_advanced', 
         )
@@ -282,6 +282,7 @@ def main(cfg: JaxValidationConfig, games: Optional[List[str]] = None):
                             results['score_error'][game_name] = []
                         results['score_error'][game_name].append(level_i)
                         n_score_error += 1
+                    print(f"Level {level_i} solution score mismatch.")
                 else:
                     if game_name not in results['success']:
                         results['success'][game_name] = []
@@ -307,13 +308,13 @@ def main(cfg: JaxValidationConfig, games: Optional[List[str]] = None):
             frames = frames.astype(np.uint8)
 
             # Scale up the frames
-            print(f"Scaling up frames for level {level_i}")
+            # print(f"Scaling up frames for level {level_i}")
             scale = 10
             frames = jnp.repeat(frames, scale, axis=1)
             frames = jnp.repeat(frames, scale, axis=2)
 
             # Save the frames
-            print(f"Saving frames for level {level_i}")
+            # print(f"Saving frames for level {level_i}")
             frames_dir = os.path.join(jax_sol_dir, 'frames')
             os.makedirs(frames_dir, exist_ok=True)
             for i, js_frame in enumerate(frames):

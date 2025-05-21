@@ -19,7 +19,7 @@ import numpy as np
 from conf.config import PreprocessConfig
 from env import PSEnv
 from gen_tree import GenPSTree
-from globals import GAMES_N_RULES_SORTED_PATH, GAMES_TO_N_RULES_PATH, GAMES_TO_SKIP
+from globals import GAMES_N_RULES_SORTED_PATH, GAMES_TO_N_RULES_PATH, GAMES_TO_SKIP, GAMES_N_LEVELS_PATH
 from ps_game import PSGameTree
 
 # TEST_GAMES = ['blockfaker', 'sokoban_match3', 'notsnake', 'sokoban_basic']
@@ -123,13 +123,13 @@ class StripPuzzleScript(Transformer):
     def rule_block_loop(self, items):
         items = [i for i in items if i]
         return self.strip_newlines_data(items, 'rule_block_loop')
+    
+    def line_detector(self, items):
+        return "..."
 
     # def rule_block(self, items):
     #     return items[0]
     
-    # def rule_part(self, items):
-    #     return items[0]
-
     def condition_data(self, items):
         return self.strip_newlines_data(items, 'condition_data')
 
@@ -294,6 +294,9 @@ class PrintPuzzleScript(Transformer):
     def rule_content(self, items):
         return ' '.join(items)
 
+    def line_detector(self, items):
+        return '...'
+
     def rule_object(self, items):
         return ' '.join(items)
     
@@ -332,12 +335,17 @@ class PrintPuzzleScript(Transformer):
 def add_empty_sounds_section(txt):
     ret = re.search(r'^SOUNDS\n', txt, re.MULTILINE)
     if ret is None:
-        txt = re.sub(r'COLLISIONLAYERS', 'SOUNDS\n\nCOLLISIONLAYERS', txt)
+        txt = re.sub(r'^COLLISIONLAYERS\n', 'SOUNDS\n\nCOLLISIONLAYERS\n', txt)
+    return txt
+
+
+def preprocess_rules(txt):
+    # Replace any occurrence of `]...[` with `|...|`
+    txt = re.sub(r'\]\s*\.\.\.\s*\[', ' | ... | ', txt)
     return txt
 
 
 def preprocess_ps(txt):
-    txt = add_empty_sounds_section(txt)
 
     # Remove whitespace at end of any line
     txt = re.sub(r'[ \t]+$', '', txt, flags=re.MULTILINE)
@@ -347,6 +355,23 @@ def preprocess_ps(txt):
 
     # Remove any lines that are just r`=+`
     txt = re.sub(r'^=+\n', '', txt, flags=re.MULTILINE)
+
+    txt = add_empty_sounds_section(txt)
+
+    # If the regular `LEGEND` header is not found, try the `LEGEND` header followed by some trailing characters
+    if not re.search(r'^LEGEND\n', txt, flags=re.MULTILINE | re.IGNORECASE):
+        txt = re.sub(r'^LEGEND\s*.*\n', 'LEGEND\n', txt, flags=re.MULTILINE | re.IGNORECASE)
+
+    pattern = r"""
+        ^OBJECTS\n|
+        ^LEGEND\n|
+        ^SOUNDS\n|
+        ^COLLISIONLAYERS\n|
+        ^RULES\n|
+        ^WINCONDITIONS\n|
+        ^LEVELS\n
+    """
+
 
     # Replace any pairs of commas, separated by whitespace, with a single comma
     # txt = re.sub(r',\s*,', ',', txt)
@@ -378,6 +403,22 @@ def preprocess_ps(txt):
 
     # Remove everything until "objects" (case insensitive)
     # txt = re.sub(r'^.*OBJECTS', 'OBJECTS', txt, flags=re.MULTILINE | re.DOTALL | re.IGNORECASE)
+
+    sections = re.split(pattern, txt, flags=re.MULTILINE | re.VERBOSE | re.IGNORECASE)
+    prelude_section, objects_section, legend_section, sounds_section, collisionlayers_section, rules_section, \
+        winconditions_section, levels_section = sections
+
+    rules_section = preprocess_rules(rules_section)
+
+    # Now put the sections back together
+    txt = (f"{prelude_section}\n"
+           f"OBJECTS\n{objects_section}\n"
+           f"LEGEND\n{legend_section}\n"
+           f"SOUNDS\n{sounds_section}\n"
+           f"COLLISIONLAYERS\n{collisionlayers_section}\n"
+           f"RULES\n{rules_section}\n"
+           f"WINCONDITIONS\n{winconditions_section}\n"
+           f"LEVELS\n{levels_section}\n")
 
     return txt.lstrip()
 

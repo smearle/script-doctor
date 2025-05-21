@@ -56,8 +56,6 @@ class GenPSTree(Transformer):
         return str(items[0])
 
     def rule_content(self, items):
-        if len(items) == 0:
-            return ''  # ... I guess?
         assert len(items) == 1
         return str(items[0])
 

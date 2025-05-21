@@ -84,10 +84,10 @@ def assign_vecs_to_objs(collision_layers, atomic_obj_names):
     return objs, objs_to_idxs, coll_masks
 
 def process_legend(legend):
-    char_legend = {}
-    char_legend_inverse = {}
+    objs_to_chars = {}
     meta_objs = {}
     conjoined_tiles = {}
+    chars_to_objs = {}
     for k, v in legend.items():
         v: LegendEntry
         if v.operator is None:
@@ -97,8 +97,8 @@ def process_legend(legend):
             # TODO: instead of this hack, check set of objects to see
             # if k in obj_to_idxs:
             if len(k) == 1:
-                char_legend[v_obj] = k_obj
-                char_legend_inverse[k_obj] = v_obj
+                objs_to_chars[v_obj] = k_obj
+                chars_to_objs[k_obj] = v_obj
             else:
                 meta_objs[k_obj] = [v_obj]
         elif v.operator.lower() == 'or':
@@ -113,13 +113,13 @@ def process_legend(legend):
         # an actual atomic object
         v_1 = []
         for v_obj in v:
-            if v_obj in char_legend_inverse:
-                v_1.append(char_legend_inverse[v_obj])
+            if v_obj in chars_to_objs:
+                v_1.append(chars_to_objs[v_obj])
             else:
                 v_1.append(v_obj)
         meta_objs[k] = v_1 
     
-    return char_legend, meta_objs, conjoined_tiles
+    return objs_to_chars, meta_objs, conjoined_tiles, chars_to_objs
 
 def expand_collision_layers(collision_layers, meta_objs, char_to_obj):
     # Preprocess collision layers to replace joint objects with their sub-objects
@@ -342,7 +342,7 @@ def is_perp_or_par_in_pattern(p):
         for c in k:
             for object_with_modifier in c:
                 modifier = object_with_modifier.split(' ')[0]
-                if modifier.lower() in ['perpendicular', 'orthogonal', 'parallel']:
+                if modifier.lower() in ['perpendicular', 'orthogonal', 'orthoganal', 'parallel']:
                     return True
     return False
 
@@ -363,7 +363,7 @@ def gen_perp_par_subrules(l_kerns, r_kerns):
                         modifier, obj = object_with_modifier_tpl
                         modifier = modifier.lower()
                         obj = obj.lower()
-                        if modifier in ['perpendicular', 'orthogonal']:
+                        if modifier in ['perpendicular', 'orthogonal', 'orthoganal']:
                             c_a.append(f'^ {obj}')
                             c_b.append(f'v {obj}')
                             continue
@@ -1139,7 +1139,7 @@ class PSEnv:
         self.require_player_movement = tree.prelude.require_player_movement
         if DEBUG:
             print(f"Processing legend for {self.title}")
-        obj_to_char, meta_objs, joint_tiles = process_legend(tree.legend)
+        obj_to_char, meta_objs, joint_tiles, legend_chars_to_objs = process_legend(tree.legend)
         self.joint_tiles = joint_tiles
         names_to_alts = get_names_to_alts(tree.objects)
         alts_to_names = {v: k for k, v in names_to_alts.items()}
@@ -1261,6 +1261,12 @@ class PSEnv:
             if jo in obj_to_char:
                 jo_char = obj_to_char[jo]
                 self.chars_to_idxs[jo_char] = joint_idx
+            elif len(jo) == 1:
+                self.chars_to_idxs[jo] = joint_idx
+
+        for char in legend_chars_to_objs:
+            if char not in self.chars_to_idxs:
+                self.chars_to_idxs[char] = self.objs_to_idxs[legend_chars_to_objs[char]]
 
         if self.jit:
             self.step = jax.jit(self.step)
@@ -2228,9 +2234,15 @@ class PSEnv:
             meta_objs = cell_detect_out.detected_meta_objs
             kernel_meta_objs = kernel_detect_out.detected_meta_objs
             pattern_meta_objs = pattern_detect_out.detected_meta_objs
-            obj_idx = disambiguate_meta(obj, meta_objs, kernel_meta_objs, pattern_meta_objs, self.objs_to_idxs)
+            if obj in self.objs_to_idxs:
+                obj_idx = self.objs_to_idxs[obj]
+                m_cell = m_cell.at[self.n_objs + (obj_idx * N_FORCES): self.n_objs + ((obj_idx + 1) * N_FORCES)].set(False)
+            else:
+                obj_idx = disambiguate_meta(obj, meta_objs, kernel_meta_objs, pattern_meta_objs, self.objs_to_idxs)
+                m_cell = jax.lax.dynamic_update_slice(
+                    m_cell, jnp.zeros(N_FORCES, dtype=bool), (self.n_objs + obj_idx * N_FORCES,)
+                )
             m_cell = m_cell.at[obj_idx].set(True)
-            m_cell = m_cell.at[self.n_objs + (obj_idx * N_FORCES): self.n_objs + ((obj_idx + 1) * N_FORCES)].set(False)
             m_cell = remove_colliding_objs(m_cell, obj_idx, self.coll_mat)
             return rng, m_cell
 
