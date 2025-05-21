@@ -33,6 +33,7 @@ class JaxValidationConfig(PSConfig):
     slurm: bool = False
     n_games_per_job: int = 50
     game: Optional[str] = None
+    aggregate_results: bool = False  # Don't run any new validations, just aggregate existing results.
     
 @dataclass
 class BFSConfig(PSConfig):

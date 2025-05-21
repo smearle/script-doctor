@@ -42,7 +42,8 @@ games_to_skip = set({
 def main_launch(cfg: JaxValidationConfig):
     games = get_list_of_games_for_testing(all_games=cfg.all_games)
     # Get sub-lists of games to distribute across nodes.
-    games = [games[i::cfg.n_games_per_job] for i in range(cfg.n_games_per_job)]
+    n_jobs = len(games) // cfg.n_games_per_job
+    games = [games[i::n_jobs] for i in range(n_jobs)]
     if cfg.slurm:
         executor = submitit.AutoExecutor(folder=os.path.join("submitit_logs", "validate_sols"))
         executor.update_parameters(
@@ -158,6 +159,22 @@ def main(cfg: JaxValidationConfig, games: Optional[List[str]] = None):
         env = None
 
         for level_i, level_sol_path in zip(level_ints, level_sols):
+            def save_stats():
+                results['stats']['total_games'] = len(games)
+                results['stats']['total_levels'] = n_levels
+                results['stats']['successful_solutions'] = n_success
+                results['stats']['compile_error'] = n_compile_error
+                results['stats']['runtime_error'] = n_runtime_error
+                results['stats']['solution_error'] = n_solution_error
+                results['stats']['state_error'] = n_state_error
+                results['stats']['score_error'] = n_score_error
+
+                with open(val_results_path, 'w') as f:
+                    json.dump(results, f, indent=4)
+
+                with open(SOLUTION_REWARDS_PATH, 'w') as f:
+                    json.dump(solution_rewards_dict, f, indent=4)
+        
             save_stats()
             if game_compile_error:
                 break
@@ -206,6 +223,10 @@ def main(cfg: JaxValidationConfig, games: Optional[List[str]] = None):
                     results['success'][game_name].append({'n_rules': n_rules, 'level': level_i})
                     n_success += 1
                 print(f"Skipping level {level_i} because gif or error log already exists")
+                continue
+
+            if cfg.aggregate_results:
+                # In this case, don't run any new validations, just aggregate results for the ones we've already run.
                 continue
 
             # Otherwise, let's initialize the environment (if on level 0) and run the solution.
@@ -353,22 +374,6 @@ def main(cfg: JaxValidationConfig, games: Optional[List[str]] = None):
             if os.path.isfile(js_gif_path):
                 shutil.copy(js_gif_path, os.path.join(jax_sol_dir, f'level-{level_i}_js.gif'))
 
-            def save_stats():
-                results['stats']['total_games'] = len(games)
-                results['stats']['total_levels'] = n_levels
-                results['stats']['successful_solutions'] = n_success
-                results['stats']['compile_error'] = n_compile_error
-                results['stats']['runtime_error'] = n_runtime_error
-                results['stats']['solution_error'] = n_solution_error
-                results['stats']['state_error'] = n_state_error
-                results['stats']['score_error'] = n_score_error
-
-                with open(val_results_path, 'w') as f:
-                    json.dump(results, f, indent=4)
-
-                with open(SOLUTION_REWARDS_PATH, 'w') as f:
-                    json.dump(solution_rewards_dict, f, indent=4)
-        
         if game_success:
             results['valid_games'].append({'game': game_name, 'n_rules': n_rules})
         results['stats']['valid_games'] = len(results['valid_games'])

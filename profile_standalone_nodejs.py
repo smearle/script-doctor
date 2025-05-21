@@ -63,7 +63,8 @@ def main_launch(cfg: ProfileStandalone):
         games = get_list_of_games_for_testing(
             all_games=cfg.all_games, include_random=cfg.include_randomness, random_order=cfg.random_order)
         # Get sub-lists of batches of games to distribute across nodes.
-        games = [games[i::cfg.n_games_per_job] for i in range(cfg.n_games_per_job)]
+        n_jobs = len(games) // cfg.n_games_per_job
+        games = [games[i::n_jobs] for i in range(n_jobs)]
         executor = submitit.AutoExecutor(folder=os.path.join("submitit_logs", "profile_nodejs"))
         executor.update_parameters(
             slurm_job_name=f"profile_nodejs",
