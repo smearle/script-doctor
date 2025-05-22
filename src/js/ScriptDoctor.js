@@ -190,7 +190,7 @@ async function solveLevelBFS(levelIdx, captureStates=false, maxIters=1_000_000) 
       //   console.log(`Timeout after ${elapsed_time / 1000} seconds. Returning best result found so far.`);
       //   return [sol, false, bestScore, bestState, i, true];
       // }
-    }
+    // }
 
     // This is a global variable of previous states. Clear it to be safe (though processInputSearch shouldn't be using 
     // it)
@@ -221,7 +221,8 @@ async function solveLevelBFS(levelIdx, captureStates=false, maxIters=1_000_000) 
       // }
 			var changed = processInputSearch(move);
 			while (againing) {
-				changed = processInputSearch(-1) || changedSomething;
+        console.log('Againg in search!');
+				changed = processInputSearch(-1) || changed;
 			}
       if (changed) {
         new_level = backupLevel();
@@ -238,8 +239,8 @@ async function solveLevelBFS(levelIdx, captureStates=false, maxIters=1_000_000) 
           // console.log('New state found:', level.objects);
 
           // UNCOMMENT THESE LINES FOR VISUAL DEBUGGING
-          // await new Promise(resolve => setTimeout(resolve, 1)); // Small delay for live feedback
-          // redraw();
+          await new Promise(resolve => setTimeout(resolve, 1)); // Small delay for live feedback
+          redraw();
           ///////////////////////////////////////////////
 
           frontier.enqueue([new_level, new_action_seq]);
@@ -544,6 +545,7 @@ async function testBFS() {
         solDir: solDir,
         dataURL: dataURL,
         timeout: timeout,
+        i: nSearchIters,
       })
     });
   }
@@ -1509,6 +1511,7 @@ async function collectGameData(gamePath, maxIters, captureStates=true) {
           timeout: timeout,
           solDir: solDir,
           dataURL: dataURL,
+          i: n_iters,
         })
       });
     }

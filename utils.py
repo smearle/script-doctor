@@ -18,7 +18,7 @@ from globals import GAMES_TO_N_RULES_PATH, GAMES_N_RULES_SORTED_PATH, PRIORITY_G
 from collect_games import GALLERY_GAMES_DIR
 from env import PSEnv
 from gen_tree import GenPSTree
-from preprocess_games import get_tree_from_txt, get_env_from_ps_file, TREES_DIR
+from preprocess_games import GAMES_DIR, get_tree_from_txt, get_env_from_ps_file, TREES_DIR
 from prompts import *
 
 
@@ -305,7 +305,7 @@ def load_games_n_rules_sorted():
     return games_n_rules
 
 
-def get_list_of_games_for_testing(all_games=True, include_random=False, random_order=False):
+def get_list_of_games_for_testing_old(all_games=True, include_random=False, random_order=False):
     gallery_games = glob.glob(os.path.join(GALLERY_GAMES_DIR, '*.txt'))
     gallery_games = [os.path.basename(g)[:-4] for g in gallery_games]
     if all_games:
@@ -317,6 +317,33 @@ def get_list_of_games_for_testing(all_games=True, include_random=False, random_o
                                     for game, n_rules, has_randomness in games_n_rules if not has_randomness or include_random]
         games = sorted(games_in_gallery_n_rules, key=lambda x: (not x[1], not x[2], x[3]))
         games = [g[0] for g in games]
+    else:
+        games = PRIORITY_GAMES
+    if random_order:
+        random.shuffle(games)
+    # HACK why is this happening??
+    games = [game[:-4] if game.endswith('.txt') else game for game in games]
+    return games
+
+
+def get_list_of_games_for_testing(all_games=True, include_random=False, random_order=False):
+    all_game_files = [game[:-4] for game in os.listdir(GAMES_DIR)]
+    gallery_games = glob.glob(os.path.join(GALLERY_GAMES_DIR, '*.txt'))
+    gallery_games = [os.path.basename(g)[:-4] for g in gallery_games]
+    if all_games:
+        with open(GAMES_N_RULES_SORTED_PATH, 'r') as f:
+            games_n_rules = json.load(f)
+        # Sort so that at the front of the list, we have games from our priority list, then the gallery then the rest of
+        # our dataset, with each subset in order of increasing complexity.
+        games_in_gallery_n_rules = [(game, game in PRIORITY_GAMES, game in gallery_games, n_rules) 
+                                    for game, n_rules, has_randomness in games_n_rules if not has_randomness or include_random]
+        games = sorted(games_in_gallery_n_rules, key=lambda x: (not x[1], not x[2], x[3]))
+        # Add the additional scraped game files (we haven't preprocessed these successfully so we can't be sure about
+        # n_rules etc.)
+        games = [g[0] for g in games]
+        games = [game[:-4] if game.endswith('.txt') else game for game in games]
+        all_games = games + [g for g in all_game_files if g not in games]
+        games = all_games
     else:
         games = PRIORITY_GAMES
     if random_order:

@@ -57,9 +57,11 @@ class ProfileJaxRandConfig(PSConfig):
     
 @dataclass
 class ProfileStandalone(PSConfig):
-    algo: str = "random"  # 'bfs', 'random'
+    # algo: str = "random"  # 'bfs', 'random'
+    algo: str = "bfs"  # 'bfs', 'random'
     game: Optional[str] = None
-    all_games: bool = False
+    # all_games: bool = False
+    all_games: bool = True
     random_order: bool = False
     # n_steps: int = 5_000
     n_steps: int = 100_000

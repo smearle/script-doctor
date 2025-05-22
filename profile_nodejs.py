@@ -1,4 +1,5 @@
 import copy
+import math
 import os
 import json
 import multiprocessing as mp
@@ -27,7 +28,7 @@ def compile_game(engine, game, level_i):
     game_path = os.path.join(SIMPLIFIED_GAMES_DIR, f'{game}.txt')
     with open(f'{game_path[:-4]}_simplified.txt', 'r') as f:
         game_text = f.read()
-    engine.compile(game_text, level_i)
+    engine.compile(['restart'], game_text)
     return game_text
 
 def get_algo_name(algo):
@@ -63,8 +64,9 @@ def main_launch(cfg: ProfileStandalone):
         games = get_list_of_games_for_testing(
             all_games=cfg.all_games, include_random=cfg.include_randomness, random_order=cfg.random_order)
         # Get sub-lists of batches of games to distribute across nodes.
-        n_jobs = len(games) // cfg.n_games_per_job
-        games = [games[i::n_jobs] for i in range(n_jobs)]
+        n_jobs = math.ceil(len(games) / cfg.n_games_per_job)
+        game_sublists = [games[i::n_jobs] for i in range(n_jobs)]
+        assert np.sum([len(g) for g in game_sublists]) == len(games), "Not all games are assigned to a job."
         executor = submitit.AutoExecutor(folder=os.path.join("submitit_logs", "profile_nodejs"))
         executor.update_parameters(
             slurm_job_name=f"profile_nodejs",
@@ -74,7 +76,7 @@ def main_launch(cfg: ProfileStandalone):
             timeout_min=1440,
             slurm_account='pr_174_tandon_advanced', 
         )
-        executor.map_array(main, [cfg] * len(games), games)
+        executor.map_array(main, [cfg] * n_jobs, game_sublists)
     else:
         main(cfg)
 
@@ -100,7 +102,7 @@ def main(cfg: ProfileStandalone, games: Optional[List[str]] = None):
     else:
         games_to_test = [cfg.game]
     results = {get_algo_name(algo): {} for algo in algos}
-    if os.path.isfile(STANDALONE_NODEJS_RESULTS_PATH):
+    if os.path.isfile(STANDALONE_NODEJS_RESULTS_PATH) and not cfg.overwrite and not cfg.for_validation:
         shutil.copyfile(STANDALONE_NODEJS_RESULTS_PATH, STANDALONE_NODEJS_RESULTS_PATH[:-5] + '_bkp.json')
         with open(STANDALONE_NODEJS_RESULTS_PATH, 'r') as f:
             results = json.load(f)
@@ -120,6 +122,7 @@ def main(cfg: ProfileStandalone, games: Optional[List[str]] = None):
             if game not in results[run_name]:
                 results[run_name][game] = {}
             try:
+                engine.unloadGame()
                 game_text = compile_game(engine, game, 0)
             except Exception as e:
                 print(f'Error compiling game {game} level {0}: {e}')
@@ -139,7 +142,7 @@ def main(cfg: ProfileStandalone, games: Optional[List[str]] = None):
                 if not cfg.for_validation and not cfg.overwrite and str(level_i) in results[run_name][game]:
                     print(f'Already solved (for profiling) {game} level {level_i} with {run_name}, skipping.')
                     continue
-                engine.compile(game_text, level_i)
+                engine.compile(['loadLevel', level_i], game_text)
                 if algo == rand_rollout_from_python:
                     result = rand_rollout_from_python(engine, solver, game_text, level_i, timeout=timeout_ms, n_steps=cfg.n_steps)
                 else:
@@ -171,7 +174,7 @@ def main(cfg: ProfileStandalone, games: Optional[List[str]] = None):
                     best_score = -np.inf
                     solution_exists = False
                 
-                if not solution_exists or result['solved'] > best_solve or result['score'] > best_score:
+                if cfg.overwrite or not solution_exists or result['solved'] > best_solve or result['score'] > best_score:
                     result_dict = {
                         'won': result['solved'],
                         'actions': result['actions'],
@@ -188,8 +191,9 @@ def main(cfg: ProfileStandalone, games: Optional[List[str]] = None):
                 print(json.dumps(result))
                 results[run_name][game][level_i] = result
 
-                with open(STANDALONE_NODEJS_RESULTS_PATH, 'w') as f:
-                    json.dump(results, f, indent=4)
+        if not cfg.for_validation:
+            with open(STANDALONE_NODEJS_RESULTS_PATH, 'w') as f:
+                json.dump(results, f, indent=4)
 
 
 

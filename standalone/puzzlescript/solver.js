@@ -531,7 +531,7 @@ function solveBFS(engine, maxIters, timeoutJS) {
 
     // const level = frontier.shift();
     // const action_seq = action_seqs.shift();
-    const [level, action_seq] = frontier.dequeue();
+    const [parent_level, action_seq] = frontier.dequeue();
     // const action_seq = action_seqs.dequeue();
 
     if (!action_seq) {
@@ -541,19 +541,23 @@ function solveBFS(engine, maxIters, timeoutJS) {
       if (i > maxIters) {
         // console.log('Exceeded 1M iterations. Exiting.');
         return [false, sol, i, ((Date.now() - start_time) / 1000), bestScore, bestState, false,
-          Arra.from(engine.getState().idDict)];
+          Array.from(engine.getState().idDict)];
       }
-      engine.restoreLevel(level);
+      engine.restoreLevel(parent_level);
 
       new_action_seq = action_seq.slice();
       new_action_seq.push(move);
-      try {
-        changed = processInputSearch(engine, move);
-      } catch (e) {
-        // console.log('Error while processing input:', e);
-        return [false, sol, i, ((Date.now() - start_time) / 1000), bestScore, bestState, false,
-          Array.from(engine.getState().idDict)];
+      var changed = engine.processInput(move);
+      while (engine.getAgaining()) {
+        changed = engine.processInput(-1) || changed;
       }
+      // try {
+      //   changed = processInputSearch(engine, move);
+      // } catch (e) {
+      //   // console.log('Error while processing input:', e);
+      //   return [false, sol, i, ((Date.now() - start_time) / 1000), bestScore, bestState, false,
+      //     Array.from(engine.getState().idDict)];
+      // }
       if (changed) {
         new_level = engine.backupLevel();
         new_level_map = new_level['dat'];
@@ -713,11 +717,11 @@ function solveAStar(engine, maxIters=100_000) {
 			for (var k = 0, len2 = parentState.length; k < len2; k++) {
 				engine.getLevel().objects[k] = parentState[k];
 			}
-			// var changedSomething = engine.processInput(actions[i]);
-			// while (engine.getAgaining()) {
-			// 	changedSomething = engine.processInput(-1) || changedSomething;
-			// }
-      var changedSomething = processInputSearch(engine, actions[i]);
+			var changedSomething = engine.processInput(actions[i]);
+			while (engine.getAgaining()) {
+				changedSomething = engine.processInput(-1) || changedSomething;
+			}
+      // var changedSomething = processInputSearch(engine, actions[i]);
 
 			if (changedSomething) {
 				if (engine.getLevel().objects in exploredStates) {

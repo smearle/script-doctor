@@ -2,6 +2,7 @@ import argparse
 from enum import IntEnum
 import glob
 import json
+import logging
 import os
 import pickle
 import re
@@ -21,6 +22,8 @@ from env import PSEnv
 from gen_tree import GenPSTree
 from globals import GAMES_N_RULES_SORTED_PATH, GAMES_TO_N_RULES_PATH, GAMES_TO_SKIP, GAMES_N_LEVELS_PATH
 from ps_game import PSGameTree
+
+logger = logging.getLogger(__name__)
 
 # TEST_GAMES = ['blockfaker', 'sokoban_match3', 'notsnake', 'sokoban_basic']
 TEST_GAMES = []
@@ -169,9 +172,17 @@ class StripPuzzleScript(Transformer):
         level_lines = items
         grid = [line for line in level_lines[:-1]]
         # pad all rows with empty tiles
-        max_len = max(len(row) for row in grid)
-        for row in grid:
-            row += ['.'] * (max_len - len(row))
+        # max_len = max(len(row) for row in grid)
+        # for row in grid:
+        #     row += ['.'] * (max_len - len(row))
+        # Truncate all the rows to the same length
+        row_lens = [len(r) for r in grid]
+        if len(set(row_lens)) > 1:
+            logger.warning(f"Rows in grid have different lengths: {row_lens}. Truncating to the shortest row.")
+            min_len = min(row_lens)
+            for i, row in enumerate(grid):
+                if len(row) > min_len:
+                    grid[i] = row[:min_len]
         grid = np.array(grid)
         return grid
 
@@ -679,7 +690,11 @@ def main(cfg: PreprocessConfig):
         elif success == PSErrors.ENV_ERROR:
             if err_msg not in parse_results['env_error']:
                 parse_results['env_error'][err_msg] = []
-            parse_results['env_error'][err_msg].append((game_name, count_rules(ps_tree)))
+            n_rules = count_rules(ps_tree)
+            has_randomness = None
+            parse_results['env_error'][err_msg].append((game_name, n_rules))
+            games_n_rules_sorted.append((game_name, n_rules, has_randomness))
+            games_to_n_rules[game_name] = (n_rules, has_randomness)
         elif success == PSErrors.SKIPPED:
             print(f"Skipping {game_name} because it has been marked for skipping in `GAMES_TO_SKIP`")
             continue

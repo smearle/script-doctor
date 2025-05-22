@@ -7,7 +7,7 @@ import pandas as pd
 
 from conf.config import PlotStandaloneBFS
 from globals import GAMES_N_RULES_SORTED_PATH, PLOTS_DIR, STANDALONE_NODEJS_RESULTS_PATH
-from profile_standalone_nodejs import get_standalone_run_params_from_name
+from profile_nodejs import get_standalone_run_params_from_name
 from utils import get_list_of_games_for_testing
 
 

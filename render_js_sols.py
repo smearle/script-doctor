@@ -2,6 +2,7 @@ import glob
 import json
 import os
 import shutil
+import traceback
 
 import imageio
 from javascript import require
@@ -9,8 +10,8 @@ import jax
 from lark import Lark
 
 from env import PSState
-from preprocess_games import PS_LARK_GRAMMAR_PATH, get_env_from_ps_file
-from profile_standalone_nodejs import compile_game
+from preprocess_games import PS_LARK_GRAMMAR_PATH, PSErrors, get_env_from_ps_file
+from profile_nodejs import compile_game
 from utils import level_to_int_arr
 from validate_sols import JS_SOLS_DIR, multihot_level_from_js_state, JAX_VALIDATED_JS_SOLS_DIR
 
@@ -32,6 +33,7 @@ if __name__ == '__main__':
         game_name = game_dir.split("/")[-1]
         level_sol_jsons = glob.glob(f"{game_dir}/*.json")
         game_text = None
+        env = None
         for level_sol_json in level_sol_jsons:
             level_i = level_sol_json.split("/")[-1].split(".")[0].split('-')[1]
             print(f"Game: {game_name}, Level: {level_i}")
@@ -41,10 +43,23 @@ if __name__ == '__main__':
                 continue
 
             if game_text is None:
-                game_text = compile_game(engine, game_name, level_i=level_i)
+                try:
+                    game_text = compile_game(engine, game_name, level_i=level_i)
+                except Exception as e:
+                    traceback.print_exc()
+                    print(f"Error compiling game {game_name} level {level_i}: {e}")
+                    continue
                 env, tree, success, err_msg = get_env_from_ps_file(parser, game_name)
+                if success != PSErrors.SUCCESS:
+                    print(f"Error parsing game {game_name} level {level_i}: {err_msg}")
+                    break
             else:
-                engine.compile(game_text, level_i)
+                try:
+                    engine.compile(game_text, level_i)
+                except Exception as e:
+                    traceback.print_exc()
+                    print(f"Error compiling game {game_name} level {level_i}: {e}")
+                    break
                 solver.precalcDistances(engine)
 
             with open(level_sol_json, "r") as f:

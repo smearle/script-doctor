@@ -5150,22 +5150,36 @@ var errorCount;
 var compiling;
 var errorStrings;
 
-function compile(text, levelIndex, randomseed) {
+function compile(command, text, randomseed) {
     matchCache = {};
+    // forceRegenImages = true;
+    if (command === undefined) {
+        command = ["restart"];
+    }
     if (randomseed === undefined) {
         randomseed = null;
     }
-    if(levelIndex === undefined){
-        levelIndex = 0;
+    // lastDownTarget = canvas;
+
+    if (text === undefined) {
+        var code = window.form1.code;
+
+        var editor = code.editorreference;
+
+        text = editor.getValue() + "\n";
     }
+    // if (canDump === true) {
+    //     compiledText = text;
+    // }
 
     errorCount = 0;
     compiling = true;
     errorStrings = [];
-    console.log('=================================');
+    consolePrint('=================================');
     try {
         var state = loadFile(text);
     } catch(error){
+        consolePrint(error);
         console.log(error);
     } finally {
         compiling = false;
@@ -5178,7 +5192,11 @@ function compile(text, levelIndex, randomseed) {
     
 
     if (errorCount > 0) {
-        consoleError('<span class="systemMessage">Errors detected during compilation; the game may not work correctly.</span>');
+        if (IDE===false){
+            consoleError('<span class="systemMessage">Errors detected during compilation; the game may not work correctly.  If this is an older game, and you think it just broke because of recent changes in the puzzlescript engine, please consider dropping an email to analytic@gmail.com with a link to the game and I\'ll try make sure it\'s back working ASAP.</span>');
+        } else{
+            consoleError('<span class="systemMessage">Errors detected during compilation; the game may not work correctly.</span>');
+        }
         if (errorCount > MAX_ERRORS) {
             return;
         }
@@ -5190,18 +5208,30 @@ function compile(text, levelIndex, randomseed) {
         for (var i = 0; i < state.lateRules.length; i++) {
             ruleCount += state.lateRules[i].length;
         }
-        console.log('Successful Compilation, generated ' + ruleCount + ' instructions.');
+        if (command[0] == "restart") {
+            consolePrint('<span class="systemMessage">Successful Compilation, generated ' + ruleCount + ' instructions.</span>');
+        } else {
+            consolePrint('<span class="systemMessage">Successful live recompilation, generated ' + ruleCount + ' instructions.</span>');
+
+        }
+
+
+        
+        // if (IDE){
+        //     if (state.metadata.title!==undefined) {
+        //         document.title="PuzzleScript - " + state.metadata.title;
+        //     }
+        // }
     }
 
     if (state!==null){//otherwise error
-        setGameState(state, ["loadLevel", levelIndex], randomseed);
+        setGameState(state, command, randomseed);
     }
 
     // clearInputHistory();
 
     // consoleCacheDump();
 
-    // return state;
 }
 
 /*
@@ -5363,7 +5393,7 @@ function unloadGame() {
 	level.objects = new Int32Array(0);
 	generateTitleScreen();
 	// canvasResize();
-	redraw();
+	// redraw();
 }
 
 function generateTitleScreen()
@@ -7759,9 +7789,12 @@ function calculateRowColMasks() {
 	}
 }
 
+
 /* returns a bool indicating if anything changed */
 function processInput(dir,dontDoWin,dontModify) {
 	againing = false;
+
+
 
 	var bak = backupLevel();
 	var inputindex=dir;
@@ -7836,8 +7869,8 @@ function processInput(dir,dontDoWin,dontModify) {
 			commandQueue: [],
 			commandQueueSourceRules: []
 		}
-	    // sfxCreateMask.setZero();
-	    // sfxDestroyMask.setZero();
+	    sfxCreateMask.setZero();
+	    sfxDestroyMask.setZero();
 
 		seedsToPlay_CanMove=[];
 		seedsToPlay_CantMove=[];
@@ -7883,8 +7916,8 @@ function processInput(dir,dontDoWin,dontModify) {
 					// TODO: shouldn't we also save/restore the level data computed by level.calculateRowColMasks() ?
 					level.commandQueue = startState.commandQueue.concat([])
 					level.commandQueueSourceRules = startState.commandQueueSourceRules.concat([])
-					// sfxCreateMask.setZero()
-					// sfxDestroyMask.setZero()
+					sfxCreateMask.setZero()
+					sfxDestroyMask.setZero()
 					// TODO: should
 
 				}
@@ -7936,7 +7969,7 @@ function processInput(dir,dontDoWin,dontModify) {
         	if (somemoved===false) {
         		if (verbose_logging){
 	    			consolePrint('require_player_movement set, but no player movement detected, so cancelling turn.');
-	    			// consoleCacheDump();
+	    			consoleCacheDump();
 				}
         		addUndoState(bak);
         		DoUndo(true,false);
@@ -7949,7 +7982,7 @@ function processInput(dir,dontDoWin,dontModify) {
 
 	    if (level.commandQueue.indexOf('cancel')>=0) {
 	    	if (verbose_logging) { 
-	    		// consoleCacheDump();
+	    		consoleCacheDump();
 	    		var r = level.commandQueueSourceRules[level.commandQueue.indexOf('cancel')];
 	    		consolePrintFromRule('CANCEL command executed, cancelling turn.',r,true);
 			}
@@ -7976,12 +8009,12 @@ function processInput(dir,dontDoWin,dontModify) {
 	    	if (verbose_logging) { 
 	    		var r = level.commandQueueSourceRules[level.commandQueue.indexOf('restart')];
 	    		consolePrintFromRule('RESTART command executed, reverting to restart state.',r.lineNumber);
-	    		// consoleCacheDump();
+	    		consoleCacheDump();
 			}
 			if (!dontModify){
 				processOutputCommands(level.commandQueue);
 			}
-    		// addUndoState(bak);
+    		addUndoState(bak);
 
 			if (!dontModify){
 	    		DoRestart(true);
@@ -7993,14 +8026,14 @@ function processInput(dir,dontDoWin,dontModify) {
         var modified=false;
 	    for (var i=0;i<level.objects.length;i++) {
 	    	if (level.objects[i]!==bak.dat[i]) {
-				// if (dontModify) {
-	        	// 	if (verbose_logging) {
-	        	// 		consoleCacheDump();
-	        	// 	}
-	        	// 	addUndoState(bak);
-	        	// 	DoUndo(true,false);
-				// 	return true;
-				// } else {
+				if (dontModify) {
+	        		if (verbose_logging) {
+	        			consoleCacheDump();
+	        		}
+	        		addUndoState(bak);
+	        		DoUndo(true,false);
+					return true;
+				} else {
 					if (dir!==-1) {
 						addUndoState(bak);
 					} else if (backups.length > 0) {
@@ -8011,7 +8044,7 @@ function processInput(dir,dontDoWin,dontModify) {
 						backups[backups.length - 1] = unconsolidateDiff(backups[backups.length - 1], bak);					
 	    			}
 	    			modified=true;
-	    		// }
+	    		}
 	    		break;
 	    	}
 	    }
@@ -8022,32 +8055,32 @@ function processInput(dir,dontDoWin,dontModify) {
 		
 		if (dontModify) {		
     		if (verbose_logging) {
-    			// consoleCacheDump();
+    			consoleCacheDump();
     		}
 			return false;
 		}
 
-        // for (var i=0;i<seedsToPlay_CantMove.length;i++) {			
-	    //     	playSound(seedsToPlay_CantMove[i]);
-        // }
+        for (var i=0;i<seedsToPlay_CantMove.length;i++) {			
+	        	// playSound(seedsToPlay_CantMove[i]);
+        }
 
-        // for (var i=0;i<seedsToPlay_CanMove.length;i++) {
-	    //     	playSound(seedsToPlay_CanMove[i]);
-        // }
+        for (var i=0;i<seedsToPlay_CanMove.length;i++) {
+	        	// playSound(seedsToPlay_CanMove[i]);
+        }
 
-        // for (var i=0;i<state.sfx_CreationMasks.length;i++) {
-        // 	var entry = state.sfx_CreationMasks[i];
-        // 	if (sfxCreateMask.anyBitsInCommon(entry.objectMask)) {
-	    //     	playSound(entry.seed);
-        // 	}
-        // }
+        for (var i=0;i<state.sfx_CreationMasks.length;i++) {
+        	var entry = state.sfx_CreationMasks[i];
+        	if (sfxCreateMask.anyBitsInCommon(entry.objectMask)) {
+	        	// playSound(entry.seed);
+        	}
+        }
 
-        // for (var i=0;i<state.sfx_DestructionMasks.length;i++) {
-        // 	var entry = state.sfx_DestructionMasks[i];
-        // 	if (sfxDestroyMask.anyBitsInCommon(entry.objectMask)) {
-	    //     	playSound(entry.seed);
-        // 	}
-        // }
+        for (var i=0;i<state.sfx_DestructionMasks.length;i++) {
+        	var entry = state.sfx_DestructionMasks[i];
+        	if (sfxDestroyMask.anyBitsInCommon(entry.objectMask)) {
+	        	// playSound(entry.seed);
+        	}
+        }
 
 		if (!dontModify){
 	    	processOutputCommands(level.commandQueue);
@@ -8114,15 +8147,20 @@ function processInput(dir,dontDoWin,dontModify) {
     }
 
 	if (verbose_logging) {
-		// consoleCacheDump();
+		consoleCacheDump();
 	}
 
 	if (winning) {
 		againing=false;
 	}
 
+	// For debugging (trying to understand how this score actually workd)
+	// score = getScore();
+	// console.log("Score: "+score);
+
 	return modified;
 }
+
 
 function checkWin(dontDoWin) {
 
@@ -8385,4 +8423,5 @@ module.exports = {
     getRestartTarget, getDeltaTime, setDeltaTime, getAgaining,
     getHasUsedCheckpoint, setHasUsedCheckpoint, get_o10,
     getNumLevels,
+    unloadGame,
 }

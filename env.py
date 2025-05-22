@@ -227,6 +227,14 @@ def gen_check_win(win_conditions: Iterable[WinCondition], obj_to_idxs, meta_objs
         heuristic = score
         return win, score, heuristic
 
+    def check_none_on(lvl, src, trg):
+        src_channel = get_meta_channel(lvl, src)
+        trg_channel = get_meta_channel(lvl, trg)
+        win = ~jnp.any(src_channel & trg_channel)
+        score = -jnp.count_nonzero(src_channel & trg_channel)
+        heuristic = score
+        return win, score, heuristic
+
     # @partial(jax.jit, static_argnums=(1,))
     def check_any(lvl, src):
         src_channel = get_meta_channel(lvl, src)
@@ -256,8 +264,10 @@ def gen_check_win(win_conditions: Iterable[WinCondition], obj_to_idxs, meta_objs
                 func = partial(check_some, src=src, trg=trg)
             else:
                 func = partial(check_some_exist, src=src)
-        elif win_condition.quantifier == 'no':
+        elif win_condition.quantifier == 'no' and trg is None:
             func = partial(check_none, src=src)
+        elif win_condition.quantifier == 'no':
+            func = partial(check_none_on, src=src, trg=trg)
         elif win_condition.quantifier == 'any':
             func = partial(check_any, src=src)
         else:
@@ -1013,6 +1023,7 @@ def apply_movement(rng, lvl, coll_mat, n_objs, obj_force_masks, jit=True):
     force_arr = force_arr.transpose(1, 2, 0)
     # Get the first x,y,c coordinates where force is present.
     coords = jnp.argwhere(force_arr, size=max_possible_forces+1, fill_value=-1)
+    # force_idxs = coords[:, 2] % (N_FORCES - 1)
 
     def attempt_move(carry):
         # NOTE: This depends on movement forces preceding any other forces (per object) in the channel dimension.

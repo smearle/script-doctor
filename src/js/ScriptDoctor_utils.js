@@ -324,6 +324,7 @@ function processInputSearch(dir,dontDoWin,dontModify) {
 		    	var old_verbose_logging=verbose_logging;
 		    	var oldmessagetext = messagetext;
 		    	verbose_logging=false;
+				console.log('change if again?', processInput(-1,true,true));
 		    	if (processInput(-1,true,true)) {
 			    	verbose_logging=old_verbose_logging;
 
