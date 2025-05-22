@@ -38,7 +38,8 @@ color_hex_map = {
     "darkblue": "#00008B",
     "purple": "#800080",
     "pink": "#FFC0CB",
-    "transparent": "#00000000"  # Transparent in RGBA format
+    "transparent": "#00000000",  # Transparent in RGBA format
+    "purpleblue": "#8A2BE2",
 }
 
 def render_solid_color(color):
@@ -69,6 +70,7 @@ def render_sprite(colors, sprite):
             c = color_hex_map[c]
         c = hex_to_rgba(c, alpha)
         colors_vec[i] = np.array(c)
+    sprite = np.clip(sprite, 0, len(colors_vec) - 1)
     im = colors_vec[sprite]
 
     # Anywhere the sprite is 0, set to transparent

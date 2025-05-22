@@ -73,7 +73,7 @@ def main_launch(cfg: ProfileStandalone):
             mem_gb=30,
             tasks_per_node=1,
             cpus_per_task=1,
-            timeout_min=1440,
+            timeout_min=180,
             slurm_account='pr_174_tandon_advanced', 
         )
         executor.map_array(main, [cfg] * n_jobs, game_sublists)

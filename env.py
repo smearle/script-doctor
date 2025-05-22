@@ -1507,6 +1507,9 @@ class PSEnv:
         return multihot_level
 
     def gen_subrules_meta(self, rule: Rule, rule_name: str):
+        if 'random' in rule.prefixes:
+            # TODO: Randomize the order of rule rotations within a group
+            self._has_randomness = True
         has_right_pattern = len(rule.right_kernels) > 0
 
         def is_meta_subobj_forceless(obj_idx, m_cell):
@@ -2406,6 +2409,7 @@ class PSEnv:
                     subkernel_projection_fns=subkernel_projection_fns,
                     lp_is_horizontal=lp_is_horizontal,
                     lp_is_vertical=lp_is_vertical,
+                    random='random' in rule.prefixes,
                 )
                 return detect_kernel, project_kernel
 
@@ -2516,6 +2520,7 @@ class PSEnv:
                     lp_is_single=lp_is_single,
                     has_right_pattern=has_right_pattern,
                     rule_name=rule_name,
+                    random='random' in rule.prefixes,
                 )
                 return detect_kernel, project_kernel
 
@@ -2876,21 +2881,22 @@ class PSEnv:
         if lp_is_vertical:
             dim = 2
             one_hot_masks = gen_one_hot_masks(*subkernel_activations[:, :, 0].shape)
-            # if rot == 2:
-            #     # Flip so that "closer" subkernel line patterns take precedence
-            #     one_hot_masks = jnp.flip(one_hot_masks, 0)
+            if rot == 2:
+                # Flip so that "closer" subkernel line patterns take precedence
+                one_hot_masks = jnp.flip(one_hot_masks, 0)
+                # one_hot_masks = jnp.flip(one_hot_masks, 2)
+                # one_hot_masks = jnp.flip(one_hot_masks, 1)
 
         elif lp_is_horizontal:
             dim = 1
             one_hot_masks = gen_one_hot_masks(*subkernel_activations[:, 0].shape)
-            # if rot == 3:
-            #     # Flip so that "closer" subkernel line patterns take precedence
-            #     one_hot_masks = jnp.flip(one_hot_masks, 0)
+            if rot == 3:
+                # Flip so that "closer" subkernel line patterns take precedence
+                one_hot_masks = jnp.flip(one_hot_masks, 0)
 
         # (n_possible_lines, n_subkernels, height, width)
         per_line_subkernel_activations = jnp.zeros((one_hot_masks.shape[0], *subkernel_activations.shape))
 
-        # breakpoint()
         if not self.jit:
             for i in range(subkernel_activations.shape[dim]):
                 if dim == 1:
@@ -2953,7 +2959,8 @@ class PSEnv:
 
 
     def project_line_kernel(self, rng, lvl, kernel_activations, subkernel_cell_detect_outs, kernel_detect_out: LineKernelFnReturn, pattern_detect_out,
-                            subkernel_projection_fns: List[Callable], lp_is_vertical: bool, lp_is_horizontal: bool):
+                            subkernel_projection_fns: List[Callable], lp_is_vertical: bool, lp_is_horizontal: bool,
+                            random: bool = False):
 
         valid_line_idxs = jnp.argwhere(kernel_detect_out.per_line_subkernel_activations.any(axis=(1,2,3)),
                                        size=kernel_detect_out.per_line_subkernel_activations.shape[0]+1, fill_value=-1)
@@ -2970,7 +2977,7 @@ class PSEnv:
                 )
             line_applied = jnp.any(lvl != init_lvl)
             i = i + 1
-            jax.debug.print('line_applied: {line_applied}, i: {i}, line_idx: {line_idx}', line_applied=line_applied, i=i, line_idx=line_idx)
+            # jax.debug.print('line_applied: {line_applied}, i: {i}, line_idx: {line_idx}', line_applied=line_applied, i=i, line_idx=line_idx)
             return lvl, line_applied, i
         
         init_carry = (lvl, False, 0)
@@ -3073,13 +3080,22 @@ class PSEnv:
                     cell_projection_fns: List[Callable],
                     lp_is_vertical: bool, lp_is_horizontal: bool, lp_is_single: bool,
                     has_right_pattern: bool, in_patch_shape: Tuple[int, int], rule_name: str,
+                    random: bool = False,
                     ):
         n_tiles = np.prod(lvl.shape[-2:])
         # Ensure we always have some invalid coordinates so that the loop will break even when all tiles are active
         if self.jit:
             kernel_activ_xys = jnp.argwhere(kernel_activations, size=n_tiles+1, fill_value=-1)
+            if random:
+                kernel_activ_xys = jax.random.permutation(rng, kernel_activ_xys)
+                # Sort so that -1s are at the end
+                kernel_activ_xys_bin = jnp.where(kernel_activ_xys == -1, 0, 1)
+                sorted_idxs = jnp.argsort(kernel_activ_xys_bin, axis=0)[:, 0][::-1]
+                kernel_activ_xys = jnp.take(kernel_activ_xys, sorted_idxs, axis=0)
         else:
             kernel_activ_xys = np.argwhere(kernel_activations)
+            if random:
+                kernel_activ_xys = np.random.permutation(kernel_activ_xys)
         kernel_activ_xy_idx = 0
         # kernel_activ_xy = kernel_activ_xys[kernel_activ_xy_idx]
 
@@ -3178,7 +3194,7 @@ def generate_index_sequences(N, M):
 
     # Probably a faster way to do this from "within" this combination-generating function.
     positions_lst = list(itertools.combinations(range(M), N))
-    positions_lst = sorted(positions_lst, key=lambda x: abs(x[0] - x[1]))
+    # positions_lst = sorted(positions_lst, key=lambda x: abs(x[0] - x[1]))
 
     # Step 1: Choose positions in the M-length vector to place the N valid indices
     for positions in positions_lst:

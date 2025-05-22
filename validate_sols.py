@@ -57,7 +57,7 @@ def main_launch(cfg: JaxValidationConfig):
         executor = submitit.AutoExecutor(folder=os.path.join("submitit_logs", "validate_sols"))
         executor.update_parameters(
             slurm_job_name=f"validate_sols",
-            mem_gb=50,
+            mem_gb=30,
             tasks_per_node=1,
             cpus_per_task=1,
             timeout_min=180,
@@ -140,6 +140,9 @@ def main(cfg: JaxValidationConfig, games: Optional[List[str]] = None):
         jax_sol_dir = os.path.join(JAX_VALIDATED_JS_SOLS_DIR, game)
         os.makedirs(jax_sol_dir, exist_ok=True)
         compile_log_path = os.path.join(jax_sol_dir, 'compile_err.txt')
+        if cfg.overwrite:
+            if os.path.exists(compile_log_path):
+                os.remove(compile_log_path)
         if os.path.exists(compile_log_path) and not cfg.overwrite:
             if cfg.aggregate:
                 with open(compile_log_path, 'r') as f:
@@ -203,8 +206,19 @@ def main(cfg: JaxValidationConfig, games: Optional[List[str]] = None):
 
             # Skip if we already have a result and are not overwritiing.
             if (os.path.exists(gif_path) or os.path.exists(sol_log_path) or os.path.exists(score_log_path) \
-                    or os.path.exists(run_log_path) or os.path.exists(state_log_path)) and not cfg.overwrite:
-                if os.path.exists(run_log_path):
+                    or os.path.exists(run_log_path) or os.path.exists(state_log_path)):
+                if cfg.overwrite:
+                    if os.path.exists(gif_path):
+                        os.remove(gif_path)
+                    if os.path.exists(sol_log_path):
+                        os.remove(sol_log_path)
+                    if os.path.exists(score_log_path):
+                        os.remove(score_log_path)
+                    if os.path.exists(run_log_path):
+                        os.remove(run_log_path)
+                    if os.path.exists(state_log_path):
+                        os.remove(state_log_path)
+                elif os.path.exists(run_log_path):
                     if cfg.aggregate:
                         with open(run_log_path, 'r') as f:
                             run_log = f.read()

@@ -90,6 +90,7 @@ def human_loop(env: PSEnv, level: int = 0, profile=False):
             print("Going back a level...")
             if lvl_i > 0:
                 lvl_i -= 1
+            params = params.replace(level=env.get_level(lvl_i))
             do_reset = True
         elif key == ord('z'):
             print("Undoing last action...")
