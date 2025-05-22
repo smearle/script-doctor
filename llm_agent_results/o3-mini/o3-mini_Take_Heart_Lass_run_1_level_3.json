@@ -1,0 +1,82 @@
+{
+  "model": "o3-mini",
+  "game": "Take_Heart_Lass",
+  "level": 3,
+  "run": 1,
+  "win": true,
+  "action_sequence": [
+    1,
+    0,
+    0,
+    0,
+    0,
+    1,
+    0,
+    1
+  ],
+  "reward_sequence": [
+    0.9900000095367432,
+    0.9900000095367432,
+    0.9900000095367432,
+    0.9900000095367432,
+    0.9900000095367432,
+    0.9900000095367432,
+    0.9900000095367432,
+    1.9900000095367432
+  ],
+  "initial_ascii": [
+    "LEGEND:",
+    "#: wall",
+    "\u1e20: newdespairwall",
+    ".: background",
+    "z: altolddespair",
+    "x: olddespair",
+    "\u2321: newdespair",
+    "*: crate",
+    "p: player",
+    "o: target",
+    "",
+    "MAP:",
+    "####\u1e20###",
+    "#.#zx\u1e20.#",
+    "#..\u2321.*p#",
+    "#......#",
+    "#o#*.#.#",
+    "########"
+  ],
+  "state_data": {
+    "score": 1,
+    "win": true,
+    "step": 8
+  },
+  "heuristics": [
+    -7.0,
+    -6.0,
+    -5.0,
+    -4.0,
+    -3.0,
+    -2.0,
+    -1.0,
+    0.0
+  ],
+  "final_ascii": [
+    "LEGEND:",
+    "\u1870: despairwall",
+    ".: background",
+    "z: altolddespair",
+    "x: olddespair",
+    "*: crate",
+    "\u128a: target, player",
+    "#: wall",
+    "\u023f: altnewdespair",
+    "\u1e20: newdespairwall",
+    "",
+    "MAP:",
+    "\u1870\u1870\u1870\u1870\u1870\u1870\u1870\u1870",
+    "\u1870.\u1870zx\u1870x\u1870",
+    "\u1870*.xzxz\u1870",
+    "\u1870...xzx\u1870",
+    "\u1870\u128a\u1870*.#\u023f\u1e20",
+    "\u1870\u1870\u1870\u1870\u1870\u1e20##"
+  ]
+}
