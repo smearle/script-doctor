@@ -327,7 +327,7 @@ class KernelFnReturn:
 
 @flax.struct.dataclass
 class LineKernelFnReturn:
-    subkernel_activations: chex.Array
+    per_line_subkernel_activations: chex.Array
     subkernel_detect_outs: List[KernelFnReturn]
     detected_meta_objs: dict
     detected_moving_idx: Optional[int] = None
@@ -1019,8 +1019,8 @@ def apply_movement(rng, lvl, coll_mat, n_objs, obj_force_masks, jit=True):
     force_mask[ACTION::N_FORCES] = 0
     force_arr = force_arr[force_mask]
     # Rearrange the array, since we want to apply force to the "first" objects spatially on the map.
-    # force_arr = rearrange(force_arr, "c h w -> h w c")
-    force_arr = force_arr.transpose(1, 2, 0)
+    # force_arr = rearrange(force_arr, "c h w -> w h c")
+    force_arr = force_arr.transpose(2, 1, 0)
     # Get the first x,y,c coordinates where force is present.
     coords = jnp.argwhere(force_arr, size=max_possible_forces+1, fill_value=-1)
     # force_idxs = coords[:, 2] % (N_FORCES - 1)
@@ -1028,7 +1028,7 @@ def apply_movement(rng, lvl, coll_mat, n_objs, obj_force_masks, jit=True):
     def attempt_move(carry):
         # NOTE: This depends on movement forces preceding any other forces (per object) in the channel dimension.
         lvl, _, _, i = carry
-        x, y, c = coords[i]
+        y, x, c = coords[i]
         is_force_present = x != -1
         # Get the obj idx on which the force is applied.
         obj_idx = c // (N_FORCES - 1)
@@ -1069,7 +1069,7 @@ def apply_movement(rng, lvl, coll_mat, n_objs, obj_force_masks, jit=True):
     # Iterate through possible moves until we apply one, or run out of possible moves.
     if jit:
         lvl, can_move, rng, i = jax.lax.while_loop(
-            lambda carry: (coords[carry[3], 0] != -1) & ~carry[1],
+            lambda carry: (coords[carry[3], 0] != -1),
             lambda carry: attempt_move(carry),
             init_carry,
         )
@@ -2876,34 +2876,36 @@ class PSEnv:
         if lp_is_vertical:
             dim = 2
             one_hot_masks = gen_one_hot_masks(*subkernel_activations[:, :, 0].shape)
-            if rot == 2:
-                # Flip so that "closer" subkernel line patterns take precedence
-                one_hot_masks = jnp.flip(one_hot_masks, 0)
+            # if rot == 2:
+            #     # Flip so that "closer" subkernel line patterns take precedence
+            #     one_hot_masks = jnp.flip(one_hot_masks, 0)
 
         elif lp_is_horizontal:
             dim = 1
             one_hot_masks = gen_one_hot_masks(*subkernel_activations[:, 0].shape)
-            if rot == 3:
-                # Flip so that "closer" subkernel line patterns take precedence
-                one_hot_masks = jnp.flip(one_hot_masks, 0)
+            # if rot == 3:
+            #     # Flip so that "closer" subkernel line patterns take precedence
+            #     one_hot_masks = jnp.flip(one_hot_masks, 0)
 
-        new_subkernel_activations = jnp.zeros_like(subkernel_activations)
+        # (n_possible_lines, n_subkernels, height, width)
+        per_line_subkernel_activations = jnp.zeros((one_hot_masks.shape[0], *subkernel_activations.shape))
 
+        # breakpoint()
         if not self.jit:
             for i in range(subkernel_activations.shape[dim]):
                 if dim == 1:
-                    new_subkernel_activations = new_subkernel_activations.at[:, i].set(mask_to_valid_sequences(
+                    per_line_subkernel_activations = per_line_subkernel_activations.at[:, :, i].set(mask_to_valid_sequences(
                         subkernel_activations[:, i], jit=self.jit, one_hot_masks=one_hot_masks))
                 elif dim == 2:
-                    new_subkernel_activations = new_subkernel_activations.at[:, :, i].set(mask_to_valid_sequences(
+                    per_line_subkernel_activations = per_line_subkernel_activations.at[:, :, :, i].set(mask_to_valid_sequences(
                         subkernel_activations[:, :, i], jit=self.jit, one_hot_masks=one_hot_masks))
         else:
-            new_subkernel_activations = jax.vmap(mask_to_valid_sequences, in_axes=(dim, None, None))(
+            per_line_subkernel_activations = jax.vmap(mask_to_valid_sequences, in_axes=(dim, None, None))(
                 subkernel_activations, one_hot_masks, True)
             if dim == 1:
-                new_subkernel_activations = jnp.transpose(new_subkernel_activations, (1, 0, 2))
+                per_line_subkernel_activations = jnp.transpose(per_line_subkernel_activations, (1, 2, 0, 3))
             elif dim == 2:
-                new_subkernel_activations = jnp.transpose(new_subkernel_activations, (1, 2, 0))
+                per_line_subkernel_activations = jnp.transpose(per_line_subkernel_activations, (1, 2, 3, 0))
 
         detected_kernel_meta_objs = {}
         detected_kernel_moving_idx = None
@@ -2940,12 +2942,12 @@ class PSEnv:
                 detected_kernel_moving_idx = jnp.max(detected_kernel_moving_idxs, axis=0)
         
         kernel_detect_out = LineKernelFnReturn(
-            subkernel_activations=new_subkernel_activations,
+            per_line_subkernel_activations=per_line_subkernel_activations,
             subkernel_detect_outs=subkernel_detect_outs,
             detected_meta_objs=detected_kernel_meta_objs,
             detected_moving_idx=detected_kernel_moving_idx,
         )
-        kernel_activations = new_subkernel_activations.any(axis=0)
+        kernel_activations = per_line_subkernel_activations.any(axis=(0,1))
 
         return kernel_activations, subkernel_cell_detect_outs, kernel_detect_out
 
@@ -2953,10 +2955,38 @@ class PSEnv:
     def project_line_kernel(self, rng, lvl, kernel_activations, subkernel_cell_detect_outs, kernel_detect_out: LineKernelFnReturn, pattern_detect_out,
                             subkernel_projection_fns: List[Callable], lp_is_vertical: bool, lp_is_horizontal: bool):
 
-        for i, subkernel_projection_fn in enumerate(subkernel_projection_fns):
-            rng, lvl = subkernel_projection_fn(
-                rng, lvl, kernel_detect_out.subkernel_activations[i], subkernel_cell_detect_outs[i], kernel_detect_out.subkernel_detect_outs[i], pattern_detect_out
+        valid_line_idxs = jnp.argwhere(kernel_detect_out.per_line_subkernel_activations.any(axis=(1,2,3)),
+                                       size=kernel_detect_out.per_line_subkernel_activations.shape[0]+1, fill_value=-1)
+
+        def project_line_i(carry):
+            lvl, line_applied, i = carry
+            init_lvl = lvl
+            line_idx = valid_line_idxs[i][0]
+            subkernel_activations = kernel_detect_out.per_line_subkernel_activations[line_idx]
+            for subkern_i, subkernel_projection_fn in enumerate(subkernel_projection_fns):
+                _, lvl = subkernel_projection_fn(
+                    rng, lvl, subkernel_activations[subkern_i], subkernel_cell_detect_outs[subkern_i],
+                    kernel_detect_out.subkernel_detect_outs[subkern_i], pattern_detect_out
+                )
+            line_applied = jnp.any(lvl != init_lvl)
+            i = i + 1
+            jax.debug.print('line_applied: {line_applied}, i: {i}, line_idx: {line_idx}', line_applied=line_applied, i=i, line_idx=line_idx)
+            return lvl, line_applied, i
+        
+        init_carry = (lvl, False, 0)
+        if self.jit:
+            lvl, line_applied, i = jax.lax.while_loop(
+                lambda x: (~x[1]) & (valid_line_idxs[x[2],0] != -1),
+                project_line_i,
+                init_carry,
             )
+        else:
+            line_applied, i = init_carry[1], init_carry[2]
+            carry = init_carry
+            while (not line_applied) and (valid_line_idxs[i,0] != -1):
+                carry = project_line_i(carry)
+                lvl, line_applied, i = carry
+
         return rng, lvl
 
     def detect_kernel(self, lvl, cell_detection_fns, lp_is_vertical, lp_is_horizontal, lp_is_single, in_patch_shape, lp,
@@ -3146,10 +3176,14 @@ def generate_index_sequences(N, M):
     valid_indices = list(range(N))
     result = []
 
+    # Probably a faster way to do this from "within" this combination-generating function.
+    positions_lst = list(itertools.combinations(range(M), N))
+    positions_lst = sorted(positions_lst, key=lambda x: abs(x[0] - x[1]))
+
     # Step 1: Choose positions in the M-length vector to place the N valid indices
-    for positions in itertools.combinations(range(M), N):
+    for positions in positions_lst:
         # Step 2: Generate increasing permutations of valid indices (fixed order)
-        for values in itertools.permutations(valid_indices):
+        for values in itertools.permutations(valid_indices,):
             if list(values) != sorted(values):
                 continue  # skip non-increasing permutations
             arr = np.full(M, -1, dtype=int)
@@ -3192,34 +3226,20 @@ def mask_to_valid_sequences(binary_matrix, one_hot_masks=None, jit=True):
     init_valid_mask = jnp.zeros_like(binary_matrix)
 
     if not jit:
-    # if True:
-        for mask in one_hot_masks:
-            if not jit:
-                if jnp.all((mask & binary_matrix) == mask):  # check if mask is a subset
-                    init_valid_mask |= mask  # elementwise OR
-            else:    
-                init_valid_mask = jax.lax.cond(
-                    jnp.all((mask & binary_matrix) == mask),
-                    lambda: init_valid_mask | mask,
-                    lambda: init_valid_mask,
-                )
+        valid_masks = np.zeros_like(one_hot_masks)
+        for mask_i, mask in enumerate(one_hot_masks):
+            if np.all((mask & binary_matrix) == mask):  # check if mask is a subset
+                valid_masks[mask_i] = mask
+        valid_mask_v = np.stack(valid_masks, axis=0)
     else:
-        def body_fun(carry, mask):
-            valid_mask, remaining_activations = carry
-            valid_mask, remaining_activations = jax.lax.cond(
-                jnp.all((mask & remaining_activations) == mask),
-                lambda: (valid_mask | mask, remaining_activations ^ mask),
-                lambda: (valid_mask, remaining_activations),
-            )
-            return (valid_mask, remaining_activations), None
+        def body_fun(mask):
+            detected = jnp.all((mask & binary_matrix) == mask)
+            valid_mask = jnp.where(detected, mask, jnp.zeros_like(mask))
+            return valid_mask
 
-        (init_valid_mask, _), _ = jax.lax.scan(
-            body_fun,
-            (init_valid_mask, binary_matrix),
-            one_hot_masks,
-        )
+        valid_mask_v = jax.vmap(body_fun, in_axes=(0,))(one_hot_masks)
 
-    return init_valid_mask
+    return valid_mask_v
 
 
 def multihot_to_desc(multihot_level, objs_to_idxs, n_objs, show_background=False):
