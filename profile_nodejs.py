@@ -84,6 +84,11 @@ def main_launch(cfg: ProfileStandalone):
 
 
 def main(cfg: ProfileStandalone, games: Optional[List[str]] = None):
+    if cfg.for_solution:
+        cfg.for_validation = False
+        cfg.timeout = -1
+        cfg.n_steps = 1_000_000
+
     engine = require('./standalone/puzzlescript/engine.js')
     solver = require('./standalone/puzzlescript/solver.js')
     timeout_ms = cfg.timeout * 1_000 if cfg.timeout > 0 else -1
@@ -105,7 +110,8 @@ def main(cfg: ProfileStandalone, games: Optional[List[str]] = None):
     else:
         games_to_test = [cfg.game]
     results = {get_algo_name(algo): {} for algo in algos}
-    if os.path.isfile(STANDALONE_NODEJS_RESULTS_PATH) and not cfg.overwrite and not cfg.for_validation:
+    if os.path.isfile(STANDALONE_NODEJS_RESULTS_PATH) and not cfg.overwrite and not cfg.for_validation \
+            and not cfg.for_solution:
         shutil.copyfile(STANDALONE_NODEJS_RESULTS_PATH, STANDALONE_NODEJS_RESULTS_PATH[:-5] + '_bkp.json')
         with open(STANDALONE_NODEJS_RESULTS_PATH, 'r') as f:
             results = json.load(f)
@@ -137,12 +143,15 @@ def main(cfg: ProfileStandalone, games: Optional[List[str]] = None):
             os.makedirs(game_js_sols_dir, exist_ok=True)
 
             for level_i in range(n_levels):
-                level_js_sol_path = os.path.join(game_js_sols_dir, f'level-{level_i}.json')
+                if cfg.for_validation:
+                    level_js_sol_path = os.path.join(game_js_sols_dir, f'level-{level_i}.json')
+                elif cfg.for_solution:
+                    level_js_sol_path = os.path.join(game_js_sols_dir, f'{cfg.n_steps}-steps_level-{level_i}.json')
                 print(f'Level: {level_i}')
-                if cfg.for_validation and not cfg.overwrite and os.path.isfile(level_js_sol_path):
+                if cfg.for_validation or cfg.for_solution and not cfg.overwrite and os.path.isfile(level_js_sol_path):
                     print(f'Already solved (for validation) {game} level {level_i}.')
                     continue
-                if not cfg.for_validation and not cfg.overwrite and str(level_i) in results[run_name][game]:
+                if not cfg.for_validation and not cfg.for_solution and cfg.overwrite and str(level_i) in results[run_name][game]:
                     print(f'Already solved (for profiling) {game} level {level_i} with {run_name}, skipping.')
                     continue
                 engine.compile(['loadLevel', level_i], game_text)
@@ -197,7 +206,7 @@ def main(cfg: ProfileStandalone, games: Optional[List[str]] = None):
                 print(json.dumps(result))
                 results[run_name][game][level_i] = result
 
-        if not cfg.for_validation:
+        if not cfg.for_validation or cfg.for_solution:
             with open(STANDALONE_NODEJS_RESULTS_PATH, 'w') as f:
                 json.dump(results, f, indent=4)
 

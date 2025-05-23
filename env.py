@@ -1469,7 +1469,7 @@ class PSEnv:
         win, score, heuristic = self.check_win(multihot_level)
         win = win | tick_win
         if PRINT_SCORE:
-            jax.debug.print('heuristic: {heuristic}, score: {score}', heuristic=heuristic, score=score)
+            jax.debug.print('heuristic: {heuristic}, score: {score}, win: {win}', heuristic=heuristic, score=score, win=win)
 
         # reward = (heuristic - state.init_heuristic) / jnp.abs(state.init_heuristic)
         reward = heuristic - state.prev_heuristic

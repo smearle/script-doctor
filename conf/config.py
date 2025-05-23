@@ -70,8 +70,9 @@ class ProfileStandalone(PSConfig):
     include_randomness: bool = True
     # timeout: int = 60
     timeout: int = -1
-    # for_validation: bool = False
-    for_validation: bool = True
+    for_validation: bool = False
+    # for_validation: bool = True
+    for_solution: bool = True
     slurm: bool = False
     n_games_per_job: int = 100
 
@@ -182,6 +183,7 @@ class TrainConfig(RLConfig):
 
 @dataclass
 class SweepRLConfig(TrainConfig):
+    game: Optional[str] = None
     all_games: bool = False
     plot: bool = False
     slurm: bool = True

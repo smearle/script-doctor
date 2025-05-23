@@ -16,6 +16,7 @@ import jax
 import jax.numpy as jnp
 from lark import Lark
 import numpy as np
+import pandas as pd
 from skimage.transform import resize
 import submitit
 
@@ -23,7 +24,7 @@ from conf.config import JaxValidationConfig, RLConfig
 from env import PSEnv
 from gen_tree import GenPSTree
 from globals import SOLUTION_REWARDS_PATH, GAMES_TO_N_RULES_PATH
-from preprocess_games import PS_LARK_GRAMMAR_PATH, TREES_DIR, DATA_DIR, TEST_GAMES, PSErrors, get_tree_from_txt
+from preprocess_games import PS_LARK_GRAMMAR_PATH, TREES_DIR, DATA_DIR, TEST_GAMES, PSErrors, get_tree_from_txt, count_rules
 from ps_game import PSGameTree
 from utils import get_list_of_games_for_testing, to_binary_vectors
 from utils_rl import get_env_params_from_config
@@ -38,6 +39,8 @@ JS_SOLS_DIR = os.path.join('data', 'js_sols')
 games_to_skip = set({
     '2048',  # hangs
 })
+
+JS_TO_JAX_ACTIONS = [3, 0, 1, 2, 4]
 
 def multihot_level_from_js_state(level_state, obj_list):
     level_state = np.array(level_state).T
@@ -91,7 +94,9 @@ def main(cfg: JaxValidationConfig, games: Optional[List[str]] = None):
             'score_error': {},
             'success': {},
             'valid_games': [],
+            'partial_valid_games': [],
         }
+        games = [game for game in games if not game.startswith('test_')]
     val_results_path = os.path.join('data', 'validation_results.json')
     if os.path.isfile(val_results_path):
         shutil.copy(val_results_path, val_results_path[:-5] + '_bkp.json')
@@ -123,7 +128,6 @@ def main(cfg: JaxValidationConfig, games: Optional[List[str]] = None):
     # 2 - right
     # 3 - up
     # 4 - action
-    action_remap = [3, 0, 1, 2, 4]
 
     for sol_dir, game in zip(sol_paths, games):
         n_rules = None
@@ -171,6 +175,7 @@ def main(cfg: JaxValidationConfig, games: Optional[List[str]] = None):
 
         key = jax.random.PRNGKey(0)
         game_success = True
+        game_partial_success = False
         game_compile_error = False
         env = None
 
@@ -240,7 +245,8 @@ def main(cfg: JaxValidationConfig, games: Optional[List[str]] = None):
                             results['state_error'][game_name] = []
                         results['state_error'][game_name].append({'n_rules': n_rules, 'level': level_i})
                     n_state_error += 1
-                    # game_success = False
+                    game_success = False
+                    # game_partial_success = True
                 elif os.path.exists(score_log_path):
                     if cfg.aggregate:
                         with open(score_log_path, 'r') as f:
@@ -251,12 +257,14 @@ def main(cfg: JaxValidationConfig, games: Optional[List[str]] = None):
                     n_score_error += 1
                     # We'll be a bit generous and not count this for now. TODO: fix the score mismatch.
                     # game_success = False
+                    game_partial_success = True
                 else:
                     if cfg.aggregate:
                         if game_name not in results['success']:
                             results['success'][game_name] = []
                         results['success'][game_name].append({'n_rules': n_rules, 'level': level_i})
                     n_success += 1
+                    game_partial_success = True
                 print(f"Skipping level {level_i} because gif or error log already exists")
                 continue
 
@@ -302,7 +310,7 @@ def main(cfg: JaxValidationConfig, games: Optional[List[str]] = None):
             obj_list = sol_dict['objs']
             level_multihot = multihot_level_from_js_state(level_state, obj_list)
             actions = level_sol
-            actions = [action_remap[a] for a in actions]
+            actions = [JS_TO_JAX_ACTIONS[a] for a in actions]
             actions = jnp.array([int(a) for a in actions], dtype=jnp.int32)
 
             params = get_env_params_from_config(env, cfg)
@@ -419,14 +427,81 @@ def main(cfg: JaxValidationConfig, games: Optional[List[str]] = None):
         if cfg.aggregate:
             if game_success:
                 results['valid_games'].append({'game': game_name, 'n_rules': n_rules})
+            elif game_partial_success:
+                results['partial_valid_games'].append({'game': game_name, 'n_rules': n_rules})
 
     if cfg.aggregate:
         results['stats']['valid_games'] = len(results['valid_games'])
+        results['stats']['partial_valid_games'] = len(results['partial_valid_games'])
         
         save_stats()
+        stats_dict = {
+            "Total Games": len(games),
+            "Valid Games": len(results['valid_games']),
+            "Partially Valid Games": len(results['partial_valid_games']),
+            "Total Levels": n_levels,
+            "Successful Solutions": n_success,
+            "Compile Errors": n_compile_error,
+            "Runtime Errors": n_runtime_error,
+            "Solution Errors": n_solution_error,
+            "State Errors": n_state_error,
+            "Unvalidated Levels": n_unvalidated_levels,
+        }
+
+        # Create a latex table with the total number of games, the number of valid games, and the number of partial valid games
+        df = pd.DataFrame.from_dict(stats_dict, orient='index', columns=['Count'])
+        val_stats_tex_path = os.path.join('plots', 'validation_stats.tex')
+        os.makedirs('plots', exist_ok=True)
+        df.to_latex(val_stats_tex_path, index=True, header=False)
+        print(f"Validation results saved to {val_stats_tex_path}")
+
+        # Create a latex table of valid games, with the headers "Game", "# Rules", "Stochastic"
+        valid_games = results['valid_games']
+        valid_games = [game for game in valid_games if game['n_rules']]
+        print(f"N valid games: {len(valid_games)}")
+        valid_game_names = [game['game'] for game in valid_games]
+        valid_game_names = clean_game_names(valid_game_names)
+        valid_game_n_rules = [game['n_rules'][0] for game in valid_games]
+        valid_game_name_stochastic = [game['n_rules'][1] for game in valid_games]
+        valid_games_df = pd.DataFrame({'Game': valid_game_names, '\# Rules': valid_game_n_rules})
+        # Sort games by number of rules
+        valid_games_df = valid_games_df.sort_values(by=['\# Rules'], ascending=True)
+        # Save to latex as a longtable
+        valid_games_tex_path = os.path.join('plots', 'valid_games.tex')
+        valid_games_df.to_latex(valid_games_tex_path, index=False, header=True, longtable=True,
+                                caption="PuzzleScript games in which all levels were successfully validated in JAX (vis-a-vis solutions generated by breadth-first search in JavaScript).",
+                                label="tab:valid_games")
+        print(f"Valid games saved to {valid_games_tex_path}")
+
+        # Do the same for partially valid games
+        partial_valid_games = results['partial_valid_games']
+        partial_valid_games = [game for game in partial_valid_games if game['n_rules']]
+        print(f"N partial valid games: {len(partial_valid_games)}")
+        partial_valid_game_names = [game['game'] for game in partial_valid_games]
+        partial_valid_game_names = clean_game_names(partial_valid_game_names)
+        partial_valid_game_n_rules = [game['n_rules'][0] for game in partial_valid_games]
+        partial_valid_game_name_stochastic = [game['n_rules'][1] for game in partial_valid_games]
+        partial_valid_games_df = pd.DataFrame({'Game': partial_valid_game_names, '\# Rules': partial_valid_game_n_rules})
+        # Sort games by number of rules
+        partial_valid_games_df = partial_valid_games_df.sort_values(by=['\# Rules'], ascending=True)
+        # Save to latex as a longtable
+        partial_valid_games_tex_path = os.path.join('plots', 'partial_valid_games.tex')
+        partial_valid_games_df.to_latex(partial_valid_games_tex_path, index=False, header=True, longtable=True,
+                                        caption="PuzzleScript games in which one or more levels were successfully validated in JAX (vis-a-vis solutions generated by breadth-first search in JavaScript).",
+                                        label="tab:partial_valid_games")
+        print(f"Partially valid games saved to {partial_valid_games_tex_path}")
+        
 
     print(f"Finished validating solutions in jax.")
+    
 
+def clean_game_names(games):
+    # Clean the game names to remove any special characters
+    games = [game.replace('_', ' ') for game in games]
+    games = [game.replace('^', '\^') for game in games]
+    games = [game.replace('&', '\&') for game in games]
+    games = [game[:60] + '...' if len(game) > 50 else game for game in games]
+    return games
 
 
 if __name__ == '__main__':
