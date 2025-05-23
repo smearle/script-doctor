@@ -69,7 +69,7 @@ if __name__ == '__main__':
         with open(ps_urls_path, "r") as f:
             ps_links = f.read().splitlines()
     visited_ps_links_path = "data/visited_ps_links.txt"
-    if os.path.isfile(visited_ps_links_path):
+    if os.path.isfile(visited_ps_links_path) and not args.update:
         with open(visited_ps_links_path, "r") as f:
             visited_ps_links = set(f.read().splitlines())
     else:
@@ -94,16 +94,16 @@ if __name__ == '__main__':
                 "X-GitHub-Api-Version": "2022-11-28"
             }
 
-            def add_to_visited():
+            def add_to_visited(filename):
                 with open(visited_ps_links_path, "a", encoding='utf-8') as f:
-                    f.write(f"{link}\n")
+                    f.write(f"{link}, {filename}\n")
             
             try:
                 response = requests.get(git_url, headers=headers)
                 response.raise_for_status()
             except requests.exceptions.HTTPError as e:
                 print(f"Error: {e}")
-                add_to_visited()
+                add_to_visited(filename="error.txt")
                 continue
             
             gist = response.json()
@@ -141,7 +141,7 @@ if __name__ == '__main__':
             with open(script_path, "w", encoding='utf-8') as f:
                 f.write(script)
             
-            add_to_visited()
+            add_to_visited(filename=filename)
 
     # Count number of scripts
     script_files = os.listdir(SCRAPED_GAMES_DIR)

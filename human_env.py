@@ -84,6 +84,9 @@ def human_loop(env: PSEnv, level: int = 0, profile=False):
         elif key == ord('n'):
             print("Advancing level...")
             lvl_i += 1
+            if lvl_i >= len(env.levels):
+                print("No more levels!")
+                break
             params = params.replace(level=env.get_level(lvl_i))
             do_reset = True
         elif key == ord('b'):

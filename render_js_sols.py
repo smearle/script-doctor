@@ -12,14 +12,12 @@ from lark import Lark
 from env import PSState
 from preprocess_games import PS_LARK_GRAMMAR_PATH, PSErrors, get_env_from_ps_file
 from profile_nodejs import compile_game
-from utils import level_to_int_arr
+from utils import init_ps_lark_parser, level_to_int_arr
 from validate_sols import JS_SOLS_DIR, multihot_level_from_js_state, JAX_VALIDATED_JS_SOLS_DIR
 
 
 if __name__ == '__main__':
-    with open(PS_LARK_GRAMMAR_PATH, "r", encoding='utf-8') as file:
-        puzzlescript_grammar = file.read()
-    parser = Lark(puzzlescript_grammar, start="ps_game", maybe_placeholders=False)
+    parser = init_ps_lark_parser()
     engine = require('./standalone/puzzlescript/engine.js')
     solver = require('./standalone/puzzlescript/solver.js')
     game_sols_dir = glob.glob(f"{JS_SOLS_DIR}/*")
@@ -44,7 +42,7 @@ if __name__ == '__main__':
 
             if game_text is None:
                 try:
-                    game_text = compile_game(engine, game_name, level_i=level_i)
+                    game_text = compile_game(parser, engine, game_name, level_i=level_i)
                 except Exception as e:
                     traceback.print_exc()
                     print(f"Error compiling game {game_name} level {level_i}: {e}")

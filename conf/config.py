@@ -18,6 +18,7 @@ class PlotRandProfileConfig:
 @dataclass
 class PlotStandaloneBFS:
     all_games: bool = True
+    aggregate: bool = False  # (Re-)collect all the solution JSONs to compile a results dict for plotting
 
 @dataclass
 class PSConfig:

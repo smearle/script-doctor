@@ -1,3 +1,4 @@
+import glob
 import json
 import os
 
@@ -9,10 +10,98 @@ from conf.config import PlotStandaloneBFS
 from globals import GAMES_N_RULES_SORTED_PATH, PLOTS_DIR, STANDALONE_NODEJS_RESULTS_PATH
 from profile_nodejs import get_standalone_run_params_from_name
 from utils import get_list_of_games_for_testing
+from validate_sols import JS_SOLS_DIR
+
+
+BFS_RESULTS_PATH = os.path.join('data', 'bfs_results.json')
 
 
 @hydra.main(version_base="1.3", config_path="conf", config_name="plot_standalone_bfs_config")
-def plot(cfg: PlotStandaloneBFS):
+def main(cfg: PlotStandaloneBFS):
+    if cfg.aggregate:
+        aggregate_results(cfg)
+    else:
+        plot(cfg)
+    
+
+def aggregate_results(cfg: PlotStandaloneBFS):
+    games = os.listdir(JS_SOLS_DIR)
+    results = {}
+    for game in games:
+        if game.startswith('test_'):
+            continue
+        game_dir = os.path.join(JS_SOLS_DIR, game)
+        sol_jsons = glob.glob(f"{game_dir}/*.json")
+        n_levels = 0
+        n_solved = 0
+        max_iters = 0
+        for sol_json in sol_jsons:
+            level_i = sol_json.split("/")[-1].split(".")[0].split('-')[1]
+            with open(sol_json, 'r') as f:
+                sol_dict = json.load(f)
+            if 'iterations' not in sol_dict or 'won' not in sol_dict:
+                print(f"Skipping {sol_json} because it doesn't have 'iterations' or 'won'")
+                continue
+            solved = sol_dict['won']
+            if solved:
+                n_solved += 1
+            n_levels += 1
+            max_iters = max(max_iters, sol_dict['iterations'])
+        if n_levels > 0:
+            pct_solved = n_solved / n_levels
+            results[game] = {
+                'pct_solved': pct_solved,
+                'n_levels': n_levels,
+                'max_iters': max_iters,
+            }
+    with open(BFS_RESULTS_PATH, 'w') as f:
+        json.dump(results, f, indent=4)
+
+    plot(cfg, results)
+
+
+def plot(cfg: PlotStandaloneBFS, results=None):
+    M = 40  # max number of games per table
+
+    if results is None:
+        with open(BFS_RESULTS_PATH, 'r') as f:
+            results = json.load(f)
+    
+    df = pd.DataFrame.from_dict(results, orient='index')
+    df = df.sort_values(by=['pct_solved', 'max_iters'], ascending=[False, True])
+
+    csv_file_path = os.path.join(PLOTS_DIR, 'standalone_bfs_results.csv')
+    df.to_csv(csv_file_path, index=True, float_format="%.2f")
+    print(f'Saved results to {csv_file_path}')
+
+    col_renames = {
+        'pct_solved': 'Solved Levels \\%',
+        'n_levels': '\\# Total Levels',
+        'max_iters': 'Max Search Iterations',
+    }
+    df.rename(columns=col_renames, inplace=True)
+
+    # Clean and prepare index for LaTeX
+    df.index = df.index.str.replace('_', ' ')
+    df.index = df.index.str.replace('&', r'\&', regex=False)
+    df.index = df.index.str.replace('^', r'\^', regex=False)
+    df.index = df.index.to_series().apply(
+        lambda name: f"\\parbox{{3.5cm}}{{\\strut {name[:50]}{'...' if len(name) > 50 else ''}}}"
+    )
+    df.index.name = 'Game'
+
+    # Modify % column to show, e.g. "0.75" as "75\%"
+    df['Solved Levels \\%'] = df['Solved Levels \\%'].apply(lambda x: f"{x * 100:.0f}\\%")
+
+    latex_file_path = os.path.join(PLOTS_DIR, 'bfs_results.tex')
+    with open(latex_file_path, 'w') as f:
+        f.write(df.to_latex(index=True, float_format="%.2f", escape=False, caption="Results of BFS on full dataset of games, with max $100,000$ max search iterations and a timeout of 1 minute.",
+                            longtable=True, label="tab:bfs_results"))
+    print(f'Saved latex table to {latex_file_path}')
+
+
+@hydra.main(version_base="1.3", config_path="conf", config_name="plot_standalone_bfs_config")
+def old_plot(cfg: PlotStandaloneBFS):
     with open(STANDALONE_NODEJS_RESULTS_PATH, 'r') as f:
         results = json.load(f)
 
@@ -129,4 +218,4 @@ def plot(cfg: PlotStandaloneBFS):
 
     
 if __name__ == "__main__":
-    plot()
+    main()

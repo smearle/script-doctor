@@ -19,13 +19,15 @@ import submitit
 
 from conf.config import ProfileStandalone
 from globals import STANDALONE_NODEJS_RESULTS_PATH
-from preprocess_games import SIMPLIFIED_GAMES_DIR
-from utils import get_list_of_games_for_testing, level_to_int_arr
+from preprocess_games import SIMPLIFIED_GAMES_DIR, get_tree_from_txt
+from utils import get_list_of_games_for_testing, level_to_int_arr, init_ps_lark_parser
 from validate_sols import JS_SOLS_DIR
 
 
-def compile_game(engine, game, level_i):
+def compile_game(parser, engine, game, level_i):
     game_path = os.path.join(SIMPLIFIED_GAMES_DIR, f'{game}.txt')
+    if not os.path.isfile(game_path):
+        get_tree_from_txt(parser=parser, game=game, test_env_init=False, overwrite=True)
     with open(f'{game_path[:-4]}_simplified.txt', 'r') as f:
         game_text = f.read()
     engine.compile(['restart'], game_text)
@@ -85,6 +87,7 @@ def main(cfg: ProfileStandalone, games: Optional[List[str]] = None):
     engine = require('./standalone/puzzlescript/engine.js')
     solver = require('./standalone/puzzlescript/solver.js')
     timeout_ms = cfg.timeout * 1_000 if cfg.timeout > 0 else -1
+    parser = init_ps_lark_parser()
     print(f'Timeout: {timeout_ms} ms')
 
     if cfg.algo == 'bfs':
@@ -123,7 +126,7 @@ def main(cfg: ProfileStandalone, games: Optional[List[str]] = None):
                 results[run_name][game] = {}
             try:
                 engine.unloadGame()
-                game_text = compile_game(engine, game, 0)
+                game_text = compile_game(parser, engine, game, 0)
             except Exception as e:
                 print(f'Error compiling game {game} level {0}: {e}')
                 results[run_name][game][level_i] = {"Error": traceback.print_exc()}
@@ -179,7 +182,10 @@ def main(cfg: ProfileStandalone, games: Optional[List[str]] = None):
                         'won': result['solved'],
                         'actions': result['actions'],
                         'score': result['score'],
-                        'timeout': None,  # TODO
+                        'timeout': result['timeout'],  # TODO
+                        'iterations': result['iterations'],
+                        'FPS': result['FPS'],
+                        'time': result['time'],
                         'objs': result['objs'],
                         'state': result['state'],
                     }

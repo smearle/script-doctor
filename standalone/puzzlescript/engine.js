@@ -8105,8 +8105,8 @@ function processInput(dir,dontDoWin,dontModify) {
 				restartTarget=level4Serialization();
 				hasUsedCheckpoint=true;
 				var backupStr = JSON.stringify(restartTarget);
-				storage_set(document.URL+'_checkpoint',backupStr);
-				storage_set(document.URL,curlevel);				
+				// storage_set(document.URL+'_checkpoint',backupStr);
+				// storage_set(document.URL,curlevel);				
 			}	 
 
 		    if (level.commandQueue.indexOf('again')>=0 && modified) {
