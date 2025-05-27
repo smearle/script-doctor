@@ -68,6 +68,9 @@ def plot_rl_runs_reward(grid_cfgs: List[SweepRLConfig]):
                 df = pd.read_csv(progress_csv)[['timestep', 'ep_return']]
                 df = df[['timestep', 'ep_return']].drop_duplicates(subset='timestep')
                 # Replace NaNs with 0s
+                if len(df) == 0:
+                    print(f"{progress_csv} is empty, skipping.")
+                    continue
                 dfs.append(df)
 
             if not dfs:
@@ -77,6 +80,7 @@ def plot_rl_runs_reward(grid_cfgs: List[SweepRLConfig]):
 
             # Interpolate all dfs on a shared set of timesteps
             common_timesteps = sorted(set().union(*[df['timestep'].values for df in dfs]))
+            common_timesteps = [t for t in common_timesteps if t is not None]
             reindexed_dfs = [df.set_index('timestep').reindex(common_timesteps).interpolate() for df in dfs]
             # reindexed_dfs = [df.fillna(0) for df in dfs]
 
@@ -162,6 +166,7 @@ def gen_grid_cfgs(sweep_cfg: SweepRLConfig):
                 cfg_i.game = game
                 cfg_i.level = level
                 cfg_i.n_envs = n_envs
+                cfg_i.hidden_dims = sweep_cfg.hidden_dims
                 cfg_i.total_timesteps = int(TOTAL_TIMESTEPS)
                 exp_cfgs.append(cfg_i)
             grid_cfgs[game][level] = exp_cfgs
