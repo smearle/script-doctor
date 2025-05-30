@@ -390,9 +390,18 @@ function getScoreNormalized(engine) {
 	return 1 - score / normal_value;
 }
 
+function getState(engine) {
+  level = engine.backupLevel();
+  return level
+}
+
 function takeAction(engine, action) {
   // let changed = engine.processInput(action);
-  let changed = processInputSearch(engine, action);
+  // let changed = processInputSearch(engine, action);
+  var changed = engine.processInput(action);
+  while (engine.getAgaining()) {
+    changed = engine.processInput(-1) || changed;
+  }
   level = engine.backupLevel();
   level_map = level['dat'];
   // score = getScore(engine);
@@ -1022,4 +1031,5 @@ module.exports = {
   randomRollout,
   takeAction,
   precalcDistances,
+  getState,
 }

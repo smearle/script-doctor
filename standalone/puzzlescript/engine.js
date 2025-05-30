@@ -8360,9 +8360,9 @@ function goToTitleScreen(){
 	doSetupTitleScreenLevelContinue();
 	titleSelection=showContinueOptionOnTitleScreen()?1:0;
 	generateTitleScreen();
-	if (canvas!==null){//otherwise triggers error in cat bastard test
-		regenSpriteImages();
-	}
+	// if (canvas!==null){//otherwise triggers error in cat bastard test
+	// 	regenSpriteImages();
+	// }
 }
 
 function getWinning() {

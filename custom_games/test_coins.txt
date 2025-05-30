@@ -3,6 +3,7 @@ author Tristan Shawn
 background_color darkblue 
 homepage https://tristanshawn.itch.io/
 color_palette arnecolors
+verbose_logging
 
 ========
 OBJECTS
@@ -58,11 +59,6 @@ G = Goal
 =========
 SOUNDS
 =========
-endlevel 18286703
-startgame 35495108
-sfx0 329907
-CloseMessage 6006506
-
 
 ================
 COLLISIONLAYERS
@@ -78,18 +74,56 @@ RULES
 ======
 
 [ > Player | ... |  Path ] -> [  | ... | Player ] sfx0
-[ > Player | ... |  Goal ] -> [  | ... | > Player ] sfx0
-[ > Player ] -> [Player] sfx0
+[ > Player ] -> [Player]
 
 ==============
 WINCONDITIONS
 ==============
 
-(no goal)
+no path
 
 =======
 LEVELS
 =======
+
+..P..
+.....
+..U..
+.....
+..U..
+
+..P..
+.....
+..P..
+.....
+..U..
+.....
+.....
+
+..U..
+.....
+..U..
+.....
+..P..
+
+
+.....
+.....
+.....
+P.P.U
+
+
+.....
+.....
+.....
+U.P.P
+
+..U..
+.....
+.....
+..P..
+..P..
+
 
 ..p..
 ..P..
@@ -106,15 +140,3 @@ U.U.P
 .....
 .....
 P.U.U
-
-..p..
-.....
-..U..
-.....
-..U..
-
-..U..
-.....
-..U..
-.....
-..P..

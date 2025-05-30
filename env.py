@@ -2883,9 +2883,7 @@ class PSEnv:
             one_hot_masks = gen_one_hot_masks(*subkernel_activations[:, :, 0].shape)
             if rot == 2:
                 # Flip so that "closer" subkernel line patterns take precedence
-                # one_hot_masks = jnp.flip(one_hot_masks, 0)
-                # one_hot_masks = jnp.flip(one_hot_masks, 2)
-                # one_hot_masks = jnp.flip(one_hot_masks, 1)
+                one_hot_masks = jnp.flip(one_hot_masks, 0)
                 pass
 
         elif lp_is_horizontal:
@@ -2893,7 +2891,7 @@ class PSEnv:
             one_hot_masks = gen_one_hot_masks(*subkernel_activations[:, 0].shape)
             if rot == 3:
                 # Flip so that "closer" subkernel line patterns take precedence
-                # one_hot_masks = jnp.flip(one_hot_masks, 0)
+                one_hot_masks = jnp.flip(one_hot_masks, 0)
                 pass
 
         # (n_possible_lines, n_subkernels, height, width)
@@ -3196,7 +3194,7 @@ def generate_index_sequences(N, M):
 
     # Probably a faster way to do this from "within" this combination-generating function.
     positions_lst = list(itertools.combinations(range(M), N))
-    positions_lst = sorted(positions_lst, key=lambda x: abs(x[0] - x[1]))
+    # positions_lst = sorted(positions_lst, key=lambda x: abs(x[0] - x[1]))
 
     # Step 1: Choose positions in the M-length vector to place the N valid indices
     for positions in positions_lst:
