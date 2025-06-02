@@ -227,8 +227,8 @@ def main(cfg: JaxValidationConfig, games: Optional[List[str]] = None):
             gif_path = os.path.join(jax_sol_dir, f'level-{level_i}.gif')
 
             # Skip if we already have a result and are not overwritiing.
-            if (os.path.exists(gif_path) or os.path.exists(sol_log_path) or os.path.exists(score_log_path) \
-                    or os.path.exists(run_log_path) or os.path.exists(state_log_path)) and not cfg.overwrite:
+            if (os.path.exists(gif_path) or os.path.exists(sol_log_path) or os.path.exists(score_log_path)
+                    or os.path.exists(run_log_path) or os.path.exists(state_log_path)):
                 if cfg.overwrite:
                     if os.path.exists(gif_path):
                         os.remove(gif_path)
@@ -240,50 +240,51 @@ def main(cfg: JaxValidationConfig, games: Optional[List[str]] = None):
                         os.remove(run_log_path)
                     if os.path.exists(state_log_path):
                         os.remove(state_log_path)
-                elif os.path.exists(run_log_path):
-                    if cfg.aggregate:
-                        with open(run_log_path, 'r') as f:
-                            run_log = f.read()
-                        if game_name not in results['runtime_error']:
-                            results['runtime_error'][game_name] = []
-                        results['runtime_error'][game_name].append({'level': level_i, 'n_rules': n_rules, 'log': run_log})
-                    n_runtime_error += 1
-                    game_success = False
-                elif os.path.exists(sol_log_path):
-                    if cfg.aggregate:
-                        if game_name not in results['solution_error']:
-                            results['solution_error'][game_name] = []
-                        results['solution_error'][game_name].append({'n_rules': n_rules, 'level': level_i})
-                    n_solution_error += 1
-                    game_success = False
-                elif os.path.exists(state_log_path):
-                    if cfg.aggregate:
-                        if game_name not in results['state_error']:
-                            results['state_error'][game_name] = []
-                        results['state_error'][game_name].append({'n_rules': n_rules, 'level': level_i})
-                    n_state_error += 1
-                    game_success = False
-                    # game_partial_success = True
-                elif os.path.exists(score_log_path):
-                    if cfg.aggregate:
-                        with open(score_log_path, 'r') as f:
-                            score_log = f.read()
-                        if game_name not in results['score_error']:
-                            results['score_error'][game_name] = []
-                        results['score_error'][game_name].append({'n_rules': n_rules, 'level': level_i, 'log': score_log})
-                    n_score_error += 1
-                    # We'll be a bit generous and not count this for now. TODO: fix the score mismatch.
-                    # game_success = False
-                    game_partial_success = True
                 else:
-                    if cfg.aggregate:
-                        if game_name not in results['success']:
-                            results['success'][game_name] = []
-                        results['success'][game_name].append({'n_rules': n_rules, 'level': level_i})
-                    n_success += 1
-                    game_partial_success = True
-                print(f"Skipping level {level_i} because gif or error log already exists")
-                continue
+                    if os.path.exists(run_log_path):
+                        if cfg.aggregate:
+                            with open(run_log_path, 'r') as f:
+                                run_log = f.read()
+                            if game_name not in results['runtime_error']:
+                                results['runtime_error'][game_name] = []
+                            results['runtime_error'][game_name].append({'level': level_i, 'n_rules': n_rules, 'log': run_log})
+                        n_runtime_error += 1
+                        game_success = False
+                    elif os.path.exists(sol_log_path):
+                        if cfg.aggregate:
+                            if game_name not in results['solution_error']:
+                                results['solution_error'][game_name] = []
+                            results['solution_error'][game_name].append({'n_rules': n_rules, 'level': level_i})
+                        n_solution_error += 1
+                        game_success = False
+                    elif os.path.exists(state_log_path):
+                        if cfg.aggregate:
+                            if game_name not in results['state_error']:
+                                results['state_error'][game_name] = []
+                            results['state_error'][game_name].append({'n_rules': n_rules, 'level': level_i})
+                        n_state_error += 1
+                        game_success = False
+                        # game_partial_success = True
+                    elif os.path.exists(score_log_path):
+                        if cfg.aggregate:
+                            with open(score_log_path, 'r') as f:
+                                score_log = f.read()
+                            if game_name not in results['score_error']:
+                                results['score_error'][game_name] = []
+                            results['score_error'][game_name].append({'n_rules': n_rules, 'level': level_i, 'log': score_log})
+                        n_score_error += 1
+                        # We'll be a bit generous and not count this for now. TODO: fix the score mismatch.
+                        # game_success = False
+                        game_partial_success = True
+                    else:
+                        if cfg.aggregate:
+                            if game_name not in results['success']:
+                                results['success'][game_name] = []
+                            results['success'][game_name].append({'n_rules': n_rules, 'level': level_i})
+                        n_success += 1
+                        game_partial_success = True
+                    print(f"Skipping level {level_i} because gif or error log already exists")
+                    continue
 
             if cfg.aggregate:
                 # In this case, don't run any new validations, just aggregate results for the ones we've already run.
@@ -328,7 +329,7 @@ def main(cfg: JaxValidationConfig, games: Optional[List[str]] = None):
             obj_list = sol_dict['objs']
             level_multihot = multihot_level_from_js_state(level_state, obj_list)
             actions = level_sol
-            print(f"Level {level_i} solution: {actions}")
+            # print(f"Level {level_i} solution: {actions}")
             actions = [JS_TO_JAX_ACTIONS[a] for a in actions]
             actions = jnp.array([int(a) for a in actions], dtype=jnp.int32)
 
@@ -382,7 +383,7 @@ def main(cfg: JaxValidationConfig, games: Optional[List[str]] = None):
                         #     results['state_error'][game_name] = []
                         # results['state_error'][game_name].append({'n_rules': n_rules, 'level': level_i})
                         n_state_error += 1
-                    print(f"Level {level_i} solution failed")
+                    print(f"Level {level_i} solution failed (state mismatch)")
                     # game_success = False
                 # # FIXME: There is a discrepancy between the way we compute scores in js (I actually don't understand
                 # # how we're getting that number) and the way we compute scores in jax, so this will always fail.
@@ -405,6 +406,8 @@ def main(cfg: JaxValidationConfig, games: Optional[List[str]] = None):
                     # results['success'][game_name].append({'n_rules': n_rules, 'level': level_i})
                     n_success += 1
                     print(f"Level {level_i} solution succeeded")
+            except KeyboardInterrupt as e:
+                raise e
             except Exception as e:
                 traceback.print_exc()
                 print(f"Error running solution: {og_path}")
