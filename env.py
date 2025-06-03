@@ -1,6 +1,7 @@
 from dataclasses import dataclass
 from functools import partial
 import itertools
+import logging
 import os
 from timeit import default_timer as timer
 from typing import Callable, Dict, Iterable, List, Optional, Tuple, Union
@@ -20,6 +21,8 @@ from jax_utils import stack_leaves
 from ps_game import LegendEntry, PSGameTree, PSObject, Rule, WinCondition
 from spaces import Discrete, Box
 
+
+logger = logging.getLogger(__name__)
 
 # Whether to print out a bunch of stuff, etc.
 DEBUG = False
@@ -348,6 +351,29 @@ def is_perp_or_par_in_pattern(p):
                 if modifier.lower() in ['perpendicular', 'orthogonal', 'orthoganal', 'parallel']:
                     return True
     return False
+
+def get_command_from_pattern(p):
+    detected_commands = []
+    new_p = []
+    for k in p:
+        new_k = []
+        for c in k:
+            new_c = []
+            for object_with_modifier in c:
+                mod_obj = object_with_modifier.split(' ')
+                obj = mod_obj[-1]
+                if len(mod_obj) == 1:
+                    if obj.lower() in ['win', 'cancel', 'restart', 'again']:
+                        detected_commands.append(obj.lower())
+                    else:
+                        new_c.append(obj)
+                else:
+                    new_c.append(object_with_modifier)
+            new_k.append(new_c)
+        new_p.append(new_k)
+    assert len(detected_commands) <= 1, (f"Detected multiple commands in pattern: {detected_commands}. "
+                                          "Does this make sense?")
+    return new_p, detected_commands[0] if len(detected_commands) > 0 else None
 
 def gen_perp_par_subrules(l_kerns, r_kerns):
     new_patterns = [[None, None], [None, None]]
@@ -1181,7 +1207,6 @@ class PSEnv:
         self.coll_mat = np.einsum('ij,ik->jk', coll_masks, coll_masks, dtype=bool)
         if DEBUG:
             print(f"Generating tick function for {self.title}")
-        self.tick_fn = self.gen_tick_fn()
         if DEBUG:
             print(f"Generating check win function for {self.title}")
         self.check_win = gen_check_win(tree.win_conditions, self.objs_to_idxs, meta_objs, self.char_to_obj, jit=self.jit)
@@ -1270,7 +1295,15 @@ class PSEnv:
 
         for char in legend_chars_to_objs:
             if char not in self.chars_to_idxs:
-                self.chars_to_idxs[char] = self.objs_to_idxs[legend_chars_to_objs[char]]
+                obj = legend_chars_to_objs[char]
+                if obj in self.objs_to_idxs:
+                    self.chars_to_idxs[char] = self.objs_to_idxs[obj]
+                else:
+                    logger.warning(f"Object {obj} not found in objs_to_idxs. Presumably it's a meta-object. "
+                                   f"Mapping the character `{char}` the first sub-object's index instead. Hopefully "
+                                   " it's not actually used in any level definitions.")
+                    sub_objs = expand_meta_objs([obj], meta_objs, char_to_obj)
+                    self.chars_to_idxs[char] = self.objs_to_idxs[sub_objs[0]]
 
         if self.jit:
             self.step = jax.jit(self.step)
@@ -1332,6 +1365,7 @@ class PSEnv:
 
     def reset(self, rng, params: PSParams):
         lvl = params.level
+        self.tick_fn = self.gen_tick_fn(lvl.shape[1:])
         again = False
         _, _, init_heuristic = self.check_win(lvl)
         state = PSState(
@@ -1499,7 +1533,7 @@ class PSEnv:
         multihot_level = self.char_level_to_multihot(level)
         return multihot_level
 
-    def gen_subrules_meta(self, rule: Rule, rule_name: str):
+    def gen_subrules_meta(self, rule: Rule, rule_name: str, lvl_shape: Tuple[int, int],):
         if 'random' in rule.prefixes:
             # TODO: Randomize the order of rule rotations within a group
             self._has_randomness = True
@@ -2378,9 +2412,16 @@ class PSEnv:
                 if lp_is_horizontal:
                     lp_subkernels = [lps[None] for lps in lp_subkernels]
                     rp_subkernels = [rps[None] for rps in rp_subkernels]
+                    row_len = np.sum([np.sum([len(c) for c in k if c[0] != '...']) for k in lp_subkernels])
+                    if row_len > lvl_shape[1]:
+                        return None, None
                 elif lp_is_vertical:
                     lp_subkernels = [lps[:, None] for lps in lp_subkernels]
                     rp_subkernels = [rps[:, None] for rps in rp_subkernels]
+                    col_len = np.sum([np.sum([len(c) for c in k if c[0] != '...']) for k in lp_subkernels])
+                    if col_len > lvl_shape[0]:
+                        breakpoint()
+                        return None, None
                 
                 subkernel_detection_fns = []
                 subkernel_projection_fns = []
@@ -2426,8 +2467,14 @@ class PSEnv:
                 # TODO: generalize rules to 2D...?
                 if lp_is_horizontal:
                     lp = lp[0, :]
+                    row_len = np.sum([len(c) for c in lp])
+                    if row_len > lvl_shape[1]:
+                        return None, None
                 elif lp_is_vertical:
                     lp = lp[:, 0]
+                    row_height = np.sum([len(c) for c in lp])
+                    if row_height > lvl_shape[0]:
+                        return None, None
                 elif lp_is_single:
                     lp = lp[0, 0]
                 else:
@@ -2483,15 +2530,16 @@ class PSEnv:
                             )
                 # FIXME: why is the normal way broken here?
                 # if has_right_pattern:
-                if has_right_pattern and rp is None:
+                if has_right_pattern and rp is None and lp is not None:
                     rp = np.array([None] * len(lp))
                 if has_right_pattern:
-                    for i, r_cell in enumerate(rp):
-                        if r_cell == '...':
-                            assert is_line_detector, f"`...` not found in left pattern of rule {self.rule_name}"
-                            cell_projection_fns.append('...')
-                        else:
-                            cell_projection_fns.append(gen_cell_projection_fn(r_cell, force_idx))
+                    if rp is not None:
+                        for i, r_cell in enumerate(rp):
+                            if r_cell == '...':
+                                assert is_line_detector, f"`...` not found in left pattern of rule {self.rule_name}"
+                                cell_projection_fns.append('...')
+                            else:
+                                cell_projection_fns.append(gen_cell_projection_fn(r_cell, force_idx))
 
 
                 detect_kernel = partial(
@@ -2528,8 +2576,14 @@ class PSEnv:
             kernel_fns = []
             for lp, rp in zip(lps, rps):
                 if is_line_detector_in_kernel(lp):
+                    det_proj_fns = gen_rotated_line_kernel_fns(lp, rp, rot)
+                    if det_proj_fns == (None, None):
+                        return None
                     kernel_fns.append(gen_rotated_line_kernel_fns(lp, rp, rot))
                 else:
+                    det_proj_fns = gen_rotated_kernel_fns(lp, rp, rot)
+                    if det_proj_fns == (None, None):
+                        return None
                     kernel_fns.append(gen_rotated_kernel_fns(lp, rp, rot))
             kernel_detection_fns, kernel_projection_fns = zip(*kernel_fns)
 
@@ -2667,6 +2721,14 @@ class PSEnv:
             kern_tpls = gen_perp_par_subrules(l_kerns, r_kerns)
         else:
             kern_tpls = [(l_kerns, r_kerns)]
+        
+        # This is not actually syntactically correct, but OG PS admits it.
+        r_kerns, in_rule_command = get_command_from_pattern(r_kerns)
+        kern_tpls = [(l_kerns, r_kerns)]
+        if in_rule_command is not None:
+            assert rule.command is None, (f"Rule {rule_name} has both a command in the right pattern and a command in the "
+                                       "rule definition.f Does this make sense?")
+            rule.command = in_rule_command
 
         # Replace any empty lists in lp and rp with a None
         for l_kerns, r_kerns in kern_tpls:
@@ -2718,12 +2780,15 @@ class PSEnv:
                     for kern in r_kerns:
                         kern = np.rot90(kern, rot, axes=(0, 1))
                         r_kerns_rot.append(kern)
-                rule_fns.append(gen_rotated_rule_fn(l_kerns_rot, r_kerns_rot, rot, rule.command))
+                rule_fn = gen_rotated_rule_fn(l_kerns_rot, r_kerns_rot, rot, rule.command)
+                if rule_fn is None:
+                    continue
+                rule_fns.append(rule_fn)
 
         return rule_fns
             
 
-    def gen_tick_fn(self):
+    def gen_tick_fn(self, lvl_shape):
         rule_blocks = []
         late_rule_grps = []
         for rule_block in self.tree.rules:
@@ -2735,7 +2800,7 @@ class PSEnv:
             looping = rule_block.looping
             rule_grps = []
             for rule in rule_block.rules:
-                sub_rule_fns = self.gen_subrules_meta(rule, rule_name=str(rule))
+                sub_rule_fns = self.gen_subrules_meta(rule, rule_name=str(rule), lvl_shape=lvl_shape)
                 if '+' in rule.prefixes:
                     rule_grps[-1].extend(sub_rule_fns)
                 elif 'late' in rule.prefixes:
@@ -3057,6 +3122,8 @@ class PSEnv:
             detected_meta_objs=detected_kernel_meta_objs,
             detected_moving_idx=detected_kernel_moving_idx,
         )
+        if kernel_activations.shape[0] == 0:
+            kernel_activations = jnp.pad(kernel_activations, ((0, 1), (0, 0)), constant_values=False)
         return kernel_activations, cell_detect_outs, kernel_detect_out
 
 
@@ -3174,7 +3241,7 @@ def is_line_detector_in_kernel(kernel):
     return False
 
 def generate_index_sequences(N, M, rot):
-    assert N <= M, "N must be less than or equal to M"
+    # assert N <= M, f"N ({N}) must be less than or equal to M ({M})"
     
     valid_indices = list(range(N))
     result = []
@@ -3217,6 +3284,8 @@ def one_hot_sequences(sequences, num_classes):
 
 
 def gen_one_hot_masks(N: int, M: int, rot: int):
+    if N > M:
+        return np.zeros((1, N, M), dtype=bool)  # No valid sequences if M < N
     # Generate valid index sequences
     sequences = generate_index_sequences(N, M, rot=rot)
     one_hot_masks = one_hot_sequences(sequences, num_classes=N)  # shape: (K, M, N)

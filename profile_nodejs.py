@@ -151,7 +151,7 @@ def main(cfg: ProfileStandalone, games: Optional[List[str]] = None):
                 if cfg.for_validation or cfg.for_solution and not cfg.overwrite and os.path.isfile(level_js_sol_path):
                     print(f'Already solved (for validation) {game} level {level_i}.')
                     continue
-                if not cfg.for_validation and not cfg.for_solution and cfg.overwrite and str(level_i) in results[run_name][game]:
+                if not cfg.for_validation and not cfg.for_solution and not cfg.overwrite and str(level_i) in results[run_name][game]:
                     print(f'Already solved (for profiling) {game} level {level_i} with {run_name}, skipping.')
                     continue
                 engine.compile(['loadLevel', level_i], game_text)
@@ -209,7 +209,6 @@ def main(cfg: ProfileStandalone, games: Optional[List[str]] = None):
         if not cfg.for_validation or cfg.for_solution:
             with open(STANDALONE_NODEJS_RESULTS_PATH, 'w') as f:
                 json.dump(results, f, indent=4)
-
 
 
 if __name__ == "__main__":

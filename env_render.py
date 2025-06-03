@@ -1,5 +1,6 @@
 import numpy as np
 import os
+import random
 import re
 import imageio
 import matplotlib.pyplot as plt
@@ -8,7 +9,6 @@ from io import BytesIO
 from typing import List, Tuple
 import jax.numpy as jnp
 import jax
-from jax import random
 from jax import jit, vmap
 
 

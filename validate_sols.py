@@ -283,7 +283,8 @@ def main(cfg: JaxValidationConfig, games: Optional[List[str]] = None):
                             results['success'][game_name].append({'n_rules': n_rules, 'level': level_i})
                         n_success += 1
                         game_partial_success = True
-                    print(f"Skipping level {level_i} because gif or error log already exists")
+                    if not cfg.aggregate:
+                        print(f"Skipping level {level_i} because gif or error log already exists")
                     continue
 
             if cfg.aggregate:
@@ -336,6 +337,10 @@ def main(cfg: JaxValidationConfig, games: Optional[List[str]] = None):
             params = get_env_params_from_config(env, cfg)
             js_gif_path = os.path.join(sol_dir, f'level-{level_i}_sol.gif')
             level = env.get_level(level_i)
+            if level is None:
+                print(f"Level {level_i} not found in game {game_name}, skipping. Must be an old JS solution generated "
+                      "before the level was removed from the PS file?")
+                continue
             params = params.replace(level=level)
             print(f"Level {level_i} solution: {actions}")
 
@@ -445,12 +450,13 @@ def main(cfg: JaxValidationConfig, games: Optional[List[str]] = None):
             n_steps = [int(os.path.basename(p).split('-steps_')[0]) if '-steps_' in os.path.basename(p) else 10_000 for p in js_gif_paths]
             if len(js_gif_paths) > 0:
                 js_gif_path = js_gif_paths[np.argmax(n_steps)]
+
+                # Copy over the js gif
+                if os.path.isfile(js_gif_path):
+                    shutil.copy(js_gif_path, os.path.join(jax_sol_dir, f'level-{level_i}_js.gif'))
+
             else:
                 js_gif_path = None
-
-            # Copy over the js gif
-            if os.path.isfile(js_gif_path):
-                shutil.copy(js_gif_path, os.path.join(jax_sol_dir, f'level-{level_i}_js.gif'))
 
             jax.clear_caches()
 
@@ -465,6 +471,7 @@ def main(cfg: JaxValidationConfig, games: Optional[List[str]] = None):
         results['stats']['partial_valid_games'] = len(results['partial_valid_games'])
         
         save_stats()
+        print(f"Validation results saved to {val_results_path}")
         stats_dict = {
             "Total Games": len(games),
             "Valid Games": len(results['valid_games']),

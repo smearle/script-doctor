@@ -33,7 +33,7 @@ class GenPSTree(Transformer):
             alt_name = str(name_line.children[1].children[0])
         legend_key = str(name_line.children[-1].children[0]) if len(name_line.children) > 1 else None
         for color in color_line.children:
-            colors.append(str(color.children[0]))
+            colors.append(str(color))
         if len(items) < 3:
             sprite = None
         else:
