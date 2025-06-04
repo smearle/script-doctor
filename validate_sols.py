@@ -73,6 +73,8 @@ def main_launch(cfg: JaxValidationConfig):
         main(cfg)
 
 def main(cfg: JaxValidationConfig, games: Optional[List[str]] = None):
+    if cfg.slurm:
+        os.system("export JAX_PLATFORMS=cpu")
     # Initialize the Lark parser with the PuzzleScript grammar
     with open(PS_LARK_GRAMMAR_PATH, "r", encoding='utf-8') as file:
         puzzlescript_grammar = file.read()
@@ -166,20 +168,25 @@ def main(cfg: JaxValidationConfig, games: Optional[List[str]] = None):
         sorted_idxs = np.argsort(level_ints)
         level_ints = [level_ints[i] for i in sorted_idxs]
         level_sols = [level_sols[i] for i in sorted_idxs]
+        level_ints_to_sols = {}
+        for i, level_i in enumerate(level_ints):
+            if level_i not in level_ints_to_sols:
+                level_ints_to_sols[level_i] = []
+            level_ints_to_sols[level_i].append(level_sols[i])
         # Remove the level_sols with fewer number of steps in case of multiple solutions (at different step counts) for 
         # the same level.
-        new_level_sols = copy.copy(level_sols)
-        new_level_ints = copy.copy(level_ints)
-        for i in range(1, len(level_sols)):
-            if level_ints[i] == level_ints[i - 1]:
-                if level_n_steps[i] < level_n_steps[i - 1]:
-                    del new_level_sols[i]
-                    del new_level_ints[i]
-                else:
-                    del new_level_sols[i - 1]
-                    del new_level_ints[i - 1]
+        new_level_sols = []
+        level_ints = []
+        for level_i, sols in level_ints_to_sols.items():
+            if len(sols) == 1:
+                new_level_sols.append(sols[0])
+            else:
+                # Sort by number of steps, and take the one with the most steps.
+                n_steps = [int(os.path.basename(p).split('-steps_')[0]) if '-steps_' in os.path.basename(p) else 10_000 for p in sols]
+                max_steps_idx = np.argmax(n_steps)
+                new_level_sols.append(sols[max_steps_idx])
+            level_ints.append(level_i)
         level_sols = new_level_sols
-        level_ints = new_level_ints
 
         if len(level_sols) == 0:
             print(f"No js solutions found for {game_name}")
@@ -500,9 +507,9 @@ def main(cfg: JaxValidationConfig, games: Optional[List[str]] = None):
         valid_game_names = clean_game_names(valid_game_names)
         valid_game_n_rules = [game['n_rules'][0] for game in valid_games]
         valid_game_name_stochastic = [game['n_rules'][1] for game in valid_games]
-        valid_games_df = pd.DataFrame({'Game': valid_game_names, '\# Rules': valid_game_n_rules})
+        valid_games_df = pd.DataFrame({'Game': valid_game_names, r'\# Rules': valid_game_n_rules})
         # Sort games by number of rules
-        valid_games_df = valid_games_df.sort_values(by=['\# Rules'], ascending=True)
+        valid_games_df = valid_games_df.sort_values(by=[r'\# Rules'], ascending=True)
         # Save to latex as a longtable
         valid_games_tex_path = os.path.join('plots', 'valid_games.tex')
         valid_games_df.to_latex(valid_games_tex_path, index=False, header=True, longtable=True,
@@ -518,9 +525,9 @@ def main(cfg: JaxValidationConfig, games: Optional[List[str]] = None):
         partial_valid_game_names = clean_game_names(partial_valid_game_names)
         partial_valid_game_n_rules = [game['n_rules'][0] for game in partial_valid_games]
         partial_valid_game_name_stochastic = [game['n_rules'][1] for game in partial_valid_games]
-        partial_valid_games_df = pd.DataFrame({'Game': partial_valid_game_names, '\# Rules': partial_valid_game_n_rules})
+        partial_valid_games_df = pd.DataFrame({'Game': partial_valid_game_names, r'\# Rules': partial_valid_game_n_rules})
         # Sort games by number of rules
-        partial_valid_games_df = partial_valid_games_df.sort_values(by=['\# Rules'], ascending=True)
+        partial_valid_games_df = partial_valid_games_df.sort_values(by=[r'\# Rules'], ascending=True)
         # Save to latex as a longtable
         partial_valid_games_tex_path = os.path.join('plots', 'partial_valid_games.tex')
         partial_valid_games_df.to_latex(partial_valid_games_tex_path, index=False, header=True, longtable=True,
@@ -535,8 +542,8 @@ def main(cfg: JaxValidationConfig, games: Optional[List[str]] = None):
 def clean_game_names(games):
     # Clean the game names to remove any special characters
     games = [game.replace('_', ' ') for game in games]
-    games = [game.replace('^', '\^') for game in games]
-    games = [game.replace('&', '\&') for game in games]
+    games = [game.replace('^', r'\^') for game in games]
+    games = [game.replace('&', r'\&') for game in games]
     games = [game[:60] + '...' if len(game) > 50 else game for game in games]
     return games
 

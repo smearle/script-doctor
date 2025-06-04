@@ -146,6 +146,7 @@ COLOR: "black"i | "white"i | "lightgray"i | "lightgrey"i | "gray"i | "grey"i | "
       | "purple"i | "pink"i
       | "transparent"i
       | "purpleblue"i
+      | /#[0-9a-fA-F]{6}/
 
 sound_id: ID
 condition_id: ID

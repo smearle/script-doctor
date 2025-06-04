@@ -144,7 +144,7 @@ def expand_meta_objs(tile_list: List, meta_objs, char_to_obj):
     assert isinstance(tile_list, list), f"tile_list should be a list, got {type(tile_list)}"
     expanded_meta_objs = []
     for mo in tile_list:
-        if mo in meta_objs:
+        if mo in meta_objs and mo not in list(char_to_obj.values()):
             expanded_meta_objs += expand_meta_objs(meta_objs[mo], meta_objs, char_to_obj)
         elif mo in char_to_obj:
             expanded_meta_objs.append(char_to_obj[mo])
@@ -352,7 +352,7 @@ def is_perp_or_par_in_pattern(p):
                     return True
     return False
 
-def get_command_from_pattern(p):
+def get_command_from_pattern(p, objs_to_idxs):
     detected_commands = []
     new_p = []
     for k in p:
@@ -363,7 +363,7 @@ def get_command_from_pattern(p):
                 mod_obj = object_with_modifier.split(' ')
                 obj = mod_obj[-1]
                 if len(mod_obj) == 1:
-                    if obj.lower() in ['win', 'cancel', 'restart', 'again']:
+                    if obj.lower() in ['win', 'cancel', 'restart', 'again'] and obj.lower() not in objs_to_idxs:
                         detected_commands.append(obj.lower())
                     else:
                         new_c.append(obj)
@@ -406,6 +406,7 @@ def gen_perp_par_subrules(l_kerns, r_kerns):
                 l_kern_b.append(c_b)
             new_kerns_a.append(l_kern_a)
             new_kerns_b.append(l_kern_b)
+        # The first and second patterns are the two directional variants of the parallel/perpendicular rule.
         new_patterns[0][i] = (new_kerns_a)
         new_patterns[1][i] = (new_kerns_b)
     return new_patterns
@@ -613,8 +614,10 @@ def loop_rule_fn(
 
     rule_applied = loop_rule_state.app_i > 1
     again = rule_group_state.again | loop_rule_state.again
+    win = rule_group_state.win | loop_rule_state.win
     if DEBUG:
-        jax.debug.print('    loop_rule_rn: rule {rule_i} applied: {rule_applied}. again: {again}', rule_i=rule_group_state.rule_i, rule_applied=rule_applied, again=again)
+        jax.debug.print('    loop_rule_rn: rule {rule_i} applied: {rule_applied}. again: {again}. win: {win}',
+                        rule_i=rule_group_state.rule_i, rule_applied=rule_applied, again=again, win=win)
     grp_applied = rule_applied | loop_rule_state.applied
 
     rule_group_state = RuleGroupState(
@@ -813,7 +816,7 @@ def loop_rule_grp(
         # restart=loop_rule_group_state.restart,  # This should be enough also...
         restart=restart | loop_rule_group_state.restart,
         again=again,
-        win=loop_rule_group_state.win | win,
+        win=loop_rule_group_state.win | rule_block_state.win,
         rng=loop_rule_group_state.rng,
         grp_i=grp_i + 1,
         block_i=block_i,
@@ -2720,20 +2723,23 @@ class PSEnv:
 
         # Expand into appropriate subrules (with relative forces) if perpendicular or parallel keywords are present.
         if is_perp_or_par_in_pattern(l_kerns):
-            kern_tpls = gen_perp_par_subrules(l_kerns, r_kerns)
+            pattern_tpls = gen_perp_par_subrules(l_kerns, r_kerns)
         else:
-            kern_tpls = [(l_kerns, r_kerns)]
-        
-        # This is not actually syntactically correct, but OG PS admits it.
-        r_kerns, in_rule_command = get_command_from_pattern(r_kerns)
-        kern_tpls = [(l_kerns, r_kerns)]
-        if in_rule_command is not None:
-            assert rule.command is None, (f"Rule {rule_name} has both a command in the right pattern and a command in the "
-                                       "rule definition.f Does this make sense?")
-            rule.command = in_rule_command
+            pattern_tpls = [(l_kerns, r_kerns)]
 
-        # Replace any empty lists in lp and rp with a None
-        for l_kerns, r_kerns in kern_tpls:
+        new_pattern_tpls = []
+        for l_kerns, r_kerns in pattern_tpls:
+            # This is not actually syntactically correct, but OG PS admits it.
+            r_kerns, in_rule_command = get_command_from_pattern(r_kerns, self.objs_to_idxs)
+            new_pattern_tpls.append((l_kerns, r_kerns))
+            if in_rule_command is not None:
+                assert rule.command is None, (f"Rule {rule_name} has both a command in the right pattern and a command in the "
+                                        "rule definition.f Does this make sense?")
+                rule.command = in_rule_command
+        pattern_tpls = new_pattern_tpls
+
+        for l_kerns, r_kerns in pattern_tpls:
+            # Replace any empty lists in lp and rp with a None
             l_kerns = [[[None] if len(l) == 0 else [' '.join(l)] for l in kernel] for kernel in l_kerns]
             if DEBUG:
                 print('lps', l_kerns)
@@ -2782,7 +2788,8 @@ class PSEnv:
                     for kern in r_kerns:
                         kern = np.rot90(kern, rot, axes=(0, 1))
                         r_kerns_rot.append(kern)
-                rule_fn = gen_rotated_rule_fn(l_kerns_rot, r_kerns_rot, rot, rule.command)
+                rule_fn = gen_rotated_rule_fn(l_kerns_rot, r_kerns_rot, rot, 
+                                              r_command=rule.command.lower() if rule.command is not None else None)
                 if rule_fn is None:
                     continue
                 rule_fns.append(rule_fn)
