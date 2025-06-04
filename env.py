@@ -2420,13 +2420,15 @@ class PSEnv:
                     rp_subkernels = [rps[:, None] for rps in rp_subkernels]
                     col_len = np.sum([np.sum([len(c) for c in k if c[0] != '...']) for k in lp_subkernels])
                     if col_len > lvl_shape[0]:
-                        breakpoint()
                         return None, None
                 
                 subkernel_detection_fns = []
                 subkernel_projection_fns = []
                 for lp, rp in zip(lp_subkernels, rp_subkernels):
                     subkernel_detection_fn, subkernel_projection_fn = gen_rotated_kernel_fns(lp, rp, rot)
+                    if subkernel_detection_fn is None and subkernel_projection_fn is None:
+                        return None, None
+                        
                     subkernel_detection_fns.append(subkernel_detection_fn)
                     subkernel_projection_fns.append(subkernel_projection_fn)
                 
@@ -2467,13 +2469,13 @@ class PSEnv:
                 # TODO: generalize rules to 2D...?
                 if lp_is_horizontal:
                     lp = lp[0, :]
-                    row_len = np.sum([len(c) for c in lp])
+                    row_len = lp.shape[0]
                     if row_len > lvl_shape[1]:
                         return None, None
                 elif lp_is_vertical:
                     lp = lp[:, 0]
-                    row_height = np.sum([len(c) for c in lp])
-                    if row_height > lvl_shape[0]:
+                    col_height = lp.shape[0]
+                    if col_height > lvl_shape[0]:
                         return None, None
                 elif lp_is_single:
                     lp = lp[0, 0]
