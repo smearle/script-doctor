@@ -144,7 +144,8 @@ def expand_meta_objs(tile_list: List, meta_objs, char_to_obj):
     assert isinstance(tile_list, list), f"tile_list should be a list, got {type(tile_list)}"
     expanded_meta_objs = []
     for mo in tile_list:
-        if mo in meta_objs and mo not in list(char_to_obj.values()):
+        # if mo in meta_objs and mo not in list(char_to_obj.values()):
+        if mo in meta_objs:
             expanded_meta_objs += expand_meta_objs(meta_objs[mo], meta_objs, char_to_obj)
         elif mo in char_to_obj:
             expanded_meta_objs.append(char_to_obj[mo])
@@ -1013,20 +1014,21 @@ def loop_rule_block(
     # else:
     #     lvl, block_applied, block_app_i, cancelled, restart, block_again, win, rng, block_i = \
     #         _apply_rule_block(init_carry)
+    applied = applied | block_applied
+    again = prev_again | block_again
+    restart = prev_restart | restart
+    cancelled = prev_cancelled | cancelled
+    win = prev_win | win
+
     if DEBUG:
         if jit:
-            jax.debug.print('loop_rule_block: block {block_i} applied: {block_applied}. again: {block_again}', block_i=block_i, block_applied=block_applied, block_again=block_again)
+            jax.debug.print('loop_rule_block: block {block_i} applied: {block_applied}. again: {again}', block_i=block_i, block_applied=block_applied, again=again)
         else:
             if block_applied:
                 print(f'block {block_i} applied: True')
             else:
                 print(f'block {block_i} applied: False')
 
-    applied = applied | block_applied
-    again = prev_again | block_again
-    restart = prev_restart | restart
-    cancelled = prev_cancelled | cancelled
-    win = prev_win | win
 
     return lvl, applied, again, cancelled, restart, win, rng, block_i + 1
 
@@ -2692,7 +2694,7 @@ class PSEnv:
                 if r_command == 'again':
                     again = rule_applied
                     if DEBUG:
-                        jax.debug.print('applying the {command} command: {rule_applied}', command=r_command, rule_applied=rule_applied)
+                        jax.debug.print('      applying the {command} command: {rule_applied}', command=r_command, rule_applied=rule_applied)
                 elif r_command == 'win':
                     win = pattern_detected
 
@@ -2859,7 +2861,7 @@ class PSEnv:
                 lvl, _, turn_app_i, cancelled, restart, turn_again, win, rng = carry
                 turn_app_i += 1
                 applied = False
-                again = False
+                block_again = False
 
                 # for block_i, (looping, rule_grps) in enumerate(rule_blocks):
                     # n_prior_rules
@@ -2876,12 +2878,16 @@ class PSEnv:
 
                 ### COMPILE VS RUNTIME ###
                 for block_i, (looping, rule_block) in enumerate(rule_blocks):
-                    carry = (lvl, applied, again, cancelled, restart, win, rng, block_i)
-                    lvl, applied, again, cancelled, restart, win, rng, block_i = _loop_rule_block(
+                    carry = (lvl, applied, block_again, cancelled, restart, win, rng, block_i)
+                    lvl, applied, block_again, cancelled, restart, win, rng, block_i = _loop_rule_block(
                         carry=carry,
                         rule_block=rule_block,
                         looping=looping,
                     )
+                    if DEBUG:
+                        jax.debug.print(
+                            'apply_turn: block {block_i} applied: {applied}. again: {again}',
+                            block_i=block_i, applied=applied, again=block_again)
 
                 # block_i = 0
                 # carry = (lvl, applied, again, cancelled, restart, win, rng, block_i)
@@ -2907,15 +2913,23 @@ class PSEnv:
                 # lvl, applied, again, cancelled, restart, win, rng, block_i = carry
                 ### COMPILE VS RUNTIME ###
 
-                return lvl, turn_applied, turn_app_i, cancelled, restart, turn_again, win, rng
+                return lvl, turn_applied, turn_app_i, cancelled, restart, block_again, win, rng
 
             turn_applied = True
             turn_app_i = 0
             turn_again = True
             win = False
 
-            init_carry = (lvl, turn_applied, turn_app_i, cancelled, restart, turn_again, win, rng)
-            carry = apply_turn(init_carry)
+            carry = (lvl, turn_applied, turn_app_i, cancelled, restart, turn_again, win, rng)
+            if not self.jit:
+                while turn_again:
+                    carry = apply_turn(carry)
+            else:
+                carry = jax.lax.while_loop(
+                    cond_fun=lambda x: ~x[3] & ~x[4] & x[5],
+                    body_fun=apply_turn,
+                    init_val=carry,
+                )
             lvl, turn_applied, turn_app_i, cancelled, restart, turn_again, win, rng = carry
 
             # if not jit:
@@ -2943,6 +2957,11 @@ class PSEnv:
             subkernel_cell_detect_outs.append(cell_detect_outs_i)
             subkernel_detect_outs.append(subkernel_detect_out_i)
 
+        if not np.all([k.shape == subkernel_activations[0].shape for k in subkernel_activations]):
+            # Then pad the subkernel activations to the same shape
+            max_shape = max([k.shape for k in subkernel_activations])
+            subkernel_activations = [jnp.pad(k, ((0, max_shape[0] - k.shape[0]), (0, max_shape[1] - k.shape[1]))) 
+                                     for k in subkernel_activations]
         subkernel_activations = jnp.stack(subkernel_activations, axis=0)
 
         if lp_is_vertical:

@@ -34,12 +34,15 @@ object_line: object_name object_name* legend_key?
 color_line: COLOR+ 
 object_data: object_with_sprite_trailing
        | object_with_sprite_no_trailing
+       | object_with_gap_before_sprite
        | object_without_sprite_trailing
        | object_without_sprite_no_trailing
 
-object_with_sprite_trailing.3: object_line NEWLINE color_line NEWLINE sprite NEWLINE
+object_with_sprite_trailing.4: object_line NEWLINE color_line NEWLINE sprite NEWLINE
 
-object_with_sprite_no_trailing.2: object_line NEWLINE color_line NEWLINE sprite
+object_with_sprite_no_trailing.3: object_line NEWLINE color_line NEWLINE sprite
+
+object_with_gap_before_sprite.2: object_line NEWLINE color_line NEWLINE NEWLINE sprite NEWLINE
 
 object_without_sprite_trailing.1: object_line NEWLINE color_line NEWLINE NEWLINE
 
@@ -104,7 +107,7 @@ OBJECT_MODIFIER: DIRECTIONAL | "random"i | "randomDir"i | "horizontal"i | "verti
 
 DIRECTIONAL: /[\^v<>]/
 
-ID: /[a-z0-9.A-Z#_\/\\@!]/+
+ID: /[a-z0-9.A-Z#_\/\\@!']/+
 
 // Command
 command: command_keyword
@@ -147,6 +150,7 @@ COLOR: "black"i | "white"i | "lightgray"i | "lightgrey"i | "gray"i | "grey"i | "
       | "transparent"i
       | "purpleblue"i
       | /#[0-9a-fA-F]{6}/
+      | /#[0-9a-fA-F]{3}/
 
 sound_id: ID
 condition_id: ID

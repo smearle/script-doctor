@@ -74,7 +74,7 @@ def main_launch(cfg: JaxValidationConfig):
 
 def main(cfg: JaxValidationConfig, games: Optional[List[str]] = None):
     if cfg.slurm:
-        os.system("export JAX_PLATFORMS=cpu")
+        os.environ["JAX_PLATFORMS"] = "cpu"
     # Initialize the Lark parser with the PuzzleScript grammar
     with open(PS_LARK_GRAMMAR_PATH, "r", encoding='utf-8') as file:
         puzzlescript_grammar = file.read()
@@ -84,7 +84,7 @@ def main(cfg: JaxValidationConfig, games: Optional[List[str]] = None):
     if games is not None:
         games = games
     elif cfg.game is None:
-        games = get_list_of_games_for_testing(all_games=cfg.all_games)
+        games = get_list_of_games_for_testing(all_games=cfg.all_games, random_order=cfg.random_order)
     else:
         games = [cfg.game]
     if cfg.aggregate:
@@ -197,7 +197,6 @@ def main(cfg: JaxValidationConfig, games: Optional[List[str]] = None):
         print(f"Processing solution for game: {og_path}")
 
 
-        key = jax.random.PRNGKey(0)
         game_success = True
         game_partial_success = False
         game_compile_error = False
@@ -365,6 +364,7 @@ def main(cfg: JaxValidationConfig, games: Optional[List[str]] = None):
                 else:
                     reward = 0.0
                     state_v = jax.tree.map(lambda x: x[None], init_state)
+                    state = init_state
                 if level_i not in solution_rewards_dict or cfg.overwrite:
                     solution_rewards_dict[game][level_i] = reward
                 if level_win and not state.win:

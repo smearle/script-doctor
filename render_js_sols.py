@@ -10,7 +10,7 @@ from javascript import require
 import jax
 from lark import Lark
 
-from conf.config import ProfileStandalone
+from conf.config import ProfileNodeJS
 from env import PSState
 from preprocess_games import PS_LARK_GRAMMAR_PATH, PSErrors, get_env_from_ps_file
 from profile_nodejs import compile_game
@@ -19,7 +19,7 @@ from validate_sols import JS_SOLS_DIR, multihot_level_from_js_state, JAX_VALIDAT
 
 
 @hydra.main(version_base="1.3", config_path='./conf', config_name='profile_standalone_config')
-def main(cfg: ProfileStandalone):
+def main(cfg: ProfileNodeJS):
     parser = init_ps_lark_parser()
     engine = require('./standalone/puzzlescript/engine.js')
     solver = require('./standalone/puzzlescript/solver.js')

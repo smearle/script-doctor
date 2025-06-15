@@ -17,7 +17,7 @@ from javascript.proxy import Proxy
 import numpy as np
 import submitit
 
-from conf.config import ProfileStandalone
+from conf.config import ProfileNodeJS
 from globals import STANDALONE_NODEJS_RESULTS_PATH
 from preprocess_games import SIMPLIFIED_GAMES_DIR, get_tree_from_txt
 from utils import get_list_of_games_for_testing, level_to_int_arr, init_ps_lark_parser
@@ -49,7 +49,7 @@ def rand_rollout_from_python(engine, solver, game_text, level_i, n_steps, timeou
     return False, [], i, timer() - start_time, score, state
 
     
-def get_standalone_run_name(cfg: ProfileStandalone, algo_name, cpu_name):
+def get_standalone_run_name(cfg: ProfileNodeJS, algo_name, cpu_name):
     return f'algo-{algo_name}_{cfg.n_steps}-steps_{cpu_name}'
 
 def get_standalone_run_params_from_name(run_name: str):
@@ -60,8 +60,8 @@ def get_standalone_run_params_from_name(run_name: str):
 
 
 # @hydra.main(version_base="1.3", config_path='./', config_name='profile_standalone')
-@hydra.main(version_base="1.3", config_path='./', config_name='profile_standalone_config')
-def main_launch(cfg: ProfileStandalone):
+@hydra.main(version_base="1.3", config_path='./', config_name='profile_nodejs_config')
+def main_launch(cfg: ProfileNodeJS):
     if cfg.slurm:
         games = get_list_of_games_for_testing(
             all_games=cfg.all_games, include_random=cfg.include_randomness, random_order=cfg.random_order)
@@ -83,7 +83,7 @@ def main_launch(cfg: ProfileStandalone):
         main(cfg)
 
 
-def main(cfg: ProfileStandalone, games: Optional[List[str]] = None):
+def main(cfg: ProfileNodeJS, games: Optional[List[str]] = None):
     if cfg.for_solution:
         cfg.for_validation = False
         cfg.timeout = -1

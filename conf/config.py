@@ -32,9 +32,10 @@ class PSConfig:
 class JaxValidationConfig(PSConfig):
     all_games: bool = True
     slurm: bool = False
-    n_games_per_job: int = 50
+    n_games_per_job: int = 1
     game: Optional[str] = None
     aggregate: bool = False  # Don't run any new validations, just aggregate existing results.
+    random_order: bool = False
     
 @dataclass
 class BFSConfig(PSConfig):
@@ -57,7 +58,7 @@ class ProfileJaxRandConfig(PSConfig):
 
     
 @dataclass
-class ProfileStandalone(PSConfig):
+class ProfileNodeJS(PSConfig):
     # algo: str = "random"  # 'bfs', 'random'
     algo: str = "bfs"  # 'bfs', 'random'
     game: Optional[str] = None
@@ -65,7 +66,7 @@ class ProfileStandalone(PSConfig):
     all_games: bool = True
     random_order: bool = False
     # n_steps: int = 5_000
-    n_steps: int = 100_000
+    n_steps: int = 1_000_000
     overwrite: bool = False
     include_randomness: bool = True
     # timeout: int = 60
@@ -198,6 +199,6 @@ cs.store(name="jax_validation_config", node=JaxValidationConfig)
 cs.store(name="config", node=RLConfig)
 cs.store(name="bfs_config", node=BFSConfig)
 cs.store(name="profile_jax_config", node=ProfileJaxRandConfig)
-cs.store(name="profile_standalone_config", node=ProfileStandalone)
+cs.store(name="profile_nodejs_config", node=ProfileNodeJS)
 cs.store(name="train_config", node=TrainConfig)
 cs.store(name="sweep_rl_config", node=SweepRLConfig)
