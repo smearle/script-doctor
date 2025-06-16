@@ -64,6 +64,7 @@ def assign_vecs_to_objs(collision_layers, atomic_obj_names):
     # obj_vec_dict = {}
     j = 0
     objs = []
+    obj_idxs_to_force_idxs_dict = {}
     atomic_objs_to_idxs = {obj: i for i, obj in enumerate(atomic_obj_names)}
     for i, layer in enumerate(collision_layers):
         for obj in layer:
@@ -77,7 +78,11 @@ def assign_vecs_to_objs(collision_layers, atomic_obj_names):
                 j += 1
             objs_to_idxs[obj] = obj_idx
             coll_masks[i, obj_idx] = 1
-    return objs, objs_to_idxs, coll_masks
+            obj_idxs_to_force_idxs_dict[obj_idx] = n_objs + i * N_FORCES
+    obj_idxs_to_force_idxs = np.zeros(len(obj_idxs_to_force_idxs_dict), dtype=int) 
+    for i in range(len(obj_idxs_to_force_idxs_dict)):
+        obj_idxs_to_force_idxs[i] = obj_idxs_to_force_idxs_dict[i]
+    return objs, objs_to_idxs, coll_masks, obj_idxs_to_force_idxs
 
 def process_legend(legend):
     objs_to_chars = {}
@@ -1032,93 +1037,6 @@ def loop_rule_block(
 
     return lvl, applied, again, cancelled, restart, win, rng, block_i + 1
 
-
-def apply_movement(rng, lvl, coll_mat, n_objs, obj_force_masks, jit=True):
-    coll_mat = jnp.array(coll_mat, dtype=bool)
-    # Upper bound on the number of forces that might exist in the level at any given time.
-    max_possible_forces = n_objs * lvl.shape[2] * lvl.shape[3]
-    force_arr = lvl[0, n_objs:-1]
-    # Mask out all forces corresponding to ACTION.
-    force_mask = np.ones((force_arr.shape[0],), dtype=bool)
-    force_mask[ACTION::N_FORCES] = 0
-    force_arr = force_arr[force_mask]
-    # Rearrange the array, since we want to apply force to the "first" objects spatially on the map.
-    # force_arr = rearrange(force_arr, "c h w -> w h c")
-    force_arr = force_arr.transpose(2, 1, 0)
-    # Get the first x,y,c coordinates where force is present.
-    coords = jnp.argwhere(force_arr, size=max_possible_forces+1, fill_value=-1)
-    # force_idxs = coords[:, 2] % (N_FORCES - 1)
-
-    def attempt_move(carry):
-        # NOTE: This depends on movement forces preceding any other forces (per object) in the channel dimension.
-        lvl, _, _, i = carry
-        y, x, c = coords[i]
-        is_force_present = x != -1
-        # Get the obj idx on which the force is applied.
-        obj_idx = c // (N_FORCES - 1)
-        obj_exists = lvl[0, obj_idx, x, y]
-        # Determine where the object would move and whether such a move would be legal.
-        forces_to_deltas = jnp.array([[0, -1], [1, 0], [0, 1], [-1, 0]])
-        delta = forces_to_deltas[c % (N_FORCES - 1)]
-        x_1, y_1 = x + delta[0], y + delta[1]
-        would_collide = jnp.any(lvl[0, :n_objs, x_1, y_1] * coll_mat[obj_idx])
-        out_of_bounds = (x_1 < 0) | (x_1 >= lvl.shape[2]) | (y_1 < 0) | (y_1 >= lvl.shape[3])
-        can_move = obj_exists & is_force_present & ~would_collide & ~out_of_bounds
-        # Now, in the new level, move the object in the direction of the force.
-        new_lvl = lvl.at[0, obj_idx, x, y].set(False)
-        new_lvl = new_lvl.at[0, obj_idx,  x_1, y_1].set(True)
-
-        # And remove any forces that were applied to the object before it moved.
-        new_lvl = jax.lax.dynamic_update_slice(
-            new_lvl,
-            jnp.zeros((1, N_FORCES, 1, 1), dtype=bool),
-            (0, n_objs + (obj_idx * N_FORCES), x, y)
-        )
-        # Use the force mask instead
-        # obj_force_mask = obj_force_masks[obj_idx]
-        # new_lvl = new_lvl.at[0, :, x, y].set(
-        #     jnp.where(obj_force_mask, 0, new_lvl[0, :, x, y])
-        # )
-
-        lvl = jax.lax.select(can_move, new_lvl, lvl)
-        i += 1
-        # if DEBUG:
-        #     jax.debug.print('      at position {xy}, the object {obj} moved to {new_xy}', xy=(x, y), obj=obj_idx, new_xy=(x_1, y_1))
-        #     jax.debug.print('      would collide: {would_collide}, out of bounds: {out_of_bounds}, can_move: {can_move}',
-        #                     would_collide=would_collide, out_of_bounds=out_of_bounds, can_move=can_move)
-        return lvl, can_move, rng, i
-
-    init_carry = (lvl, False, rng, 0)
-
-    # Iterate through possible moves until we apply one, or run out of possible moves.
-    if jit:
-        lvl, can_move, rng, i = jax.lax.while_loop(
-            lambda carry: (coords[carry[3], 0] != -1),
-            lambda carry: attempt_move(carry),
-            init_carry,
-        )
-    else:
-        i = init_carry[3]
-        can_move = init_carry[1]
-        carry = init_carry
-        while (coords[i, 0] != -1) and not can_move:
-            lvl, can_move, rng, i = attempt_move(carry)
-            carry = (lvl, can_move, rng, i)
-    
-    if DEBUG:
-        jax.debug.print('      applied movement: {can_move}', can_move=can_move)
-    rule_state = RuleState(
-        lvl=lvl,
-        applied=can_move,
-        cancelled=False,
-        restart=False,
-        again=False,
-        win=False,
-        rng=rng
-    )
-    return rule_state
-
-
 @flax.struct.dataclass
 class PSState:
     multihot_level: np.ndarray
@@ -1150,12 +1068,13 @@ def get_names_to_alts(objects):
     return names_to_alts
 
 
-def gen_obj_force_masks(n_objs):
+def gen_obj_force_masks(n_objs, obj_idxs_to_force_idxs, n_layers):
     # Generate a mask corresponding to the channels denoting the forces that can be applied to a given object
-    obj_force_masks = np.zeros((n_objs, n_objs + n_objs * N_FORCES + 1), dtype=bool)
+    obj_force_masks = np.zeros((n_objs, n_objs + n_layers * N_FORCES + 1), dtype=bool)
     for i in range(n_objs):
-        obj_force_mask = np.zeros((n_objs + n_objs * N_FORCES + 1,), dtype=bool)
-        obj_force_mask[n_objs + i * N_FORCES:n_objs + (i + 1) * N_FORCES] = 1
+        obj_force_mask = np.zeros((n_objs + n_layers * N_FORCES + 1,), dtype=bool)
+        force_idx = obj_idxs_to_force_idxs[i]
+        obj_force_mask[force_idx: (force_idx + 1) * N_FORCES] = 1
         obj_force_masks[i] = obj_force_mask
     return jnp.array(obj_force_masks)
 
@@ -1200,8 +1119,16 @@ class PSEnv:
         # atomic_obj_names = [name for name in atomic_obj_names]
         self.atomic_obj_names = atomic_obj_names
         self.n_objs = len(atomic_obj_names)
-        objs, self.objs_to_idxs, coll_masks = assign_vecs_to_objs(collision_layers, atomic_obj_names)
-        self.obj_force_masks = gen_obj_force_masks(self.n_objs)
+        self.n_objs_per_layer = np.zeros((len(self.collision_layers),), dtype=int)
+        self.n_objs_prior_to_layer = np.zeros((len(self.collision_layers)), dtype=int)
+        self.layer_masks = np.zeros((len(self.collision_layers), self.n_objs), dtype=bool)
+        for i, l in enumerate(self.collision_layers):
+            self.n_objs_per_layer[i] = len(l)
+            self.n_objs_prior_to_layer[i+1:] += len(l)
+            n_objs_prior_to_layer_i = self.n_objs_prior_to_layer[i]
+            self.layer_masks[n_objs_prior_to_layer_i: n_objs_prior_to_layer_i + len(l)]
+        objs, self.objs_to_idxs, coll_masks, self.obj_idxs_to_force_idxs = assign_vecs_to_objs(collision_layers, atomic_obj_names)
+        self.obj_force_masks = gen_obj_force_masks(self.n_objs, self.obj_idxs_to_force_idxs, len(self.collision_layers))
         for obj, sub_objs in meta_objs.items():
             # Meta-objects that are actually just alternate names.
             if DEBUG:
@@ -1402,19 +1329,23 @@ class PSEnv:
     # @partial(jax.jit, static_argnums=(0))
     def apply_player_force(self, action, state: PSState):
         multihot_level = state.multihot_level
-        # Add a dummy object at the front. Add one final channel to mark the player's effect.
-        force_map = jnp.zeros((N_FORCES * (multihot_level.shape[0] + 1) + 1, *multihot_level.shape[1:]), dtype=bool)
+        # Add a dummy collision layer at the front. Add one final channel to mark the player's effect.
+        force_map = jnp.zeros((N_FORCES * (len(self.collision_layers) + 1) + 1, *multihot_level.shape[1:]), dtype=bool)
         
         def place_force(force_map, action):
             # This is a map-shape array of the obj-indices corresponding to the player objects active on these respective cells.
+            # The `+ 1` here moves us past the dummy collision layer.
             player_int_mask = (self.player_idxs[...,None,None] + 1) * multihot_level[self.player_idxs].astype(int)
 
             # Turn the int mask into coords, by flattening it, and appending it with xy coords
             xy_coords = jnp.indices(force_map.shape[1:])
             xy_coords = xy_coords[:, None].repeat(len(self.player_idxs), axis=1)
 
+            # Create a new dictionary mapping objects to force channels, which adds a dummy collision layer at the front
+            obj_idxs_to_force_idxs = jnp.concat((np.array([0]), self.obj_idxs_to_force_idxs + 1))
+
             # This is a map-shaped array of the force-indices (and xy indices) that should be applied, given the player objects at these cells.
-            player_force_mask = player_int_mask * N_FORCES + action
+            player_force_mask = obj_idxs_to_force_idxs[player_int_mask] + action
 
             player_force_mask = jnp.concatenate((player_force_mask[None], xy_coords), axis=0)
             player_coords = player_force_mask.reshape(3, -1).T
@@ -1444,7 +1375,7 @@ class PSEnv:
         else:
             if should_apply_force:
                 force_map = place_force(force_map, action)
-        # remove the dummy object
+        # remove the dummy collision layer
         force_map = force_map[N_FORCES:]
 
         lvl = jnp.concatenate((multihot_level, force_map), axis=0)
@@ -1546,7 +1477,8 @@ class PSEnv:
 
         def is_meta_subobj_forceless(obj_idx, m_cell):
             """ `obj_idx` is dynamic."""
-            return jnp.sum(jax.lax.dynamic_slice(m_cell, (self.n_objs + (obj_idx * N_FORCES),), (N_FORCES,))) == 0
+            return jnp.sum(jax.lax.dynamic_slice(
+                m_cell, self.obj_idxs_to_force_idxs[obj_idx], (N_FORCES,))) == 0
 
         def is_obj_forceless(obj_idx, m_cell):
             """ `obj_idx` is static."""
@@ -1588,11 +1520,11 @@ class PSEnv:
         # @partial(jax.jit, static_argnames=('obj_idx', 'force_idx'))
         def detect_force_on_obj(m_cell, obj_idx, force_idx):
             obj_is_present = m_cell[obj_idx]
-            force_is_present = m_cell[self.n_objs + (obj_idx * N_FORCES) + force_idx]
+            force_is_present = m_cell[self.obj_idxs_to_force_idxs[obj_idx] + force_idx]
             active = obj_is_present & force_is_present
             is_detected = np.zeros(m_cell.shape, dtype=bool)
             is_detected[obj_idx] = 1
-            is_detected[self.n_objs + (obj_idx * N_FORCES) + force_idx] = 1
+            is_detected[self.obj_idxs_to_force_idxs[obj_idx] + force_idx] = 1
             detected = jax.lax.cond(
                 active,
                 lambda: is_detected,
@@ -1664,11 +1596,11 @@ class PSEnv:
 
         # @partial(jax.jit, static_argnames=())
         def detect_force_on_meta(m_cell: chex.Array, obj_idxs, force_idx):
-            dummy_force_obj_vec = jnp.zeros(self.n_objs + self.n_objs * N_FORCES + 1, dtype=bool)
+            dummy_force_obj_vec = jnp.zeros(self.n_objs + len(self.collision_layers) * N_FORCES + 1, dtype=bool)
 
             def force_obj_vec_fn(obj_idx):
                 force_obj_vec = dummy_force_obj_vec.at[obj_idx].set(True)
-                force_obj_vec = force_obj_vec.at[self.n_objs + obj_idx * N_FORCES + force_idx].set(True)
+                force_obj_vec = force_obj_vec.at[self.obj_idxs_to_force_idxs[obj_idx] + force_idx].set(True)
                 return force_obj_vec
             
             force_obj_vecs = jax.vmap(force_obj_vec_fn)(obj_idxs)
@@ -1684,7 +1616,7 @@ class PSEnv:
             )
             is_detected = jnp.zeros(m_cell.shape, dtype=bool)
             is_detected = is_detected.at[obj_idx].set(True)
-            is_detected = is_detected.at[self.n_objs + (obj_idx * N_FORCES) + force_idx].set(True)
+            is_detected = is_detected.at[self.obj_idxs_to_force_idxs[obj_idx] + force_idx].set(True)
             detected = jax.lax.cond(
                 active,
                 lambda: is_detected,
@@ -1795,7 +1727,7 @@ class PSEnv:
             for obj_idx in obj_idxs:
 
                 obj_is_present = m_cell[obj_idx] == 1
-                obj_forces = jax.lax.dynamic_slice(m_cell, (self.n_objs + (obj_idx * N_FORCES),), (4,))
+                obj_forces = jax.lax.dynamic_slice(m_cell, self.obj_idxs_to_force_idxs[obj_idx], (4,))
                 # obj_force_mask = self.obj_force_masks[obj_idx]
                 # obj_forces = m_cell[obj_force_mask]
                 if vertical:
@@ -1808,7 +1740,7 @@ class PSEnv:
                 obj_active = obj_is_present & (force_idx != -1)
 
                 active_detected = detected.at[obj_idx].set(True)
-                active_detected = active_detected.at[self.n_objs + (obj_idx * N_FORCES) + force_idx].set(True)
+                active_detected = active_detected.at[self.obj_idxs_to_force_idxs[obj_idx] + force_idx].set(True)
 
                 detected = jax.lax.select(
                     obj_active,
@@ -1844,7 +1776,7 @@ class PSEnv:
 
 
             obj_is_present = m_cell[obj_idx] == 1
-            obj_forces = jax.lax.dynamic_slice(m_cell, (self.n_objs + (obj_idx * N_FORCES),), (4,))
+            obj_forces = jax.lax.dynamic_slice(m_cell, self.obj_idxs_to_force_idxs[obj_idx], (4,))
             # obj_force_mask = self.obj_force_masks[obj_idx]
             # obj_forces = m_cell[obj_force_mask]
             if vertical:
@@ -1857,7 +1789,7 @@ class PSEnv:
             obj_active = obj_is_present & (force_idx != -1)
 
             active_detected = detected.at[obj_idx].set(True)
-            active_detected = active_detected.at[self.n_objs + (obj_idx * N_FORCES) + force_idx].set(True)
+            active_detected = active_detected.at[self.obj_idxs_to_force_idxs[obj_idx] + force_idx].set(True)
 
             detected = jax.lax.select(
                 obj_active,
@@ -1939,7 +1871,7 @@ class PSEnv:
                     obj_names.append(obj)
                     sub_objs = expand_meta_objs([obj], self.meta_objs, self.char_to_obj)
                     obj_idxs = np.array([self.objs_to_idxs[so] for so in sub_objs])
-                    obj_vec = np.zeros((self.n_objs + self.n_objs * N_FORCES + 1), dtype=bool)
+                    obj_vec = np.zeros((self.n_objs + len(self.collision_layers) * N_FORCES + 1), dtype=bool)
                     obj_vec[obj_idxs] = 1
                     if obj in self.char_to_obj:
                         obj = self.char_to_obj[obj]
@@ -2096,18 +2028,18 @@ class PSEnv:
                 # Reassign any forces belonging to the detected object to the new object
                 # First, identify the forces of the detected object.
                 detected_forces = jax.lax.dynamic_slice(
-                    m_cell, (self.n_objs + detected_obj_idx * N_FORCES,), (N_FORCES,)
+                    m_cell, self.obj_idxs_to_force_idxs[detected_obj_idx], (N_FORCES,)
                 )
                 # obj_force_mask = self.obj_force_masks[detected_obj_idx]
                 # detected_forces = m_cell[obj_force_mask]
                 # Then remove them from the detected object.
                 m_cell = jax.lax.dynamic_update_slice(
-                    m_cell, jnp.zeros(N_FORCES, dtype=bool), (self.n_objs + detected_obj_idx * N_FORCES,)
+                    m_cell, jnp.zeros(N_FORCES, dtype=bool), self.obj_idxs_to_force_idxs[detected_obj_idx],
                 )
                 # m_cell = m_cell.at[obj_force_mask].set(0)
                 # Then copy them to the new object.
                 m_cell = jax.lax.dynamic_update_slice(
-                    m_cell, detected_forces, (self.n_objs + obj_idx * N_FORCES,)
+                    m_cell, detected_forces, self.obj_idxs_to_force_idxs[obj_idx],
                 )
                 # m_cell = jnp.where(obj_force_mask, detected_forces, m_cell)
                 return m_cell
@@ -2150,7 +2082,7 @@ class PSEnv:
             # Remove any existing forces from the object
             # Here we need to use a dynamic update slice, since we don't know the obj_idx at compile time
             m_cell = jax.lax.dynamic_update_slice(
-                m_cell, jnp.zeros(N_FORCES, dtype=bool), (self.n_objs + obj_idx * N_FORCES,)
+                m_cell, jnp.zeros(N_FORCES, dtype=bool), self.obj_idxs_to_force_idxs[obj_idx],
             )
             return rng, m_cell
 
@@ -2168,7 +2100,7 @@ class PSEnv:
             force_mask = self.obj_force_masks[obj_idx]
             # Remove any existing forces from the object and add the new one
             m_cell = jnp.where(force_mask, False, m_cell)
-            m_cell = m_cell.at[self.n_objs + obj_idx * N_FORCES + force_idx].set(True)
+            m_cell = m_cell.at[self.obj_idxs_to_force_idxs[obj_idx] + force_idx].set(True)
             # Also remove player action mask if it exists.
             m_cell = m_cell.at[-1].set(False)
 
@@ -2216,7 +2148,7 @@ class PSEnv:
             force_arr = jnp.zeros(N_FORCES, dtype=bool)
             force_arr = force_arr.at[force_idx].set(True)
             m_cell = jax.lax.dynamic_update_slice(
-                m_cell, force_arr, (self.n_objs + obj_idx * N_FORCES,)
+                m_cell, force_arr, self.obj_idxs_to_force_idxs[obj_idx],
             )
             # Also remove player action mask
             m_cell = m_cell.at[-1].set(False)
@@ -2267,7 +2199,7 @@ class PSEnv:
             force_arr = force_arr.at[force_idx].set(True)
             # m_cell = m_cell.at[self.n_objs + (obj_idx * N_FORCES) + force_idx].set(1)
             m_cell = jax.lax.dynamic_update_slice(
-                m_cell, force_arr, (self.n_objs + obj_idx * N_FORCES,)
+                m_cell, force_arr, self.obj_idxs_to_force_idxs[obj_idx],
             )
 
             if DEBUG:
@@ -2283,11 +2215,12 @@ class PSEnv:
             pattern_meta_objs = pattern_detect_out.detected_meta_objs
             if obj in self.objs_to_idxs:
                 obj_idx = self.objs_to_idxs[obj]
-                m_cell = m_cell.at[self.n_objs + (obj_idx * N_FORCES): self.n_objs + ((obj_idx + 1) * N_FORCES)].set(False)
+                force_idx = self.obj_idxs_to_force_idxs[obj_idx]
+                m_cell = m_cell.at[force_idx: (force_idx + 1) * N_FORCES].set(False)
             else:
                 obj_idx = disambiguate_meta(obj, meta_objs, kernel_meta_objs, pattern_meta_objs, self.objs_to_idxs)
                 m_cell = jax.lax.dynamic_update_slice(
-                    m_cell, jnp.zeros(N_FORCES, dtype=bool), (self.n_objs + obj_idx * N_FORCES,)
+                    m_cell, jnp.zeros(N_FORCES, dtype=bool), self.obj_idxs_to_force_idxs[obj_idx]
                 )
             m_cell = m_cell.at[obj_idx].set(True)
             m_cell = remove_colliding_objs(m_cell, obj_idx, self.coll_mat)
@@ -2820,7 +2753,7 @@ class PSEnv:
                     rule_grps.append(sub_rule_fns)
             rule_blocks.append((looping, rule_grps))
 
-        _move_rule_fn = partial(apply_movement, coll_mat=self.coll_mat,
+        _move_rule_fn = partial(self.apply_movement, coll_mat=self.coll_mat,
                                 n_objs=self.n_objs, obj_force_masks=self.obj_force_masks, jit=self.jit)
         rule_blocks.append((False, [[_move_rule_fn]]))
         # Can we have loops in late rules? I hope not.
@@ -3258,6 +3191,103 @@ class PSEnv:
                 carry = project_kernel_at_xy(carry)
                 rng, kernel_activ_xy_idx, lvl = carry
         return rng, lvl
+
+
+    def apply_movement(self, rng, lvl, coll_mat, n_objs, obj_force_masks, jit=True):
+        coll_mat = jnp.array(coll_mat, dtype=bool)
+        # Upper bound on the number of forces that might exist in the level at any given time.
+        n_layers = len(self.collision_layers)
+        max_possible_forces = n_layers * lvl.shape[2] * lvl.shape[3]
+        force_arr = lvl[0, n_objs:-1]
+        # Mask out all forces corresponding to ACTION.
+        force_mask = np.ones((force_arr.shape[0],), dtype=bool)
+        force_mask[ACTION::N_FORCES] = 0
+        force_arr = force_arr[force_mask]
+        # Rearrange the array, since we want to apply force to the "first" objects spatially on the map.
+        # force_arr = rearrange(force_arr, "c h w -> w h c")
+        force_arr = force_arr.transpose(2, 1, 0)
+        # Get the first x,y,c coordinates where force is present.
+        coords = jnp.argwhere(force_arr, size=max_possible_forces+1, fill_value=-1)
+        # force_idxs = coords[:, 2] % (N_FORCES - 1)
+
+        def attempt_move(carry):
+            # NOTE: This depends on movement forces preceding any other forces (per object) in the channel dimension.
+            lvl, _, _, i = carry
+            y, x, c = coords[i]
+            is_force_present = x != -1
+            # Get the obj idx on which the force is applied.
+            # First get the collision layer idx.
+            coll_layer_idx = c // (N_FORCES - 1)
+            # Then find the active object in this collition layer.
+            n_layer_objs = jnp.array(self.n_objs_per_layer)[coll_layer_idx]
+            n_prior_objs = jnp.array(self.n_objs_prior_to_layer)[coll_layer_idx]
+            layer_obj_mask = jnp.array(self.layer_masks)[coll_layer_idx]
+            # obj_idx = n_prior_objs + jnp.argwhere(lvl[0, n_prior_objs: n_prior_objs + n_layer_objs, x, y])
+            obj_idx = n_prior_objs + jnp.argwhere(
+                jnp.where(layer_obj_mask, lvl[0, :self.n_objs, x, y], False), size=1
+            )[0]
+            breakpoint()
+            obj_exists = lvl[0, obj_idx, x, y]
+            # Determine where the object would move and whether such a move would be legal.
+            forces_to_deltas = jnp.array([[0, -1], [1, 0], [0, 1], [-1, 0]])
+            delta = forces_to_deltas[c % (N_FORCES - 1)]
+            x_1, y_1 = x + delta[0], y + delta[1]
+            would_collide = jnp.any(lvl[0, :n_objs, x_1, y_1] * coll_mat[obj_idx])
+            out_of_bounds = (x_1 < 0) | (x_1 >= lvl.shape[2]) | (y_1 < 0) | (y_1 >= lvl.shape[3])
+            can_move = obj_exists & is_force_present & ~would_collide & ~out_of_bounds
+            # Now, in the new level, move the object in the direction of the force.
+            new_lvl = lvl.at[0, obj_idx, x, y].set(False)
+            new_lvl = new_lvl.at[0, obj_idx,  x_1, y_1].set(True)
+
+            # And remove any forces that were applied to the object before it moved.
+            new_lvl = jax.lax.dynamic_update_slice(
+                new_lvl,
+                jnp.zeros((1, N_FORCES, 1, 1), dtype=bool),
+                (0, n_objs + (coll_layer_idx * N_FORCES), x, y)
+            )
+            # Use the force mask instead
+            # obj_force_mask = obj_force_masks[obj_idx]
+            # new_lvl = new_lvl.at[0, :, x, y].set(
+            #     jnp.where(obj_force_mask, 0, new_lvl[0, :, x, y])
+            # )
+
+            lvl = jax.lax.select(can_move, new_lvl, lvl)
+            i += 1
+            # if DEBUG:
+            #     jax.debug.print('      at position {xy}, the object {obj} moved to {new_xy}', xy=(x, y), obj=obj_idx, new_xy=(x_1, y_1))
+            #     jax.debug.print('      would collide: {would_collide}, out of bounds: {out_of_bounds}, can_move: {can_move}',
+            #                     would_collide=would_collide, out_of_bounds=out_of_bounds, can_move=can_move)
+            return lvl, can_move, rng, i
+
+        init_carry = (lvl, False, rng, 0)
+
+        # Iterate through possible moves until we apply one, or run out of possible moves.
+        if jit:
+            lvl, can_move, rng, i = jax.lax.while_loop(
+                lambda carry: (coords[carry[3], 0] != -1),
+                lambda carry: attempt_move(carry),
+                init_carry,
+            )
+        else:
+            i = init_carry[3]
+            can_move = init_carry[1]
+            carry = init_carry
+            while (coords[i, 0] != -1) and not can_move:
+                lvl, can_move, rng, i = attempt_move(carry)
+                carry = (lvl, can_move, rng, i)
+        
+        if DEBUG:
+            jax.debug.print('      applied movement: {can_move}', can_move=can_move)
+        rule_state = RuleState(
+            lvl=lvl,
+            applied=can_move,
+            cancelled=False,
+            restart=False,
+            again=False,
+            win=False,
+            rng=rng
+        )
+        return rule_state
 
 
 def is_line_detector_in_kernel(kernel):
