@@ -502,6 +502,8 @@ def get_tree_from_txt(parser, game, log_dir: str = None, overwrite: bool = True,
     # print(f"Parsing game {filepath} ({i+1}/{len(game_files)})")
     simp_filepath = os.path.join(SIMPLIFIED_GAMES_DIR, simp_filename)
     os.makedirs(SIMPLIFIED_GAMES_DIR, exist_ok=True)
+    os.makedirs(pretty_trees_dir, exist_ok=True)
+    os.makedirs(MIN_GAMES_DIR, exist_ok=True)
     if overwrite or not os.path.exists(simp_filepath):
         # Now save the simplified version of the file
         try:

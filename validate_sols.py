@@ -67,6 +67,7 @@ def main_launch(cfg: JaxValidationConfig):
             timeout_min=180,
             # slurm_gres='gpu:1',
             slurm_account='pr_174_tandon_advanced', 
+            slurm_setup=["export JAX_PLATFORMS=cpu"]
         )
         executor.map_array(main, [cfg] * n_jobs, game_sublists)
     else:
@@ -74,6 +75,7 @@ def main_launch(cfg: JaxValidationConfig):
 
 def main(cfg: JaxValidationConfig, games: Optional[List[str]] = None):
     if cfg.slurm:
+        os.environ["CUDA_VISIBLE_DEVICES"] = ""
         os.environ["JAX_PLATFORMS"] = "cpu"
     # Initialize the Lark parser with the PuzzleScript grammar
     with open(PS_LARK_GRAMMAR_PATH, "r", encoding='utf-8') as file:
@@ -123,6 +125,25 @@ def main(cfg: JaxValidationConfig, games: Optional[List[str]] = None):
     # else:
     solution_rewards_dict = {}
     
+
+    def save_stats(results, n_levels, n_success, n_compile_error, n_runtime_error,
+                   n_solution_error, n_state_error, n_score_error, n_unvalidated_levels):
+        results['stats']['total_games'] = len(games)
+        results['stats']['total_levels'] = n_levels
+        results['stats']['successful_solutions'] = n_success
+        results['stats']['compile_error'] = n_compile_error
+        results['stats']['runtime_error'] = n_runtime_error
+        results['stats']['solution_error'] = n_solution_error
+        results['stats']['state_error'] = n_state_error
+        results['stats']['score_error'] = n_score_error
+        results['stats']['unvalidated_levels'] = n_unvalidated_levels
+
+        with open(val_results_path, 'w') as f:
+            json.dump(results, f, indent=4)
+
+        with open(SOLUTION_REWARDS_PATH, 'w') as f:
+            json.dump(solution_rewards_dict, f, indent=4)
+
 
     key = jax.random.PRNGKey(0)
 
@@ -203,22 +224,6 @@ def main(cfg: JaxValidationConfig, games: Optional[List[str]] = None):
         env = None
 
         for level_i, level_sol_path in zip(level_ints, level_sols):
-            def save_stats():
-                results['stats']['total_games'] = len(games)
-                results['stats']['total_levels'] = n_levels
-                results['stats']['successful_solutions'] = n_success
-                results['stats']['compile_error'] = n_compile_error
-                results['stats']['runtime_error'] = n_runtime_error
-                results['stats']['solution_error'] = n_solution_error
-                results['stats']['state_error'] = n_state_error
-                results['stats']['score_error'] = n_score_error
-                results['stats']['unvalidated_levels'] = n_unvalidated_levels
-
-                with open(val_results_path, 'w') as f:
-                    json.dump(results, f, indent=4)
-
-                with open(SOLUTION_REWARDS_PATH, 'w') as f:
-                    json.dump(solution_rewards_dict, f, indent=4)
         
             # if cfg.aggregate:
             #     save_stats()
@@ -477,7 +482,8 @@ def main(cfg: JaxValidationConfig, games: Optional[List[str]] = None):
         results['stats']['valid_games'] = len(results['valid_games'])
         results['stats']['partial_valid_games'] = len(results['partial_valid_games'])
         
-        save_stats()
+        save_stats(results, n_levels, n_success, n_compile_error, n_runtime_error,
+                   n_solution_error, n_state_error, n_score_error, n_unvalidated_levels)
         print(f"Validation results saved to {val_results_path}")
         stats_dict = {
             "Total Games": len(games),

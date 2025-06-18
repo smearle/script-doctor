@@ -16,7 +16,7 @@ import jax.numpy as jnp
 import numpy as np
 
 from env_render import render_solid_color, render_sprite
-from env_utils import multihot_to_desc, N_FORCES, ACTION
+from env_utils import N_MOVEMENTS, multihot_to_desc, N_FORCES, ACTION
 from jax_utils import stack_leaves
 from ps_game import LegendEntry, PSGameTree, PSObject, Rule, WinCondition
 from spaces import Discrete, Box
@@ -62,21 +62,32 @@ def assign_vecs_to_objs(collision_layers, atomic_obj_names):
     objs_to_idxs = {}
     # vecs = np.eye(n_objs, dtype=np.uint8)
     # obj_vec_dict = {}
-    j = 0
+    # j = 0
     objs = []
     obj_idxs_to_force_idxs_dict = {}
-    atomic_objs_to_idxs = {obj: i for i, obj in enumerate(atomic_obj_names)}
+    # atomic_objs_to_idxs = {obj: i for i, obj in enumerate(atomic_obj_names)}
+    # Need to check for dupes
+    atomic_objs_to_idxs = {}
+    i = 0
+    for obj in atomic_obj_names:
+        if obj in atomic_objs_to_idxs:
+            continue
+        atomic_objs_to_idxs[obj] = i
+        i += 1
+
     for i, layer in enumerate(collision_layers):
         for obj in layer:
+            if obj in objs_to_idxs:
+                continue
             objs.append(obj)
             # obj_vec_dict[obj] = vecs[i]
-            if obj in atomic_objs_to_idxs:
-                obj_idx = atomic_objs_to_idxs[obj]
-                objs_to_idxs[obj] = obj_idx
-            else:
-                obj_idx = j
-                j += 1
+            # if obj in atomic_objs_to_idxs:
+            obj_idx = atomic_objs_to_idxs[obj]
             objs_to_idxs[obj] = obj_idx
+            # else:
+            #     obj_idx = j
+            #     j += 1
+            # objs_to_idxs[obj] = obj_idx
             coll_masks[i, obj_idx] = 1
             obj_idxs_to_force_idxs_dict[obj_idx] = n_objs + i * N_FORCES
     obj_idxs_to_force_idxs = np.zeros(len(obj_idxs_to_force_idxs_dict), dtype=int) 
@@ -1733,7 +1744,7 @@ class PSEnv:
             for obj_idx in obj_idxs:
 
                 obj_is_present = m_cell[obj_idx] == 1
-                obj_forces = jax.lax.dynamic_slice(m_cell, self.obj_idxs_to_force_idxs[obj_idx], (4,))
+                obj_forces = jax.lax.dynamic_slice(m_cell, self.obj_idxs_to_force_idxs[obj_idx], (N_MOVEMENTS,))
                 # obj_force_mask = self.obj_force_masks[obj_idx]
                 # obj_forces = m_cell[obj_force_mask]
                 if vertical:
@@ -1782,7 +1793,7 @@ class PSEnv:
 
 
             obj_is_present = m_cell[obj_idx] == 1
-            obj_forces = jax.lax.dynamic_slice(m_cell, self.obj_idxs_to_force_idxs[obj_idx], (4,))
+            obj_forces = jax.lax.dynamic_slice(m_cell, self.obj_idxs_to_force_idxs[obj_idx], (N_MOVEMENTS,))
             # obj_force_mask = self.obj_force_masks[obj_idx]
             # obj_forces = m_cell[obj_force_mask]
             if vertical:
@@ -2034,18 +2045,18 @@ class PSEnv:
                 # Reassign any forces belonging to the detected object to the new object
                 # First, identify the forces of the detected object.
                 detected_forces = jax.lax.dynamic_slice(
-                    m_cell, self.obj_idxs_to_force_idxs[detected_obj_idx], (N_FORCES,)
+                    m_cell, (jnp.array(self.obj_idxs_to_force_idxs)[detected_obj_idx],), (N_FORCES,)
                 )
                 # obj_force_mask = self.obj_force_masks[detected_obj_idx]
                 # detected_forces = m_cell[obj_force_mask]
                 # Then remove them from the detected object.
                 m_cell = jax.lax.dynamic_update_slice(
-                    m_cell, jnp.zeros(N_FORCES, dtype=bool), self.obj_idxs_to_force_idxs[detected_obj_idx],
+                    m_cell, jnp.zeros(N_FORCES, dtype=bool), (jnp.array(self.obj_idxs_to_force_idxs)[detected_obj_idx],),
                 )
                 # m_cell = m_cell.at[obj_force_mask].set(0)
                 # Then copy them to the new object.
                 m_cell = jax.lax.dynamic_update_slice(
-                    m_cell, detected_forces, self.obj_idxs_to_force_idxs[obj_idx],
+                    m_cell, detected_forces, (jnp.array(self.obj_idxs_to_force_idxs)[obj_idx],),
                 )
                 # m_cell = jnp.where(obj_force_mask, detected_forces, m_cell)
                 return m_cell
@@ -2088,7 +2099,7 @@ class PSEnv:
             # Remove any existing forces from the object
             # Here we need to use a dynamic update slice, since we don't know the obj_idx at compile time
             m_cell = jax.lax.dynamic_update_slice(
-                m_cell, jnp.zeros(N_FORCES, dtype=bool), self.obj_idxs_to_force_idxs[obj_idx],
+                m_cell, jnp.zeros(N_FORCES, dtype=bool), (jnp.array(self.obj_idxs_to_force_idxs)[obj_idx],),
             )
             return rng, m_cell
 
@@ -2154,7 +2165,7 @@ class PSEnv:
             force_arr = jnp.zeros(N_FORCES, dtype=bool)
             force_arr = force_arr.at[force_idx].set(True)
             m_cell = jax.lax.dynamic_update_slice(
-                m_cell, force_arr, self.obj_idxs_to_force_idxs[obj_idx],
+                m_cell, force_arr, (jnp.array(self.obj_idxs_to_force_idxs)[obj_idx],),
             )
             # Also remove player action mask
             m_cell = m_cell.at[-1].set(False)

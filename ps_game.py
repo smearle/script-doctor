@@ -34,7 +34,7 @@ class LegendEntry:
     """
     def __init__(self, key: str, obj_names: List[str], operator: Optional[str]):
         self.key = key
-        self.obj_names = obj_names
+        self.obj_names = list(set(obj_names))
         self.operator = operator
 
     def __repr__(self):
