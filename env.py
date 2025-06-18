@@ -1126,7 +1126,7 @@ class PSEnv:
             self.n_objs_per_layer[i] = len(l)
             self.n_objs_prior_to_layer[i+1:] += len(l)
             n_objs_prior_to_layer_i = self.n_objs_prior_to_layer[i]
-            self.layer_masks[n_objs_prior_to_layer_i: n_objs_prior_to_layer_i + len(l)]
+            self.layer_masks[i, n_objs_prior_to_layer_i: n_objs_prior_to_layer_i + len(l)] = True
         objs, self.objs_to_idxs, coll_masks, self.obj_idxs_to_force_idxs = assign_vecs_to_objs(collision_layers, atomic_obj_names)
         self.obj_force_masks = gen_obj_force_masks(self.n_objs, self.obj_idxs_to_force_idxs, len(self.collision_layers))
         for obj, sub_objs in meta_objs.items():
@@ -1342,7 +1342,8 @@ class PSEnv:
             xy_coords = xy_coords[:, None].repeat(len(self.player_idxs), axis=1)
 
             # Create a new dictionary mapping objects to force channels, which adds a dummy collision layer at the front
-            obj_idxs_to_force_idxs = jnp.concat((np.array([0]), self.obj_idxs_to_force_idxs + 1))
+            # Also, ignore the indices corresponding to object channels since we're dealing directly with the force map.
+            obj_idxs_to_force_idxs = jnp.concat((np.array([0]), self.obj_idxs_to_force_idxs + N_FORCES - self.n_objs))
 
             # This is a map-shaped array of the force-indices (and xy indices) that should be applied, given the player objects at these cells.
             player_force_mask = obj_idxs_to_force_idxs[player_int_mask] + action
@@ -1392,18 +1393,23 @@ class PSEnv:
     ) -> Tuple[chex.Array, PSState, float, bool, dict]:
         """Performs step transitions in the environment."""
         key, key_reset = jax.random.split(key)
-        obs_st, state_st, reward, done, info = self.step_env(
-            key, state, action, params
-        )
-        obs_re, state_re = self.reset(key_reset, params)
-        # Auto-reset environment based on termination
-        state = jax.tree.map(
-            lambda x, y: jax.lax.select(done, x, y), state_re, state_st
-        )
-        # Generalizing this to flax dataclass observations
-        obs = jax.tree.map(
-            lambda x, y: jax.lax.select(done, x, y), obs_re, obs_st
-        )
+        if self.jit:
+            obs_st, state_st, reward, done, info = self.step_env(
+                key, state, action, params
+            )
+            obs_re, state_re = self.reset(key_reset, params)
+            # Auto-reset environment based on termination
+            state = jax.tree.map(
+                lambda x, y: jax.lax.select(done, x, y), state_re, state_st
+            )
+            # Generalizing this to flax dataclass observations
+            obs = jax.tree.map(
+                lambda x, y: jax.lax.select(done, x, y), obs_re, obs_st
+            )
+        else:
+            obs, state, reward, done, info = self.step_env(key, state, action, params)
+            if done:
+                obs, state = self.reset(key_reset, params)
         return obs, state, reward, done, info
 
 
@@ -2857,6 +2863,7 @@ class PSEnv:
             if not self.jit:
                 while turn_again:
                     carry = apply_turn(carry)
+                    lvl, turn_applied, turn_app_i, cancelled, restart, turn_again, win, rng = carry
             else:
                 carry = jax.lax.while_loop(
                     cond_fun=lambda x: ~x[3] & ~x[4] & x[5],
@@ -3223,10 +3230,9 @@ class PSEnv:
             n_prior_objs = jnp.array(self.n_objs_prior_to_layer)[coll_layer_idx]
             layer_obj_mask = jnp.array(self.layer_masks)[coll_layer_idx]
             # obj_idx = n_prior_objs + jnp.argwhere(lvl[0, n_prior_objs: n_prior_objs + n_layer_objs, x, y])
-            obj_idx = n_prior_objs + jnp.argwhere(
+            obj_idx = jnp.argwhere(
                 jnp.where(layer_obj_mask, lvl[0, :self.n_objs, x, y], False), size=1
-            )[0]
-            breakpoint()
+            )[0,0]
             obj_exists = lvl[0, obj_idx, x, y]
             # Determine where the object would move and whether such a move would be legal.
             forces_to_deltas = jnp.array([[0, -1], [1, 0], [0, 1], [-1, 0]])
