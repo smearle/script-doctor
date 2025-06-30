@@ -372,7 +372,7 @@ def preprocess_ps(txt):
 
     # Remove any lines that are just r`=+` (or actually, at least 3 `=` followed by one accidental character;
     # a hack to get around some typos in the dataset)
-    txt = re.sub(r'^====*.\n', '', txt, flags=re.MULTILINE)
+    txt = re.sub(r'^===*.\n', '', txt, flags=re.MULTILINE)
 
     txt = add_empty_sounds_section(txt)
 

@@ -1,0 +1,184 @@
+title Touchdown Heroes (Prototype)
+author Matt Ventre
+color_palette whitingjp       
+again_interval 1
+text_color LIGHTGREEN
+require_player_movement
+noaction
+noundo
+debug
+
+
+(
+
+TO DO:
+
+ - More levels
+ - Smarter defense
+ - Turn counter
+ - Tackle animation
+ 
+)
+
+========
+OBJECTS
+========
+
+(///////////// Field Objects ////////////////////)
+
+Background 	. (Turf)
+GREEN LIGHTGREEN
+01000
+00001
+01000
+00010
+00000
+
+	Sideline 	# (Out of bounds, can't go through it)
+	WHITE LIGHTGRAY
+	01000
+	00001
+	01000
+	00010
+	00000
+
+	Yardline 	- (Just marks off distance. The more yardlines = higher level)
+	GREEN LIGHTGREEN WHITE
+	01000
+	00001
+	22222
+	00010
+	00000
+
+	Endzone		= (When the player and ball are in the endzone, you win the level)
+	RED DARKRED WHITE
+	00000
+	01000
+	00000
+	00100
+	22222
+    
+    Ball		B (Gotta run the rock to score)
+	BROWN DARKBROWN
+	.....
+	..0..
+	.010.
+	.010.
+	..0..
+
+
+(///////////// Player States ////////////////////)
+
+Player 		Q (That's you, pal)
+WHITE BLACK BLUE LIGHTBLUE YELLOW
+.232.
+.232.
+13331
+43334
+.1.1.
+
+	Tackled 	T (When you go down)
+	WHITE BLACK BLUE LIGHTBLUE YELLOW
+	.1.1.
+	.333.
+	13331
+	42424
+	.232.
+
+	Celebrate	C (Your TD dance)
+	WHITE BLACK BLUE LIGHTBLUE YELLOW
+	.232.
+	42424
+	13331
+	.333.
+	.1.1.
+
+
+(///////////// Offensive Players ////////////////////)
+
+Lineman		L (Keeps you from getting hit)
+WHITE BLACK BLUE LIGHTBLUE YELLOW
+.232.
+.232.
+12221
+42224
+.1.1.
+
+(We don't use him just yet)
+Reciever	R
+WHITE
+
+
+(///////////// Defensive Players ////////////////////)
+
+
+Defense		D (Standard defense, he just kind of jumps around trying to make a tackle, not too bright)
+WHITE BLACK RED DARKRED YELLOW
+.232.
+.242.
+13331
+43334
+.1.1.
+
+Blitzer		Z (This guy comes after you, you'll have to use your blockers and probably some other defenders, too)
+WHITE BLACK RED DARKRED YELLOW
+.232.
+.242.
+13331
+43334
+.1.1.
+
+Stalker		S (Chases after the ballcarrier. Slightly more intelligent.)
+WHITE BLACK RED DARKRED YELLOW
+.232.
+.242.
+13331
+43334
+.1.1.
+
+
+
+=======
+LEGEND
+=======
+Background = Background or Yardline
+P = Player and Ball
+
+=======
+SOUNDS
+=======
+
+
+================
+COLLISIONLAYERS
+================
+
+Background
+Yardline
+Endzone
+Ball
+Sideline, Player, Reciever, Celebrate, Defense, Stalker, Tackled, Lineman, Blitzer
+
+======
+RULES     
+======     
+
+[ > Player Ball ] -> [ > Player > Ball ]
+
+==============
+WINCONDITIONS
+==============
+
+=======     
+LEVELS
+=======
+
+#==========#
+#..........#
+#..........#
+#..........#
+#----------#
+#..........#
+#..P.......#
+#..........#
+############

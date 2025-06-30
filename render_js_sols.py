@@ -18,7 +18,7 @@ from utils import init_ps_lark_parser, level_to_int_arr
 from validate_sols import JS_SOLS_DIR, multihot_level_from_js_state, JAX_VALIDATED_JS_SOLS_DIR
 
 
-@hydra.main(version_base="1.3", config_path='./conf', config_name='profile_standalone_config')
+@hydra.main(version_base="1.3", config_path='./conf', config_name='profile_nodejs_config')
 def main(cfg: ProfileNodeJS):
     parser = init_ps_lark_parser()
     engine = require('./standalone/puzzlescript/engine.js')
@@ -34,14 +34,14 @@ def main(cfg: ProfileNodeJS):
         step_i=0, rng=jax.random.PRNGKey(0),
     )
     for game_dir in game_sols_dirs:
-        game_name = game_dir.split("/")[-1]
+        game_name = game_dir.split(os.path.sep)[-1]
         level_sol_jsons = glob.glob(f"{game_dir}/*.json")
         game_text = None
         env = None
         for level_sol_json in level_sol_jsons:
-            level_i = level_sol_json.split("/")[-1].split(".")[0].split('-')[-1]
+            level_i = level_sol_json.split(os.path.sep)[-1].split(".")[0].split('-')[-1]
             if '-steps' in level_sol_json:
-                n_steps = level_sol_json.split("/")[-1].split(".")[0].split('-steps')[0]
+                n_steps = level_sol_json.split(os.path.sep)[-1].split(".")[0].split('-steps')[0]
             else:
                 n_steps = 10_000
             print(f"Game: {game_name}, Level: {level_i}, Steps: {n_steps}")

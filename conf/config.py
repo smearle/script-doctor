@@ -36,6 +36,7 @@ class JaxValidationConfig(PSConfig):
     game: Optional[str] = None
     aggregate: bool = False  # Don't run any new validations, just aggregate existing results.
     random_order: bool = False
+    include_test_games: bool = True
     
 @dataclass
 class BFSConfig(PSConfig):

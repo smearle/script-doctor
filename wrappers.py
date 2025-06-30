@@ -217,7 +217,7 @@ class RepresentationWrapper(PSEnv):
 
 
     def render_text(self, state: PSState):
-        return multihot_to_desc(state.multihot_level, self.objs_to_idxs, self.n_objs, show_background=False)
+        return multihot_to_desc(state.multihot_level, self.objs_to_idxs, self.n_objs, obj_idxs_to_force_idxs=self.obj_idxs_to_force_idxs, show_background=False)
 
 
 def test_log_wrapper():

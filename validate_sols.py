@@ -101,7 +101,8 @@ def main(cfg: JaxValidationConfig, games: Optional[List[str]] = None):
             'valid_games': [],
             'partial_valid_games': [],
         }
-        games = [game for game in games if not game.startswith('test_')]
+        if not cfg.include_test_games:
+            games = [game for game in games if not game.startswith('test_')]
     val_results_path = os.path.join('data', 'validation_results.json')
     if os.path.isfile(val_results_path):
         shutil.copy(val_results_path, val_results_path[:-5] + '_bkp.json')
