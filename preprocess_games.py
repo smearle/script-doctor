@@ -370,10 +370,6 @@ def preprocess_ps(txt):
     # Remove whitespace at start of any line
     txt = re.sub(r'^[ \t]+', '', txt, flags=re.MULTILINE)
 
-    # Remove any lines that are just r`=+` (or actually, at least 3 `=` followed by one accidental character;
-    # a hack to get around some typos in the dataset)
-    txt = re.sub(r'^===*.\n', '', txt, flags=re.MULTILINE)
-
     txt = add_empty_sounds_section(txt)
 
     # If the regular `LEGEND` header is not found, try the `LEGEND` header followed by some trailing characters
@@ -394,6 +390,10 @@ def preprocess_ps(txt):
 
     ## Strip any comments
     txt = strip_comments(txt)
+
+    # Remove any lines that are just r`=+` (or actually, at least 3 `=` followed by one accidental character;
+    # a hack to get around some typos in the dataset)
+    txt = re.sub(r'^===*.\n', '', txt, flags=re.MULTILINE)
 
     # Remove any lines that are just whitespace
     txt = re.sub(r'^\s*\n', '\n', txt, flags=re.MULTILINE)
@@ -596,7 +596,8 @@ def get_tree_from_txt(parser, game, log_dir: str = None, overwrite: bool = True,
     return tree, PSErrors.SUCCESS, ""
 
 def gen_error_str(e):
-    return f"{type(e).__name__}: {e}"
+    err_msg = f"{traceback.format_exc()}\n{type(e).__name__}: {e}"
+    return err_msg
 
 
 @hydra.main(version_base="1.3", config_path="conf", config_name="preprocess_config")

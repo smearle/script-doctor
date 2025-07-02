@@ -45,10 +45,26 @@ JS_TO_JAX_ACTIONS = [3, 0, 1, 2, 4]
 
 def multihot_level_from_js_state(level_state, obj_list):
     level_state = np.array(level_state).T
-    level_multihot = to_binary_vectors(level_state, len(obj_list))
-    level_multihot = rearrange(level_multihot, 'h w c -> c h w')
-    level_multihot = np.flip(level_multihot, 0)
-    return level_multihot
+    multihot_level_js = to_binary_vectors(level_state, len(obj_list))
+    multihot_level_js = rearrange(multihot_level_js, 'h w c -> c h w')
+
+    # Remove duplicate channels from the multihot level.
+    new_multihot_level_js = []
+    new_objs_to_idxs = {}
+    for obj_idx, obj in enumerate(obj_list):
+        if obj not in new_objs_to_idxs:
+            new_objs_to_idxs[obj] = len(new_objs_to_idxs)
+            new_multihot_level_js.append(multihot_level_js[obj_idx])
+        else:
+            dupe_obj_idx = new_objs_to_idxs[obj]
+            new_multihot_level_js[dupe_obj_idx] = np.logical_or(
+                new_multihot_level_js[dupe_obj_idx],
+                multihot_level_js[obj_idx]
+            )
+    multihot_level_js = np.array(new_multihot_level_js, dtype=bool)
+
+    multihot_level_js = np.flip(multihot_level_js, 0)
+    return multihot_level_js
 
 @hydra.main(version_base="1.3", config_path='./conf', config_name='jax_validation_config')
 def main_launch(cfg: JaxValidationConfig):
@@ -340,7 +356,7 @@ def main(cfg: JaxValidationConfig, games: Optional[List[str]] = None):
             level_score = sol_dict['score']
             level_state = sol_dict['state']
             obj_list = sol_dict['objs']
-            level_multihot = multihot_level_from_js_state(level_state, obj_list)
+            multihot_level_js = multihot_level_from_js_state(level_state, obj_list)
             actions = level_sol
             # print(f"Level {level_i} solution: {actions}")
             actions = [JS_TO_JAX_ACTIONS[a] for a in actions]
@@ -385,8 +401,8 @@ def main(cfg: JaxValidationConfig, games: Optional[List[str]] = None):
                     game_success = False
                         # f.write(f"State: {state}\n")
                     print(f"Level {level_i} solution failed (won in JS, did not win in jax)")
-                elif np.any(level_multihot != state.multihot_level):
-                    js_state = state.replace(multihot_level=level_multihot)
+                elif np.any(multihot_level_js != state.multihot_level):
+                    js_state = state.replace(multihot_level=multihot_level_js)
                     js_frame = env.render(js_state, cv2=False)
                     js_frame = np.array(js_frame, dtype=np.uint8)
                     imageio.imsave(os.path.join(jax_sol_dir, f'level-{level_i}_state_js.png'), js_frame)
@@ -401,6 +417,7 @@ def main(cfg: JaxValidationConfig, games: Optional[List[str]] = None):
                         #     results['state_error'][game_name] = []
                         # results['state_error'][game_name].append({'n_rules': n_rules, 'level': level_i})
                         n_state_error += 1
+                    
                     print(f"Level {level_i} solution failed (state mismatch)")
                     # game_success = False
                 # # FIXME: There is a discrepancy between the way we compute scores in js (I actually don't understand

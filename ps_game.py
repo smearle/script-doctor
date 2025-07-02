@@ -34,7 +34,17 @@ class LegendEntry:
     """
     def __init__(self, key: str, obj_names: List[str], operator: Optional[str]):
         self.key = key
-        self.obj_names = list(set(obj_names))
+
+        # self.obj_names = list(set(obj_names))
+        # dedupe while maintaining order
+        new_obj_names = []
+        seen: Set[str] = set()
+        for name in obj_names:
+            if name not in seen:
+                seen.add(name)
+                new_obj_names.append(name)
+        self.obj_names = new_obj_names
+
         self.operator = operator
 
     def __repr__(self):

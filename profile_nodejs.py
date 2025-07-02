@@ -84,10 +84,6 @@ def main_launch(cfg: ProfileNodeJS):
 
 
 def main(cfg: ProfileNodeJS, games: Optional[List[str]] = None):
-    if cfg.for_solution:
-        cfg.for_validation = False
-        cfg.timeout = -1
-        cfg.n_steps = 1_000_000
 
     engine = require('./standalone/puzzlescript/engine.js')
     solver = require('./standalone/puzzlescript/solver.js')
@@ -135,7 +131,7 @@ def main(cfg: ProfileNodeJS, games: Optional[List[str]] = None):
                 game_text = compile_game(parser, engine, game, 0)
             except Exception as e:
                 print(f'Error compiling game {game} level {0}: {e}')
-                results[run_name][game][level_i] = {"Error": traceback.print_exc()}
+                results[run_name][game] = {"Error": traceback.print_exc()}
                 continue
 
             n_levels = engine.getNumLevels()
@@ -143,10 +139,7 @@ def main(cfg: ProfileNodeJS, games: Optional[List[str]] = None):
             os.makedirs(game_js_sols_dir, exist_ok=True)
 
             for level_i in range(n_levels):
-                if cfg.for_validation:
-                    level_js_sol_path = os.path.join(game_js_sols_dir, f'level-{level_i}.json')
-                elif cfg.for_solution:
-                    level_js_sol_path = os.path.join(game_js_sols_dir, f'{cfg.n_steps}-steps_level-{level_i}.json')
+                level_js_sol_path = os.path.join(game_js_sols_dir, f'{cfg.n_steps}-steps_level-{level_i}.json')
                 print(f'Level: {level_i}')
                 if cfg.for_validation or cfg.for_solution and not cfg.overwrite and os.path.isfile(level_js_sol_path):
                     print(f'Already solved (for validation) {game} level {level_i}.')

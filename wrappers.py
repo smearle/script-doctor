@@ -3,7 +3,6 @@ from itertools import product, combinations
 import itertools
 import unicodedata
 
-from gymnax.environments import environment
 import jax
 from lark import Lark
 import numpy as np

@@ -1,5 +1,6 @@
 from dataclasses import dataclass
 import glob
+import logging
 import os
 from typing import Optional
 
@@ -12,7 +13,9 @@ import numpy as np
 
 from env import PSEnv, PSParams, multihot_to_desc
 from preprocess_games import TREES_DIR, DATA_DIR, TEST_GAMES, get_tree_from_txt
+from preprocess_games import PSErrors
 
+logger = logging.getLogger(__name__)
 
 @dataclass
 class Config:
@@ -179,6 +182,9 @@ def play_game(game: str, level: int = 0, jit: bool = False, profile: bool = Fals
     # min_parser = Lark(min_puzzlescript_grammar, start="ps_game")
     print(f"""Parsing game: \"{game}\"""")
     tree, success, err_msg = get_tree_from_txt(parser, game, overwrite=True, test_env_init=False)
+    if success != PSErrors.SUCCESS:
+        print(f"Error parsing game: {err_msg}")
+        return
     print(f"Initializing environment for game: {game}")
     env = PSEnv(tree, jit=jit, debug=debug, print_score=True)
     print(f"Playing game: {game}")

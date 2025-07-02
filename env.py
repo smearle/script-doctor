@@ -91,7 +91,7 @@ def assign_vecs_to_objs(collision_layers, atomic_obj_names):
             coll_masks[i, obj_idx] = 1
             obj_idxs_to_force_idxs_dict[obj_idx] = n_objs + i * N_FORCES
     obj_idxs_to_force_idxs = np.zeros(len(obj_idxs_to_force_idxs_dict), dtype=int) 
-    for i in range(len(obj_idxs_to_force_idxs_dict)):
+    for i in obj_idxs_to_force_idxs_dict.keys():
         obj_idxs_to_force_idxs[i] = obj_idxs_to_force_idxs_dict[i]
     return objs, objs_to_idxs, coll_masks, obj_idxs_to_force_idxs
 
@@ -172,7 +172,7 @@ def expand_meta_objs(tile_list: List, meta_objs, char_to_obj):
     atomic_obj_names = char_to_obj.values()
 
     while stack:
-        mo = stack.pop()
+        mo = stack.pop(0)
         if mo in meta_objs and mo not in seen:
             stack.extend(meta_objs[mo])  # defer expanding sub-elements
             seen.add(mo)  # mark the meta-object as seen
@@ -662,9 +662,6 @@ class PSEnv:
         self.collision_layers = collision_layers = expand_collision_layers(tree.collision_layers, meta_objs, char_to_obj)
         atomic_obj_names = [name for layer in collision_layers for name in layer]
         # dedupe
-        for i in range(len(atomic_obj_names) - 1, -1, -1):
-            if atomic_obj_names[i] in atomic_obj_names[:i]:
-                del atomic_obj_names[i]
         # atomic_obj_names = [name for name in tree.objects.keys()]
         # atomic_obj_names = [name for name in atomic_obj_names]
         self.atomic_obj_names = atomic_obj_names
@@ -730,7 +727,7 @@ class PSEnv:
             else:
                 # assert len(obj.colors) == 1
                 if len(obj.colors) != 1:
-                    raise ValueError(f"Object {obj_key} has more than one color, but no sprite.")
+                    logger.warning(f"Object {obj_key} has more than one color, but no sprite. Using first color: {obj.colors[0]}.")
                 if DEBUG:
                     print(f'rendering solid color for {obj_key}')
                 im = render_solid_color(obj.colors[0])
@@ -1037,7 +1034,7 @@ class PSEnv:
         def is_meta_subobj_forceless(obj_idx, m_cell):
             """ `obj_idx` is dynamic."""
             return jnp.sum(jax.lax.dynamic_slice(
-                m_cell, self.obj_idxs_to_force_idxs[obj_idx], (N_FORCES,))) == 0
+                m_cell, (self.obj_idxs_to_force_idxs[obj_idx],), (N_FORCES,))) == 0
 
         def is_obj_forceless(obj_idx, m_cell):
             """ `obj_idx` is static."""
@@ -1159,7 +1156,7 @@ class PSEnv:
 
             def force_obj_vec_fn(obj_idx):
                 force_obj_vec = dummy_force_obj_vec.at[obj_idx].set(True)
-                force_obj_vec = force_obj_vec.at[self.obj_idxs_to_force_idxs[obj_idx] + force_idx].set(True)
+                force_obj_vec = force_obj_vec.at[jnp.array(self.obj_idxs_to_force_idxs)[obj_idx] + force_idx].set(True)
                 return force_obj_vec
             
             force_obj_vecs = jax.vmap(force_obj_vec_fn)(obj_idxs)
@@ -1175,7 +1172,7 @@ class PSEnv:
             )
             is_detected = jnp.zeros(m_cell.shape, dtype=bool)
             is_detected = is_detected.at[obj_idx].set(True)
-            is_detected = is_detected.at[self.obj_idxs_to_force_idxs[obj_idx] + force_idx].set(True)
+            is_detected = is_detected.at[jnp.array(self.obj_idxs_to_force_idxs)[obj_idx] + force_idx].set(True)
             detected = jax.lax.cond(
                 active,
                 lambda: is_detected,
@@ -1618,12 +1615,18 @@ class PSEnv:
                            kernel_detect_out: KernelFnReturn,
                         pattern_detect_out: PatternFnReturn, obj: str):
             obj_idx = self.objs_to_idxs[obj]
+            object_was_present = m_cell[obj_idx]
             # Remove the object
             m_cell = m_cell.at[obj_idx].set(False)
             # Remove any existing forces from the object
             force_mask = self.obj_force_masks[obj_idx]
             # m_cell = m_cell.at[force_mask].set(False)
-            m_cell = jnp.where(force_mask, False, m_cell)
+            # If the object was present, then we remove any forces on the relevant collision layer.
+            m_cell = jax.lax.select(
+                object_was_present,
+                jnp.where(force_mask, False, m_cell),
+                m_cell,
+            )
             return rng, m_cell
 
         # @partial(jax.jit, static_argnums=(3))
@@ -1633,15 +1636,16 @@ class PSEnv:
             kernel_meta_objs = kernel_detect_out.detected_meta_objs
             pattern_meta_objs = pattern_detect_out.detected_meta_objs
             obj_idx = disambiguate_meta(obj, meta_objs, kernel_meta_objs, pattern_meta_objs, self.objs_to_idxs)
-            # sub_objs = expand_meta_objs([obj], self.meta_objs, self.char_to_obj)
-            # obj_idxs = np.array([self.objs_to_idxs[so] for so in sub_objs])
-            # TODO: vmap this (?) Actually, no, this obj_idx will always be a single value
-            # for obj_idx in obj_idxs:
+            object_was_present = m_cell[obj_idx]
             m_cell = m_cell.at[obj_idx].set(False)
             # Remove any existing forces from the object
             # Here we need to use a dynamic update slice, since we don't know the obj_idx at compile time
-            m_cell = jax.lax.dynamic_update_slice(
-                m_cell, jnp.zeros(N_FORCES, dtype=bool), (jnp.array(self.obj_idxs_to_force_idxs)[obj_idx],),
+            m_cell = jax.lax.select(
+                object_was_present,
+                jax.lax.dynamic_update_slice(
+                    m_cell, jnp.zeros(N_FORCES, dtype=bool), (jnp.array(self.obj_idxs_to_force_idxs)[obj_idx],),
+                ),
+                m_cell,
             )
             return rng, m_cell
 
