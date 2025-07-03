@@ -43,15 +43,20 @@ color_hex_map = {
 }
 
 def render_solid_color(color):
-    color = color.lower()
     alpha = 255
-    if color == 'transparent':
-        c = color_hex_map[color]
-        alpha = 0
-    elif color in color_hex_map:
-        c = color_hex_map[color]
+    # Check if color is a hex code or a named color
+    if re.match(r'^#(?:[0-9a-fA-F]{3}){1,2}$', color):
+        # It's a hex code
+        c = color
     else:
-        c = '#000000'
+        # It's a string (named color)
+        if color == 'transparent':
+            c = color_hex_map[color]
+            alpha = 0
+        elif color in color_hex_map:
+            c = color_hex_map[color]
+        else:
+            c = '#000000'
     c = hex_to_rgba(c, alpha)
     im = np.zeros((5, 5, 4), dtype=np.uint8)
     im[:, :, :] = np.array(c)

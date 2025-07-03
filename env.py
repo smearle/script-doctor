@@ -41,12 +41,14 @@ def disambiguate_meta(obj, cell_meta_objs, kernel_meta_objs, pattern_meta_objs, 
         return cell_meta_objs[obj]
     elif obj in kernel_meta_objs:
         return kernel_meta_objs[obj]
-    else:
-        # assert obj in pattern_meta_objs, f"Meta-object `{obj}` not found in meta_objs or pattern_meta_objs."
-        if obj not in pattern_meta_objs:
-            raise Exception(f"When compiling a meta-object projection rule, the meta-object `{obj}` in the output pattern is " 
-                  "not found in the return of the compiled detection function (either in meta_objs or pattern_meta_objs).")
+    elif obj in pattern_meta_objs:
         return pattern_meta_objs[obj]
+    else:
+        # raise Exception(f"When compiling a meta-object projection rule, the meta-object {obj} in the output pattern is " 
+        #         "not found in the return of the compiled detection function (either in meta_objs or pattern_meta_objs).")
+        # TODO: I think we can just do this in general.
+        return None
+
     # FIXME: as above, but jax (this is broken. is it necessary?)
     # obj_idx = jax.lax.select_n(
     #     jnp.array([obj in obj_to_idxs, obj in meta_objs, obj in pattern_meta_objs]),
@@ -136,7 +138,7 @@ def process_legend(legend):
     
     return objs_to_chars, meta_objs, conjoined_tiles, chars_to_objs
 
-def expand_collision_layers(collision_layers, meta_objs, char_to_obj):
+def expand_collision_layers(collision_layers, meta_objs, char_to_obj, tree_obj_names):
     # Preprocess collision layers to replace joint objects with their sub-objects
     # TODO: could do this more elegantly using `expand_meta_objs`, right?
     # for i, l in enumerate(collision_layers):
@@ -157,6 +159,10 @@ def expand_collision_layers(collision_layers, meta_objs, char_to_obj):
         l_1 = []
         for o in l:
             sub_objs = expand_meta_objs([o], meta_objs, char_to_obj)
+            # If our meta-object is also atomic (e.g. in `Bug_Exterminator`), and does not recursively refer to itself,
+            # we still need to include it in the collision layers.
+            if o in tree_obj_names and o not in sub_objs:
+                sub_objs = [o] + sub_objs
             for so in sub_objs:
                 if so not in seen:
                     seen.add(so)
@@ -447,9 +453,9 @@ def gen_perp_par_subrules(l_kerns, r_kerns):
         new_patterns[1][i] = (new_kerns_b)
     return new_patterns
 
-def player_has_moved(lvl_0, lvl_1, obj_to_idxs, meta_objs, char_to_obj):
-    player_sub_objs = expand_meta_objs(['player'], meta_objs, char_to_obj)
-    player_idxs = [obj_to_idxs[obj] for obj in player_sub_objs]
+def player_has_moved(player_idxs, lvl_0, lvl_1, obj_to_idxs, meta_objs, char_to_obj):
+    # player_sub_objs = expand_meta_objs(['player'], meta_objs, char_to_obj)
+    # player_idxs = [obj_to_idxs[obj] for obj in player_sub_objs]
     player_moved = False
     for player_idx in player_idxs:
         player_i_moved = jnp.sum(lvl_0[player_idx] != lvl_1[player_idx]) > 0
@@ -648,18 +654,19 @@ class PSEnv:
         self.state_history = []  
         self.total_reward = 0  
 
-        # Add to the legend any objects to whose keys are specified in their object definition
+        # Add to the legend any objects to whose (single-character) keys are specified in their object definition
         for obj_key, obj in tree.objects.items():
             obj_key = obj.legend_key
             if obj_key is not None:
                 obj_to_char[obj.name] = obj_key
                 if obj.alt_name is not None:
                     obj_to_char[obj.alt_name] = obj_key
-        self.char_to_obj = char_to_obj = {v: k for k, v in obj_to_char.items()}
+        self.char_to_obj = {v: k for k, v in obj_to_char.items()}
 
         if DEBUG:
             print(f"Expanding collision layers for {self.title}")
-        self.collision_layers = collision_layers = expand_collision_layers(tree.collision_layers, meta_objs, char_to_obj)
+        self.collision_layers = collision_layers = expand_collision_layers(tree.collision_layers, meta_objs,
+                                                                           self.char_to_obj, list(tree.objects.keys()))
         atomic_obj_names = [name for layer in collision_layers for name in layer]
         # dedupe
         # atomic_obj_names = [name for name in tree.objects.keys()]
@@ -681,7 +688,7 @@ class PSEnv:
             # Meta-objects that are actually just alternate names.
             if DEBUG:
                 print(f'sub_objs {sub_objs}')
-            sub_objs = expand_meta_objs(sub_objs, meta_objs, char_to_obj)
+            sub_objs = expand_meta_objs(sub_objs, meta_objs, self.char_to_obj)
             if len(sub_objs) == 1 and (obj not in self.objs_to_idxs):
                 self.objs_to_idxs[obj] = self.objs_to_idxs[sub_objs[0]]
         self.coll_mat = np.einsum('ij,ik->jk', coll_masks, coll_masks, dtype=bool)
@@ -693,11 +700,13 @@ class PSEnv:
         if 'player' in self.objs_to_idxs:
             self.player_idxs = [self.objs_to_idxs['player']]
         elif 'player' in meta_objs:
-            player_objs = expand_meta_objs(['player'], meta_objs, char_to_obj)
+            player_objs = expand_meta_objs(['player'], meta_objs, self.char_to_obj)
             self.player_idxs = [self.objs_to_idxs[p] for p in player_objs]
         elif 'player' in joint_tiles: 
             sub_objs = joint_tiles['player']
             self.player_idxs = [self.objs_to_idxs[sub_obj] for sub_obj in sub_objs]
+        elif 'player' in names_to_alts:
+            self.player_idxs = [self.objs_to_idxs[names_to_alts['player']]]
         else: 
             raise ValueError("Cannot figure out what indices to assign to player.")
         self.player_idxs = np.array(self.player_idxs)
@@ -759,7 +768,7 @@ class PSEnv:
         # Generate vectors to detect joint objects
         for jo, subobjects in joint_tiles.items():
             vec = np.zeros(self.n_objs, dtype=bool)
-            subobjects = expand_meta_objs(subobjects, meta_objs, char_to_obj)
+            subobjects = expand_meta_objs(subobjects, meta_objs, self.char_to_obj)
             for so in subobjects:
                 if DEBUG:
                     print(so)
@@ -782,7 +791,7 @@ class PSEnv:
                     logger.warning(f"Object {obj} not found in objs_to_idxs. Presumably it's a meta-object. "
                                    f"Mapping the character `{char}` the first sub-object's index instead. Hopefully "
                                    " it's not actually used in any level definitions.")
-                    sub_objs = expand_meta_objs([obj], meta_objs, char_to_obj)
+                    sub_objs = expand_meta_objs([obj], meta_objs, self.char_to_obj)
                     self.chars_to_idxs[char] = self.objs_to_idxs[sub_objs[0]]
 
         if self.jit:
@@ -975,7 +984,7 @@ class PSEnv:
         final_lvl, tick_applied, turn_app_i, cancelled, restart, tick_win, rng = self.tick_fn(rng, lvl)
 
         accept_lvl_change = ((not self.require_player_movement) or 
-                             player_has_moved(init_lvl, final_lvl, self.objs_to_idxs, self.meta_objs, self.char_to_obj)) & ~cancelled
+                             player_has_moved(self.player_idxs, init_lvl, final_lvl, self.objs_to_idxs, self.meta_objs, self.char_to_obj)) & ~cancelled
         # if DEBUG:
         #     jax.debug.print('accept level change: {accept_lvl_change}', accept_lvl_change=accept_lvl_change) 
 
@@ -1034,7 +1043,7 @@ class PSEnv:
         def is_meta_subobj_forceless(obj_idx, m_cell):
             """ `obj_idx` is dynamic."""
             return jnp.sum(jax.lax.dynamic_slice(
-                m_cell, (self.obj_idxs_to_force_idxs[obj_idx],), (N_FORCES,))) == 0
+                m_cell, (jnp.array(self.obj_idxs_to_force_idxs)[obj_idx],), (N_FORCES,))) == 0
 
         def is_obj_forceless(obj_idx, m_cell):
             """ `obj_idx` is static."""
@@ -1190,7 +1199,7 @@ class PSEnv:
             #     lambda: None,
             # )
 
-            # FIXME: wtf?
+            # FIXME: hm?
             active = ((obj_idx != -1) & active)
 
             return ObjFnReturn(active=active, detected=detected, obj_idx=obj_idx, force_idx=force_idx)
@@ -1283,7 +1292,7 @@ class PSEnv:
             for obj_idx in obj_idxs:
 
                 obj_is_present = m_cell[obj_idx] == 1
-                obj_forces = jax.lax.dynamic_slice(m_cell, self.obj_idxs_to_force_idxs[obj_idx], (N_MOVEMENTS,))
+                obj_forces = jax.lax.dynamic_slice(m_cell, (jnp.array(self.obj_idxs_to_force_idxs)[obj_idx],), (N_MOVEMENTS,))
                 # obj_force_mask = self.obj_force_masks[obj_idx]
                 # obj_forces = m_cell[obj_force_mask]
                 if vertical:
@@ -1632,21 +1641,27 @@ class PSEnv:
         # @partial(jax.jit, static_argnums=(3))
         def project_no_meta(rng, m_cell: chex.Array, obj_pos, cell_i, cell_detect_out, kernel_detect_out,
                             pattern_detect_out, obj: str):
-            meta_objs = cell_detect_out.detected_meta_objs
+            cell_meta_objs = cell_detect_out.detected_meta_objs
             kernel_meta_objs = kernel_detect_out.detected_meta_objs
             pattern_meta_objs = pattern_detect_out.detected_meta_objs
-            obj_idx = disambiguate_meta(obj, meta_objs, kernel_meta_objs, pattern_meta_objs, self.objs_to_idxs)
-            object_was_present = m_cell[obj_idx]
-            m_cell = m_cell.at[obj_idx].set(False)
-            # Remove any existing forces from the object
-            # Here we need to use a dynamic update slice, since we don't know the obj_idx at compile time
-            m_cell = jax.lax.select(
-                object_was_present,
-                jax.lax.dynamic_update_slice(
-                    m_cell, jnp.zeros(N_FORCES, dtype=bool), (jnp.array(self.obj_idxs_to_force_idxs)[obj_idx],),
-                ),
-                m_cell,
-            )
+            obj_idx = disambiguate_meta(obj, cell_meta_objs, kernel_meta_objs, pattern_meta_objs, self.objs_to_idxs)
+            if obj_idx is None:
+                sub_objs = expand_meta_objs([obj], self.meta_objs, self.char_to_obj)
+                obj_idxs = [self.objs_to_idxs[o] for o in sub_objs]
+            else:
+                obj_idxs = [obj_idx]
+            for obj_idx in obj_idxs:
+                object_was_present = m_cell[obj_idx]
+                m_cell = m_cell.at[obj_idx].set(False)
+                # Remove any existing forces from the object
+                # Here we need to use a dynamic update slice, since we don't know the obj_idx at compile time
+                m_cell = jax.lax.select(
+                    object_was_present,
+                    jax.lax.dynamic_update_slice(
+                        m_cell, jnp.zeros(N_FORCES, dtype=bool), (jnp.array(self.obj_idxs_to_force_idxs)[obj_idx],),
+                    ),
+                    m_cell,
+                )
             return rng, m_cell
 
         # @partial(jax.jit, static_argnums=(3, 4))
@@ -1762,7 +1777,7 @@ class PSEnv:
             force_arr = force_arr.at[force_idx].set(True)
             # m_cell = m_cell.at[self.n_objs + (obj_idx * N_FORCES) + force_idx].set(1)
             m_cell = jax.lax.dynamic_update_slice(
-                m_cell, force_arr, (self.obj_idxs_to_force_idxs[obj_idx],),
+                m_cell, force_arr, (jnp.array(self.obj_idxs_to_force_idxs)[obj_idx],),
             )
 
             if DEBUG:
@@ -1783,7 +1798,7 @@ class PSEnv:
             else:
                 obj_idx = disambiguate_meta(obj, meta_objs, kernel_meta_objs, pattern_meta_objs, self.objs_to_idxs)
                 m_cell = jax.lax.dynamic_update_slice(
-                    m_cell, jnp.zeros(N_FORCES, dtype=bool), self.obj_idxs_to_force_idxs[obj_idx]
+                    m_cell, jnp.zeros(N_FORCES, dtype=bool), (jnp.array(self.obj_idxs_to_force_idxs)[obj_idx],)
                 )
             m_cell = m_cell.at[obj_idx].set(True)
             m_cell = remove_colliding_objs(m_cell, obj_idx, self.coll_mat)
@@ -1798,8 +1813,6 @@ class PSEnv:
             no, force, moving, stationary, random, vertical, horizontal, random_dir = False, False, False, False, False, False, False, False
             for obj in r_cell:
                 obj = obj.lower()
-                if obj in self.char_to_obj:
-                    obj = self.char_to_obj[obj]
                 if obj == 'no':
                     no = True
                 elif obj in ['>', '<', '^', 'v']:
@@ -1828,44 +1841,47 @@ class PSEnv:
                 # ignore sound effects (which can exist incide rules (?))
                 elif obj.startswith('sfx'):
                     continue
-                elif (obj in self.objs_to_idxs) or (obj in self.meta_objs):
-                    if no:
-                        if obj in self.objs_to_idxs:
-                            fns.append(partial(project_no_obj, obj=obj))
-                        elif obj in self.meta_objs:
-                            fns.append(partial(project_no_meta, obj=obj))
-                        else:
-                            raise Exception(f'Invalid object `{obj}` in rule.')
-                        no = False
-                    elif force:
-                        if obj in self.objs_to_idxs:
-                            obj_idx = self.objs_to_idxs[obj]
-                            fns.append(partial(project_force_obj, obj_idx=obj_idx, force_idx=force_idx))
-                        else:
-                            fns.append(partial(project_force_meta, obj=obj, force_idx=force_idx))
-                        force = False
-                    elif moving:
-                        fns.append(partial(project_moving_obj, obj=obj))
-                        moving = False
-                    elif vertical:
-                        fns.append(partial(project_moving_obj, obj=obj))
-                        vertical = False
-                    elif horizontal:
-                        fns.append(partial(project_moving_obj, obj=obj))
-                        horizontal = False
-                    elif stationary:
-                        fns.append(partial(project_stationary_obj, obj=obj))
-                        stationary = False
-                    elif random:
-                        fns.append(partial(project_obj, obj=obj, random=True))
-                        random = False
-                    elif random_dir:
-                        fns.append(partial(project_force_meta, obj=obj, force_idx=None))
-                        random_dir = False
-                    else:
-                        fns.append(partial(project_obj, obj=obj))
                 else:
-                    raise Exception(f'Invalid object `{obj}` in rule.')
+                    if obj in self.char_to_obj:
+                        obj = self.char_to_obj[obj]
+                    if (obj in self.objs_to_idxs) or (obj in self.meta_objs):
+                        if no:
+                            if obj in self.objs_to_idxs:
+                                fns.append(partial(project_no_obj, obj=obj))
+                            elif obj in self.meta_objs:
+                                fns.append(partial(project_no_meta, obj=obj))
+                            else:
+                                raise Exception(f'Invalid object `{obj}` in rule.')
+                            no = False
+                        elif force:
+                            if obj in self.objs_to_idxs:
+                                obj_idx = self.objs_to_idxs[obj]
+                                fns.append(partial(project_force_obj, obj_idx=obj_idx, force_idx=force_idx))
+                            else:
+                                fns.append(partial(project_force_meta, obj=obj, force_idx=force_idx))
+                            force = False
+                        elif moving:
+                            fns.append(partial(project_moving_obj, obj=obj))
+                            moving = False
+                        elif vertical:
+                            fns.append(partial(project_moving_obj, obj=obj))
+                            vertical = False
+                        elif horizontal:
+                            fns.append(partial(project_moving_obj, obj=obj))
+                            horizontal = False
+                        elif stationary:
+                            fns.append(partial(project_stationary_obj, obj=obj))
+                            stationary = False
+                        elif random:
+                            fns.append(partial(project_obj, obj=obj, random=True))
+                            random = False
+                        elif random_dir:
+                            fns.append(partial(project_force_meta, obj=obj, force_idx=None))
+                            random_dir = False
+                        else:
+                            fns.append(partial(project_obj, obj=obj))
+                    else:
+                        raise Exception(f'Invalid object `{obj}` in rule.')
             
             # @partial(jax.jit, static_argnums=())
             def project_cell(rng, m_cell, cell_i, cell_detect_out, kernel_detect_out, pattern_detect_out):
@@ -1940,6 +1956,7 @@ class PSEnv:
                     lp_is_vertical=lp_is_vertical,
                     rule_name=rule_name,
                     rot=rot,
+                    subkernel_sizes=[max(lp.shape) for lp in lp_subkernels],
                 )
                 project_kernel = partial(
                     self.project_line_kernel,
@@ -2231,8 +2248,9 @@ class PSEnv:
             r_kerns, in_rule_command = get_command_from_pattern(r_kerns, self.objs_to_idxs)
             new_pattern_tpls.append((l_kerns, r_kerns))
             if in_rule_command is not None:
-                assert rule.command is None, (f"Rule {rule_name} has both a command in the right pattern and a command in the "
-                                        "rule definition.f Does this make sense?")
+                if rule.command is not None:
+                    assert rule.command == in_rule_command, (f"Rule {rule_name} has the {in_rule_command} command in the "
+                    f"right pattern, but the command in the rule definition is {rule.command}. ")
                 rule.command = in_rule_command
         pattern_tpls = new_pattern_tpls
 
@@ -2439,7 +2457,7 @@ class PSEnv:
         return tick_fn
 
     def detect_line_kernel(self, lvl: chex.Array, subkernel_detection_fns: List[Callable], lp_is_vertical: bool,
-                           lp_is_horizontal: bool, rule_name: str, rot: int):
+                           lp_is_horizontal: bool, rule_name: str, rot: int, subkernel_sizes: List[int]):
         """
             subkernel_detection_fns: List of functions that detect the subkernels in the line kernel. These need to be detected in sequence, along some line.
         """
@@ -2461,11 +2479,11 @@ class PSEnv:
 
         if lp_is_vertical:
             dim = 2
-            one_hot_masks = gen_one_hot_masks(*subkernel_activations[:, :, 0].shape, rot=rot)
+            one_hot_masks = gen_one_hot_masks(*subkernel_activations[:, :, 0].shape, rot=rot, spacings=subkernel_sizes[:-1])
 
         elif lp_is_horizontal:
             dim = 1
-            one_hot_masks = gen_one_hot_masks(*subkernel_activations[:, 0].shape, rot=rot)
+            one_hot_masks = gen_one_hot_masks(*subkernel_activations[:, 0].shape, rot=rot, spacings=subkernel_sizes[:-1])
 
         # (n_possible_lines, n_subkernels, height, width)
         per_line_subkernel_activations = jnp.zeros((one_hot_masks.shape[0], *subkernel_activations.shape))
@@ -3396,7 +3414,7 @@ def one_hot_sequences(sequences, num_classes):
     return np.array(result, dtype=bool)
 
 
-def gen_one_hot_masks(N: int, M: int, rot: int):
+def gen_one_hot_masks(N: int, M: int, rot: int, spacings: List[int]):
     if N > M:
         return np.zeros((1, N, M), dtype=bool)  # No valid sequences if M < N
     # Generate valid index sequences
@@ -3405,6 +3423,12 @@ def gen_one_hot_masks(N: int, M: int, rot: int):
 
     # Transpose to match binary_matrix shape (N, M)
     one_hot_masks = one_hot_masks.transpose(0, 2, 1)  # shape: (K, N, M)
+
+    oh_mask_start_idxs = np.argmax(one_hot_masks, axis=2)  # Get the first position of each sub-pattern in each mask
+    oh_mask_diffs = np.diff(oh_mask_start_idxs, axis=1)
+    oh_masks_are_valid = np.all(oh_mask_diffs >= np.array(spacings), axis=1)
+    oh_mask_idxs = np.argwhere(oh_masks_are_valid) 
+    one_hot_masks = one_hot_masks[oh_mask_idxs[:, 0]]  # Filter masks based on spacings
     return one_hot_masks
 
 

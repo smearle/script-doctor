@@ -83,7 +83,8 @@ def main_launch(cfg: JaxValidationConfig):
             timeout_min=180,
             # slurm_gres='gpu:1',
             slurm_account='pr_174_tandon_advanced', 
-            slurm_setup=["export JAX_PLATFORMS=cpu"]
+            slurm_setup=["export JAX_PLATFORMS=cpu"],
+            slurm_array_parallelism=n_jobs,
         )
         executor.map_array(main, [cfg] * n_jobs, game_sublists)
     else:

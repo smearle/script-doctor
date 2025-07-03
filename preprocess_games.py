@@ -171,18 +171,19 @@ class StripPuzzleScript(Transformer):
         grid = []
         level_lines = items
         grid = [line for line in level_lines[:-1]]
+        # TODO: Thich of these does OG PS do? Does it do different things in different cases? :/
         # pad all rows with empty tiles
-        # max_len = max(len(row) for row in grid)
-        # for row in grid:
-        #     row += ['.'] * (max_len - len(row))
+        max_len = max(len(row) for row in grid)
+        for row in grid:
+            row += row[-1] * (max_len - len(row))
         # Truncate all the rows to the same length
-        row_lens = [len(r) for r in grid]
-        if len(set(row_lens)) > 1:
-            logger.warning(f"Rows in grid have different lengths: {row_lens}. Truncating to the shortest row.")
-            min_len = min(row_lens)
-            for i, row in enumerate(grid):
-                if len(row) > min_len:
-                    grid[i] = row[:min_len]
+        # row_lens = [len(r) for r in grid]
+        # if len(set(row_lens)) > 1:
+        #     logger.warning(f"Rows in grid have different lengths: {row_lens}. Truncating to the shortest row.")
+        #     min_len = min(row_lens)
+        #     for i, row in enumerate(grid):
+        #         if len(row) > min_len:
+        #             grid[i] = row[:min_len]
         grid = np.array(grid)
         return grid
 

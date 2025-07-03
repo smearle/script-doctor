@@ -76,7 +76,7 @@ class ProfileNodeJS(PSConfig):
     # for_validation: bool = True
     for_solution: bool = True
     slurm: bool = False
-    n_games_per_job: int = 100
+    n_games_per_job: int = 1
 
 
 @dataclass
