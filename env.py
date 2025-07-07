@@ -741,14 +741,19 @@ class PSEnv:
                     print(f'rendering solid color for {obj_key}')
                 im = render_solid_color(obj.colors[0])
 
+            # Size the image up a bunch
+            im_s = PIL.Image.fromarray(im)
+            im_s = im_s.resize((50, 50), PIL.Image.NEAREST)
+            im = np.array(im_s)
+
+            if obj_key == 'bluesky':
+                breakpoint()
+
             if DEBUG:
                 temp_dir = 'scratch'
                 os.makedirs(temp_dir, exist_ok=True)
                 sprite_path = os.path.join(temp_dir, f'sprite_{obj_key}.png')
 
-                # Size the image up a bunch
-                im_s = PIL.Image.fromarray(im)
-                im_s = im_s.resize((im_s.size[0] * 10, im_s.size[1] * 10), PIL.Image.NEAREST)
                 im_s.save(sprite_path)
 
             sprite_stack.append(im)
@@ -823,6 +828,8 @@ class PSEnv:
         background_sub_objs = expand_meta_objs(['background'], self.meta_objs, self.char_to_obj)
         if 'background' in background_sub_objs:
             bg_obj = 'background'
+        elif self.char_to_obj['.'] in background_sub_objs:
+            bg_obj = self.char_to_obj['.']
         else:
             bg_obj = background_sub_objs[0]
         bg_idx = self.objs_to_idxs[bg_obj]
@@ -1589,32 +1596,34 @@ class PSEnv:
                     raise RuntimeError(f'Object `{obj}` not found in cell {cell_i}.')
             m_cell = m_cell.at[obj_idx].set(True)
 
-            def transfer_force(m_cell, obj_idx, detected_obj_idx):
-                # Reassign any forces belonging to the detected object to the new object
-                # First, identify the forces of the detected object.
-                detected_forces = jax.lax.dynamic_slice(
-                    m_cell, (jnp.array(self.obj_idxs_to_force_idxs)[detected_obj_idx],), (N_FORCES,)
-                )
-                # obj_force_mask = self.obj_force_masks[detected_obj_idx]
-                # detected_forces = m_cell[obj_force_mask]
-                # Then remove them from the detected object.
-                m_cell = jax.lax.dynamic_update_slice(
-                    m_cell, jnp.zeros(N_FORCES, dtype=bool), (jnp.array(self.obj_idxs_to_force_idxs)[detected_obj_idx],),
-                )
-                # m_cell = m_cell.at[obj_force_mask].set(0)
-                # Then copy them to the new object.
-                m_cell = jax.lax.dynamic_update_slice(
-                    m_cell, detected_forces, (jnp.array(self.obj_idxs_to_force_idxs)[obj_idx],),
-                )
-                # m_cell = jnp.where(obj_force_mask, detected_forces, m_cell)
-                return m_cell
+            # Actually, forces of transformed objects are just left there, on the relevant collision layer, I think.
+            # def transfer_force(m_cell, obj_idx, detected_obj_idx):
+            #     # Reassign any forces belonging to the detected object to the new object
+            #     # First, identify the forces of the detected object.
+            #     detected_forces = jax.lax.dynamic_slice(
+            #         m_cell, (jnp.array(self.obj_idxs_to_force_idxs)[detected_obj_idx],), (N_FORCES,)
+            #     )
+                
+            #     # obj_force_mask = self.obj_force_masks[detected_obj_idx]
+            #     # detected_forces = m_cell[obj_force_mask]
+            #     # Then remove them from the detected object.
+            #     m_cell = jax.lax.dynamic_update_slice(
+            #         m_cell, jnp.zeros(N_FORCES, dtype=bool), (jnp.array(self.obj_idxs_to_force_idxs)[detected_obj_idx],),
+            #     )
+            #     # m_cell = m_cell.at[obj_force_mask].set(0)
+            #     # Then copy them to the new object.
+            #     m_cell = jax.lax.dynamic_update_slice(
+            #         m_cell, detected_forces, (jnp.array(self.obj_idxs_to_force_idxs)[obj_idx],),
+            #     )
+            #     # m_cell = jnp.where(obj_force_mask, detected_forces, m_cell)
+            #     return m_cell
 
-            m_cell = jax.lax.cond(
-                detected_obj_idx != -1,
-                transfer_force,
-                lambda m_cell, _, __: m_cell,
-                m_cell, obj_idx, detected_obj_idx
-            )
+            # m_cell = jax.lax.cond(
+            #     detected_obj_idx != -1,
+            #     transfer_force,
+            #     lambda m_cell, _, __: m_cell,
+            #     m_cell, obj_idx, detected_obj_idx
+            # )
 
             m_cell = remove_colliding_objs(m_cell, obj_idx, self.coll_mat)
             return rng, m_cell

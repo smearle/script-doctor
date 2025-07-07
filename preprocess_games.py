@@ -98,6 +98,7 @@ class StripPuzzleScript(Transformer):
         return Tree('collisionlayers_section', self.strip_section_items(items, 'layer_data'))
 
     def rules_section(self, items):
+
         return Tree('rules_section', self.strip_section_items(items, 'rule_block'))
 
     def sounds_section(self, items):
@@ -117,7 +118,10 @@ class StripPuzzleScript(Transformer):
         return self.strip_newlines_data(items, 'legend_data')
     
     def rule_data(self, items):
-        return self.strip_newlines_data(items, 'rule_data')
+        assert len(items) == 1
+        if items[0].data.value == 'rule_data_broken':
+            return None
+        return self.strip_newlines_data(items[0].children, 'rule_data')
 
     def rule_block_once(self, items):
         items = [i for i in items if i]
@@ -158,6 +162,8 @@ class StripPuzzleScript(Transformer):
         return grid
 
     def sprite(self, items):
+        assert len(items) == 1
+        items = items[0].children
         # Remote any item that is a message
         items = [i for i in items if not (isinstance(i, Token) and i.type == 'COMMENT')]
         return Tree('sprite', self.shape_2d(items))
@@ -387,7 +393,11 @@ def preprocess_ps(txt):
     txt = re.sub(r'^message.*\n', '\n', txt, flags=re.MULTILINE | re.IGNORECASE)
 
     # Truncate lines ending with "message"
-    txt = re.sub(r'message.*\n', '\n', txt, flags=re.MULTILINE | re.IGNORECASE)
+    # txt = re.sub(r'message.*\n', '\n', txt, flags=re.MULTILINE | re.IGNORECASE)
+
+    # If a line ends with "message ...", and is preceded somewhere by a `]`, remove the `message ...` part
+    # (This is to avoid removing the closing parenthesis of the `(endgame message)` comment in `cute train`)
+    txt = re.sub(r'(\]\s*)message.*\n', r'\1\n', txt, flags=re.MULTILINE | re.IGNORECASE)
 
     ## Strip any comments
     txt = strip_comments(txt)

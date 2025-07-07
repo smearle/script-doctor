@@ -42,8 +42,8 @@ def human_loop(env: PSEnv, level: int = 0, profile=False):
     im = np.array(im, dtype=np.uint8)
     
     # Resize the image by a factor of 5
-    new_h, new_w = tuple(np.array(im.shape[:2]) * SCALING_FACTOR)
-    im = cv2.resize(im, (new_w, new_h), interpolation=cv2.INTER_NEAREST)
+    # new_h, new_w = tuple(np.array(im.shape[:2]) * SCALING_FACTOR)
+    # im = cv2.resize(im, (new_w, new_h), interpolation=cv2.INTER_NEAREST)
     state_hist = []
     
     # Display the image in an OpenCV window
@@ -105,8 +105,8 @@ def human_loop(env: PSEnv, level: int = 0, profile=False):
                 state = state_hist[-1]
             im = env.render(state)
             im = np.array(im, dtype=np.uint8)
-            new_h, new_w = tuple(np.array(im.shape[:2]) * SCALING_FACTOR)
-            im = cv2.resize(im, (new_w, new_h), interpolation=cv2.INTER_NEAREST)
+            # new_h, new_w = tuple(np.array(im.shape[:2]) * SCALING_FACTOR)
+            # im = cv2.resize(im, (new_w, new_h), interpolation=cv2.INTER_NEAREST)
             cv2.imshow(env.title, im)
 
         else:
@@ -132,8 +132,8 @@ def human_loop(env: PSEnv, level: int = 0, profile=False):
             print(multihot_to_desc(state.multihot_level, env.objs_to_idxs, env.n_objs, obj_idxs_to_force_idxs=env.obj_idxs_to_force_idxs))
             im = env.render(state)
             im = np.array(im, dtype=np.uint8)
-            new_h, new_w = tuple(np.array(im.shape[:2]) * SCALING_FACTOR)
-            im = cv2.resize(im, (new_w, new_h), interpolation=cv2.INTER_NEAREST)
+            # new_h, new_w = tuple(np.array(im.shape[:2]) * SCALING_FACTOR)
+            # im = cv2.resize(im, (new_w, new_h), interpolation=cv2.INTER_NEAREST)
             cv2.imshow(env.title, im)
             # Add a short waitKey here to allow the window to update.
             cv2.waitKey(1)  # 1 ms delay; adjust as necessary
@@ -151,8 +151,8 @@ def human_loop(env: PSEnv, level: int = 0, profile=False):
             state_hist.append(state)
             im = env.render(state)
             im = np.array(im, dtype=np.uint8)
-            new_h, new_w = tuple(np.array(im.shape[:2]) * SCALING_FACTOR)
-            im = cv2.resize(im, (new_w, new_h), interpolation=cv2.INTER_NEAREST)
+            # new_h, new_w = tuple(np.array(im.shape[:2]) * SCALING_FACTOR)
+            # im = cv2.resize(im, (new_w, new_h), interpolation=cv2.INTER_NEAREST)
             cv2.imshow(env.title, im)
     
 
@@ -167,8 +167,8 @@ def human_loop(env: PSEnv, level: int = 0, profile=False):
             obs, state = env.reset(rng, params)
             im = env.render(state)
             im = np.array(im, dtype=np.uint8)
-            new_h, new_w = tuple(np.array(im.shape[:2]) * SCALING_FACTOR)
-            im = cv2.resize(im, (new_w, new_h), interpolation=cv2.INTER_NEAREST)
+            # new_h, new_w = tuple(np.array(im.shape[:2]) * SCALING_FACTOR)
+            # im = cv2.resize(im, (new_w, new_h), interpolation=cv2.INTER_NEAREST)
             cv2.imshow(env.title, im)
     # Close the image window
     cv2.destroyAllWindows()

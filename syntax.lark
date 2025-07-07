@@ -52,7 +52,12 @@ object_without_sprite_no_trailing.0: object_line NEWLINE color_line NEWLINE
 
 SPRITE_PIXEL: /[0-9.]/
 
-sprite: (SPRITE_PIXEL~5 NEWLINE)~5
+sprite: sprite_5x5
+      | sprite_5x4
+      | sprite_4x5
+sprite_5x5.2: (SPRITE_PIXEL~5 NEWLINE)~5
+sprite_5x4.1: (SPRITE_PIXEL~4 NEWLINE)~5
+sprite_4x5.0: (SPRITE_PIXEL~5 NEWLINE)~4
 
 // Legend Data
 legend_data: LEGEND_PIXEL object_name legend_operation* NEWLINES
@@ -86,7 +91,10 @@ rule_block_loop: STARTLOOP NEWLINES rule_data+ ENDLOOP NEWLINES
 // Rule Data
 // rule_data: PLUS? (PREFIX | rule_part)+ THEN (PREFIX | command | rule_part)* message? NEWLINES
 
-rule_data: RULE_PREFIX* (rule_part)+ THEN (command | rule_part)* NEWLINES
+rule_data: rule_data_actual | rule_data_broken
+
+rule_data_actual.1: RULE_PREFIX* (rule_part RULE_PREFIX?)+ THEN (command | rule_part)* NEWLINES
+rule_data_broken.0: /(?!WINCONDITIONS).+/ NEWLINES
 
 RULE_PREFIX: "late"i | "horizontal"i | "vertical"i | "left"i | "right"i | "up"i | "down"i | "+" | "random"i
        | "perpendicular"i | "parallel"i | "orthoganal"i | "orthogonal"i | "rigid"i | "+"
@@ -151,6 +159,7 @@ COLOR: "black"i | "white"i | "lightgray"i | "lightgrey"i | "gray"i | "grey"i | "
       | "purpleblue"i
       | /#[0-9a-fA-F]{6}/
       | /#[0-9a-fA-F]{3}/
+      | /#[0-9a-fA-F]{8}/
 
 sound_id: ID
 condition_id: ID

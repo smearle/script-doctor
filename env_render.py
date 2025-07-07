@@ -50,11 +50,11 @@ def render_solid_color(color):
         c = color
     else:
         # It's a string (named color)
-        if color == 'transparent':
-            c = color_hex_map[color]
+        if color.lower() == 'transparent':
+            c = color_hex_map[color.lower()]
             alpha = 0
-        elif color in color_hex_map:
-            c = color_hex_map[color]
+        elif color.lower() in color_hex_map:
+            c = color_hex_map[color.lower()]
         else:
             c = '#000000'
     c = hex_to_rgba(c, alpha)
@@ -95,5 +95,9 @@ def hex_to_rgba(hex_code, alpha):
     hex_code = hex_code.lstrip('#')
     if len(hex_code) == 3:
         hex_code = ''.join(c*2 for c in hex_code)
+    if len(hex_code) == 8:
+        # If the hex code is in RGBA format
+        rgb = tuple(int(hex_code[i:i+2], 16) for i in (0, 2, 4))
+        alpha = int(hex_code[6:8], 16)
     rgb = tuple(int(hex_code[i:i+2], 16) for i in (0, 2, 4))
     return (*rgb, alpha)
