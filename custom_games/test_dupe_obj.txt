@@ -69,7 +69,7 @@ COLLISIONLAYERS
 
 Background
 Target
-Player, Player, Wall, Crate
+Player, Wall, Player, Crate
 
 ======
 RULES

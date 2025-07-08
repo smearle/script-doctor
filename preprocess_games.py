@@ -177,11 +177,18 @@ class StripPuzzleScript(Transformer):
         grid = []
         level_lines = items
         grid = [line for line in level_lines[:-1]]
-        # TODO: Thich of these does OG PS do? Does it do different things in different cases? :/
+        # TODO: Which of these does OG PS do? Does it do different things in different cases? :/
         # pad all rows with empty tiles
-        max_len = max(len(row) for row in grid)
-        for row in grid:
-            row += row[-1] * (max_len - len(row))
+        lvl_width = len(grid[0])
+        for i, row in enumerate(grid):
+            row_i_len = len(row)
+            if row_i_len != lvl_width:
+                logger.warn("Maps must be rectangular, yo.")
+            if row_i_len < lvl_width:
+                row += row[-1] * (lvl_width - len(row))
+            elif row_i_len > lvl_width:
+                row = row[:lvl_width]
+            grid[i] = row
         # Truncate all the rows to the same length
         # row_lens = [len(r) for r in grid]
         # if len(set(row_lens)) > 1:

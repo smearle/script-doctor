@@ -174,11 +174,12 @@ def expand_meta_objs(tile_list: List, meta_objs, char_to_obj):
     assert isinstance(tile_list, list), f"tile_list should be a list, got {type(tile_list)}"
     expanded_meta_objs = []
     seen = set()
-    stack = list(tile_list)
+    stack = list(tile_list)[::-1]  # So that we start expanding in the right order
     atomic_obj_names = char_to_obj.values()
 
     while stack:
-        mo = stack.pop(0)
+        # Expand depth-first
+        mo = stack.pop(-1)
         if mo in meta_objs and mo not in seen:
             stack.extend(meta_objs[mo])  # defer expanding sub-elements
             seen.add(mo)  # mark the meta-object as seen
@@ -195,6 +196,7 @@ def expand_meta_objs(tile_list: List, meta_objs, char_to_obj):
             elif mo in atomic_obj_names:
                 expanded_meta_objs.append(mo)
 
+    expanded_meta_objs = expanded_meta_objs[::-1]  # Reverse to maintain original order
     return expanded_meta_objs
 
 def get_meta_channel(lvl, obj_idxs):
@@ -828,10 +830,13 @@ class PSEnv:
         background_sub_objs = expand_meta_objs(['background'], self.meta_objs, self.char_to_obj)
         if 'background' in background_sub_objs:
             bg_obj = 'background'
-        elif self.char_to_obj['.'] in background_sub_objs:
-            bg_obj = self.char_to_obj['.']
         else:
-            bg_obj = background_sub_objs[0]
+            flat_int_level = int_level.flatten()
+            # bg_obj = background_sub_objs[0]
+            for bg_obj in background_sub_objs:
+                bg_obj_int = self.objs_to_idxs[bg_obj]
+                if bg_obj_int in flat_int_level:
+                    break
         bg_idx = self.objs_to_idxs[bg_obj]
         multihot_level[bg_idx] = 1
 
@@ -2065,8 +2070,11 @@ class PSEnv:
                     if rp is not None:
                         for i, r_cell in enumerate(rp):
                             if r_cell == '...':
-                                assert is_line_detector, f"`...` not found in left pattern of rule {self.rule_name}"
-                                cell_projection_fns.append('...')
+                                # assert is_line_detector, f"`...` not found in left pattern of rule {rule_name}"
+                                if not is_line_detector:
+                                    logger.warn(f'`...` found in right pattern of rule {rule_name}, but not in left pattern. Removing it on the right side for now.')
+                                else:
+                                    cell_projection_fns.append('...')
                             else:
                                 cell_projection_fns.append(gen_cell_projection_fn(r_cell, force_idx))
 

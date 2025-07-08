@@ -46,7 +46,7 @@ JS_TO_JAX_ACTIONS = [3, 0, 1, 2, 4]
 def multihot_level_from_js_state(level_state, obj_list):
     level_state = np.array(level_state).T
     multihot_level_js = to_binary_vectors(level_state, len(obj_list))
-    multihot_level_js = rearrange(multihot_level_js, 'h w c -> c h w')
+    multihot_level_js = rearrange(multihot_level_js, 'h w c -> c h w')[::-1]
 
     # Remove duplicate channels from the multihot level.
     new_multihot_level_js = []
@@ -63,7 +63,6 @@ def multihot_level_from_js_state(level_state, obj_list):
             )
     multihot_level_js = np.array(new_multihot_level_js, dtype=bool)
 
-    multihot_level_js = np.flip(multihot_level_js, 0)
     return multihot_level_js
 
 @hydra.main(version_base="1.3", config_path='./conf', config_name='jax_validation_config')
