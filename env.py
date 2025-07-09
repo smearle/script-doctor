@@ -156,7 +156,8 @@ def expand_collision_layers(collision_layers, meta_objs, char_to_obj, tree_obj_n
     #             j += 1
     seen = set()
     cl = []
-    for l in collision_layers:
+    # If an object appears multiple times, it belongs to the last collision layer in which we saw it
+    for l in collision_layers[::-1]:
         l_1 = []
         for o in l:
             sub_objs = expand_meta_objs([o], meta_objs, char_to_obj)
@@ -169,7 +170,7 @@ def expand_collision_layers(collision_layers, meta_objs, char_to_obj, tree_obj_n
                     seen.add(so)
                     l_1.append(so)
         cl.append(l_1)
-    return cl
+    return cl[::-1]
 
 def expand_meta_objs(tile_list: List, meta_objs, char_to_obj):
     assert isinstance(tile_list, list), f"tile_list should be a list, got {type(tile_list)}"
@@ -529,13 +530,18 @@ class PSObs:
     flat_obs: Optional[chex.Array] = None
 
 
-def get_names_to_alts(objects):
+def get_alts_to_names(objects):
+    alts_to_names = {}
     names_to_alts = {}
     for obj_key, obj in objects.items():
         obj: PSObject
-        if obj.alt_name is not None:
-            names_to_alts[obj.alt_name] = obj_key
-    return names_to_alts
+        if obj.alt_names is not None:
+            for alt_name in obj.alt_names:
+                alts_to_names[alt_name] = obj_key
+            if len(obj.alt_names) > 0:
+                names_to_alts[obj_key] = obj.alt_names
+    print(alts_to_names, names_to_alts)
+    return alts_to_names, names_to_alts
 
 
 def gen_obj_force_masks(n_objs, obj_idxs_to_force_idxs, n_layers):
@@ -650,20 +656,20 @@ class PSEnv:
             print(f"Processing legend for {self.title}")
         obj_to_char, meta_objs, joint_tiles, legend_chars_to_objs = process_legend(tree.legend)
         self.joint_tiles = joint_tiles
-        names_to_alts = get_names_to_alts(tree.objects)
-        alts_to_names = {v: k for k, v in names_to_alts.items()}
+        alts_to_names, names_to_alts = get_alts_to_names(tree.objects)
         self.meta_objs = meta_objs
         self.max_steps = max_steps  
         self.state_history = []  
         self.total_reward = 0  
 
         # Add to the legend any objects to whose (single-character) keys are specified in their object definition
-        for obj_key, obj in tree.objects.items():
-            obj_key = obj.legend_key
-            if obj_key is not None:
-                obj_to_char[obj.name] = obj_key
-                if obj.alt_name is not None:
-                    obj_to_char[obj.alt_name] = obj_key
+        for obj_name, obj in tree.objects.items():
+            obj_name = obj.legend_key
+            if obj_name is not None:
+                obj_to_char[obj.name] = obj_name
+                if obj.alt_names is not None:
+                    for alt_name in obj.alt_names:
+                        obj_to_char[alt_name] = obj_name
         self.char_to_obj = {v: k for k, v in obj_to_char.items()}
 
         if DEBUG:
@@ -708,8 +714,8 @@ class PSEnv:
         elif 'player' in joint_tiles: 
             sub_objs = joint_tiles['player']
             self.player_idxs = [self.objs_to_idxs[sub_obj] for sub_obj in sub_objs]
-        elif 'player' in names_to_alts:
-            self.player_idxs = [self.objs_to_idxs[names_to_alts['player']]]
+        elif 'player' in alts_to_names:
+            self.player_idxs = [self.objs_to_idxs[alts_to_names['player']]]
         else: 
             raise ValueError("Cannot figure out what indices to assign to player.")
         self.player_idxs = np.array(self.player_idxs)
@@ -720,28 +726,34 @@ class PSEnv:
             print(atomic_obj_names)
             print(self.objs_to_idxs)
         # for obj_name in self.obj_to_idxs:
-        for obj_key in atomic_obj_names:
-            if obj_key not in tree.objects:
-                if obj_key in alts_to_names:
-                    meta_objs[obj_key] = alts_to_names[obj_key]
-                    obj_key = alts_to_names[obj_key]
-                elif obj_key in names_to_alts:
-                    meta_objs[obj_key] = names_to_alts[obj_key]
-                    obj_key = names_to_alts[obj_key]
+        for obj_name in atomic_obj_names:
+            if obj_name not in tree.objects:
+                if obj_name in alts_to_names:
+                    meta_objs[obj_name] = [alts_to_names[obj_name]]
+                    obj_name = alts_to_names[obj_name]
+
+                elif obj_name in names_to_alts:
+                    for alt_name in names_to_alts[obj_name]:
+                        if alt_name not in meta_objs:
+                            meta_objs[alt_name] = [obj_name]
+                        else:
+                            meta_objs[alt_name].append(obj_name)
+                        if alt_name in tree.objects:
+                            obj_name = alt_name
                 else:
-                    raise ValueError(f"Object {obj_key} not found in tree.objects")
-            obj = tree.objects[obj_key]
+                    raise ValueError(f"Object {obj_name} not found in tree.objects")
+            obj = tree.objects[obj_name]
             if obj.sprite is not None:
                 if DEBUG:
-                    print(f'rendering pixel sprite for {obj_key}')
+                    print(f'rendering pixel sprite for {obj_name}')
                 im = render_sprite(obj.colors, obj.sprite)
 
             else:
                 # assert len(obj.colors) == 1
                 if len(obj.colors) != 1:
-                    logger.warning(f"Object {obj_key} has more than one color, but no sprite. Using first color: {obj.colors[0]}.")
+                    logger.warning(f"Object {obj_name} has more than one color, but no sprite. Using first color: {obj.colors[0]}.")
                 if DEBUG:
-                    print(f'rendering solid color for {obj_key}')
+                    print(f'rendering solid color for {obj_name}')
                 im = render_solid_color(obj.colors[0])
 
             # Size the image up a bunch
@@ -749,13 +761,10 @@ class PSEnv:
             im_s = im_s.resize((50, 50), PIL.Image.NEAREST)
             im = np.array(im_s)
 
-            if obj_key == 'bluesky':
-                breakpoint()
-
             if DEBUG:
                 temp_dir = 'scratch'
                 os.makedirs(temp_dir, exist_ok=True)
-                sprite_path = os.path.join(temp_dir, f'sprite_{obj_key}.png')
+                sprite_path = os.path.join(temp_dir, f'sprite_{obj_name}.png')
 
                 im_s.save(sprite_path)
 

@@ -31,10 +31,22 @@ class GenPSTree(Transformer):
         name = str(name_line.children[0].children[0]).lower()
         colors = []
         color_line = items[1]
-        alt_name = None
-        if len(name_line.children) > 2:
-            alt_name = str(name_line.children[1].children[0])
-        legend_key = str(name_line.children[-1].children[0]) if len(name_line.children) > 1 else None
+        alt_names = []
+        legend_key = None
+        for i, child in enumerate(name_line.children[1:]):
+            if child.data.value == 'object_name':
+                assert len(child.children) == 1
+                alt_name = str(child.children[0]).lower()
+                alt_names.append(alt_name)
+            elif child.data.value == 'legend_key':
+                assert len(child.children) == 1
+                legend_key = str(child.children[0]).lower()
+                assert len(legend_key) == 1, "Legend key must be a single character"
+                assert len(name_line.children) == i + 2, \
+                    f"Legend key must be the last item in the name line, but found {name_line.children[i+2:]}"
+            else:
+                raise Exception(f'Unrecognized item in object name line: {child}')
+
         for color in color_line.children:
             colors.append(str(color))
         if len(items) < 3:
@@ -44,7 +56,7 @@ class GenPSTree(Transformer):
 
         return PSObject(
             name=name,
-            alt_name=alt_name,
+            alt_names=alt_names,
             legend_key=legend_key,
             colors=colors,
             sprite=sprite,
