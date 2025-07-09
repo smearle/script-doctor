@@ -1,5 +1,6 @@
 from dataclasses import dataclass
 from functools import partial
+import logging
 import os
 import pickle
 import re
@@ -18,6 +19,8 @@ import numpy as np
 from PIL import Image
 
 from ps_game import LegendEntry, PSGameTree, PSObject, Prelude, Rule, RuleBlock, WinCondition
+
+logger = logging.getLogger(__name__)
 
 class GenPSTree(Transformer):
     """
@@ -46,6 +49,11 @@ class GenPSTree(Transformer):
             colors=colors,
             sprite=sprite,
         )
+
+    def object_line(self, items):
+        assert len(items) == 1
+        items = items[0].children
+        return Tree('object_line', items)
 
     def rule_object_with_modifier(self, items):
         items = [it for it in items if not (isinstance(it, Token) and it.type == 'WS_INLINE')]
@@ -95,7 +103,7 @@ class GenPSTree(Transformer):
         for it in items[2:]:
             obj_name = str(it.children[1].children[0]).lower()
             obj_names.append(obj_name)
-            new_op = str(it.children[0])
+            new_op = str(it.children[0]).lower()
             if operator is not None:
                 assert operator == new_op
             else:
@@ -170,7 +178,13 @@ class GenPSTree(Transformer):
         return {ik.name: ik for ik in items}
 
     def legend_section(self, items: List[LegendEntry]):
-        return {it.key: it for it in items}
+        legend_dict = {}
+        for it in items:
+            if it.key in legend_dict:
+                logger.warn(f"Conjoined tile {it.key} already in use: k={legend_dict[it.key]}.")
+                continue
+            legend_dict[it.key] = it
+        return legend_dict
     
     def layer_data(self, items):
         obj_names = [str(it.children[0]).lower() for it in items]

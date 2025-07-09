@@ -143,7 +143,12 @@ class StripPuzzleScript(Transformer):
     def layer_data(self, items):
         return self.strip_newlines_data(items, 'layer_data')
 
-    def shape_2d(self, items):
+    def sprite(self, items):
+        assert len(items) == 1
+        items = items[0].children
+        # Remote any item that is a message
+        items = [i for i in items if not (isinstance(i, Token) and i.type == 'COMMENT')]
+
         # Create a 2D array of the items
         grid = []
         row = []
@@ -155,18 +160,13 @@ class StripPuzzleScript(Transformer):
                     row = []
             else:
                 row.append(s.value)
-        row_lens = [len(r) for r in grid]
-        if len(set(row_lens)) > 1:
-            raise ValueError(f"Rows in grid have different lengths: {row_lens}")
+        max_row_len = max(len(r) for r in grid)
+        for r in grid:
+            if len(r) < max_row_len:
+                r.append(r[-1] * (max_row_len - len(r)))
         grid = np.array(grid)
-        return grid
 
-    def sprite(self, items):
-        assert len(items) == 1
-        items = items[0].children
-        # Remote any item that is a message
-        items = [i for i in items if not (isinstance(i, Token) and i.type == 'COMMENT')]
-        return Tree('sprite', self.shape_2d(items))
+        return Tree('sprite', grid)
 
     def levelline(self, items):
         line = [str(i) for i in items]
@@ -296,6 +296,8 @@ class PrintPuzzleScript(Transformer):
         return '\n'.join(items) + '\n'
 
     def object_line(self, items):
+        assert len(items) == 1
+        items = items[0].children
         return ' '.join(items)
 
     def color_line(self, items):
@@ -364,6 +366,12 @@ def add_empty_sounds_section(txt):
     return txt
 
 
+def remove_sounds_section(txt):
+    # Replace contents of the `SOUNDS` section with an empty section
+    txt = re.sub(r'^SOUNDS\n.*?\nCOLLISIONLAYERS', 'SOUNDS\n\nCOLLISIONLAYERS', txt, flags=re.DOTALL | re.MULTILINE)
+    return txt
+
+
 def preprocess_rules(txt):
     # Replace any occurrence of `]...[` with `|...|`
     txt = re.sub(r'\]\s*\.\.\.\s*\[', ' | ... | ', txt)
@@ -376,6 +384,13 @@ def preprocess_collisionlayers(txt):
     txt = re.sub(r',\s*,', ',', txt)
     return txt
 
+def preprocess_levels(txt):
+    # Remove any lines beginning with `message` (regardless of whether they're followed by whitespace or not)
+    txt = re.sub(r'^\s*message.*', '', txt, flags=re.MULTILINE | re.IGNORECASE)
+    # Replace any more-than-double newlines with a double newline
+    txt = re.sub(r'\n{3,}', '\n\n', txt)
+    return txt
+
 def preprocess_ps(txt):
 
     # Remove whitespace at end of any line
@@ -384,7 +399,8 @@ def preprocess_ps(txt):
     # Remove whitespace at start of any line
     txt = re.sub(r'^[ \t]+', '', txt, flags=re.MULTILINE)
 
-    txt = add_empty_sounds_section(txt)
+    # txt = add_empty_sounds_section(txt)
+    txt = remove_sounds_section(txt)
 
     # If the regular `LEGEND` header is not found, try the `LEGEND` header followed by some trailing characters
     if not re.search(r'^LEGEND\n', txt, flags=re.MULTILINE | re.IGNORECASE):
@@ -397,14 +413,16 @@ def preprocess_ps(txt):
             txt += "\n"
 
     # Remove any lines beginning with "message" (case insensitive)
-    txt = re.sub(r'^message.*\n', '\n', txt, flags=re.MULTILINE | re.IGNORECASE)
+    txt = re.sub(r'^message .*\n', '\n', txt, flags=re.MULTILINE | re.IGNORECASE)
 
     # Truncate lines ending with "message"
     # txt = re.sub(r'message.*\n', '\n', txt, flags=re.MULTILINE | re.IGNORECASE)
 
     # If a line ends with "message ...", and is preceded somewhere by a `]`, remove the `message ...` part
     # (This is to avoid removing the closing parenthesis of the `(endgame message)` comment in `cute train`)
-    txt = re.sub(r'(\]\s*)message.*\n', r'\1\n', txt, flags=re.MULTILINE | re.IGNORECASE)
+    # Also check to make sure the entire rule and message is not enclosed in a comment, by (hackishly) checking
+    # that the line does not start with a `(`.
+    txt = re.sub(r'^((?!\().*\]\s*)message .*\n', r'\1\n', txt, flags=re.MULTILINE | re.IGNORECASE)
 
     ## Strip any comments
     txt = strip_comments(txt)
@@ -442,12 +460,13 @@ def preprocess_ps(txt):
 
     rules_section = preprocess_rules(rules_section)
     collisionlayers_section = preprocess_collisionlayers(collisionlayers_section)
+    levels_section = preprocess_levels(levels_section)
 
     # Now put the sections back together
     txt = (f"{prelude_section}\n"
            f"OBJECTS\n{objects_section}"
            f"LEGEND\n{legend_section}"
-           f"SOUNDS\n{sounds_section}"
+           f"SOUNDS\n\n"
            f"COLLISIONLAYERS\n{collisionlayers_section}"
            f"RULES\n{rules_section}"
            f"WINCONDITIONS\n{winconditions_section}"

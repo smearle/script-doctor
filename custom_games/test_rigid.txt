@@ -1,0 +1,105 @@
+title Little Girl, Big World
+author Franklin P. Dyer
+run_rules_on_level_start on
+require_player_movement off
+
+========
+OBJECTS
+========
+
+Background .
+White
+
+Player @
+#d2b48c Brown Blue Lightgreen Darkblue
+.111.
+10001
+32323
+.444.
+.4.4.
+
+Wall1 1
+Lightblue Blue Darkblue
+00001
+01112
+01112
+01112
+12222
+
+Wall2 2
+Lightred Red Darkred
+11111
+10201
+12021
+10201
+11111
+
+Wall3 3
+Yellow Lightbrown
+10010
+01001
+00100
+10010
+01001
+
+Barrier /
+Black Darkgrey
+00000
+01010
+00100
+01010
+00000
+
+Goal #
+Transparent
+
+=======
+LEGEND
+=======
+
+Wall = Wall1 or Wall2 or Wall3
+
+=======
+SOUNDS
+=======
+
+================
+COLLISIONLAYERS
+================
+
+Background
+Goal
+Player, Wall, Barrier
+
+======
+RULES
+======
+
+[ > Player | Wall ] -> [ > Player | > Wall ]
+
+startloop
+
+[ moving Wall1 | Wall1 ] -> [ moving Wall1 | moving Wall1 ]
+[ moving Wall2 | Wall2 ] -> [ moving Wall2 | moving Wall2 ]
+[ moving Wall3 | Wall3 ] -> [ moving Wall3 | moving Wall3 ]
+
+[ > Wall | Wall ] -> [ > Wall | > Wall ]
+
+endloop
+
+[ > Wall | Barrier ] -> cancel
+
+[> Player|Goal] -> [|Player]
+
+==============
+WINCONDITIONS
+==============
+
+=======
+LEVELS
+=======
+
+....
+.22.
+11..
+@...

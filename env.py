@@ -121,7 +121,8 @@ def process_legend(legend):
                 continue
             meta_objs[k.strip()] = v.obj_names
         elif v.operator.lower() == 'and':
-            conjoined_tiles[k.strip()] = v.obj_names
+            k = k.strip().lower()
+            conjoined_tiles[k] = v.obj_names
         else:
             raise Exception('Invalid LegendEntry operator.')
 
@@ -392,7 +393,7 @@ def is_perp_or_par_in_pattern(p):
         for c in k:
             for object_with_modifier in c:
                 modifier = object_with_modifier.split(' ')[0]
-                if modifier.lower() in ['perpendicular', 'orthogonal', 'orthoganal', 'parallel']:
+                if modifier.lower() in ['perpendicular', 'parallel']:
                     return True
     return False
 
@@ -436,7 +437,7 @@ def gen_perp_par_subrules(l_kerns, r_kerns):
                         modifier, obj = object_with_modifier_tpl
                         modifier = modifier.lower()
                         obj = obj.lower()
-                        if modifier in ['perpendicular', 'orthogonal', 'orthoganal']:
+                        if modifier in ['perpendicular']:
                             c_a.append(f'^ {obj}')
                             c_b.append(f'v {obj}')
                             continue
@@ -1295,7 +1296,7 @@ class PSEnv:
             return ObjFnReturn(active=active, detected=detected, obj_idx=active_obj_idx)
 
         # @partial(jax.jit, static_argnums=())
-        def detect_moving_meta(m_cell, obj_idxs, vertical=False, horizontal=False):
+        def detect_moving_meta(m_cell, obj_idxs, vertical=False, horizontal=False, orthogonal=False):
             # TODO: vmap this?
             active_obj_idx = -1
             active_force_idx = -1
@@ -1304,15 +1305,18 @@ class PSEnv:
             for obj_idx in obj_idxs:
 
                 obj_is_present = m_cell[obj_idx] == 1
-                obj_forces = jax.lax.dynamic_slice(m_cell, (jnp.array(self.obj_idxs_to_force_idxs)[obj_idx],), (N_MOVEMENTS,))
+                obj_forces = jax.lax.dynamic_slice(m_cell, (jnp.array(self.obj_idxs_to_force_idxs)[obj_idx],), (N_FORCES,))
                 # obj_force_mask = self.obj_force_masks[obj_idx]
                 # obj_forces = m_cell[obj_force_mask]
                 if vertical:
-                    vertical_mask = np.array([0, 1, 0, 1], dtype=bool)
+                    vertical_mask = np.array([0, 1, 0, 1, 0], dtype=bool)
                     obj_forces = jnp.logical_and(obj_forces, vertical_mask)
                 elif horizontal:
-                    horizontal_mask = np.array([1, 0, 1, 0], dtype=bool)
+                    horizontal_mask = np.array([1, 0, 1, 0, 0], dtype=bool)
                     obj_forces = jnp.logical_and(obj_forces, horizontal_mask)
+                elif orthogonal:
+                    orthogonal_mask = np.array([1, 1, 1, 1, 0], dtype=bool)
+                    obj_forces = jnp.logical_and(obj_forces, orthogonal_mask)
                 force_idx = jnp.argwhere(obj_forces, size=1, fill_value=-1)[0, 0]
                 obj_active = obj_is_present & (force_idx != -1)
 
@@ -1345,7 +1349,7 @@ class PSEnv:
                 )
             return ObjFnReturn(active=active, detected=detected, obj_idx=active_obj_idx, moving_idx=active_force_idx)
 
-        def detect_moving_obj(m_cell, obj_idx, vertical=False, horizontal=False):
+        def detect_moving_obj(m_cell, obj_idx, vertical=False, horizontal=False, orthogonal=False):
             # TODO: vmap this?
             active_obj_idx = -1
             active_force_idx = -1
@@ -1353,15 +1357,18 @@ class PSEnv:
 
 
             obj_is_present = m_cell[obj_idx] == 1
-            obj_forces = jax.lax.dynamic_slice(m_cell, (self.obj_idxs_to_force_idxs[obj_idx],), (N_MOVEMENTS,))
+            obj_forces = jax.lax.dynamic_slice(m_cell, (self.obj_idxs_to_force_idxs[obj_idx],), (N_FORCES,))
             # obj_force_mask = self.obj_force_masks[obj_idx]
             # obj_forces = m_cell[obj_force_mask]
             if vertical:
-                vertical_mask = np.array([0, 1, 0, 1], dtype=bool)
+                vertical_mask = np.array([0, 1, 0, 1, 0], dtype=bool)
                 obj_forces = jnp.logical_and(obj_forces, vertical_mask)
             elif horizontal:
-                horizontal_mask = np.array([1, 0, 1, 0], dtype=bool)
+                horizontal_mask = np.array([1, 0, 1, 0, 0], dtype=bool)
                 obj_forces = jnp.logical_and(obj_forces, horizontal_mask)
+            elif orthogonal:
+                orthogonal_mask = np.array([1, 1, 1, 1, 0], dtype=bool)
+                obj_forces = jnp.logical_and(obj_forces, orthogonal_mask)
             force_idx = jnp.argwhere(obj_forces, size=1, fill_value=-1)[0, 0]
             obj_active = obj_is_present & (force_idx != -1)
 
@@ -1420,7 +1427,7 @@ class PSEnv:
             l_cell = l_cell.split(' ')
             if DEBUG:
                 print('l cell 2:', l_cell)
-            no, force, directional_force, stationary, action, moving, vertical, horizontal = \
+            no, force, orthogonal, stationary, action, moving, vertical, horizontal = \
                 False, False, False, False, False, False, False, False
             obj_names = []
             for obj in l_cell:
@@ -1439,7 +1446,11 @@ class PSEnv:
                     force = True
                     force_idx = 4
                 elif obj == 'moving':
+                    # Detect movement or action (yes, OG PS is kind of weird for this)
                     moving = True
+                elif obj in ['orthogonal', 'orthoganal']:
+                    # Detect movement only (no, not the same as `perpendicular`).
+                    orthogonal = True
                 elif obj == 'vertical':
                     vertical = True
                 elif obj == 'horizontal':
@@ -1468,6 +1479,9 @@ class PSEnv:
                         elif moving:
                             fns.append(partial(detect_moving_obj, obj_idx=obj_idx))
                             moving = False
+                        elif orthogonal:
+                            fns.append(partial(detect_moving_obj, obj_idx=obj_idx, orthogonal=True))
+                            orthogonal = False
                         elif vertical:
                             fns.append(partial(detect_moving_obj, obj_idx=obj_idx, vertical=True))
                             vertical = False
@@ -1491,6 +1505,9 @@ class PSEnv:
                         elif moving:
                             fns.append(partial(detect_moving_meta, obj_idxs=obj_idxs))
                             moving = False
+                        elif orthogonal:
+                            fns.append(partial(detect_moving_meta, obj_idxs=obj_idxs, orthogonal=True))
+                            orthogonal = False
                         elif vertical:
                             fns.append(partial(detect_moving_meta, obj_idxs=obj_idxs, vertical=True))
                             vertical = False
@@ -1824,7 +1841,8 @@ class PSEnv:
                 r_cell = []
             else:
                 r_cell = r_cell.split(' ')
-            no, force, moving, stationary, random, vertical, horizontal, random_dir = False, False, False, False, False, False, False, False
+            no, force, moving, stationary, random, vertical, horizontal, random_dir, orthogonal = \
+                False, False, False, False, False, False, False, False, False
             for obj in r_cell:
                 obj = obj.lower()
                 if obj == 'no':
@@ -1840,6 +1858,8 @@ class PSEnv:
                     force_idx = 4
                 elif obj == 'moving':
                     moving = True
+                elif obj in ['orthogonal', 'orthoganal']:
+                    orthogonal = True
                 elif obj == 'stationary':
                     stationary = True
                 elif obj == 'random':
@@ -1877,6 +1897,9 @@ class PSEnv:
                         elif moving:
                             fns.append(partial(project_moving_obj, obj=obj))
                             moving = False
+                        elif orthogonal:
+                            fns.append(partial(project_moving_obj, obj=obj))
+                            orthogonal = False
                         elif vertical:
                             fns.append(partial(project_moving_obj, obj=obj))
                             vertical = False
@@ -1930,13 +1953,16 @@ class PSEnv:
                             lp_subkernels.append([])
                         else:
                             lp_subkernels[-1].append(l_cell)
-                rp_subkernels = [[]]
-                for r_cell_row in rp:
-                    for r_cell in r_cell_row:
-                        if r_cell == '...':
-                            rp_subkernels.append([])
-                        else:
-                            rp_subkernels[-1].append(r_cell)
+                    rp_subkernels = [[]]
+                if rp is not None:
+                    for r_cell_row in rp:
+                        for r_cell in r_cell_row:
+                            if r_cell == '...':
+                                rp_subkernels.append([])
+                            else:
+                                rp_subkernels[-1].append(r_cell)
+                else:
+                    rp_subkernels = [[None] * len(lp_subkernels[i]) for i in range(len(lp_subkernels))]
                 # Now put these subkernels back in the correct shape
                 lp_subkernels = [np.array(lps) for lps in lp_subkernels]
                 rp_subkernels = [np.array(rps) for rps in rp_subkernels]
@@ -2222,7 +2248,9 @@ class PSEnv:
                     elif r_command == 'restart':
                         restart = pattern_detected
                 if r_command == 'again':
-                    again = rule_applied
+                    # Again will be applied as long as left pattern is detected, until the entire turn has no effect 
+                    # on the level.
+                    again = True
                     if DEBUG:
                         jax.debug.print('      applying the {command} command: {rule_applied}', command=r_command, rule_applied=rule_applied)
                 elif r_command == 'win':
@@ -2389,7 +2417,8 @@ class PSEnv:
                     print('\n' + multihot_to_desc(lvl[0], self.objs_to_idxs, self.n_objs, obj_idxs_to_force_idxs=self.obj_idxs_to_force_idxs))
 
             def apply_turn(carry):
-                lvl, _, turn_app_i, cancelled, restart, turn_again, win, rng = carry
+                init_lvl, _, turn_app_i, cancelled, restart, turn_again, win, rng = carry
+                lvl = init_lvl
                 turn_app_i += 1
                 applied = False
                 block_again = False
@@ -2442,6 +2471,8 @@ class PSEnv:
                 # lvl, applied, again, cancelled, restart, win, rng, block_i = carry
                 ### COMPILE VS RUNTIME ###
 
+                turn_applied = jnp.any(lvl != init_lvl)
+
                 return lvl, turn_applied, turn_app_i, cancelled, restart, block_again, win, rng
 
             turn_applied = True
@@ -2451,12 +2482,12 @@ class PSEnv:
 
             carry = (lvl, turn_applied, turn_app_i, cancelled, restart, turn_again, win, rng)
             if not self.jit:
-                while turn_again:
+                while (turn_again and turn_applied):
                     carry = apply_turn(carry)
                     lvl, turn_applied, turn_app_i, cancelled, restart, turn_again, win, rng = carry
             else:
                 carry = jax.lax.while_loop(
-                    cond_fun=lambda x: ~x[3] & ~x[4] & x[5],
+                    cond_fun=lambda x: ~x[3] & ~x[4] & (x[5] & x[1]),
                     body_fun=apply_turn,
                     init_val=carry,
                 )
@@ -2807,14 +2838,41 @@ class PSEnv:
         coords = jnp.argwhere(force_arr, size=max_possible_forces+1, fill_value=-1)
         # force_idxs = coords[:, 2] % (N_FORCES - 1)
 
+        def remove_invalid_force(carry):
+            lvl, i = carry
+            y, x, c = coords[i]
+            coll_layer_idx = c // (N_FORCES - 1)
+            layer_obj_mask = jnp.array(self.layer_masks)[coll_layer_idx]
+            obj_idx = jnp.argwhere(
+                jnp.where(layer_obj_mask, lvl[0, :self.n_objs, x, y], False), size=1, fill_value=-1
+            )[0,0]
+            obj_exists = obj_idx != -1
+            new_lvl = jax.lax.dynamic_update_slice(
+                lvl,
+                jnp.zeros((1, N_FORCES, 1, 1), dtype=bool),
+                (0, n_objs + (coll_layer_idx * N_FORCES), x, y)
+            )
+            lvl = jax.lax.select(
+                ~obj_exists,
+                new_lvl,
+                lvl
+            )
+            i += 1
+            return lvl, i
+
         def attempt_move(carry):
             # NOTE: This depends on movement forces preceding any other forces (per object) in the channel dimension.
             lvl, _, _, i = carry
             y, x, c = coords[i]
-            is_force_present = x != -1
             # Get the obj idx on which the force is applied.
             # First get the collision layer idx.
-            coll_layer_idx = c // (N_FORCES - 1)
+            coll_layer_idx = c // N_MOVEMENTS
+            # Check that the coordinates are not null, and that the force is actually present at the coordinates
+            # (since we may have removed it if not corresponding to an object).
+            is_force_present = (x != -1) & (
+                jnp.any(jax.lax.dynamic_slice(
+                    lvl, (0, n_objs + (coll_layer_idx * N_FORCES), x, y), (1, N_MOVEMENTS, 1, 1)
+                )))
             # Then find the active object in this collition layer.
             n_layer_objs = jnp.array(self.n_objs_per_layer)[coll_layer_idx]
             n_prior_objs = jnp.array(self.n_objs_prior_to_layer)[coll_layer_idx]
@@ -2826,7 +2884,7 @@ class PSEnv:
             obj_exists = obj_idx != -1
             # Determine where the object would move and whether such a move would be legal.
             forces_to_deltas = jnp.array([[0, -1], [1, 0], [0, 1], [-1, 0]])
-            delta = forces_to_deltas[c % (N_FORCES - 1)]
+            delta = forces_to_deltas[c % N_MOVEMENTS]
             x_1, y_1 = x + delta[0], y + delta[1]
             would_collide = jnp.any(lvl[0, :n_objs, x_1, y_1] * coll_mat[obj_idx])
             out_of_bounds = (x_1 < 0) | (x_1 >= lvl.shape[2]) | (y_1 < 0) | (y_1 >= lvl.shape[3])
@@ -2854,6 +2912,22 @@ class PSEnv:
             #     jax.debug.print('      would collide: {would_collide}, out of bounds: {out_of_bounds}, can_move: {can_move}',
             #                     would_collide=would_collide, out_of_bounds=out_of_bounds, can_move=can_move)
             return lvl, can_move, rng, i
+
+        init_carry = (lvl, 0)
+
+        # Iterate through forces and remove them if they don't correspond to an object.
+        if jit:
+            lvl, i = jax.lax.while_loop(
+                lambda carry: (coords[carry[1], 0] != -1),
+                lambda carry: remove_invalid_force(carry),
+                init_carry,
+            )
+        else:
+            i = init_carry[1]
+            carry = init_carry
+            while (coords[i, 0] != -1):
+                lvl, i = remove_invalid_force(carry)
+                carry = (lvl, i)
 
         init_carry = (lvl, False, rng, 0)
 

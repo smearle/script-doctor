@@ -193,6 +193,10 @@ def play_game(game: str, level: int = 0, jit: bool = False, profile: bool = Fals
 @hydra.main(config_name="config", version_base="1.3")
 def main(cfg: Config):
 
+    # Using this line to play games with characters (e.g. ` ) that don't agree with CL
+    # TODO: Fix this (by removing this character from filenames?)
+    # cfg.game = "-=lost=-"
+
     if cfg.game is not None:
         play_game(cfg.game, level=cfg.level, jit=cfg.jit, profile=cfg.profile, debug=cfg.debug)
 
