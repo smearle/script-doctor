@@ -125,6 +125,9 @@ def llm_text_query(system_prompt, prompt, model, api_key=None, base_url=None, mo
     elif model == "gemini":
         virtual_key = os.environ.get("PORTKEY_VERTEX_KEY", "")
         model ="gemini-2.0-flash-exp"
+    elif model == "gemini-2.5-pro":
+        virtual_key = os.environ.get("PORTKEY_VERTEX_KEY", "")
+        model = "gemini-2.5-pro"
     elif model == "deepseek":
         pass  # DeepSeek will be handled separately
     elif model == "qwen":
