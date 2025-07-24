@@ -1,0 +1,82 @@
+{
+  "model": "deepseek-r1",
+  "game": "slidings",
+  "level": 2,
+  "run": 4,
+  "win": true,
+  "action_sequence": [
+    1,
+    1,
+    2,
+    2,
+    4,
+    2,
+    0,
+    2,
+    0,
+    2
+  ],
+  "reward_sequence": [
+    -0.009999999776482582,
+    -0.009999999776482582,
+    -0.009999999776482582,
+    -0.009999999776482582,
+    0.9900000095367432,
+    -1.0099999904632568,
+    0.9900000095367432,
+    -1.0099999904632568,
+    0.9900000095367432,
+    1.9900000095367432
+  ],
+  "initial_ascii": [
+    "LEGEND:",
+    "#: wall",
+    "m: count",
+    "n: countend",
+    "p: player",
+    "a: balla",
+    "o: target",
+    ".: background",
+    "d: ballb, overwall",
+    "e: ballc, overwall",
+    "",
+    "MAP:",
+    "#mmmmn#",
+    "#pao..#",
+    "##....#",
+    "d#####e"
+  ],
+  "state_data": {
+    "score": 0,
+    "win": true,
+    "step": 10
+  },
+  "heuristics": [
+    -2.0,
+    -2.0,
+    -2.0,
+    -2.0,
+    -1.0,
+    -2.0,
+    -1.0,
+    -2.0,
+    -1.0,
+    0.0
+  ],
+  "final_ascii": [
+    "LEGEND:",
+    "#: wall",
+    "c: ballc",
+    ".: background",
+    "o: target",
+    "\u0452: deadplayer",
+    "\u237b: balla, overwall",
+    "d: ballb, overwall",
+    "",
+    "MAP:",
+    "#######",
+    "#c.o.\u0452#",
+    "##....#",
+    "\u237b#####d"
+  ]
+}
