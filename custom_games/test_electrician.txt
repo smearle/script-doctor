@@ -1,0 +1,89 @@
+title The electrician
+author Fabien Vidal
+homepage vfabien21.itch.io
+verbose_logging
+
+========
+OBJECTS
+========
+
+Background 
+LIGHTGRAY  
+
+Target 
+Red 
+
+Working
+Green
+
+Wall 
+Grey
+
+Player 
+Blue
+
+Crate 
+Orange
+
+Temp
+Red
+
+Source
+Yellow
+
+
+Dead	
+Black
+
+=======
+LEGEND
+=======
+
+. = Background
+# = Wall
+P = Player
+* = Crate
+@ = Source
+O = Target
+
+=======
+SOUNDS
+=======
+
+================
+COLLISIONLAYERS
+================
+
+Background
+Player, Wall, Crate , Source, Dead, working,Target, Temp
+
+======
+RULES     
+======     
+
+
+late [ Crate | Source ] -> [  Source | Source  ] 
+
+
+
+==============
+WINCONDITIONS
+==============
+
+No Target
+Some Player
+
+=======     
+LEVELS
+=======
+
+
+
+
+##########
+#........#
+#........#
+#P....***O
+#....**..#
+#....*...#
+#####@####

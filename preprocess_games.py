@@ -138,7 +138,10 @@ class StripPuzzleScript(Transformer):
     #     return items[0]
     
     def condition_data(self, items):
-        return self.strip_newlines_data(items, 'condition_data')
+        assert len(items) == 1
+        if items[0].data.value == 'condition_data_broken':
+            return None
+        return self.strip_newlines_data(items[0].children, 'condition_data')
 
     def layer_data(self, items):
         return self.strip_newlines_data(items, 'layer_data')
@@ -402,9 +405,21 @@ def preprocess_ps(txt):
     # txt = add_empty_sounds_section(txt)
     txt = remove_sounds_section(txt)
 
-    # If the regular `LEGEND` header is not found, try the `LEGEND` header followed by some trailing characters
+    # If the regular section header is not found, try the header followed by some trailing characters
     if not re.search(r'^LEGEND\n', txt, flags=re.MULTILINE | re.IGNORECASE):
         txt = re.sub(r'^LEGEND\s*.*\n', 'LEGEND\n', txt, flags=re.MULTILINE | re.IGNORECASE)
+    if not re.search(r'^OBJECTS\n', txt, flags=re.MULTILINE | re.IGNORECASE):
+        txt = re.sub(r'^OBJECTS\s*.*\n', 'OBJECTS\n', txt, flags=re.MULTILINE | re.IGNORECASE)
+    if not re.search(r'^COLLISIONLAYERS\n', txt, flags=re.MULTILINE | re.IGNORECASE):
+        txt = re.sub(r'^COLLISIONLAYERS\s*.*\n', 'COLLISIONLAYERS\n', txt, flags=re.MULTILINE | re.IGNORECASE)
+    if not re.search(r'^SOUNDS\n', txt, flags=re.MULTILINE | re.IGNORECASE):
+        txt = re.sub(r'^SOUNDS\s*.*\n', 'SOUNDS\n', txt, flags=re.MULTILINE | re.IGNORECASE)
+    if not re.search(r'^RULES\n', txt, flags=re.MULTILINE | re.IGNORECASE):
+        txt = re.sub(r'^RULES\s*.*\n', 'RULES\n', txt, flags=re.MULTILINE | re.IGNORECASE)
+    if not re.search(r'^WINCONDITIONS\n', txt, flags=re.MULTILINE | re.IGNORECASE):
+        txt = re.sub(r'^WINCONDITIONS\s*.*\n', 'WINCONDITIONS\n', txt, flags=re.MULTILINE | re.IGNORECASE)
+    if not re.search(r'^LEVELS\n', txt, flags=re.MULTILINE | re.IGNORECASE):
+        txt = re.sub(r'^LEVELS\s*.*\n', 'LEVELS\n', txt, flags=re.MULTILINE | re.IGNORECASE)
 
     txt = txt.replace('\u00A0', ' ')
     # If the file does not end with 2 newlines, fix this
@@ -510,8 +525,8 @@ class PSErrors(IntEnum):
     SKIPPED = 5
     PREPROCESSING_ERROR = 6
 
-def get_env_from_ps_file(parser, game, log_dir: str = None, overwrite: bool = True):
-    tree, success, err_msg = get_tree_from_txt(parser, game, log_dir, overwrite, test_env_init=False)
+def get_env_from_ps_file(parser, game, log_dir: str = None, overwrite: bool = True, timeout: int = 10):
+    tree, success, err_msg = get_tree_from_txt(parser, game, log_dir, overwrite, test_env_init=False, timeout=timeout)
     if success != PSErrors.SUCCESS:
         return None, tree, success, err_msg 
     try:
@@ -523,7 +538,8 @@ def get_env_from_ps_file(parser, game, log_dir: str = None, overwrite: bool = Tr
         return None, tree, PSErrors.ENV_ERROR, gen_error_str(e)
 
 # Keeping this here only for backwards compatibility
-def get_tree_from_txt(parser, game, log_dir: str = None, overwrite: bool = True, test_env_init: bool = True):
+def get_tree_from_txt(parser, game, log_dir: str = None, overwrite: bool = True, test_env_init: bool = True,
+                      timeout: int = 10):
     filepath = os.path.join(CUSTOM_GAMES_DIR, game + '.txt')
     if not os.path.exists(filepath):
         filepath = os.path.join(GAMES_DIR, game + '.txt')
@@ -563,7 +579,7 @@ def get_tree_from_txt(parser, game, log_dir: str = None, overwrite: bool = True,
     print(f"Parsing {simp_filepath}")
     if os.name != 'nt':
         def parse_attempt_fn():
-            with timeout_handler(10):
+            with timeout_handler(timeout):
                 return parser.parse(content)
     # FIXME: On windows, this will hang indefinitely on nasty games :(
     else:

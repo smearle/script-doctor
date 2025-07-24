@@ -169,6 +169,8 @@ def expand_collision_layers(collision_layers, meta_objs, char_to_obj, tree_obj_n
                 if so not in seen:
                     seen.add(so)
                     l_1.append(so)
+                else:
+                    logger.warn(f"Object {so} appears multiple times in collision layers.")
         cl.append(l_1)
     return cl[::-1]
 
@@ -189,7 +191,10 @@ def expand_meta_objs(tile_list: List, meta_objs, char_to_obj):
             obj = char_to_obj[mo]
             if obj not in seen:
                 seen.add(obj)
-                expanded_meta_objs.append(obj)
+                if obj in meta_objs:
+                    stack.extend(meta_objs[obj])
+                else:
+                    expanded_meta_objs.append(obj)
         else:
             if mo not in seen:
                 seen.add(mo)
@@ -197,7 +202,6 @@ def expand_meta_objs(tile_list: List, meta_objs, char_to_obj):
             # Deals with `background = background or yardline` in Touchdown Heroes
             elif mo in atomic_obj_names:
                 expanded_meta_objs.append(mo)
-
     expanded_meta_objs = expanded_meta_objs[::-1]  # Reverse to maintain original order
     return expanded_meta_objs
 
@@ -238,6 +242,8 @@ def gen_check_win(win_conditions: Iterable[WinCondition], obj_to_idxs, meta_objs
     # @partial(jax.jit, static_argnums=(1, 2))
     def check_all(lvl, src, trg):
         src_channel = get_meta_channel(lvl, src)
+        if trg is None:
+            return True, 0, 0
         trg_channel = get_meta_channel(lvl, trg)
         # There can be no source objects that do not overlap target objects
         win = ~jnp.any(src_channel & ~trg_channel)
@@ -246,7 +252,7 @@ def gen_check_win(win_conditions: Iterable[WinCondition], obj_to_idxs, meta_objs
         return win, score, -heuristic
 
     # @partial(jax.jit, static_argnums=(1, 2))
-    def check_some(lvl, src, trg):
+    def check_some_on(lvl, src, trg):
         src_channel = get_meta_channel(lvl, src)
         trg_channel = get_meta_channel(lvl, trg)
         win = jnp.any(src_channel & trg_channel)
@@ -301,17 +307,17 @@ def gen_check_win(win_conditions: Iterable[WinCondition], obj_to_idxs, meta_objs
                 trg = [obj_to_idxs[obj] for obj in trg_objs]
         if win_condition.quantifier == 'all':
             func = partial(check_all, src=src, trg=trg)
-        elif win_condition.quantifier in ['some']:
+        elif win_condition.quantifier in ['some', 'any']:
             if trg is not None:
-                func = partial(check_some, src=src, trg=trg)
+                func = partial(check_some_on, src=src, trg=trg)
             else:
                 func = partial(check_some_exist, src=src)
         elif win_condition.quantifier == 'no' and trg is None:
             func = partial(check_none, src=src)
         elif win_condition.quantifier == 'no':
             func = partial(check_none_on, src=src, trg=trg)
-        elif win_condition.quantifier == 'any':
-            func = partial(check_any, src=src)
+        # elif win_condition.quantifier == 'any':
+        #     func = partial(check_any, src=src, trg=trg)
         else:
             raise Exception('Invalid quantifier.')
         funcs.append(func)
@@ -360,7 +366,7 @@ class CellFnReturn:
     # A dictionary of the objects detected, mapping meta-object names to sub-object indices
     detected_meta_objs: dict
     detected_obj_idxs: Optional[chex.Array] = None
-    detected_moving_idx: Optional[int] = None
+    detected_moving_idx: Optional[None] = None
 
 @flax.struct.dataclass
 class KernelFnReturn:
@@ -540,7 +546,6 @@ def get_alts_to_names(objects):
                 alts_to_names[alt_name] = obj_key
             if len(obj.alt_names) > 0:
                 names_to_alts[obj_key] = obj.alt_names
-    print(alts_to_names, names_to_alts)
     return alts_to_names, names_to_alts
 
 
@@ -656,7 +661,10 @@ class PSEnv:
             print(f"Processing legend for {self.title}")
         obj_to_char, meta_objs, joint_tiles, legend_chars_to_objs = process_legend(tree.legend)
         self.joint_tiles = joint_tiles
+
         alts_to_names, names_to_alts = get_alts_to_names(tree.objects)
+        # alts_to_names, names_to_alts = {}, {}
+
         self.meta_objs = meta_objs
         self.max_steps = max_steps  
         self.state_history = []  
@@ -664,12 +672,12 @@ class PSEnv:
 
         # Add to the legend any objects to whose (single-character) keys are specified in their object definition
         for obj_name, obj in tree.objects.items():
-            obj_name = obj.legend_key
-            if obj_name is not None:
-                obj_to_char[obj.name] = obj_name
+            obj_key = obj.legend_key
+            if obj_key is not None:
+                obj_to_char[obj.name] = obj_key
                 if obj.alt_names is not None:
                     for alt_name in obj.alt_names:
-                        obj_to_char[alt_name] = obj_name
+                        obj_to_char[alt_name] = obj_key
         self.char_to_obj = {v: k for k, v in obj_to_char.items()}
 
         if DEBUG:
@@ -691,6 +699,22 @@ class PSEnv:
             n_objs_prior_to_layer_i = self.n_objs_prior_to_layer[i]
             self.layer_masks[i, n_objs_prior_to_layer_i: n_objs_prior_to_layer_i + len(l)] = True
         objs, self.objs_to_idxs, coll_masks, self.obj_idxs_to_force_idxs = assign_vecs_to_objs(collision_layers, atomic_obj_names)
+
+        # Make sure all alternates/names (depending on which was specified in the collision layers) are in the
+        # objs_to_idxs dict.
+        for obj_key in names_to_alts:
+            alt_names = names_to_alts[obj_key]
+            if obj_key not in self.objs_to_idxs:
+                # Then one alt must be in the objs_to_idxs dict...
+                for alt_name in alt_names:
+                    if alt_name in self.objs_to_idxs:
+                        self.objs_to_idxs[obj_key] = self.objs_to_idxs[alt_name]
+                        break
+            # Now make sure all the alts are in the objs_to_idxs dict
+            for alt_name in alt_names:
+                if alt_name not in self.objs_to_idxs:
+                    self.objs_to_idxs[alt_name] = self.objs_to_idxs[obj_key]
+
         self.obj_force_masks = gen_obj_force_masks(self.n_objs, self.obj_idxs_to_force_idxs, len(self.collision_layers))
         
         for obj, sub_objs in meta_objs.items():
@@ -726,34 +750,34 @@ class PSEnv:
             print(atomic_obj_names)
             print(self.objs_to_idxs)
         # for obj_name in self.obj_to_idxs:
-        for obj_name in atomic_obj_names:
-            if obj_name not in tree.objects:
-                if obj_name in alts_to_names:
-                    meta_objs[obj_name] = [alts_to_names[obj_name]]
-                    obj_name = alts_to_names[obj_name]
+        for obj_key in atomic_obj_names:
+            if obj_key not in tree.objects:
+                if obj_key in alts_to_names:
+                    meta_objs[obj_key] = [alts_to_names[obj_key]]
+                    obj_key = alts_to_names[obj_key]
 
-                elif obj_name in names_to_alts:
-                    for alt_name in names_to_alts[obj_name]:
+                elif obj_key in names_to_alts:
+                    for alt_name in names_to_alts[obj_key]:
                         if alt_name not in meta_objs:
-                            meta_objs[alt_name] = [obj_name]
+                            meta_objs[alt_name] = [obj_key]
                         else:
-                            meta_objs[alt_name].append(obj_name)
+                            meta_objs[alt_name].append(obj_key)
                         if alt_name in tree.objects:
-                            obj_name = alt_name
+                            obj_key = alt_name
                 else:
-                    raise ValueError(f"Object {obj_name} not found in tree.objects")
-            obj = tree.objects[obj_name]
+                    raise ValueError(f"Object {obj_key} not found in tree.objects")
+            obj = tree.objects[obj_key]
             if obj.sprite is not None:
                 if DEBUG:
-                    print(f'rendering pixel sprite for {obj_name}')
+                    print(f'rendering pixel sprite for {obj_key}')
                 im = render_sprite(obj.colors, obj.sprite)
 
             else:
                 # assert len(obj.colors) == 1
                 if len(obj.colors) != 1:
-                    logger.warning(f"Object {obj_name} has more than one color, but no sprite. Using first color: {obj.colors[0]}.")
+                    logger.warning(f"Object {obj_key} has more than one color, but no sprite. Using first color: {obj.colors[0]}.")
                 if DEBUG:
-                    print(f'rendering solid color for {obj_name}')
+                    print(f'rendering solid color for {obj_key}')
                 im = render_solid_color(obj.colors[0])
 
             # Size the image up a bunch
@@ -764,7 +788,7 @@ class PSEnv:
             if DEBUG:
                 temp_dir = 'scratch'
                 os.makedirs(temp_dir, exist_ok=True)
-                sprite_path = os.path.join(temp_dir, f'sprite_{obj_name}.png')
+                sprite_path = os.path.join(temp_dir, f'sprite_{obj_key}.png')
 
                 im_s.save(sprite_path)
 
@@ -1465,13 +1489,13 @@ class PSEnv:
                 elif obj == 'horizontal':
                     horizontal = True
                 else:
-                    obj_names.append(obj)
                     sub_objs = expand_meta_objs([obj], self.meta_objs, self.char_to_obj)
                     obj_idxs = np.array([self.objs_to_idxs[so] for so in sub_objs])
                     obj_vec = np.zeros((self.n_objs + len(self.collision_layers) * N_FORCES + 1), dtype=bool)
                     obj_vec[obj_idxs] = 1
                     if obj in self.char_to_obj:
                         obj = self.char_to_obj[obj]
+                    obj_names.append(obj)
                     # TODO: we can remove these functions to individual objects and apply the more abstract meta-tile versions instead
                     if len(obj_idxs) == 1:
                     # if obj in obj_to_idxs:
@@ -1798,15 +1822,26 @@ class PSEnv:
             obj_idx = disambiguate_meta(obj, meta_objs, kernel_meta_objs, pattern_meta_objs, self.objs_to_idxs)
 
             # Look for detected force index in corresponding input cell, then kernel, then pattern.
-            # This should never end up as -1.
+            # This should never end up as -1 (i.e. there should be a corresponding movement index somewhere in the LHS).
+            cell_moving_idx = cell_detect_out.detected_moving_idx
+            kernel_moving_idx = kernel_detect_out.detected_moving_idx
+            pattern_moving_idx = pattern_detect_out.detected_moving_idx
+            if cell_moving_idx is None:
+                cell_moving_idx = jnp.array([[-1]])
+            if kernel_moving_idx is None:
+                kernel_moving_idx = jnp.array([[-1]])
+            if pattern_moving_idx is None:
+                pattern_moving_idx = jnp.array([[-1]])
+
+            force_idx = cell_moving_idx
             force_idx = jax.lax.select(
-                cell_detect_out.detected_moving_idx != -1,
-                cell_detect_out.detected_moving_idx,
-                kernel_detect_out.detected_moving_idx,
+                force_idx == -1,
+                kernel_moving_idx,
+                force_idx,
             )
             force_idx = jax.lax.select(
                 force_idx == -1,
-                pattern_detect_out.detected_moving_idx,
+                pattern_moving_idx,
                 force_idx,
             )
                 
@@ -2259,7 +2294,7 @@ class PSEnv:
                 if r_command == 'again':
                     # Again will be applied as long as left pattern is detected, until the entire turn has no effect 
                     # on the level.
-                    again = True
+                    again = pattern_detected
                     if DEBUG:
                         jax.debug.print('      applying the {command} command: {rule_applied}', command=r_command, rule_applied=rule_applied)
                 elif r_command == 'win':
@@ -2378,14 +2413,44 @@ class PSEnv:
 
             looping = rule_block.looping
             rule_grps = []
+            last_subrule_fns_were_late = None
             for rule in rule_block.rules:
                 sub_rule_fns = self.gen_subrules_meta(rule, rule_name=str(rule), lvl_shape=lvl_shape)
                 if '+' in rule.prefixes:
-                    rule_grps[-1].extend(sub_rule_fns)
+                    # I'm not actually clear on how PS handles these groups combining late/non-late rules, so have just
+                    # taken a best guess here (which seems to agree with game `Teh_Interwebs`).
+                    if last_subrule_fns_were_late is None:
+                        logger.warn(
+                            (f'Initial rule has `+` prefix, but no rule precedes it, so ignoring `+` and adding this rule'
+                            ' as a new rule group.')
+                        )
+                        rule_grps.append(sub_rule_fns)
+                    if 'late' in rule.prefixes:
+                        if last_subrule_fns_were_late:
+                            late_rule_grps[-1].extend(sub_rule_fns)
+                        else:
+                            logger.warn(
+                                (f'Attempting to add `late` rule to a non-late rule. Ignoring `+` and creating a new '
+                                '`late` rule group.')
+                            )
+                            late_rule_grps.append(sub_rule_fns)
+                            last_subrule_fns_were_late = True
+                    else:
+                        if last_subrule_fns_were_late:
+                            logger.warn(
+                                (f'Attempting to add `+` non-late rule to a late rule. Ignoring `+` and creating a new '
+                                'non-late rule group.')
+                            )
+                            rule_grps.append(sub_rule_fns)
+                            last_subrule_fns_were_late = False
+                        else:
+                            rule_grps[-1].extend(sub_rule_fns)
                 elif 'late' in rule.prefixes:
                     late_rule_grps.append(sub_rule_fns)
+                    last_subrule_fns_were_late = True
                 else:
                     rule_grps.append(sub_rule_fns)
+                    last_subrule_fns_were_late = False
             rule_blocks.append((looping, rule_grps))
 
         _move_rule_fn = partial(self.apply_movement, coll_mat=self.coll_mat,
@@ -3117,6 +3182,7 @@ class PSEnv:
             )
 
         block_i, grp_i = loop_group_state.block_i, loop_group_state.grp_i
+        init_lvl = loop_group_state.lvl
 
         ### COMPILE VS RUNTIME ###
         # n_rules_in_grp = n_rules_per_grp_arr[block_i, grp_i]
@@ -3175,7 +3241,10 @@ class PSEnv:
 
         loop_group_state = LoopRuleGroupState(
             lvl=lvl,
-            applied=rule_group_state.applied,
+            # applied=rule_group_state.applied,
+            # FIXME: Shouldn't have to do this...
+            # (if we don't `test_electrician` breaks, for example)
+            applied=np.any(lvl != init_lvl),
             cancelled=rule_group_state.cancelled,
             restart=rule_group_state.restart,
             again=again,

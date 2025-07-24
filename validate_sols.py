@@ -323,7 +323,7 @@ def main(cfg: JaxValidationConfig, games: Optional[List[str]] = None):
 
             # Otherwise, let's initialize the environment (if on level 0) and run the solution.
             if env is None:
-                tree, success, err_msg = get_tree_from_txt(parser, game, test_env_init=False)
+                tree, success, err_msg = get_tree_from_txt(parser, game, test_env_init=False, timeout=60*20)
                 if success == PSErrors.SUCCESS:
                     try:
                         env = PSEnv(tree, debug=False, print_score=False)

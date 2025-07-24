@@ -73,10 +73,6 @@ python train.py game=sokoban_basic level=0 n_envs=600 model=conv2 render_freq=5 
 ```
 This will attempt to log plots and gifs to wandb.
 
-## 
-
-
-## Generate data for training a world model
 
 
 ## Custom Environment Integration

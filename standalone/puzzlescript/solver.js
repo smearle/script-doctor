@@ -556,6 +556,7 @@ function solveBFS(engine, maxIters, timeoutJS) {
 
       new_action_seq = action_seq.slice();
       new_action_seq.push(move);
+      engine.clearBackups();
       var changed = engine.processInput(move);
       while (engine.getAgaining()) {
         changed = engine.processInput(-1) || changed;

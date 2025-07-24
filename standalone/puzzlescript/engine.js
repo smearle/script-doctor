@@ -6194,10 +6194,10 @@ function consolidateDiff(before,after){
 }
 
 function addUndoState(state){
-	// backups.push(state);
-	// if(backups.length>2 && !backups[backups.length-1].hasOwnProperty("diff")){
-	// 	backups[backups.length-3]=consolidateDiff(backups[backups.length-3],backups[backups.length-2]);
-	// }
+	backups.push(state);
+	if(backups.length>2 && !backups[backups.length-1].hasOwnProperty("diff")){
+		backups[backups.length-3]=consolidateDiff(backups[backups.length-3],backups[backups.length-2]);
+	}
 }
 
 function DoRestart(force) {
@@ -7996,7 +7996,11 @@ function processInput(dir,dontDoWin,dontModify) {
     		addUndoState(bak);
     		DoUndo(true,false);
     		tryPlayCancelSound();
+            // PUZZLE-JAX EDIT: I don't see why on earth this should be returned. So let's not return it??
+            // I guess maybe it's informing the recursive call of this function to itself, but that's just to check if
+            // an `again` rule will change anything. But if `cancel` is executed before other commands, then it won't!
     		return commandsleft;
+            // return false;
 	    } 
 
 	    if (level.commandQueue.indexOf('restart')>=0) {
@@ -8417,6 +8421,10 @@ function get_o10(){
     return _o10;
 }
 
+function clearBackups() {
+    backups = [];
+}
+
 module.exports = {
     compile, backupLevel, restoreLevel, processInput, addUndoState, 
     getWinning, setWinning, getLevel, getState, getRestarting, setRestarting, 
@@ -8424,4 +8432,5 @@ module.exports = {
     getHasUsedCheckpoint, setHasUsedCheckpoint, get_o10,
     getNumLevels,
     unloadGame,
+    clearBackups,
 }

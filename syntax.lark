@@ -134,7 +134,9 @@ RESTART: "restart"i
 WIN: "win"i
 
 // Condition Data
-condition_data: QUANT object_name (ON object_name)? NEWLINES
+condition_data: condition_data_actual | condition_data_broken
+condition_data_actual.1: QUANT object_name (ON object_name)? NEWLINES
+condition_data_broken.0: /(?!(LEVELS)).+/ NEWLINES
 
 ON: "on"i
 QUANT: "all"i | "some"i | "no"i | "any"i

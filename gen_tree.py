@@ -187,6 +187,16 @@ class GenPSTree(Transformer):
         return items
 
     def objects_section(self, items: List[PSObject]):
+        # new_objects = []
+        # for obj in items:
+        #     alt_names = obj.alt_names
+        #     obj.alt_names = []
+        #     for alt_name in alt_names:
+        #         obj_i = copy.deepcopy(obj)
+        #         obj_i.name = alt_name
+        #         new_objects.append(obj_i)
+        #     new_objects.append(obj)
+        # items = new_objects
         return {ik.name: ik for ik in items}
 
     def legend_section(self, items: List[LegendEntry]):
