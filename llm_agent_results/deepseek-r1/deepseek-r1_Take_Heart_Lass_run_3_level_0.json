@@ -1,0 +1,72 @@
+{
+  "model": "deepseek-r1",
+  "game": "Take_Heart_Lass",
+  "level": 0,
+  "run": 3,
+  "win": true,
+  "action_sequence": [
+    0,
+    0,
+    4,
+    4,
+    0
+  ],
+  "reward_sequence": [
+    0.9900000095367432,
+    0.9900000095367432,
+    -0.009999999776482582,
+    -0.009999999776482582,
+    1.9900000095367432
+  ],
+  "initial_ascii": [
+    "LEGEND:",
+    "#: wall",
+    "\u11b5: newdespairwall",
+    ".: background",
+    "\u1a29: altnewdespair",
+    "x: olddespair",
+    "f: backflowers",
+    "o: target",
+    "p: player",
+    "",
+    "MAP:",
+    "####\u11b5#",
+    "#..\u1a29x\u11b5",
+    "#.ff\u1a29#",
+    "#.ff.#",
+    "#o.p.#",
+    "######"
+  ],
+  "state_data": {
+    "score": 1,
+    "win": true,
+    "step": 5
+  },
+  "heuristics": [
+    -2.0,
+    -1.0,
+    -1.0,
+    -1.0,
+    0.0
+  ],
+  "final_ascii": [
+    "LEGEND:",
+    "\u11b5: newdespairwall",
+    "\u2a1a: despairwall",
+    "#: wall",
+    "z: altolddespair",
+    "x: olddespair",
+    "\u1f4d: backflowers, altolddespair",
+    "\u22bf: backflowers, olddespair",
+    ".: background",
+    "\u0436: target, player",
+    "",
+    "MAP:",
+    "\u11b5\u2a1a\u2a1a\u2a1a\u2a1a\u2a1a",
+    "#zxzx\u2a1a",
+    "\u11b5x\u1f4d\u22bfz\u2a1a",
+    "#.\u22bf\u1f4dx\u2a1a",
+    "#\u0436.xz\u2a1a",
+    "###\u11b5#\u11b5"
+  ]
+}

@@ -1,0 +1,69 @@
+{
+  "model": "o3-mini",
+  "game": "slidings",
+  "level": 1,
+  "run": 6,
+  "win": true,
+  "action_sequence": [
+    3,
+    2,
+    0,
+    2,
+    0
+  ],
+  "reward_sequence": [
+    0.9900000095367432,
+    -1.0099999904632568,
+    0.9900000095367432,
+    -1.0099999904632568,
+    2.990000009536743
+  ],
+  "initial_ascii": [
+    "LEGEND:",
+    "#: overwall",
+    "m: count",
+    "n: countend",
+    "p: player",
+    "o: target",
+    ".: background",
+    "a: balla",
+    "d: ballb, overwall",
+    "e: ballc, overwall",
+    "",
+    "MAP:",
+    "#mmmn#",
+    "#po..#",
+    "#.####",
+    "#a####",
+    "d####e"
+  ],
+  "state_data": {
+    "score": 0,
+    "win": true,
+    "step": 5
+  },
+  "heuristics": [
+    -1.0,
+    -2.0,
+    -1.0,
+    -2.0,
+    0.0
+  ],
+  "final_ascii": [
+    "LEGEND:",
+    "#: overwall",
+    "\u1f1c: deadplayer",
+    "o: target",
+    ".: background",
+    "a: balla",
+    "d: ballb, overwall",
+    "e: ballc, overwall",
+    "",
+    "MAP:",
+    "######",
+    "#\u1f1co..#",
+    "#.####",
+    "#a####",
+    "d####e"
+  ]
+}

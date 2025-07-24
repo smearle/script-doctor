@@ -60,11 +60,6 @@ def collect_results(results_dir):
                     print(f"Skipping unparsable file: {filename}")
                     continue
                     
-                # Skip Gemini results
-                # if "gemini" in llm.lower():
-                #     print(f"Skipping Gemini result file: {filename}")
-                #     continue
-
                 # Normalize game name for atlas shrank cases
                 if "atlas shrank" in game or "atlas_shrank" in game:
                     game = "atlas_shrank"
@@ -111,7 +106,8 @@ def main():
     llm_name_mapping = {
         "4o-mini": "ChatGPT 4o-mini",
         "deepseek": "Deepseek-chat",
-        "qwen": "Qwen-plus" 
+        "qwen": "Qwen-plus",
+        "gemini": "gemini 2.5 experimental flash"
     }
     df['llm'] = df['llm'].replace(llm_name_mapping)
 

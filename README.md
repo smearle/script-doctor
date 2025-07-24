@@ -73,6 +73,42 @@ python train.py game=sokoban_basic level=0 n_envs=600 model=conv2 render_freq=5 
 ```
 This will attempt to log plots and gifs to wandb.
 
+## LLM Agent
+
+To run the LLM agent, use the `llm_agent_loop.py` script. This script iterates through a predefined list of games, running each one for a specified number of trials (`--num_runs`) across all its levels.
+
+### Basic Usage
+To run the agent for all priority games with a specific model for a certain number of runs:
+```bash
+python llm_agent_loop.py --model gemini --num_runs 10
+```
+Supported models are `4o-mini`, `o3-mini`, `gemini`, `deepseek`, `qwen`, and `deepseek-r1`.
+
+### Command-line Options
+The script offers several options to customize its execution:
+-   `--model`: (Required) The LLM model to use.
+-   `--num_runs`: The number of times to run each game level (default: 10).
+-   `--max_steps`: The maximum number of steps allowed per episode (default: 100).
+-   `--resume_game_name`: The name of the game to start from in the priority list.
+-   `--level`: The level number to start from for each game (default: 0).
+-   `--reverse`: Process the games in reverse order.
+-   `--force`: Rerun all games, even if result files already exist.
+
+### Execution Flow
+The script performs the following steps:
+1.  It loads a predefined list of priority games.
+2.  It iterates from `run_id` 1 to `--num_runs`.
+3.  In each run, it processes every game in the list.
+4.  For each game, it iterates through all available levels, starting from the specified `--level`.
+5.  The results for each run and level are saved as individual JSON files in the `llm_agent_results/<model_name>/` directory.
+
+### Generating Analysis
+After running the agent, you can generate heatmaps and other analysis by running:
+```bash
+python llm_agent_results/analysis/result_analysis.py
+```
+This will save the generated images in the `llm_agent_results/analysis/` directory.
+
 ## 
 
 
