@@ -378,8 +378,8 @@ def process_game_level(agent, game_info, level_index, run_id, save_dir, model, m
 
 def main():
     parser = argparse.ArgumentParser(description='LLM agent loop experiment (env+rules/ascii/mapping)')
-    parser.add_argument('--model', type=str, required=True, choices=['4o-mini', 'o3-mini', 'gemini', 'deepseek', 'qwen', 'deepseek-r1'],
-                        help='LLM model alias (4o-mini=4o-mini, o3=O3-mini, gemini=Gemini-2.0, deepseek=DeepSeek, qwen=Qwen)')
+    parser.add_argument('--model', type=str, required=True, choices=['4o-mini', 'o3-mini', 'gemini', 'gemini-2.5-pro', 'deepseek', 'qwen', 'deepseek-r1'],
+                        help='LLM model alias (4o-mini=4o-mini, o3=O3-mini, gemini=Gemini-2.0, gemini-2.5-pro=Gemini-2.5-Pro, deepseek=DeepSeek, qwen=Qwen)')
     parser.add_argument('--max_steps', type=int, default=100,
                         help='Maximum steps per episode (default: 100)')
     parser.add_argument('--num_runs', type=int, default=10,
