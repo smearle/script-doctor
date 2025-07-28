@@ -115,6 +115,7 @@ def profile(cfg: ProfileJaxRandConfig):
         # for level_i in range(len(env.levels[:1])):
         for level_i in range(len(env.levels)):
 
+            # jax.clear_caches()
             level_str = get_level_str(level_i)
             if game not in game_n_envs_to_fps:
                 game_n_envs_to_fps[game] = {}
@@ -174,8 +175,11 @@ def profile(cfg: ProfileJaxRandConfig):
                     carry, _ = jax.lax.scan(
                         _env_step_jitted, carry, None, cfg.n_steps
                     )
+                    env_state: PSState = carry[0]
+                    # Otherwise, when running on CPU, the state may not be ready yet
+                    env_state.multihot_level.block_until_ready()
                     times.append(timer() - start)
-                    print(f'Loop {i} ran {n_env_steps} in {times[-1]} seconds. FPS: {n_env_steps / times[-1]:,.2f}')
+                    print(f'Loop {i} ran {n_env_steps} steps in {times[-1]} seconds. FPS: {n_env_steps / times[-1]:,.2f}')
 
             except jaxlib.xla_extension.XlaRuntimeError as e:
                 err_msg = traceback.format_exc()

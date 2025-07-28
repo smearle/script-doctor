@@ -118,10 +118,15 @@ def llm_text_query(system_prompt, prompt, model, api_key=None, base_url=None, mo
         {"role": "user", "content": prompt},
     ]
     
+    use_portkey = True
     # Select different virtual keys based on the model parameter
     virtual_key = os.environ.get("PORTKEY_O3MINI_KEY", "")
     if model == "4o-mini":
         virtual_key = os.environ.get("PORTKEY_GPT4O_KEY", "")
+    elif model == "gpt-4o":
+        use_portkey = False
+    elif model == "o1":
+        use_portkey = False
     elif model == "gemini":
         virtual_key = os.environ.get("PORTKEY_VERTEX_KEY", "")
         model ="gemini-2.0-flash-exp"
@@ -133,7 +138,7 @@ def llm_text_query(system_prompt, prompt, model, api_key=None, base_url=None, mo
     elif model == "qwen":
         pass  # Qwen will be handled separately
     # Try using Portkey API, DeepSeek API or Qwen API
-    try:
+    if use_portkey:
         import requests
         import json
 
@@ -149,7 +154,7 @@ def llm_text_query(system_prompt, prompt, model, api_key=None, base_url=None, mo
                 "Authorization": f"Bearer {api_key}",
             }
             payload = {
-                "model": model_name, # Or the specific deepseek model name you intend to use
+                "model": model_name,
                 "messages": messages,
             }
         elif model == "qwen":
@@ -227,9 +232,9 @@ def llm_text_query(system_prompt, prompt, model, api_key=None, base_url=None, mo
         return None
 
 
-    except ImportError:
+    else:
         # If portkey is not installed, fall back to original implementation
-        print("Portkey not installed, falling back to original implementation")
+        print("Using Microsoft Azure API.")
         messages = [
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": prompt},
