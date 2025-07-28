@@ -2,7 +2,9 @@
 bin/
 **/.DS_Store
 .vscode
+.idea
 .build
+.ipynb_checkpoints
 logs*
 plots/
 multirun

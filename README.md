@@ -1,9 +1,6 @@
 
-ScriptDoctor & PuzzleJax
+# ScriptDoctor & PuzzleJAX
 
-
-
-This project provides a unified LLM client and agent system for using Large Language Models (LLMs) as intelligent agents in Sokoban puzzle game environments. The system supports multiple LLM models and providers, and integrates reinforcement learning capabilities.
 ## Setup
 
 Create a conda environment or whatnot running python 3.13, then:
