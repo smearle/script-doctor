@@ -610,28 +610,28 @@ def get_tree_from_txt(parser, game, log_dir: str = None, overwrite: bool = True,
         return None, PSErrors.PARSE_ERROR, gen_error_str(e)
 
 
-    min_parse_tree = StripPuzzleScript().transform(parse_tree)
-    min_tree_path = os.path.join(TREES_DIR, game + '.pkl')
-    # print(f"Writing parse tree to {min_tree_path}")
-    with open(min_tree_path, "wb") as f:
-        pickle.dump(min_parse_tree, f)
-    pretty_parse_tree_str = min_parse_tree.pretty()
-    pretty_tree_filename = os.path.join(pretty_trees_dir, game)
-    print(f"Writing pretty tree to {pretty_tree_filename}")
-    with open(pretty_tree_filename, "w", encoding='utf-8') as file:
-        file.write(pretty_parse_tree_str)
-    # print(min_parse_tree.pretty())
-    ps_str = PrintPuzzleScript().transform(min_parse_tree)
-    ps_str = add_empty_sounds_section(ps_str)
-    min_filename = os.path.join(MIN_GAMES_DIR, game + '.txt')
-    # print(f"Writing minified game to {min_filename}")
-    with open(min_filename, "w", encoding='utf-8') as file:
-        file.write(ps_str)
-
-    # with open(parsed_games_filename, 'a') as file:
-    #     file.write(game + "\n")
-
     try:
+        min_parse_tree = StripPuzzleScript().transform(parse_tree)
+        min_tree_path = os.path.join(TREES_DIR, game + '.pkl')
+        # print(f"Writing parse tree to {min_tree_path}")
+        with open(min_tree_path, "wb") as f:
+            pickle.dump(min_parse_tree, f)
+        pretty_parse_tree_str = min_parse_tree.pretty()
+        pretty_tree_filename = os.path.join(pretty_trees_dir, game)
+        print(f"Writing pretty tree to {pretty_tree_filename}")
+        with open(pretty_tree_filename, "w", encoding='utf-8') as file:
+            file.write(pretty_parse_tree_str)
+        # print(min_parse_tree.pretty())
+        ps_str = PrintPuzzleScript().transform(min_parse_tree)
+        ps_str = add_empty_sounds_section(ps_str)
+        min_filename = os.path.join(MIN_GAMES_DIR, game + '.txt')
+        # print(f"Writing minified game to {min_filename}")
+        with open(min_filename, "w", encoding='utf-8') as file:
+            file.write(ps_str)
+
+        # with open(parsed_games_filename, 'a') as file:
+        #     file.write(game + "\n")
+
         tree: PSGameTree = GenPSTree().transform(min_parse_tree)
     except Exception as e:
         traceback.print_exc()

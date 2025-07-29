@@ -3,10 +3,11 @@ import os
 
 import hydra
 from matplotlib import pyplot as plt
+from matplotlib.ticker import StrMethodFormatter
 
 from conf.config import PlotRandProfileConfig
 from globals import PLOTS_DIR, GAMES_TO_N_RULES_PATH
-from profile_rand_jax import JAX_N_ENVS_TO_FPS_PATH, get_step_int, get_level_int
+from profile_rand_jax import get_step_int, get_level_int
 from globals import STANDALONE_NODEJS_RESULTS_PATH
 
 
@@ -22,6 +23,9 @@ GAMES_TO_PLOT = [
     # 'Multi-word_Dictionary_Game',
     'Take_Heart_Lass',
 ]
+
+
+JAX_N_ENVS_TO_FPS_PATH = os.path.join('data', 'jax_fps_NVIDIA_GeForce_RTX_4090.json')
 
 
 @hydra.main(version_base="1.3", config_path="conf", config_name="plot_rand_profile_config")
@@ -51,10 +55,10 @@ def main(cfg: PlotRandProfileConfig):
 
             games_n_rules = []
             for game in games:
-                if game not in games_to_n_rules:
-                    print(f'Game {game} not found in games_to_n_rules. You may need to run sort_games_by_n_rules.py first.')
-                    continue
-                games_n_rules.append((game, games_to_n_rules[game]))
+                if game+'.txt' not in games_to_n_rules:
+                    print(f'Game {game} not found in games_to_n_rules. You may need to run preprocess_games.py first.')
+                    games_to_n_rules[game+'.txt'] = (-1, False)  # Default to -1 rules and no randomness
+                games_n_rules.append((game, games_to_n_rules[game+'.txt']))
 
             games_n_rules = sorted(games_n_rules, key=lambda x: x[1][0])
 
@@ -92,15 +96,16 @@ def main(cfg: PlotRandProfileConfig):
                     n_envs = [n_envs[i] for i in sorted_idxs]
                     fps = [fps[i] for i in sorted_idxs]
                     
-                    ax.plot(n_envs, fps, label=level_str, marker='x', markersize=5, linestyle='-')
+                    ax.plot(n_envs, fps, label='PuzzleJAX', marker='x', markersize=5, linestyle='-')
 
                     # Make the y-axis logarithmic
                     ax.set_yscale('linear')
                     ax.set_xscale('linear')
                     ax.set_xlabel('batch size')
                     ax.set_ylabel('FPS')
+                    ax.yaxis.set_major_formatter(StrMethodFormatter('{x:,.0f}')) 
                     ax.grid(True)
-                    n_rules, has_randomness = games_to_n_rules[game]
+                    n_rules, has_randomness = games_to_n_rules[game+'.txt']
                     ax.set_title(f'{game}\n({n_rules} rule{"s" if n_rules != 1 else ""}{", stochastic" if has_randomness else ""})')
 
                     print(f'Game: {game}')
@@ -116,7 +121,7 @@ def main(cfg: PlotRandProfileConfig):
                                 print(f'Error in nodejs results for game {game} level {level_i}: {results_standalone[run_name][game][str(level_i)]["Error"]}')
                             else:
                                 nodejs_rand_rollout_fps = results_standalone[run_name][game][str(level_i)]['FPS']
-                                ax.axhline(y=nodejs_rand_rollout_fps, color='r', linestyle='--', label='NodeJS FPS')
+                                ax.axhline(y=nodejs_rand_rollout_fps, color='r', linestyle='--', label='NodeJS')
                         else:
                             print(f'Level {level_i} not found in nodejs results for game {game}')
                     else:
@@ -127,18 +132,22 @@ def main(cfg: PlotRandProfileConfig):
                                 print(f'Error in nodejs results for game {game} level {level_i}: {results_standalone[run_name_python][game][str(level_i)]["Error"]}')
                             else:
                                 nodejs_rand_rollout_python_fps = results_standalone[run_name_python][game][str(level_i)]['FPS']
-                                ax.axhline(y=nodejs_rand_rollout_python_fps, color='g', linestyle='--', label='Python-NodeJS FPS')
+                                ax.axhline(y=nodejs_rand_rollout_python_fps, color='g', linestyle='--', label='Python-NodeJS')
                         else:
                             print(f'Level {level_i} not found in nodejs results for game {game}')
                     else:
                         print(f'Game {game} not found in nodejs results')
 
+                if game_i == len(games_n_rules) - 1:
                     ax.legend()
 
             rollout_len = get_step_int(rollout_len_str)
             fig.suptitle(f'{device} -- {rollout_len}-step random rollout', fontsize=16)
             fig.tight_layout()
-            fig.savefig(f'plots/{device}_{rollout_len_str}{('_select' if not cfg.all_games else '')}.png')
+            plot_path = os.path.join(PLOTS_DIR, f'{device}_{rollout_len_str}{("_select" if not cfg.all_games else "")}.png')
+            plot_path = plot_path.replace(' ', '_')
+            print(f'Saving plot to {plot_path}')
+            fig.savefig(plot_path)
 
             
 if __name__ == '__main__':

@@ -36,11 +36,10 @@ batch_sizes = [
     1_200,
     1_500,
     1_800,
+    2_000,
+    5_000,
 ]
 batch_sizes = batch_sizes[::-1]
-
-JAX_N_ENVS_TO_FPS_PATH = os.path.join('data', 'jax_n_envs_to_fps.json')
-
 
 def get_step_str(s):
     return f'{s}-step_rollout'
@@ -54,8 +53,8 @@ def get_level_str(level_i):
 def get_level_int(level_str):
     return int(level_str.split('-')[1])
 
-def save_results(results):
-    with open(JAX_N_ENVS_TO_FPS_PATH, 'w') as f:
+def save_results(results, results_path):
+    with open(results_path, 'w') as f:
         json.dump(results, f, indent=4)
 
 @hydra.main(version_base="1.3", config_path='./conf', config_name='profile_jax')
@@ -64,6 +63,9 @@ def profile(cfg: ProfileJaxRandConfig):
     devices = jax.devices()
     assert len(devices) == 1, f'JAX is not using a single device. Found {len(devices)} devices: {devices}. This is unexpected.'
     device_name = devices[0].device_kind
+    device_name = device_name.replace(' ', '_')
+    results_path = os.path.join('data', f'jax_fps_{device_name}.json')
+    print(results_path)
 
     if cfg.game is None:
         games = get_list_of_games_for_testing(all_games=cfg.all_games)
@@ -87,14 +89,14 @@ def profile(cfg: ProfileJaxRandConfig):
     step_str = get_step_str(cfg.n_steps)
 
 
-    if not os.path.isfile(JAX_N_ENVS_TO_FPS_PATH):
+    if not os.path.isfile(results_path):
         results = {}
         game_n_envs_to_fps = {}
         step_str = get_step_str(cfg.n_steps)
         results[device_name] = {}
         results[device_name][step_str] = game_n_envs_to_fps
     else:
-        with open(JAX_N_ENVS_TO_FPS_PATH, 'r') as f:
+        with open(results_path, 'r') as f:
             results = json.load(f)
         if device_name not in results:
             results[device_name] = {}
@@ -112,8 +114,8 @@ def profile(cfg: ProfileJaxRandConfig):
         print(f'\nGame: {game}, n_envs: {n_envs}.')
         env = init_ps_env(cfg)
 
-        # for level_i in range(len(env.levels[:1])):
-        for level_i in range(len(env.levels)):
+        for level_i in range(len(env.levels[:1])):
+        # for level_i in range(len(env.levels)):
 
             # jax.clear_caches()
             level_str = get_level_str(level_i)
@@ -185,7 +187,7 @@ def profile(cfg: ProfileJaxRandConfig):
                 err_msg = traceback.format_exc()
                 print(f'Error in first step: {err_msg}')
                 results[device_name][step_str][game][level_str][n_envs] = None
-                save_results(results)
+                save_results(results, results_path)
                 continue
 
             fpss = tuple(n_env_steps / np.array(times))
@@ -204,11 +206,11 @@ def profile(cfg: ProfileJaxRandConfig):
             #     print(f'Finished saving gif in {timer() - start} seconds.')
 
             game_n_envs_to_fps[game][level_str][n_envs] = fpss
-            save_results(results)
+            save_results(results, results_path)
 
     else:
         # Load from json
-        with open(JAX_N_ENVS_TO_FPS_PATH, 'r') as f:
+        with open(results_path, 'r') as f:
             results = json.load(f)
 
 if __name__ == '__main__':

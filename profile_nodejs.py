@@ -41,12 +41,12 @@ actions = ["LEFT", "RIGHT", "UP", "DOWN", "ACTION"]
 def rand_rollout_from_python(engine, solver, game_text, level_i, n_steps, timeout):
     start_time = timer()
     for i in range(n_steps):
-        if (i % 1_000) and (timer() - start_time > timeout):
+        if timeout > 0 and (i % 1_000 == 0) and (timer() - start_time > timeout):
             fps = i / (timer() - start_time)
-            return False, [], i, fps, score, state
+            return False, [], i, fps, score, state, False, []
         action = random.randint(0, 5)
-        _, _, _, _, score, state = solver.takeAction(engine, action)
-    return False, [], i, timer() - start_time, score, state
+        _, _, _, _, score, state, _, objects = solver.takeAction(engine, action)
+    return False, [], i, timer() - start_time, score, state, False, list(objects)
 
     
 def get_standalone_run_name(cfg: ProfileNodeJS, algo_name, cpu_name):
@@ -85,6 +85,9 @@ def main_launch(cfg: ProfileNodeJS):
 
 
 def main(cfg: ProfileNodeJS, games: Optional[List[str]] = None):
+    if cfg.for_profiling:
+        cfg.n_steps = 5_000
+        cfg.algo = 'random'
 
     engine = require('./standalone/puzzlescript/engine.js')
     solver = require('./standalone/puzzlescript/solver.js')
@@ -135,7 +138,10 @@ def main(cfg: ProfileNodeJS, games: Optional[List[str]] = None):
                 results[run_name][game] = {"Error": traceback.print_exc()}
                 continue
 
-            n_levels = engine.getNumLevels()
+            if cfg.for_profiling:
+                n_levels = 1
+            else:
+                n_levels = engine.getNumLevels()
             game_js_sols_dir = os.path.join(JS_SOLS_DIR, game)
             os.makedirs(game_js_sols_dir, exist_ok=True)
 
@@ -153,9 +159,20 @@ def main(cfg: ProfileNodeJS, games: Optional[List[str]] = None):
                     result = rand_rollout_from_python(engine, solver, game_text, level_i, timeout=timeout_ms, n_steps=cfg.n_steps)
                 else:
                     # Make the javascript timeout longer so that we can timeout from inside JS and return stats properly
-                    result = algo(engine,
-                                  cfg.n_steps, timeout_ms,
-                                  timeout=timeout_ms*1.5 if timeout_ms > 0 else None,)
+                    def call_algo():
+                        result = algo(engine,
+                                    cfg.n_steps, timeout_ms,
+                                    timeout=timeout_ms*1.5 if timeout_ms > 0 else None,)
+                        return result
+                    # If profiling, let the nodejs engine warm up (the same way we do for JAX). Maybe we should tweak
+                    # the number of warmup loops? I don't think warming up really applies for the python-nodejs bridge,
+                    # so we don't do it in that case above.
+                    if cfg.for_profiling:
+                        for _ in range(3):
+                            result = call_algo()
+                    else:
+                        result = call_algo()
+
                 end_level_state = level_to_int_arr(result[5]).tolist()
                 result = {
                     'solved': result[0],
@@ -197,7 +214,7 @@ def main(cfg: ProfileNodeJS, games: Optional[List[str]] = None):
                     print(f"Saved solution to {level_js_sol_path}")
 
 
-                print(json.dumps(result))
+                # print(json.dumps(result))
                 results[run_name][game][level_i] = result
 
         if not cfg.for_validation or cfg.for_solution:

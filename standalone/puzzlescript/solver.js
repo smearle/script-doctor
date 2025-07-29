@@ -412,7 +412,7 @@ function takeAction(engine, action) {
     // return true;
   }
   // Dummy values for winning, solution, iterations, and elapsed time
-  return [false, [], 0, 0, score, level];
+  return [false, [], 0, 0, score, level, false, Array.from(engine.getState().idDict)];
 }
 
 function randomRollout(engine, maxIters=100_000) {
@@ -421,20 +421,22 @@ function randomRollout(engine, maxIters=100_000) {
   let start_time = Date.now();
   const timeout_ms = 60 * 1000;
   var score = getScore(engine);
+  var new_level = engine.backupLevel();
   var level_map = engine.backupLevel()['dat'];
   while (i < maxIters) {
     // if (i % 1000 == 0) {
     elapsed_time = Date.now() - start_time;
     if (elapsed_time > timeout_ms) {
       console.log(`Timeout after ${elapsed_time / 1000} seconds. Returning.`);
-      return [false, [], i, ((Date.now() - start_time) / 1000), score, level_map];
+      return [false, [], i, ((Date.now() - start_time) / 1000), score, new_level, true, Array.from(engine.getState().idDict)];
     }
     // }
     // let changed = engine.processInput(Math.min(5, Math.floor(Math.random() * 6)));
     let changed = processInputSearch(engine, Math.min(5, Math.floor(Math.random() * 6)));
     if (changed) {
       score = getScore(engine);
-      new_level = engine.backupLevel()['dat'];
+      new_level = engine.backupLevel();
+      level_map = new_level['dat'];
       if (engine.getWinning()) {
         // console.log(`Winning! Solution:, ${new_action_seq}\n Iterations: ${i}`);
         // console.log('FPS:', (i / (Date.now() - start_time) * 1000).toFixed(2));
@@ -446,10 +448,10 @@ function randomRollout(engine, maxIters=100_000) {
   }
   if(i >= maxIters) {
     // console.log('Exceeded max iterations. Exiting.');
-    return [false, [], i, ((Date.now() - start_time) / 1000), score, level_map];
+    return [false, [], i, ((Date.now() - start_time) / 1000), score, new_level, false, Array.from(engine.getState().idDict)];
   }
   // Dummy values for winning and solution
-  return [false, [], i, ((Date.now() - start_time) / 1000), score, level_map];
+  return [false, [], i, ((Date.now() - start_time) / 1000), score, new_level, false, Array.from(engine.getState().idDict)];
 }
 
 function processInputSearch(engine, action){
@@ -623,6 +625,7 @@ function solveBFS(engine, maxIters, timeoutJS) {
 }
 
 function DoRestartSearch(engine, force) {
+  engine.clearBackups();
   if (engine.getRestarting()){
     return;
   }
