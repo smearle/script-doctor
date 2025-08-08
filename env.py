@@ -647,10 +647,11 @@ class LoopRuleGroupState:
 
 class PSEnv:
     def __init__(self, tree: PSGameTree, jit: bool = True, level_i: int = 0, max_steps: int = np.inf,
-                 debug: bool = False, print_score: bool = True):
+                 debug: bool = False, print_score: bool = True, vmap: bool = True):
         global DEBUG, PRINT_SCORE
         DEBUG, PRINT_SCORE = debug, print_score
         self.jit = jit
+        self.vmap = vmap
         self.title = tree.prelude.title
         self._has_randomness = False
         self.tree = tree
@@ -2739,7 +2740,7 @@ class PSEnv:
         # patches = rearrange(patches, "c h w -> h w c")
         patches = patches.transpose(1, 2, 0)
 
-        if self.jit:
+        if self.jit and self.vmap:
             kernel_activations, cell_detect_outs = jax.vmap(jax.vmap(detect_cells))(patches)
 
         else:

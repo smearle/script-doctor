@@ -7,8 +7,8 @@ from matplotlib.ticker import StrMethodFormatter
 
 from conf.config import PlotRandProfileConfig
 from globals import PLOTS_DIR, GAMES_TO_N_RULES_PATH
-from profile_rand_jax import get_step_int, get_level_int
-from globals import STANDALONE_NODEJS_RESULTS_PATH
+from profile_rand_jax import get_step_int, get_level_int, get_vmap
+from globals import STANDALONE_NODEJS_RESULTS_PATH, JAX_PROFILING_RESULTS_DIR
 
 
 GAMES_TO_PLOT = [
@@ -25,13 +25,11 @@ GAMES_TO_PLOT = [
 ]
 
 
-JAX_N_ENVS_TO_FPS_PATH = os.path.join('data', 'jax_fps_NVIDIA_GeForce_RTX_4090.json')
 
 
 @hydra.main(version_base="1.3", config_path="conf", config_name="plot_rand_profile_config")
 def main(cfg: PlotRandProfileConfig):
-    with open(JAX_N_ENVS_TO_FPS_PATH, 'r') as f:
-        results = json.load(f)
+    devices = os.listdir(JAX_PROFILING_RESULTS_DIR)
 
     with open(STANDALONE_NODEJS_RESULTS_PATH, 'r') as f:
         results_standalone = json.load(f)
@@ -41,15 +39,14 @@ def main(cfg: PlotRandProfileConfig):
 
     os.makedirs(PLOTS_DIR, exist_ok=True)
 
-    devices = results.keys()
     for device in devices:
         print(f'Device: {device}')
-        rollout_len_str = results[device].keys()
-        for rollout_len_str in rollout_len_str:
+        rollout_len_strs = os.listdir(os.path.join(JAX_PROFILING_RESULTS_DIR, device))
+        for rollout_len_str in rollout_len_strs:
             print(f'Rollout len: {rollout_len_str}')
 
             if cfg.all_games:
-                games = results[device][rollout_len_str].keys()
+                games = os.listdir(os.path.join(JAX_PROFILING_RESULTS_DIR, device, rollout_len_str))
             else:
                 games = GAMES_TO_PLOT
 
@@ -79,14 +76,20 @@ def main(cfg: PlotRandProfileConfig):
                 else:
                     ax = axes[ax_x, ax_y]
 
-                levels = results[device][rollout_len_str][game].keys()
-                for level_str in levels:
+                levels = os.listdir(os.path.join(JAX_PROFILING_RESULTS_DIR, device, rollout_len_str, game))
+                plotted_nodejs = {}
+                for level_path in levels:
+                    level_str = level_path[:-5]  # Remove .json extension
                     level_i = get_level_int(level_str)
                     if level_i != 0:
                         print(f"Ignoring levels other than 0 for now ({game})")
                         continue
+                    vmap = get_vmap(level_str)
 
-                    n_envs_to_fps = results[device][rollout_len_str][game][level_str]
+                    level_results_path = os.path.join(JAX_PROFILING_RESULTS_DIR, device, rollout_len_str, game,
+                                                      level_path)
+                    with open(level_results_path, 'r') as f:
+                        n_envs_to_fps = json.load(f)
 
                     n_envs = list(n_envs_to_fps.keys())
                     n_envs = [int(n_env) for n_env in n_envs]
@@ -96,7 +99,9 @@ def main(cfg: PlotRandProfileConfig):
                     n_envs = [n_envs[i] for i in sorted_idxs]
                     fps = [fps[i] for i in sorted_idxs]
                     
-                    ax.plot(n_envs, fps, label='PuzzleJAX', marker='x', markersize=5, linestyle='-')
+                    label = 'PuzzleJAX' if vmap else 'PuzzleJAX (for loop)'
+                    color = 'C0' if vmap else 'C1'
+                    ax.plot(n_envs, fps, label=label, marker='x', markersize=5, linestyle='-', color=color)
 
                     # Make the y-axis logarithmic
                     ax.set_yscale('linear')
@@ -114,6 +119,9 @@ def main(cfg: PlotRandProfileConfig):
                     run_names = results_standalone.keys()
                     run_name = 'algo-randomRollout_5000-steps_11th Gen Intel(R) Core(TM) i9-11900K @ 3.50GHz'
                     run_name_python = 'algo-rand_rollout_from_python_5000-steps_11th Gen Intel(R) Core(TM) i9-11900K @ 3.50GHz'
+
+                    if level_i in plotted_nodejs:
+                        continue
                     
                     if game in results_standalone[run_name]:
                         if str(level_i) in results_standalone[run_name][game]:
@@ -121,7 +129,7 @@ def main(cfg: PlotRandProfileConfig):
                                 print(f'Error in nodejs results for game {game} level {level_i}: {results_standalone[run_name][game][str(level_i)]["Error"]}')
                             else:
                                 nodejs_rand_rollout_fps = results_standalone[run_name][game][str(level_i)]['FPS']
-                                ax.axhline(y=nodejs_rand_rollout_fps, color='r', linestyle='--', label='NodeJS')
+                                ax.axhline(y=nodejs_rand_rollout_fps, color='C3', linestyle='--', label='NodeJS')
                         else:
                             print(f'Level {level_i} not found in nodejs results for game {game}')
                     else:
@@ -132,14 +140,24 @@ def main(cfg: PlotRandProfileConfig):
                                 print(f'Error in nodejs results for game {game} level {level_i}: {results_standalone[run_name_python][game][str(level_i)]["Error"]}')
                             else:
                                 nodejs_rand_rollout_python_fps = results_standalone[run_name_python][game][str(level_i)]['FPS']
-                                ax.axhline(y=nodejs_rand_rollout_python_fps, color='g', linestyle='--', label='Python-NodeJS')
+                                ax.axhline(y=nodejs_rand_rollout_python_fps, color='C2', linestyle='--', label='Python-NodeJS')
                         else:
                             print(f'Level {level_i} not found in nodejs results for game {game}')
                     else:
                         print(f'Game {game} not found in nodejs results')
 
-                if game_i == len(games_n_rules) - 1:
-                    ax.legend()
+                    plotted_nodejs[level_i] = True
+
+                # if game_i == len(games_n_rules) - 1:
+                if True:
+                    handles, labels = ax.get_legend_handles_labels()
+                    label_to_handle = dict(zip(labels, handles))
+
+                    labels_order = ['PuzzleJAX', 'PuzzleJAX (for loop)', 'NodeJS', 'Python-NodeJS']
+                    ordered_handles = [label_to_handle[label] for label in labels_order if label in label_to_handle]
+                    ordered_labels = [label for label in labels_order if label in label_to_handle]
+                    ax.legend(handles=ordered_handles, labels=ordered_labels)
+                    print(ordered_labels)
 
             rollout_len = get_step_int(rollout_len_str)
             fig.suptitle(f'{device} -- {rollout_len}-step random rollout', fontsize=16)

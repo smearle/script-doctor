@@ -161,4 +161,4 @@ def save_checkpoint(config: TrainConfig, ckpt_manager, runner_state, t):
 import utils
 
 def init_ps_env(config: RLConfig, verbose: bool = False) -> PSEnv:
-    return utils.init_ps_env(config.game, config.level, config.max_episode_steps)
+    return utils.init_ps_env(config.game, config.level, config.max_episode_steps, vmap=config.vmap)
