@@ -27,24 +27,24 @@ from utils_rl import get_env_params_from_config, init_ps_env
 # games = [os.path.basename(p) for p in game_paths]
 
 batch_sizes = [
-    1,
-    10,
-    50,
-    100,
-    200,
-    400,
-    600,
-    1_200,
-    1_500,
-    1_800,
+    # 1,
+    # 10,
+    # 50,
+    # 100,
+    # 200,
+    # 400,
+    # 600,
+    # 1_200,
+    # 1_500,
+    # 1_800,
     2_000,
     5_000,
     8_000,
 ]
-batch_sizes = batch_sizes[::-1]
+# batch_sizes = batch_sizes[::-1]
 vmaps = [
     True,
-    False,
+    # False,
 ]
 
 def get_step_str(s):
@@ -70,6 +70,8 @@ def get_vmap(level_str):
     return 'vmap-False' not in level_str
 
 def save_results(results, results_path):
+    results_dir = os.path.dirname(results_path)
+    os.makedirs(results_dir, exist_ok=True)
     with open(results_path, 'w') as f:
         json.dump(results, f, indent=4)
 
@@ -114,15 +116,13 @@ def profile(cfg: ProfileJaxRandConfig):
         cfg.vmap = vmap
 
         print(f'\nGame: {game}, n_envs: {n_envs}, vmap: {vmap}.')
-        game_dir = os.path.join(steps_dir, game)
-        os.makedirs(game_dir, exist_ok=True)
 
         # Only profiling the first level for now.
         for level_i in range(1):
         # for level_i in range(len(env.levels)):
 
             level_str = get_level_str(level_i, vmap=vmap)
-            results_path = os.path.join(game_dir, level_str + '.json')
+            results_path = os.path.join(steps_dir, game, level_str + '.json')
             if os.path.exists(results_path):
                 n_envs_to_fps = json.load(open(results_path, 'r'))
             else:

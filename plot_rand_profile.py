@@ -6,23 +6,29 @@ from matplotlib import pyplot as plt
 from matplotlib.ticker import StrMethodFormatter
 
 from conf.config import PlotRandProfileConfig
-from globals import PLOTS_DIR, GAMES_TO_N_RULES_PATH
+from globals import PLOTS_DIR, GAMES_TO_N_RULES_PATH, PRIORITY_GAMES
+from preprocess_games import count_rules
 from profile_rand_jax import get_step_int, get_level_int, get_vmap
 from globals import STANDALONE_NODEJS_RESULTS_PATH, JAX_PROFILING_RESULTS_DIR
+from utils import init_ps_env
 
 
-GAMES_TO_PLOT = [
-    'sokoban_basic',
-    'sokoban_match3',
-    'limerick',
-    'blocks',
-    'slidings',
-    'notsnake',
-    'Travelling_salesman',
-    'Zen_Puzzle_Garden',
-    # 'Multi-word_Dictionary_Game',
-    'Take_Heart_Lass',
-]
+# GAMES_TO_PLOT = [
+#     'sokoban_basic',
+#     'test_sokoban_rules_3',
+#     'test_sokoban_rules_5',
+
+#     # 'sokoban_match3',
+#     # 'limerick',
+#     # 'blocks',
+#     # 'slidings',
+#     # 'notsnake',
+#     # 'Travelling_salesman',
+#     # 'Zen_Puzzle_Garden',
+#     # # 'Multi-word_Dictionary_Game',
+#     # 'Take_Heart_Lass',
+# ]
+GAMES_TO_PLOT = PRIORITY_GAMES
 
 
 
@@ -54,7 +60,9 @@ def main(cfg: PlotRandProfileConfig):
             for game in games:
                 if game+'.txt' not in games_to_n_rules:
                     print(f'Game {game} not found in games_to_n_rules. You may need to run preprocess_games.py first.')
-                    games_to_n_rules[game+'.txt'] = (-1, False)  # Default to -1 rules and no randomness
+                    env = init_ps_env(game=game, level_i=0, max_episode_steps=1000, vmap=True)
+                    n_rules = count_rules(env.tree)
+                    games_to_n_rules[game+'.txt'] = (n_rules, env.has_randomness())
                 games_n_rules.append((game, games_to_n_rules[game+'.txt']))
 
             games_n_rules = sorted(games_n_rules, key=lambda x: x[1][0])

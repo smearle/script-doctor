@@ -26,6 +26,7 @@ class PSConfig:
     level: int = 0
     max_episode_steps: int = np.iinfo(np.int32).max
     overwrite: bool = False  # Whether to overwrite existing results
+    vmap: bool = True
 
 
 @dataclass

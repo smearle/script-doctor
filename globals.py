@@ -2,27 +2,36 @@ import os
 
 
 PRIORITY_GAMES = [
-    # 'blank',
     'sokoban_basic',
-    'sokoban_match3',
-    'limerick',
-    'blocks',
-    'slidings',
-    'notsnake',
-    'kettle',
-    'Travelling_salesman',
-    'Zen_Puzzle_Garden',
-    # 'tiny treasure hunt',
-    'atlas shrank',
-    # 'Watch_Your_Step',
-    'Multi-word_Dictionary_Game',
-    'Take_Heart_Lass',
-    # 'Indigestion',
-    # 'castlemouse',
-    # 'Sokodig',
-    'kettle',
-    # 'nekopuzzle'
-    'constellationz',
+    'test_sokoban_objs_10',
+    'test_sokoban_objs_20',
+    'test_sokoban_lvls_14',
+    'test_sokoban_lvls_21',
+    # 'test_sokoban_rules_5',
+    # 'test_sokoban_rules_10',
+
+
+    # # 'blank',
+    # 'sokoban_basic',
+    # 'sokoban_match3',
+    # 'limerick',
+    # 'blocks',
+    # 'slidings',
+    # 'notsnake',
+    # 'kettle',
+    # 'Travelling_salesman',
+    # 'Zen_Puzzle_Garden',
+    # # 'tiny treasure hunt',
+    # 'atlas shrank',
+    # # 'Watch_Your_Step',
+    # 'Multi-word_Dictionary_Game',
+    # 'Take_Heart_Lass',
+    # # 'Indigestion',
+    # # 'castlemouse',
+    # # 'Sokodig',
+    # 'kettle',
+    # # 'nekopuzzle'
+    # 'constellationz',
 ]
 
 GAMES_TO_SKIP = set({'easyenigma', 'A_Plaid_Puzzle'})

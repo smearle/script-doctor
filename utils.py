@@ -378,7 +378,7 @@ def get_current_commit_hash():
 
 from timeit import default_timer as timer
 
-def init_ps_env(game, level_i, max_episode_steps, vmap):
+def init_ps_env(game, level_i, max_episode_steps, vmap) -> PSEnv:
     start_time = timer()
     with open("syntax.lark", "r", encoding='utf-8') as file:
         puzzlescript_grammar = file.read()
