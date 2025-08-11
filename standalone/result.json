@@ -1,1 +1,1 @@
-{"game":"games/sokoban.ps","level":1,"algorithm":"solveRandom","isSolved":false,"actions":[],"iterations":100000,"time":"0.40","fps":"250000.00"}
+{"game":"games/sokoban.ps","level":1,"algorithm":"solveAStar","isSolved":true,"actions":[3,2,2,1,3,0,0,1,2,0,0,1,1,2,2,3],"iterations":43,"time":"0.03","fps":"1653.85"}
