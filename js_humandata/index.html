@@ -253,6 +253,12 @@
     <script src="ps.js"></script>
     <script>
         var gameFile = "games/sokoban.txt";
+        const params = new URLSearchParams(window.location.search);
+        // Get the 'file' parameter
+        const tempName = params.get("file");
+        if (tempName) {
+            gameFile = "games/" + tempName + ".txt";
+        }
 
         document.addEventListener("DOMContentLoaded", function() {
             loadGame(gameFile);
