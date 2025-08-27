@@ -16,7 +16,7 @@ import hydra
 from hydra.core.config_store import ConfigStore
 
 from game_gen import gen_game, gen_game_from_plan
-from prompts import *
+from script_doctor.prompts import *
 ps = require('./script-doctor/node_modules/puzzlescript/lib/index.js')
 
 

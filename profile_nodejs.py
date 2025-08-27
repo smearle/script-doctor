@@ -173,7 +173,8 @@ def main(cfg: ProfileNodeJS, games: Optional[List[str]] = None):
                     else:
                         result = call_algo()
 
-                end_level_state = level_to_int_arr(result[5]).tolist()
+                n_objs = len(list(result[7]))
+                end_level_state = level_to_int_arr(result[5], n_objs).tolist()
                 result = {
                     'solved': result[0],
                     'actions': tuple(result[1]),

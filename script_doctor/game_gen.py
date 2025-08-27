@@ -2,7 +2,7 @@ import json
 import os
 import random
 import re
-from prompts import *
+from script_doctor.prompts import *
 from utils import extract_ps_code, gen_fewshot_examples, llm_text_query, save_prompts
 
 def gen_game_from_plan(seed, save_dir, game_idea, n_iter):

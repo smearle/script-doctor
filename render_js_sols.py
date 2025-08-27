@@ -14,7 +14,7 @@ from conf.config import ProfileNodeJS
 from env import PSState
 from preprocess_games import PS_LARK_GRAMMAR_PATH, PSErrors, get_env_from_ps_file
 from profile_nodejs import compile_game
-from utils import init_ps_lark_parser, level_to_int_arr
+from utils import get_list_of_games_for_testing, init_ps_lark_parser, level_to_int_arr
 from validate_sols import JS_SOLS_DIR, multihot_level_from_js_state, JAX_VALIDATED_JS_SOLS_DIR
 
 
@@ -24,7 +24,11 @@ def main(cfg: ProfileNodeJS):
     engine = require('./standalone/puzzlescript/engine.js')
     solver = require('./standalone/puzzlescript/solver.js')
     if cfg.game is None:
-        game_sols_dirs = glob.glob(f"{JS_SOLS_DIR}/*")
+        if cfg.all_games:
+            game_sols_dirs = glob.glob(f"{JS_SOLS_DIR}/*")
+        else:
+            game_sols_dirs = get_list_of_games_for_testing(all_games=cfg.all_games)
+            game_sols_dirs = [os.path.join(JS_SOLS_DIR, game) for game in game_sols_dirs]
     else:
         game_sols_dirs = [os.path.join(JS_SOLS_DIR, cfg.game)]
     # A dummy state, only the multihot_level is used.
@@ -79,13 +83,16 @@ def main(cfg: ProfileNodeJS):
 
             frames = []
             level_state = solver.getState(engine)
-            level_state = level_to_int_arr(level_state).tolist()
+            n_objs = len(list(data['objs']))
+            if n_objs > 64:
+                continue
+            level_state = level_to_int_arr(level_state, n_objs).tolist()
             multihot_level = multihot_level_from_js_state(level_state, data['objs'])
             state = state.replace(multihot_level=multihot_level)
             frames.append(env.render(state, cv2=False))
             for action in actions:
                 _, _, _, _, _, level_state = solver.takeAction(engine, action)
-                level_state = level_to_int_arr(level_state).tolist()
+                level_state = level_to_int_arr(level_state, n_objs).tolist()
                 multihot_level = multihot_level_from_js_state(level_state, data['objs'])
                 state = state.replace(multihot_level=multihot_level)
                 frames.append(env.render(state, cv2=False))
