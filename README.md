@@ -164,3 +164,7 @@ If you use our code for generating PuzzleScript games with LLMs, you can cite Sc
   journal={arXiv preprint arXiv:2506.06524},
   year={2025}
 }```
+
+## License
+
+MIT

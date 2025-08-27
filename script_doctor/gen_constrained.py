@@ -50,7 +50,7 @@ if not os.path.exists('temp'):
 with open(prompt_filepath, 'w') as f:
     f.write(prompt)
 
-with open('syntax_generate.lark', 'r') as f:
+with open('script/doctor/syntax_generate.lark', 'r') as f:
     grammar = f.read()
 
 generated_filepath = os.path.join('temp', 'generated.txt')
