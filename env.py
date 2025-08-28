@@ -19,7 +19,7 @@ from env_render import render_solid_color, render_sprite
 from env_utils import N_MOVEMENTS, multihot_to_desc, N_FORCES, ACTION
 from jax_utils import stack_leaves
 from ps_game import LegendEntry, PSGameTree, PSObject, Rule, WinCondition
-from spaces import Discrete, Box
+from gymnax.environments.spaces import Discrete, Box
 
 
 logger = logging.getLogger(__name__)
@@ -647,11 +647,10 @@ class LoopRuleGroupState:
 
 class PSEnv:
     def __init__(self, tree: PSGameTree, jit: bool = True, level_i: int = 0, max_steps: int = np.inf,
-                 debug: bool = False, print_score: bool = True, vmap: bool = True):
+                 debug: bool = False, print_score: bool = True):
         global DEBUG, PRINT_SCORE
         DEBUG, PRINT_SCORE = debug, print_score
         self.jit = jit
-        self.vmap = vmap
         self.title = tree.prelude.title
         self._has_randomness = False
         self.tree = tree
@@ -2460,7 +2459,7 @@ class PSEnv:
         # Can we have loops in late rules? I hope not.
         rule_blocks.append((False, late_rule_grps))
 
-        self.all_rule_fns = [rule_fn for looping, rule_grps in rule_blocks for rule_grp in rule_grps for rule_fn in rule_grp]
+        all_rule_fns = [rule_fn for looping, rule_grps in rule_blocks for rule_grp in rule_grps for rule_fn in rule_grp]
         n_rules_counted = 0
         # n_prior_rules = {}
         max_n_grps = max([len(rule_grps) for _, rule_grps in rule_blocks])
@@ -2475,9 +2474,9 @@ class PSEnv:
                 n_prior_rules_arr[rule_block_i, rule_grp_i] = n_rules_counted
                 n_rules_per_grp_arr[rule_block_i, rule_grp_i] = len(rule_grp)
                 n_rules_counted += len(rule_grp)
-        self.n_prior_rules_arr = jnp.array(n_prior_rules_arr)
-        self.n_rules_per_grp_arr = jnp.array(n_rules_per_grp_arr)
-        self.n_grps_per_block_arr = jnp.array(n_grps_per_block_arr)
+        n_prior_rules_arr = jnp.array(n_prior_rules_arr)
+        n_rules_per_grp_arr = jnp.array(n_rules_per_grp_arr)
+        n_grps_per_block_arr = jnp.array(n_grps_per_block_arr)
         blocks_are_looping_lst = jnp.array([looping for looping, _ in rule_blocks])
 
         def tick_fn(rng, lvl):
@@ -2740,7 +2739,7 @@ class PSEnv:
         # patches = rearrange(patches, "c h w -> h w c")
         patches = patches.transpose(1, 2, 0)
 
-        if self.jit and self.vmap:
+        if self.jit:
             kernel_activations, cell_detect_outs = jax.vmap(jax.vmap(detect_cells))(patches)
 
         else:
@@ -3264,7 +3263,7 @@ class PSEnv:
             # n_prior_rules_arr, n_rules_per_grp_arr, all_rule_fns,
             rule_grp,
             ### COMPILE VS RUNTIME ###
-        ):
+            ):
         """Given a rule group, repeatedly attempt to apply the group (by looping each rule in sequence) until the group no longer has an effect."""
         lvl = rule_block_state.lvl
         grp_applied_prev = rule_block_state.applied
@@ -3407,8 +3406,8 @@ class PSEnv:
             jax.debug.print('apply_rule_block: block {block_i} applied: {block_applied}. again: {again}', block_i=block_i, block_applied=block_applied, again=again)
             if not self.jit:
                 if block_applied:
-                    print(f'Level state after rule block {block_i} application:\n{multihot_to_desc(lvl[0],
-                          objs_to_idxs=self.objs_to_idxs, n_objs=self.n_objs, obj_idxs_to_force_idxs=self.obj_idxs_to_force_idxs)}')
+                    print(f'Level state after rule block {block_i} application:\n{multihot_to_desc(lvl[0], objs_to_idxs=self.objs_to_idxs, n_objs=self.n_objs,
+                                                                                                   obj_idxs_to_force_idxs=self.obj_idxs_to_force_idxs)}')
 
         rule_block_state = LoopRuleBlockState(
             lvl=lvl,

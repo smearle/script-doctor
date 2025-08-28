@@ -658,8 +658,6 @@ def main(cfg: PreprocessConfig):
 
     with open(PS_LARK_GRAMMAR_PATH, "r", encoding='utf-8') as file:
         puzzlescript_grammar = file.read()
-    with open("syntax_generate.lark", "r", encoding='utf-8') as file:
-        min_puzzlescript_grammar = file.read()
 
     # Initialize the Lark parser with the PuzzleScript grammar
     parser = Lark(puzzlescript_grammar, start="ps_game", maybe_placeholders=False)

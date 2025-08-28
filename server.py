@@ -34,7 +34,7 @@ from client import open_browser
 import game_gen
 from globals import PRIORITY_GAMES
 from preprocess_games import GAMES_DIR, MIN_GAMES_DIR, PrintPuzzleScript, RepairPuzzleScript, StripPuzzleScript, add_empty_sounds_section, preprocess_ps, TEST_GAMES
-from prompts import *
+from script_doctor.prompts import *
 from sort_games_by_n_rules import GAMES_N_RULES_SORTED_PATH
 from utils import (extract_ps_code, gen_fewshot_examples, get_list_of_games_for_testing, llm_text_query,
                    num_tokens_from_string, save_prompts, truncate_str_to_token_len, level_to_int_arr)

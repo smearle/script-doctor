@@ -1,10 +1,12 @@
 import glob
 import json
+import math
 import os
 import pickle
 import random
 import re
 import time
+from typing import List
 
 import dotenv
 import jax
@@ -19,7 +21,7 @@ from collect_games import GALLERY_GAMES_DIR
 from env import PSEnv
 from gen_tree import GenPSTree
 from preprocess_games import GAMES_DIR, get_tree_from_txt, get_env_from_ps_file, TREES_DIR
-from prompts import *
+from script_doctor.prompts import *
 
 
 dotenv.load_dotenv()
@@ -118,27 +120,19 @@ def llm_text_query(system_prompt, prompt, model, api_key=None, base_url=None, mo
         {"role": "user", "content": prompt},
     ]
     
-    use_portkey = True
     # Select different virtual keys based on the model parameter
     virtual_key = os.environ.get("PORTKEY_O3MINI_KEY", "")
     if model == "4o-mini":
         virtual_key = os.environ.get("PORTKEY_GPT4O_KEY", "")
-    elif model == "gpt-4o":
-        use_portkey = False
-    elif model == "o1":
-        use_portkey = False
     elif model == "gemini":
         virtual_key = os.environ.get("PORTKEY_VERTEX_KEY", "")
         model ="gemini-2.0-flash-exp"
-    elif model == "gemini-2.5-pro":
-        virtual_key = os.environ.get("PORTKEY_VERTEX_KEY", "")
-        model = "gemini-2.5-pro"
     elif model == "deepseek":
         pass  # DeepSeek will be handled separately
     elif model == "qwen":
         pass  # Qwen will be handled separately
     # Try using Portkey API, DeepSeek API or Qwen API
-    if use_portkey:
+    try:
         import requests
         import json
 
@@ -154,7 +148,7 @@ def llm_text_query(system_prompt, prompt, model, api_key=None, base_url=None, mo
                 "Authorization": f"Bearer {api_key}",
             }
             payload = {
-                "model": model_name,
+                "model": model_name, # Or the specific deepseek model name you intend to use
                 "messages": messages,
             }
         elif model == "qwen":
@@ -232,9 +226,9 @@ def llm_text_query(system_prompt, prompt, model, api_key=None, base_url=None, mo
         return None
 
 
-    else:
+    except ImportError:
         # If portkey is not installed, fall back to original implementation
-        print("Using Microsoft Azure API.")
+        print("Portkey not installed, falling back to original implementation")
         messages = [
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": prompt},
@@ -378,7 +372,7 @@ def get_current_commit_hash():
 
 from timeit import default_timer as timer
 
-def init_ps_env(game, level_i, max_episode_steps, vmap) -> PSEnv:
+def init_ps_env(game, level_i, max_episode_steps):
     start_time = timer()
     with open("syntax.lark", "r", encoding='utf-8') as file:
         puzzlescript_grammar = file.read()
@@ -387,7 +381,7 @@ def init_ps_env(game, level_i, max_episode_steps, vmap) -> PSEnv:
     tree, success, err_msg = get_tree_from_txt(parser, game, test_env_init=False)
     parse_time = timer()
     # print(f'Parsed PS file using Lark into python PSTree object in {(parse_time - start_time) / 1000} seconds.')
-    env = PSEnv(tree, jit=True, level_i=level_i, max_steps=max_episode_steps, print_score=False, debug=False, vmap=vmap)
+    env = PSEnv(tree, jit=True, level_i=level_i, max_steps=max_episode_steps, print_score=False, debug=False)
     # print(f'Initialized PSEnv in {(timer() - parse_time) / 1000} seconds.')
     return env
 
@@ -400,14 +394,27 @@ def init_ps_lark_parser():
     return parser
 
     
-def level_to_int_arr(level: dict):
+def level_to_int_arr(level: dict, n_objs: int):
+    stride_obj = math.ceil(n_objs / 32)
     level_arr = []
     for x in range(level['width']):
         level_arr.append([])
         for y in range(level['height']):
-            flat_idx = x * level['height'] + y
-            level_arr[x].append(level['dat'][str(flat_idx)])
-    return np.array(level_arr)
+            val = 0
+            flat_idx = (x * level['height'] + y) * stride_obj
+            for j in range(stride_obj):
+                idx = flat_idx + j
+                val += level['dat'][str(idx)]
+            level_arr[x].append(val)
+    if n_objs <= 32:
+        dtype = np.int32
+    elif n_objs <= 64:
+        dtype = np.int64
+    else:
+        # TODO: Get more clever in order to handle this (if we must)
+        raise ValueError(f"Number of objects {n_objs} exceeds 64, cannot convert to int array.")
+    level_arr = np.array(level_arr, dtype=dtype)
+    return level_arr
 
 def get_n_levels_per_game():
     if os.path.exists(GAMES_N_LEVELS_PATH):

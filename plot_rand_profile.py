@@ -8,7 +8,7 @@ from matplotlib.ticker import StrMethodFormatter
 from conf.config import PlotRandProfileConfig
 from globals import PLOTS_DIR, GAMES_TO_N_RULES_PATH, PRIORITY_GAMES
 from preprocess_games import count_rules
-from profile_rand_jax import get_step_int, get_level_int, get_vmap
+from profile_rand_jax import get_step_int, get_level_int, get_vmap, VMAPS
 from globals import STANDALONE_NODEJS_RESULTS_PATH, JAX_PROFILING_RESULTS_DIR
 from utils import init_ps_env
 
@@ -73,7 +73,6 @@ def main(cfg: PlotRandProfileConfig):
             n_cols = int(n_games / n_rows) + (n_games % n_rows > 0)
 
             fig, axes = plt.subplots(n_rows, n_cols, figsize=(n_cols * 5, n_rows * 5)) 
-
             if n_games == 1:
                 axes = [axes]
 
@@ -93,6 +92,8 @@ def main(cfg: PlotRandProfileConfig):
                         print(f"Ignoring levels other than 0 for now ({game})")
                         continue
                     vmap = get_vmap(level_str)
+                    if vmap not in VMAPS:
+                        continue
 
                     level_results_path = os.path.join(JAX_PROFILING_RESULTS_DIR, device, rollout_len_str, game,
                                                       level_path)
@@ -114,6 +115,9 @@ def main(cfg: PlotRandProfileConfig):
                     # Make the y-axis logarithmic
                     ax.set_yscale('linear')
                     ax.set_xscale('linear')
+                    # ax.set_xscale('log')
+                    # ax.set_yscale('log')
+
                     ax.set_xlabel('batch size')
                     ax.set_ylabel('FPS')
                     ax.yaxis.set_major_formatter(StrMethodFormatter('{x:,.0f}')) 

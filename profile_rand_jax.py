@@ -26,23 +26,25 @@ from utils_rl import get_env_params_from_config, init_ps_env
 # game_paths = glob.glob(os.path.join('data', 'scraped_games', '*.txt'))
 # games = [os.path.basename(p) for p in game_paths]
 
-batch_sizes = [
-    # 1,
-    # 10,
-    # 50,
-    # 100,
+BATCH_SIZES = [
+    1,
+    10,
+    50,
+    100,
     # 200,
-    # 400,
+    400,
     # 600,
     # 1_200,
-    # 1_500,
+    1_500,
     # 1_800,
     2_000,
+    # 3_500,
     5_000,
+    # 7_500,
     8_000,
 ]
 # batch_sizes = batch_sizes[::-1]
-vmaps = [
+VMAPS = [
     True,
     # False,
 ]
@@ -88,13 +90,13 @@ def profile(cfg: ProfileJaxRandConfig):
     else:
         games = [cfg.game]
 
-    global batch_sizes, vmaps
+    global BATCH_SIZES, VMAPS
     hparams = itertools.product(
         games,
-        batch_sizes,
-        vmaps,
+        BATCH_SIZES,
+        VMAPS,
     )
-    games, batch_sizes, vmaps = zip(*hparams)
+    games, BATCH_SIZES, VMAPS = zip(*hparams)
 
     vids_dir = 'vids'
     if cfg.render:
@@ -110,7 +112,7 @@ def profile(cfg: ProfileJaxRandConfig):
     os.makedirs(steps_dir, exist_ok=True)
     last_game = None
 
-    for (game, n_envs, vmap) in zip(games, batch_sizes, vmaps):
+    for (game, n_envs, vmap) in zip(games, BATCH_SIZES, VMAPS):
 
         cfg.game = game
         cfg.vmap = vmap
