@@ -35,7 +35,7 @@ MIN_GAMES_DIR = os.path.join(DATA_DIR, 'min_games')
 CUSTOM_GAMES_DIR = os.path.join('custom_games')
 SIMPLIFIED_GAMES_DIR = os.path.join(DATA_DIR, 'simplified_games')
 TREES_DIR = os.path.join(DATA_DIR, 'game_trees')
-pretty_trees_dir = os.path.join(DATA_DIR, 'pretty_trees')
+PRETTY_TREES_DIR = os.path.join(DATA_DIR, 'pretty_trees')
 # parsed_games_filename = os.path.join(DATA_DIR, "parsed_games.txt")
 
 
@@ -555,7 +555,7 @@ def get_tree_from_txt(parser, game, log_dir: str = None, overwrite: bool = True,
     # print(f"Parsing game {filepath} ({i+1}/{len(game_files)})")
     simp_filepath = os.path.join(SIMPLIFIED_GAMES_DIR, simp_filename)
     os.makedirs(SIMPLIFIED_GAMES_DIR, exist_ok=True)
-    os.makedirs(pretty_trees_dir, exist_ok=True)
+    os.makedirs(PRETTY_TREES_DIR, exist_ok=True)
     os.makedirs(MIN_GAMES_DIR, exist_ok=True)
     if overwrite or not os.path.exists(simp_filepath):
         # Now save the simplified version of the file
@@ -617,7 +617,7 @@ def get_tree_from_txt(parser, game, log_dir: str = None, overwrite: bool = True,
         with open(min_tree_path, "wb") as f:
             pickle.dump(min_parse_tree, f)
         pretty_parse_tree_str = min_parse_tree.pretty()
-        pretty_tree_filename = os.path.join(pretty_trees_dir, game)
+        pretty_tree_filename = os.path.join(PRETTY_TREES_DIR, game)
         print(f"Writing pretty tree to {pretty_tree_filename}")
         with open(pretty_tree_filename, "w", encoding='utf-8') as file:
             file.write(pretty_parse_tree_str)
@@ -666,7 +666,7 @@ def main(cfg: PreprocessConfig):
     # games_dir = os.path.join('script-doctor','games')
 
     os.makedirs(TREES_DIR, exist_ok=True)
-    os.makedirs(pretty_trees_dir, exist_ok=True)
+    os.makedirs(PRETTY_TREES_DIR, exist_ok=True)
     os.makedirs(MIN_GAMES_DIR, exist_ok=True)
     parse_results = {
         'stats': {},

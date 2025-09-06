@@ -16,7 +16,7 @@ evo_meta_prompt = (
     """Though you may be asked to mutate and recombine other games during evolution, any outputted game should effectively be an attempt to recombine the games above in one way or another.\n\n"""
 )
 docs_prompt = (
-    f"""Here are the docs: {open('all_documentation.txt', 'r').read()}\n"""
+    f"""Here are the docs: {open('script_doctor/all_documentation.txt', 'r').read()}\n"""
 )
 fewshow_examples_prompt = (
     "Here are some example games, for inspiration (do not reproduce these games exactly):"""

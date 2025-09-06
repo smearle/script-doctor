@@ -192,6 +192,41 @@ class SweepRLConfig(TrainConfig):
     plot: bool = False
     slurm: bool = True
 
+    
+@dataclass
+class NCAConfig:
+    seed: int = 0
+    game: str = "sokoban_basic"
+    level: int = 0
+    minibatch_size: int = 32
+    n_layers: int = 64
+    loss_interval: int = 4  # Compute loss and do a gradient update every `loss_interval` layers
+    lr: float = 1e-3
+    log_interval: int = 10
+    n_hid_chan: int = 128
+    skip_connections: bool = True
+    render: bool = False
+    evaluate: bool = False
+    kernel_size: int = 3
+    max_pool: bool = False
+    shared_weights: bool = True
+    load: bool = False
+    overwrite: bool = False
+    wandb: bool = False
+    n_data: int = 10_000
+    n_updates: int = 10_000
+    render_minibatch_size: int = 4
+    sparse_update: bool = False 
+    save_interval: int = 1_000
+
+    # Update our own image of loss curves and model outputs in the training directory (in addition to writing them to 
+    # tensorboard and/or wandb).
+    manual_log: bool = False
+
+    # NOTE: DO NOT MODIFY THESE. WILL BE SET AUTOMATICALLY AT RUNTIME. ########
+    _exp_name: Optional[str] = None
+    _log_dir: Optional[str] = None
+
 
 cs = ConfigStore.instance()
 cs.store(name="preprocess_config", node=PreprocessConfig)
@@ -205,3 +240,4 @@ cs.store(name="profile_jax_config", node=ProfileJaxRandConfig)
 cs.store(name="profile_nodejs_config", node=ProfileNodeJS)
 cs.store(name="train_config", node=TrainConfig)
 cs.store(name="sweep_rl_config", node=SweepRLConfig)
+cs.store(name="nca_config", node=NCAConfig)
