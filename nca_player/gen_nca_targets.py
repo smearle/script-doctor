@@ -12,6 +12,7 @@ from javascript import require
 import jax
 from jax import numpy as jnp
 from lark import Lark
+import numpy as np
 import pickle
 
 # Add parent directory to path
@@ -30,7 +31,8 @@ from validate_sols import JS_SOLS_DIR, multihot_level_from_js_state
 class PSStateData:
     multihot_levels: jnp.ndarray
     target_frames: jnp.ndarray
-    level_ims: PIL.Image.Image
+    level_ims: np.ndarray
+    player_coords: jnp.ndarray
 
 @hydra.main(version_base="1.3", config_path='../conf', config_name='profile_nodejs_config')
 def main(cfg: ProfileNodeJS):
@@ -99,6 +101,7 @@ def main(cfg: ProfileNodeJS):
                 actions = data['sol']    
 
             multihot_levels = []
+            player_coords = []
             level_ims = []
             level_state = solver.getState(engine)
             n_objs = len(list(data['objs']))
@@ -115,15 +118,19 @@ def main(cfg: ProfileNodeJS):
             player_pos_mask = jnp.where(multihot_level[env.player_idxs] == 1, 1, 0)
             # Take 'or' over player indices
             player_pos_mask = jnp.clip(jnp.sum(player_pos_mask, axis=0), 0, 1)
+            player_coord = jnp.argwhere(player_pos_mask == 1)
+            player_coords.append(player_coord)
             target_frames = target_frames.at[0, actions[0]].set(jnp.where(player_pos_mask == 1, 1, 0))
             for i, action in enumerate(actions):
                 _, _, _, _, _, level_state, _, _ = solver.takeAction(engine, action)
                 level_state = level_to_int_arr(level_state, n_objs).tolist()
                 multihot_level = multihot_level_from_js_state(level_state, data['objs'])
-                # multihot_level = jnp.pad(multihot_level, ((0,0),(1,1),(1,1)), mode='constant', constant_values=0)
+                multihot_levels.append(multihot_level)
                 state = state.replace(multihot_level=multihot_level)
                 player_pos_mask = jnp.where(multihot_level[env.player_idxs] == 1, 1, 0)
                 player_pos_mask = jnp.clip(jnp.sum(player_pos_mask, axis=0), 0, 1)
+                player_coord = jnp.argwhere(player_pos_mask == 1)
+                player_coords.append(player_coord)
                 target_frames = target_frames.at[i+1, action].set(jnp.where(player_pos_mask == 1, 1, 0))
                 level_ims.append(env.render(state, cv2=False))
 
@@ -134,7 +141,8 @@ def main(cfg: ProfileNodeJS):
             states = PSStateData(
                 multihot_levels=jnp.stack(multihot_levels),
                 target_frames=target_frames,
-                level_ims=level_ims,
+                level_ims=np.array(level_ims),
+                player_coords=jnp.stack(player_coords),
             )
 
             # Save multihot levels and target frames in a pickle file for later use in training.

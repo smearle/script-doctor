@@ -202,7 +202,7 @@ class NCAConfig:
     n_layers: int = 64
     loss_interval: int = 4  # Compute loss and do a gradient update every `loss_interval` layers
     lr: float = 1e-3
-    log_interval: int = 10
+    log_interval: int = 100
     n_hid_chan: int = 128
     skip_connections: bool = True
     render: bool = False
@@ -212,12 +212,13 @@ class NCAConfig:
     shared_weights: bool = True
     load: bool = False
     overwrite: bool = False
-    wandb: bool = False
+    wandb: bool = True
     n_data: int = 10_000
     n_updates: int = 10_000
-    render_minibatch_size: int = 4
+    render_minibatch_size: int = 1
     sparse_update: bool = False 
     save_interval: int = 1_000
+    device: str = "cuda"
 
     # Update our own image of loss curves and model outputs in the training directory (in addition to writing them to 
     # tensorboard and/or wandb).

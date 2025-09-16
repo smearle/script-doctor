@@ -213,9 +213,50 @@ def get_discrete_loss(x, target_frames, cfg=None):
     loss = err.square()  #.float().mean()    #+ overflow_loss
     return loss
 
+def _debug_sanity(preds, target_frames, player_coords):
+    H, W = preds.shape[-2:]
+    if th.isnan(preds).any() or th.isinf(preds).any():
+        raise ValueError("NaN/Inf in preds!")
+    if th.isnan(target_frames).any() or th.isinf(target_frames).any():
+        raise ValueError("NaN/Inf in targets!")
+    if player_coords.numel() == 0:
+        print("[warn] player_coords empty")
+    if (player_coords[...,0].min() < 0 or player_coords[...,0].max() >= H or
+        player_coords[...,1].min() < 0 or player_coords[...,1].max() >= W):
+        print("[warn] some coords are out-of-bounds")
 
-def get_ce_loss(paths, target_frames, cfg=None):
-    loss = nn.BCELoss()(nn.Sigmoid()(paths), target_frames.float())
+def get_ce_loss(preds, target_frames, player_coords, cfg=None):
+    """
+    preds:   (B, A, H, W) LOGITS
+    targets: (B, A, H, W) one-hot at player coords
+    player_coords: (B, n_players, 2) (y, x)
+    """
+    _debug_sanity(preds, target_frames, player_coords)
+    B, A, H, W = preds.shape
+    y = player_coords[..., 0].long()
+    x = player_coords[..., 1].long()
+    n_players = y.shape[1]
+
+    # Gather logits & one-hot at coords
+    lin = (y * W + x)                      # (B, n_players)
+    preds_flat = preds.view(B, A, -1)      # (B, A, HW)
+    t_flat     = target_frames.view(B, A, -1)
+    linA = lin.unsqueeze(1).expand(-1, A, -1)  # (B, A, n_players)
+
+    logits_at = th.gather(preds_flat, 2, linA)         # (B, A, n_players)
+    t_at      = th.gather(t_flat,     2, linA)         # (B, A, n_players)
+
+    # Convert one-hot → class indices along action dim
+    target_idx = t_at.argmax(dim=1)                       # (B, n_players)
+
+    # Move to shape (B*n_players, A) / (B*n_players,)
+    logits_flat = logits_at.permute(0, 2, 1).reshape(-1, A)
+    target_flat = target_idx.reshape(-1)
+
+    loss_fn = nn.CrossEntropyLoss()
+    loss = loss_fn(logits_flat, target_flat)
+
+    # Optional: normalize by #valid players (CE already ignores invalid by ignore_index)
     return loss
 
 
@@ -226,11 +267,12 @@ def train(model: PathfindingNN, opt: th.optim.Optimizer, ps_state_data: PSStateD
     minibatch_size = min(cfg.minibatch_size, cfg.n_data)
     lr_sched = th.optim.lr_scheduler.MultiStepLR(opt, [10000], 0.1)
     logger.last_time = timer()
-    multihot_levels = th.Tensor(ps_state_data.multihot_levels)
-    target_frames = th.Tensor(ps_state_data.target_frames)
+    multihot_levels = th.Tensor(np.array(ps_state_data.multihot_levels))
+    target_frames = th.Tensor(np.array(ps_state_data.target_frames))
+    player_coords = th.Tensor(np.array(ps_state_data.player_coords))
     level_ims = np.array(ps_state_data.level_ims)
     batch_size = multihot_levels.shape[0]
-    hid_states = model.seed(batch_size=batch_size, level_width=multihot_levels.shape[2], level_height=multihot_levels.shape[3])
+    hid_states = model.seed(batch_size=minibatch_size, level_width=multihot_levels.shape[2], level_height=multihot_levels.shape[3])
 
 
     for i in tqdm(range(logger.n_step, cfg.n_updates)):
@@ -245,7 +287,8 @@ def train(model: PathfindingNN, opt: th.optim.Optimizer, ps_state_data: PSStateD
             # x = th.zeros(x_maze.shape[0], n_chan, x_maze.shape[2], x_maze.shape[3])
             # x[:, :4, :, :] = x_maze
             x0 = multihot_levels[batch_idx].clone()
-            target_paths_mini_batch = target_frames[batch_idx]
+            target_paths_minibatch = target_frames[batch_idx]
+            player_coords_minibatch = player_coords[batch_idx]
 
             e0 = None
             ef = None
@@ -280,12 +323,12 @@ def train(model: PathfindingNN, opt: th.optim.Optimizer, ps_state_data: PSStateD
 
             # loss += get_mse_loss(x, target_paths_mini_batch)
             out_paths = to_target_frames(x)
-            batch_errs = loss_fn(out_paths, target_paths_mini_batch)
+            batch_errs = loss_fn(out_paths, target_paths_minibatch, player_coords_minibatch)
             # err = (out_paths - target_paths_mini_batch).square()
             loss = loss + batch_errs.mean()
 
         loss = loss / n_subepisodes
-        discrete_loss = get_discrete_loss(x, target_paths_mini_batch).float().mean()
+        discrete_loss = get_discrete_loss(x, target_paths_minibatch).float().mean()
 
         with th.no_grad():
 
@@ -322,21 +365,26 @@ def train(model: PathfindingNN, opt: th.optim.Optimizer, ps_state_data: PSStateD
                 log(logger, lr_sched, cfg)
             
             if i % cfg.log_interval == 0 or last_step:
-                render_paths = np.hstack(to_target_frames(x[:cfg.render_minibatch_size]).cpu())
                 render_maze_ims = np.hstack(level_ims[render_batch_idx])
-                target_path_ims = np.hstack(target_frames[render_batch_idx].cpu())
-                breakpoint()
+                target_actions = np.vstack(np.vstack(target_frames[render_batch_idx].cpu()))
+                render_action_preds = np.vstack(np.vstack(to_target_frames(x[:cfg.render_minibatch_size]).cpu()))
+                # Scale up render_action_preds and target_actions by x50
+                render_action_preds = np.repeat(np.repeat(render_action_preds, 50, axis=0), 50, axis=1)
+                target_actions = np.repeat(np.repeat(target_actions, 50, axis=0), 50, axis=1)
                 if cfg.manual_log or last_step or key_ckp_step:
-                    vis_train(logger, render_maze_ims, render_paths, target_path_ims, render_batch_idx, cfg._log_dir)
+                    vis_train(logger, render_maze_ims, render_action_preds, target_actions, render_batch_idx, cfg._log_dir)
                 images = np.vstack((
                     render_maze_ims, 
-                    np.tile(render_paths[...,None], (1, 1, 3))*255, 
-                    np.tile(target_path_ims[...,None], (1, 1, 3))*255,
+                    np.tile(render_action_preds[...,None], (1, 1, 4))*255, 
+                    np.tile(target_actions[...,None], (1, 1, 4))*255,
                     )) 
+                # Save images to disk
+                img_path = os.path.join(cfg._log_dir, f"train_{i:05d}.png")
+                PIL.Image.fromarray(images.astype(np.uint8)).save(img_path)
                 tb_images = images.astype(np.uint8).transpose(2,0,1)
                 tb_writer.add_image("examples", np.array(tb_images), i)
                 if cfg.wandb:
-                    images = wandb.Image(images, caption="Top: Input, Middle: Output, Bottom: Target")
+                    images = wandb.Image(images.astype(np.uint8), caption="Top: Input, Middle: Output, Bottom: Target")
                     wandb.log({"examples": images}, step=i)
 
 def field_to_hsv(probs):
@@ -416,142 +464,14 @@ def smooth(y, box_pts):
     return y_smooth
 
 
-
-def render_trained(model: PathfindingNN, maze_data, cfg: NCAConfig, pyplot_animation=True, name=''):
-    """Generate a video showing the behavior of the trained NCA on mazes from its training distribution.
-    """
-    model.eval()
-    mazes_onehot, mazes_discrete, edges, edge_feats, target_paths = maze_data.mazes_onehot, maze_data.mazes_discrete, \
-        maze_data.edges, maze_data.edge_feats, maze_data.target_paths
-    if cfg.task == 'traveling':
-        target_paths = maze_data.target_travelings
-    if N_RENDER_CHANS is None:
-        n_render_chans = model.n_out_chan
-    else:
-        n_render_chans = min(N_RENDER_CHANS, model.n_out_chan)
-
-    render_minibatch_size = min(cfg.render_minibatch_size, mazes_onehot.shape[0])
-    path_lengths = target_paths.sum((1, 2))
-    path_chan = mazes_discrete[0].max() + 1
-    mazes_discrete = mazes_discrete.cpu()
-    target_paths = target_paths.cpu()
-    path_chan = path_chan.cpu()
-    # mazes_discrete = th.where((mazes_discrete != Tiles.DEST) & (target_paths == 1), path_chan, mazes_discrete)
-    mazes_discrete = th.where((mazes_discrete == Tiles.EMPTY) & (target_paths == 1), path_chan, mazes_discrete)
-
-    # Render most complex mazes first.
-    batch_idxs = path_lengths.sort(descending=True)[1]
-    # batch_idxs = th.arange(mazes_onehot.shape[0])
-
-    # batch_idx = np.random.choice(mazes_onehot.shape[0], render_minibatch_size, replace=False)
-    bi = 0
-
-    global N_RENDER_EPISODES
-    if N_RENDER_EPISODES is None:
-        N_RENDER_EPISODES = len(batch_idxs)
-
-    model_has_oracle = model == "BfsNCA"
-
-    if RENDER_WEIGHTS:
-        for name, p in model.named_parameters():
-            if "weight" in name:
-                # (in_chan, height, width, out_chan)
-                im = p.data.permute(0, 2, 3, 1)
-                # (in_chan * height, width, out_chan)
-                im = th.vstack([wi for wi in im])
-                # (out_chan, width, in_chan * height)
-                im = im.permute(2, 1, 0)
-                im = th.vstack([wi for wi in im])
-                im = (im - im.min()) / (im.max() - im.min())
-                # im = PIL.Image.fromarray(im.cpu().numpy() * 255)
-                # im.show()
-                # im.save(open(os.path.join(cfg.log_dir, 'weights.png')))
-        return
-
-    # Render live and indefinitely using cv2.
-    if RENDER_TYPE == 0:
-
-        def render_loop_cv2(bi, writer=None):
-            # Create large window
-            # cv2.namedWindow('maze', cv2.WINDOW_NORMAL)
-            # cv2.namedWindow('model', cv2.WINDOW_NORMAL)
-            if not cfg.headless:
-                cv2.namedWindow('pathfinding', cv2.WINDOW_NORMAL)
-            render_dir = os.path.join(cfg._log_dir, f"render{name}")
-            if SAVE_PNGS:
-                if os.path.exists(render_dir):
-                    shutil.rmtree(render_dir)
-                os.mkdir(render_dir)
-            # cv2.resize('pathfinding', (2000, 2000))
-            frame_i = 0
-
-            for ep_i in range(N_RENDER_EPISODES):
-                bi, frame_i, x = render_ep_cv2(bi, model, mazes_onehot, target_paths, batch_idxs, n_render_chans, render_dir, cfg, 
-                    model_has_oracle=model_has_oracle, writer=writer, edges=edges, edge_feats=edge_feats, frame_i=frame_i)
-            
-        if SAVE_GIF:
-            with imageio.get_writer(os.path.join(cfg._log_dir, f"behavior{name}.gif"), mode='I', duration=0.1) as writer:
-                render_loop_cv2(bi, writer)
-        else:
-            render_loop_cv2(bi)
-
-
-    # Save a video with pyplot.
-    elif RENDER_TYPE == 1:
-        plt.axis('off')
-        fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(10,10), gridspec_kw={'width_ratios': [1, 10]})
-        
-
-        for i in range(N_RENDER_EPISODES):
-            x, maze_imgs, bi = reset_ep_render(bi, model, mazes_onehot, target_paths, batch_idxs, render_minibatch_size, 
-                cfg, edges, edge_feats)
-            bw_imgs = get_imgs(x, n_render_chans, cfg)
-            global im1, im2
-            mat1 = ax1.matshow(maze_imgs)
-            mat2 = ax2.matshow(bw_imgs)
-            plt.tight_layout()
-
-            # def init():
-            #     im1 = ax1.imshow(maze_imgs)
-            #     im2 = ax2.imshow(bw_imgs)
-
-            #     return im1, im2
-
-            xs = []
-            oracle_outs = []
-
-            xs.append(x)
-            oracle_outs.append(model.oracle_out) if model_has_oracle else None
-
-            for j in range(cfg.n_layers):
-                x = model.forward(x)
-                xs.append(x)
-                oracle_outs.append(model.oracle_out) if oracle_outs else None
-
-
-        # FIXME: We shouldn't need to call `imshow` from scratch here!!
-        def animate(i):
-            xi = xs[i]
-            oracle_out = oracle_outs[i] if oracle_outs else None
-            bw_imgs = get_imgs(xi, n_render_chans, cfg, oracle_out=oracle_out)
-            if i % cfg.n_layers == 0:
-                # ax1.imshow(maze_imgs)
-                mat1.set_array(bw_imgs)
-            # ax2.imshow(bw_imgs)
-            mat2.set_array(bw_imgs)
-            # ax1.figure.canvas.draw()
-            # ax2.figure.canvas.draw()
-
-            return mat1, mat2,
-
-
-        anim = animation.FuncAnimation(
-        fig, animate, interval=1, frames=cfg.n_layers, blit=True, save_count=50)
-        anim.save(f'{cfg._log_dir}/path_nca_anim{name}.mp4', fps=10, extra_args=['-vcodec', 'libx264'])
-
-        
 def load_dataset(cfg: NCAConfig):
     game_dir = os.path.join(NCA_DATA_DIR, cfg.game)
+    # level_pkl_paths = [os.path.join(game_dir, f) for f in os.listdir(game_dir) if f.endswith('.pkl')]
+    # ps_data_list = []
+    # for level_pkl_path in level_pkl_paths:
+    #     with open(level_pkl_path, "rb") as f:
+    #         ps_data = pickle.load(f)
+    #         ps_data_list.append(ps_data)
     level_pkl_path = os.path.join(game_dir, f"level-{cfg.level}.pkl")
     with open(level_pkl_path, "rb") as f:
         ps_data = pickle.load(f)
@@ -681,10 +601,11 @@ def main_experiment(cfg: NCAConfig = None, cfg_path: str = None):
         hyperparam_cfg = {k: v for k, v in vars(cfg).items() if k not in set({'log_dir', 'exp_name'})}
         wandb.login()
         wandb.init(
-            project='pathfinding-nca', 
+            project='puzzlescript-nca', 
             # name=cfg.exp_name, 
             # id=cfg.exp_name,
-            config=hyperparam_cfg,
+            # config=hyperparam_cfg,
+            config=OmegaConf.to_container(cfg, resolve=True),
             # resume="allow" if cfg.load else None,
         )
 
@@ -694,13 +615,8 @@ def main_experiment(cfg: NCAConfig = None, cfg_path: str = None):
 
     # assert cfg.path_chan == mazes_discrete.max() + 1  # Wait we don't even use this??
 
-    if cfg.render:
-        with th.no_grad():
-            render_trained(model, ps_data_train, cfg)
-
-    else:
-        print("Beginning to train.")
-        train(model, opt, ps_data_train, logger, cfg)
+    print("Beginning to train.")
+    train(model, opt, ps_data_train, logger, cfg)
 
     if cfg.wandb:
         wandb.finish()
