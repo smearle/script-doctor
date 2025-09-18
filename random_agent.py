@@ -8,7 +8,8 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 
-from gen_tree import GenPSTree, PSEnv
+from gen_tree import GenPSTree
+import env as Env
 from preprocess_games import TREES_DIR, TEST_GAMES, DATA_DIR
 from ps_game import PSGameTree
 
@@ -31,29 +32,36 @@ if __name__ == '__main__':
 
         tree: PSGameTree = GenPSTree().transform(tree)
 
-        env = PSEnv(tree)
-        state = env.reset(0)
+        env = Env.PSEnv(tree)
+        level = env.get_level(0)
+        params = Env.PSParams(level=level)
+        key = jax.random.PRNGKey(0)
+        _, state = env.reset(0, params = params)
+        key, subkey = jax.random.split(key)
+        state = state.replace(rng=subkey)
 
         # 0 - left
         # 1 - down
         # 2 - right
         # 3 - up
 
-        key = jax.random.PRNGKey(0)
-
         actions = jax.random.randint(key, (100,), 0, 5)
         # actions = jnp.array([0, 3, 0])
+        from typing import Any
+        def assert_has_attr_multihot(s: Any):
+            if not hasattr(s, "multihot_level"):
+                raise TypeError(f"Expected PSState with .multihot_level, got: {type(s)}")
 
-        state = env.reset(0)
+        def step_env(carry, action):
+            key, state = carry
+            key, subkey = jax.random.split(key)
+            obs, next_state, reward, done, info = env.step(subkey, state, action, params)
+            return (key, next_state), next_state
 
-        def step_env(state, action):
-            state = env.step(action, state)
-            return state, state
-
-        _, state_v = jax.lax.scan(step_env, state, actions)
+        _, state_v = jax.lax.scan(step_env, (key, state), actions)
 
         # Use jax tree map to add the initial state
-        state_v = jax.tree_map(lambda x, y: jnp.concatenate([x[None], y]), state, state_v)
+        state_v = jax.tree.map(lambda x, y: jnp.concatenate([x[None], y]), state, state_v)
 
         frames = jax.vmap(env.render, in_axes=(0, None))(state_v, None)
         frames = frames.astype(np.uint8)
