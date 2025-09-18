@@ -44,14 +44,7 @@ if __name__ == '__main__':
         # 1 - down
         # 2 - right
         # 3 - up
-
         actions = jax.random.randint(key, (100,), 0, 5)
-        # actions = jnp.array([0, 3, 0])
-        from typing import Any
-        def assert_has_attr_multihot(s: Any):
-            if not hasattr(s, "multihot_level"):
-                raise TypeError(f"Expected PSState with .multihot_level, got: {type(s)}")
-
         def step_env(carry, action):
             key, state = carry
             key, subkey = jax.random.split(key)
