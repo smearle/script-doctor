@@ -396,16 +396,15 @@ function getState(engine) {
 }
 
 function takeAction(engine, action) {
-  // let changed = engine.processInput(action);
-  // let changed = processInputSearch(engine, action);
+  // precalcDistances(engine);
   var changed = engine.processInput(action);
   while (engine.getAgaining()) {
     changed = engine.processInput(-1) || changed;
   }
+  score = getScore(engine);
   level = engine.backupLevel();
   level_map = level['dat'];
-  // score = getScore(engine);
-  score = 0;
+  // score = 0;
   if (engine.getWinning()) {
     DoRestartSearch(engine);
     // console.log('Winning!');
@@ -694,6 +693,8 @@ function solveAStar(engine, maxIters=100_000) {
 		actions = [0, 1, 2, 3];
 	}
 	exploredStates = {};
+  var bestState = getState(engine);
+  var bestScore = getScore(engine);
 	exploredStates[engine.getLevel().objects] = [engine.getLevel().objects.slice(0), -1];
 	var queue;
 	queue = new FastPriorityQueue(byScoreAndLength);
@@ -741,6 +742,12 @@ function solveAStar(engine, maxIters=100_000) {
 					continue;
 				}
 
+        score = getScore(engine)
+        if (score < bestScore) {
+          bestScore = score;
+          bestState = getState(engine)
+        }
+
         // await new Promise(resolve => setTimeout(resolve, 1)); // Small delay for live feedback
         // redraw();
 
@@ -759,10 +766,10 @@ function solveAStar(engine, maxIters=100_000) {
 					engine.setDeltaTime(oldDT);
 					DoRestartSearch(engine);
 					// redraw();
-					return [true, solution, totalIters, ((Date.now() - start_time) / 1000)];
+					return [true, solution, totalIters, ((Date.now() - start_time) / 1000), bestScore, bestState, false, engine.getState().idDict];
 				}
 				size++;
-				queue.add([getScore(engine), engine.getLevel().objects.slice(0), numSteps + 1]);
+				queue.add([score, engine.getLevel().objects.slice(0), numSteps + 1]);
 			}
 		}
     totalIters++;
@@ -775,7 +782,7 @@ function solveAStar(engine, maxIters=100_000) {
 	deltatime = oldDT;
 	// redraw();
 	// cancelLink.hidden = true;
-  return [false, [], totalIters, ((Date.now() - start_time) / 1000)];
+  return [false, [], totalIters, ((Date.now() - start_time) / 1000), bestScore, bestState, false, engine.getState().idDict];
 }
 
 class MCTSNode{
@@ -924,17 +931,26 @@ function solveMCTS(engine, options = {}) {
     "c": Math.sqrt(2), 
     "max_iterations": 100_000
   };
-  for(let key in defaultOptions){
-    if(!options.hasOwnProperty(key)){
-      options[key] = defaultOptions[key];
-    }
-  }
+
+  // for(let key in defaultOptions){
+  //   if(!options.hasOwnProperty(key)){
+  //     options[key] = defaultOptions[key];
+  //   }
+  // }
+  // I believe this is a simpler and correct form of the above (which leaves options as `null`)
+  options = { ...defaultOptions, ...options };
+
+  console.log("Running MCTS with:")
+  console.log(options)
+
   if(options.score_fn){
     precalcDistances(engine);
     options.score_fn = getScoreNormalized;
   }
 
   let init_level = engine.backupLevel();
+  bestScore = getScore(engine);
+  bestState = getState(engine);
   let rootNode = new MCTSNode(-1, null, 5);
   let i = 0;
   let deadend_nodes = 1;
@@ -949,10 +965,19 @@ function solveMCTS(engine, options = {}) {
       currentNode = currentNode.select(options.c);
       // changed = engine.processInput(currentNode.action);
       changed = processInputSearch(engine, currentNode.action);
+
+      score = getScore(engine);
+      if (score < bestScore) {
+        bestScore = score;
+        bestState = getState(engine);
+      }
+
       if(engine.getWinning()){
         let sol = currentNode.get_actions();
         // console.log(`Winning! Solution:, ${sol}\n Iterations: ${i}\n Tree size: ${rootNode.tree_size()}`);
-        return [true, sol, i, ((Date.now() - start_time) / 1000)];
+        return [true, sol, i, ((Date.now() - start_time) / 1000), bestScore,
+          bestState, false, engine.getState().idDict
+        ];
       }
       if(!options.explore_deadends && !changed){
         break;
@@ -974,7 +999,8 @@ function solveMCTS(engine, options = {}) {
         let sol = currentNode.get_actions();
         // console.log(`Winning! Solution:, ${sol}\n Iterations: ${i}`);
         // console.log('FPS:', (i / (Date.now() - start_time) * 1000).toFixed(2));
-        return [true, sol, i, ((Date.now() - start_time) / 1000)];
+        return [true, sol, i, ((Date.now() - start_time) / 1000), bestScore,
+          bestState, false, engine.getState().idDict];
       }
       // if node is deadend, punish it
       if(!options.explore_deadends && !changed){
@@ -1014,7 +1040,8 @@ function solveMCTS(engine, options = {}) {
     actions.push(action);
     currentNode = currentNode.children[action];
   }
-  return [false, actions, options.max_iterations, ((Date.now() - start_time) / 1000)];
+  return [false, actions, options.max_iterations,
+    ((Date.now() - start_time) / 1000), bestScore, bestState, false, engine.getState().idDict];
 }
 
 function getNLevels(engine) {
@@ -1036,4 +1063,5 @@ module.exports = {
   takeAction,
   precalcDistances,
   getState,
+  getScore,
 }

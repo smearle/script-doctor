@@ -74,10 +74,9 @@ class ProfileNodeJS(PSConfig):
     include_randomness: bool = True
     # timeout: int = 60
     timeout: int = -1
-    for_validation: bool = False
-    # for_validation: bool = True
-    for_solution: bool = True
-    for_profiling: bool = False
+    for_profiling: bool = False  # To compare FPS of the vanilla engine with our JAX reimplementation
+    for_validation: bool = False  # To validate that our JAX reimplementation matches the vanilla engine
+    for_solution: bool = True  # To find solutions for their own sake
     slurm: bool = False
     n_games_per_job: int = 1
 
