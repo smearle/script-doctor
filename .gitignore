@@ -34,5 +34,5 @@ script-doctor-py
 script-doctor
 scratch
 sols
-
-vids/*
+vids
+wandb

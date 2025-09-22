@@ -13,14 +13,14 @@ from env import PSEnv
 # from eval import get_eval_name, init_config_for_eval
 from purejaxrl.wrappers import LogWrapper
 from train import init_checkpointer
-from utils_rl import get_exp_dir, init_network, init_ps_env, init_config
+from utils_rl import get_env_params_from_config, get_exp_dir, init_network, init_ps_env, init_config
 
 
-@hydra.main(version_base="1.3", config_path='./conf', config_name='enjoy_pcgrl')
+@hydra.main(version_base="1.3", config_path='./conf', config_name='enjoy_config')
 def main_enjoy(enjoy_config: EnjoyConfig):
     enjoy_config = init_config(enjoy_config)
 
-    exp_dir = enjoy_config.exp_dir
+    exp_dir = enjoy_config._exp_dir
     if enjoy_config.random_agent:
         # Save the gif of random agent behavior here. For debugging.
         os.makedirs(exp_dir)
@@ -42,29 +42,23 @@ def main_enjoy(enjoy_config: EnjoyConfig):
     best_frames_dir = os.path.join(exp_dir, 'best_frames')
     os.makedirs(best_frames_dir, exist_ok=True)
 
-    env: PCGRLEnv
+    env: PSEnv
 
     # Preserve config as it was during training, for future reference (i.e. naming output of enjoy/eval)
     train_config = copy.deepcopy(enjoy_config)
 
-    enjoy_config = init_config_for_eval(enjoy_config)
-    env, env_params = gymnax_pcgrl_make(enjoy_config.env_name, config=enjoy_config)
+    enjoy_config = init_config(enjoy_config)
+    env = init_ps_env(enjoy_config)
+    env_params = get_env_params_from_config(env, enjoy_config)
     env = LogWrapper(env)
-    env.prob.init_graphics()
     network = init_network(env, env_params, enjoy_config)
 
     rng = jax.random.PRNGKey(enjoy_config.eval_seed)
     rng_reset = jax.random.split(rng, enjoy_config.n_enjoy_envs)
 
-    # Can manually define frozen tiles here, e.g. to set an OOD task
-    # frz_map = jnp.zeros(env.map_shape, dtype=bool)
-    # frz_map = frz_map.at[7, 3:-3].set(1)
-    queued_state = gen_dummy_queued_state(env)
-    # queued_state = env.queue_frz_map(queued_state, frz_map)
-
     # obs, env_state = env.reset(rng, env_params)
-    obs, env_state = jax.vmap(env.reset, in_axes=(0, None, None))(
-        rng_reset, env_params, queued_state
+    obs, env_state = jax.vmap(env.reset, in_axes=(0, None))(
+        rng_reset, env_params
     )
 
     def step_env(carry, _):
@@ -84,7 +78,7 @@ def main_enjoy(enjoy_config: EnjoyConfig):
             rng_step, env_state, action, env_params
 
         )
-        frames = jax.vmap(env.render, in_axes=(0))(env_state.log_env_state.env_state)
+        frames = jax.vmap(env.render, in_axes=(0))(env_state.env_state)
         # frame = env.render(env_state)
         rng = jax.random.split(rng)[0]
         # Can't concretize these values inside jitted function (?)
@@ -98,22 +92,11 @@ def main_enjoy(enjoy_config: EnjoyConfig):
         step_env, (rng, obs, env_state), None,
         length=enjoy_config.n_eps*env.max_steps)  # *at least* this many eps (maybe more if change percentage or whatnot)
     
-    min_ep_losses = states.min_episode_losses
-    # Mask out so we only have the final step of each episode
-    min_ep_losses = jnp.where(dones, min_ep_losses, jnp.nan)
-
-    # FIXME: get best frame index for *each* episode
-    min_ep_loss_frame_idx = jnp.nanargmin(min_ep_losses, axis=0)
-
-    # frames = frames.reshape((config.n_eps*env.max_steps, *frames.shape[2:]))
-
-    # assert len(frames) == config.n_eps * env.max_steps, \
-    #     "Not enough frames collected"
     assert frames.shape[1] == enjoy_config.n_enjoy_envs and frames.shape[0] == enjoy_config.n_eps * env.max_steps, \
         "`frames` has wrong shape"
 
     # Save gifs.
-    print('Adding stats to frames:')
+    print('Rendering frames:')
     for env_idx in range(enjoy_config.n_enjoy_envs):
         # ep_frames = frames[ep_is*env.max_steps:(ep_is+1)*env.max_steps]
 
@@ -123,39 +106,19 @@ def main_enjoy(enjoy_config: EnjoyConfig):
 
             new_ep_frames = []
 
-            min_loss, best_frame = np.inf, None
-
             for i in range(ep_idx * env.max_steps, (ep_idx + 1) * env.max_steps):
                 frame = frames[i, env_idx]
                 
-                state_i = jax.tree_util.tree_map(lambda x: x[i, env_idx], states)
-                if enjoy_config.render_stats:
-                    frame = render_stats(env, state_i.log_env_state.env_state, frame)
                 new_ep_frames.append(frame)
-
-                loss = get_loss(state_i.log_env_state.env_state.prob_state.stats, 
-                    env._env.prob.stat_weights, 
-                    env._env.prob.stat_trgs,
-                    env._env.prob.ctrl_threshes, 
-                    env._env.prob.metric_bounds)
-
-                if loss < min_loss:
-                    min_loss, best_frame = loss, frame
-
 
                 if enjoy_config.render_ims:
                     # Save frame as png
                     png_name = os.path.join(frames_dir, f"{enjoy_config.exp_dir.strip('saves/')}_" +\
-                        f"{get_eval_name(eval_config=enjoy_config, train_config=train_config)}_frame_ep-{net_ep_idx}_step-{i}" + \
+                        f"frame_ep-{net_ep_idx}_step-{i}" + \
                         f"{('_randAgent' if enjoy_config.random_agent else '')}.png")
                     imageio.v3.imwrite(png_name, frame)
                     # imageio.imwrite(png_name, frame)
                 new_ep_frames.append(frame)
-
-            best_png_name = os.path.join(best_frames_dir, f"{enjoy_config.exp_dir.strip('saves/')}_" +\
-                f"{get_eval_name(eval_config=enjoy_config, train_config=train_config)}_frame_ep-{net_ep_idx}_step-{i}" + \
-                f"{('_randAgent' if enjoy_config.random_agent else '')}.png")
-            imageio.v3.imwrite(best_png_name, best_frame)
 
             ep_frames = new_ep_frames
 
@@ -179,7 +142,6 @@ def main_enjoy(enjoy_config: EnjoyConfig):
                 f"anim_step-{steps_prev_complete}" + \
                 f"_ep-{net_ep_idx}" + \
                 f"{('_randAgent' if enjoy_config.random_agent else '')}" + \
-                get_eval_name(eval_config=enjoy_config, train_config=train_config) + \
                 ".gif"
             )
             imageio.v3.imwrite(
@@ -189,6 +151,7 @@ def main_enjoy(enjoy_config: EnjoyConfig):
                 # when captured in `train.py`). Are we saving extra frames?
                 duration=enjoy_config.gif_frame_duration / 2
             )
+            print(f'Saved gif to {gif_name}')
 
 
 if __name__ == '__main__':
