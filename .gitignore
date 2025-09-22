@@ -26,6 +26,7 @@ example_games.json
 example_sprites.json
 example_sprites_names.txt
 outputs
+llm_agent_results/*/*/step_*.txt
 logs
 rl_logs
 pretty_trees
