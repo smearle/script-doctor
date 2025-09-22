@@ -180,9 +180,9 @@ def llm_text_query(system_prompt, prompt, model, api_key=None, base_url=None, mo
                 "messages": messages
             }
 
-        max_retries = 8
+        max_retries = 80
         retry_count = 0
-        base_wait = 5
+        base_wait = 10
 
         if model == "gemini-2.0-flash-exp":
             print("Detected Gemini model, enabling enhanced backoff strategy")

@@ -107,7 +107,8 @@ def main():
         "4o-mini": "ChatGPT 4o-mini",
         "deepseek": "Deepseek-chat",
         "qwen": "Qwen-plus",
-        "gemini": "gemini 2.5 experimental flash"
+        "gemini": "Gemini 2.0 flash exp",
+        "gemini-2.5-pro":"Gemini 2.5 Pro"
     }
     df['llm'] = df['llm'].replace(llm_name_mapping)
 

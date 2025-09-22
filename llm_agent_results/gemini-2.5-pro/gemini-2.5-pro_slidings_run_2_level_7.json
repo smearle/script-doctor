@@ -1,0 +1,77 @@
+{
+  "model": "gemini-2.5-pro",
+  "game": "slidings",
+  "level": 7,
+  "run": 2,
+  "win": true,
+  "action_sequence": [
+    0,
+    2,
+    4,
+    2,
+    0,
+    2,
+    0
+  ],
+  "reward_sequence": [
+    -0.009999999776482582,
+    -0.009999999776482582,
+    0.9900000095367432,
+    -0.009999999776482582,
+    -0.009999999776482582,
+    -0.009999999776482582,
+    2.990000009536743
+  ],
+  "initial_ascii": [
+    "LEGEND:",
+    "#: wall",
+    "m: count",
+    "n: countend",
+    "p: player",
+    ".: background",
+    "a: balla",
+    "o: target",
+    "b: ballb",
+    "c: ballc",
+    "",
+    "MAP:",
+    "#mmmmn#",
+    "#p....#",
+    "#a.o..#",
+    "#b....#",
+    "#.c...#",
+    "#######"
+  ],
+  "state_data": {
+    "score": 0,
+    "win": true,
+    "step": 7
+  },
+  "heuristics": [
+    -3.0,
+    -3.0,
+    -2.0,
+    -2.0,
+    -2.0,
+    -2.0,
+    0.0
+  ],
+  "final_ascii": [
+    "LEGEND:",
+    "#: wall",
+    ".: background",
+    "c: ballc",
+    "\u26ab: deadplayer",
+    "o: target",
+    "a: balla",
+    "b: ballb",
+    "",
+    "MAP:",
+    "#######",
+    "#....c#",
+    "#\u26ab.o..#",
+    "#a....#",
+    "#.b...#",
+    "#######"
+  ]
+}

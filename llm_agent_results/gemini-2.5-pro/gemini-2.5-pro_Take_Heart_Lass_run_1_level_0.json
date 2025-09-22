@@ -1,0 +1,68 @@
+{
+  "model": "gemini-2.5-pro",
+  "game": "Take_Heart_Lass",
+  "level": 0,
+  "run": 1,
+  "win": true,
+  "action_sequence": [
+    0,
+    0,
+    0
+  ],
+  "reward_sequence": [
+    0.9900000095367432,
+    0.9900000095367432,
+    1.9900000095367432
+  ],
+  "initial_ascii": [
+    "LEGEND:",
+    "#: wall",
+    "\u01b4: newdespairwall",
+    ".: background",
+    "\u1c6c: altnewdespair",
+    "x: olddespair",
+    "f: backflowers",
+    "o: target",
+    "p: player",
+    "",
+    "MAP:",
+    "####\u01b4#",
+    "#..\u1c6cx\u01b4",
+    "#.ff\u1c6c#",
+    "#.ff.#",
+    "#o.p.#",
+    "######"
+  ],
+  "state_data": {
+    "score": 1,
+    "win": true,
+    "step": 3
+  },
+  "heuristics": [
+    -2.0,
+    -1.0,
+    0.0
+  ],
+  "final_ascii": [
+    "LEGEND:",
+    "#: wall",
+    "\u01b4: newdespairwall",
+    "\u1d34: despairwall",
+    "\u1c6c: altnewdespair",
+    "x: olddespair",
+    "z: altolddespair",
+    ".: background",
+    "\u0853: backflowers, altnewdespair",
+    "\u1d7c: backflowers, olddespair",
+    "f: backflowers",
+    "\u1729: target, player",
+    "",
+    "MAP:",
+    "##\u01b4\u1d34\u1d34\u1d34",
+    "#\u1c6cxzx\u1d34",
+    "#.\u0853\u1d7cz\u1d34",
+    "#.f\u0853x\u01b4",
+    "#\u1729..\u1c6c#",
+    "######"
+  ]
+}
