@@ -1,9 +1,12 @@
 import glob
 import json
+import math
 import os
+import pickle
 import random
 import re
 import time
+from typing import List
 
 import dotenv
 import jax
@@ -13,12 +16,12 @@ from openai import AzureOpenAI
 import requests
 import tiktoken
 
-from globals import GAMES_TO_N_RULES_PATH, GAMES_N_RULES_SORTED_PATH
+from globals import GAMES_TO_N_RULES_PATH, GAMES_N_RULES_SORTED_PATH, PRIORITY_GAMES, GAMES_N_LEVELS_PATH
 from collect_games import GALLERY_GAMES_DIR
 from env import PSEnv
-from globals import PRIORITY_GAMES
-from preprocess_games import get_tree_from_txt
-from prompts import *
+from gen_tree import GenPSTree
+from preprocess_games import GAMES_DIR, get_tree_from_txt, get_env_from_ps_file, TREES_DIR
+from script_doctor.prompts import *
 
 
 dotenv.load_dotenv()
@@ -307,7 +310,7 @@ def load_games_n_rules_sorted():
     return games_n_rules
 
 
-def get_list_of_games_for_testing(all_games=True, include_random=False):
+def get_list_of_games_for_testing_old(all_games=True, include_random=False, random_order=False):
     gallery_games = glob.glob(os.path.join(GALLERY_GAMES_DIR, '*.txt'))
     gallery_games = [os.path.basename(g)[:-4] for g in gallery_games]
     if all_games:
@@ -321,7 +324,39 @@ def get_list_of_games_for_testing(all_games=True, include_random=False):
         games = [g[0] for g in games]
     else:
         games = PRIORITY_GAMES
+    if random_order:
+        random.shuffle(games)
+    # HACK why is this happening??
+    games = [game[:-4] if game.endswith('.txt') else game for game in games]
     return games
+
+
+def get_list_of_games_for_testing(all_games=True, include_random=False, random_order=False):
+    all_game_files = [game[:-4] for game in os.listdir(GAMES_DIR)]
+    gallery_games = glob.glob(os.path.join(GALLERY_GAMES_DIR, '*.txt'))
+    gallery_games = [os.path.basename(g)[:-4] for g in gallery_games]
+    if all_games:
+        with open(GAMES_N_RULES_SORTED_PATH, 'r') as f:
+            games_n_rules = json.load(f)
+        # Sort so that at the front of the list, we have games from our priority list, then the gallery then the rest of
+        # our dataset, with each subset in order of increasing complexity.
+        games_in_gallery_n_rules = [(game, game in PRIORITY_GAMES, game in gallery_games, n_rules) 
+                                    for game, n_rules, has_randomness in games_n_rules if not has_randomness or include_random]
+        games = sorted(games_in_gallery_n_rules, key=lambda x: (not x[1], not x[2], x[3]))
+        # Add the additional scraped game files (we haven't preprocessed these successfully so we can't be sure about
+        # n_rules etc.)
+        games = [g[0] for g in games]
+        games = [game[:-4] if game.endswith('.txt') else game for game in games]
+        all_games = games + [g for g in all_game_files if g not in games]
+        games = all_games
+    else:
+        games = PRIORITY_GAMES
+    if random_order:
+        random.shuffle(games)
+    # HACK why is this happening??
+    games = [game[:-4] if game.endswith('.txt') else game for game in games]
+    return games
+
 
 import subprocess
 
@@ -340,7 +375,7 @@ def get_current_commit_hash():
 
 from timeit import default_timer as timer
 
-def init_ps_env(game, level_i, max_episode_steps):
+def init_ps_env(game, level_i, max_episode_steps, vmap: bool = True):
     start_time = timer()
     with open("syntax.lark", "r", encoding='utf-8') as file:
         puzzlescript_grammar = file.read()
@@ -349,15 +384,70 @@ def init_ps_env(game, level_i, max_episode_steps):
     tree, success, err_msg = get_tree_from_txt(parser, game, test_env_init=False)
     parse_time = timer()
     # print(f'Parsed PS file using Lark into python PSTree object in {(parse_time - start_time) / 1000} seconds.')
-    env = PSEnv(tree, jit=True, level_i=level_i, max_steps=max_episode_steps, print_score=False, debug=False)
+    env = PSEnv(tree, jit=True, level_i=level_i, max_steps=max_episode_steps, print_score=False, debug=False, vmap=vmap)
     # print(f'Initialized PSEnv in {(timer() - parse_time) / 1000} seconds.')
     return env
 
     
-if __name__ == '__main__':
-    with open(GAMES_N_RULES_SORTED_PATH, 'r') as f:
-        games_n_rules = json.load(f)
-    games_to_n_rules = {game: (n_rules, has_randomness) for game, n_rules, has_randomness in games_n_rules}
+def init_ps_lark_parser():
+    with open("syntax.lark", "r", encoding='utf-8') as file:
+        puzzlescript_grammar = file.read()
+    # Initialize the Lark parser with the PuzzleScript grammar
+    parser = Lark(puzzlescript_grammar, start="ps_game", maybe_placeholders=False)
+    return parser
 
-    with open(GAMES_TO_N_RULES_PATH, 'w') as f:
-        json.dump(games_to_n_rules, f, indent=4)
+    
+def level_to_int_arr(level: dict, n_objs: int):
+    stride_obj = math.ceil(n_objs / 32)
+    level_arr = []
+    for x in range(level['width']):
+        level_arr.append([])
+        for y in range(level['height']):
+            val = 0
+            flat_idx = (x * level['height'] + y) * stride_obj
+            for j in range(stride_obj):
+                idx = flat_idx + j
+                val += level['dat'][str(idx)]
+            level_arr[x].append(val)
+    if n_objs <= 32:
+        dtype = np.int32
+    elif n_objs <= 64:
+        dtype = np.int64
+    else:
+        # TODO: Get more clever in order to handle this (if we must)
+        raise ValueError(f"Number of objects {n_objs} exceeds 64, cannot convert to int array.")
+    level_arr = np.array(level_arr, dtype=dtype)
+    return level_arr
+
+def get_n_levels_per_game():
+    if os.path.exists(GAMES_N_LEVELS_PATH):
+        with open(GAMES_N_LEVELS_PATH, 'r') as f:
+            n_levels_per_game = json.load(f)
+        return n_levels_per_game
+
+    parser = init_ps_lark_parser()
+    games = get_list_of_games_for_testing(all_games=True)
+    n_levels_per_game = {}
+    for game in games:
+        min_tree_path = os.path.join(TREES_DIR, game + '.pkl')
+        if os.path.exists(min_tree_path):
+            with open(min_tree_path, 'rb') as f:
+                tree = pickle.load(f)
+            tree = GenPSTree().transform(tree)
+            env = PSEnv(tree)
+            n_levels = len(env.levels)
+            n_levels_per_game[game] = n_levels
+    with open(GAMES_N_LEVELS_PATH, 'w') as f:
+        json.dump(n_levels_per_game, f, indent=4)
+    return n_levels_per_game
+
+
+    
+if __name__ == '__main__':
+    games_n_levels = get_n_levels_per_game()
+    # with open(GAMES_N_RULES_SORTED_PATH, 'r') as f:
+    #     games_n_rules = json.load(f)
+    # games_to_n_rules = {game: (n_rules, has_randomness) for game, n_rules, has_randomness in games_n_rules}
+
+    # with open(GAMES_TO_N_RULES_PATH, 'w') as f:
+    #     json.dump(games_to_n_rules, f, indent=4)

@@ -1,0 +1,109 @@
+title Mars Attacks
+ 
+homepage https://soundcloud.com/ridlaa
+
+text_color green
+
+========
+OBJECTS
+========
+
+Background
+Black darkblue
+00100
+00000
+00010 
+10000 
+00000
+
+
+Crate
+lightbrown brown darkbrown 
+10000
+21110
+21110
+21110
+22221
+
+
+Wall
+Green Darkgreen lightgreen
+02222
+10002
+10002
+10002
+11110
+
+Player
+lightgreenBlack
+.000.
+01010
+01010
+.000.
+..0..
+
+Fruit 
+White gray
+.000.
+00000
+00010
+00010
+.000.
+
+
+=======
+LEGEND
+=======
+
+. = Background
+# = Wall
+P = Player
+F = Fruit
+C = Crate
+
+
+=======
+SOUNDS
+=======
+Fruit destroy 66959100
+startgame 82125102
+endgame 70589308
+Crate move 47385307
+closemessage 83916906
+
+================
+COLLISIONLAYERS
+================
+
+Background
+
+Player, Wall, Fruit, Crate
+
+======
+RULES
+======
+
+[ > Player | Crate ] -> [ > Player | > Crate ]
+[> Player | ] -> [> Player | NO Fruit]
+
+==============
+WINCONDITIONS
+==============
+
+=======
+LEVELS
+=======
+
+#######
+#.....#
+#.....#
+#.PC...
+#......
+#.....#
+#.....#
+
+
+
+
+
+

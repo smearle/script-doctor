@@ -2,8 +2,7 @@ import math
 from timeit import default_timer as timer
 from typing import Sequence, Tuple
 
-import chex
-import distrax
+from categorical import Categorical
 from flax.linen.initializers import constant, orthogonal
 import numpy as np
 import flax.linen as nn
@@ -11,7 +10,6 @@ import jax
 import jax.numpy as jnp
 
 from env import PSObs
-
 
 def crop_rf(x, rf_size):
     mid_x = x.shape[1] // 2
@@ -361,10 +359,9 @@ class ActorCriticPS(nn.Module):
         obs_2d = x.multihot_level
         obs_1d = x.flat_obs
         act, val = self.subnet(obs_2d, obs_1d)
-        pi = distrax.Categorical(logits=act)
+        pi = Categorical(logits=act)
 
         return pi, val
-
 
 if __name__ == '__main__':
     n_trials = 100
@@ -374,7 +371,7 @@ if __name__ == '__main__':
         rng, _rng = jax.random.split(rng)
         data = jax.random.normal(rng, (4, 256, 2))
         print('data', data)
-        dist = distrax.Categorical(data)
+        dist = Categorical(data)
         sample = dist.sample(seed=rng)
         print('sample', sample)
         log_prob = dist.log_prob(sample)

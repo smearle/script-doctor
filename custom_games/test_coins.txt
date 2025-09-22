@@ -1,0 +1,148 @@
+title COIN COLLECTORS
+author Tristan Shawn
+background_color darkblue 
+homepage https://tristanshawn.itch.io/
+color_palette arnecolors
+
+========
+OBJECTS
+========
+
+Background
+darkblue darkblue lightblue
+12111
+11121
+12111
+11121
+11111
+
+
+Path
+Gray darkgray
+.....
+.....
+.....
+00000
+11111
+
+Goal
+Yellow gray darkgray #e6e600 #ffff4d white #ffff66 #b3b300
+.444.
+43734
+43734
+14441
+22222
+
+
+
+
+Player
+gray darkgray #ffff99 blue black darkblue 
+54445
+52225
+33333
+04040
+11111
+
+
+
+
+=======
+LEGEND
+=======
+. = Background
+P = Path
+U = Player
+G = Goal
+
+=========
+SOUNDS
+=========
+endlevel 18286703
+startgame 35495108
+sfx0 329907
+CloseMessage 6006506
+
+
+================
+COLLISIONLAYERS
+================
+
+Background
+Goal
+Player, Path
+
+
+======
+RULES
+======
+
+[ > Player | ... |  Path ] -> [  | ... | Player ]
+[ > Player ] -> [Player] sfx0
+
+==============
+WINCONDITIONS
+==============
+
+(no goal)
+
+=======
+LEVELS
+=======
+
+..P..
+..P..
+.....
+.....
+..U..
+
+..P..
+.....
+..U..
+.....
+..U..
+
+..P..
+..P..
+.....
+.....
+..U..
+..U..
+
+..U..
+.....
+.....
+..P..
+..P..
+
+..U..
+.....
+..U..
+.....
+..P..
+
+.....
+.....
+.....
+U.U.P
+
+.....
+.....
+.....
+U.P.P
+
+
+.....
+.....
+.....
+P.U.U
+
+.....
+.....
+.....
+UU.PP
+
+.....
+.....
+.....
+P.P.U

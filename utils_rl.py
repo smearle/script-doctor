@@ -6,7 +6,7 @@ import imageio
 import jax
 import jax.numpy as jnp
 from flax import struct
-from flax.training import orbax_utils
+# from flax.training import orbax_utils
 import numpy as np
 from jax_utils import stack_leaves
 import orbax.checkpoint as ocp
@@ -154,11 +154,12 @@ def init_config(config: TrainConfig) -> TrainConfig:
 
     
 def save_checkpoint(config: TrainConfig, ckpt_manager, runner_state, t):
-    save_args = orbax_utils.save_args_from_target(runner_state)
+    # save_args = orbax_utils.save_args_from_target(runner_state)
     ckpt_manager.save(t.item(), args=ocp.args.StandardSave(runner_state))
     ckpt_manager.wait_until_finished() 
 
 import utils
 
 def init_ps_env(config: RLConfig, verbose: bool = False) -> PSEnv:
-    return utils.init_ps_env(config.game, config.level, config.max_episode_steps)
+    #return utils.init_ps_env(config.game, config.level, config.max_episode_steps, vmap=config.vmap)
+    return utils.init_ps_env(game=config.game, level_i=config.level, max_episode_steps=config.max_episode_steps)

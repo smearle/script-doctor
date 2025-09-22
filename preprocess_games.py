@@ -2,6 +2,7 @@ import argparse
 from enum import IntEnum
 import glob
 import json
+import logging
 import os
 import pickle
 import re
@@ -13,13 +14,16 @@ from typing import Optional
 
 import hydra
 import lark
-from lark.reconstruct import Reconstructor
+from lark import Lark, Transformer, Tree, Token, Visitor
+import numpy as np
 
 from conf.config import PreprocessConfig
 from env import PSEnv
 from gen_tree import GenPSTree
-from globals import GAMES_N_RULES_SORTED_PATH, GAMES_TO_N_RULES_PATH, GAMES_TO_SKIP
+from globals import GAMES_N_RULES_SORTED_PATH, GAMES_TO_N_RULES_PATH, GAMES_TO_SKIP, GAMES_N_LEVELS_PATH
 from ps_game import PSGameTree
+
+logger = logging.getLogger(__name__)
 
 # TEST_GAMES = ['blockfaker', 'sokoban_match3', 'notsnake', 'sokoban_basic']
 TEST_GAMES = []
@@ -33,9 +37,6 @@ SIMPLIFIED_GAMES_DIR = os.path.join(DATA_DIR, 'simplified_games')
 TREES_DIR = os.path.join(DATA_DIR, 'game_trees')
 pretty_trees_dir = os.path.join(DATA_DIR, 'pretty_trees')
 # parsed_games_filename = os.path.join(DATA_DIR, "parsed_games.txt")
-
-from lark import Lark, Transformer, Tree, Token, Visitor
-import numpy as np
 
 
 @contextlib.contextmanager
@@ -97,6 +98,7 @@ class StripPuzzleScript(Transformer):
         return Tree('collisionlayers_section', self.strip_section_items(items, 'layer_data'))
 
     def rules_section(self, items):
+
         return Tree('rules_section', self.strip_section_items(items, 'rule_block'))
 
     def sounds_section(self, items):
@@ -116,7 +118,10 @@ class StripPuzzleScript(Transformer):
         return self.strip_newlines_data(items, 'legend_data')
     
     def rule_data(self, items):
-        return self.strip_newlines_data(items, 'rule_data')
+        assert len(items) == 1
+        if items[0].data.value == 'rule_data_broken':
+            return None
+        return self.strip_newlines_data(items[0].children, 'rule_data')
 
     def rule_block_once(self, items):
         items = [i for i in items if i]
@@ -125,20 +130,28 @@ class StripPuzzleScript(Transformer):
     def rule_block_loop(self, items):
         items = [i for i in items if i]
         return self.strip_newlines_data(items, 'rule_block_loop')
+    
+    def line_detector(self, items):
+        return "..."
 
     # def rule_block(self, items):
     #     return items[0]
     
-    # def rule_part(self, items):
-    #     return items[0]
-
     def condition_data(self, items):
-        return self.strip_newlines_data(items, 'condition_data')
+        assert len(items) == 1
+        if items[0].data.value == 'condition_data_broken':
+            return None
+        return self.strip_newlines_data(items[0].children, 'condition_data')
 
     def layer_data(self, items):
         return self.strip_newlines_data(items, 'layer_data')
 
-    def shape_2d(self, items):
+    def sprite(self, items):
+        assert len(items) == 1
+        items = items[0].children
+        # Remote any item that is a message
+        items = [i for i in items if not (isinstance(i, Token) and i.type == 'COMMENT')]
+
         # Create a 2D array of the items
         grid = []
         row = []
@@ -150,16 +163,13 @@ class StripPuzzleScript(Transformer):
                     row = []
             else:
                 row.append(s.value)
-        row_lens = [len(r) for r in grid]
-        if len(set(row_lens)) > 1:
-            raise ValueError(f"Rows in grid have different lengths: {row_lens}")
+        max_row_len = max(len(r) for r in grid)
+        for r in grid:
+            if len(r) < max_row_len:
+                r.append(r[-1] * (max_row_len - len(r)))
         grid = np.array(grid)
-        return grid
 
-    def sprite(self, items):
-        # Remote any item that is a message
-        items = [i for i in items if not (isinstance(i, Token) and i.type == 'COMMENT')]
-        return Tree('sprite', self.shape_2d(items))
+        return Tree('sprite', grid)
 
     def levelline(self, items):
         line = [str(i) for i in items]
@@ -170,10 +180,26 @@ class StripPuzzleScript(Transformer):
         grid = []
         level_lines = items
         grid = [line for line in level_lines[:-1]]
+        # TODO: Which of these does OG PS do? Does it do different things in different cases? :/
         # pad all rows with empty tiles
-        max_len = max(len(row) for row in grid)
-        for row in grid:
-            row += ['.'] * (max_len - len(row))
+        lvl_width = len(grid[0])
+        for i, row in enumerate(grid):
+            row_i_len = len(row)
+            if row_i_len != lvl_width:
+                logger.warn("Maps must be rectangular, yo.")
+            if row_i_len < lvl_width:
+                row += row[-1] * (lvl_width - len(row))
+            elif row_i_len > lvl_width:
+                row = row[:lvl_width]
+            grid[i] = row
+        # Truncate all the rows to the same length
+        # row_lens = [len(r) for r in grid]
+        # if len(set(row_lens)) > 1:
+        #     logger.warning(f"Rows in grid have different lengths: {row_lens}. Truncating to the shortest row.")
+        #     min_len = min(row_lens)
+        #     for i, row in enumerate(grid):
+        #         if len(row) > min_len:
+        #             grid[i] = row[:min_len]
         grid = np.array(grid)
         return grid
 
@@ -273,6 +299,8 @@ class PrintPuzzleScript(Transformer):
         return '\n'.join(items) + '\n'
 
     def object_line(self, items):
+        assert len(items) == 1
+        items = items[0].children
         return ' '.join(items)
 
     def color_line(self, items):
@@ -295,6 +323,9 @@ class PrintPuzzleScript(Transformer):
 
     def rule_content(self, items):
         return ' '.join(items)
+
+    def line_detector(self, items):
+        return '...'
 
     def rule_object(self, items):
         return ' '.join(items)
@@ -334,12 +365,36 @@ class PrintPuzzleScript(Transformer):
 def add_empty_sounds_section(txt):
     ret = re.search(r'^SOUNDS\n', txt, re.MULTILINE)
     if ret is None:
-        txt = re.sub(r'COLLISIONLAYERS', 'SOUNDS\n\nCOLLISIONLAYERS', txt)
+        txt = re.sub(r'^COLLISIONLAYERS\n', 'SOUNDS\n\nCOLLISIONLAYERS\n', txt)
     return txt
 
 
+def remove_sounds_section(txt):
+    # Replace contents of the `SOUNDS` section with an empty section
+    txt = re.sub(r'^SOUNDS\n.*?\nCOLLISIONLAYERS', 'SOUNDS\n\nCOLLISIONLAYERS', txt, flags=re.DOTALL | re.MULTILINE)
+    return txt
+
+
+def preprocess_rules(txt):
+    # Replace any occurrence of `]...[` with `|...|`
+    txt = re.sub(r'\]\s*\.\.\.\s*\[', ' | ... | ', txt)
+    # Replace any occurrence of `] | [` with `] [`
+    txt = re.sub(r'\]\s*\|\s*\[', '] [', txt)
+    return txt
+
+def preprocess_collisionlayers(txt):
+    # Replace any pairs of commas, separated by whitespace, with a single comma
+    txt = re.sub(r',\s*,', ',', txt)
+    return txt
+
+def preprocess_levels(txt):
+    # Remove any lines beginning with `message` (regardless of whether they're followed by whitespace or not)
+    txt = re.sub(r'^\s*message.*', '', txt, flags=re.MULTILINE | re.IGNORECASE)
+    # Replace any more-than-double newlines with a double newline
+    txt = re.sub(r'\n{3,}', '\n\n', txt)
+    return txt
+
 def preprocess_ps(txt):
-    txt = add_empty_sounds_section(txt)
 
     # Remove whitespace at end of any line
     txt = re.sub(r'[ \t]+$', '', txt, flags=re.MULTILINE)
@@ -347,11 +402,24 @@ def preprocess_ps(txt):
     # Remove whitespace at start of any line
     txt = re.sub(r'^[ \t]+', '', txt, flags=re.MULTILINE)
 
-    # Remove any lines that are just r`=+`
-    txt = re.sub(r'^=+\n', '', txt, flags=re.MULTILINE)
+    # txt = add_empty_sounds_section(txt)
+    txt = remove_sounds_section(txt)
 
-    # Replace any pairs of commas, separated by whitespace, with a single comma
-    txt = re.sub(r',\s*,', ',', txt)
+    # If the regular section header is not found, try the header followed by some trailing characters
+    if not re.search(r'^LEGEND\n', txt, flags=re.MULTILINE | re.IGNORECASE):
+        txt = re.sub(r'^LEGEND\s*.*\n', 'LEGEND\n', txt, flags=re.MULTILINE | re.IGNORECASE)
+    if not re.search(r'^OBJECTS\n', txt, flags=re.MULTILINE | re.IGNORECASE):
+        txt = re.sub(r'^OBJECTS\s*.*\n', 'OBJECTS\n', txt, flags=re.MULTILINE | re.IGNORECASE)
+    if not re.search(r'^COLLISIONLAYERS\n', txt, flags=re.MULTILINE | re.IGNORECASE):
+        txt = re.sub(r'^COLLISIONLAYERS\s*.*\n', 'COLLISIONLAYERS\n', txt, flags=re.MULTILINE | re.IGNORECASE)
+    if not re.search(r'^SOUNDS\n', txt, flags=re.MULTILINE | re.IGNORECASE):
+        txt = re.sub(r'^SOUNDS\s*.*\n', 'SOUNDS\n', txt, flags=re.MULTILINE | re.IGNORECASE)
+    if not re.search(r'^RULES\n', txt, flags=re.MULTILINE | re.IGNORECASE):
+        txt = re.sub(r'^RULES\s*.*\n', 'RULES\n', txt, flags=re.MULTILINE | re.IGNORECASE)
+    if not re.search(r'^WINCONDITIONS\n', txt, flags=re.MULTILINE | re.IGNORECASE):
+        txt = re.sub(r'^WINCONDITIONS\s*.*\n', 'WINCONDITIONS\n', txt, flags=re.MULTILINE | re.IGNORECASE)
+    if not re.search(r'^LEVELS\n', txt, flags=re.MULTILINE | re.IGNORECASE):
+        txt = re.sub(r'^LEVELS\s*.*\n', 'LEVELS\n', txt, flags=re.MULTILINE | re.IGNORECASE)
 
     txt = txt.replace('\u00A0', ' ')
     # If the file does not end with 2 newlines, fix this
@@ -360,18 +428,28 @@ def preprocess_ps(txt):
             txt += "\n"
 
     # Remove any lines beginning with "message" (case insensitive)
-    txt = re.sub(r'^message.*\n', '', txt, flags=re.MULTILINE | re.IGNORECASE)
+    txt = re.sub(r'^message .*\n', '\n', txt, flags=re.MULTILINE | re.IGNORECASE)
 
     # Truncate lines ending with "message"
-    txt = re.sub(r'message.*\n', '\n', txt, flags=re.MULTILINE | re.IGNORECASE)
+    # txt = re.sub(r'message.*\n', '\n', txt, flags=re.MULTILINE | re.IGNORECASE)
+
+    # If a line ends with "message ...", and is preceded somewhere by a `]`, remove the `message ...` part
+    # (This is to avoid removing the closing parenthesis of the `(endgame message)` comment in `cute train`)
+    # Also check to make sure the entire rule and message is not enclosed in a comment, by (hackishly) checking
+    # that the line does not start with a `(`.
+    txt = re.sub(r'^((?!\().*\]\s*)message .*\n', r'\1\n', txt, flags=re.MULTILINE | re.IGNORECASE)
 
     ## Strip any comments
     txt = strip_comments(txt)
 
+    # Remove any lines that are just r`=+` (or actually, at least 3 `=` followed by one accidental character;
+    # a hack to get around some typos in the dataset)
+    txt = re.sub(r'^===*.\n', '', txt, flags=re.MULTILINE)
+
     # Remove any lines that are just whitespace
     txt = re.sub(r'^\s*\n', '\n', txt, flags=re.MULTILINE)
 
-    # any more-than-double newlines should be replaced by a single newline
+    # any more-than-double newlines should be replaced by a double newline
     txt = re.sub(r'\n{3,}', '\n\n', txt)
 
     # Remove any lines that are just a single character. (Very niche patch, this one is. But we know such lines can 
@@ -380,6 +458,34 @@ def preprocess_ps(txt):
 
     # Remove everything until "objects" (case insensitive)
     # txt = re.sub(r'^.*OBJECTS', 'OBJECTS', txt, flags=re.MULTILINE | re.DOTALL | re.IGNORECASE)
+
+    sections_pattern = r"""
+        ^OBJECTS\n|
+        ^LEGEND\n|
+        ^SOUNDS\n|
+        ^COLLISIONLAYERS\n|
+        ^RULES\n|
+        ^WINCONDITIONS\n|
+        ^LEVELS\n
+    """
+
+    sections = re.split(sections_pattern, txt, flags=re.MULTILINE | re.VERBOSE | re.IGNORECASE)
+    prelude_section, objects_section, legend_section, sounds_section, collisionlayers_section, rules_section, \
+        winconditions_section, levels_section = sections
+
+    rules_section = preprocess_rules(rules_section)
+    collisionlayers_section = preprocess_collisionlayers(collisionlayers_section)
+    levels_section = preprocess_levels(levels_section)
+
+    # Now put the sections back together
+    txt = (f"{prelude_section}\n"
+           f"OBJECTS\n{objects_section}"
+           f"LEGEND\n{legend_section}"
+           f"SOUNDS\n\n"
+           f"COLLISIONLAYERS\n{collisionlayers_section}"
+           f"RULES\n{rules_section}"
+           f"WINCONDITIONS\n{winconditions_section}"
+           f"LEVELS\n{levels_section}")
 
     return txt.lstrip()
 
@@ -417,9 +523,10 @@ class PSErrors(IntEnum):
     ENV_ERROR = 3
     TIMEOUT = 4
     SKIPPED = 5
+    PREPROCESSING_ERROR = 6
 
-def get_env_from_ps_file(parser, game, log_dir: str = None, overwrite: bool = True):
-    tree, success, err_msg = get_tree_from_txt(parser, game, log_dir, overwrite, test_env_init=False)
+def get_env_from_ps_file(parser, game, log_dir: str = None, overwrite: bool = True, timeout: int = 10):
+    tree, success, err_msg = get_tree_from_txt(parser, game, log_dir, overwrite, test_env_init=False, timeout=timeout)
     if success != PSErrors.SUCCESS:
         return None, tree, success, err_msg 
     try:
@@ -431,7 +538,8 @@ def get_env_from_ps_file(parser, game, log_dir: str = None, overwrite: bool = Tr
         return None, tree, PSErrors.ENV_ERROR, gen_error_str(e)
 
 # Keeping this here only for backwards compatibility
-def get_tree_from_txt(parser, game, log_dir: str = None, overwrite: bool = True, test_env_init: bool = True):
+def get_tree_from_txt(parser, game, log_dir: str = None, overwrite: bool = True, test_env_init: bool = True,
+                      timeout: int = 10):
     filepath = os.path.join(CUSTOM_GAMES_DIR, game + '.txt')
     if not os.path.exists(filepath):
         filepath = os.path.join(GAMES_DIR, game + '.txt')
@@ -447,9 +555,15 @@ def get_tree_from_txt(parser, game, log_dir: str = None, overwrite: bool = True,
     # print(f"Parsing game {filepath} ({i+1}/{len(game_files)})")
     simp_filepath = os.path.join(SIMPLIFIED_GAMES_DIR, simp_filename)
     os.makedirs(SIMPLIFIED_GAMES_DIR, exist_ok=True)
+    os.makedirs(pretty_trees_dir, exist_ok=True)
+    os.makedirs(MIN_GAMES_DIR, exist_ok=True)
     if overwrite or not os.path.exists(simp_filepath):
         # Now save the simplified version of the file
-        content = preprocess_ps(ps_text)
+        try:
+            content = preprocess_ps(ps_text)
+        except ValueError as e:
+            print(f"Error preprocessing {filepath}: {e}")
+            return None, PSErrors.PREPROCESSING_ERROR, gen_error_str(e)
         with open(simp_filepath, "w", encoding='utf-8') as file:
             file.write(content)
     else:
@@ -465,7 +579,7 @@ def get_tree_from_txt(parser, game, log_dir: str = None, overwrite: bool = True,
     print(f"Parsing {simp_filepath}")
     if os.name != 'nt':
         def parse_attempt_fn():
-            with timeout_handler(10):
+            with timeout_handler(timeout):
                 return parser.parse(content)
     # FIXME: On windows, this will hang indefinitely on nasty games :(
     else:
@@ -496,28 +610,28 @@ def get_tree_from_txt(parser, game, log_dir: str = None, overwrite: bool = True,
         return None, PSErrors.PARSE_ERROR, gen_error_str(e)
 
 
-    min_parse_tree = StripPuzzleScript().transform(parse_tree)
-    min_tree_path = os.path.join(TREES_DIR, game + '.pkl')
-    # print(f"Writing parse tree to {min_tree_path}")
-    with open(min_tree_path, "wb") as f:
-        pickle.dump(min_parse_tree, f)
-    pretty_parse_tree_str = min_parse_tree.pretty()
-    pretty_tree_filename = os.path.join(pretty_trees_dir, game)
-    print(f"Writing pretty tree to {pretty_tree_filename}")
-    with open(pretty_tree_filename, "w", encoding='utf-8') as file:
-        file.write(pretty_parse_tree_str)
-    # print(min_parse_tree.pretty())
-    ps_str = PrintPuzzleScript().transform(min_parse_tree)
-    ps_str = add_empty_sounds_section(ps_str)
-    min_filename = os.path.join(MIN_GAMES_DIR, game + '.txt')
-    # print(f"Writing minified game to {min_filename}")
-    with open(min_filename, "w", encoding='utf-8') as file:
-        file.write(ps_str)
-
-    # with open(parsed_games_filename, 'a') as file:
-    #     file.write(game + "\n")
-
     try:
+        min_parse_tree = StripPuzzleScript().transform(parse_tree)
+        min_tree_path = os.path.join(TREES_DIR, game + '.pkl')
+        # print(f"Writing parse tree to {min_tree_path}")
+        with open(min_tree_path, "wb") as f:
+            pickle.dump(min_parse_tree, f)
+        pretty_parse_tree_str = min_parse_tree.pretty()
+        pretty_tree_filename = os.path.join(pretty_trees_dir, game)
+        print(f"Writing pretty tree to {pretty_tree_filename}")
+        with open(pretty_tree_filename, "w", encoding='utf-8') as file:
+            file.write(pretty_parse_tree_str)
+        # print(min_parse_tree.pretty())
+        ps_str = PrintPuzzleScript().transform(min_parse_tree)
+        ps_str = add_empty_sounds_section(ps_str)
+        min_filename = os.path.join(MIN_GAMES_DIR, game + '.txt')
+        # print(f"Writing minified game to {min_filename}")
+        with open(min_filename, "w", encoding='utf-8') as file:
+            file.write(ps_str)
+
+        # with open(parsed_games_filename, 'a') as file:
+        #     file.write(game + "\n")
+
         tree: PSGameTree = GenPSTree().transform(min_parse_tree)
     except Exception as e:
         traceback.print_exc()
@@ -535,7 +649,8 @@ def get_tree_from_txt(parser, game, log_dir: str = None, overwrite: bool = True,
     return tree, PSErrors.SUCCESS, ""
 
 def gen_error_str(e):
-    return f"{type(e).__name__}: {e}"
+    err_msg = f"{traceback.format_exc()}\n{type(e).__name__}: {e}"
+    return err_msg
 
 
 @hydra.main(version_base="1.3", config_path="conf", config_name="preprocess_config")
@@ -543,8 +658,6 @@ def main(cfg: PreprocessConfig):
 
     with open(PS_LARK_GRAMMAR_PATH, "r", encoding='utf-8') as file:
         puzzlescript_grammar = file.read()
-    with open("syntax_generate.lark", "r", encoding='utf-8') as file:
-        min_puzzlescript_grammar = file.read()
 
     # Initialize the Lark parser with the PuzzleScript grammar
     parser = Lark(puzzlescript_grammar, start="ps_game", maybe_placeholders=False)
@@ -558,6 +671,7 @@ def main(cfg: PreprocessConfig):
     parse_results = {
         'stats': {},
         'success': [],
+        'preprocess_error': {},
         'parse_error': {},
         'tree_error': {},
         'env_error': {},
@@ -588,15 +702,14 @@ def main(cfg: PreprocessConfig):
     os.makedirs(SIMPLIFIED_GAMES_DIR, exist_ok=True)
     scrape_log_dir = 'scrape_logs'
     os.makedirs(scrape_log_dir, exist_ok=True)
+    games_n_rules_sorted = []
+    games_to_n_rules = {}
     if not cfg.overwrite:
         if os.path.exists(GAMES_N_RULES_SORTED_PATH):
             with open(GAMES_N_RULES_SORTED_PATH, 'r') as f:
                 games_n_rules_sorted = json.load(f)
             games_to_n_rules = {game: (n_rules, has_randomness) for game, n_rules, has_randomness in games_n_rules_sorted}
             print(f"Loaded {len(games_n_rules_sorted)} games from {GAMES_N_RULES_SORTED_PATH}")
-        else:
-            games_n_rules_sorted = []
-            games_to_n_rules = {}
         if os.path.exists(parse_results_path):
             with open(parse_results_path, 'r') as f:
                 parse_results = json.load(f)
@@ -632,12 +745,20 @@ def main(cfg: PreprocessConfig):
         elif success == PSErrors.ENV_ERROR:
             if err_msg not in parse_results['env_error']:
                 parse_results['env_error'][err_msg] = []
-            parse_results['env_error'][err_msg].append((game_name, count_rules(ps_tree)))
+            n_rules = count_rules(ps_tree)
+            has_randomness = None
+            parse_results['env_error'][err_msg].append((game_name, n_rules))
+            games_n_rules_sorted.append((game_name, n_rules, has_randomness))
+            games_to_n_rules[game_name] = (n_rules, has_randomness)
         elif success == PSErrors.SKIPPED:
             print(f"Skipping {game_name} because it has been marked for skipping in `GAMES_TO_SKIP`")
             continue
+        elif success == PSErrors.PREPROCESSING_ERROR:
+            if err_msg not in parse_results['parse_error']:
+                parse_results['parse_error'][err_msg] = []
+            parse_results['parse_error'][err_msg].append(game_name)
         else:
-            breakpoint()
+            raise Exception(f"Unknown error while parsing game: {success}")
 
         n_success = len(parse_results['success'])
         n_env_errors = np.sum([len(v) for k, v in parse_results['env_error'].items()]).item()

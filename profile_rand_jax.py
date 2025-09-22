@@ -18,6 +18,7 @@ from timeit import default_timer as timer
 
 from conf.config import ProfileJaxRandConfig
 from env import PSState
+from globals import JAX_PROFILING_RESULTS_DIR
 from utils import get_list_of_games_for_testing, load_games_n_rules_sorted
 from utils_rl import get_env_params_from_config, init_ps_env
 
@@ -25,21 +26,28 @@ from utils_rl import get_env_params_from_config, init_ps_env
 # game_paths = glob.glob(os.path.join('data', 'scraped_games', '*.txt'))
 # games = [os.path.basename(p) for p in game_paths]
 
-batch_sizes = [
+BATCH_SIZES = [
     1,
     10,
     50,
     100,
-    200,
+    # 200,
     400,
-    600,
-    1_200,
+    # 600,
+    # 1_200,
     1_500,
+    # 1_800,
+    2_000,
+    # 3_500,
+    5_000,
+    # 7_500,
+    8_000,
 ]
-batch_sizes = batch_sizes[::-1]
-
-JAX_N_ENVS_TO_FPS_PATH = os.path.join('data', 'jax_n_envs_to_fps.json')
-
+# batch_sizes = batch_sizes[::-1]
+VMAPS = [
+    True,
+    # False,
+]
 
 def get_step_str(s):
     return f'{s}-step_rollout'
@@ -47,14 +55,26 @@ def get_step_str(s):
 def get_step_int(step_str):
     return int(step_str.split('-')[0])
 
-def get_level_str(level_i):
-    return f'level-{level_i}'
+def get_level_str(level_i, vmap):
+    # return f'level-{level_i}-vmap-{vmap}'
+    if vmap:
+        # For backward compatibility TODO: Clean this up (as above)
+        return f'level-{level_i}'
+    else:
+        return f'level-{level_i}-vmap-{vmap}'
 
 def get_level_int(level_str):
     return int(level_str.split('-')[1])
 
-def save_results(results):
-    with open(JAX_N_ENVS_TO_FPS_PATH, 'w') as f:
+def get_vmap(level_str):
+    # return level_str.split('-')[-1]
+    # For backward compatibility. TODO: Clean this up (as above)
+    return 'vmap-False' not in level_str
+
+def save_results(results, results_path):
+    results_dir = os.path.dirname(results_path)
+    os.makedirs(results_dir, exist_ok=True)
+    with open(results_path, 'w') as f:
         json.dump(results, f, indent=4)
 
 @hydra.main(version_base="1.3", config_path='./conf', config_name='profile_jax')
@@ -63,18 +83,20 @@ def profile(cfg: ProfileJaxRandConfig):
     devices = jax.devices()
     assert len(devices) == 1, f'JAX is not using a single device. Found {len(devices)} devices: {devices}. This is unexpected.'
     device_name = devices[0].device_kind
+    device_name = device_name.replace(' ', '_')
 
     if cfg.game is None:
         games = get_list_of_games_for_testing(all_games=cfg.all_games)
     else:
         games = [cfg.game]
 
-    global batch_sizes
+    global BATCH_SIZES, VMAPS
     hparams = itertools.product(
         games,
-        batch_sizes,
+        BATCH_SIZES,
+        VMAPS,
     )
-    games, batch_sizes = zip(*hparams)
+    games, BATCH_SIZES, VMAPS = zip(*hparams)
 
     vids_dir = 'vids'
     if cfg.render:
@@ -85,44 +107,39 @@ def profile(cfg: ProfileJaxRandConfig):
     rng = jax.random.PRNGKey(42)
     step_str = get_step_str(cfg.n_steps)
 
+    device_dir = os.path.join(JAX_PROFILING_RESULTS_DIR, device_name)
+    steps_dir = os.path.join(device_dir, step_str)
+    os.makedirs(steps_dir, exist_ok=True)
+    last_game = None
 
-    if not os.path.isfile(JAX_N_ENVS_TO_FPS_PATH):
-        results = {}
-        game_n_envs_to_fps = {}
-        step_str = get_step_str(cfg.n_steps)
-        results[device_name] = {}
-        results[device_name][step_str] = game_n_envs_to_fps
-    else:
-        with open(JAX_N_ENVS_TO_FPS_PATH, 'r') as f:
-            results = json.load(f)
-        if device_name not in results:
-            results[device_name] = {}
-        if step_str not in results[device_name]:
-            results[device_name][step_str] = {}
-        game_n_envs_to_fps = results[device_name][step_str]
-
-    for (game, n_envs) in zip(games, batch_sizes):
-
-        # if n_envs >= 1_200 and game in ['limerick']:
-        #     continue
+    for (game, n_envs, vmap) in zip(games, BATCH_SIZES, VMAPS):
 
         cfg.game = game
+        cfg.vmap = vmap
 
-        print(f'\nGame: {game}, n_envs: {n_envs}.')
-        env = init_ps_env(cfg)
+        print(f'\nGame: {game}, n_envs: {n_envs}, vmap: {vmap}.')
 
-        # for level_i in range(len(env.levels[:1])):
-        for level_i in range(len(env.levels)):
+        # Only profiling the first level for now.
+        for level_i in range(1):
+        # for level_i in range(len(env.levels)):
 
-            level_str = get_level_str(level_i)
-            if game not in game_n_envs_to_fps:
-                game_n_envs_to_fps[game] = {}
+            level_str = get_level_str(level_i, vmap=vmap)
+            results_path = os.path.join(steps_dir, game, level_str + '.json')
+            if os.path.exists(results_path):
+                n_envs_to_fps = json.load(open(results_path, 'r'))
+            else:
+                n_envs_to_fps = {}
 
-            if level_str not in game_n_envs_to_fps[game]:
-                game_n_envs_to_fps[game][level_str] = {}
-
-            if not cfg.overwrite and str(n_envs) in game_n_envs_to_fps[game][level_str]:
+            if str(n_envs) in n_envs_to_fps and not cfg.overwrite:
+                print(f'Skipping {game} level {level_i} with n_envs={n_envs} vmap={vmap} as results already exists.')
                 continue
+
+            if last_game != game:
+                env = init_ps_env(cfg)
+
+            last_game = game
+
+            # jax.clear_caches()
 
             env_params = get_env_params_from_config(env, cfg)
 
@@ -173,14 +190,20 @@ def profile(cfg: ProfileJaxRandConfig):
                     carry, _ = jax.lax.scan(
                         _env_step_jitted, carry, None, cfg.n_steps
                     )
+                    env_state: PSState = carry[0]
+                    # Otherwise, when running on CPU, the state may not be ready yet
+                    env_state.multihot_level.block_until_ready()
                     times.append(timer() - start)
-                    print(f'Loop {i} ran {n_env_steps} in {times[-1]} seconds. FPS: {n_env_steps / times[-1]:,.2f}')
+                    print(f'Loop {i} ran {n_env_steps} steps in {times[-1]} seconds. FPS: {n_env_steps / times[-1]:,.2f}')
 
             except jaxlib.xla_extension.XlaRuntimeError as e:
                 err_msg = traceback.format_exc()
                 print(f'Error in first step: {err_msg}')
-                results[device_name][step_str][game][level_str][n_envs] = None
-                save_results(results)
+                n_envs_to_fps[str(n_envs)] = {
+                    'error': str(e),
+                    'error_traceback': err_msg,
+                }
+                save_results(n_envs_to_fps, results_path)
                 continue
 
             fpss = tuple(n_env_steps / np.array(times))
@@ -198,12 +221,12 @@ def profile(cfg: ProfileJaxRandConfig):
             #     imageio.mimsave(gif_path, frames, duration=cfg.gif_frame_duration)
             #     print(f'Finished saving gif in {timer() - start} seconds.')
 
-            game_n_envs_to_fps[game][level_str][n_envs] = fpss
-            save_results(results)
+            n_envs_to_fps[str(n_envs)] = fpss
+            save_results(n_envs_to_fps, results_path)
 
     else:
         # Load from json
-        with open(JAX_N_ENVS_TO_FPS_PATH, 'r') as f:
+        with open(results_path, 'r') as f:
             results = json.load(f)
 
 if __name__ == '__main__':

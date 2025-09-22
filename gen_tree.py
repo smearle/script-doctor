@@ -1,5 +1,6 @@
 from dataclasses import dataclass
 from functools import partial
+import logging
 import os
 import pickle
 import re
@@ -19,6 +20,8 @@ from PIL import Image
 
 from ps_game import LegendEntry, PSGameTree, PSObject, Prelude, Rule, RuleBlock, WinCondition
 
+logger = logging.getLogger(__name__)
+
 class GenPSTree(Transformer):
     """
     Reduces the parse tree to a minimal functional version of the grammar.
@@ -28,12 +31,24 @@ class GenPSTree(Transformer):
         name = str(name_line.children[0].children[0]).lower()
         colors = []
         color_line = items[1]
-        alt_name = None
-        if len(name_line.children) > 2:
-            alt_name = str(name_line.children[1].children[0])
-        legend_key = str(name_line.children[-1].children[0]) if len(name_line.children) > 1 else None
+        alt_names = []
+        legend_key = None
+        for i, child in enumerate(name_line.children[1:]):
+            if child.data.value == 'object_name':
+                assert len(child.children) == 1
+                alt_name = str(child.children[0]).lower()
+                alt_names.append(alt_name)
+            elif child.data.value == 'legend_key':
+                assert len(child.children) == 1
+                legend_key = str(child.children[0]).lower()
+                assert len(legend_key) == 1, "Legend key must be a single character"
+                assert len(name_line.children) == i + 2, \
+                    f"Legend key must be the last item in the name line, but found {name_line.children[i+2:]}"
+            else:
+                raise Exception(f'Unrecognized item in object name line: {child}')
+
         for color in color_line.children:
-            colors.append(str(color.children[0]))
+            colors.append(str(color))
         if len(items) < 3:
             sprite = None
         else:
@@ -41,11 +56,16 @@ class GenPSTree(Transformer):
 
         return PSObject(
             name=name,
-            alt_name=alt_name,
+            alt_names=alt_names,
             legend_key=legend_key,
             colors=colors,
             sprite=sprite,
         )
+
+    def object_line(self, items):
+        assert len(items) == 1
+        items = items[0].children
+        return Tree('object_line', items)
 
     def rule_object_with_modifier(self, items):
         items = [it for it in items if not (isinstance(it, Token) and it.type == 'WS_INLINE')]
@@ -56,8 +76,6 @@ class GenPSTree(Transformer):
         return str(items[0])
 
     def rule_content(self, items):
-        if len(items) == 0:
-            return ''  # ... I guess?
         assert len(items) == 1
         return str(items[0])
 
@@ -97,7 +115,7 @@ class GenPSTree(Transformer):
         for it in items[2:]:
             obj_name = str(it.children[1].children[0]).lower()
             obj_names.append(obj_name)
-            new_op = str(it.children[0])
+            new_op = str(it.children[0]).lower()
             if operator is not None:
                 assert operator == new_op
             else:
@@ -169,10 +187,26 @@ class GenPSTree(Transformer):
         return items
 
     def objects_section(self, items: List[PSObject]):
+        # new_objects = []
+        # for obj in items:
+        #     alt_names = obj.alt_names
+        #     obj.alt_names = []
+        #     for alt_name in alt_names:
+        #         obj_i = copy.deepcopy(obj)
+        #         obj_i.name = alt_name
+        #         new_objects.append(obj_i)
+        #     new_objects.append(obj)
+        # items = new_objects
         return {ik.name: ik for ik in items}
 
     def legend_section(self, items: List[LegendEntry]):
-        return {it.key: it for it in items}
+        legend_dict = {}
+        for it in items:
+            if it.key in legend_dict:
+                logger.warn(f"Conjoined tile {it.key} already in use: k={legend_dict[it.key]}.")
+                continue
+            legend_dict[it.key] = it
+        return legend_dict
     
     def layer_data(self, items):
         obj_names = [str(it.children[0]).lower() for it in items]

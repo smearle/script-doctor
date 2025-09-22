@@ -1,5 +1,6 @@
 from dataclasses import dataclass
 import glob
+import logging
 import os
 from typing import Optional
 
@@ -12,7 +13,9 @@ import numpy as np
 
 from env import PSEnv, PSParams, multihot_to_desc
 from preprocess_games import TREES_DIR, DATA_DIR, TEST_GAMES, get_tree_from_txt
+from preprocess_games import PSErrors
 
+logger = logging.getLogger(__name__)
 
 @dataclass
 class Config:
@@ -39,8 +42,8 @@ def human_loop(env: PSEnv, level: int = 0, profile=False):
     im = np.array(im, dtype=np.uint8)
     
     # Resize the image by a factor of 5
-    new_h, new_w = tuple(np.array(im.shape[:2]) * SCALING_FACTOR)
-    im = cv2.resize(im, (new_w, new_h), interpolation=cv2.INTER_NEAREST)
+    # new_h, new_w = tuple(np.array(im.shape[:2]) * SCALING_FACTOR)
+    # im = cv2.resize(im, (new_w, new_h), interpolation=cv2.INTER_NEAREST)
     state_hist = []
     
     # Display the image in an OpenCV window
@@ -57,7 +60,7 @@ def human_loop(env: PSEnv, level: int = 0, profile=False):
         action = None
         do_reset = False
         print("\n\n========= STEP =========\n")
-        print(multihot_to_desc(state.multihot_level, env.objs_to_idxs, env.n_objs))
+        print(multihot_to_desc(state.multihot_level, env.objs_to_idxs, env.n_objs, obj_idxs_to_force_idxs=env.obj_idxs_to_force_idxs))
 
         # If the user presses ESC (ASCII 27), exit the loop.
         print("Player input:")
@@ -84,12 +87,16 @@ def human_loop(env: PSEnv, level: int = 0, profile=False):
         elif key == ord('n'):
             print("Advancing level...")
             lvl_i += 1
+            if lvl_i >= len(env.levels):
+                print("No more levels!")
+                break
             params = params.replace(level=env.get_level(lvl_i))
             do_reset = True
         elif key == ord('b'):
             print("Going back a level...")
             if lvl_i > 0:
                 lvl_i -= 1
+            params = params.replace(level=env.get_level(lvl_i))
             do_reset = True
         elif key == ord('z'):
             print("Undoing last action...")
@@ -98,8 +105,8 @@ def human_loop(env: PSEnv, level: int = 0, profile=False):
                 state = state_hist[-1]
             im = env.render(state)
             im = np.array(im, dtype=np.uint8)
-            new_h, new_w = tuple(np.array(im.shape[:2]) * SCALING_FACTOR)
-            im = cv2.resize(im, (new_w, new_h), interpolation=cv2.INTER_NEAREST)
+            # new_h, new_w = tuple(np.array(im.shape[:2]) * SCALING_FACTOR)
+            # im = cv2.resize(im, (new_w, new_h), interpolation=cv2.INTER_NEAREST)
             cv2.imshow(env.title, im)
 
         else:
@@ -122,11 +129,11 @@ def human_loop(env: PSEnv, level: int = 0, profile=False):
             else:
                 obs, state, reward, done, info = env.step(rng, state, action, params)
             win = state.win
-            print(multihot_to_desc(state.multihot_level, env.objs_to_idxs, env.n_objs))
+            print(multihot_to_desc(state.multihot_level, env.objs_to_idxs, env.n_objs, obj_idxs_to_force_idxs=env.obj_idxs_to_force_idxs))
             im = env.render(state)
             im = np.array(im, dtype=np.uint8)
-            new_h, new_w = tuple(np.array(im.shape[:2]) * SCALING_FACTOR)
-            im = cv2.resize(im, (new_w, new_h), interpolation=cv2.INTER_NEAREST)
+            # new_h, new_w = tuple(np.array(im.shape[:2]) * SCALING_FACTOR)
+            # im = cv2.resize(im, (new_w, new_h), interpolation=cv2.INTER_NEAREST)
             cv2.imshow(env.title, im)
             # Add a short waitKey here to allow the window to update.
             cv2.waitKey(1)  # 1 ms delay; adjust as necessary
@@ -139,12 +146,13 @@ def human_loop(env: PSEnv, level: int = 0, profile=False):
 
         if do_reset:
             obs, state = env.reset(rng, params)
-            print(multihot_to_desc(state.multihot_level, env.objs_to_idxs, env.n_objs))
+            print(multihot_to_desc(state.multihot_level, env.objs_to_idxs, env.n_objs, obj_idxs_to_force_idxs=env.obj_idxs_to_force_idxs))
+            done = False
             state_hist.append(state)
             im = env.render(state)
             im = np.array(im, dtype=np.uint8)
-            new_h, new_w = tuple(np.array(im.shape[:2]) * SCALING_FACTOR)
-            im = cv2.resize(im, (new_w, new_h), interpolation=cv2.INTER_NEAREST)
+            # new_h, new_w = tuple(np.array(im.shape[:2]) * SCALING_FACTOR)
+            # im = cv2.resize(im, (new_w, new_h), interpolation=cv2.INTER_NEAREST)
             cv2.imshow(env.title, im)
     
 
@@ -159,8 +167,8 @@ def human_loop(env: PSEnv, level: int = 0, profile=False):
             obs, state = env.reset(rng, params)
             im = env.render(state)
             im = np.array(im, dtype=np.uint8)
-            new_h, new_w = tuple(np.array(im.shape[:2]) * SCALING_FACTOR)
-            im = cv2.resize(im, (new_w, new_h), interpolation=cv2.INTER_NEAREST)
+            # new_h, new_w = tuple(np.array(im.shape[:2]) * SCALING_FACTOR)
+            # im = cv2.resize(im, (new_w, new_h), interpolation=cv2.INTER_NEAREST)
             cv2.imshow(env.title, im)
     # Close the image window
     cv2.destroyAllWindows()
@@ -174,6 +182,9 @@ def play_game(game: str, level: int = 0, jit: bool = False, profile: bool = Fals
     # min_parser = Lark(min_puzzlescript_grammar, start="ps_game")
     print(f"""Parsing game: \"{game}\"""")
     tree, success, err_msg = get_tree_from_txt(parser, game, overwrite=True, test_env_init=False)
+    if success != PSErrors.SUCCESS:
+        print(f"Error parsing game: {err_msg}")
+        return
     print(f"Initializing environment for game: {game}")
     env = PSEnv(tree, jit=jit, debug=debug, print_score=True)
     print(f"Playing game: {game}")
@@ -181,6 +192,10 @@ def play_game(game: str, level: int = 0, jit: bool = False, profile: bool = Fals
 
 @hydra.main(config_name="config", version_base="1.3")
 def main(cfg: Config):
+
+    # Using this line to play games with characters (e.g. ` ) that don't agree with CL
+    # TODO: Fix this (by removing this character from filenames?)
+    # cfg.game = "-=lost=-"
 
     if cfg.game is not None:
         play_game(cfg.game, level=cfg.level, jit=cfg.jit, profile=cfg.profile, debug=cfg.debug)

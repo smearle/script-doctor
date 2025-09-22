@@ -7,14 +7,12 @@ import random
 
 
 class PSObject:
-    def __init__(self, name: str, alt_name: str, colors: List[str], sprite: Optional[List[List[str]]] = None, legend_key: Optional[str] = None):
+    def __init__(self, name: str, alt_names: str, colors: List[str], sprite: Optional[List[List[str]]] = None, legend_key: Optional[str] = None):
         self.name = name
-        if alt_name is not None:
-            alt_name = alt_name.lower()
-        self.alt_name = alt_name
+        if alt_names is not None:
+            alt_names = [alt_name.lower() for alt_name in alt_names]
+        self.alt_names = alt_names
         if legend_key is not None:
-            # if len(legend_key) > 1:
-            #     breakpoint()
             assert len(legend_key) == 1, "Legend key must be a single character"
             legend_key = legend_key.lower()
         self.legend_key = legend_key 
@@ -34,7 +32,17 @@ class LegendEntry:
     """
     def __init__(self, key: str, obj_names: List[str], operator: Optional[str]):
         self.key = key
-        self.obj_names = obj_names
+
+        # self.obj_names = list(set(obj_names))
+        # dedupe while maintaining order
+        new_obj_names = []
+        seen: Set[str] = set()
+        for name in obj_names:
+            if name not in seen:
+                seen.add(name)
+                new_obj_names.append(name)
+        self.obj_names = new_obj_names
+
         self.operator = operator
 
     def __repr__(self):

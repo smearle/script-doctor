@@ -41,7 +41,7 @@ try {
       }
     }
   }
-  puzzlescript.compile(gameText, targetLevel);
+  puzzlescript.compile(["loadLevel", targetLevel], gameText);
   let result = algorithm(puzzlescript);
   result = {
       "game": process.argv[2],

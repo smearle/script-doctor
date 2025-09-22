@@ -174,7 +174,8 @@ async function solveLevelBFS(levelIdx, captureStates=false, maxIters=1_000_000) 
 
   var sol = [];
   var bestState = init_level;
-  var bestScore = Infinity;
+  score = getScore();
+  var bestScore = score;
   console.log(sol.length);
   // visited = new Set([hashState(init_level_map)]);
   visited = {};
@@ -184,12 +185,12 @@ async function solveLevelBFS(levelIdx, captureStates=false, maxIters=1_000_000) 
   console.log(frontier.size())
   while (frontier.size() > 0) {
     // if (i % 1000) {
-      const elapsed_time = Date.now() - start_time;
-      if (elapsed_time > timeout_ms) {
-        console.log(`Timeout after ${elapsed_time / 1000} seconds. Returning best result found so far.`);
-        return [sol, false, bestScore, bestState, i, true];
+      // const elapsed_time = Date.now() - start_time;
+      // if (elapsed_time > timeout_ms) {
+      //   console.log(`Timeout after ${elapsed_time / 1000} seconds. Returning best result found so far.`);
+      //   return [sol, false, bestScore, bestState, i, true];
       // }
-    }
+    // }
 
     // This is a global variable of previous states. Clear it to be safe (though processInputSearch shouldn't be using 
     // it)
@@ -220,15 +221,17 @@ async function solveLevelBFS(levelIdx, captureStates=false, maxIters=1_000_000) 
       // }
 			var changed = processInputSearch(move);
 			while (againing) {
-				changed = processInputSearch(-1) || changedSomething;
+        console.log('Againg in search!');
+				changed = processInputSearch(-1) || changed;
 			}
-      if (winning) {
-        console.log(`Winning! Solution:, ${new_action_seq}\n Iterations: ${i}`);
-        console.log('FPS:', (i / (Date.now() - start_time) * 1000).toFixed(2));
-        return [new_action_seq, winning, score, backupLevel(), i, false];
-      }
-      else if (changed) {
+      if (changed) {
         new_level = backupLevel();
+        if (winning) {
+          console.log(`Winning! Solution:, ${new_action_seq}\n Iterations: ${i}`);
+          console.log('FPS:', (i / (Date.now() - start_time) * 1000).toFixed(2));
+          score = getScore();
+          return [new_action_seq, winning, score, new_level, i, false];
+        }
         // new_level_map = new_level['dat'];
         // const newHash = hashState(new_level_map);
         // if (!visited.has(newHash)) {
@@ -236,8 +239,8 @@ async function solveLevelBFS(levelIdx, captureStates=false, maxIters=1_000_000) 
           // console.log('New state found:', level.objects);
 
           // UNCOMMENT THESE LINES FOR VISUAL DEBUGGING
-          // await new Promise(resolve => setTimeout(resolve, 1)); // Small delay for live feedback
-          // redraw();
+          await new Promise(resolve => setTimeout(resolve, 1)); // Small delay for live feedback
+          redraw();
           ///////////////////////////////////////////////
 
           frontier.enqueue([new_level, new_action_seq]);
@@ -542,6 +545,7 @@ async function testBFS() {
         solDir: solDir,
         dataURL: dataURL,
         timeout: timeout,
+        i: nSearchIters,
       })
     });
   }
@@ -1507,6 +1511,7 @@ async function collectGameData(gamePath, maxIters, captureStates=true) {
           timeout: timeout,
           solDir: solDir,
           dataURL: dataURL,
+          i: n_iters,
         })
       });
     }

@@ -83,13 +83,15 @@ def _render_frames(frames, i, metric, steps_prev_complete, env, config: RLConfig
     timesteps = metric["timestep"][metric["returned_episode"]
                             ] * config.n_envs
     if len(timesteps) > 0:
-        t = timesteps[0]
+        # Log videos at the latest completed episode step to stay in sync with
+        # scalar metrics and avoid logging to an earlier WandB step.
+        t = int(timesteps[-1])
     else:
         t = 0
     if config.render_freq <= 0 or i % config.render_freq != 0 or t == steps_prev_complete:
     # if jnp.all(frames == 0):
         return
-    print(f"Rendering episode gifs at update {i}")
+    print(f"Rendering episode gifs at update {i} to directory {config._exp_dir}")
     assert len(frames) == config.n_render_eps * 1 * env.max_steps,\
         "Not enough frames collected"
 
@@ -115,7 +117,7 @@ def _render_frames(frames, i, metric, steps_prev_complete, env, config: RLConfig
             duration=config.gif_frame_duration,
             loop=0,
         )
-        wandb.log({'video': wandb.Video(gif_name, format='gif')})
+        wandb.log({'video': wandb.Video(gif_name, format='gif')}, step=t)
         print(f"Done rendering episode gifs at update {i}")
 
     except jax.errors.TracerArrayConversionError:
@@ -135,17 +137,17 @@ def log_callback(metric, steps_prev_complete, config: RLConfig, train_start_time
         ep_return_mean = return_values.mean()
         ep_return_max = return_values.max()
         ep_return_min = return_values.min()
-        print(f"global step={t:,}; episodic return mean: {ep_return_mean} " + \
-            f"max: {ep_return_max}, min: {ep_return_min}")
         ep_length = (metric["returned_episode_lengths"]
                         [metric["returned_episode"]].mean())
+        fps = (t - steps_prev_complete) / (timer() - train_start_time)
+        print(f"global step={t:,}; episodic return mean: {ep_return_mean:,.2f} " + \
+            f"max: {ep_return_max:,.2f}, min: {ep_return_min:,.2f}, episode length: {ep_length:,.2f}, " + \
+            f"FPS: {fps:,.2f}")
 
         # Add a row to csv with ep_return
         with open(os.path.join(get_exp_dir(config),
                                 "progress.csv"), "a") as f:
             f.write(f"{t},{ep_return_mean}\n")
-
-        fps = (t - steps_prev_complete) / (timer() - train_start_time)
 
         # writer.add_scalar("ep_return", ep_return_mean, t)
         # writer.add_scalar("ep_return_max", ep_return_max, t)
@@ -163,10 +165,17 @@ def log_callback(metric, steps_prev_complete, config: RLConfig, train_start_time
             step=t,
         )
 
-        print(f"fps: {round(fps):,}")
         # for k, v in zip(env.prob.metric_names, env.prob.stats):
         #     writer.add_scalar(k, v, t)
 
+def preprocess_ckpt(ckpt):
+    runner_state = ckpt['runner_state']
+    runner_state.env_state = runner_state.env_state.replace(
+        env_state=runner_state.env_state.env_state.replace(
+            
+        )
+        
+    )
 
 def make_train(config: TrainConfig, restored_ckpt, checkpoint_manager):
     config._num_updates = (
@@ -293,7 +302,7 @@ def make_train(config: TrainConfig, restored_ckpt, checkpoint_manager):
                     print(f"Saving checkpoint at step {t}")
                     ckpt = {'runner_state': runner_state,
                             # 'config': OmegaConf.to_container(config),
-                            'step_i': t}
+                            'step_i': jnp.array(t, dtype=jnp.int32)}
                     # ckpt = {'step_i': t}
                     # save_args = orbax_utils.save_args_from_target(ckpt)
                     # checkpoint_manager.save(t, ckpt, save_kwargs={
@@ -577,7 +586,7 @@ def init_checkpointer(config: RLConfig) -> Tuple[Any, dict]:
     runner_state = RunnerState(train_state=train_state, env_state=env_state, last_obs=obsv,
                                # ep_returns=jnp.full(config.num_envs, jnp.nan), 
                                rng=rng, update_i=0)
-    target = {'runner_state': runner_state, 'step_i': 0}
+    target = {'runner_state': runner_state, 'step_i': jnp.array(0, dtype=jnp.int32)}
     # Get absolute path
     ckpt_dir = os.path.abspath(ckpt_dir)
     options = ocp.CheckpointManagerOptions(
@@ -596,7 +605,7 @@ def init_checkpointer(config: RLConfig) -> Tuple[Any, dict]:
         restored_ckpt = checkpoint_manager.restore(
             # steps_prev_complete, items=target)
             steps_prev_complete, args=ocp.args.StandardRestore(target))
-        target = {'runner_state': runner_state, 'step_i': 0}
+        target = {'runner_state': runner_state, 'step_i': jnp.array(0, dtype=jnp.int32)}
         restored_ckpt = checkpoint_manager.restore(
             steps_prev_complete, items=target)
             

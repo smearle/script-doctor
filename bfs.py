@@ -14,6 +14,7 @@ from timeit import default_timer as timer
 
 from conf.config import BFSConfig, RLConfig
 from env import PSEnv, PSParams, PSState
+from globals import PRIORITY_GAMES
 from human_env import SCALING_FACTOR
 from jax_utils import stack_leaves
 from preprocess_games import PS_LARK_GRAMMAR_PATH, get_tree_from_txt

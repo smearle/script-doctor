@@ -1,5 +1,6 @@
 import numpy as np
 import os
+import random
 import re
 import imageio
 import matplotlib.pyplot as plt
@@ -8,7 +9,6 @@ from io import BytesIO
 from typing import List, Tuple
 import jax.numpy as jnp
 import jax
-from jax import random
 from jax import jit, vmap
 
 
@@ -38,19 +38,25 @@ color_hex_map = {
     "darkblue": "#00008B",
     "purple": "#800080",
     "pink": "#FFC0CB",
-    "transparent": "#00000000"  # Transparent in RGBA format
+    "transparent": "#00000000",  # Transparent in RGBA format
+    "purpleblue": "#8A2BE2",
 }
 
 def render_solid_color(color):
-    color = color.lower()
     alpha = 255
-    if color == 'transparent':
-        c = color_hex_map[color]
-        alpha = 0
-    elif color in color_hex_map:
-        c = color_hex_map[color]
+    # Check if color is a hex code or a named color
+    if re.match(r'^#(?:[0-9a-fA-F]{3}){1,2}$', color):
+        # It's a hex code
+        c = color
     else:
-        c = '#000000'
+        # It's a string (named color)
+        if color.lower() == 'transparent':
+            c = color_hex_map[color.lower()]
+            alpha = 0
+        elif color.lower() in color_hex_map:
+            c = color_hex_map[color.lower()]
+        else:
+            c = '#000000'
     c = hex_to_rgba(c, alpha)
     im = np.zeros((5, 5, 4), dtype=np.uint8)
     im[:, :, :] = np.array(c)
@@ -69,6 +75,7 @@ def render_sprite(colors, sprite):
             c = color_hex_map[c]
         c = hex_to_rgba(c, alpha)
         colors_vec[i] = np.array(c)
+    sprite = np.clip(sprite, 0, len(colors_vec) - 1)
     im = colors_vec[sprite]
 
     # Anywhere the sprite is 0, set to transparent
@@ -88,5 +95,9 @@ def hex_to_rgba(hex_code, alpha):
     hex_code = hex_code.lstrip('#')
     if len(hex_code) == 3:
         hex_code = ''.join(c*2 for c in hex_code)
+    if len(hex_code) == 8:
+        # If the hex code is in RGBA format
+        rgb = tuple(int(hex_code[i:i+2], 16) for i in (0, 2, 4))
+        alpha = int(hex_code[6:8], 16)
     rgb = tuple(int(hex_code[i:i+2], 16) for i in (0, 2, 4))
     return (*rgb, alpha)

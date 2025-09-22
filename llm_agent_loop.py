@@ -4,7 +4,7 @@ import re
 import json
 import jax
 from lark import Lark
-from wrappers import RepresentationWrapper
+from env_wrappers import RepresentationWrapper
 from env import PSParams
 from preprocess_games import PS_LARK_GRAMMAR_PATH, get_tree_from_txt
 from LLM_agent import LLMGameAgent
@@ -85,7 +85,8 @@ def extract_first_level(level_lines):
         return "\n".join(levels[0])
     return ""
 
-def check_run_file_exists(save_dir, model, game_name, run_id, level_index):
+def check_run_file_exists(save_dir, model, game_name, run_id, level_index,
+                          think_aloud):
     """
     Check if the specified run file exists, supporting two naming formats:
     1. With level marker: model_game_run_X_level_Y.json
@@ -103,21 +104,22 @@ def check_run_file_exists(save_dir, model, game_name, run_id, level_index):
     """
     # Format the game name by replacing spaces with underscores for file paths
     formatted_game_name = game_name.replace(" ", "_")
+    cot_prefix = "CoT_" if think_aloud else ""
     
     # Check filename with level marker
-    filename_with_level = f"{model}_{formatted_game_name}_run_{run_id}_level_{level_index}.json"
+    filename_with_level = f"{model}_{cot_prefix}{formatted_game_name}_run_{run_id}_level_{level_index}.json"
     path_with_level = os.path.join(save_dir, filename_with_level)
     
     # Also check with original game name format (for backward compatibility)
-    orig_filename_with_level = f"{model}_{game_name}_run_{run_id}_level_{level_index}.json"
+    orig_filename_with_level = f"{model}_{cot_prefix}{game_name}_run_{run_id}_level_{level_index}.json"
     orig_path_with_level = os.path.join(save_dir, orig_filename_with_level)
     
     # For level 0, also check filename without level marker
     if level_index == 0:
-        filename_without_level = f"{model}_{formatted_game_name}_run_{run_id}.json"
+        filename_without_level = f"{model}_{cot_prefix}{formatted_game_name}_run_{run_id}.json"
         path_without_level = os.path.join(save_dir, filename_without_level)
         
-        orig_filename_without_level = f"{model}_{game_name}_run_{run_id}.json"
+        orig_filename_without_level = f"{model}_{cot_prefix}{game_name}_run_{run_id}.json"
         orig_path_without_level = os.path.join(save_dir, orig_filename_without_level)
         
         exists = os.path.exists(path_with_level) or os.path.exists(path_without_level) or \
@@ -127,7 +129,8 @@ def check_run_file_exists(save_dir, model, game_name, run_id, level_index):
     exists = os.path.exists(path_with_level) or os.path.exists(orig_path_with_level)
     return exists
 
-def get_run_file_path(save_dir, model, game_name, run_id, level_index):
+def get_run_file_path(save_dir, model, game_name, run_id, level_index,
+                      think_aloud):
     """
     Get file path for saving run results, always using the format with level marker
     
@@ -144,7 +147,10 @@ def get_run_file_path(save_dir, model, game_name, run_id, level_index):
     # Format the game name by replacing spaces with underscores for file paths
     formatted_game_name = game_name.replace(" ", "_")
     
-    filename = f"{model}_{formatted_game_name}_run_{run_id}_level_{level_index}.json"
+    filename = (f"{model}_" + \
+        ('CoT_' if think_aloud else '') + \
+        f"{formatted_game_name}_run_{run_id}_level_{level_index}.json")
+    
     return os.path.join(save_dir, filename)
 
 def find_next_available_run_id(save_dir, model, game_name, level_index, initial_run_id):
@@ -235,7 +241,8 @@ def collect_game_info(game_name, start_level):
         print(f"Error collecting game info for {game_name}: {type(e).__name__}, {e}")
         return None
 
-def process_game_level(agent, game_info, level_index, run_id, save_dir, model, max_steps, force=False):
+def process_game_level(agent, game_info, level_index, run_id, save_dir, model,
+                       max_steps, think_aloud, force=False):
     """
     Process a specific game level for a specific run ID.
     
@@ -259,12 +266,16 @@ def process_game_level(agent, game_info, level_index, run_id, save_dir, model, m
     print(f"\n=== Processing Game: {game_name}, Level: {level_index}, Run: {run_id} ===")
     
     # Check if this run already exists
-    if check_run_file_exists(save_dir, model, game_name, run_id, level_index) and not force:
+    if check_run_file_exists(save_dir, model, game_name, run_id, level_index, think_aloud) and not force:
         print(f"Run {run_id} for Game: {game_name}, Level: {level_index} already exists. Skipping.")
         return True
     
     # Get the path for saving results
-    current_run_filepath = get_run_file_path(save_dir, model, game_name, run_id, level_index)
+    current_run_filepath = get_run_file_path(save_dir, model, game_name, run_id,
+                                             level_index, think_aloud)
+
+    current_run_logs_dir = current_run_filepath[:-5] + "_logs"
+    os.makedirs(current_run_logs_dir, exist_ok=True)
     
     try:
         # Ensure level_index is valid
@@ -303,12 +314,16 @@ def process_game_level(agent, game_info, level_index, run_id, save_dir, model, m
             
             h = hash(current_state.multihot_level.tobytes())
             state_history.add(h)
+
+            log_file = os.path.join(current_run_logs_dir, f"step_{step+1}.txt")
             
             action_id = agent.choose_action(
                 ascii_map=ascii_state,
                 rules=rules,
                 action_space=action_space,
                 action_meanings=action_meanings,
+                think_aloud=think_aloud,
+                log_file=log_file,
             )
             
             action_str = action_meanings[action_id]
@@ -362,7 +377,7 @@ def process_game_level(agent, game_info, level_index, run_id, save_dir, model, m
             result["run"] = available_run_id
         
         # Get the file path with the updated run ID
-        current_run_filepath = get_run_file_path(save_dir, model, game_name, available_run_id, level_index)
+        current_run_filepath = get_run_file_path(save_dir, model, game_name, available_run_id, level_index, think_aloud)
         
         # Save results
         with open(current_run_filepath, "w", encoding="utf-8") as f:
@@ -393,6 +408,11 @@ def main():
     # Add a force flag to force run all games regardless of existing files
     parser.add_argument('--force', action='store_true',
                         help='Force run all games regardless of existing result files')
+    parser.add_argument('--run_id_start', type=int, default=1,)
+    parser.add_argument('--think_aloud', action='store_true',
+                        help='Allow the LLM to think aloud as opposed to outputting strictly the next action.')
+    parser.add_argument('--save_dir', type=str, default="llm_agent_results",
+                        help='Directory to save results (default: llm_agent_results)')
     args = parser.parse_args()
 
     # Get the list of games from PRIORITY_GAMES
@@ -421,7 +441,7 @@ def main():
     
     agent = LLMGameAgent(model_name=args.model)
 
-    save_dir_main = "llm_agent_results/"+ args.model
+    save_dir_main = os.path.join(args.save_dir, args.model)
     os.makedirs(save_dir_main, exist_ok=True)
 
     # Starting level from CLI argument
@@ -444,7 +464,7 @@ def main():
         return
     
     # 第二步：按运行ID遍历所有游戏和关卡
-    for run_id in range(1, args.num_runs + 1):
+    for run_id in range(args.run_id_start, args.num_runs + args.run_id_start):
         print(f"\n\n========== PROCESSING RUN {run_id} OF {args.num_runs} FOR ALL GAMES ==========\n")
         
         # 处理所有游戏
@@ -460,6 +480,7 @@ def main():
                     level_index=level_index,
                     run_id=run_id,
                     save_dir=save_dir_main,
+                    think_aloud=args.think_aloud,
                     model=args.model,
                     max_steps=args.max_steps,
                     force=args.force

@@ -2,7 +2,9 @@
 bin/
 **/.DS_Store
 .vscode
+.idea
 .build
+.ipynb_checkpoints
 logs*
 plots/
 multirun
@@ -24,6 +26,7 @@ example_games.json
 example_sprites.json
 example_sprites_names.txt
 outputs
+llm_agent_results/*/*/step_*.txt
 logs
 rl_logs
 pretty_trees
@@ -32,3 +35,5 @@ script-doctor-py
 script-doctor
 scratch
 sols
+vids
+wandb

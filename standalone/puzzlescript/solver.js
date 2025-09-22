@@ -390,32 +390,52 @@ function getScoreNormalized(engine) {
 	return 1 - score / normal_value;
 }
 
+function getState(engine) {
+  level = engine.backupLevel();
+  return level
+}
+
 function takeAction(engine, action) {
-  // let changed = engine.processInput(action);
-  let changed = processInputSearch(engine, action);
+  // precalcDistances(engine);
+  var changed = engine.processInput(action);
+  while (engine.getAgaining()) {
+    changed = engine.processInput(-1) || changed;
+  }
+  score = getScore(engine);
+  level = engine.backupLevel();
+  level_map = level['dat'];
+  // score = 0;
   if (engine.getWinning()) {
     DoRestartSearch(engine);
     // console.log('Winning!');
     // return true;
   }
-  return false;
+  // Dummy values for winning, solution, iterations, and elapsed time
+  return [false, [], 0, 0, score, level, false, Array.from(engine.getState().idDict)];
 }
 
 function randomRollout(engine, maxIters=100_000) {
+  precalcDistances(engine);
   let i = 0;
   let start_time = Date.now();
   const timeout_ms = 60 * 1000;
+  var score = getScore(engine);
+  var new_level = engine.backupLevel();
+  var level_map = engine.backupLevel()['dat'];
   while (i < maxIters) {
     // if (i % 1000 == 0) {
     elapsed_time = Date.now() - start_time;
     if (elapsed_time > timeout_ms) {
       console.log(`Timeout after ${elapsed_time / 1000} seconds. Returning.`);
-      return [false, [], i, ((Date.now() - start_time) / 1000)];
+      return [false, [], i, ((Date.now() - start_time) / 1000), score, new_level, true, Array.from(engine.getState().idDict)];
     }
     // }
     // let changed = engine.processInput(Math.min(5, Math.floor(Math.random() * 6)));
     let changed = processInputSearch(engine, Math.min(5, Math.floor(Math.random() * 6)));
     if (changed) {
+      score = getScore(engine);
+      new_level = engine.backupLevel();
+      level_map = new_level['dat'];
       if (engine.getWinning()) {
         // console.log(`Winning! Solution:, ${new_action_seq}\n Iterations: ${i}`);
         // console.log('FPS:', (i / (Date.now() - start_time) * 1000).toFixed(2));
@@ -427,9 +447,10 @@ function randomRollout(engine, maxIters=100_000) {
   }
   if(i >= maxIters) {
     // console.log('Exceeded max iterations. Exiting.');
-    return [false, [], i, ((Date.now() - start_time) / 1000)];
+    return [false, [], i, ((Date.now() - start_time) / 1000), score, new_level, false, Array.from(engine.getState().idDict)];
   }
-  return [false, [], i, ((Date.now() - start_time) / 1000)];
+  // Dummy values for winning and solution
+  return [false, [], i, ((Date.now() - start_time) / 1000), score, new_level, false, Array.from(engine.getState().idDict)];
 }
 
 function processInputSearch(engine, action){
@@ -478,8 +499,9 @@ function solveRandom(engine, maxLength=100, maxIters=100_000) {
   return [false, [], i, ((Date.now() - start_time) / 1000)];
 }
 
-function solveBFS(engine, maxIters=100_000) {
-  const timeout_ms = 60 * 1000;
+function solveBFS(engine, maxIters, timeoutJS) {
+  precalcDistances(engine);
+  timeout_ms = timeoutJS;
   function hashState(state) {
     return JSON.stringify(state).split('').reduce((hash, char) => {
       return (hash * 31 + char.charCodeAt(0)) % 1_000_000_003; // Simple hash
@@ -499,7 +521,9 @@ function solveBFS(engine, maxIters=100_000) {
   frontier.enqueue([init_level, []]);
   // action_seqs.enqueue([]);
 
-  sol = [];
+  var sol = [];
+  var bestState = init_level;
+  var bestScore = getScore(engine);
   // console.log(sol.length);
   visited = new Set([hashState(init_level_map)]);
   i = 0;
@@ -507,15 +531,17 @@ function solveBFS(engine, maxIters=100_000) {
   // console.log(frontier.size())
   while (frontier.size() > 0 && i < maxIters) {
     if (i % 1000 == 0) {
-      if (elapsed_time > timeout_ms) {
+      elapsed_time = Date.now() - start_time;
+      if ((timeout_ms > 0) && (elapsed_time > timeout_ms)) {
         console.log(`Timeout after ${elapsed_time / 1000} seconds. Returning best result found so far.`);
+        return [false, sol, i, ((Date.now() - start_time) / 1000), bestScore, bestState, true, engine.getState().idDict];
       }
     }
     backups = [];
 
     // const level = frontier.shift();
     // const action_seq = action_seqs.shift();
-    const [level, action_seq] = frontier.dequeue();
+    const [parent_level, action_seq] = frontier.dequeue();
     // const action_seq = action_seqs.dequeue();
 
     if (!action_seq) {
@@ -524,26 +550,35 @@ function solveBFS(engine, maxIters=100_000) {
     for (const move of Array(5).keys()) {
       if (i > maxIters) {
         // console.log('Exceeded 1M iterations. Exiting.');
-        return [false, [], i, ((Date.now() - start_time) / 1000)];
+        return [false, sol, i, ((Date.now() - start_time) / 1000), bestScore, bestState, false,
+          Array.from(engine.getState().idDict)];
       }
-      engine.restoreLevel(level);
+      engine.restoreLevel(parent_level);
 
       new_action_seq = action_seq.slice();
       new_action_seq.push(move);
-      try {
-        changed = processInputSearch(engine, move);
-      } catch (e) {
-        // console.log('Error while processing input:', e);
-        return [false, [], i, ((Date.now() - start_time) / 1000)];
+      engine.clearBackups();
+      var changed = engine.processInput(move);
+      while (engine.getAgaining()) {
+        changed = engine.processInput(-1) || changed;
       }
-      if (engine.getWinning()) {
-        // console.log(`Winning! Solution:, ${new_action_seq}\n Iterations: ${i}`);
-        // console.log('FPS:', (i / (Date.now() - start_time) * 1000).toFixed(2));
-        return [true, new_action_seq, i, ((Date.now() - start_time) / 1000)];
-      }
-      else if (changed) {
+      // try {
+      //   changed = processInputSearch(engine, move);
+      // } catch (e) {
+      //   // console.log('Error while processing input:', e);
+      //   return [false, sol, i, ((Date.now() - start_time) / 1000), bestScore, bestState, false,
+      //     Array.from(engine.getState().idDict)];
+      // }
+      if (changed) {
         new_level = engine.backupLevel();
         new_level_map = new_level['dat'];
+        if (engine.getWinning()) {
+          // console.log(`Winning! Solution:, ${new_action_seq}\n Iterations: ${i}`);
+          // console.log('FPS:', (i / (Date.now() - start_time) * 1000).toFixed(2));
+          score = getScore(engine);
+          return [true, new_action_seq, i, ((Date.now() - start_time) / 1000), score, new_level, false,
+            Array.from(engine.getState().idDict)];
+        }
         const newHash = hashState(new_level_map);
         if (!visited.has(newHash)) {
           
@@ -554,32 +589,42 @@ function solveBFS(engine, maxIters=100_000) {
           frontier.enqueue([new_level, new_action_seq]);
           // frontier.enqueue(new_level);
           if (!new_action_seq) {
-            // console.log(`New action sequence is undefined when pushing.`);
+            console.log(`New action sequence is undefined when pushing.`);
           }
           // action_seqs.enqueue(new_action_seq);
           visited.add(newHash);
+          score = getScore(engine);
+          // Use this condition if we want short and maximlly good sequences
+          // if ((score < bestScore) | (score == bestScore && new_action_seq.length > sol.length)) {
+          // Use this condition if we want maximally long sequences to validate the jax engine, for example
+          if ((score < bestScore) | (score == bestScore && new_action_seq.length > sol.length)) {
+            bestScore = score;
+            // bestState = new_level_map;
+            bestState = new_level;
+            sol = new_action_seq;
+          }
         } 
       }
     }
-    // if (i % 10000 == 0) {
-    //   now = Date.now();
-    //   console.log('Iteration:', i);
-    //   console.log('FPS:', (i / (now - start_time) * 1000).toFixed(2));
-    //   console.log(`Size of frontier: ${frontier.size()}`);
-    //   console.log(`Visited states: ${visited.size}`);
-    //   // await new Promise(resolve => setTimeout(resolve, 1)); // Small delay for live feedback
-    //   // redraw();
-    // }
+    if (i % 10000 == 0) {
+      now = Date.now();
+      console.log('Iteration:', i);
+      console.log('FPS:', (i / (now - start_time) * 1000).toFixed(2));
+      console.log(`Size of frontier: ${frontier.size()}`);
+      console.log(`Visited states: ${visited.size}`);
+    }
     i++;
   }
   if(i >= maxIters) {
-    // console.log('Exceeded max iterations. Exiting.');
-    return [false, [], i, ((Date.now() - start_time) / 1000)];
+    return [false, sol, i, ((Date.now() - start_time) / 1000), bestScore, bestState, false,
+      Array.from(engine.getState().idDict)];
   }
-  return [true, sol, i, ((Date.now() - start_time) / 1000)];
+  return [false, sol, i, ((Date.now() - start_time) / 1000), bestScore, bestState, false,
+    Array.from(engine.getState().idDict)];
 }
 
 function DoRestartSearch(engine, force) {
+  engine.clearBackups();
   if (engine.getRestarting()){
     return;
   }
@@ -648,6 +693,8 @@ function solveAStar(engine, maxIters=100_000) {
 		actions = [0, 1, 2, 3];
 	}
 	exploredStates = {};
+  var bestState = getState(engine);
+  var bestScore = getScore(engine);
 	exploredStates[engine.getLevel().objects] = [engine.getLevel().objects.slice(0), -1];
 	var queue;
 	queue = new FastPriorityQueue(byScoreAndLength);
@@ -684,16 +731,22 @@ function solveAStar(engine, maxIters=100_000) {
 			for (var k = 0, len2 = parentState.length; k < len2; k++) {
 				engine.getLevel().objects[k] = parentState[k];
 			}
-			// var changedSomething = engine.processInput(actions[i]);
-			// while (engine.getAgaining()) {
-			// 	changedSomething = engine.processInput(-1) || changedSomething;
-			// }
-      var changedSomething = processInputSearch(engine, actions[i]);
+			var changedSomething = engine.processInput(actions[i]);
+			while (engine.getAgaining()) {
+				changedSomething = engine.processInput(-1) || changedSomething;
+			}
+      // var changedSomething = processInputSearch(engine, actions[i]);
 
 			if (changedSomething) {
 				if (engine.getLevel().objects in exploredStates) {
 					continue;
 				}
+
+        score = getScore(engine)
+        if (score < bestScore) {
+          bestScore = score;
+          bestState = getState(engine)
+        }
 
         // await new Promise(resolve => setTimeout(resolve, 1)); // Small delay for live feedback
         // redraw();
@@ -713,10 +766,10 @@ function solveAStar(engine, maxIters=100_000) {
 					engine.setDeltaTime(oldDT);
 					DoRestartSearch(engine);
 					// redraw();
-					return [true, solution, totalIters, ((Date.now() - start_time) / 1000)];
+					return [true, solution, totalIters, ((Date.now() - start_time) / 1000), bestScore, bestState, false, engine.getState().idDict];
 				}
 				size++;
-				queue.add([getScore(engine), engine.getLevel().objects.slice(0), numSteps + 1]);
+				queue.add([score, engine.getLevel().objects.slice(0), numSteps + 1]);
 			}
 		}
     totalIters++;
@@ -729,7 +782,7 @@ function solveAStar(engine, maxIters=100_000) {
 	deltatime = oldDT;
 	// redraw();
 	// cancelLink.hidden = true;
-  return [false, [], totalIters, ((Date.now() - start_time) / 1000)];
+  return [false, [], totalIters, ((Date.now() - start_time) / 1000), bestScore, bestState, false, engine.getState().idDict];
 }
 
 class MCTSNode{
@@ -878,17 +931,26 @@ function solveMCTS(engine, options = {}) {
     "c": Math.sqrt(2), 
     "max_iterations": 100_000
   };
-  for(let key in defaultOptions){
-    if(!options.hasOwnProperty(key)){
-      options[key] = defaultOptions[key];
-    }
-  }
+
+  // for(let key in defaultOptions){
+  //   if(!options.hasOwnProperty(key)){
+  //     options[key] = defaultOptions[key];
+  //   }
+  // }
+  // I believe this is a simpler and correct form of the above (which leaves options as `null`)
+  options = { ...defaultOptions, ...options };
+
+  console.log("Running MCTS with:")
+  console.log(options)
+
   if(options.score_fn){
     precalcDistances(engine);
     options.score_fn = getScoreNormalized;
   }
 
   let init_level = engine.backupLevel();
+  bestScore = getScore(engine);
+  bestState = getState(engine);
   let rootNode = new MCTSNode(-1, null, 5);
   let i = 0;
   let deadend_nodes = 1;
@@ -903,10 +965,19 @@ function solveMCTS(engine, options = {}) {
       currentNode = currentNode.select(options.c);
       // changed = engine.processInput(currentNode.action);
       changed = processInputSearch(engine, currentNode.action);
+
+      score = getScore(engine);
+      if (score < bestScore) {
+        bestScore = score;
+        bestState = getState(engine);
+      }
+
       if(engine.getWinning()){
         let sol = currentNode.get_actions();
         // console.log(`Winning! Solution:, ${sol}\n Iterations: ${i}\n Tree size: ${rootNode.tree_size()}`);
-        return [true, sol, i, ((Date.now() - start_time) / 1000)];
+        return [true, sol, i, ((Date.now() - start_time) / 1000), bestScore,
+          bestState, false, engine.getState().idDict
+        ];
       }
       if(!options.explore_deadends && !changed){
         break;
@@ -928,7 +999,8 @@ function solveMCTS(engine, options = {}) {
         let sol = currentNode.get_actions();
         // console.log(`Winning! Solution:, ${sol}\n Iterations: ${i}`);
         // console.log('FPS:', (i / (Date.now() - start_time) * 1000).toFixed(2));
-        return [true, sol, i, ((Date.now() - start_time) / 1000)];
+        return [true, sol, i, ((Date.now() - start_time) / 1000), bestScore,
+          bestState, false, engine.getState().idDict];
       }
       // if node is deadend, punish it
       if(!options.explore_deadends && !changed){
@@ -968,7 +1040,18 @@ function solveMCTS(engine, options = {}) {
     actions.push(action);
     currentNode = currentNode.children[action];
   }
-  return [false, actions, options.max_iterations, ((Date.now() - start_time) / 1000)];
+  return [false, actions, options.max_iterations,
+    ((Date.now() - start_time) / 1000), bestScore, bestState, false, engine.getState().idDict];
+}
+
+function getNLevels(engine) {
+  let n_levels = 0;
+  for (let i = 0; i < engine.getLevel().n_tiles; i++) {
+    if (engine.getLevel().getCellInto(i, engine.get_o10()).data != 0) {
+      n_levels++;
+    }
+  }
+  return n_levels;
 }
 
 module.exports = {
@@ -978,4 +1061,7 @@ module.exports = {
   solveRandom,
   randomRollout,
   takeAction,
+  precalcDistances,
+  getState,
+  getScore,
 }
