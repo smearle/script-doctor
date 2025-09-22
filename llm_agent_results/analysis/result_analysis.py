@@ -95,6 +95,9 @@ def main():
 
     df = collect_results(results_dir)
 
+    # 过滤掉 deepseek-r1 结果
+    df = df[df['llm'] != 'deepseek-r1']
+
     if df.empty:
         print("No data collected. Exiting.")
         return

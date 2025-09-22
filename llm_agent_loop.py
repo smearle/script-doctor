@@ -153,7 +153,7 @@ def get_run_file_path(save_dir, model, game_name, run_id, level_index,
     
     return os.path.join(save_dir, filename)
 
-def find_next_available_run_id(save_dir, model, game_name, level_index, initial_run_id):
+def find_next_available_run_id(save_dir, model, game_name, level_index, initial_run_id, think_aloud):
     """
     Find the next available run ID that doesn't conflict with existing files.
     
@@ -163,12 +163,13 @@ def find_next_available_run_id(save_dir, model, game_name, level_index, initial_
         game_name: Game name
         level_index: Level index
         initial_run_id: The initial run ID we'd like to use
+        think_aloud: Whether to use CoT prefix in filename
         
     Returns:
         int: The next available run ID
     """
     run_id = initial_run_id
-    while check_run_file_exists(save_dir, model, game_name, run_id, level_index):
+    while check_run_file_exists(save_dir, model, game_name, run_id, level_index, think_aloud):
         print(f"Run {run_id} already exists for Game: {game_name}, Level: {level_index}. Trying next run ID.")
         run_id += 1
     return run_id
@@ -369,7 +370,7 @@ def process_game_level(agent, game_info, level_index, run_id, save_dir, model,
         result["final_ascii"] = ascii_state.split('\n')
         
         # Find the next available run ID (starting from the current run_id)
-        available_run_id = find_next_available_run_id(save_dir, model, game_name, level_index, run_id)
+        available_run_id = find_next_available_run_id(save_dir, model, game_name, level_index, run_id, think_aloud)
         
         if available_run_id != run_id:
             print(f"Original run ID {run_id} already exists. Using run ID {available_run_id} instead.")
@@ -393,8 +394,8 @@ def process_game_level(agent, game_info, level_index, run_id, save_dir, model,
 
 def main():
     parser = argparse.ArgumentParser(description='LLM agent loop experiment (env+rules/ascii/mapping)')
-    parser.add_argument('--model', type=str, required=True, choices=['4o-mini', 'o3-mini', 'gemini', 'gemini-2.5-pro', 'deepseek', 'qwen', 'deepseek-r1'],
-                        help='LLM model alias (4o-mini=4o-mini, o3=O3-mini, gemini=Gemini-2.0, gemini-2.5-pro=Gemini-2.5-Pro, deepseek=DeepSeek, qwen=Qwen)')
+    parser.add_argument('--model', type=str, required=True, choices=['4o-mini', 'o3-mini', 'gemini', 'gemini-2.5-pro', 'deepseek', 'qwen', 'deepseek-r1', 'llama'],
+                        help='LLM model alias (4o-mini=4o-mini, o3=O3-mini, gemini=Gemini-2.0, gemini-2.5-Pro, deepseek=DeepSeek, qwen=Qwen, llama=Llama-3 via Portkey)')
     parser.add_argument('--max_steps', type=int, default=100,
                         help='Maximum steps per episode (default: 100)')
     parser.add_argument('--num_runs', type=int, default=10,
