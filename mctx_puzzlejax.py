@@ -25,7 +25,7 @@ import jax
 import jax.numpy as jnp
 import env as Env
 import mctx
-from utils import get_list_of_games_for_testing
+from puzzlejax.utils import get_list_of_games_for_testing
 from utils_rl import get_env_params_from_config, init_ps_env
 from conf.config import PSConfig
 import os,logging
