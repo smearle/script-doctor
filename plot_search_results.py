@@ -6,11 +6,12 @@ import hydra
 from matplotlib import pyplot as plt
 import numpy as np
 import pandas as pd
+import seaborn as sns
 
 from conf.config import PlotSearch
 from globals import PLOTS_DIR, STANDALONE_NODEJS_RESULTS_PATH, JS_SOLS_DIR
 from profile_nodejs import get_algo_name, get_standalone_run_params_from_name
-from utils import get_list_of_games_for_testing
+from puzzlejax.utils import get_list_of_games_for_testing, game_names_remap
 
 
 BFS_RESULTS_PATH = os.path.join('data', 'bfs_results.json')
@@ -25,7 +26,8 @@ def main(cfg: PlotSearch):
     
 
 def aggregate_results(cfg: PlotSearch):
-    games = os.listdir(JS_SOLS_DIR)
+    # games = os.listdir(JS_SOLS_DIR)
+    games = get_list_of_games_for_testing(cfg.all_games)
     results = {}
     max_iters = cfg.n_steps
     if cfg.algo == 'bfs':
@@ -44,6 +46,7 @@ def aggregate_results(cfg: PlotSearch):
         n_levels = 0
         n_solved = 0
         n_stepss = []
+        solution_lengths = []
         for sol_json in sol_jsons:
             run_name, level_i = os.path.basename(sol_json).rsplit('_level-', 1)
             sol_algo_name = run_name.split('_')[0]
@@ -57,18 +60,22 @@ def aggregate_results(cfg: PlotSearch):
                 print(f"Skipping {sol_json} because it doesn't have 'iterations' or 'won'")
                 continue
             solved = sol_dict['won']
+            actions = sol_dict.get('actions')
             if solved:
                 n_solved += 1
+                solution_lengths.append(len(actions))
             n_levels += 1
             n_steps = min(cfg.n_steps, sol_dict['iterations'])
             n_stepss.append(n_steps)
         if n_levels > 0:
             n_steps_mean = np.mean(n_stepss)
             pct_solved = n_solved / n_levels
+            mean_solution_length = float(np.mean(solution_lengths))
             results[game] = {
                 'pct_solved': pct_solved,
                 'n_levels': n_levels,
                 'n_iters': n_steps_mean,
+                'mean_sol_len': mean_solution_length
             }
     print(results)
     with open(BFS_RESULTS_PATH, 'w') as f:
@@ -85,40 +92,160 @@ def plot(cfg: PlotSearch, results=None):
             results = json.load(f)
     
     df = pd.DataFrame.from_dict(results, orient='index')
+    if 'sol_len' in df.columns and 'mean_sol_len' not in df.columns:
+        df.rename(columns={'sol_len': 'mean_sol_len'}, inplace=True)
     df = df.sort_values(by=['pct_solved', 'n_iters'], ascending=[False, True])
+
+    os.makedirs(PLOTS_DIR, exist_ok=True)
 
     csv_file_path = os.path.join(PLOTS_DIR, 'standalone_bfs_results.csv')
     df.to_csv(csv_file_path, index=True, float_format="%.2f")
     print(f'Saved results to {csv_file_path}')
 
+    # Remap game names
+    df.index = df.index.to_series().replace(game_names_remap)
+    # Replace underscores and capitalize game names
+    df.index = df.index.str.replace('_', ' ')
+    df.index = df.index.str.title()
+
+    heatmap_source_df = df.copy()
+
+    generate_heatmaps(heatmap_source_df)
+
+    latex_df = df.copy()
+
     col_renames = {
         'pct_solved': 'Solved Levels \\%',
         'n_levels': '\\# Total Levels',
         'n_iters': 'Mean Search Iterations',
+        'mean_sol_len': 'Mean Solution Length',
     }
-    df.rename(columns=col_renames, inplace=True)
+    latex_df.rename(columns=col_renames, inplace=True)
 
     # Clean and prepare index for LaTeX
-    df.index = df.index.str.replace('_', ' ')
-    df.index = df.index.str.replace('&', r'\&', regex=False)
-    df.index = df.index.str.replace('^', r'\^', regex=False)
-    df.index = df.index.to_series().apply(
+    latex_df.index = latex_df.index.str.replace('_', ' ')
+    latex_df.index = latex_df.index.str.replace('&', r'\&', regex=False)
+    latex_df.index = latex_df.index.str.replace('^', r'\^', regex=False)
+    latex_df.index = latex_df.index.to_series().apply(
         lambda name: f"\\parbox{{3.5cm}}{{\\strut {name[:50]}{'...' if len(name) > 50 else ''}}}"
     )
-    df.index.name = 'Game'
+    latex_df.index.name = 'Game'
 
     # Modify % column to show, e.g. "0.75" as "75\%"
-    df['Solved Levels \\%'] = df['Solved Levels \\%'].apply(lambda x: f"{x * 100:.0f}\\%")
+    latex_df['Solved Levels \\%'] = latex_df['Solved Levels \\%'].apply(lambda x: f"{x * 100:.0f}\\%")
 
     latex_file_path = os.path.join(PLOTS_DIR, 'bfs_results.tex')
     with open(latex_file_path, 'w') as f:
-        f.write(df.to_latex(index=True, float_format="%.2f", escape=False, caption="Results of BFS on full dataset of games, with max $100,000$ max search iterations and a timeout of 1 minute.",
+        f.write(latex_df.to_latex(index=True, float_format="%.2f", escape=False, caption="Results of BFS on full dataset of games, with max $100,000$ max search iterations and a timeout of 1 minute.",
                             longtable=True, label="tab:bfs_results"))
     print(f'Saved latex table to {latex_file_path}')
 
-    # Now generate a 1D heatmap, with cell color corresponding to percentage of levels solved, and games along the x-axis
-    
+def generate_heatmaps(df: pd.DataFrame) -> None:
+    if df.empty:
+        print('No data available for heatmap generation.')
+        return
 
+    heatmap_configs = [
+        {
+            'column': 'pct_solved',
+            'title': 'BFS Percent of Levels Solved per Game',
+            'cmap': 'RdYlGn',
+            'vmin': 0.0,
+            'vmax': 1.0,
+            'colorbar_label': 'Solved Levels %',
+            'formatter': lambda v: f"{v:.0%}",
+            'output': 'bfs_pct_solved_heatmap.png',
+        },
+        {
+            'column': 'n_iters',
+            'title': 'BFS Mean Search Iterations per Game',
+            'cmap': 'Blues',
+            'vmin': 0.0,
+            'vmax': None,
+            'colorbar_label': 'Mean Search Iterations',
+            'formatter': lambda v: f"{v:.0f}",
+            'output': 'bfs_mean_iterations_heatmap.png',
+        },
+        {
+            'column': 'mean_sol_len',
+            'title': 'BFS Mean Solution Length per Game',
+            'cmap': 'Purples',
+            'vmin': 0.0,
+            'vmax': None,
+            'colorbar_label': 'Mean Solution Length',
+            'formatter': lambda v: f"{v:.0f}",
+            'output': 'bfs_mean_solution_length_heatmap.png',
+        },
+    ]
+
+    target_cell_height = 1.0
+    target_cell_width = 1.0
+    min_total_figure_width = 8.0
+    min_total_figure_height = 3.0
+    h_padding = 3.0
+    v_padding = 1.5
+
+    for config in heatmap_configs:
+        column = config['column']
+        if column not in df.columns:
+            continue
+
+        series = df[column]
+        if series.dropna().empty:
+            continue
+
+        valid_series = series.dropna()
+
+        vmin = config.get('vmin')
+        vmax = config.get('vmax')
+        if vmin is None:
+            vmin = float(valid_series.min())
+        if vmax is None:
+            vmax = float(valid_series.max())
+        if np.isfinite(vmin) and np.isfinite(vmax) and np.isclose(vmin, vmax):
+            vmax = vmin + (abs(vmin) * 0.05 + 1)
+
+        display_names = [name.replace('_', ' ') for name in series.index]
+        data = pd.DataFrame([series.values], columns=display_names, index=[''])
+
+        annot_row = [
+            config['formatter'](val) if pd.notnull(val) else ''
+            for val in series.values
+        ]
+        annot_data = [annot_row]
+
+        num_cols = len(series)
+        fig_h = max(target_cell_height + v_padding, min_total_figure_height)
+        fig_w = max(num_cols * target_cell_width + h_padding, min_total_figure_width)
+
+        plt.figure(figsize=(fig_w, fig_h))
+        sns.heatmap(
+            data,
+            annot=annot_data,
+            fmt="",
+            cmap=config['cmap'],
+            vmin=vmin,
+            vmax=vmax,
+            cbar_kws={'label': config['colorbar_label'], 'shrink': 0.8, 'pad': 0.01},
+            annot_kws={"size": 9},
+            linewidths=0.5,
+            linecolor='white'
+        )
+        plt.title(config['title'])
+        plt.xlabel('Game', labelpad=10)
+        plt.ylabel('')
+        plt.yticks([])
+        plt.xticks(rotation=45, ha='right')
+        plt.tight_layout(pad=1.2, rect=[0, 0, 0.92, 1])
+
+        output_path = os.path.join(PLOTS_DIR, config['output'])
+        try:
+            plt.savefig(output_path, dpi=300)
+            print(f"Saved heatmap to {output_path}")
+        except Exception as e:
+            print(f"Error saving heatmap {config['output']}: {e}")
+        finally:
+            plt.close()
 
 
 @hydra.main(version_base="1.3", config_path="conf", config_name="plot_standalone_bfs_config")

@@ -28,7 +28,7 @@ from globals import SOLUTION_REWARDS_PATH, GAMES_TO_N_RULES_PATH
 from preprocess_games import PS_LARK_GRAMMAR_PATH, TREES_DIR, DATA_DIR, TEST_GAMES, PSErrors, get_tree_from_txt, count_rules
 from standalone.utils import replay_actions_js
 from standalone.utils import compile_game as compile_game_js
-from utils import get_list_of_games_for_testing, to_binary_vectors
+from puzzlejax.utils import get_list_of_games_for_testing, to_binary_vectors
 from utils_rl import get_env_params_from_config
 
 

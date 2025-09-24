@@ -20,6 +20,10 @@ from env import PSEnv
 from gen_tree import GenPSTree
 from preprocess_games import GAMES_DIR, get_tree_from_txt, TREES_DIR
 
+game_names_remap = {
+    'constellationz': 'Constellation Z',
+    'limerick': 'Lime Rick',
+}
 
 dotenv.load_dotenv()
 

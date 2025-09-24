@@ -19,18 +19,18 @@ PRIORITY_GAMES = [
     'slidings',
     'notsnake',
     'kettle',
-    # 'Travelling_salesman',
+    'Travelling_salesman',
     'Zen_Puzzle_Garden',
     # 'tiny treasure hunt',
     'atlas shrank',
     # 'Watch_Your_Step',
-    # 'Multi-word_Dictionary_Game',
+    'Multi-word_Dictionary_Game',
     'Take_Heart_Lass',
     # 'Indigestion',
     # 'castlemouse',
     # 'Sokodig',
     # 'nekopuzzle'
-    # 'constellationz',
+    'constellationz',
 ]
 
 GAMES_TO_SKIP = set({'easyenigma', 'A_Plaid_Puzzle'})

@@ -19,7 +19,7 @@ from env import PSParams
 from preprocess_games import get_env_from_ps_file
 from train import main as main_train
 from enjoy import main_enjoy
-from utils import get_list_of_games_for_testing, get_n_levels_per_game, init_ps_lark_parser
+from puzzlejax.utils import get_list_of_games_for_testing, get_n_levels_per_game, init_ps_lark_parser
 from utils_rl import init_config
 from globals import JS_TO_JAX_ACTIONS, JS_SOLS_DIR, SOLUTION_REWARDS_PATH
 

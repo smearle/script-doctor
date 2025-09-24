@@ -1,5 +1,5 @@
 from typing import List, Dict, Optional, Tuple
-from utils import llm_text_query
+from puzzlejax.utils import llm_text_query
 
 class LLMGameAgent:
     """

@@ -5,15 +5,21 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 import re
 
+from puzzlejax.utils import game_names_remap
+
+
 def parse_filename(filename):
     """
     Parses the filename to extract LLM, game, run, and level.
     Example: 4o-mini_limerick_run_1_level_1.json
     Example: 4o-mini_atlas shrank_run_1.json (level is 0 by default)
     """
-    match = re.match(r"^(.*?)_(.*?)_run_(\d+)(?:_level_(\d+))?\.json$", filename)
+    match = re.match(r"^(.*?)_(CoT_)?(.*?)_run_(\d+)(?:_level_(\d+))?\.json$", filename)
     if match:
-        llm_model, game_name, run_number, level_number = match.groups()
+        llm_model, cot, game_name, run_number, level_number = match.groups()
+        if cot:
+            # TODO: Plot comparison between CoT and non-CoT results in the future
+            return  None, None, None, None
         if level_number is None: # Handles cases like '4o-mini_atlas shrank_run_1.json'
             # Check if game_name itself contains 'level_X'
             game_match = re.match(r"(.*?)_level_(\d+)$", game_name)
@@ -55,6 +61,7 @@ def collect_results(results_dir):
             if filename.endswith(".json"):
                 filepath = os.path.join(root, filename)
                 llm, game, run, level = parse_filename(filename)
+
 
                 if not llm or not game:
                     print(f"Skipping unparsable file: {filename}")
@@ -102,12 +109,19 @@ def main():
     # Standardize game names - ensure all atlas shrank variations are normalized
     df['game'] = df['game'].apply(lambda x: "atlas_shrank" if "atlas" in x and "shrank" in x else x)
 
+    # Rename games
+    df['game'] = df['game'].replace(game_names_remap)
+    # Now remove any underscores, and capitalize each word
+    df['game'] = df['game'].apply(lambda x: ' '.join(word.capitalize() for word in x.replace('_', ' ').split()))
+
     # Map LLM names (remove Gemini from mapping)
     llm_name_mapping = {
-        "4o-mini": "ChatGPT 4o-mini",
+        "4o-mini": "GPT 4o-mini",
         "deepseek": "Deepseek-chat",
         "qwen": "Qwen-plus",
-        "gemini": "gemini 2.5 experimental flash"
+        "gemini": "Gemini 2.0 Flash Experimental",
+        'Deepseek-chat': 'DeepSeek-Chat',
+        'deepseek-r1': 'DeepSeek-R1',
     }
     df['llm'] = df['llm'].replace(llm_name_mapping)
 

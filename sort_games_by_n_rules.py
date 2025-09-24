@@ -17,7 +17,7 @@ from env import PSEnv
 from gen_tree import GenPSTree
 from preprocess_games import TREES_DIR, GAMES_DIR, count_rules, get_tree_from_txt
 from ps_game import PSGameTree
-from utils import GAMES_N_RULES_SORTED_PATH
+from puzzlejax.utils import GAMES_N_RULES_SORTED_PATH
 from globals import GAMES_TO_N_RULES_PATH, GAMES_N_RULES_SORTED_PATH
 
 
