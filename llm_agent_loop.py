@@ -344,31 +344,26 @@ def collect_game_info(game_name, start_level):
             print(f"Parse error: {err_msg}, code: {success}")
             return None
 
-        env = RepresentationWrapper(tree, debug=False, print_score=False)
-
-        if not hasattr(env, 'levels') or not env.levels:
+        # Do NOT create env here! Only store info needed to reconstruct it in the worker.
+        # Instead, check levels by parsing tree directly.
+        levels = getattr(tree, "levels", None)
+        if not levels or len(levels) == 0:
             print(f"Error: No levels found for game '{game_name}'. Skipping game.")
             return None
-            
-        if len(env.levels) == 0:
-            print(f"Error: No levels available (env.levels is empty) for game '{game_name}'. Skipping game.")
-            return None
-            
-        # Collect game information
+
+        # Collect game information (no env object)
         game_info = {
             "game_name": game_name,
             "game_path": game_path,
             "rules": rules,
             "mapping": mapping,
             "ascii_map": ascii_map,
-            "env": env,
             "tree": tree,
-            "num_levels": len(env.levels),
-            "levels_to_process": list(range(start_level, len(env.levels)))
+            "num_levels": len(levels),
+            "levels_to_process": list(range(start_level, len(levels)))
         }
-        
         return game_info
-        
+
     except Exception as e:
         print(f"Error collecting game info for {game_name}: {type(e).__name__}, {e}")
         return None
@@ -393,19 +388,28 @@ def process_game_level(agent, game_info, level_index, run_id, save_dir, model,
         Boolean indicating success
     """
     game_name = game_info["game_name"]
-    env = game_info["env"]
+    # Reconstruct env inside the worker process
+    from env_wrappers import RepresentationWrapper
+    tree = game_info["tree"]
+    env = RepresentationWrapper(tree, debug=False, print_score=False)
     rules = game_info["rules"]
     
     print(f"\n=== Processing Game: {game_name}, Level: {level_index}, Run: {run_id} ===")
     
-    # Check if this run already exists
-    if check_run_file_exists(save_dir, model, game_name, run_id, level_index, think_aloud, memory) and not force:
-        print(f"Run {run_id} for Game: {game_name}, Level: {level_index} already exists. Skipping.")
-        return True
-    
     # Get the path for saving results
     current_run_filepath = get_run_file_path(save_dir, model, game_name, run_id,
                                              level_index, think_aloud, memory)
+
+    # Create an empty run file as a lock before starting work
+    if os.path.exists(current_run_filepath) and not force:
+        print(f"Run {run_id} for Game: {game_name}, Level: {level_index} already exists. Skipping.")
+        return True
+    try:
+        with open(current_run_filepath, "w", encoding="utf-8") as f:
+            json.dump({"status": "running"}, f)
+    except Exception as e:
+        print(f"Failed to create lock file for {current_run_filepath}: {e}")
+        return False
 
     current_run_logs_dir = current_run_filepath[:-5] + "_logs"
     os.makedirs(current_run_logs_dir, exist_ok=True)
@@ -523,6 +527,8 @@ def process_game_level(agent, game_info, level_index, run_id, save_dir, model,
 
 
 def main():
+    import multiprocessing
+    multiprocessing.set_start_method("spawn", force=True)
     parser = argparse.ArgumentParser(description='LLM agent loop experiment (env+rules/ascii/mapping)')
     parser.add_argument('--model', type=str, required=True, choices=['4o-mini', 'o3-mini', 'gemini', 'gemini-2.5-pro', 'deepseek', 'qwen', 'deepseek-r1', 'llama'],
                         help='LLM model alias (4o-mini=4o-mini, o3=O3-mini, gemini=Gemini-2.0, gemini-2.5-Pro, deepseek=DeepSeek, qwen=Qwen, llama=Llama-3 via Portkey)')

@@ -1,0 +1,84 @@
+{
+  "working": {
+    "llama|mem-0|NoCoT|limerick|0|1": {
+      "worker": "Ace-847",
+      "ts": 1758739953.9078083
+    }
+  },
+  "completed": [
+    "llama|mem-0|NoCoT|sokoban_basic|0|1",
+    "llama|mem-0|NoCoT|sokoban_basic|1|1",
+    "llama|mem-0|NoCoT|sokoban_match3|0|1",
+    "llama|mem-0|NoCoT|sokoban_match3|1|1"
+  ]
+}{
+  "working": {
+    "llama|mem-0|NoCoT|limerick|0|1": {
+      "worker": "Ace-847",
+      "ts": 1758739953.9078083
+    },
+    "llama|mem-0|NoCoT|limerick|1|1": {
+      "worker": "Ace-848",
+      "ts": 1758739953.916593
+    }
+  },
+  "completed": [
+    "llama|mem-0|NoCoT|sokoban_basic|0|1",
+    "llama|mem-0|NoCoT|sokoban_basic|1|1",
+    "llama|mem-0|NoCoT|sokoban_match3|0|1",
+    "llama|mem-0|NoCoT|sokoban_match3|1|1"
+  ]
+}{
+  "working": {
+    "llama|mem-0|NoCoT|limerick|0|1": {
+      "worker": "Ace-21588",
+      "ts": 1758741945.3991175
+    }
+  },
+  "completed": [
+    "llama|mem-0|NoCoT|sokoban_basic|0|1",
+    "llama|mem-0|NoCoT|sokoban_basic|1|1",
+    "llama|mem-0|NoCoT|sokoban_match3|0|1",
+    "llama|mem-0|NoCoT|sokoban_match3|1|1"
+  ]
+}{
+  "working": {
+    "llama|mem-0|NoCoT|limerick|0|1": {
+      "worker": "Ace-21689",
+      "ts": 1758741946.7035863
+    }
+  },
+  "completed": [
+    "llama|mem-0|NoCoT|sokoban_basic|0|1",
+    "llama|mem-0|NoCoT|sokoban_basic|1|1",
+    "llama|mem-0|NoCoT|sokoban_match3|0|1",
+    "llama|mem-0|NoCoT|sokoban_match3|1|1"
+  ]
+}{
+  "working": {
+    "llama|mem-0|NoCoT|limerick|0|1": {
+      "worker": "Ace-31364",
+      "ts": 1758742848.2433896
+    }
+  },
+  "completed": [
+    "llama|mem-0|NoCoT|sokoban_basic|0|1",
+    "llama|mem-0|NoCoT|sokoban_basic|1|1",
+    "llama|mem-0|NoCoT|sokoban_match3|0|1",
+    "llama|mem-0|NoCoT|sokoban_match3|1|1"
+  ]
+}{
+  "working": {
+    "llama|mem-0|NoCoT|limerick|1|1": {
+      "worker": "Ace-31469",
+      "ts": 1758742849.5719578
+    }
+  },
+  "completed": [
+    "llama|mem-0|NoCoT|limerick|0|1",
+    "llama|mem-0|NoCoT|sokoban_basic|0|1",
+    "llama|mem-0|NoCoT|sokoban_basic|1|1",
+    "llama|mem-0|NoCoT|sokoban_match3|0|1",
+    "llama|mem-0|NoCoT|sokoban_match3|1|1"
+  ]
+}
