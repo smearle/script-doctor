@@ -647,10 +647,11 @@ class LoopRuleGroupState:
 
 class PSEnv:
     def __init__(self, tree: PSGameTree, jit: bool = True, level_i: int = 0, max_steps: int = np.inf,
-                 debug: bool = False, print_score: bool = True):
+                 debug: bool = False, print_score: bool = True, vmap: bool = False):
         global DEBUG, PRINT_SCORE
         DEBUG, PRINT_SCORE = debug, print_score
         self.jit = jit
+        self.vmap = vmap
         self.title = tree.prelude.title
         self._has_randomness = False
         self.tree = tree
@@ -935,7 +936,7 @@ class PSEnv:
     def apply_player_force(self, action, state: PSState):
         multihot_level = state.multihot_level
         # Add a dummy collision layer at the front. Add one final channel to mark the player's effect.
-        force_map = jnp.zeros((N_FORCES * (len(self.collision_layers) + 1) + 1, *multihot_level.shape[1:]), dtype=bool)
+        force_map = np.zeros((N_FORCES * (len(self.collision_layers) + 1) + 1, *multihot_level.shape[1:]), dtype=bool)
         
         def place_force(force_map, action):
             # This is a map-shape array of the obj-indices corresponding to the player objects active on these respective cells.
@@ -943,12 +944,13 @@ class PSEnv:
             player_int_mask = (self.player_idxs[...,None,None] + 1) * multihot_level[self.player_idxs].astype(int)
 
             # Turn the int mask into coords, by flattening it, and appending it with xy coords
-            xy_coords = jnp.indices(force_map.shape[1:])
+            xy_coords = np.indices(force_map.shape[1:])
             xy_coords = xy_coords[:, None].repeat(len(self.player_idxs), axis=1)
 
             # Create a new dictionary mapping objects to force channels, which adds a dummy collision layer at the front
             # Also, ignore the indices corresponding to object channels since we're dealing directly with the force map.
-            obj_idxs_to_force_idxs = jnp.concat((np.array([0]), self.obj_idxs_to_force_idxs + N_FORCES - self.n_objs))
+            obj_idxs_to_force_idxs = np.concat((np.array([0]), self.obj_idxs_to_force_idxs + N_FORCES - self.n_objs))
+            obj_idxs_to_force_idxs = jnp.array(obj_idxs_to_force_idxs)
 
             # This is a map-shaped array of the force-indices (and xy indices) that should be applied, given the player objects at these cells.
             player_force_mask = obj_idxs_to_force_idxs[player_int_mask] + action
@@ -2739,7 +2741,7 @@ class PSEnv:
         # patches = rearrange(patches, "c h w -> h w c")
         patches = patches.transpose(1, 2, 0)
 
-        if self.jit:
+        if self.jit and self.vmap:
             kernel_activations, cell_detect_outs = jax.vmap(jax.vmap(detect_cells))(patches)
 
         else:

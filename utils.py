@@ -127,6 +127,9 @@ def llm_text_query(system_prompt, prompt, model, api_key=None, base_url=None, mo
     elif model == "gemini":
         virtual_key = os.environ.get("PORTKEY_VERTEX_KEY", "")
         model ="gemini-2.0-flash-exp"
+    elif model == "gemini-2.5-pro":
+        virtual_key = os.environ.get("PORTKEY_VERTEX_KEY", "")
+        model = "gemini-2.5-pro"
     elif model == "deepseek":
         pass  # DeepSeek will be handled separately
     elif model == "qwen":
@@ -372,7 +375,7 @@ def get_current_commit_hash():
 
 from timeit import default_timer as timer
 
-def init_ps_env(game, level_i, max_episode_steps):
+def init_ps_env(game, level_i, max_episode_steps, vmap: bool = True):
     start_time = timer()
     with open("syntax.lark", "r", encoding='utf-8') as file:
         puzzlescript_grammar = file.read()
@@ -381,7 +384,7 @@ def init_ps_env(game, level_i, max_episode_steps):
     tree, success, err_msg = get_tree_from_txt(parser, game, test_env_init=False)
     parse_time = timer()
     # print(f'Parsed PS file using Lark into python PSTree object in {(parse_time - start_time) / 1000} seconds.')
-    env = PSEnv(tree, jit=True, level_i=level_i, max_steps=max_episode_steps, print_score=False, debug=False)
+    env = PSEnv(tree, jit=True, level_i=level_i, max_steps=max_episode_steps, print_score=False, debug=False, vmap=vmap)
     # print(f'Initialized PSEnv in {(timer() - parse_time) / 1000} seconds.')
     return env
 
