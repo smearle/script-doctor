@@ -23,7 +23,7 @@ if __name__ == '__main__':
     test_game_paths = [os.path.join(TREES_DIR, tg + '.pkl') for tg in TEST_GAMES]
     tree_paths = test_game_paths + tree_paths
     for tree_path in tree_paths:
-        print(tree_path)
+        print("Treepath:", tree_path)
         og_game_path = os.path.join(DATA_DIR, 'scraped_games', os.path.basename(tree_path)[:-3] + 'txt')
         print(f"Parsing {og_game_path}")
         with open(tree_path, 'rb') as f:
@@ -32,6 +32,7 @@ if __name__ == '__main__':
 
         tree: PSGameTree = GenPSTree().transform(tree)
 
+        # initialize environment
         env = Env.PSEnv(tree)
         level = env.get_level(0)
         params = Env.PSParams(level=level)
