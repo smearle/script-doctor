@@ -4,11 +4,12 @@ import os
 
 import hydra
 from matplotlib import pyplot as plt
+import numpy as np
 import pandas as pd
 
-from conf.config import PlotStandaloneBFS
+from conf.config import PlotSearch
 from globals import GAMES_N_RULES_SORTED_PATH, PLOTS_DIR, STANDALONE_NODEJS_RESULTS_PATH
-from profile_nodejs import get_standalone_run_params_from_name
+from profile_nodejs import get_algo_name, get_standalone_run_params_from_name
 from utils import get_list_of_games_for_testing
 from validate_sols import JS_SOLS_DIR
 
@@ -17,16 +18,25 @@ BFS_RESULTS_PATH = os.path.join('data', 'bfs_results.json')
 
 
 @hydra.main(version_base="1.3", config_path="conf", config_name="plot_standalone_bfs_config")
-def main(cfg: PlotStandaloneBFS):
+def main(cfg: PlotSearch):
     if cfg.aggregate:
         aggregate_results(cfg)
     else:
         plot(cfg)
     
 
-def aggregate_results(cfg: PlotStandaloneBFS):
+def aggregate_results(cfg: PlotSearch):
     games = os.listdir(JS_SOLS_DIR)
     results = {}
+    max_iters = cfg.n_steps
+    if cfg.algo == 'bfs':
+        algo_name = 'solveBFS'
+    elif cfg.algo == 'astar':
+        algo_name = 'solveAStar'
+    elif cfg.algo == 'mcts':
+        algo_name = 'solveMCTS'
+    else:
+        raise ValueError(f'Unknown algo: {cfg.algo}')
     for game in games:
         if game.startswith('test_'):
             continue
@@ -34,9 +44,14 @@ def aggregate_results(cfg: PlotStandaloneBFS):
         sol_jsons = glob.glob(f"{game_dir}/*.json")
         n_levels = 0
         n_solved = 0
-        max_iters = 0
+        n_stepss = []
         for sol_json in sol_jsons:
-            level_i = sol_json.split("/")[-1].split(".")[0].split('-')[1]
+            run_name, level_i = os.path.basename(sol_json).rsplit('_level-', 1)
+            sol_algo_name = run_name.split('_')[0]
+            n_steps = run_name.split('_')[1].split('-steps')[0]
+            level_i = level_i.split('.json')[0]
+            if sol_algo_name != algo_name or int(n_steps) != cfg.n_steps:
+                continue
             with open(sol_json, 'r') as f:
                 sol_dict = json.load(f)
             if 'iterations' not in sol_dict or 'won' not in sol_dict:
@@ -46,21 +61,24 @@ def aggregate_results(cfg: PlotStandaloneBFS):
             if solved:
                 n_solved += 1
             n_levels += 1
-            max_iters = max(max_iters, sol_dict['iterations'])
+            n_steps = min(cfg.n_steps, sol_dict['iterations'])
+            n_stepss.append(n_steps)
         if n_levels > 0:
+            n_steps_mean = np.mean(n_stepss)
             pct_solved = n_solved / n_levels
             results[game] = {
                 'pct_solved': pct_solved,
                 'n_levels': n_levels,
-                'max_iters': max_iters,
+                'n_iters': n_steps_mean,
             }
+    print(results)
     with open(BFS_RESULTS_PATH, 'w') as f:
         json.dump(results, f, indent=4)
 
     plot(cfg, results)
 
 
-def plot(cfg: PlotStandaloneBFS, results=None):
+def plot(cfg: PlotSearch, results=None):
     M = 40  # max number of games per table
 
     if results is None:
@@ -68,7 +86,7 @@ def plot(cfg: PlotStandaloneBFS, results=None):
             results = json.load(f)
     
     df = pd.DataFrame.from_dict(results, orient='index')
-    df = df.sort_values(by=['pct_solved', 'max_iters'], ascending=[False, True])
+    df = df.sort_values(by=['pct_solved', 'n_iters'], ascending=[False, True])
 
     csv_file_path = os.path.join(PLOTS_DIR, 'standalone_bfs_results.csv')
     df.to_csv(csv_file_path, index=True, float_format="%.2f")
@@ -77,7 +95,7 @@ def plot(cfg: PlotStandaloneBFS, results=None):
     col_renames = {
         'pct_solved': 'Solved Levels \\%',
         'n_levels': '\\# Total Levels',
-        'max_iters': 'Max Search Iterations',
+        'n_iters': 'Mean Search Iterations',
     }
     df.rename(columns=col_renames, inplace=True)
 
@@ -99,9 +117,12 @@ def plot(cfg: PlotStandaloneBFS, results=None):
                             longtable=True, label="tab:bfs_results"))
     print(f'Saved latex table to {latex_file_path}')
 
+    # Now generate a 1D heatmap, with cell color corresponding to percentage of levels solved, and games along the x-axis
+    
+
 
 @hydra.main(version_base="1.3", config_path="conf", config_name="plot_standalone_bfs_config")
-def old_plot(cfg: PlotStandaloneBFS):
+def old_plot(cfg: PlotSearch):
     with open(STANDALONE_NODEJS_RESULTS_PATH, 'r') as f:
         results = json.load(f)
 

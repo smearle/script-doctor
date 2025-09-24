@@ -16,11 +16,6 @@ class PlotRandProfileConfig:
     all_games: bool = True  # Plot as many games as we have (partial) results for
 
 @dataclass
-class PlotStandaloneBFS:
-    all_games: bool = True
-    aggregate: bool = False  # (Re-)collect all the solution JSONs to compile a results dict for plotting
-
-@dataclass
 class PSConfig:
     game: str = "sokoban_basic"
     level: int = 0
@@ -79,6 +74,11 @@ class ProfileNodeJS(PSConfig):
     for_solution: bool = True  # To find solutions for their own sake
     slurm: bool = False
     n_games_per_job: int = 1
+
+
+@dataclass
+class PlotSearch(ProfileNodeJS):
+    aggregate: bool = True  # (Re-)collect all the solution JSONs to compile a results dict for plotting
 
 
 @dataclass
@@ -166,7 +166,7 @@ class TrainConfig(RLConfig):
     # WandB Params
     wandb_mode: str = 'run'  # one of: 'offline', 'run', 'dryrun', 'shared', 'disabled', 'online'
     wandb_entity: str = ''
-    wandb_project: str = 'smearle_ps_ppo'
+    wandb_project: str = 'puzzlejax_ppo'
 
     # Save a checkpoint after (at least) this many timesteps
     ckpt_freq: int = int(1e7)
@@ -221,12 +221,13 @@ class SweepRLConfig(TrainConfig):
     all_games: bool = False
     plot: bool = False
     slurm: bool = True
+    mode: str = 'train'
 
 
 cs = ConfigStore.instance()
 cs.store(name="preprocess_config", node=PreprocessConfig)
 cs.store(name="plot_rand_profile_config", node=PlotRandProfileConfig)
-cs.store(name="plot_standalone_bfs_config", node=PlotStandaloneBFS)
+cs.store(name="plot_standalone_bfs_config", node=PlotSearch)
 cs.store(name="ps_config", node=PSConfig)
 cs.store(name="jax_validation_config", node=JaxValidationConfig)
 cs.store(name="config", node=RLConfig)

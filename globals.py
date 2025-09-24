@@ -41,4 +41,8 @@ STANDALONE_NODEJS_RESULTS_PATH = os.path.join('data', 'standalone_nodejs_results
 GAMES_N_LEVELS_PATH = os.path.join('data', 'games_n_levels.json')
 SOLUTION_REWARDS_PATH = os.path.join('data', 'solution_rewards.json')
 JAX_PROFILING_RESULTS_DIR = os.path.join('data', 'jax_profiling_results')
+JAX_VALIDATED_JS_SOLS_DIR = os.path.join('data', 'jax_validated_js_sols')
+JS_TO_JAX_ACTIONS = [3, 0, 1, 2, 4]
+JS_SOLS_DIR = os.path.join('data', 'js_sols')
+
 

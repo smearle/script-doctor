@@ -35,14 +35,9 @@ from utils_rl import get_env_params_from_config
 scratch_dir = 'scratch'
 os.makedirs(scratch_dir, exist_ok = True)
 
-JAX_VALIDATED_JS_SOLS_DIR = os.path.join('data', 'jax_validated_js_sols')
-JS_SOLS_DIR = os.path.join('data', 'js_sols')
-
 games_to_skip = set({
     '2048',  # hangs
 })
-
-JS_TO_JAX_ACTIONS = [3, 0, 1, 2, 4]
 
 
 def multihot_level_from_js_state(level_state, obj_list):

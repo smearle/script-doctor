@@ -18,11 +18,10 @@ import numpy as np
 import submitit
 
 from conf.config import ProfileNodeJS
-from globals import STANDALONE_NODEJS_RESULTS_PATH
+from globals import STANDALONE_NODEJS_RESULTS_PATH, JS_SOLS_DIR
 from preprocess_games import SIMPLIFIED_GAMES_DIR, get_tree_from_txt
 from standalone.utils import compile_game
 from utils import get_list_of_games_for_testing, level_to_int_arr, init_ps_lark_parser
-from validate_sols import JS_SOLS_DIR
 
 
 actions = ["LEFT", "RIGHT", "UP", "DOWN", "ACTION"]
@@ -45,6 +44,7 @@ def rand_rollout_from_python(engine, solver, game_text, level_i, n_steps, timeou
     
 def get_standalone_run_name(cfg: ProfileNodeJS, algo_name, cpu_name):
     return f'algo-{algo_name}_{cfg.n_steps}-steps_{cpu_name}'
+
 
 def get_standalone_run_params_from_name(run_name: str):
     # use regex to extract the parameters from the run name
