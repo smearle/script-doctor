@@ -10,7 +10,7 @@ from globals import PLOTS_DIR, GAMES_TO_N_RULES_PATH, PRIORITY_GAMES
 from preprocess_games import count_rules
 from profile_rand_jax import get_step_int, get_level_int, get_vmap, VMAPS
 from globals import STANDALONE_NODEJS_RESULTS_PATH, JAX_PROFILING_RESULTS_DIR
-from utils import init_ps_env
+from puzzlejax.utils import init_ps_env
 
 
 # GAMES_TO_PLOT = [

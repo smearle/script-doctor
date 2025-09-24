@@ -37,3 +37,4 @@ scratch
 sols
 vids
 wandb
+*.egg-info

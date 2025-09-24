@@ -6,31 +6,26 @@ import pickle
 import random
 import re
 import time
-from typing import List
 
 import dotenv
 import jax
 from lark import Lark
 import numpy as np
 from openai import AzureOpenAI
-import requests
 import tiktoken
 
 from globals import GAMES_TO_N_RULES_PATH, GAMES_N_RULES_SORTED_PATH, PRIORITY_GAMES, GAMES_N_LEVELS_PATH
 from collect_games import GALLERY_GAMES_DIR
 from env import PSEnv
 from gen_tree import GenPSTree
-from preprocess_games import GAMES_DIR, get_tree_from_txt, get_env_from_ps_file, TREES_DIR
-from script_doctor.prompts import *
+from preprocess_games import GAMES_DIR, get_tree_from_txt, TREES_DIR
 
+game_names_remap = {
+    'constellationz': 'Constellation Z',
+    'limerick': 'Lime Rick',
+}
 
 dotenv.load_dotenv()
-
-def num_tokens_from_string(string: str, model_name: str) -> int:
-    encoding = tiktoken.encoding_for_model(model_name)
-    num_tokens = len(encoding.encode(string))
-    return num_tokens
-
 
 def truncate_str_to_token_len(string: str, model_name: str, n_tokens: int) -> str:
     encoding = tiktoken.encoding_for_model(model_name)
@@ -63,26 +58,6 @@ def extract_ps_code(text):
         print("No code block found in text.")
         breakpoint()
         return None, None
-
-
-def gen_fewshot_examples(system_prompt, prompt, max_tokens):
-    # Randomly add fewshot examples to the system prompt (within our token limit)
-    with open('example_games.json', 'r') as f:
-        example_games = json.load(f)
-    n_tokens_avail = max_tokens - num_tokens_from_string(system_prompt, 'gpt-4o')
-    fewshot_examples_prompt_i = fewshow_examples_prompt
-    last_fewshot_examples_prompt_i = fewshot_examples_prompt_i
-    n_games_included = 0
-    while num_tokens_from_string(system_prompt + fewshot_examples_prompt_i + prompt, 'gpt-4o') < n_tokens_avail:
-        last_fewshot_examples_prompt_i = fewshot_examples_prompt_i
-        rand_example_i = random.randint(0, len(example_games) - 1)
-        fewshot_examples_prompt_i += '\n```\n' + example_games.pop(rand_example_i) + '\n```\n'
-        n_games_included += 1
-    fewshot_examples_prompt_i = last_fewshot_examples_prompt_i
-    print(f"Number of games included in fewshot examples: {n_games_included-1}")
-    if n_games_included == 0:
-        fewshow_examples_prompt_i = ''
-    return fewshot_examples_prompt_i
 
 def to_binary_vectors(arr_2d, num_bits):
     arr_2d = np.asarray(arr_2d)

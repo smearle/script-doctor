@@ -6,33 +6,65 @@ import seaborn as sns
 import re
 import argparse
 
-def parse_filename(filename):
+from puzzlejax.utils import game_names_remap
+
+
+def parse_filename(filename, folder_llm=None):
     """
-    Parses the filename to extract LLM, game, run, and level.
-    Example: 4o-mini_limerick_run_1_level_1.json
-    Example: 4o-mini_atlas shrank_run_1.json (level is 0 by default)
+    Parses filename (and optionally folder_llm) to extract LLM, game, run, and level.
+    Supports:
+      - Legacy: <llm>_(CoT_)?<game>_run_<n>(_level_<m>)?.json
+      - New: (CoT_)?<game>_run_<n>(_level_<m>)?.json  (llm inferred from folder name)
     """
-    match = re.match(r"^(.*?)_(.*?)_run_(\d+)(?:_level_(\d+))?\.json$", filename)
-    if match:
-        llm_model, game_name, run_number, level_number = match.groups()
-        if level_number is None: # Handles cases like '4o-mini_atlas shrank_run_1.json'
+    # Legacy pattern with model prefix
+    m = re.match(r"^(.*?)_(CoT_)?(.*?)_run_(\d+)(?:_level_(\d+))?\.json$", filename)
+    if m:
+        llm_model, cot, game_name, run_number, level_number = m.groups()
+        if cot:
+            # TODO: Plot comparison between CoT and non-CoT results in the future
+            return None, None, None, None
+        if level_number is None:  # Handles cases like '4o-mini_atlas shrank_run_1.json'
             # Check if game_name itself contains 'level_X'
             game_match = re.match(r"(.*?)_level_(\d+)$", game_name)
             if game_match:
                 game_name = game_match.group(1)
                 level_number = game_match.group(2)
-            else: # Default level to 0 if not specified and not in game_name
-                 # Further split game_name if it's a multi-part name before '_run_'
-                if ' shrank' in llm_model: # Special case for "atlas shrank"
+            else:  # Default level to 0 if not specified and not in game_name
+                # Further split game_name if it's a multi-part name before '_run_'
+                if ' shrank' in llm_model:  # Special case for "atlas shrank"
                     parts = llm_model.split(' shrank')
                     llm_model = parts[0]
-                    game_name = f"atlas shrank_{game_name}" # Reconstruct game name
+                    game_name = f"atlas shrank_{game_name}"  # Reconstruct game name
                 level_number = '0'
 
         # Normalize game name here - convert "atlas shrank" to "atlas_shrank"
         if game_name == "atlas shrank" or game_name == "atlas_shrank":
             game_name = "atlas_shrank"
 
+        return llm_model, game_name, int(run_number), int(level_number)
+
+    # New pattern without model prefix (model comes from folder_llm)
+    m2 = re.match(r"^(CoT_)?(.*?)_run_(\d+)(?:_level_(\d+))?\.json$", filename)
+    if m2:
+        cot_prefix, game_name, run_number, level_number = m2.groups()
+        if cot_prefix:
+            return None, None, None, None
+        if level_number is None:
+            game_match = re.match(r"(.*?)_level_(\d+)$", game_name)
+            if game_match:
+                game_name = game_match.group(1)
+                level_number = game_match.group(2)
+            else:
+                level_number = '0'
+        if game_name == "atlas shrank" or game_name == "atlas_shrank":
+            game_name = "atlas_shrank"
+        # infer llm from folder name (strip memory suffix if present)
+        llm_model = folder_llm or ""
+        if llm_model:
+            llm_model = re.sub(r"_mem-\d+$", "", llm_model)
+        if not llm_model:
+            print(f"Warning: Could not infer model from folder for file: {filename}")
+            return None, None, None, None
         return llm_model, game_name, int(run_number), int(level_number)
 
     # Fallback for filenames that might not perfectly match the primary pattern
@@ -55,7 +87,10 @@ def collect_results(results_dir):
         for filename in files:
             if filename.endswith(".json"):
                 filepath = os.path.join(root, filename)
-                llm, game, run, level = parse_filename(filename)
+                rel_root = os.path.relpath(root, results_dir)
+                folder_llm = rel_root.split(os.sep)[0] if rel_root != "." else None
+                llm, game, run, level = parse_filename(filename, folder_llm)
+
 
                 if not llm or not game:
                     print(f"Skipping unparsable file: {filename}")
@@ -141,9 +176,14 @@ def main():
     # Standardize game names - ensure all atlas shrank variations are normalized
     df['game'] = df['game'].apply(lambda x: "atlas_shrank" if "atlas" in x and "shrank" in x else x)
 
+    # Rename games
+    df['game'] = df['game'].replace(game_names_remap)
+    # Now remove any underscores, and capitalize each word
+    df['game'] = df['game'].apply(lambda x: ' '.join(word.capitalize() for word in x.replace('_', ' ').split()))
+
     # Map LLM names (remove Gemini from mapping)
     llm_name_mapping = {
-        "4o-mini": "ChatGPT 4o-mini",
+        "4o-mini": "GPT 4o-mini",
         "deepseek": "Deepseek-chat",
         "qwen": "Qwen-plus",
         "gemini": "Gemini 2.0 flash exp",

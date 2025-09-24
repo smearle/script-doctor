@@ -1,4 +1,4 @@
-from utils import num_tokens_from_string
+from script_doctor.utils import num_tokens_from_string
 
 game_path = 'data/scraped_games/atlas shrank.txt'
 

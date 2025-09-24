@@ -13,16 +13,20 @@ from preprocess_games import PS_LARK_GRAMMAR_PATH, get_tree_from_txt
 from LLM_agent import LLMGameAgent
 from globals import PRIORITY_GAMES
 
+
 CUSTOM_GAMES_DIR = "data/scraped_games"
 
 # Shared state file for coordinating parallel workers
 STATE_FILE_BASENAME = "work_state.json"
 
-def make_job_key(model, game_name, level_index, run_id, think_aloud):
-    cot = "CoT" if think_aloud else "NoCoT"
-    return f"{model}|{cot}|{game_name}|{level_index}|{run_id}"
 
-def claim_next_job(state_path, all_jobs, save_dir, model, think_aloud, force, worker_id):
+def make_job_key(model, game_name, level_index, run_id, think_aloud, memory):
+    cot = "CoT" if think_aloud else "NoCoT"
+    mem = f"mem-{memory}" if memory and memory > 0 else "mem-0"
+    return f"{model}|{mem}|{cot}|{game_name}|{level_index}|{run_id}"
+
+
+def claim_next_job(state_path, all_jobs, save_dir, model, think_aloud, memory, force, worker_id):
     """
     Atomically claim the next available job by updating the shared JSON state.
     Returns a tuple (game_name, level_index, run_id) or None if no jobs remain.
@@ -41,18 +45,18 @@ def claim_next_job(state_path, all_jobs, save_dir, model, think_aloud, force, wo
         # Mark already-existing outputs as completed when not forcing
         if not force:
             for game_name, level_index, run_id in all_jobs:
-                key = make_job_key(model, game_name, level_index, run_id, think_aloud)
+                key = make_job_key(model, game_name, level_index, run_id, think_aloud, memory)
                 if key in completed or key in working:
                     continue
-                if check_run_file_exists(save_dir, model, game_name, run_id, level_index, think_aloud):
+                if check_run_file_exists(save_dir, model, game_name, run_id, level_index, think_aloud, memory):
                     completed.add(key)
 
         chosen = None
         for game_name, level_index, run_id in all_jobs:
-            key = make_job_key(model, game_name, level_index, run_id, think_aloud)
+            key = make_job_key(model, game_name, level_index, run_id, think_aloud, memory)
             if key in completed or key in working:
                 continue
-            if (not force) and check_run_file_exists(save_dir, model, game_name, run_id, level_index, think_aloud):
+            if (not force) and check_run_file_exists(save_dir, model, game_name, run_id, level_index, think_aloud, memory):
                 completed.add(key)
                 continue
             # Claim this job
@@ -69,12 +73,13 @@ def claim_next_job(state_path, all_jobs, save_dir, model, think_aloud, force, wo
 
     return chosen
 
-def release_job(state_path, model, game_name, level_index, run_id, think_aloud, status):
+
+def release_job(state_path, model, game_name, level_index, run_id, think_aloud, memory, status):
     """
     Release a claimed job from the working set and optionally mark completed.
     Status can be 'done', 'failed', or 'skipped'.
     """
-    key = make_job_key(model, game_name, level_index, run_id, think_aloud)
+    key = make_job_key(model, game_name, level_index, run_id, think_aloud, memory)
     with open(state_path, "a+", encoding="utf-8") as f:
         fcntl.flock(f, fcntl.LOCK_EX)
         f.seek(0)
@@ -97,6 +102,7 @@ def release_job(state_path, model, game_name, level_index, run_id, think_aloud, 
         f.truncate()
         fcntl.flock(f, fcntl.LOCK_UN)
 
+
 def worker_loop(args, all_jobs, game_info_map, save_dir_main):
     worker_id = args.worker_id if args.worker_id else f"{os.uname().nodename}-{os.getpid()}"
     state_path = args.state_path if args.state_path else os.path.join(save_dir_main, STATE_FILE_BASENAME)
@@ -104,7 +110,16 @@ def worker_loop(args, all_jobs, game_info_map, save_dir_main):
     agent = LLMGameAgent(model_name=args.model)
     print(f"Worker {worker_id}: starting with state_path {state_path}")
     while True:
-        job = claim_next_job(state_path, all_jobs, save_dir_main, args.model, args.think_aloud, args.force, worker_id)
+        job = claim_next_job(
+            state_path=state_path,
+            all_jobs=all_jobs,
+            save_dir=save_dir_main,
+            model=args.model,
+            think_aloud=args.think_aloud,
+            memory=args.memory,
+            force=args.force,
+            worker_id=worker_id,
+        )
         if job is None:
             print(f"Worker {worker_id}: no remaining claimable jobs. Exiting worker loop.")
             break
@@ -120,10 +135,12 @@ def worker_loop(args, all_jobs, game_info_map, save_dir_main):
             think_aloud=args.think_aloud,
             model=args.model,
             max_steps=args.max_steps,
+            memory=args.memory,
             force=args.force
         )
-        release_job(state_path, args.model, game_name, level_index, run_id, args.think_aloud, 'done' if success else 'failed')
-    
+        release_job(state_path, args.model, game_name, level_index, run_id, args.think_aloud, args.memory, 'done' if success else 'failed')
+
+
 def extract_section(filepath, section):
     """
     Extract a specific section from a PuzzleScript game file.
@@ -153,6 +170,7 @@ def extract_section(filepath, section):
         section_lines.pop()
     return section_lines
 
+
 def parse_legend(legend_lines):
     """
     Parse the LEGEND section from a PuzzleScript game file.
@@ -171,6 +189,7 @@ def parse_legend(legend_lines):
             objs = [obj.strip() for obj in v.strip().split()]
             mapping[k] = objs
     return mapping
+
 
 def extract_first_level(level_lines):
     """
@@ -197,80 +216,79 @@ def extract_first_level(level_lines):
         return "\n".join(levels[0])
     return ""
 
-def check_run_file_exists(save_dir, model, game_name, run_id, level_index,
-                          think_aloud):
+
+def check_run_file_exists(save_dir, model, game_name, run_id, level_index, think_aloud, memory):
     """
-    Check if the specified run file exists, supporting two naming formats:
-    1. With level marker: model_game_run_X_level_Y.json
-    2. Without level marker: model_game_run_X.json (assumed to be level 0)
+    Check if the specified run file exists, supporting both new (folder-based) and legacy naming.
     
-    Args:
-        save_dir: Directory to check
-        model: Model name
-        game_name: Game name
-        run_id: Run ID
-        level_index: Level index
-        
-    Returns:
-        Boolean indicating if file exists
+    New style (this change): files are stored under save_dir (which is model[_mem] folder),
+    and filename does NOT contain model/memory prefix:
+      [CoT_]{game}_run_{run}_level_{level}.json
+      [CoT_]{game}_run_{run}.json  (for level 0)
+    
+    Legacy style (back-compat, still checked in the same folder):
+      {model}_[mem-#_]{CoT_}{game}_run_{run}_level_{level}.json
+      {model}_{CoT_}{game}_run_{run}.json (sometimes without mem-# for level 0)
     """
     # Format the game name by replacing spaces with underscores for file paths
     formatted_game_name = game_name.replace(" ", "_")
     cot_prefix = "CoT_" if think_aloud else ""
-    
-    # Check filename with level marker
-    filename_with_level = f"{model}_{cot_prefix}{formatted_game_name}_run_{run_id}_level_{level_index}.json"
-    path_with_level = os.path.join(save_dir, filename_with_level)
-    
-    # Also check with original game name format (for backward compatibility)
-    orig_filename_with_level = f"{model}_{cot_prefix}{game_name}_run_{run_id}_level_{level_index}.json"
-    orig_path_with_level = os.path.join(save_dir, orig_filename_with_level)
-    
-    # For level 0, also check filename without level marker
+    memory_prefix = f"mem-{str(memory)}_" if memory and memory > 0 else ""
+
+    # New style: inside save_dir (model[_mem] folder), filenames don't include model/memory
+    new_filename_with_level = f"{cot_prefix}{formatted_game_name}_run_{run_id}_level_{level_index}.json"
+    new_path_with_level = os.path.join(save_dir, new_filename_with_level)
+
+    new_filename_without_level = f"{cot_prefix}{formatted_game_name}_run_{run_id}.json"
+    new_path_without_level = os.path.join(save_dir, new_filename_without_level)
+
+    # Legacy style: same folder, model/memory prefixes in filename
+    legacy_filename_with_level = f"{model}_{memory_prefix}{cot_prefix}{formatted_game_name}_run_{run_id}_level_{level_index}.json"
+    legacy_path_with_level = os.path.join(save_dir, legacy_filename_with_level)
+
+    legacy_orig_filename_with_level = f"{model}_{memory_prefix}{cot_prefix}{game_name}_run_{run_id}_level_{level_index}.json"
+    legacy_orig_path_with_level = os.path.join(save_dir, legacy_orig_filename_with_level)
+
+    # Legacy level-0 variants (some runs didn't include memory prefix on level-0 file)
+    legacy_filename_without_level = f"{model}_{cot_prefix}{formatted_game_name}_run_{run_id}.json"
+    legacy_path_without_level = os.path.join(save_dir, legacy_filename_without_level)
+
+    legacy_orig_filename_without_level = f"{model}_{cot_prefix}{game_name}_run_{run_id}.json"
+    legacy_orig_path_without_level = os.path.join(save_dir, legacy_orig_filename_without_level)
+
     if level_index == 0:
-        filename_without_level = f"{model}_{cot_prefix}{formatted_game_name}_run_{run_id}.json"
-        path_without_level = os.path.join(save_dir, filename_without_level)
-        
-        orig_filename_without_level = f"{model}_{cot_prefix}{game_name}_run_{run_id}.json"
-        orig_path_without_level = os.path.join(save_dir, orig_filename_without_level)
-        
-        exists = os.path.exists(path_with_level) or os.path.exists(path_without_level) or \
-                os.path.exists(orig_path_with_level) or os.path.exists(orig_path_without_level)
+        exists = (
+            os.path.exists(new_path_with_level) or
+            os.path.exists(new_path_without_level) or
+            os.path.exists(legacy_path_with_level) or
+            os.path.exists(legacy_orig_path_with_level) or
+            os.path.exists(legacy_path_without_level) or
+            os.path.exists(legacy_orig_path_without_level)
+        )
         return exists
-    
-    exists = os.path.exists(path_with_level) or os.path.exists(orig_path_with_level)
+
+    exists = os.path.exists(new_path_with_level) or os.path.exists(legacy_path_with_level) or os.path.exists(legacy_orig_path_with_level)
     return exists
 
-def get_run_file_path(save_dir, model, game_name, run_id, level_index,
-                      think_aloud):
+
+def get_run_file_path(save_dir, model, game_name, run_id, level_index, think_aloud: bool, memory: int):
     """
-    Get file path for saving run results, always using the format with level marker
-    
-    Args:
-        save_dir: Directory to save to
-        model: Model name
-        game_name: Game name
-        run_id: Run ID
-        level_index: Level index
-        
-    Returns:
-        File path string
+    Get file path for saving run results using folder-based model/memory separation.
+    save_dir is expected to be the model[_mem] folder already.
+    Filenames will not include model/memory prefix.
     """
-    # Format the game name by replacing spaces with underscores for file paths
     formatted_game_name = game_name.replace(" ", "_")
-    
-    filename = (f"{model}_" + \
-        ('CoT_' if think_aloud else '') + \
-        f"{formatted_game_name}_run_{run_id}_level_{level_index}.json")
-    
+    filename = (('CoT_' if think_aloud else '') +
+                f"{formatted_game_name}_run_{run_id}_level_{level_index}.json")
     return os.path.join(save_dir, filename)
 
-def find_next_available_run_id(save_dir, model, game_name, level_index, initial_run_id, think_aloud):
+
+def find_next_available_run_id(save_dir, model, game_name, level_index, initial_run_id, think_aloud, memory):
     """
     Find the next available run ID that doesn't conflict with existing files.
     
     Args:
-        save_dir: Directory where run results are saved
+        save_dir: Directory where run results are saved (model[_mem] folder)
         model: Model name
         game_name: Game name
         level_index: Level index
@@ -281,10 +299,11 @@ def find_next_available_run_id(save_dir, model, game_name, level_index, initial_
         int: The next available run ID
     """
     run_id = initial_run_id
-    while check_run_file_exists(save_dir, model, game_name, run_id, level_index, think_aloud):
-        print(f"Run {run_id} already exists for Game: {game_name}, Level: {level_index}. Trying next run ID.")
+    while check_run_file_exists(save_dir, model, game_name, run_id, level_index, think_aloud, memory):
+        print(f"Run {run_id} already exists for Game: {game_name}, Level: {level_index}, CoT: {think_aloud}, Memory: {str(memory)}, Trying next run ID.")
         run_id += 1
     return run_id
+
 
 def collect_game_info(game_name, start_level):
     """
@@ -354,8 +373,9 @@ def collect_game_info(game_name, start_level):
         print(f"Error collecting game info for {game_name}: {type(e).__name__}, {e}")
         return None
 
+
 def process_game_level(agent, game_info, level_index, run_id, save_dir, model,
-                       max_steps, think_aloud, force=False):
+                       max_steps, think_aloud: bool, memory: int, force=False):
     """
     Process a specific game level for a specific run ID.
     
@@ -364,7 +384,7 @@ def process_game_level(agent, game_info, level_index, run_id, save_dir, model,
         game_info: Dictionary containing game information
         level_index: Level index to process
         run_id: Run ID
-        save_dir: Directory to save results
+        save_dir: Directory to save results (model[_mem] folder)
         model: Model name
         max_steps: Maximum steps per episode
         force: Whether to force rerun existing results
@@ -379,13 +399,13 @@ def process_game_level(agent, game_info, level_index, run_id, save_dir, model,
     print(f"\n=== Processing Game: {game_name}, Level: {level_index}, Run: {run_id} ===")
     
     # Check if this run already exists
-    if check_run_file_exists(save_dir, model, game_name, run_id, level_index, think_aloud) and not force:
+    if check_run_file_exists(save_dir, model, game_name, run_id, level_index, think_aloud, memory) and not force:
         print(f"Run {run_id} for Game: {game_name}, Level: {level_index} already exists. Skipping.")
         return True
     
     # Get the path for saving results
     current_run_filepath = get_run_file_path(save_dir, model, game_name, run_id,
-                                             level_index, think_aloud)
+                                             level_index, think_aloud, memory)
 
     current_run_logs_dir = current_run_filepath[:-5] + "_logs"
     os.makedirs(current_run_logs_dir, exist_ok=True)
@@ -419,6 +439,7 @@ def process_game_level(agent, game_info, level_index, run_id, save_dir, model,
         }
         
         state_history = set()
+        state_history_lst = []
         current_state = state
         
         # Main action loop
@@ -436,8 +457,12 @@ def process_game_level(agent, game_info, level_index, run_id, save_dir, model,
                 action_space=action_space,
                 action_meanings=action_meanings,
                 think_aloud=think_aloud,
+                memory=memory,
+                state_history=state_history_lst,
                 log_file=log_file,
             )
+
+            state_history_lst.append((ascii_state, action_id))
             
             action_str = action_meanings[action_id]
             print(f"LLM chose action id: {action_id} ({action_str})")
@@ -496,6 +521,7 @@ def process_game_level(agent, game_info, level_index, run_id, save_dir, model,
         print(f"Error type: {type(e).__name__}, Message: {e}")
         return False
 
+
 def main():
     parser = argparse.ArgumentParser(description='LLM agent loop experiment (env+rules/ascii/mapping)')
     parser.add_argument('--model', type=str, required=True, choices=['4o-mini', 'o3-mini', 'gemini', 'gemini-2.5-pro', 'deepseek', 'qwen', 'deepseek-r1', 'llama'],
@@ -516,8 +542,9 @@ def main():
     parser.add_argument('--run_id_start', type=int, default=1,)
     parser.add_argument('--think_aloud', action='store_true',
                         help='Allow the LLM to think aloud as opposed to outputting strictly the next action.')
+    parser.add_argument('--memory', type=int, default=0, help="Number of previous steps to include in the prompt (default: 0)")
     parser.add_argument('--save_dir', type=str, default="llm_agent_results",
-                        help='Directory to save results (default: llm_agent_results)')
+                        help='Root directory to save results (default: llm_agent_results)')
     parser.add_argument('--worker_id', type=str, default='',
                         help='Optional identifier for this worker process')
     parser.add_argument('--state_path', type=str, default='',
@@ -549,17 +576,17 @@ def main():
         print(f"Processing games in order, starting with: {game_names[0]}")
 
     print(f"\n=== Running LLM agent with model: {args.model}, for {len(game_names)} games, ensuring up to {args.num_runs} total runs per level ===")
-    
-    agent = LLMGameAgent(model_name=args.model)
 
-    save_dir_main = os.path.join(args.save_dir, args.model)
+    # Determine model folder name possibly including memory
+    model_folder = args.model if args.memory <= 0 else f"{args.model}_mem-{args.memory}"
+    save_dir_main = os.path.join(args.save_dir, model_folder)
     os.makedirs(save_dir_main, exist_ok=True)
 
     # Starting level from CLI argument
     start_level = args.level
     print(f"Starting from level {start_level}")
 
-    # 第一步：收集所有游戏的信息
+    # Collect information for all games
     print("\n==== Collecting information for all games ====")
     all_games_info = []
     
@@ -574,7 +601,7 @@ def main():
         print("No valid games found. Exiting.")
         return
     
-    # 第二步：构建全部作业列表，并通过共享JSON进行并行协调
+    # Build all jobs list for parallel coordination
     all_jobs = []
     for run_id in range(args.run_id_start, args.num_runs + args.run_id_start):
         for game_info in all_games_info:
@@ -592,11 +619,11 @@ def main():
         for p in processes:
             p.join()
     else:
-        # For single worker, initialize the agent here and run directly.
-        agent = LLMGameAgent(model_name=args.model)
+        # For single worker, run directly
         worker_loop(args, all_jobs, game_info_map, save_dir_main)
     
     print("\n=== All runs for all games and levels have been processed ===")
+
 
 if __name__ == "__main__":
     main()
