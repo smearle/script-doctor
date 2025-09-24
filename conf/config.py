@@ -16,11 +16,6 @@ class PlotRandProfileConfig:
     all_games: bool = True  # Plot as many games as we have (partial) results for
 
 @dataclass
-class PlotStandaloneBFS:
-    all_games: bool = True
-    aggregate: bool = False  # (Re-)collect all the solution JSONs to compile a results dict for plotting
-
-@dataclass
 class PSConfig:
     game: str = "sokoban_basic"
     level: int = 0
@@ -53,6 +48,7 @@ class BFSConfig(PSConfig):
 class ProfileJaxRandConfig(PSConfig):
     game: Optional[str] = None
     all_games: bool = False
+    # max_episode_steps: int = 100
     n_steps: int = 5_000
     # reevaluate: bool = True  # Whether to continue profiling, or just plot the results
     render: bool = False
@@ -73,19 +69,23 @@ class ProfileNodeJS(PSConfig):
     include_randomness: bool = True
     # timeout: int = 60
     timeout: int = -1
-    for_validation: bool = False
-    # for_validation: bool = True
-    for_solution: bool = True
-    for_profiling: bool = False
+    for_profiling: bool = False  # To compare FPS of the vanilla engine with our JAX reimplementation
+    for_validation: bool = False  # To validate that our JAX reimplementation matches the vanilla engine
+    for_solution: bool = True  # To find solutions for their own sake
     slurm: bool = False
     n_games_per_job: int = 1
+
+
+@dataclass
+class PlotSearch(ProfileNodeJS):
+    aggregate: bool = True  # (Re-)collect all the solution JSONs to compile a results dict for plotting
 
 
 @dataclass
 class RLConfig(PSConfig):
     max_episode_steps: int = 100
     lr: float = 1.0e-4
-    n_envs: int = 400
+    n_envs: int = 1_000
     # How many steps do I take in all of my batched environments before doing a gradient update
     num_steps: int = 128
     total_timesteps: int = int(5e7)
@@ -166,7 +166,7 @@ class TrainConfig(RLConfig):
     # WandB Params
     wandb_mode: str = 'run'  # one of: 'offline', 'run', 'dryrun', 'shared', 'disabled', 'online'
     wandb_entity: str = ''
-    wandb_project: str = 'smearle_ps_ppo'
+    wandb_project: str = 'puzzlejax_ppo'
 
     # Save a checkpoint after (at least) this many timesteps
     ckpt_freq: int = int(1e7)
@@ -186,17 +186,48 @@ class TrainConfig(RLConfig):
 
 
 @dataclass
+class EvalConfig(TrainConfig):
+    reevaluate: bool = True
+    random_agent: bool = False
+    # In how many bins to divide up each metric being evaluated
+    n_bins: int = 10
+    n_eps: int = 1
+    eval_map_width: Optional[int] = None
+    eval_max_board_scans: Optional[float] = None
+    eval_randomize_map_shape: Optional[bool] = None
+    eval_seed: int = 0
+
+    # Which eval metric to keep in our generated table if sweeping over eval hyperparams (in which case we want to 
+    # save space). Only applied when running `cross_eval.py`
+    metrics_to_keep: Tuple[str] = ('mean_ep_reward',)
+    # metrics_to_keep: Tuple[str] = ('mean_fps',)
+
+
+@dataclass
+class EnjoyConfig(EvalConfig):
+    random_agent: bool = False
+    # How many episodes to render as gifs
+    n_eps: int = 5
+    eval_map_width: Optional[int] = None
+    # Add debugging text showing the current/target values for various stats to each frame of the episode (this is really slow)
+    render_stats: bool = False
+    n_enjoy_envs: int = 1
+    render_ims: bool = False
+    a_freezer: bool = False
+
+@dataclass
 class SweepRLConfig(TrainConfig):
     game: Optional[str] = None
     all_games: bool = False
     plot: bool = False
     slurm: bool = True
+    mode: str = 'train'
 
 
 cs = ConfigStore.instance()
 cs.store(name="preprocess_config", node=PreprocessConfig)
 cs.store(name="plot_rand_profile_config", node=PlotRandProfileConfig)
-cs.store(name="plot_standalone_bfs_config", node=PlotStandaloneBFS)
+cs.store(name="plot_standalone_bfs_config", node=PlotSearch)
 cs.store(name="ps_config", node=PSConfig)
 cs.store(name="jax_validation_config", node=JaxValidationConfig)
 cs.store(name="config", node=RLConfig)
@@ -204,4 +235,6 @@ cs.store(name="bfs_config", node=BFSConfig)
 cs.store(name="profile_jax_config", node=ProfileJaxRandConfig)
 cs.store(name="profile_nodejs_config", node=ProfileNodeJS)
 cs.store(name="train_config", node=TrainConfig)
+cs.store(name="eval_config", node=EvalConfig)
+cs.store(name="enjoy_config", node=EnjoyConfig)
 cs.store(name="sweep_rl_config", node=SweepRLConfig)

@@ -1,0 +1,79 @@
+{
+  "model": "o1",
+  "game": "slidings",
+  "level": 4,
+  "run": 2,
+  "win": true,
+  "action_sequence": [
+    0,
+    2,
+    0,
+    2,
+    0,
+    2,
+    4,
+    0,
+    2
+  ],
+  "reward_sequence": [
+    0.9900000095367432,
+    -1.0099999904632568,
+    0.9900000095367432,
+    -1.0099999904632568,
+    0.9900000095367432,
+    -1.0099999904632568,
+    -2.009999990463257,
+    0.9900000095367432,
+    4.989999771118164
+  ],
+  "initial_ascii": [
+    "LEGEND:",
+    "#: wall",
+    "m: count",
+    "n: countend",
+    "p: player",
+    ".: background",
+    "o: target",
+    "a: balla",
+    "d: ballb, overwall",
+    "e: ballc, overwall",
+    "",
+    "MAP:",
+    "##mmmmmmn#",
+    "##p.o...##",
+    "#.......a#",
+    "d########e"
+  ],
+  "state_data": {
+    "score": 0,
+    "win": true,
+    "step": 9
+  },
+  "heuristics": [
+    -2.0,
+    -3.0,
+    -2.0,
+    -3.0,
+    -2.0,
+    -3.0,
+    -5.0,
+    -4.0,
+    0.0
+  ],
+  "final_ascii": [
+    "LEGEND:",
+    "#: wall",
+    ".: background",
+    "o: target",
+    "c: ballc",
+    "\u2733: deadplayer",
+    "\u0974: balla, overwall",
+    "d: ballb, overwall",
+    "",
+    "MAP:",
+    "##########",
+    "##..o..c##",
+    "#.......\u2733#",
+    "\u0974########d"
+  ]
+}

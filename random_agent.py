@@ -8,8 +8,7 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 
-from gen_tree import GenPSTree
-import env as Env
+from gen_tree import GenPSTree, PSEnv
 from preprocess_games import TREES_DIR, TEST_GAMES, DATA_DIR
 from ps_game import PSGameTree
 
@@ -32,7 +31,6 @@ if __name__ == '__main__':
 
         tree: PSGameTree = GenPSTree().transform(tree)
 
-        # initialize environment
         env = Env.PSEnv(tree)
         level = env.get_level(0)
         params = Env.PSParams(level=level)

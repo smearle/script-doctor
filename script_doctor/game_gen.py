@@ -3,7 +3,8 @@ import os
 import random
 import re
 from script_doctor.prompts import *
-from utils import extract_ps_code, gen_fewshot_examples, llm_text_query, save_prompts
+from puzzlejax.utils import extract_ps_code, llm_text_query, save_prompts
+from script_doctor.utils import gen_fewshot_examples
 
 def gen_game_from_plan(seed, save_dir, game_idea, n_iter):
     # fewshot = data['fewshot']

@@ -14,7 +14,7 @@ from conf.config import ProfileNodeJS
 from env import PSState
 from preprocess_games import PS_LARK_GRAMMAR_PATH, PSErrors, get_env_from_ps_file
 from profile_nodejs import compile_game
-from utils import get_list_of_games_for_testing, init_ps_lark_parser, level_to_int_arr
+from puzzlejax.utils import get_list_of_games_for_testing, init_ps_lark_parser, level_to_int_arr
 from validate_sols import JS_SOLS_DIR, multihot_level_from_js_state, JAX_VALIDATED_JS_SOLS_DIR
 
 
@@ -91,7 +91,7 @@ def main(cfg: ProfileNodeJS):
             state = state.replace(multihot_level=multihot_level)
             frames.append(env.render(state, cv2=False))
             for action in actions:
-                _, _, _, _, _, level_state = solver.takeAction(engine, action)
+                _, _, _, _, _, level_state, _, _ = solver.takeAction(engine, action)
                 level_state = level_to_int_arr(level_state, n_objs).tolist()
                 multihot_level = multihot_level_from_js_state(level_state, data['objs'])
                 state = state.replace(multihot_level=multihot_level)

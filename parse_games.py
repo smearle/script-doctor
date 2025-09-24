@@ -3,7 +3,7 @@ import os
 import re
 
 from collect_games import SCRAPED_GAMES_DIR
-from utils import num_tokens_from_string
+from puzzlejax.utils import num_tokens_from_string
 
 def extract_sprites(content):
     # Regex to find the OBJECTS section

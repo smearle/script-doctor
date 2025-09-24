@@ -18,25 +18,18 @@ import numpy as np
 import submitit
 
 from conf.config import ProfileNodeJS
-from globals import STANDALONE_NODEJS_RESULTS_PATH
+from globals import STANDALONE_NODEJS_RESULTS_PATH, JS_SOLS_DIR
 from preprocess_games import SIMPLIFIED_GAMES_DIR, get_tree_from_txt
-from utils import get_list_of_games_for_testing, level_to_int_arr, init_ps_lark_parser
-from validate_sols import JS_SOLS_DIR
+from standalone.utils import compile_game
+from puzzlejax.utils import get_list_of_games_for_testing, level_to_int_arr, init_ps_lark_parser
 
 
-def compile_game(parser, engine, game, level_i):
-    game_path = os.path.join(SIMPLIFIED_GAMES_DIR, f'{game}.txt')
-    if not os.path.isfile(game_path):
-        get_tree_from_txt(parser=parser, game=game, test_env_init=False, overwrite=True)
-    with open(f'{game_path[:-4]}_simplified.txt', 'r') as f:
-        game_text = f.read()
-    engine.compile(['restart'], game_text)
-    return game_text
+actions = ["LEFT", "RIGHT", "UP", "DOWN", "ACTION"]
+
 
 def get_algo_name(algo):
     return str(algo).split(' ')[1].strip(']')
 
-actions = ["LEFT", "RIGHT", "UP", "DOWN", "ACTION"]
 
 def rand_rollout_from_python(engine, solver, game_text, level_i, n_steps, timeout):
     start_time = timer()
@@ -51,6 +44,7 @@ def rand_rollout_from_python(engine, solver, game_text, level_i, n_steps, timeou
     
 def get_standalone_run_name(cfg: ProfileNodeJS, algo_name, cpu_name):
     return f'algo-{algo_name}_{cfg.n_steps}-steps_{cpu_name}'
+
 
 def get_standalone_run_params_from_name(run_name: str):
     # use regex to extract the parameters from the run name
@@ -98,8 +92,14 @@ def main(cfg: ProfileNodeJS, games: Optional[List[str]] = None):
     if cfg.algo == 'bfs':
         algos = [solver.solveBFS]
         # algos = [solver.solveBFS, solver.solveAStar, solver.solveMCTS]:
+    elif cfg.algo == 'astar':
+        algos = [solver.solveAStar]
+    elif cfg.algo == 'mcts':
+        algos = [solver.solveMCTS]
     elif cfg.algo == 'random':
         algos = [solver.randomRollout, rand_rollout_from_python]
+    else:
+        raise ValueError(f"Invalid search algorithm: {cfg.algo}")
     cpu_name = cpuinfo.get_cpu_info()['brand_raw']
 
     if games is not None:
@@ -146,7 +146,10 @@ def main(cfg: ProfileNodeJS, games: Optional[List[str]] = None):
             os.makedirs(game_js_sols_dir, exist_ok=True)
 
             for level_i in range(n_levels):
-                level_js_sol_path = os.path.join(game_js_sols_dir, f'{cfg.n_steps}-steps_level-{level_i}.json')
+                # algo_prefix = f'{algo_name}_' if cfg.algo != 'bfs' else ''
+                algo_prefix = f'{algo_name}_'
+                level_js_sol_path = os.path.join(
+                    game_js_sols_dir, f'{algo_prefix}{cfg.n_steps}-steps_level-{level_i}.json')
                 print(f'Level: {level_i}')
                 if cfg.for_validation or cfg.for_solution and not cfg.overwrite and os.path.isfile(level_js_sol_path):
                     print(f'Already solved (for validation) {game} level {level_i}.')
