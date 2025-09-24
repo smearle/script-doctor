@@ -8,10 +8,9 @@ import numpy as np
 import pandas as pd
 
 from conf.config import PlotSearch
-from globals import GAMES_N_RULES_SORTED_PATH, PLOTS_DIR, STANDALONE_NODEJS_RESULTS_PATH
+from globals import PLOTS_DIR, STANDALONE_NODEJS_RESULTS_PATH, JS_SOLS_DIR
 from profile_nodejs import get_algo_name, get_standalone_run_params_from_name
 from utils import get_list_of_games_for_testing
-from validate_sols import JS_SOLS_DIR
 
 
 BFS_RESULTS_PATH = os.path.join('data', 'bfs_results.json')
@@ -119,6 +118,7 @@ def plot(cfg: PlotSearch, results=None):
 
     # Now generate a 1D heatmap, with cell color corresponding to percentage of levels solved, and games along the x-axis
     
+
 
 
 @hydra.main(version_base="1.3", config_path="conf", config_name="plot_standalone_bfs_config")

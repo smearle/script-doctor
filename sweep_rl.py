@@ -193,7 +193,8 @@ def gen_grid_cfgs(sweep_cfg: SweepRLConfig, base_cfg: TrainConfig):
 
 # SEEDS = [99]
 # SEEDS = list(range(10, 15))
-SEEDS = list(range(20, 25))
+# SEEDS = list(range(20, 25))
+SEEDS = list(range(0, 5))
 
 GAME_TO_N_ENVS = {
 #     'sokoban_basic': 100,
@@ -241,17 +242,18 @@ def main(sweep_cfg: SweepRLConfig):
             print(f"Launching jobs {seeds} for {game} level {level}, with {n_envs}.")
 
             level_cfgs = [OmegaConf.create(c) for c in level_cfgs]
-            if sweep_cfg.slurm:
-                all_cfgs.append(level_cfgs)
-
-            else:
-                [main_fn(cfg) for cfg in level_cfgs]
+            all_cfgs.append(level_cfgs)
 
     all_cfgs = [cfg for sublist in all_cfgs for cfg in sublist]  # Flatten list of lists
-    executor.map_array(
-        main_fn,
-        all_cfgs,
-    )
+    # Sort cfgs by seed so that we run a a breadth of experiments first
+    all_cfgs = sorted(all_cfgs, key=lambda x: x.seed)
+    if not sweep_cfg.slurm:
+        [main_fn(cfg) for cfg in level_cfgs]
+    else:
+        executor.map_array(
+            main_fn,
+            all_cfgs,
+        )
 
 if __name__ == "__main__":
     main()

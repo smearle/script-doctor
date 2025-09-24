@@ -85,7 +85,7 @@ class PlotSearch(ProfileNodeJS):
 class RLConfig(PSConfig):
     max_episode_steps: int = 100
     lr: float = 1.0e-4
-    n_envs: int = 400
+    n_envs: int = 1_000
     # How many steps do I take in all of my batched environments before doing a gradient update
     num_steps: int = 128
     total_timesteps: int = int(5e7)
