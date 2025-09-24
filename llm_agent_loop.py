@@ -2,6 +2,9 @@ import argparse
 import os
 import re
 import json
+import time
+import fcntl
+import multiprocessing
 import jax
 from lark import Lark
 from env_wrappers import RepresentationWrapper
@@ -12,6 +15,115 @@ from globals import PRIORITY_GAMES
 
 CUSTOM_GAMES_DIR = "data/scraped_games"
 
+# Shared state file for coordinating parallel workers
+STATE_FILE_BASENAME = "work_state.json"
+
+def make_job_key(model, game_name, level_index, run_id, think_aloud):
+    cot = "CoT" if think_aloud else "NoCoT"
+    return f"{model}|{cot}|{game_name}|{level_index}|{run_id}"
+
+def claim_next_job(state_path, all_jobs, save_dir, model, think_aloud, force, worker_id):
+    """
+    Atomically claim the next available job by updating the shared JSON state.
+    Returns a tuple (game_name, level_index, run_id) or None if no jobs remain.
+    """
+    os.makedirs(os.path.dirname(state_path), exist_ok=True)
+    with open(state_path, "a+", encoding="utf-8") as f:
+        fcntl.flock(f, fcntl.LOCK_EX)
+        f.seek(0)
+        try:
+            state = json.load(f)
+        except Exception:
+            state = {}
+        working = state.get("working", {})
+        completed = set(state.get("completed", []))
+
+        # Mark already-existing outputs as completed when not forcing
+        if not force:
+            for game_name, level_index, run_id in all_jobs:
+                key = make_job_key(model, game_name, level_index, run_id, think_aloud)
+                if key in completed or key in working:
+                    continue
+                if check_run_file_exists(save_dir, model, game_name, run_id, level_index, think_aloud):
+                    completed.add(key)
+
+        chosen = None
+        for game_name, level_index, run_id in all_jobs:
+            key = make_job_key(model, game_name, level_index, run_id, think_aloud)
+            if key in completed or key in working:
+                continue
+            if (not force) and check_run_file_exists(save_dir, model, game_name, run_id, level_index, think_aloud):
+                completed.add(key)
+                continue
+            # Claim this job
+            working[key] = {"worker": worker_id, "ts": time.time()}
+            chosen = (game_name, level_index, run_id)
+            break
+
+        state["working"] = working
+        state["completed"] = sorted(completed)
+        f.seek(0)
+        json.dump(state, f, indent=2)
+        f.truncate()
+        fcntl.flock(f, fcntl.LOCK_UN)
+
+    return chosen
+
+def release_job(state_path, model, game_name, level_index, run_id, think_aloud, status):
+    """
+    Release a claimed job from the working set and optionally mark completed.
+    Status can be 'done', 'failed', or 'skipped'.
+    """
+    key = make_job_key(model, game_name, level_index, run_id, think_aloud)
+    with open(state_path, "a+", encoding="utf-8") as f:
+        fcntl.flock(f, fcntl.LOCK_EX)
+        f.seek(0)
+        try:
+            state = json.load(f)
+        except Exception:
+            state = {}
+        working = state.get("working", {})
+        completed = set(state.get("completed", []))
+
+        if key in working:
+            del working[key]
+        if status in ("done", "skipped"):
+            completed.add(key)
+
+        state["working"] = working
+        state["completed"] = sorted(completed)
+        f.seek(0)
+        json.dump(state, f, indent=2)
+        f.truncate()
+        fcntl.flock(f, fcntl.LOCK_UN)
+
+def worker_loop(args, all_jobs, game_info_map, save_dir_main):
+    worker_id = args.worker_id if args.worker_id else f"{os.uname().nodename}-{os.getpid()}"
+    state_path = args.state_path if args.state_path else os.path.join(save_dir_main, STATE_FILE_BASENAME)
+    # Initialize a new LLM agent for this worker
+    agent = LLMGameAgent(model_name=args.model)
+    print(f"Worker {worker_id}: starting with state_path {state_path}")
+    while True:
+        job = claim_next_job(state_path, all_jobs, save_dir_main, args.model, args.think_aloud, args.force, worker_id)
+        if job is None:
+            print(f"Worker {worker_id}: no remaining claimable jobs. Exiting worker loop.")
+            break
+        game_name, level_index, run_id = job
+        print(f"Worker {worker_id} processing: {game_name} | Level {level_index} | Run {run_id}")
+        game_info = game_info_map[game_name]
+        success = process_game_level(
+            agent=agent,
+            game_info=game_info,
+            level_index=level_index,
+            run_id=run_id,
+            save_dir=save_dir_main,
+            think_aloud=args.think_aloud,
+            model=args.model,
+            max_steps=args.max_steps,
+            force=args.force
+        )
+        release_job(state_path, args.model, game_name, level_index, run_id, args.think_aloud, 'done' if success else 'failed')
+    
 def extract_section(filepath, section):
     """
     Extract a specific section from a PuzzleScript game file.
@@ -369,21 +481,13 @@ def process_game_level(agent, game_info, level_index, run_id, save_dir, model,
             del result["heuristic_sequence"]
         result["final_ascii"] = ascii_state.split('\n')
         
-        # Find the next available run ID (starting from the current run_id)
-        available_run_id = find_next_available_run_id(save_dir, model, game_name, level_index, run_id, think_aloud)
-        
-        if available_run_id != run_id:
-            print(f"Original run ID {run_id} already exists. Using run ID {available_run_id} instead.")
-            # Update the run ID in the result dictionary
-            result["run"] = available_run_id
-        
-        # Get the file path with the updated run ID
-        current_run_filepath = get_run_file_path(save_dir, model, game_name, available_run_id, level_index, think_aloud)
-        
-        # Save results
-        with open(current_run_filepath, "w", encoding="utf-8") as f:
-            json.dump(result, f, indent=2, default=lambda o: f"<{type(o).__name__} instance>")
-        print(f"Result saved to {current_run_filepath} (Run ID: {available_run_id})")
+        # Save results to the originally-claimed run file path (do not change run_id under parallel workers)
+        if os.path.exists(current_run_filepath):
+            print(f"Result file already exists at {current_run_filepath}. Not overwriting.")
+        else:
+            with open(current_run_filepath, "w", encoding="utf-8") as f:
+                json.dump(result, f, indent=2, default=lambda o: f"<{type(o).__name__} instance>")
+            print(f"Result saved to {current_run_filepath} (Run ID: {run_id})")
         
         return True
         
@@ -414,6 +518,12 @@ def main():
                         help='Allow the LLM to think aloud as opposed to outputting strictly the next action.')
     parser.add_argument('--save_dir', type=str, default="llm_agent_results",
                         help='Directory to save results (default: llm_agent_results)')
+    parser.add_argument('--worker_id', type=str, default='',
+                        help='Optional identifier for this worker process')
+    parser.add_argument('--state_path', type=str, default='',
+                        help='Optional path to shared JSON state for coordinating workers')
+    parser.add_argument('--workers', type=int, default=1,
+                        help='Number of parallel worker processes to spawn (default: 1)')
     args = parser.parse_args()
 
     # Get the list of games from PRIORITY_GAMES
@@ -464,28 +574,27 @@ def main():
         print("No valid games found. Exiting.")
         return
     
-    # 第二步：按运行ID遍历所有游戏和关卡
+    # 第二步：构建全部作业列表，并通过共享JSON进行并行协调
+    all_jobs = []
     for run_id in range(args.run_id_start, args.num_runs + args.run_id_start):
-        print(f"\n\n========== PROCESSING RUN {run_id} OF {args.num_runs} FOR ALL GAMES ==========\n")
-        
-        # 处理所有游戏
-        for game_idx, game_info in enumerate(all_games_info):
-            game_name = game_info["game_name"]
-            print(f"\n==== Processing game {game_idx+1}/{len(all_games_info)}: {game_name} (Run {run_id}) ====")
-            
-            # 处理该游戏的所有关卡
+        for game_info in all_games_info:
             for level_index in game_info["levels_to_process"]:
-                process_game_level(
-                    agent=agent,
-                    game_info=game_info,
-                    level_index=level_index,
-                    run_id=run_id,
-                    save_dir=save_dir_main,
-                    think_aloud=args.think_aloud,
-                    model=args.model,
-                    max_steps=args.max_steps,
-                    force=args.force
-                )
+                all_jobs.append((game_info["game_name"], level_index, run_id))
+
+    game_info_map = {gi["game_name"]: gi for gi in all_games_info}
+
+    if args.workers > 1:
+        processes = []
+        for _ in range(args.workers):
+            p = multiprocessing.Process(target=worker_loop, args=(args, all_jobs, game_info_map, save_dir_main))
+            p.start()
+            processes.append(p)
+        for p in processes:
+            p.join()
+    else:
+        # For single worker, initialize the agent here and run directly.
+        agent = LLMGameAgent(model_name=args.model)
+        worker_loop(args, all_jobs, game_info_map, save_dir_main)
     
     print("\n=== All runs for all games and levels have been processed ===")
 
