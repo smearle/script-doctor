@@ -1,4 +1,4 @@
-from typing import List, Dict, Optional, Tuple
+from typing import Iterable, List, Dict, Optional, Tuple
 from puzzlejax.utils import llm_text_query
 
 class LLMGameAgent:
@@ -10,7 +10,7 @@ class LLMGameAgent:
         self.model_name = model_name
 
     def choose_action(self, ascii_map: str, rules: str, action_space: List[int], action_meanings: Dict[int, str],
-                      think_aloud: bool, log_file: Optional[str] = None) -> Tuple[int, Optional[str]]:
+                      think_aloud: bool, memory: int, state_history: List, log_file: Optional[str] = None) -> Tuple[int, Optional[str]]:
         """
         Query the LLM to select an action id from action_space, given ascii_map, mapping, rules, and action_meanings.
         Returns an integer action id.
@@ -28,7 +28,16 @@ class LLMGameAgent:
         action_space_str = ", ".join(str(a) for a in action_space)
         # Provide action mapping (number to meaning) dynamically
         action_map_str = ", ".join([f"{k}={v}" for k, v in action_meanings.items()])
-        prompt = (
+        prompt = ""
+        if memory > 0 and len(state_history) > 0:
+            recent_states = state_history[-memory:] if len(state_history) >= memory else state_history
+            prompt += "Previous states:\n"
+            for i, state in enumerate(recent_states):
+                prev_ascii_state = state[0]
+                prev_action_id = state[1]
+                prompt += f"\n{prev_ascii_state}\n\nAction: {prev_action_id}\n"
+            prompt += "\n"
+        prompt += (
             f"Game state (ASCII map) and Legend:\n{ascii_map}\n\n"
   
             f"Game rules:\n{rules}\n\n"

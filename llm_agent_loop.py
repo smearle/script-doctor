@@ -10,7 +10,9 @@ from preprocess_games import PS_LARK_GRAMMAR_PATH, get_tree_from_txt
 from LLM_agent import LLMGameAgent
 from globals import PRIORITY_GAMES
 
+
 CUSTOM_GAMES_DIR = "data/scraped_games"
+
 
 def extract_section(filepath, section):
     """
@@ -41,6 +43,7 @@ def extract_section(filepath, section):
         section_lines.pop()
     return section_lines
 
+
 def parse_legend(legend_lines):
     """
     Parse the LEGEND section from a PuzzleScript game file.
@@ -59,6 +62,7 @@ def parse_legend(legend_lines):
             objs = [obj.strip() for obj in v.strip().split()]
             mapping[k] = objs
     return mapping
+
 
 def extract_first_level(level_lines):
     """
@@ -86,7 +90,7 @@ def extract_first_level(level_lines):
     return ""
 
 def check_run_file_exists(save_dir, model, game_name, run_id, level_index,
-                          think_aloud):
+                          think_aloud, memory):
     """
     Check if the specified run file exists, supporting two naming formats:
     1. With level marker: model_game_run_X_level_Y.json
@@ -105,13 +109,14 @@ def check_run_file_exists(save_dir, model, game_name, run_id, level_index,
     # Format the game name by replacing spaces with underscores for file paths
     formatted_game_name = game_name.replace(" ", "_")
     cot_prefix = "CoT_" if think_aloud else ""
+    memory_prefix = f"mem-{str(memory)}_" if memory > 0 else ""
     
     # Check filename with level marker
-    filename_with_level = f"{model}_{cot_prefix}{formatted_game_name}_run_{run_id}_level_{level_index}.json"
+    filename_with_level = f"{model}_{memory_prefix}{cot_prefix}{formatted_game_name}_run_{run_id}_level_{level_index}.json"
     path_with_level = os.path.join(save_dir, filename_with_level)
     
     # Also check with original game name format (for backward compatibility)
-    orig_filename_with_level = f"{model}_{cot_prefix}{game_name}_run_{run_id}_level_{level_index}.json"
+    orig_filename_with_level = f"{model}_{memory_prefix}{cot_prefix}{game_name}_run_{run_id}_level_{level_index}.json"
     orig_path_with_level = os.path.join(save_dir, orig_filename_with_level)
     
     # For level 0, also check filename without level marker
@@ -130,7 +135,7 @@ def check_run_file_exists(save_dir, model, game_name, run_id, level_index,
     return exists
 
 def get_run_file_path(save_dir, model, game_name, run_id, level_index,
-                      think_aloud):
+                      think_aloud: bool, memory: int):
     """
     Get file path for saving run results, always using the format with level marker
     
@@ -148,12 +153,13 @@ def get_run_file_path(save_dir, model, game_name, run_id, level_index,
     formatted_game_name = game_name.replace(" ", "_")
     
     filename = (f"{model}_" + \
+        (f'mem-{str(memory)}_' if memory > 0 else '') + \
         ('CoT_' if think_aloud else '') + \
         f"{formatted_game_name}_run_{run_id}_level_{level_index}.json")
     
     return os.path.join(save_dir, filename)
 
-def find_next_available_run_id(save_dir, model, game_name, level_index, initial_run_id):
+def find_next_available_run_id(save_dir, model, game_name, level_index, initial_run_id, think_aloud, memory):
     """
     Find the next available run ID that doesn't conflict with existing files.
     
@@ -168,8 +174,8 @@ def find_next_available_run_id(save_dir, model, game_name, level_index, initial_
         int: The next available run ID
     """
     run_id = initial_run_id
-    while check_run_file_exists(save_dir, model, game_name, run_id, level_index):
-        print(f"Run {run_id} already exists for Game: {game_name}, Level: {level_index}. Trying next run ID.")
+    while check_run_file_exists(save_dir, model, game_name, run_id, level_index, think_aloud, memory):
+        print(f"Run {run_id} already exists for Game: {game_name}, Level: {level_index}, CoT: {think_aloud}, Memory: {str(memory)}, Trying next run ID.")
         run_id += 1
     return run_id
 
@@ -242,7 +248,7 @@ def collect_game_info(game_name, start_level):
         return None
 
 def process_game_level(agent, game_info, level_index, run_id, save_dir, model,
-                       max_steps, think_aloud, force=False):
+                       max_steps, think_aloud: bool, memory: int, force=False):
     """
     Process a specific game level for a specific run ID.
     
@@ -266,13 +272,13 @@ def process_game_level(agent, game_info, level_index, run_id, save_dir, model,
     print(f"\n=== Processing Game: {game_name}, Level: {level_index}, Run: {run_id} ===")
     
     # Check if this run already exists
-    if check_run_file_exists(save_dir, model, game_name, run_id, level_index, think_aloud) and not force:
+    if check_run_file_exists(save_dir, model, game_name, run_id, level_index, think_aloud, memory) and not force:
         print(f"Run {run_id} for Game: {game_name}, Level: {level_index} already exists. Skipping.")
         return True
     
     # Get the path for saving results
     current_run_filepath = get_run_file_path(save_dir, model, game_name, run_id,
-                                             level_index, think_aloud)
+                                             level_index, think_aloud, memory)
 
     current_run_logs_dir = current_run_filepath[:-5] + "_logs"
     os.makedirs(current_run_logs_dir, exist_ok=True)
@@ -306,6 +312,7 @@ def process_game_level(agent, game_info, level_index, run_id, save_dir, model,
         }
         
         state_history = set()
+        state_history_lst = []
         current_state = state
         
         # Main action loop
@@ -323,8 +330,12 @@ def process_game_level(agent, game_info, level_index, run_id, save_dir, model,
                 action_space=action_space,
                 action_meanings=action_meanings,
                 think_aloud=think_aloud,
+                memory=memory,
+                state_history=state_history_lst,
                 log_file=log_file,
             )
+
+            state_history_lst.append((ascii_state, action_id))
             
             action_str = action_meanings[action_id]
             print(f"LLM chose action id: {action_id} ({action_str})")
@@ -377,7 +388,7 @@ def process_game_level(agent, game_info, level_index, run_id, save_dir, model,
             result["run"] = available_run_id
         
         # Get the file path with the updated run ID
-        current_run_filepath = get_run_file_path(save_dir, model, game_name, available_run_id, level_index, think_aloud)
+        current_run_filepath = get_run_file_path(save_dir, model, game_name, available_run_id, level_index, think_aloud, memory)
         
         # Save results
         with open(current_run_filepath, "w", encoding="utf-8") as f:
@@ -411,6 +422,7 @@ def main():
     parser.add_argument('--run_id_start', type=int, default=1,)
     parser.add_argument('--think_aloud', action='store_true',
                         help='Allow the LLM to think aloud as opposed to outputting strictly the next action.')
+    parser.add_argument('--memory', type=int, default=0, help="Number of previous steps to include in the prompt (default: 0)")
     parser.add_argument('--save_dir', type=str, default="llm_agent_results",
                         help='Directory to save results (default: llm_agent_results)')
     args = parser.parse_args()
@@ -483,6 +495,7 @@ def main():
                     think_aloud=args.think_aloud,
                     model=args.model,
                     max_steps=args.max_steps,
+                    memory=args.memory,
                     force=args.force
                 )
     
