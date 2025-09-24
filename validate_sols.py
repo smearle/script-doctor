@@ -28,21 +28,16 @@ from globals import SOLUTION_REWARDS_PATH, GAMES_TO_N_RULES_PATH
 from preprocess_games import PS_LARK_GRAMMAR_PATH, TREES_DIR, DATA_DIR, TEST_GAMES, PSErrors, get_tree_from_txt, count_rules
 from standalone.utils import replay_actions_js
 from standalone.utils import compile_game as compile_game_js
-from utils import get_list_of_games_for_testing, to_binary_vectors
+from puzzlejax.utils import get_list_of_games_for_testing, to_binary_vectors
 from utils_rl import get_env_params_from_config
 
 
 scratch_dir = 'scratch'
 os.makedirs(scratch_dir, exist_ok = True)
 
-JAX_VALIDATED_JS_SOLS_DIR = os.path.join('data', 'jax_validated_js_sols')
-JS_SOLS_DIR = os.path.join('data', 'js_sols')
-
 games_to_skip = set({
     '2048',  # hangs
 })
-
-JS_TO_JAX_ACTIONS = [3, 0, 1, 2, 4]
 
 
 def multihot_level_from_js_state(level_state, obj_list):

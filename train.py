@@ -624,6 +624,7 @@ def init_checkpointer(config: RLConfig) -> Tuple[Any, dict]:
 
         return restored_ckpt
 
+    wandb_run_id = None
     if checkpoint_manager.latest_step() is None:
         restored_ckpt = None
     else:
@@ -638,6 +639,8 @@ def init_checkpointer(config: RLConfig) -> Tuple[Any, dict]:
         for steps_prev_complete in ckpt_steps:
             try:
                 restored_ckpt = try_load_ckpt(steps_prev_complete, target)
+                with open(os.path.join(config._exp_dir, "wandb_run_id.txt"), "r") as f:
+                    wandb_run_id = f.read()
                 if restored_ckpt is None:
                     raise TypeError("Restored checkpoint is None")
                 break
@@ -645,47 +648,13 @@ def init_checkpointer(config: RLConfig) -> Tuple[Any, dict]:
                 print(f"Failed to load checkpoint at step {steps_prev_complete}. Error: {e}")
                 continue 
     
-    return checkpoint_manager, restored_ckpt
+    return checkpoint_manager, restored_ckpt, wandb_run_id
 
     
-def main_chunk(config, rng, exp_dir):
+def main_chunk(config, rng, restored_ckpt=None, checkpoint_manager=None):
     """When jax jits the training loop, it pre-allocates an array with size equal to number of training steps. So, when training for a very long time, we sometimes need to break training up into multiple
     chunks to save on VRAM.
     """
-    # FIXME: This shouldn't happen inside every chunk!
-    checkpoint_manager, restored_ckpt = init_checkpointer(config)
-
-    # if restored_ckpt is not None:
-    #     ep_returns = restored_ckpt['runner_state'].ep_returns
-    #     plot_ep_returns(ep_returns, config)
-    # else:
-    if restored_ckpt is None:
-        wandb_run_id = None
-        wandb_resume = None
-        progress_csv_path = os.path.join(exp_dir, "progress.csv")
-        # assert not os.path.exists(progress_csv_path), "Progress csv already exists, but have no checkpoint to restore " +\
-        #     "from. Run with `overwrite=True` to delete the progress csv."
-        # Create csv for logging progress
-        with open(progress_csv_path, "w") as f:
-            f.write("timestep,ep_return\n")
-
-    else:
-        with open(os.path.join(exp_dir, "wandb_run_id.txt"), "r") as f:
-            wandb_run_id = f.read()
-        wandb_resume = "must"
-
-    run = wandb.init(
-        project=config.wandb_project,
-        tags=["MAPPO"],
-        config=OmegaConf.to_container(config),
-        mode=config.wandb_mode,
-        dir=config._exp_dir,
-        id=wandb_run_id,
-        resume=wandb_resume,
-    )
-    wandb_run_id = run.id
-    with open(os.path.join(exp_dir, "wandb_run_id.txt"), "w") as f:
-        f.write(wandb_run_id)
 
     train_jit = jax.jit(make_train(config, restored_ckpt, checkpoint_manager))
     out = train_jit(rng)
@@ -706,22 +675,62 @@ def main(config: TrainConfig):
     exp_dir = config._exp_dir
     print(f'Running experiment to be logged at {exp_dir}\n')
 
-
     # Need to do this before setting up checkpoint manager so that it doesn't refer to old checkpoints.
     if config.overwrite and os.path.exists(exp_dir):
         shutil.rmtree(exp_dir)
 
+    checkpoint_manager, restored_ckpt, wandb_run_id = init_checkpointer(config)
+    if restored_ckpt is not None:
+        steps_prev_complete = restored_ckpt['steps_prev_complete']
+    else:
+        steps_prev_complete = 0
+
+    os.makedirs(exp_dir, exist_ok=True)
+
+    # Initialize wandb run
+    run = wandb.init(
+        project=getattr(config, "wandb_project", "pcgrl-jax"),
+        config=OmegaConf.to_container(config),
+        mode=getattr(config, "wandb_mode", "online"),
+        dir=exp_dir,
+        id=wandb_run_id,
+        resume=None,
+    )
+    wandb_run_id = run.id
+    with open(os.path.join(exp_dir, "wandb_run_id.txt"), "w") as f:
+        f.write(wandb_run_id)
+
+    # if restored_ckpt is not None:
+    #     ep_returns = restored_ckpt['runner_state'].ep_returns
+    #     plot_ep_returns(ep_returns, config)
+    # else:
+    if restored_ckpt is None:
+        progress_csv_path = os.path.join(exp_dir, "progress.csv")
+        if os.path.exists(progress_csv_path):
+            print("Progress csv already exists, but have no checkpoint to restore " +\
+                "from. Overwriting it.")
+        # Create csv for logging progress
+        with open(os.path.join(exp_dir, "progress.csv"), "w") as f:
+            f.write("timestep,ep_return\n")
+
     if config.timestep_chunk_size != -1:
         n_chunks = config.total_timesteps // config.timestep_chunk_size
-        for i in range(n_chunks):
+        n_chunks_complete = steps_prev_complete // config.timestep_chunk_size
+        for i in range(n_chunks_complete, n_chunks):
+            if i > 0:
+                # In case we called the overall function with `overwrite=True`, we need to make sure we don't mess things up moving forward.
+                # (In particular, not doing this will cause the step index to go back to 0 at the beginning of each new chunk... and overwrite the checkpoints?)
+                # (Ultimately we should make this chunk function less lazy in its approach. Move more initialization outside of it. But for now, anyway.)
+                config.overwrite = False
             config.total_timesteps = config.timestep_chunk_size + (i * config.timestep_chunk_size)
             print(f"Running chunk {i+1}/{n_chunks}")
-            out = main_chunk(config, rng, exp_dir)
-
+            out = main_chunk(config, rng, restored_ckpt, checkpoint_manager)
+            runer_state = out["runner_state"]
+            steps_prev_complete = (i + 1) * config.timestep_chunk_size
+            # A bit of a hack
+            restored_ckpt = {'runner_state': runer_state, 'steps_prev_complete': steps_prev_complete}
     else:
-        out = main_chunk(config, rng, exp_dir)        
-
-#   ep_returns = out["runner_state"].ep_returns
+        out = main_chunk(config, rng, restored_ckpt, checkpoint_manager)
 
 
 if __name__ == "__main__":

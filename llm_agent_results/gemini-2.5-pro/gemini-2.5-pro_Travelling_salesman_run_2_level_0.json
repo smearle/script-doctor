@@ -1,0 +1,73 @@
+{
+  "model": "gemini-2.5-pro",
+  "game": "Travelling_salesman",
+  "level": 0,
+  "run": 2,
+  "win": true,
+  "action_sequence": [
+    0,
+    0,
+    1,
+    1,
+    2,
+    3,
+    2
+  ],
+  "reward_sequence": [
+    1.9900000095367432,
+    0.9900000095367432,
+    0.9900000095367432,
+    0.9900000095367432,
+    0.9900000095367432,
+    0.9900000095367432,
+    1.9900000095367432
+  ],
+  "initial_ascii": [
+    "LEGEND:",
+    "o: node",
+    "-: hlink",
+    "\u2a02: nodeseen, player",
+    "\u151e: hlinkseen",
+    "\u26ab: nodeseen",
+    "|: vlink",
+    ".: background",
+    "",
+    "MAP:",
+    "o-\u2a02\u151e\u26ab",
+    "|...|",
+    "o-o-o",
+    "|.|..",
+    "o-o.."
+  ],
+  "state_data": {
+    "score": 0,
+    "win": true,
+    "step": 7
+  },
+  "heuristics": [
+    -6.0,
+    -5.0,
+    -4.0,
+    -3.0,
+    -2.0,
+    -1.0,
+    0.0
+  ],
+  "final_ascii": [
+    "LEGEND:",
+    "\u26ab: nodeseen",
+    "\u151e: hlinkseen",
+    "\u1a23: vlinkseen",
+    ".: background",
+    "|: vlink",
+    "-: hlink",
+    "\u2a02: nodeseen, player",
+    "",
+    "MAP:",
+    "\u26ab\u151e\u26ab\u151e\u26ab",
+    "\u1a23...|",
+    "\u26ab-\u26ab\u151e\u2a02",
+    "\u1a23.\u1a23..",
+    "\u26ab\u151e\u26ab.."
+  ]
+}

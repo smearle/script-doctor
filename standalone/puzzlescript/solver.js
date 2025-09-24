@@ -773,6 +773,11 @@ function solveAStar(engine, maxIters=100_000) {
 			}
 		}
     totalIters++;
+		if (totalIters > 0 && totalIters % 10000 === 0) {
+			const now = Date.now();
+			console.log('Iteration:', totalIters);
+			console.log('FPS:', (totalIters / (now - start_time) * 1000).toFixed(2));
+		}
 	}
 	muted = false;
 	solving = false;

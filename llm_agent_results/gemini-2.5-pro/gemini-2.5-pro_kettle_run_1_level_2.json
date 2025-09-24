@@ -1,0 +1,76 @@
+{
+  "model": "gemini-2.5-pro",
+  "game": "kettle",
+  "level": 2,
+  "run": 1,
+  "win": true,
+  "action_sequence": [
+    3,
+    0
+  ],
+  "reward_sequence": [
+    3.990000009536743,
+    4.989999771118164
+  ],
+  "initial_ascii": [
+    "LEGEND:",
+    "#: wall",
+    ".: background",
+    "k: dpolice",
+    "l: rpolice",
+    "@: target, crate",
+    "t: target",
+    "c: crate",
+    "j: lpolice",
+    "i: upolice",
+    "",
+    "MAP:",
+    "###############",
+    "#.............#",
+    "#.............#",
+    "#....kkkkk....#",
+    "#...l@t@@cj...#",
+    "#...l@@@tcj...#",
+    "#...lt@@@cj...#",
+    "#...lt@@@cj...#",
+    "#...liiiiij...#",
+    "#.............#",
+    "#.............#",
+    "#.............#",
+    "###############"
+  ],
+  "state_data": {
+    "score": 16,
+    "win": true,
+    "step": 2
+  },
+  "heuristics": [
+    -4.0,
+    0.0
+  ],
+  "final_ascii": [
+    "LEGEND:",
+    "#: wall",
+    ".: background",
+    "k: dpolice",
+    "l: rpolice",
+    "@: target, crate",
+    "j: lpolice",
+    "i: upolice",
+    "",
+    "MAP:",
+    "###############",
+    "#.............#",
+    "#.............#",
+    "#....kkkkk....#",
+    "#...l@@@@j....#",
+    "#...l@@@@j....#",
+    "#...l@@@@j....#",
+    "#...l@@@@j....#",
+    "#...liiiiij...#",
+    "#.............#",
+    "#.............#",
+    "#.............#",
+    "###############"
+  ]
+}

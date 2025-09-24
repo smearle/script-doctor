@@ -4,34 +4,67 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
 import re
+import argparse
 
-def parse_filename(filename):
+from puzzlejax.utils import game_names_remap
+
+
+def parse_filename(filename, folder_llm=None):
     """
-    Parses the filename to extract LLM, game, run, and level.
-    Example: 4o-mini_limerick_run_1_level_1.json
-    Example: 4o-mini_atlas shrank_run_1.json (level is 0 by default)
+    Parses filename (and optionally folder_llm) to extract LLM, game, run, and level.
+    Supports:
+      - Legacy: <llm>_(CoT_)?<game>_run_<n>(_level_<m>)?.json
+      - New: (CoT_)?<game>_run_<n>(_level_<m>)?.json  (llm inferred from folder name)
     """
-    match = re.match(r"^(.*?)_(.*?)_run_(\d+)(?:_level_(\d+))?\.json$", filename)
-    if match:
-        llm_model, game_name, run_number, level_number = match.groups()
-        if level_number is None: # Handles cases like '4o-mini_atlas shrank_run_1.json'
+    # Legacy pattern with model prefix
+    m = re.match(r"^(.*?)_(CoT_)?(.*?)_run_(\d+)(?:_level_(\d+))?\.json$", filename)
+    if m:
+        llm_model, cot, game_name, run_number, level_number = m.groups()
+        if cot:
+            # TODO: Plot comparison between CoT and non-CoT results in the future
+            return None, None, None, None
+        if level_number is None:  # Handles cases like '4o-mini_atlas shrank_run_1.json'
             # Check if game_name itself contains 'level_X'
             game_match = re.match(r"(.*?)_level_(\d+)$", game_name)
             if game_match:
                 game_name = game_match.group(1)
                 level_number = game_match.group(2)
-            else: # Default level to 0 if not specified and not in game_name
-                 # Further split game_name if it's a multi-part name before '_run_'
-                if ' shrank' in llm_model: # Special case for "atlas shrank"
+            else:  # Default level to 0 if not specified and not in game_name
+                # Further split game_name if it's a multi-part name before '_run_'
+                if ' shrank' in llm_model:  # Special case for "atlas shrank"
                     parts = llm_model.split(' shrank')
                     llm_model = parts[0]
-                    game_name = f"atlas shrank_{game_name}" # Reconstruct game name
+                    game_name = f"atlas shrank_{game_name}"  # Reconstruct game name
                 level_number = '0'
 
         # Normalize game name here - convert "atlas shrank" to "atlas_shrank"
         if game_name == "atlas shrank" or game_name == "atlas_shrank":
             game_name = "atlas_shrank"
 
+        return llm_model, game_name, int(run_number), int(level_number)
+
+    # New pattern without model prefix (model comes from folder_llm)
+    m2 = re.match(r"^(CoT_)?(.*?)_run_(\d+)(?:_level_(\d+))?\.json$", filename)
+    if m2:
+        cot_prefix, game_name, run_number, level_number = m2.groups()
+        if cot_prefix:
+            return None, None, None, None
+        if level_number is None:
+            game_match = re.match(r"(.*?)_level_(\d+)$", game_name)
+            if game_match:
+                game_name = game_match.group(1)
+                level_number = game_match.group(2)
+            else:
+                level_number = '0'
+        if game_name == "atlas shrank" or game_name == "atlas_shrank":
+            game_name = "atlas_shrank"
+        # infer llm from folder name (strip memory suffix if present)
+        llm_model = folder_llm or ""
+        if llm_model:
+            llm_model = re.sub(r"_mem-\d+$", "", llm_model)
+        if not llm_model:
+            print(f"Warning: Could not infer model from folder for file: {filename}")
+            return None, None, None, None
         return llm_model, game_name, int(run_number), int(level_number)
 
     # Fallback for filenames that might not perfectly match the primary pattern
@@ -42,6 +75,7 @@ def parse_filename(filename):
 def collect_results(results_dir):
     """
     Collects results from all .json files in the specified results_dir **and all its subdirectories**.
+    Adds a 'cot' field (0/1) for each entry, inferred from filename or content.
     """
     data = []
 
@@ -49,24 +83,41 @@ def collect_results(results_dir):
         print(f"Error: Directory '{results_dir}' not found.")
         return pd.DataFrame()
 
-    # 遍历所有子目录和文件
     for root, dirs, files in os.walk(results_dir):
         for filename in files:
             if filename.endswith(".json"):
                 filepath = os.path.join(root, filename)
-                llm, game, run, level = parse_filename(filename)
+                rel_root = os.path.relpath(root, results_dir)
+                folder_llm = rel_root.split(os.sep)[0] if rel_root != "." else None
+                llm, game, run, level = parse_filename(filename, folder_llm)
+
 
                 if not llm or not game:
                     print(f"Skipping unparsable file: {filename}")
                     continue
-                    
+
+                # Infer cot from filename (e.g. cot-1 or cot-0 in filename)
+                cot = None
+                cot_match = re.search(r'cot[-_](\d)', filename)
+                if cot_match:
+                    cot = int(cot_match.group(1))
+                else:
+                    # Try to infer from content if possible
+                    try:
+                        with open(filepath, 'r') as f:
+                            content = json.load(f)
+                        cot = int(content.get("cot", 0))
+                    except Exception:
+                        cot = 0  # Default to 0 if not found
+
                 # Normalize game name for atlas shrank cases
                 if "atlas shrank" in game or "atlas_shrank" in game:
                     game = "atlas_shrank"
 
                 try:
-                    with open(filepath, 'r') as f:
-                        content = json.load(f)
+                    if 'content' not in locals():
+                        with open(filepath, 'r') as f:
+                            content = json.load(f)
                     
                     win_status = content.get("win", content.get("state_data", {}).get("win", False))
                     steps = content.get("state_data", {}).get("step", float('nan')) # Get steps, use NaN if not found
@@ -78,22 +129,45 @@ def collect_results(results_dir):
                         "level": level,
                         "win": win_status,
                         "steps": steps,
-                        "filename": filename
+                        "filename": filename,
+                        "cot": cot
                     })
                 except json.JSONDecodeError:
                     print(f"Error decoding JSON from file: {filepath}")
                 except Exception as e:
                     print(f"Error processing file {filepath}: {e}")
+                finally:
+                    if 'content' in locals():
+                        del content
     
     return pd.DataFrame(data)
 
 
 def main():
-    # The script is in llm_agent_results/analysis/, so results_dir is ../
+    parser = argparse.ArgumentParser(description="Analyze LLM results with optional CoT filtering.")
+    parser.add_argument('--cot', type=int, choices=[0, 1], default=0,
+                        help="Analyze only data with specified cot value (0: default, 1: only CoT runs). Default: 0 (no CoT).")
+    parser.add_argument('--include-cot-games', action='store_true',
+                        help="If set, include games whose name starts with 'cot' or 'CoT'. Default: not included.")
+    parser.add_argument('--only-non-thinking-models', action='store_true',
+                        help="If set, only include non-thinking models (ChatGPT 4o-mini, Deepseek-chat, Gemini 2.5 Pro, Qwen-plus).")
+    args = parser.parse_args()
+
     current_script_path = os.path.dirname(os.path.abspath(__file__))
     results_dir = os.path.join(current_script_path, "..") # Points to llm_agent_results/
 
     df = collect_results(results_dir)
+
+    # 过滤掉 deepseek-r1 结果
+    df = df[~df['llm'].isin(['deepseek-r1', 'llama'])]
+
+    # 只保留指定 cot 的数据
+    if "cot" in df.columns:
+        df = df[df["cot"] == args.cot]
+
+    # 默认过滤掉所有以 cot/CoT 开头的 game，除非用户指定 --include-cot-games
+    if not args.include_cot_games:
+        df = df[~df['game'].str.lower().str.startswith('cot')]
 
     if df.empty:
         print("No data collected. Exiting.")
@@ -102,14 +176,31 @@ def main():
     # Standardize game names - ensure all atlas shrank variations are normalized
     df['game'] = df['game'].apply(lambda x: "atlas_shrank" if "atlas" in x and "shrank" in x else x)
 
+    # Rename games
+    df['game'] = df['game'].replace(game_names_remap)
+    # Now remove any underscores, and capitalize each word
+    df['game'] = df['game'].apply(lambda x: ' '.join(word.capitalize() for word in x.replace('_', ' ').split()))
+
     # Map LLM names (remove Gemini from mapping)
     llm_name_mapping = {
-        "4o-mini": "ChatGPT 4o-mini",
+        "4o-mini": "GPT 4o-mini",
         "deepseek": "Deepseek-chat",
         "qwen": "Qwen-plus",
-        "gemini": "gemini 2.5 experimental flash"
+        "gemini": "Gemini 2.0 flash exp",
+        "gemini-2.5-pro":"Gemini 2.5 Pro"
     }
     df['llm'] = df['llm'].replace(llm_name_mapping)
+
+    # 只保留非thinking模型（如指定）
+    if args.only_non_thinking_models:
+        non_thinking_models = [
+            "ChatGPT 4o-mini",
+            "Deepseek-chat",
+            "Gemini 2.5 Pro",
+            "Gemini 2.0 flash exp",
+            "Qwen-plus"
+        ]
+        df = df[df['llm'].isin(non_thinking_models)]
 
     # Calculate average win rate and average steps per LLM
     llm_agg_data = df.groupby("llm").agg(

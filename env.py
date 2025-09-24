@@ -226,7 +226,7 @@ def compute_manhattan_dists(lvl, src, trg):
 def compute_sum_of_manhattan_dists(lvl, src, trg):
     dists = compute_manhattan_dists(lvl, src, trg)
     # Get minimum of each source to any target
-    dists = jnp.nanmin(dists, axis=0)
+    dists = jnp.nanmin(dists, axis=1)
     dists = jnp.where(jnp.isnan(dists), 0, dists)
     sum_dist = jnp.sum(dists, axis=0).astype(np.int32)
     return sum_dist
@@ -905,7 +905,9 @@ class PSEnv:
         lvl = params.level
         self.tick_fn = self.gen_tick_fn(lvl.shape[1:])
         again = False
-        _, _, init_heuristic = self.check_win(lvl)
+        win, score, init_heuristic = self.check_win(lvl)
+        if PRINT_SCORE:
+            jax.debug.print('heuristic: {heuristic}, score: {score}, win: {win}', heuristic=init_heuristic, score=score, win=win)
         state = PSState(
             multihot_level=lvl,
             win=jnp.array(False),
