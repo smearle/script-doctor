@@ -17,4 +17,3 @@ hydra:
     gpus_per_node: 1
     timeout_min: 1440
     mem_gb: 30
-    account: pr_174_tandon_advanced

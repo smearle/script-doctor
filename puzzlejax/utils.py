@@ -151,7 +151,7 @@ def llm_text_query(system_prompt, prompt, model, api_key=None, base_url=None, mo
             }
         else:
             print(f'Querying API using model {model} with virtual key {virtual_key}...')
-            url = "https://ai-gateway.apps.cloud.rt.nyu.edu/v1/chat/completions"
+            url = "anon"
             headers = {
                 "Content-Type": "application/json",
                 "Authorization": f"Bearer {os.environ.get('PORTKEY_BEARER', '')}",

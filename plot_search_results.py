@@ -94,7 +94,7 @@ def plot(cfg: PlotSearch, results=None):
     df = pd.DataFrame.from_dict(results, orient='index')
     if 'sol_len' in df.columns and 'mean_sol_len' not in df.columns:
         df.rename(columns={'sol_len': 'mean_sol_len'}, inplace=True)
-    df = df.sort_values(by=['pct_solved', 'n_iters'], ascending=[False, True])
+    # df = df.sort_values(by=['pct_solved', 'n_iters'], ascending=[False, True])
 
     os.makedirs(PLOTS_DIR, exist_ok=True)
 
@@ -152,7 +152,7 @@ def generate_heatmaps(df: pd.DataFrame) -> None:
             'cmap': 'RdYlGn',
             'vmin': 0.0,
             'vmax': 1.0,
-            'colorbar_label': 'Solved Levels %',
+            'colorbar_label': 'Average Win Rate',
             'formatter': lambda v: f"{v:.0%}",
             'output': 'bfs_pct_solved_heatmap.png',
         },
@@ -236,7 +236,8 @@ def generate_heatmaps(df: pd.DataFrame) -> None:
         plt.ylabel('')
         plt.yticks([])
         plt.xticks(rotation=45, ha='right')
-        plt.tight_layout(pad=1.2, rect=[0, 0, 0.92, 1])
+        # plt.tight_layout(pad=1.2, rect=[0, 0, 0.92, 1])
+        plt.tight_layout()
 
         output_path = os.path.join(PLOTS_DIR, config['output'])
         try:

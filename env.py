@@ -206,6 +206,7 @@ def expand_meta_objs(tile_list: List, meta_objs, char_to_obj):
     return expanded_meta_objs
 
 def get_meta_channel(lvl, obj_idxs):
+    """ Return a boolean array indicating whether any of the specified object indices are present in each cell of the level."""
     return jnp.any(lvl[jnp.array(obj_idxs)], axis=0)
 
 def compute_manhattan_dists(lvl, src, trg):
@@ -237,60 +238,69 @@ def compute_min_manhattan_dist(lvl, src, trg):
     min_dist = jnp.min(dists).astype(np.int32)
     return min_dist
 
+def check_all(lvl, src, trg):
+    src_channel = get_meta_channel(lvl, src)
+    if trg is None:
+        return True, 0, 0
+    trg_channel = get_meta_channel(lvl, trg)
+    win = ~jnp.any(src_channel & ~trg_channel)
+    score = jnp.count_nonzero(src_channel & trg_channel)
+    heuristic = compute_sum_of_manhattan_dists(lvl, src, trg)
+    return win, score, -heuristic
+
+def check_some_on(lvl, src, trg):
+    src_channel = get_meta_channel(lvl, src)
+    trg_channel = get_meta_channel(lvl, trg)
+    win = jnp.any(src_channel & trg_channel)
+    score = win.astype(np.int32)
+    heuristic = compute_min_manhattan_dist(lvl, src, trg)
+    return win, score, -heuristic
+
+def check_some_exist(lvl, src):
+    src_channel = get_meta_channel(lvl, src)
+    win = jnp.any(src_channel)
+    score = win.astype(np.int32)
+    heuristic = score.astype(np.int32)
+    return win, score, heuristic
+
+def check_none(lvl, src):
+    src_channel = get_meta_channel(lvl, src)
+    win = ~jnp.any(src_channel)
+    score = -jnp.count_nonzero(src_channel)
+    heuristic = score
+    return win, score, heuristic
+
+def check_none_on(lvl, src, trg):
+    src_channel = get_meta_channel(lvl, src)
+    trg_channel = get_meta_channel(lvl, trg)
+    win = ~jnp.any(src_channel & trg_channel)
+    score = -jnp.count_nonzero(src_channel & trg_channel)
+    heuristic = score
+    return win, score, heuristic
+
+def check_any(lvl, src):
+    src_channel = get_meta_channel(lvl, src)
+    win = jnp.any(src_channel)
+    score = jnp.count_nonzero(src_channel)
+    heuristic = compute_min_manhattan_dist(lvl, src, trg)
+    return win, score, -heuristic
+
+def check_win(lvl, funcs, jit):
+    if len(funcs) == 0:
+        return False, 0, 0
+
+    def apply_win_condition_func(i, lvl):
+        return jax.lax.switch(i, funcs, lvl)
+
+    if jit:
+        wins, scores, heuristics = jax.vmap(apply_win_condition_func, in_axes=(0, None))(jnp.arange(len(funcs)), lvl)
+    else:
+        func_returns = [f(lvl) for f in funcs]
+        wins, scores, heuristics = zip(*func_returns)
+        wins, scores, heuristics = np.array(wins), np.array(scores), np.array(heuristics)
+    return jnp.all(wins), scores.sum(), heuristics.sum()
+
 def gen_check_win(win_conditions: Iterable[WinCondition], obj_to_idxs, meta_objs, char_to_obj, jit=True):
-
-    # @partial(jax.jit, static_argnums=(1, 2))
-    def check_all(lvl, src, trg):
-        src_channel = get_meta_channel(lvl, src)
-        if trg is None:
-            return True, 0, 0
-        trg_channel = get_meta_channel(lvl, trg)
-        # There can be no source objects that do not overlap target objects
-        win = ~jnp.any(src_channel & ~trg_channel)
-        score = jnp.count_nonzero(src_channel & trg_channel)
-        heuristic = compute_sum_of_manhattan_dists(lvl, src, trg)
-        return win, score, -heuristic
-
-    # @partial(jax.jit, static_argnums=(1, 2))
-    def check_some_on(lvl, src, trg):
-        src_channel = get_meta_channel(lvl, src)
-        trg_channel = get_meta_channel(lvl, trg)
-        win = jnp.any(src_channel & trg_channel)
-        score = win.astype(np.int32)
-        heuristic = compute_min_manhattan_dist(lvl, src, trg)
-        return win, score, -heuristic
-
-    def check_some_exist(lvl, src):
-        src_channel = get_meta_channel(lvl, src)
-        win = jnp.any(src_channel)
-        score = win.astype(np.int32)
-        heuristic = score.astype(np.int32)
-        return win, score, heuristic
-
-    # @partial(jax.jit, static_argnums=(1,))
-    def check_none(lvl, src):
-        src_channel = get_meta_channel(lvl, src)
-        win = ~jnp.any(src_channel)
-        score = -jnp.count_nonzero(src_channel)
-        heuristic = score
-        return win, score, heuristic
-
-    def check_none_on(lvl, src, trg):
-        src_channel = get_meta_channel(lvl, src)
-        trg_channel = get_meta_channel(lvl, trg)
-        win = ~jnp.any(src_channel & trg_channel)
-        score = -jnp.count_nonzero(src_channel & trg_channel)
-        heuristic = score
-        return win, score, heuristic
-
-    # @partial(jax.jit, static_argnums=(1,))
-    def check_any(lvl, src):
-        src_channel = get_meta_channel(lvl, src)
-        win = jnp.any(src_channel)
-        score = jnp.count_nonzero(src_channel)
-        heuristic = compute_min_manhattan_dist(lvl, src, trg)
-        return win, score, -heuristic
-
     funcs = []
     for win_condition in win_conditions:
         src, trg = win_condition.src_obj, win_condition.trg_obj
@@ -322,25 +332,8 @@ def gen_check_win(win_conditions: Iterable[WinCondition], obj_to_idxs, meta_objs
             raise Exception('Invalid quantifier.')
         funcs.append(func)
 
-    # @partial(jax.jit)
-    def check_win(lvl):
-
-        if len(funcs) == 0:
-            return False, 0, 0
-        
-        def apply_win_condition_func(i, lvl):
-            # FIXME: can't jit this list of functions... when the funcs are jitted theselves??
-            return jax.lax.switch(i, funcs, lvl)
-
-        if jit:
-            wins, scores, heuristics = jax.vmap(apply_win_condition_func, in_axes=(0, None))(jnp.arange(len(funcs)), lvl)
-        else:
-            func_returns = [f(lvl) for f in funcs]
-            wins, scores, heuristics = zip(*func_returns)
-            wins, scores, heuristics = np.array(wins), np.array(scores), np.array(heuristics)
-        return jnp.all(wins), scores.sum(), heuristics.sum()
-
-    return check_win
+    from functools import partial as _partial
+    return _partial(check_win, funcs=funcs, jit=jit)
 
 
 @flax.struct.dataclass
@@ -647,7 +640,7 @@ class LoopRuleGroupState:
 
 class PSEnv:
     def __init__(self, tree: PSGameTree, jit: bool = True, level_i: int = 0, max_steps: int = np.inf,
-                 debug: bool = False, print_score: bool = True, vmap: bool = False):
+                 debug: bool = False, print_score: bool = True, vmap: bool = True):
         global DEBUG, PRINT_SCORE
         DEBUG, PRINT_SCORE = debug, print_score
         self.jit = jit
@@ -841,6 +834,7 @@ class PSEnv:
             self.step_env = jax.jit(self.step_env)
             self.reset = jax.jit(self.reset)
             self.apply_player_force = jax.jit(self.apply_player_force)
+            self.render = jax.jit(self.render, static_argnums=(1,))
         self.joint_tiles = joint_tiles
 
         multihot_level = self.get_level(level_i)
@@ -878,7 +872,7 @@ class PSEnv:
         multihot_level = multihot_level.astype(bool)
         return multihot_level
 
-    @partial(jax.jit, static_argnums=(0, 2))
+    # @partial(jax.jit, static_argnums=(0, 2))
     def render(self, state: PSState, cv2=True):
         lvl = state.multihot_level
         level_height, level_width = lvl.shape[1:]
@@ -911,10 +905,10 @@ class PSEnv:
         state = PSState(
             multihot_level=lvl,
             win=jnp.array(False),
-            score=0,
+            score=jnp.array(0, dtype=jnp.int32),
             heuristic=init_heuristic,
             restart=jnp.array(False),
-            step_i=0,
+            step_i=jnp.array(0, dtype=jnp.int32),
             init_heuristic=init_heuristic,
             prev_heuristic=init_heuristic,
             rng=rng,
@@ -1082,6 +1076,7 @@ class PSEnv:
         level = self.levels[level_idx][0]
         # Convert the level to a multihot representation and render it
         multihot_level = self.char_level_to_multihot(level)
+        multihot_level = jnp.array(multihot_level)
         return multihot_level
 
     def gen_subrules_meta(self, rule: Rule, rule_name: str, lvl_shape: Tuple[int, int],):

@@ -228,7 +228,6 @@ def main(sweep_cfg: SweepRLConfig):
         cpus_per_task=1,
         timeout_min=60*24,
         slurm_gres='gpu:1',
-        slurm_account='pr_174_tandon_advanced', 
         slurm_array_parallelism=1_000,
     )
     all_cfgs = []
@@ -248,7 +247,7 @@ def main(sweep_cfg: SweepRLConfig):
     # Sort cfgs by seed so that we run a a breadth of experiments first
     all_cfgs = sorted(all_cfgs, key=lambda x: x.seed)
     if not sweep_cfg.slurm:
-        [main_fn(cfg) for cfg in level_cfgs]
+        [main_fn(cfg) for cfg in all_cfgs]
     else:
         executor.map_array(
             main_fn,

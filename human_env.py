@@ -8,6 +8,7 @@ import hydra
 from hydra.core.config_store import ConfigStore
 import cv2
 import jax
+import jax.numpy as jnp
 from lark import Lark
 import numpy as np
 
@@ -38,12 +39,8 @@ def human_loop(env: PSEnv, level: int = 0, profile=False):
     rng = jax.random.PRNGKey(0)
     obs, state = env.reset(rng, params)
     im = env.render(state)
-    # print(multihot_to_desc(state.multihot_level, env.obj_to_idxs))
     im = np.array(im, dtype=np.uint8)
     
-    # Resize the image by a factor of 5
-    # new_h, new_w = tuple(np.array(im.shape[:2]) * SCALING_FACTOR)
-    # im = cv2.resize(im, (new_w, new_h), interpolation=cv2.INTER_NEAREST)
     state_hist = []
     
     # Display the image in an OpenCV window
@@ -55,7 +52,6 @@ def human_loop(env: PSEnv, level: int = 0, profile=False):
     while True:
         rng, _ = jax.random.split(rng)
         # cv2.waitKey(0) waits indefinitely until a key is pressed.
-        # Mask with 0xFF to get the lowest 8 bits (common practice).
         key = cv2.waitKey(0)
         action = None
         do_reset = False
@@ -117,10 +113,7 @@ def human_loop(env: PSEnv, level: int = 0, profile=False):
             break
 
         elif action is not None:
-            lvl = env.apply_player_force(action, state)
-            vis_lvl = lvl[:env.n_objs]
-            lvl_changed = True
-            n_vis_apps = 0
+            action = jnp.array(action, dtype=jnp.int32)
             if profile:
                 with jax.profiler.trace("/tmp/jax-trace", create_perfetto_link=True):
                     obs, state, reward, done, info = env.step(rng, state, action, params)
@@ -151,8 +144,6 @@ def human_loop(env: PSEnv, level: int = 0, profile=False):
             state_hist.append(state)
             im = env.render(state)
             im = np.array(im, dtype=np.uint8)
-            # new_h, new_w = tuple(np.array(im.shape[:2]) * SCALING_FACTOR)
-            # im = cv2.resize(im, (new_w, new_h), interpolation=cv2.INTER_NEAREST)
             cv2.imshow(env.title, im)
     
 
@@ -167,8 +158,6 @@ def human_loop(env: PSEnv, level: int = 0, profile=False):
             obs, state = env.reset(rng, params)
             im = env.render(state)
             im = np.array(im, dtype=np.uint8)
-            # new_h, new_w = tuple(np.array(im.shape[:2]) * SCALING_FACTOR)
-            # im = cv2.resize(im, (new_w, new_h), interpolation=cv2.INTER_NEAREST)
             cv2.imshow(env.title, im)
     # Close the image window
     cv2.destroyAllWindows()

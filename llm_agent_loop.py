@@ -286,7 +286,7 @@ def get_run_file_path(save_dir, model, game_name, run_id, level_index, think_alo
 def find_next_available_run_id(save_dir, model, game_name, level_index, initial_run_id, think_aloud, memory):
     """
     Find the next available run ID that doesn't conflict with existing files.
-    
+
     Args:
         save_dir: Directory where run results are saved (model[_mem] folder)
         model: Model name
@@ -344,31 +344,26 @@ def collect_game_info(game_name, start_level):
             print(f"Parse error: {err_msg}, code: {success}")
             return None
 
-        env = RepresentationWrapper(tree, debug=False, print_score=False)
-
-        if not hasattr(env, 'levels') or not env.levels:
+        # Do NOT create env here! Only store info needed to reconstruct it in the worker.
+        # Instead, check levels by parsing tree directly.
+        levels = getattr(tree, "levels", None)
+        if not levels or len(levels) == 0:
             print(f"Error: No levels found for game '{game_name}'. Skipping game.")
             return None
-            
-        if len(env.levels) == 0:
-            print(f"Error: No levels available (env.levels is empty) for game '{game_name}'. Skipping game.")
-            return None
-            
-        # Collect game information
+
+        # Collect game information (no env object)
         game_info = {
             "game_name": game_name,
             "game_path": game_path,
             "rules": rules,
             "mapping": mapping,
             "ascii_map": ascii_map,
-            "env": env,
             "tree": tree,
-            "num_levels": len(env.levels),
-            "levels_to_process": list(range(start_level, len(env.levels)))
+            "num_levels": len(levels),
+            "levels_to_process": list(range(start_level, len(levels)))
         }
-        
         return game_info
-        
+
     except Exception as e:
         print(f"Error collecting game info for {game_name}: {type(e).__name__}, {e}")
         return None
@@ -393,19 +388,28 @@ def process_game_level(agent, game_info, level_index, run_id, save_dir, model,
         Boolean indicating success
     """
     game_name = game_info["game_name"]
-    env = game_info["env"]
+    # Reconstruct env inside the worker process
+    from env_wrappers import RepresentationWrapper
+    tree = game_info["tree"]
+    env = RepresentationWrapper(tree, debug=False, print_score=False)
     rules = game_info["rules"]
     
     print(f"\n=== Processing Game: {game_name}, Level: {level_index}, Run: {run_id} ===")
     
-    # Check if this run already exists
-    if check_run_file_exists(save_dir, model, game_name, run_id, level_index, think_aloud, memory) and not force:
-        print(f"Run {run_id} for Game: {game_name}, Level: {level_index} already exists. Skipping.")
-        return True
-    
     # Get the path for saving results
     current_run_filepath = get_run_file_path(save_dir, model, game_name, run_id,
                                              level_index, think_aloud, memory)
+
+    # Create an empty run file as a lock before starting work
+    if os.path.exists(current_run_filepath) and not force:
+        print(f"Run {run_id} for Game: {game_name}, Level: {level_index} already exists. Skipping.")
+        return True
+    try:
+        with open(current_run_filepath, "w", encoding="utf-8") as f:
+            json.dump({"status": "running"}, f)
+    except Exception as e:
+        print(f"Failed to create lock file for {current_run_filepath}: {e}")
+        return False
 
     current_run_logs_dir = current_run_filepath[:-5] + "_logs"
     os.makedirs(current_run_logs_dir, exist_ok=True)
@@ -523,6 +527,8 @@ def process_game_level(agent, game_info, level_index, run_id, save_dir, model,
 
 
 def main():
+    import multiprocessing
+    multiprocessing.set_start_method("spawn", force=True)
     parser = argparse.ArgumentParser(description='LLM agent loop experiment (env+rules/ascii/mapping)')
     parser.add_argument('--model', type=str, required=True, choices=['4o-mini', 'o3-mini', 'gemini', 'gemini-2.5-pro', 'deepseek', 'qwen', 'deepseek-r1', 'llama'],
                         help='LLM model alias (4o-mini=4o-mini, o3=O3-mini, gemini=Gemini-2.0, gemini-2.5-Pro, deepseek=DeepSeek, qwen=Qwen, llama=Llama-3 via Portkey)')
@@ -545,6 +551,8 @@ def main():
     parser.add_argument('--memory', type=int, default=0, help="Number of previous steps to include in the prompt (default: 0)")
     parser.add_argument('--save_dir', type=str, default="llm_agent_results",
                         help='Root directory to save results (default: llm_agent_results)')
+    parser.add_argument('--game', type=str, default='',
+                        help='Specific game to run. If not provided, runs all games (default: empty)')
     parser.add_argument('--worker_id', type=str, default='',
                         help='Optional identifier for this worker process')
     parser.add_argument('--state_path', type=str, default='',
@@ -554,19 +562,25 @@ def main():
     args = parser.parse_args()
 
     # Get the list of games from PRIORITY_GAMES
-    game_names = PRIORITY_GAMES.copy()
-    
-    # Find the starting game in the list
-    resume_game_name = args.resume_game_name
-    actual_resume_game_name = 'atlas shrank' if resume_game_name == 'atlas_shrank' else resume_game_name
-    
-    if actual_resume_game_name:
-        try:
-            start_idx = game_names.index(actual_resume_game_name)
-            # Keep only games starting from the resume game
-            game_names = game_names[start_idx:]
-        except ValueError:
-            print(f"Warning: Game '{actual_resume_game_name}' not found in PRIORITY_GAMES list. Starting from the beginning.")
+    if args.game:
+        # If a specific game is provided, use only that game
+        game_names = [args.game]
+        print(f"Running specific game: {args.game}")
+    else:
+        # Use all games from PRIORITY_GAMES
+        game_names = PRIORITY_GAMES.copy()
+
+        # Find the starting game in the list
+        resume_game_name = args.resume_game_name
+        actual_resume_game_name = 'atlas shrank' if resume_game_name == 'atlas_shrank' else resume_game_name
+
+        if actual_resume_game_name:
+            try:
+                start_idx = game_names.index(actual_resume_game_name)
+                # Keep only games starting from the resume game
+                game_names = game_names[start_idx:]
+            except ValueError:
+                print(f"Warning: Game '{actual_resume_game_name}' not found in PRIORITY_GAMES list. Starting from the beginning.")
     
     # Process in reverse order if flag is set
     if args.reverse:

@@ -77,12 +77,12 @@ def open_browser(url=url, headless=False):
 
     return driver
 # Azure OpenAI other model configurations
-O_ENDPOINT = os.getenv("ENDPOINT_URL", "https://sc-pn-m898m3wl-eastus2.openai.azure.com/")
+O_ENDPOINT = os.getenv("ENDPOINT_URL", "anon")
 O_KEY = os.getenv("O3_MINI_KEY")
 
 # Portkey API configuration
 PORTKEY_API_KEY = os.getenv('PORTKEY_API_KEY')
-PORTKEY_BASE_URL = "https://ai-gateway.apps.cloud.rt.nyu.edu/v1"
+PORTKEY_BASE_URL = "anon"
 
 # Global client instance
 azure_client = None
