@@ -1,14 +1,12 @@
 
 # PuzzleJAX
 
-This repository contains the code for [*PuzzleJAX*](https://arxiv.org/abs/2508.16821), a GPU-accelerated implementation of PuzzleScript (https://www.puzzlescript.net)
+This repository contains the code for *PuzzleJAX*, a GPU-accelerated implementation of PuzzleScript (https://www.puzzlescript.net)
 
 PuzzleScript is a concise and expressive game description language that has been used by designers to create a plethora of grid-based puzzle games.
 At its core are *local pattern rewrite rules*. We take advantage of the convolutional nature of these rewrite rules to implement the engine in JAX, allowing AI practitioners to e.g. efficiently train Reinforcement Learning agents to play arbitrary PuzzleScript games.
 
 ![A GIF showing tree-search-generated (partial) solutions to a diverse series of PuzzleScript games.](gifs/header.gif)
-
-(This repository also contains the code for [*ScriptDoctor*](https://arxiv.org/abs/2506.06524), a pipeline for generating PuzzleScript games using LLMs.)
 
 ## Setup
 
@@ -136,34 +134,9 @@ Refer to the implementation in `jax_sokoban_agent.py`, especially the following 
 - Ensure environment variables are correctly configured, especially API keys
 - For large game states, you may need to adjust the LLM token limit
 
-## Generating games with LLMs (ScriptDoctor)
-
-Documentation coming soon.
-
 ## Citing this work
 
-If you use the JAX-accelerated implementation of PuzzleScript, you can cite PuzzleJAX:
-```
-@misc{earle2025puzzlejax,
-      title={PuzzleJAX: A Benchmark for Reasoning and Learning}, 
-      author={Sam Earle and Graham Todd and Yuchen Li and Ahmed Khalifa and Muhammad Umair Nasir and Zehua Jiang and Andrzej Banburski-Fahey and Julian Togelius},
-      year={2025},
-      eprint={2508.16821},
-      archivePrefix={arXiv},
-      primaryClass={cs.AI},
-      url={https://arxiv.org/abs/2508.16821}, 
-}
-```
-
-If you use our code for generating PuzzleScript games with LLMs, you can cite ScriptDoctor:
-
-```
-@article{earle2025scriptdoctor,
-  title={ScriptDoctor: Automatic Generation of PuzzleScript Games via Large Language Models and Tree Search},
-  author={Earle, Sam and Khalifa, Ahmed and Nasir, Muhammad Umair and Jiang, Zehua and Todd, Graham and Banburski-Fahey, Andrzej and Togelius, Julian},
-  journal={arXiv preprint arXiv:2506.06524},
-  year={2025}
-}```
+*omitted for anonymity*
 
 ## License
 

@@ -228,7 +228,6 @@ def main(sweep_cfg: SweepRLConfig):
         cpus_per_task=1,
         timeout_min=60*24,
         slurm_gres='gpu:1',
-        slurm_account='pr_174_tandon_advanced', 
         slurm_array_parallelism=1_000,
     )
     all_cfgs = []
