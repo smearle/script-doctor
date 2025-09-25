@@ -903,10 +903,10 @@ class PSEnv:
         state = PSState(
             multihot_level=lvl,
             win=jnp.array(False),
-            score=0,
+            score=jnp.array(0, dtype=jnp.int32),
             heuristic=init_heuristic,
             restart=jnp.array(False),
-            step_i=0,
+            step_i=jnp.array(0, dtype=jnp.int32),
             init_heuristic=init_heuristic,
             prev_heuristic=init_heuristic,
             rng=rng,
