@@ -248,7 +248,7 @@ def main(sweep_cfg: SweepRLConfig):
     # Sort cfgs by seed so that we run a a breadth of experiments first
     all_cfgs = sorted(all_cfgs, key=lambda x: x.seed)
     if not sweep_cfg.slurm:
-        [main_fn(cfg) for cfg in level_cfgs]
+        [main_fn(cfg) for cfg in all_cfgs]
     else:
         executor.map_array(
             main_fn,
