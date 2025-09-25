@@ -286,7 +286,7 @@ def get_run_file_path(save_dir, model, game_name, run_id, level_index, think_alo
 def find_next_available_run_id(save_dir, model, game_name, level_index, initial_run_id, think_aloud, memory):
     """
     Find the next available run ID that doesn't conflict with existing files.
-    
+
     Args:
         save_dir: Directory where run results are saved (model[_mem] folder)
         model: Model name
@@ -551,6 +551,8 @@ def main():
     parser.add_argument('--memory', type=int, default=0, help="Number of previous steps to include in the prompt (default: 0)")
     parser.add_argument('--save_dir', type=str, default="llm_agent_results",
                         help='Root directory to save results (default: llm_agent_results)')
+    parser.add_argument('--game', type=str, default='',
+                        help='Specific game to run. If not provided, runs all games (default: empty)')
     parser.add_argument('--worker_id', type=str, default='',
                         help='Optional identifier for this worker process')
     parser.add_argument('--state_path', type=str, default='',
@@ -560,19 +562,25 @@ def main():
     args = parser.parse_args()
 
     # Get the list of games from PRIORITY_GAMES
-    game_names = PRIORITY_GAMES.copy()
-    
-    # Find the starting game in the list
-    resume_game_name = args.resume_game_name
-    actual_resume_game_name = 'atlas shrank' if resume_game_name == 'atlas_shrank' else resume_game_name
-    
-    if actual_resume_game_name:
-        try:
-            start_idx = game_names.index(actual_resume_game_name)
-            # Keep only games starting from the resume game
-            game_names = game_names[start_idx:]
-        except ValueError:
-            print(f"Warning: Game '{actual_resume_game_name}' not found in PRIORITY_GAMES list. Starting from the beginning.")
+    if args.game:
+        # If a specific game is provided, use only that game
+        game_names = [args.game]
+        print(f"Running specific game: {args.game}")
+    else:
+        # Use all games from PRIORITY_GAMES
+        game_names = PRIORITY_GAMES.copy()
+
+        # Find the starting game in the list
+        resume_game_name = args.resume_game_name
+        actual_resume_game_name = 'atlas shrank' if resume_game_name == 'atlas_shrank' else resume_game_name
+
+        if actual_resume_game_name:
+            try:
+                start_idx = game_names.index(actual_resume_game_name)
+                # Keep only games starting from the resume game
+                game_names = game_names[start_idx:]
+            except ValueError:
+                print(f"Warning: Game '{actual_resume_game_name}' not found in PRIORITY_GAMES list. Starting from the beginning.")
     
     # Process in reverse order if flag is set
     if args.reverse:
