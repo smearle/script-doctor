@@ -206,6 +206,7 @@ def expand_meta_objs(tile_list: List, meta_objs, char_to_obj):
     return expanded_meta_objs
 
 def get_meta_channel(lvl, obj_idxs):
+    """ Return a boolean array indicating whether any of the specified object indices are present in each cell of the level."""
     return jnp.any(lvl[jnp.array(obj_idxs)], axis=0)
 
 def compute_manhattan_dists(lvl, src, trg):
@@ -639,7 +640,7 @@ class LoopRuleGroupState:
 
 class PSEnv:
     def __init__(self, tree: PSGameTree, jit: bool = True, level_i: int = 0, max_steps: int = np.inf,
-                 debug: bool = False, print_score: bool = True, vmap: bool = False):
+                 debug: bool = False, print_score: bool = True, vmap: bool = True):
         global DEBUG, PRINT_SCORE
         DEBUG, PRINT_SCORE = debug, print_score
         self.jit = jit
@@ -833,6 +834,7 @@ class PSEnv:
             self.step_env = jax.jit(self.step_env)
             self.reset = jax.jit(self.reset)
             self.apply_player_force = jax.jit(self.apply_player_force)
+            self.render = jax.jit(self.render, static_argnums=(1,))
         self.joint_tiles = joint_tiles
 
         multihot_level = self.get_level(level_i)
@@ -870,7 +872,7 @@ class PSEnv:
         multihot_level = multihot_level.astype(bool)
         return multihot_level
 
-    @partial(jax.jit, static_argnums=(0, 2))
+    # @partial(jax.jit, static_argnums=(0, 2))
     def render(self, state: PSState, cv2=True):
         lvl = state.multihot_level
         level_height, level_width = lvl.shape[1:]
@@ -1074,6 +1076,7 @@ class PSEnv:
         level = self.levels[level_idx][0]
         # Convert the level to a multihot representation and render it
         multihot_level = self.char_level_to_multihot(level)
+        multihot_level = jnp.array(multihot_level)
         return multihot_level
 
     def gen_subrules_meta(self, rule: Rule, rule_name: str, lvl_shape: Tuple[int, int],):
