@@ -168,18 +168,21 @@ def profile(cfg: ProfileJaxRandConfig):
             try:
                 obsv, env_state = jax.vmap(env.reset, in_axes=(0, None))(reset_rng, env_params)
                 carry = (env_state, rng)
+                # jax.config.update('jax_log_compiles', True)
 
                 carry, _ = _env_step_jitted(carry, None)
+                carry[0].multihot_level.block_until_ready()
                 print(f'Finished 1st step in {(timer() - start)} seconds.')
                 
                 start = timer()
                 carry, _ = _env_step_jitted(carry, None)
+                carry[0].multihot_level.block_until_ready()
                 print(f'Finished 2nd step in {(timer() - start)} seconds.')
 
                 start = timer()
                 # with jax.profiler.trace("/tmp/jax-trace", create_perfetto_link=True):
                 carry, _ = _env_step_jitted(carry, None)
-                # carry[0].multihot_level.block_until_ready()
+                carry[0].multihot_level.block_until_ready()
                 print(f'Finished 3rd step in {(timer() - start)} seconds.')
 
                 n_env_steps = cfg.n_steps * n_envs

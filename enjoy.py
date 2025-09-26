@@ -8,7 +8,7 @@ from jax import numpy as jnp
 import numpy as np
 
 from conf.config import EnjoyConfig
-from env import PSEnv
+from env import PSEnv, PSState
 # from envs.probs.problem import get_loss
 # from eval import get_eval_name, init_config_for_eval
 from purejaxrl.wrappers import LogWrapper
@@ -23,13 +23,13 @@ def main_enjoy(enjoy_config: EnjoyConfig):
     exp_dir = enjoy_config._exp_dir
     if enjoy_config.random_agent:
         # Save the gif of random agent behavior here. For debugging.
-        os.makedirs(exp_dir)
+        os.makedirs(exp_dir, exist_ok=True)
         steps_prev_complete = 0
     else:
         if not os.path.exists(exp_dir):
             exit(f"Experiment directory {exp_dir} does not exist")
         print(f'Loading checkpoint from {exp_dir}')
-        checkpoint_manager, restored_ckpt = init_checkpointer(enjoy_config)
+        checkpoint_manager, restored_ckpt, wandb_run_id = init_checkpointer(enjoy_config)
         runner_state = restored_ckpt['runner_state']
         network_params = runner_state.train_state.params
         steps_prev_complete = restored_ckpt['steps_prev_complete'] 
@@ -91,6 +91,20 @@ def main_enjoy(enjoy_config: EnjoyConfig):
     _, (states, rewards, dones, infos, frames) = jax.lax.scan(
         step_env, (rng, obs, env_state), None,
         length=enjoy_config.n_eps*env.max_steps)  # *at least* this many eps (maybe more if change percentage or whatnot)
+    states: PSState
+    n_total_eps = enjoy_config.n_eps * enjoy_config.n_enjoy_envs
+    n_wins = min(n_total_eps, int(jnp.sum(dones)) - n_total_eps)
+    mean_wins = n_wins / n_total_eps
+
+    # Save a json with stats
+    stats = {
+        'n_wins': int(n_wins),
+        'mean_wins': float(mean_wins),
+        'n_eps': enjoy_config.n_eps * enjoy_config.n_enjoy_envs,
+    }
+    with open(os.path.join(exp_dir, 'eval_stats.json'), 'w') as f:
+        import json
+        json.dump(stats, f, indent=4)
     
     assert frames.shape[1] == enjoy_config.n_enjoy_envs and frames.shape[0] == enjoy_config.n_eps * env.max_steps, \
         "`frames` has wrong shape"
@@ -113,7 +127,7 @@ def main_enjoy(enjoy_config: EnjoyConfig):
 
                 if enjoy_config.render_ims:
                     # Save frame as png
-                    png_name = os.path.join(frames_dir, f"{enjoy_config.exp_dir.strip('saves/')}_" +\
+                    png_name = os.path.join(frames_dir,
                         f"frame_ep-{net_ep_idx}_step-{i}" + \
                         f"{('_randAgent' if enjoy_config.random_agent else '')}.png")
                     imageio.v3.imwrite(png_name, frame)

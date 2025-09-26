@@ -222,6 +222,7 @@ class SweepRLConfig(TrainConfig):
     plot: bool = False
     slurm: bool = True
     mode: str = 'train'
+    render_ims: bool = False
 
 
 cs = ConfigStore.instance()

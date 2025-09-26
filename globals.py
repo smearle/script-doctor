@@ -29,7 +29,7 @@ PRIORITY_GAMES = [
     'slidings',
     'sokoban_basic',
     'sokoban_match3',
-    # 'constellationz',
+    'constellationz',
 ]
 
 GAMES_TO_SKIP = set({'easyenigma', 'A_Plaid_Puzzle'})

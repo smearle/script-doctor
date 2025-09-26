@@ -24,7 +24,7 @@ import submitit
 
 from conf.config import JaxValidationConfig
 from env import PSEnv
-from globals import SOLUTION_REWARDS_PATH, GAMES_TO_N_RULES_PATH
+from globals import SOLUTION_REWARDS_PATH, GAMES_TO_N_RULES_PATH, JS_SOLS_DIR, JAX_VALIDATED_JS_SOLS_DIR, JS_TO_JAX_ACTIONS
 from preprocess_games import PS_LARK_GRAMMAR_PATH, TREES_DIR, DATA_DIR, TEST_GAMES, PSErrors, get_tree_from_txt, count_rules
 from standalone.utils import replay_actions_js
 from standalone.utils import compile_game as compile_game_js

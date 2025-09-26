@@ -122,6 +122,15 @@ def plot(cfg: PlotSearch, results=None):
     }
     latex_df.rename(columns=col_renames, inplace=True)
 
+    def _format_with_commas(value, decimals):
+        if pd.isna(value):
+            return 'NaN'
+        try:
+            numeric_value = float(value)
+        except (TypeError, ValueError):
+            return value
+        return f"{numeric_value:,.{decimals}f}"
+
     # Clean and prepare index for LaTeX
     latex_df.index = latex_df.index.str.replace('_', ' ')
     latex_df.index = latex_df.index.str.replace('&', r'\&', regex=False)
@@ -133,6 +142,15 @@ def plot(cfg: PlotSearch, results=None):
 
     # Modify % column to show, e.g. "0.75" as "75\%"
     latex_df['Solved Levels \\%'] = latex_df['Solved Levels \\%'].apply(lambda x: f"{x * 100:.0f}\\%")
+
+    numeric_format_specs = {
+        '\\# Total Levels': 0,
+        'Mean Search Iterations': 2,
+        'Mean Solution Length': 2,
+    }
+    for column, decimals in numeric_format_specs.items():
+        if column in latex_df.columns:
+            latex_df[column] = latex_df[column].apply(lambda value: _format_with_commas(value, decimals))
 
     latex_file_path = os.path.join(PLOTS_DIR, 'bfs_results.tex')
     with open(latex_file_path, 'w') as f:
@@ -172,7 +190,7 @@ def generate_heatmaps(df: pd.DataFrame) -> None:
             'cmap': 'Purples',
             'vmin': 0.0,
             'vmax': None,
-            'colorbar_label': 'Mean Solution Length',
+            'colorbar_label': 'Mean Sol. Length',
             'formatter': lambda v: f"{v:.0f}",
             'output': 'bfs_mean_solution_length_heatmap.png',
         },

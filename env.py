@@ -278,12 +278,12 @@ def check_none_on(lvl, src, trg):
     heuristic = score
     return win, score, heuristic
 
-def check_any(lvl, src):
-    src_channel = get_meta_channel(lvl, src)
-    win = jnp.any(src_channel)
-    score = jnp.count_nonzero(src_channel)
-    heuristic = compute_min_manhattan_dist(lvl, src, trg)
-    return win, score, -heuristic
+# def check_any(lvl, src):
+#     src_channel = get_meta_channel(lvl, src)
+#     win = jnp.any(src_channel)
+#     score = jnp.count_nonzero(src_channel)
+#     heuristic = compute_min_manhattan_dist(lvl, src, trg)
+#     return win, score, -heuristic
 
 def check_win(lvl, funcs, jit):
     if len(funcs) == 0:
@@ -1038,6 +1038,13 @@ class PSEnv:
             lvl,
         )
         multihot_level = final_lvl[:self.n_objs]
+
+        multihot_level = jax.lax.cond(
+            restart,
+            lambda: self.reset(rng, params)[1].multihot_level,
+            lambda: multihot_level
+        )
+
         win, score, heuristic = self.check_win(multihot_level)
         win = win | tick_win
         if PRINT_SCORE:
