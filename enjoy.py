@@ -8,7 +8,7 @@ from jax import numpy as jnp
 import numpy as np
 
 from conf.config import EnjoyConfig
-from env import PSEnv, PSState
+from puzzlejax.env import PuzzleJaxEnv, PJState
 # from envs.probs.problem import get_loss
 # from eval import get_eval_name, init_config_for_eval
 from purejaxrl.wrappers import LogWrapper
@@ -42,7 +42,7 @@ def main_enjoy(enjoy_config: EnjoyConfig):
     best_frames_dir = os.path.join(exp_dir, 'best_frames')
     os.makedirs(best_frames_dir, exist_ok=True)
 
-    env: PSEnv
+    env: PuzzleJaxEnv
 
     # Preserve config as it was during training, for future reference (i.e. naming output of enjoy/eval)
     train_config = copy.deepcopy(enjoy_config)
@@ -91,7 +91,7 @@ def main_enjoy(enjoy_config: EnjoyConfig):
     _, (states, rewards, dones, infos, frames) = jax.lax.scan(
         step_env, (rng, obs, env_state), None,
         length=enjoy_config.n_eps*env.max_steps)  # *at least* this many eps (maybe more if change percentage or whatnot)
-    states: PSState
+    states: PJState
     n_total_eps = enjoy_config.n_eps * enjoy_config.n_enjoy_envs
     n_wins = min(n_total_eps, int(jnp.sum(dones)) - n_total_eps)
     mean_wins = n_wins / n_total_eps

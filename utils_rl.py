@@ -16,7 +16,7 @@ from flax.training.train_state import TrainState
 from time import perf_counter
 
 from conf.config import RLConfig, TrainConfig
-from env import PSEnv, PSObs, PSState, PSParams
+from puzzlejax.env import PuzzleJaxEnv, PSObs, PJState, PJParams
 from models import NCA, AutoEncoder, ConvForward, ConvForward2, SeqNCA, ActorCriticPS, Dense
 
 N_AGENTS = 1
@@ -34,16 +34,16 @@ def get_exp_dir(config: TrainConfig):
     )
     return exp_dir
 
-def get_env_params_from_config(env: PSEnv, config: RLConfig):
+def get_env_params_from_config(env: PuzzleJaxEnv, config: RLConfig):
     level = env.get_level(config.level)
-    return PSParams(
+    return PJParams(
         level=level
     )
 
 @struct.dataclass
 class RunnerState:
     train_states: Tuple[TrainState, TrainState]
-    env_state: PSState
+    env_state: PJState
     last_obs: Dict[str, jnp.ndarray]
     last_done: jnp.ndarray
     hstates: Tuple[jnp.ndarray, jnp.ndarray]
@@ -82,7 +82,7 @@ def linear_schedule(config, count):
 
 
 
-def init_network(env: PSEnv, env_params: PSParams, config: RLConfig):
+def init_network(env: PuzzleJaxEnv, env_params: PJParams, config: RLConfig):
     action_dim = env.action_space.n
 
     if config.model == "dense":
@@ -128,7 +128,7 @@ def init_network(env: PSEnv, env_params: PSParams, config: RLConfig):
     return network
 
     
-def render_callback(env: PSEnv, frames, save_dir: str, t: int, max_steps: int):
+def render_callback(env: PuzzleJaxEnv, frames, save_dir: str, t: int, max_steps: int):
 
     imageio.mimsave(os.path.join(save_dir, f"enjoy_{t}.gif"), np.array(frames), fps=20, loop=0)
     wandb.log({"video": wandb.Video(os.path.join(save_dir, f"enjoy_{t}.gif"), fps=20, format="gif")})
@@ -160,6 +160,6 @@ def save_checkpoint(config: TrainConfig, ckpt_manager, runner_state, t):
 
 import puzzlejax.utils as utils
 
-def init_ps_env(config: RLConfig, verbose: bool = False) -> PSEnv:
+def init_ps_env(config: RLConfig, verbose: bool = False) -> PuzzleJaxEnv:
     #return utils.init_ps_env(config.game, config.level, config.max_episode_steps, vmap=config.vmap)
     return utils.init_ps_env(game=config.game, level_i=config.level, max_episode_steps=config.max_episode_steps)

@@ -9,7 +9,7 @@ import flax.linen as nn
 import jax
 import jax.numpy as jnp
 
-from env import PSObs
+from puzzlejax.env import PSObs
 
 def crop_rf(x, rf_size):
     mid_x = x.shape[1] // 2

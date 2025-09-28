@@ -17,7 +17,7 @@ import pandas as pd
 from timeit import default_timer as timer
 
 from conf.config import ProfileJaxRandConfig
-from env import PSState
+from puzzlejax.env import PJState
 from globals import JAX_PROFILING_RESULTS_DIR
 from puzzlejax.utils import get_list_of_games_for_testing, load_games_n_rules_sorted
 from utils_rl import get_env_params_from_config, init_ps_env
@@ -193,7 +193,7 @@ def profile(cfg: ProfileJaxRandConfig):
                     carry, _ = jax.lax.scan(
                         _env_step_jitted, carry, None, cfg.n_steps
                     )
-                    env_state: PSState = carry[0]
+                    env_state: PJState = carry[0]
                     # Otherwise, when running on CPU, the state may not be ready yet
                     env_state.multihot_level.block_until_ready()
                     times.append(timer() - start)

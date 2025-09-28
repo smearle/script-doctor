@@ -9,7 +9,7 @@ import jax.numpy as jnp
 import numpy as np
 
 from gen_tree import GenPSTree
-import env as Env
+from puzzlejax.env import PuzzleJaxEnv, PJParams
 from preprocess_games import TREES_DIR, TEST_GAMES, DATA_DIR
 from ps_game import PSGameTree
 
@@ -32,9 +32,9 @@ if __name__ == '__main__':
 
         tree: PSGameTree = GenPSTree().transform(tree)
 
-        env = Env.PSEnv(tree)
+        env = PuzzleJaxEnv(tree)
         level = env.get_level(0)
-        params = Env.PSParams(level=level)
+        params = PJParams(level=level)
         key = jax.random.PRNGKey(0)
         _, state = env.reset(0, params = params)
         key, subkey = jax.random.split(key)

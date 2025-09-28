@@ -13,17 +13,17 @@ import hydra
 from lark import Lark
 
 from conf.config import PreprocessConfig
-from env import PSEnv
+from puzzlejax.env import PuzzleJaxEnv
 from gen_tree import GenPSTree
 from preprocess_games import TREES_DIR, GAMES_DIR, count_rules, get_tree_from_txt
 from ps_game import PSGameTree
 from puzzlejax.utils import GAMES_N_RULES_SORTED_PATH
-from globals import GAMES_TO_N_RULES_PATH, GAMES_N_RULES_SORTED_PATH
+from globals import GAMES_TO_N_RULES_PATH, GAMES_N_RULES_SORTED_PATH, LARK_SYNTAX_PATH
 
 
 @hydra.main(version_base="1.3", config_path="conf", config_name="preprocess_config")
 def main(cfg: PreprocessConfig):
-    with open("syntax.lark", "r", encoding='utf-8') as file:
+    with open(LARK_SYNTAX_PATH, "r", encoding='utf-8') as file:
         puzzlescript_grammar = file.read()
     scraped_games_paths = glob.glob(os.path.join(GAMES_DIR, '*'))
     parser = Lark(puzzlescript_grammar, start="ps_game", maybe_placeholders=False)
@@ -46,7 +46,7 @@ def main(cfg: PreprocessConfig):
             #     parse_tree = pickle.load(f)
             # ps_tree: PSGameTree = GenPSTree().transform(parse_tree)
             ps_tree, err_msg, success = get_tree_from_txt(parser, game_name, test_env_init=False)
-            env = PSEnv(ps_tree)
+            env = PuzzleJaxEnv(ps_tree)
             has_randomness = env.has_randomness()
             n_rules = count_rules(ps_tree)
             games_n_rules.append((game_name, n_rules, has_randomness))

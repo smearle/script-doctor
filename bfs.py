@@ -13,7 +13,7 @@ import numpy as np
 from timeit import default_timer as timer
 
 from conf.config import BFSConfig, RLConfig
-from env import PSEnv, PSParams, PSState
+from puzzlejax.env import PuzzleJaxEnv, PJParams, PJState
 from globals import PRIORITY_GAMES
 from human_env import SCALING_FACTOR
 from jax_utils import stack_leaves
@@ -25,7 +25,7 @@ from validate_sols import JS_SOLS_DIR
 
 JAX_BFS_SOLS_DIR = os.path.join('data', 'jax_bfs_sols')
 
-def hash_state(state: PSState):
+def hash_state(state: PJState):
     """Hash the state to a string."""
     byte_string = state.multihot_level.tobytes()
     hash_value_builtin = hash(byte_string)
@@ -33,7 +33,7 @@ def hash_state(state: PSState):
     # print(f"Hash value (built-in): {hash_value_builtin}")
     # return str(state.multihot_level.flatten())
 
-def bfs(env: PSEnv, state: PSState, params: PSParams,
+def bfs(env: PuzzleJaxEnv, state: PJState, params: PJParams,
           max_steps: int = np.inf, render: bool = False, max_episode_steps: int = 100, n_best_to_keep: int = 1):
     """Apply a search algorithm to find the sequence of player actions leading to the highest possible reward."""
     rng = jax.random.PRNGKey(0)
@@ -58,7 +58,7 @@ def bfs(env: PSEnv, state: PSState, params: PSParams,
         for action in possible_actions:
             obs, state, rew, done, info = \
                 env.step_env(rng=rng, action=action, state=parent_state, params=params)
-            state: PSState
+            state: PJState
             child_score = state.heuristic
             # if render:
             #     im = env.render(state, cv2=True)
@@ -119,7 +119,7 @@ def main(cfg: BFSConfig):
     for js_sol_dir, game in zip(js_sols_dirs, games):
         game_name = os.path.basename(game)
         tree, success, err_msg = get_tree_from_txt(parser, game, test_env_init=False)
-        env = PSEnv(tree, debug=False, print_score=False)
+        env = PuzzleJaxEnv(tree, debug=False, print_score=False)
 
         # level_sol_paths = glob.glob(os.path.join(js_sol_dir, 'level-*.json'))
         # level_idxs = [int(os.path.basename(level_sol_path).split('-')[1].split('.')[0]) for level_sol_path in level_sol_paths]
@@ -135,7 +135,7 @@ def main(cfg: BFSConfig):
             rng = jax.random.PRNGKey(0)
             
             level = env.get_level(level_i)
-            params = PSParams(
+            params = PJParams(
                 level=level,
             )
 

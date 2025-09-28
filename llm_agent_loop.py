@@ -8,7 +8,7 @@ import multiprocessing
 import jax
 from lark import Lark
 from env_wrappers import RepresentationWrapper
-from env import PSParams
+from puzzlejax.env import PJParams
 from preprocess_games import PS_LARK_GRAMMAR_PATH, get_tree_from_txt
 from LLM_agent import LLMGameAgent
 from globals import PRIORITY_GAMES
@@ -421,7 +421,7 @@ def process_game_level(agent, game_info, level_index, run_id, save_dir, model,
             return False
         
         level = env.get_level(level_index)
-        env_params = PSParams(level=level)
+        env_params = PJParams(level=level)
         # Use run_id as seed to ensure uniqueness
         rng = jax.random.PRNGKey(run_id * 1000 + level_index)
         

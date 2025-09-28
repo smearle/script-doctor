@@ -18,25 +18,19 @@ from lark import Lark, Transformer, Tree, Token, Visitor
 import numpy as np
 
 from conf.config import PreprocessConfig
-from env import PSEnv
+from puzzlejax.env import PuzzleJaxEnv
 from gen_tree import GenPSTree
-from globals import GAMES_N_RULES_SORTED_PATH, GAMES_TO_N_RULES_PATH, GAMES_TO_SKIP, GAMES_N_LEVELS_PATH
+from globals import (
+    GAMES_N_RULES_SORTED_PATH, GAMES_TO_N_RULES_PATH, GAMES_TO_SKIP, GAMES_N_LEVELS_PATH, LARK_SYNTAX_PATH,
+    PRIORITY_GAMES, DATA_DIR, TREES_DIR, SIMPLIFIED_GAMES_DIR, MIN_GAMES_DIR, PRETTY_TREES_DIR, CUSTOM_GAMES_DIR,
+    GAMES_DIR,
+)
 from ps_game import PSGameTree
 
 logger = logging.getLogger(__name__)
 
 # TEST_GAMES = ['blockfaker', 'sokoban_match3', 'notsnake', 'sokoban_basic']
 TEST_GAMES = []
-
-DATA_DIR = 'data'
-PS_LARK_GRAMMAR_PATH = "syntax.lark"
-GAMES_DIR = os.path.join(DATA_DIR, 'scraped_games')
-MIN_GAMES_DIR = os.path.join(DATA_DIR, 'min_games')
-CUSTOM_GAMES_DIR = os.path.join('custom_games')
-SIMPLIFIED_GAMES_DIR = os.path.join(DATA_DIR, 'simplified_games')
-TREES_DIR = os.path.join(DATA_DIR, 'game_trees')
-pretty_trees_dir = os.path.join(DATA_DIR, 'pretty_trees')
-# parsed_games_filename = os.path.join(DATA_DIR, "parsed_games.txt")
 
 
 @contextlib.contextmanager
@@ -530,7 +524,7 @@ def get_env_from_ps_file(parser, game, log_dir: str = None, overwrite: bool = Tr
     if success != PSErrors.SUCCESS:
         return None, tree, success, err_msg 
     try:
-        env = PSEnv(tree)
+        env = PuzzleJaxEnv(tree)
         return env, tree, PSErrors.SUCCESS, ""
     except Exception as e:
         traceback.print_exc()
@@ -555,7 +549,7 @@ def get_tree_from_txt(parser, game, log_dir: str = None, overwrite: bool = True,
     # print(f"Parsing game {filepath} ({i+1}/{len(game_files)})")
     simp_filepath = os.path.join(SIMPLIFIED_GAMES_DIR, simp_filename)
     os.makedirs(SIMPLIFIED_GAMES_DIR, exist_ok=True)
-    os.makedirs(pretty_trees_dir, exist_ok=True)
+    os.makedirs(PRETTY_TREES_DIR, exist_ok=True)
     os.makedirs(MIN_GAMES_DIR, exist_ok=True)
     if overwrite or not os.path.exists(simp_filepath):
         # Now save the simplified version of the file
@@ -617,7 +611,7 @@ def get_tree_from_txt(parser, game, log_dir: str = None, overwrite: bool = True,
         with open(min_tree_path, "wb") as f:
             pickle.dump(min_parse_tree, f)
         pretty_parse_tree_str = min_parse_tree.pretty()
-        pretty_tree_filename = os.path.join(pretty_trees_dir, game)
+        pretty_tree_filename = os.path.join(PRETTY_TREES_DIR, game)
         print(f"Writing pretty tree to {pretty_tree_filename}")
         with open(pretty_tree_filename, "w", encoding='utf-8') as file:
             file.write(pretty_parse_tree_str)
@@ -639,7 +633,7 @@ def get_tree_from_txt(parser, game, log_dir: str = None, overwrite: bool = True,
         return None, PSErrors.TREE_ERROR, gen_error_str(e)
     if test_env_init:
         try:
-            env = PSEnv(tree, level_i=0)
+            env = PuzzleJaxEnv(tree, level_i=0)
         except Exception as e:
             traceback.print_exc()
             print(f"Error initializing environment for {game}: {e}")
@@ -656,7 +650,7 @@ def gen_error_str(e):
 @hydra.main(version_base="1.3", config_path="conf", config_name="preprocess_config")
 def main(cfg: PreprocessConfig):
 
-    with open(PS_LARK_GRAMMAR_PATH, "r", encoding='utf-8') as file:
+    with open(LARK_SYNTAX_PATH, "r", encoding='utf-8') as file:
         puzzlescript_grammar = file.read()
 
     # Initialize the Lark parser with the PuzzleScript grammar
@@ -666,7 +660,7 @@ def main(cfg: PreprocessConfig):
     # games_dir = os.path.join('script-doctor','games')
 
     os.makedirs(TREES_DIR, exist_ok=True)
-    os.makedirs(pretty_trees_dir, exist_ok=True)
+    os.makedirs(PRETTY_TREES_DIR, exist_ok=True)
     os.makedirs(MIN_GAMES_DIR, exist_ok=True)
     parse_results = {
         'stats': {},

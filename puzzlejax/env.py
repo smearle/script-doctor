@@ -16,7 +16,7 @@ import jax.numpy as jnp
 import numpy as np
 
 from env_render import render_solid_color, render_sprite
-from env_utils import N_MOVEMENTS, multihot_to_desc, N_FORCES, ACTION
+from puzzlejax.env_utils import N_MOVEMENTS, multihot_to_desc, N_FORCES, ACTION
 from jax_utils import stack_leaves
 from ps_game import LegendEntry, PSGameTree, PSObject, Rule, WinCondition
 from gymnax.environments.spaces import Discrete, Box
@@ -508,7 +508,7 @@ def expand_joint_objs_in_pattern(pattern, joint_tiles):
     return new_pattern
 
 @flax.struct.dataclass
-class PSState:
+class PJState:
     multihot_level: np.ndarray
     win: bool
     score: int
@@ -520,7 +520,7 @@ class PSState:
     rng: chex.PRNGKey
 
 @flax.struct.dataclass
-class PSParams:
+class PJParams:
     level: chex.Array
 
 @flax.struct.dataclass
@@ -638,7 +638,7 @@ class LoopRuleGroupState:
     block_i: int
 
 
-class PSEnv:
+class PuzzleJaxEnv:
     def __init__(self, tree: PSGameTree, jit: bool = True, level_i: int = 0, max_steps: int = np.inf,
                  debug: bool = False, print_score: bool = True, vmap: bool = True):
         global DEBUG, PRINT_SCORE
@@ -873,7 +873,7 @@ class PSEnv:
         return multihot_level
 
     # @partial(jax.jit, static_argnums=(0, 2))
-    def render(self, state: PSState, cv2=True):
+    def render(self, state: PJState, cv2=True):
         lvl = state.multihot_level
         level_height, level_width = lvl.shape[1:]
         sprite_height, sprite_width = self.sprite_stack.shape[1:3]
@@ -895,14 +895,14 @@ class PSEnv:
 
         return im
 
-    def reset(self, rng, params: PSParams):
+    def reset(self, rng, params: PJParams):
         lvl = params.level
         self.tick_fn = self.gen_tick_fn(lvl.shape[1:])
         again = False
         win, score, init_heuristic = self.check_win(lvl)
         if PRINT_SCORE:
             jax.debug.print('heuristic: {heuristic}, score: {score}, win: {win}', heuristic=init_heuristic, score=score, win=win)
-        state = PSState(
+        state = PJState(
             multihot_level=lvl,
             win=jnp.array(False),
             score=jnp.array(0, dtype=jnp.int32),
@@ -929,7 +929,7 @@ class PSEnv:
         return obs
 
     # @partial(jax.jit, static_argnums=(0))
-    def apply_player_force(self, action, state: PSState):
+    def apply_player_force(self, action, state: PJState):
         multihot_level = state.multihot_level
         # Add a dummy collision layer at the front. Add one final channel to mark the player's effect.
         force_map = np.zeros((N_FORCES * (len(self.collision_layers) + 1) + 1, *multihot_level.shape[1:]), dtype=bool)
@@ -990,10 +990,10 @@ class PSEnv:
     def step(
         self,
         key: chex.PRNGKey,
-        state: PSState,
+        state: PJState,
         action: int,
-        params: Optional[PSParams] = None,
-    ) -> Tuple[chex.Array, PSState, float, bool, dict]:
+        params: Optional[PJParams] = None,
+    ) -> Tuple[chex.Array, PJState, float, bool, dict]:
         """Performs step transitions in the environment."""
         key, key_reset = jax.random.split(key)
         if self.jit:
@@ -1018,7 +1018,7 @@ class PSEnv:
 
 
     # @partial(jax.jit, static_argnums=(0))
-    def step_env(self, rng, state: PSState, action, params: Optional[PSParams] = None):
+    def step_env(self, rng, state: PJState, action, params: Optional[PJParams] = None):
         init_lvl = state.multihot_level.copy()
         lvl = self.apply_player_force(action, state)
 
@@ -1058,7 +1058,7 @@ class PSEnv:
 
         done = win | ((state.step_i + 1) >= self.max_steps)
         info = {}
-        state = PSState(
+        state = PJState(
             multihot_level=multihot_level,
             win=win,
             score=score,

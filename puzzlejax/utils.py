@@ -14,11 +14,14 @@ import numpy as np
 from openai import AzureOpenAI
 import tiktoken
 
-from globals import GAMES_TO_N_RULES_PATH, GAMES_N_RULES_SORTED_PATH, PRIORITY_GAMES, GAMES_N_LEVELS_PATH
+from globals import (
+    GAMES_TO_N_RULES_PATH, GAMES_N_RULES_SORTED_PATH, PRIORITY_GAMES, GAMES_N_LEVELS_PATH, LARK_SYNTAX_PATH,
+    GAMES_DIR, TREES_DIR
+)
 from collect_games import GALLERY_GAMES_DIR
-from env import PSEnv
+from puzzlejax.env import PuzzleJaxEnv
 from gen_tree import GenPSTree
-from preprocess_games import GAMES_DIR, get_tree_from_txt, TREES_DIR
+from preprocess_games import get_tree_from_txt
 
 game_names_remap = {
     'constellationz': 'Constellation Z',
@@ -356,20 +359,17 @@ from timeit import default_timer as timer
 
 def init_ps_env(game, level_i, max_episode_steps, vmap: bool = True):
     start_time = timer()
-    with open("syntax.lark", "r", encoding='utf-8') as file:
-        puzzlescript_grammar = file.read()
-    # Initialize the Lark parser with the PuzzleScript grammar
-    parser = Lark(puzzlescript_grammar, start="ps_game", maybe_placeholders=False)
+    parser = init_ps_lark_parser()
     tree, success, err_msg = get_tree_from_txt(parser, game, test_env_init=False)
     parse_time = timer()
     # print(f'Parsed PS file using Lark into python PSTree object in {(parse_time - start_time) / 1000} seconds.')
-    env = PSEnv(tree, jit=True, level_i=level_i, max_steps=max_episode_steps, print_score=False, debug=False, vmap=vmap)
+    env = PuzzleJaxEnv(tree, jit=True, level_i=level_i, max_steps=max_episode_steps, print_score=False, debug=False, vmap=vmap)
     # print(f'Initialized PSEnv in {(timer() - parse_time) / 1000} seconds.')
     return env
 
     
 def init_ps_lark_parser():
-    with open("syntax.lark", "r", encoding='utf-8') as file:
+    with open(LARK_SYNTAX_PATH, "r", encoding='utf-8') as file:
         puzzlescript_grammar = file.read()
     # Initialize the Lark parser with the PuzzleScript grammar
     parser = Lark(puzzlescript_grammar, start="ps_game", maybe_placeholders=False)
@@ -413,7 +413,7 @@ def get_n_levels_per_game():
             with open(min_tree_path, 'rb') as f:
                 tree = pickle.load(f)
             tree = GenPSTree().transform(tree)
-            env = PSEnv(tree)
+            env = PuzzleJaxEnv(tree)
             n_levels = len(env.levels)
             n_levels_per_game[game] = n_levels
     with open(GAMES_N_LEVELS_PATH, 'w') as f:

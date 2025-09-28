@@ -31,6 +31,7 @@ import pandas as pd
 import requests
 
 from client import open_browser
+from globals import LARK_SYNTAX_PATH
 from preprocess_games import MIN_GAMES_DIR, PrintPuzzleScript, RepairPuzzleScript, StripPuzzleScript, add_empty_sounds_section, preprocess_ps, TEST_GAMES
 from script_doctor.prompts import *
 from puzzlejax.utils import (extract_ps_code, get_list_of_games_for_testing, llm_text_query,
@@ -191,7 +192,7 @@ def log_gen_results():
     return jsonify({})
 
 import lark
-lark_parser = lark.Lark.open('syntax.lark', start='ps_game')
+lark_parser = lark.Lark.open(LARK_SYNTAX_PATH, start='ps_game')
 
 @app.route('/save_evo_gen_stats', methods=['POST'])
 def save_evo_gen_stats():

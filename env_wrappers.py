@@ -6,8 +6,11 @@ import unicodedata
 import jax
 from lark import Lark
 import numpy as np
-from env import PSEnv, PSParams, PSState, multihot_to_desc
-from preprocess_games import PS_LARK_GRAMMAR_PATH, get_tree_from_txt
+
+from globals import LARK_SYNTAX_PATH
+from puzzlejax.env import PuzzleJaxEnv, PJParams, PJState
+from puzzlejax.env_utils import multihot_to_desc
+from preprocess_games import get_tree_from_txt
 
 
 def vec_to_obj_names(vec, idxs_to_objs):
@@ -39,7 +42,7 @@ def get_llm_friendly_chars():
             chars.add(c)
     return chars
 
-class RepresentationWrapper(PSEnv):
+class RepresentationWrapper(PuzzleJaxEnv):
     """Log the episode returns and lengths."""
 
 
@@ -183,7 +186,7 @@ class RepresentationWrapper(PSEnv):
         print(self.full_ascii_legend_str)
 
 
-    def render_ascii(self, state: PSState):
+    def render_ascii(self, state: PJState):
         """Render the game state as ASCII art."""
         map_arr = state.multihot_level
         ascii_map = np.full(map_arr.shape[1:], " ", dtype="<U1")
@@ -194,7 +197,7 @@ class RepresentationWrapper(PSEnv):
         return "\n".join("".join(row) for row in ascii_map)
 
 
-    def render_ascii_and_legend(self, state: PSState):
+    def render_ascii_and_legend(self, state: PJState):
         """Render the game state as ASCII art."""
         map_arr = state.multihot_level
         ascii_map = np.full(map_arr.shape[1:], " ", dtype="<U1")
@@ -215,20 +218,20 @@ class RepresentationWrapper(PSEnv):
         return f"LEGEND:\n{legend_str}\n\nMAP:\n{map_str}"
 
 
-    def render_text(self, state: PSState):
+    def render_text(self, state: PJState):
         return multihot_to_desc(state.multihot_level, self.objs_to_idxs, self.n_objs, obj_idxs_to_force_idxs=self.obj_idxs_to_force_idxs, show_background=False)
 
 
 def test_log_wrapper():
     game = 'Take_Heart_Lass'
-    with open(PS_LARK_GRAMMAR_PATH, 'r', encoding='utf-8') as f:
+    with open(LARK_SYNTAX_PATH, 'r', encoding='utf-8') as f:
         puzzlescript_grammar = f.read()
     parser = Lark(puzzlescript_grammar, start="ps_game", maybe_placeholders=False)
     tree, success, err_msg = get_tree_from_txt(parser, game, test_env_init=False)
     print('Initializing environment')
     env = RepresentationWrapper(tree, debug=False, print_score=False)
     level = env.get_level(0)
-    env_params = PSParams(
+    env_params = PJParams(
         level=level,
     )
     rng = jax.random.PRNGKey(0)

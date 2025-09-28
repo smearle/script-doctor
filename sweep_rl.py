@@ -15,7 +15,7 @@ import submitit
 import wandb
 
 from conf.config import SweepRLConfig, TrainConfig, EnjoyConfig
-from env import PSParams
+from puzzlejax.env import PJParams
 from preprocess_games import get_env_from_ps_file
 from train import main as main_train
 from enjoy import main_enjoy
@@ -30,7 +30,7 @@ def replay_solution(parser, game, level_i, actions):
     env, tree, success, err_msg = get_env_from_ps_file(parser, game)
     key = jax.random.PRNGKey(0)
     level = env.get_level(level_i)
-    params = PSParams(
+    params = PJParams(
         level=level
     )
     obs, state = env.reset(key, params)

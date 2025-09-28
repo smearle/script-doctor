@@ -15,16 +15,13 @@ import argparse
 from pathlib import Path
 import sys
 
-# # Add parent directory to path for imports
-# script_dir = Path(__file__).parent
-# parent_dir = script_dir.parent
-# sys.path.insert(0, str(parent_dir))
-
 import jax
 from lark import Lark
+
+from globals import LARK_SYNTAX_PATH
 from env_wrappers import RepresentationWrapper
-from env import PSParams
-from preprocess_games import PS_LARK_GRAMMAR_PATH, get_tree_from_txt
+from puzzlejax.env import PJParams
+from preprocess_games import get_tree_from_txt
 
 CUSTOM_GAMES_DIR = "data/scraped_games"
 
@@ -199,7 +196,7 @@ def create_game_environment(game_name):
             return None
 
         # Initialize environment parser
-        with open(PS_LARK_GRAMMAR_PATH, 'r', encoding='utf-8') as f:
+        with open(LARK_SYNTAX_PATH, 'r', encoding='utf-8') as f:
             puzzlescript_grammar = f.read()
         grammar_parser = Lark(puzzlescript_grammar, start="ps_game", maybe_placeholders=False)
 
@@ -227,7 +224,7 @@ def replay_actions_in_environment(env, level_index, actions, run_id):
     """Replay actions in the environment to get accurate rewards and heuristics."""
     try:
         level = env.get_level(level_index)
-        env_params = PSParams(level=level)
+        env_params = PJParams(level=level)
         # Use run_id as seed to ensure same initial state as original run
         rng = jax.random.PRNGKey(run_id * 1000 + level_index)
 

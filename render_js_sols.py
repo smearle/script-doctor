@@ -11,7 +11,7 @@ import jax
 from lark import Lark
 
 from conf.config import ProfileNodeJS
-from env import PSState
+from puzzlejax.env import PJState
 from preprocess_games import PS_LARK_GRAMMAR_PATH, PSErrors, get_env_from_ps_file
 from profile_nodejs import compile_game
 from puzzlejax.utils import get_list_of_games_for_testing, init_ps_lark_parser, level_to_int_arr
@@ -32,7 +32,7 @@ def main(cfg: ProfileNodeJS):
     else:
         game_sols_dirs = [os.path.join(JS_SOLS_DIR, cfg.game)]
     # A dummy state, only the multihot_level is used.
-    state = PSState(
+    state = PJState(
         multihot_level=None,
         win=False, score=0, heuristic=0, restart=False, init_heuristic=0, prev_heuristic=0,
         step_i=0, rng=jax.random.PRNGKey(0),

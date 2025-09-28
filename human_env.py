@@ -12,7 +12,8 @@ import jax.numpy as jnp
 from lark import Lark
 import numpy as np
 
-from env import PSEnv, PSParams, multihot_to_desc
+from globals import LARK_SYNTAX_PATH
+from puzzlejax.env import PuzzleJaxEnv, PJParams, multihot_to_desc
 from preprocess_games import TREES_DIR, DATA_DIR, TEST_GAMES, get_tree_from_txt
 from preprocess_games import PSErrors
 
@@ -32,10 +33,10 @@ cs.store(name="config", node=Config)
 
 SCALING_FACTOR = 10
 
-def human_loop(env: PSEnv, level: int = 0, profile=False):
+def human_loop(env: PuzzleJaxEnv, level: int = 0, profile=False):
     lvl_i = level
     level = env.get_level(lvl_i)
-    params = PSParams(level=level)
+    params = PJParams(level=level)
     rng = jax.random.PRNGKey(0)
     obs, state = env.reset(rng, params)
     im = env.render(state)
@@ -164,7 +165,7 @@ def human_loop(env: PSEnv, level: int = 0, profile=False):
 
 
 def play_game(game: str, level: int = 0, jit: bool = False, profile: bool = False, debug: bool = False):
-    with open("syntax.lark", "r", encoding='utf-8') as file:
+    with open(LARK_SYNTAX_PATH, "r", encoding='utf-8') as file:
         puzzlescript_grammar = file.read()
     # Initialize the Lark parser with the PuzzleScript grammar
     parser = Lark(puzzlescript_grammar, start="ps_game", maybe_placeholders=False)
@@ -175,7 +176,7 @@ def play_game(game: str, level: int = 0, jit: bool = False, profile: bool = Fals
         print(f"Error parsing game: {err_msg}")
         return
     print(f"Initializing environment for game: {game}")
-    env = PSEnv(tree, jit=jit, debug=debug, print_score=True)
+    env = PuzzleJaxEnv(tree, jit=jit, debug=debug, print_score=True)
     print(f"Playing game: {game}")
     human_loop(env, profile=profile, level=level)
 

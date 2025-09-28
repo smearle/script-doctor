@@ -23,7 +23,7 @@ from skimage.transform import resize
 import submitit
 
 from conf.config import JaxValidationConfig
-from env import PSEnv
+from puzzlejax.env import PuzzleJaxEnv
 from globals import SOLUTION_REWARDS_PATH, GAMES_TO_N_RULES_PATH, JS_SOLS_DIR, JAX_VALIDATED_JS_SOLS_DIR, JS_TO_JAX_ACTIONS
 from preprocess_games import PS_LARK_GRAMMAR_PATH, TREES_DIR, DATA_DIR, TEST_GAMES, PSErrors, get_tree_from_txt, count_rules
 from standalone.utils import replay_actions_js
@@ -81,6 +81,7 @@ def main_launch(cfg: JaxValidationConfig):
             # slurm_gres='gpu:1',
             slurm_setup=["export JAX_PLATFORMS=cpu"],
             slurm_array_parallelism=n_jobs,
+            slurm_account='pr_174_tandon_advanced',
         )
         executor.map_array(main, [cfg] * n_jobs, game_sublists)
     else:
@@ -310,6 +311,15 @@ def main(cfg: JaxValidationConfig, games: Optional[List[str]] = None):
                         # We'll be a bit generous and not count this for now. TODO: fix the score mismatch.
                         # game_success = False
                         game_partial_success = True
+                    elif os.path.exists(intermediary_scores_log_path):
+                        if cfg.aggregate:
+                            with open(intermediary_scores_log_path, 'r') as f:
+                                intermediary_scores_log = f.read()
+                            if game_name not in results['score_error']:
+                                results['score_error'][game_name] = []
+                            results['score_error'][game_name].append({'n_rules': n_rules, 'level': level_i, 'log': intermediary_scores_log})
+                        n_score_error += 1
+                        game_partial_success = True
                     else:
                         if cfg.aggregate:
                             if game_name not in results['success']:
@@ -332,7 +342,7 @@ def main(cfg: JaxValidationConfig, games: Optional[List[str]] = None):
                 tree, success, err_msg = get_tree_from_txt(parser, game, test_env_init=False, timeout=60*20)
                 if success == PSErrors.SUCCESS:
                     try:
-                        env = PSEnv(tree, debug=False, print_score=False)
+                        env = PuzzleJaxEnv(tree, debug=False, print_score=False)
                     except KeyboardInterrupt as e:
                         raise e
                     except bdb.BdbQuit as e:
@@ -390,14 +400,6 @@ def main(cfg: JaxValidationConfig, games: Optional[List[str]] = None):
                     reward = float(reward_v.sum().item())
                     # Use jax tree map to add the initial state
                     state_v = jax.tree.map(lambda x, y: jnp.concatenate([x[None], y]), init_state, state_v)
-                    if not np.all(-np.array(js_scores) == np.array(state_v.heuristic)):
-                        print(f"Warning: intermediary JS and JAX heuristics do not match for game {game_name} level {level_i}")
-                        # Log this to disk
-                        with open(intermediary_scores_log_path, 'w') as f:
-                            f.write(f"Level {level_i} solution score mismatch\n")
-                            f.write(f"Actions: {actions}\n")
-                            f.write(f"Jax score: {state_v.heuristic}\n")
-                            f.write(f"JS score: {js_scores}\n")
                 else:
                     reward = 0.0
                     state_v = jax.tree.map(lambda x: x[None], init_state)
@@ -438,7 +440,7 @@ def main(cfg: JaxValidationConfig, games: Optional[List[str]] = None):
                 # FIXME: There is a discrepancy between the way we compute scores in js (I actually don't understand
                 # how we're getting that number) and the way we compute scores in jax, so this will always fail.
                 # elif not level_win and (state.heuristic != level_score):
-                elif (state.heuristic != level_score):
+                elif (state.heuristic != -level_score):
                     with open(score_log_path, 'w') as f:
                         f.write(f"Level {level_i} solution score mismatch\n")
                         f.write(f"Actions: {actions}\n")
@@ -451,6 +453,16 @@ def main(cfg: JaxValidationConfig, games: Optional[List[str]] = None):
                     print(f"Level {level_i} solution score mismatch.")
                     # We'll be a bit generous and not count this for now. TODO: fix the score mismatch.
                     # game_success = False
+                
+                elif not np.all(-np.array(js_scores) == np.array(state_v.heuristic)):
+                    print(f"Warning: intermediary JS and JAX heuristics do not match for game {game_name} level {level_i}")
+                    # Log this to disk
+                    with open(intermediary_scores_log_path, 'w') as f:
+                        f.write(f"Level {level_i} solution score mismatch\n")
+                        f.write(f"Actions: {actions}\n")
+                        f.write(f"Jax score: {state_v.heuristic}\n")
+                        f.write(f"JS score: {js_scores}\n")
+                        n_score_error += 1
                 else:
                     # if game_name not in results['success']:
                     #     results['success'][game_name] = []
