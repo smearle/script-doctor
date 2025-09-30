@@ -38,11 +38,10 @@ logging.getLogger("jax").setLevel(logging.ERROR)    # or WARNING
 logging.getLogger("jax._src").setLevel(logging.ERROR)
 
 SEED = 42
-NUM_ACTIONS = 4
 MAX_ACTION = 100
-BATCH_SIZES = [
-    100,
-    500,
+BATCH_SIZES = [ # number of games to play with mctx
+    2,
+    5,
 ]
 # batch_sizes = batch_sizes[::-1]
 VMAPS = [
@@ -96,16 +95,44 @@ def _run_demo(rng_key: chex.PRNGKey, cfg : PSConfig) -> Tuple[chex.PRNGKey, Demo
       params = Env.PSParams(level=level)
       key = jax.random.PRNGKey(0)
       obsv, init_state = jax.vmap(env.reset, in_axes=(0, None))(reset_rng, env_params)
+      mc_envs = 80000
+      mc_steps = 30
+
+      def monte_carlo_step(carry, unused):
+        env_state, rng, _ = carry
+        rng, _rng = jax.random.split(rng)
+        rand_act = jax.random.randint(_rng, (mc_envs,), 0, env.action_space.n)
+        # STEP ENV
+        rng_step = jax.random.split(_rng, mc_envs)
+        _, env_state, _, done, _ = jax.vmap(
+            env.step, in_axes=(0, 0, 0, None)
+        )(rng_step, env_state, rand_act, env_params)
+        carry = (env_state, rng, done)
+        return carry, None
+      
+      def single_rollout(carry0):
+        return jax.lax.scan(monte_carlo_step, carry0, None, length=mc_steps)
+      
+      _rollout_jitted = jax.jit(single_rollout)
 
       def _make_bandit_recurrent_fn():
         """Returns a recurrent_fn for a determistic bandit."""
         def recurrent_fn(params, rng_key, action, env_state):
           del params
 
-          rand_act = jax.random.randint(rng_key, (n_envs, NUM_ACTIONS), 0, env.action_space.n).astype(jnp.float32)
+          rand_act = jax.random.randint(rng_key, (n_envs, env.action_space.n), 0, env.action_space.n).astype(jnp.float32)
           rng_step = jax.random.split(rng_key, n_envs)
-
           obsv, env_state, reward, done, info = jax.vmap(env.step, in_axes=(0, 0, 0, None))(rng_step, env_state, action, env_params)
+
+          rng_rollout = jax.random.split(rng_key, n_envs)
+          carry = (env_state, rng_rollout, jax.numpy.zeros((n_envs,), dtype=jax.numpy.bool_))
+          #carry, _ = jax.lax.scan(_monte_carlo_jitted, carry, None, mc_step)
+          #carry0 = jnp.tile(carry, (n_envs, mc_envs))
+          (carryT, rngT, doneT), rewards = jax.vmap(_rollout_jitted)(carry)
+          #jax.debug.print("rollout wins: {}", doneT)
+          jax.debug.print("env_states: {}", env_state)
+          #wins = jax.numpy.sum(doneT)
+
           # On a single-player environment, use discount from [0, 1].
           # On a zero-sum self-play environment, use discount=-1.
           discount = jnp.ones_like(reward)
@@ -119,13 +146,18 @@ def _run_demo(rng_key: chex.PRNGKey, cfg : PSConfig) -> Tuple[chex.PRNGKey, Demo
 
         return recurrent_fn
 
+
+
+      _env_step_jitted = jax.jit(monte_carlo_step)
+
+
       start = time.time()
       env_state = init_state
       done = False
       step = 0
       while not done:
         step+=1
-        rand_act = jax.random.randint(_rng, (n_envs, NUM_ACTIONS), 0, env.action_space.n).astype(jnp.float32)
+        rand_act = jax.random.randint(_rng, (n_envs, env.action_space.n), 0, env.action_space.n).astype(jnp.float32)
         # The root output would be the output of MuZero representation network.
         root = mctx.RootFnOutput(
             prior_logits=rand_act,
@@ -161,14 +193,14 @@ def _run_demo(rng_key: chex.PRNGKey, cfg : PSConfig) -> Tuple[chex.PRNGKey, Demo
       
     except Exception as e:
         # 🔹 Log failure
-        with open("AALL/mctx_profile_list.txt", "a") as f:
+        with open("mctx_profile_list.txt", "a") as f:
             f.write(f"{game, n_envs, vmap} FAILED: {e}\n")
         # (Optional: also dump stacktrace to console)
         traceback.print_exc()
 
     else:
         # 🔹 Log success
-        with open("AALL/mctx_profile_list.txt", "a") as f:
+        with open("mctx_profile_list.txt", "a") as f:
             f.write(f"{game, n_envs, vmap} SUCCESS\n")
 
 
