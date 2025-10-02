@@ -38,8 +38,23 @@ BATCH_SIZES = [
     #1_500,
     # 1_800,
     100,
+    200,
+    300,
+    400,
+    500,
+    600,
+    700,
+    800,
+    900,
     1000,
+    2000,
+    3000,
+    4000,
     5000,
+    6000,
+    7000,
+    8000,
+    9000,
     10000,
     # 3_500,
     #5_000,
@@ -74,6 +89,9 @@ STEPS = [
 ]
 PERCFGREPEAT = 10
 MAX_TIME = 60
+SKIP_LIST = [
+    'atlas shrank' # allocates too much memory at environment count larger than 1000
+    ]
 def get_step_str(s):
     return f'{s}-step_rollout'
 
@@ -136,7 +154,9 @@ def profile(cfg: ProfileJaxRandConfig):
     last_game = None
 
     for (game, n_envs, vmap, steps) in zip(games, BATCH_SIZES, VMAPS, STEPS):
-
+        if game in SKIP_LIST:
+            print(f"{game} in SKIP_LIST")
+            continue
         cfg.game = game
         cfg.vmap = vmap
 
@@ -247,14 +267,16 @@ def profile(cfg: ProfileJaxRandConfig):
             #     gif_path = os.path.join(vids_dir, f'{game}_{n_envs}_randAct.gif')
             #     imageio.mimsave(gif_path, frames, duration=cfg.gif_frame_duration)
             #     print(f'Finished saving gif in {timer() - start} seconds.')
+            results = {}
             if not skip:
-                results = {}
                 results["wins"] = float(num_wins) / PERCFGREPEAT # wins per n_envs games 
                 results["winrate"] = win_rate # win rate per game
                 results["c_time"] = times[0] - np.mean(times[1:]) # compile time 
                 results["sim_time"] = np.mean(times[1:]) # gameplay time
-                n_envs_to_fps[f"env {n_envs} step {steps}"] = results
-                save_results(n_envs_to_fps, results_path)
+            else:
+                results["skipped"] = f"Simulation time longer than {MAX_TIME}"
+            n_envs_to_fps[f"env {n_envs} step {steps}"] = results
+            save_results(n_envs_to_fps, results_path)
 
     else:
         # Load from json
