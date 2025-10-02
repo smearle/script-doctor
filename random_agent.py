@@ -31,6 +31,7 @@ if __name__ == '__main__':
 
         tree: PSGameTree = GenPSTree().transform(tree)
 
+        # initialize environment
         env = Env.PSEnv(tree)
         level = env.get_level(0)
         params = Env.PSParams(level=level)

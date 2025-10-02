@@ -1038,6 +1038,9 @@ class PSEnv:
             lvl,
         )
         multihot_level = final_lvl[:self.n_objs]
+
+        multihot_level = jax.lax.cond(restart, lambda: self.reset(rng,params)[1].multihot_level, lambda: multihot_level)
+
         win, score, heuristic = self.check_win(multihot_level)
         win = win | tick_win
         if PRINT_SCORE:

@@ -49,9 +49,10 @@ class ProfileJaxRandConfig(PSConfig):
     game: Optional[str] = None
     all_games: bool = False
     # max_episode_steps: int = 100
-    n_steps: int = 5_000
+    n_steps: int = 30
     # reevaluate: bool = True  # Whether to continue profiling, or just plot the results
     render: bool = False
+    #game: str = "slidings"
 
 
     

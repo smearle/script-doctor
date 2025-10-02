@@ -1,0 +1,119 @@
+('sokoban_basic', 100, True) SUCCESS
+('sokoban_basic', 500, True) SUCCESS
+('sokoban_match3', 100, True) SUCCESS
+('sokoban_match3', 500, True) SUCCESS
+('limerick', 100, True) SUCCESS
+('sokoban_basic', 100, True) SUCCESS
+('sokoban_basic', 100, True) SUCCESS
+('sokoban_basic', 500, True) SUCCESS
+('sokoban_match3', 100, True) SUCCESS
+('sokoban_match3', 500, True) SUCCESS
+('limerick', 100, True) SUCCESS
+('limerick', 500, True) SUCCESS
+('blocks', 100, True) SUCCESS
+('blocks', 500, True) SUCCESS
+('slidings', 100, True) SUCCESS
+('slidings', 500, True) SUCCESS
+('notsnake', 100, True) SUCCESS
+('notsnake', 500, True) SUCCESS
+('kettle', 100, True) SUCCESS
+('kettle', 500, True) SUCCESS
+('Travelling_salesman', 100, True) SUCCESS
+('Travelling_salesman', 500, True) SUCCESS
+('Zen_Puzzle_Garden', 100, True) SUCCESS
+('Zen_Puzzle_Garden', 500, True) SUCCESS
+('atlas shrank', 100, True) SUCCESS
+('atlas shrank', 500, True) SUCCESS
+('Multi-word_Dictionary_Game', 100, True) SUCCESS
+('Multi-word_Dictionary_Game', 500, True) SUCCESS
+('Take_Heart_Lass', 100, True) SUCCESS
+('Take_Heart_Lass', 500, True) SUCCESS
+('constellationz', 100, True) SUCCESS
+('constellationz', 500, True) SUCCESS
+('Multi-word_Dictionary_Game', 2, True) FAILED: name 'monte_carlo_step' is not defined
+('Multi-word_Dictionary_Game', 5, True) FAILED: name 'monte_carlo_step' is not defined
+('Take_Heart_Lass', 2, True) FAILED: name 'monte_carlo_step' is not defined
+('Take_Heart_Lass', 5, True) FAILED: name 'monte_carlo_step' is not defined
+('Travelling_salesman', 2, True) FAILED: name 'monte_carlo_step' is not defined
+('Travelling_salesman', 5, True) FAILED: name 'monte_carlo_step' is not defined
+('Multi-word_Dictionary_Game', 2, True) FAILED: vmap got inconsistent sizes for array axes to be mapped:
+  * most axes (10 of them) had size 2, e.g. axis 0 of argument carry0[0].multihot_level of type bool[2,7,7,9];
+  * one axis had size 80000: axis 0 of argument carry0[2] of type bool[80000]
+('Multi-word_Dictionary_Game', 5, True) FAILED: vmap got inconsistent sizes for array axes to be mapped:
+  * most axes (10 of them) had size 5, e.g. axis 0 of argument carry0[0].multihot_level of type bool[5,7,7,9];
+  * one axis had size 80000: axis 0 of argument carry0[2] of type bool[80000]
+('Take_Heart_Lass', 2, True) FAILED: vmap got inconsistent sizes for array axes to be mapped:
+  * most axes (10 of them) had size 2, e.g. axis 0 of argument carry0[0].multihot_level of type bool[2,14,6,6];
+  * one axis had size 80000: axis 0 of argument carry0[2] of type bool[80000]
+('Take_Heart_Lass', 5, True) FAILED: vmap got inconsistent sizes for array axes to be mapped:
+  * most axes (10 of them) had size 5, e.g. axis 0 of argument carry0[0].multihot_level of type bool[5,14,6,6];
+  * one axis had size 80000: axis 0 of argument carry0[2] of type bool[80000]
+('Travelling_salesman', 2, True) FAILED: vmap got inconsistent sizes for array axes to be mapped:
+  * most axes (10 of them) had size 2, e.g. axis 0 of argument carry0[0].multihot_level of type bool[2,9,5,5];
+  * one axis had size 80000: axis 0 of argument carry0[2] of type bool[80000]
+('Travelling_salesman', 5, True) FAILED: vmap got inconsistent sizes for array axes to be mapped:
+  * most axes (10 of them) had size 5, e.g. axis 0 of argument carry0[0].multihot_level of type bool[5,9,5,5];
+  * one axis had size 80000: axis 0 of argument carry0[2] of type bool[80000]
+('Zen_Puzzle_Garden', 2, True) FAILED: vmap got inconsistent sizes for array axes to be mapped:
+  * most axes (10 of them) had size 2, e.g. axis 0 of argument carry0[0].multihot_level of type bool[2,6,12,12];
+  * one axis had size 80000: axis 0 of argument carry0[2] of type bool[80000]
+('Zen_Puzzle_Garden', 5, True) FAILED: vmap got inconsistent sizes for array axes to be mapped:
+  * most axes (10 of them) had size 5, e.g. axis 0 of argument carry0[0].multihot_level of type bool[5,6,12,12];
+  * one axis had size 80000: axis 0 of argument carry0[2] of type bool[80000]
+('atlas shrank', 2, True) FAILED: vmap got inconsistent sizes for array axes to be mapped:
+  * most axes (10 of them) had size 2, e.g. axis 0 of argument carry0[0].multihot_level of type bool[2,27,7,15];
+  * one axis had size 80000: axis 0 of argument carry0[2] of type bool[80000]
+('atlas shrank', 5, True) FAILED: vmap got inconsistent sizes for array axes to be mapped:
+  * most axes (10 of them) had size 5, e.g. axis 0 of argument carry0[0].multihot_level of type bool[5,27,7,15];
+  * one axis had size 80000: axis 0 of argument carry0[2] of type bool[80000]
+('blocks', 2, True) FAILED: vmap got inconsistent sizes for array axes to be mapped:
+  * most axes (10 of them) had size 2, e.g. axis 0 of argument carry0[0].multihot_level of type bool[2,4,11,13];
+  * one axis had size 80000: axis 0 of argument carry0[2] of type bool[80000]
+('blocks', 5, True) FAILED: vmap got inconsistent sizes for array axes to be mapped:
+  * most axes (10 of them) had size 5, e.g. axis 0 of argument carry0[0].multihot_level of type bool[5,4,11,13];
+  * one axis had size 80000: axis 0 of argument carry0[2] of type bool[80000]
+('kettle', 2, True) FAILED: vmap got inconsistent sizes for array axes to be mapped:
+  * most axes (10 of them) had size 2, e.g. axis 0 of argument carry0[0].multihot_level of type bool[2,8,13,15];
+  * one axis had size 80000: axis 0 of argument carry0[2] of type bool[80000]
+('kettle', 5, True) FAILED: vmap got inconsistent sizes for array axes to be mapped:
+  * most axes (10 of them) had size 5, e.g. axis 0 of argument carry0[0].multihot_level of type bool[5,8,13,15];
+  * one axis had size 80000: axis 0 of argument carry0[2] of type bool[80000]
+('limerick', 2, True) FAILED: vmap got inconsistent sizes for array axes to be mapped:
+  * most axes (10 of them) had size 2, e.g. axis 0 of argument carry0[0].multihot_level of type bool[2,11,15,19];
+  * one axis had size 80000: axis 0 of argument carry0[2] of type bool[80000]
+('limerick', 5, True) FAILED: vmap got inconsistent sizes for array axes to be mapped:
+  * most axes (10 of them) had size 5, e.g. axis 0 of argument carry0[0].multihot_level of type bool[5,11,15,19];
+  * one axis had size 80000: axis 0 of argument carry0[2] of type bool[80000]
+('notsnake', 2, True) FAILED: vmap got inconsistent sizes for array axes to be mapped:
+  * most axes (10 of them) had size 2, e.g. axis 0 of argument carry0[0].multihot_level of type bool[2,3,5,8];
+  * one axis had size 80000: axis 0 of argument carry0[2] of type bool[80000]
+('notsnake', 5, True) FAILED: vmap got inconsistent sizes for array axes to be mapped:
+  * most axes (10 of them) had size 5, e.g. axis 0 of argument carry0[0].multihot_level of type bool[5,3,5,8];
+  * one axis had size 80000: axis 0 of argument carry0[2] of type bool[80000]
+('slidings', 2, True) FAILED: vmap got inconsistent sizes for array axes to be mapped:
+  * most axes (10 of them) had size 2, e.g. axis 0 of argument carry0[0].multihot_level of type bool[2,12,4,6];
+  * one axis had size 80000: axis 0 of argument carry0[2] of type bool[80000]
+('slidings', 5, True) FAILED: vmap got inconsistent sizes for array axes to be mapped:
+  * most axes (10 of them) had size 5, e.g. axis 0 of argument carry0[0].multihot_level of type bool[5,12,4,6];
+  * one axis had size 80000: axis 0 of argument carry0[2] of type bool[80000]
+('sokoban_basic', 2, True) FAILED: vmap got inconsistent sizes for array axes to be mapped:
+  * most axes (10 of them) had size 2, e.g. axis 0 of argument carry0[0].multihot_level of type bool[2,5,7,6];
+  * one axis had size 80000: axis 0 of argument carry0[2] of type bool[80000]
+('sokoban_basic', 5, True) FAILED: vmap got inconsistent sizes for array axes to be mapped:
+  * most axes (10 of them) had size 5, e.g. axis 0 of argument carry0[0].multihot_level of type bool[5,5,7,6];
+  * one axis had size 80000: axis 0 of argument carry0[2] of type bool[80000]
+('sokoban_match3', 2, True) FAILED: vmap got inconsistent sizes for array axes to be mapped:
+  * most axes (10 of them) had size 2, e.g. axis 0 of argument carry0[0].multihot_level of type bool[2,5,7,9];
+  * one axis had size 80000: axis 0 of argument carry0[2] of type bool[80000]
+('sokoban_match3', 5, True) FAILED: vmap got inconsistent sizes for array axes to be mapped:
+  * most axes (10 of them) had size 5, e.g. axis 0 of argument carry0[0].multihot_level of type bool[5,5,7,9];
+  * one axis had size 80000: axis 0 of argument carry0[2] of type bool[80000]
+('Multi-word_Dictionary_Game', 2, True) FAILED: vmap got inconsistent sizes for array axes to be mapped:
+  * most axes (10 of them) had size 2, e.g. axis 0 of argument carry[0].multihot_level of type bool[2,7,7,9];
+  * one axis had size 80000: axis 0 of argument carry[2] of type bool[80000]
+('Multi-word_Dictionary_Game', 2, True) FAILED: tile requires ndarray or scalar arguments, got <class 'tuple'> at position 0.
+('Multi-word_Dictionary_Game', 2, True) FAILED: vmap got inconsistent sizes for array axes to be mapped:
+  * most axes (10 of them) had size 2, e.g. axis 0 of argument carry0[0].multihot_level of type bool[2,7,7,9];
+  * one axis had size 80000: axis 0 of argument carry0[2] of type bool[80000]
+('Multi-word_Dictionary_Game', 2, True) FAILED: JAX encountered invalid PRNG key data: expected key_data.ndim >= 1; got ndim=0
+('Multi-word_Dictionary_Game', 2, True) FAILED: vmap was requested to map its argument along axis 0, which implies that its rank should be at least 1, but is only 0 (its shape is ())
