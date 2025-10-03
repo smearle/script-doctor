@@ -1,0 +1,6 @@
+Folder for AALL
+
+install a fork of gsplat in your conda environment:
+cd AALL/gsplat
+ls should show a folder named gsplat and a setup.py
+python -m pip install -e . --no-build-isolation --config-settings editable_mode=compat
