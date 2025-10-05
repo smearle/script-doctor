@@ -895,7 +895,7 @@ class PuzzleJaxEnv:
 
         return im
 
-    def reset(self, rng, params: PJParams):
+    def reset(self, rng, params: PJParams) -> Tuple[chex.Array, PJState]:
         lvl = params.level
         self.tick_fn = self.gen_tick_fn(lvl.shape[1:])
         again = False

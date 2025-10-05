@@ -4,7 +4,8 @@ N_MOVEMENTS = 4
 ACTION = 4
 
 
-def multihot_to_desc(multihot_level, objs_to_idxs, n_objs, obj_idxs_to_force_idxs, show_background=False):
+def multihot_to_desc(multihot_level, objs_to_idxs, n_objs, obj_idxs_to_force_idxs, show_background=False,
+                     show_forces=True):
     """Converts a multihot array to a 2D list of descriptions.
     
     Args:
@@ -34,16 +35,17 @@ def multihot_to_desc(multihot_level, objs_to_idxs, n_objs, obj_idxs_to_force_idx
                         continue
                     obj_desc = obj_name
                     
-                    # Check if there's a force applied to this object
-                    force_names = ["left", "down", "right", "up", "action"]
-                    forces = []
-                    for f_idx, force_name in enumerate(force_names):
-                        force_channel = obj_idxs_to_force_idxs[obj_idx] + f_idx
-                        if force_channel < multihot_level.shape[0] and multihot_level[force_channel, h, w] > 0:
-                            forces.append(f"force {force_name}")
-                    
-                    if forces:
-                        obj_desc += f" ({', '.join(forces)})"
+                    if show_forces:
+                        # Check if there's a force applied to this object
+                        force_names = ["left", "down", "right", "up", "action"]
+                        forces = []
+                        for f_idx, force_name in enumerate(force_names):
+                            force_channel = obj_idxs_to_force_idxs[obj_idx] + f_idx
+                            if force_channel < multihot_level.shape[0] and multihot_level[force_channel, h, w] > 0:
+                                forces.append(f"force {force_name}")
+                        
+                        if forces:
+                            obj_desc += f" ({', '.join(forces)})"
                     
                     cell_desc.append(obj_desc)
             
