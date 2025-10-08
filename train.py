@@ -19,9 +19,9 @@ import orbax.checkpoint as ocp
 import wandb
 # from tensorboardX import SummaryWriter
 
-from conf.config import RLConfig, TrainConfig
+from puzzlejax.conf.config import RLConfig, TrainConfig
 from purejaxrl.wrappers import LogWrapper
-from utils_rl import get_ckpt_dir, get_env_params_from_config, get_exp_dir, init_config, init_network, init_ps_env
+from puzzlejax.utils_rl import get_ckpt_dir, get_env_params_from_config, get_exp_dir, init_config, init_network, init_ps_env
 
 
 class RunnerState(struct.PyTreeNode):

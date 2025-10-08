@@ -8,16 +8,16 @@ import jax.numpy as jnp
 from flax import struct
 # from flax.training import orbax_utils
 import numpy as np
-from jax_utils import stack_leaves
+from puzzlejax.utils_jax import stack_leaves
 import orbax.checkpoint as ocp
-from preprocess_games import get_tree_from_txt
+from puzzlejax.preprocess_games import get_tree_from_txt
 import wandb
 from flax.training.train_state import TrainState
 from time import perf_counter
 
-from conf.config import RLConfig, TrainConfig
-from env import PSEnv, PSObs, PSState, PSParams
-from models import NCA, AutoEncoder, ConvForward, ConvForward2, SeqNCA, ActorCriticPS, Dense
+from puzzlejax.conf.config import RLConfig, TrainConfig
+from puzzlejax.env import PSEnv, PSObs, PSState, PSParams
+from puzzlejax.models import NCA, AutoEncoder, ConvForward, ConvForward2, SeqNCA, ActorCriticPS, Dense
 
 N_AGENTS = 1
 

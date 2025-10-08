@@ -6,8 +6,8 @@ import unicodedata
 import jax
 from lark import Lark
 import numpy as np
-from env import PSEnv, PSParams, PSState, multihot_to_desc
-from preprocess_games import PS_LARK_GRAMMAR_PATH, get_tree_from_txt
+from puzzlejax.env import PSEnv, PSParams, PSState, multihot_to_desc
+from puzzlejax.preprocess_games import PS_LARK_GRAMMAR_PATH, get_tree_from_txt
 
 
 def vec_to_obj_names(vec, idxs_to_objs):

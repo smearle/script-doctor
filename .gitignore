@@ -39,3 +39,4 @@ vids
 wandb
 *.egg-info
 dump
+build

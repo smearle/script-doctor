@@ -2,7 +2,7 @@ import json
 import os
 import re
 
-from collect_games import SCRAPED_GAMES_DIR
+from puzzlejax.collect_games import SCRAPED_GAMES_DIR
 from puzzlejax.utils import num_tokens_from_string
 
 def extract_sprites(content):

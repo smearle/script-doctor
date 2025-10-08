@@ -12,15 +12,15 @@ from lark import Lark
 import numpy as np
 from timeit import default_timer as timer
 
-from conf.config import BFSConfig, RLConfig
-from env import PSEnv, PSParams, PSState
-from globals import PRIORITY_GAMES
-from human_env import SCALING_FACTOR
-from jax_utils import stack_leaves
-from preprocess_games import PS_LARK_GRAMMAR_PATH, get_tree_from_txt
+from puzzlejax.conf.config import BFSConfig, RLConfig
+from puzzlejax.env import PSEnv, PSParams, PSState
+from puzzlejax.globals import PRIORITY_GAMES
+from puzzlejax.human_env import SCALING_FACTOR
+from puzzlejax.utils_jax import stack_leaves
+from puzzlejax.preprocess_games import PS_LARK_GRAMMAR_PATH, get_tree_from_txt
 from sort_games_by_n_rules import GAMES_N_RULES_SORTED_PATH
 from puzzlejax.utils import save_gif_from_states
-from utils_rl import get_env_params_from_config
+from puzzlejax.utils_rl import get_env_params_from_config
 from validate_sols import JS_SOLS_DIR
 
 JAX_BFS_SOLS_DIR = os.path.join('data', 'jax_bfs_sols')

@@ -14,14 +14,14 @@ import pandas as pd
 import submitit
 import wandb
 
-from conf.config import SweepRLConfig, TrainConfig, EnjoyConfig
-from env import PSParams
-from preprocess_games import get_env_from_ps_file
+from puzzlejax.conf.config import SweepRLConfig, TrainConfig, EnjoyConfig
+from puzzlejax.env import PSParams
+from puzzlejax.preprocess_games import get_env_from_ps_file
 from train import main as main_train
 from enjoy import main_enjoy
 from puzzlejax.utils import get_list_of_games_for_testing, get_n_levels_per_game, init_ps_lark_parser
-from utils_rl import init_config
-from globals import JS_TO_JAX_ACTIONS, JS_SOLS_DIR, SOLUTION_REWARDS_PATH
+from puzzlejax.utils_rl import init_config
+from puzzlejax.globals import JS_TO_JAX_ACTIONS, JS_SOLS_DIR, SOLUTION_REWARDS_PATH
 
 
 def replay_solution(parser, game, level_i, actions):

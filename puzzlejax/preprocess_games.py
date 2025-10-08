@@ -18,11 +18,11 @@ from lark import Lark, Transformer, Tree, Token, Visitor
 import numpy as np
 
 from conf.config import PreprocessConfig
-from env import PSEnv
-from gen_tree import GenPSTree
-from globals import GAMES_N_RULES_SORTED_PATH, GAMES_TO_N_RULES_PATH, GAMES_TO_SKIP, GAMES_N_LEVELS_PATH
-from ps_game import PSGameTree
-
+from puzzlejax.env import PSEnv
+from puzzlejax.gen_tree import GenPSTree
+from puzzlejax.globals import GAMES_N_RULES_SORTED_PATH, GAMES_TO_N_RULES_PATH, GAMES_TO_SKIP, GAMES_N_LEVELS_PATH
+from puzzlejax.ps_game import PSGameTree
+from importlib import resources
 logger = logging.getLogger(__name__)
 
 # TEST_GAMES = ['blockfaker', 'sokoban_match3', 'notsnake', 'sokoban_basic']
@@ -30,6 +30,7 @@ TEST_GAMES = []
 
 DATA_DIR = 'data'
 PS_LARK_GRAMMAR_PATH = "syntax.lark"
+
 GAMES_DIR = os.path.join(DATA_DIR, 'scraped_games')
 MIN_GAMES_DIR = os.path.join(DATA_DIR, 'min_games')
 CUSTOM_GAMES_DIR = os.path.join('custom_games')
@@ -656,9 +657,9 @@ def gen_error_str(e):
 @hydra.main(version_base="1.3", config_path="conf", config_name="preprocess_config")
 def main(cfg: PreprocessConfig):
 
-    with open(PS_LARK_GRAMMAR_PATH, "r", encoding='utf-8') as file:
-        puzzlescript_grammar = file.read()
-
+    # with open(PS_LARK_GRAMMAR_PATH, "r", encoding='utf-8') as file:
+    #     puzzlescript_grammar = file.read()
+    puzzlescript_grammar = resources.files(__package__).joinpath("syntax.lark").read_text()
     # Initialize the Lark parser with the PuzzleScript grammar
     parser = Lark(puzzlescript_grammar, start="ps_game", maybe_placeholders=False)
     # min_parser = Lark(min_puzzlescript_grammar, start="ps_game")

@@ -2,14 +2,14 @@ import math
 from timeit import default_timer as timer
 from typing import Sequence, Tuple
 
-from categorical import Categorical
+from puzzlejax.utils_jax import Categorical
 from flax.linen.initializers import constant, orthogonal
 import numpy as np
 import flax.linen as nn
 import jax
 import jax.numpy as jnp
 
-from env import PSObs
+from puzzlejax.env import PSObs
 
 def crop_rf(x, rf_size):
     mid_x = x.shape[1] // 2
@@ -363,7 +363,7 @@ class ActorCriticPS(nn.Module):
 
         return pi, val
 
-if __name__ == '__main__':
+def main():
     n_trials = 100
     rng = jax.random.PRNGKey(42)
     start_time = timer()
@@ -378,3 +378,6 @@ if __name__ == '__main__':
         print('log_prob', log_prob)
     time = timer() - start_time
     print(f'Average time per sample: {time / n_trials}')
+
+if __name__ == '__main__':
+    main()

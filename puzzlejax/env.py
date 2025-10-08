@@ -15,10 +15,10 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 
-from env_render import render_solid_color, render_sprite
-from env_utils import N_MOVEMENTS, multihot_to_desc, N_FORCES, ACTION
-from jax_utils import stack_leaves
-from ps_game import LegendEntry, PSGameTree, PSObject, Rule, WinCondition
+from puzzlejax.env_render import render_solid_color, render_sprite
+from puzzlejax.env_utils import N_MOVEMENTS, multihot_to_desc, N_FORCES, ACTION
+from puzzlejax.utils_jax import stack_leaves
+from puzzlejax.ps_game import LegendEntry, PSGameTree, PSObject, Rule, WinCondition
 from gymnax.environments.spaces import Discrete, Box
 
 

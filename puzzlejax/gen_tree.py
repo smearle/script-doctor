@@ -18,7 +18,7 @@ from lark import Token, Transformer, Tree
 import numpy as np
 from PIL import Image
 
-from ps_game import LegendEntry, PSGameTree, PSObject, Prelude, Rule, RuleBlock, WinCondition
+from puzzlejax.ps_game import LegendEntry, PSGameTree, PSObject, Prelude, Rule, RuleBlock, WinCondition
 
 logger = logging.getLogger(__name__)
 

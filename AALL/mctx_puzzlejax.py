@@ -23,11 +23,11 @@ import itertools
 import chex
 import jax
 import jax.numpy as jnp
-import env as Env
+import puzzlejax.env as Env
 import mctx
 from puzzlejax.utils import get_list_of_games_for_testing
-from utils_rl import get_env_params_from_config, init_ps_env
-from conf.config import PSConfig
+from puzzlejax.utils_rl import get_env_params_from_config, init_ps_env
+from puzzlejax.conf.config import PSConfig
 import os,logging
 
 os.environ.setdefault("TF_CPP_MIN_LOG_LEVEL", "3")  # 0=all, 1=INFO off, 2=INFO+WARNING off, 3=INFO+WARN+ERR off

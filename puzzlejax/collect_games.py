@@ -9,7 +9,6 @@ from bs4 import BeautifulSoup
 from dotenv import load_dotenv
 from pathvalidate import sanitize_filename
 
-
 GALLERY_GAMES_DIR = os.path.join('src', 'demo')
 SCRAPED_GAMES_DIR = os.path.join('data', 'scraped_games')
 
@@ -21,8 +20,7 @@ def return_keyval(d, key):
             return return_keyval(v, key)
     return None
 
-
-if __name__ == '__main__':
+def main():
     parser = ArgumentParser()
     parser.add_argument("--update", action="store_true", help="Update the list of PuzzleScript URLs")
     args = parser.parse_args()
@@ -146,3 +144,7 @@ if __name__ == '__main__':
     # Count number of scripts
     script_files = os.listdir(SCRAPED_GAMES_DIR)
     print(f"Total scripts: {len(script_files)}")
+
+
+if __name__ == '__main__':
+    main()

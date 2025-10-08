@@ -4,7 +4,7 @@ import numpy as np
 import json
 import jax
 import os
-from globals import JAX_PROFILING_RESULTS_DIR
+from puzzlejax.globals import JAX_PROFILING_RESULTS_DIR
 
 LEVEL=0
 GAME="Multi-word_Dictionary_Game"

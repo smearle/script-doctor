@@ -8,8 +8,8 @@ import numpy as np
 import pandas as pd
 import seaborn as sns
 
-from conf.config import PlotSearch
-from globals import PLOTS_DIR, STANDALONE_NODEJS_RESULTS_PATH, JS_SOLS_DIR
+from puzzlejax.conf.config import PlotSearch
+from puzzlejax.globals import PLOTS_DIR, STANDALONE_NODEJS_RESULTS_PATH, JS_SOLS_DIR
 from profile_nodejs import get_algo_name, get_standalone_run_params_from_name
 from puzzlejax.utils import get_list_of_games_for_testing, game_names_remap
 

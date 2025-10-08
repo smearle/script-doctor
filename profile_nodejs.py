@@ -17,9 +17,9 @@ from javascript.proxy import Proxy
 import numpy as np
 import submitit
 
-from conf.config import ProfileNodeJS
-from globals import STANDALONE_NODEJS_RESULTS_PATH, JS_SOLS_DIR
-from preprocess_games import SIMPLIFIED_GAMES_DIR, get_tree_from_txt
+from puzzlejax.conf.config import ProfileNodeJS
+from puzzlejax.globals import STANDALONE_NODEJS_RESULTS_PATH, JS_SOLS_DIR
+from puzzlejax.preprocess_games import SIMPLIFIED_GAMES_DIR, get_tree_from_txt
 from standalone.utils import compile_game
 from puzzlejax.utils import get_list_of_games_for_testing, level_to_int_arr, init_ps_lark_parser
 

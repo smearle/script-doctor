@@ -22,9 +22,9 @@ import sys
 
 import jax
 from lark import Lark
-from env_wrappers import RepresentationWrapper
-from env import PSParams
-from preprocess_games import PS_LARK_GRAMMAR_PATH, get_tree_from_txt
+from puzzlejax.env_wrappers import RepresentationWrapper
+from puzzlejax.env import PSParams
+from puzzlejax.preprocess_games import PS_LARK_GRAMMAR_PATH, get_tree_from_txt
 
 CUSTOM_GAMES_DIR = "data/scraped_games"
 

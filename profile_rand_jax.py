@@ -16,11 +16,11 @@ import numpy as np
 import pandas as pd
 from timeit import default_timer as timer
 
-from conf.config import ProfileJaxRandConfig
-from env import PSState
-from globals import JAX_PROFILING_RESULTS_DIR
+from puzzlejax.conf.config import ProfileJaxRandConfig
+from puzzlejax.env import PSState
+from puzzlejax.globals import JAX_PROFILING_RESULTS_DIR
 from puzzlejax.utils import get_list_of_games_for_testing, load_games_n_rules_sorted
-from utils_rl import get_env_params_from_config, init_ps_env
+from puzzlejax.utils_rl import get_env_params_from_config, init_ps_env
 
 
 # game_paths = glob.glob(os.path.join('data', 'scraped_games', '*.txt'))

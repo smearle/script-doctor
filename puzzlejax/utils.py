@@ -10,15 +10,17 @@ import time
 import dotenv
 import jax
 from lark import Lark
+from importlib import resources
+
 import numpy as np
 from openai import AzureOpenAI
 import tiktoken
 
-from globals import GAMES_TO_N_RULES_PATH, GAMES_N_RULES_SORTED_PATH, PRIORITY_GAMES, GAMES_N_LEVELS_PATH
-from collect_games import GALLERY_GAMES_DIR
-from env import PSEnv
-from gen_tree import GenPSTree
-from preprocess_games import GAMES_DIR, get_tree_from_txt, TREES_DIR
+from puzzlejax.globals import GAMES_TO_N_RULES_PATH, GAMES_N_RULES_SORTED_PATH, PRIORITY_GAMES, GAMES_N_LEVELS_PATH
+from puzzlejax.collect_games import GALLERY_GAMES_DIR
+from puzzlejax.env import PSEnv
+from puzzlejax.gen_tree import GenPSTree
+from puzzlejax.preprocess_games import GAMES_DIR, get_tree_from_txt, TREES_DIR
 
 game_names_remap = {
     'constellationz': 'Constellation Z',
@@ -356,8 +358,10 @@ from timeit import default_timer as timer
 
 def init_ps_env(game, level_i, max_episode_steps, vmap: bool = True):
     start_time = timer()
-    with open("syntax.lark", "r", encoding='utf-8') as file:
-        puzzlescript_grammar = file.read()
+    puzzlescript_grammar = resources.files(__package__).joinpath("syntax.lark").read_text()
+
+    # with open("syntax.lark", "r", encoding='utf-8') as file:
+    #     puzzlescript_grammar = file.read()
     # Initialize the Lark parser with the PuzzleScript grammar
     parser = Lark(puzzlescript_grammar, start="ps_game", maybe_placeholders=False)
     tree, success, err_msg = get_tree_from_txt(parser, game, test_env_init=False)
@@ -369,8 +373,9 @@ def init_ps_env(game, level_i, max_episode_steps, vmap: bool = True):
 
     
 def init_ps_lark_parser():
-    with open("syntax.lark", "r", encoding='utf-8') as file:
-        puzzlescript_grammar = file.read()
+    puzzlescript_grammar = resources.files(__package__).joinpath("syntax.lark").read_text()
+    # with open("syntax.lark", "r", encoding='utf-8') as file:
+    #     puzzlescript_grammar = file.read()
     # Initialize the Lark parser with the PuzzleScript grammar
     parser = Lark(puzzlescript_grammar, start="ps_game", maybe_placeholders=False)
     return parser

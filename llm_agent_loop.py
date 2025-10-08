@@ -7,11 +7,11 @@ import fcntl
 import multiprocessing
 import jax
 from lark import Lark
-from env_wrappers import RepresentationWrapper
-from env import PSParams
-from preprocess_games import PS_LARK_GRAMMAR_PATH, get_tree_from_txt
+from puzzlejax.env_wrappers import RepresentationWrapper
+from puzzlejax.env import PSParams
+from puzzlejax.preprocess_games import PS_LARK_GRAMMAR_PATH, get_tree_from_txt
 from LLM_agent import LLMGameAgent
-from globals import PRIORITY_GAMES
+from puzzlejax.globals import PRIORITY_GAMES
 
 
 CUSTOM_GAMES_DIR = "data/scraped_games"
@@ -389,7 +389,7 @@ def process_game_level(agent, game_info, level_index, run_id, save_dir, model,
     """
     game_name = game_info["game_name"]
     # Reconstruct env inside the worker process
-    from env_wrappers import RepresentationWrapper
+    from puzzlejax.env_wrappers import RepresentationWrapper
     tree = game_info["tree"]
     env = RepresentationWrapper(tree, debug=False, print_score=False)
     rules = game_info["rules"]
