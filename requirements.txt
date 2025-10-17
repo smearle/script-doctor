@@ -10,8 +10,8 @@ hydra-core==1.3.2
 hydra-submitit-launcher==1.2.0
 imageio==2.37.0
 javascript==1!1.2.5
-# jax[cuda]==0.7.1  # or `jax` if no CUDA is not an option
-jax>=0.7.1
+jax[cuda]==0.7.1  # or `jax` if no CUDA is not an option
+#jax>=0.7.1
 lark==1.2.2
 Levenshtein==0.27.1
 matplotlib==3.10.6

@@ -1,10 +1,8 @@
 from dataclasses import dataclass
-import glob
 import logging
 import os
 from typing import Optional
 
-import hydra
 from hydra.core.config_store import ConfigStore
 import cv2
 import jax
@@ -12,8 +10,9 @@ import jax.numpy as jnp
 from lark import Lark
 import numpy as np
 
+import puzzlejax
 from puzzlejax.env import PSEnv, PSParams, multihot_to_desc
-from puzzlejax.preprocess_games import TREES_DIR, DATA_DIR, TEST_GAMES, get_tree_from_txt
+from puzzlejax.preprocess_games import get_tree_from_txt
 from puzzlejax.preprocess_games import PSErrors
 
 logger = logging.getLogger(__name__)
@@ -164,7 +163,9 @@ def human_loop(env: PSEnv, level: int = 0, profile=False):
 
 
 def play_game(game: str, level: int = 0, jit: bool = False, profile: bool = False, debug: bool = False):
-    with open("syntax.lark", "r", encoding='utf-8') as file:
+    package_dir = os.path.dirname(puzzlejax.__file__)
+    file_path = os.path.join(package_dir, "syntax.lark")
+    with open(file_path, "r", encoding='utf-8') as file:
         puzzlescript_grammar = file.read()
     # Initialize the Lark parser with the PuzzleScript grammar
     parser = Lark(puzzlescript_grammar, start="ps_game", maybe_placeholders=False)
@@ -178,28 +179,3 @@ def play_game(game: str, level: int = 0, jit: bool = False, profile: bool = Fals
     env = PSEnv(tree, jit=jit, debug=debug, print_score=True)
     print(f"Playing game: {game}")
     human_loop(env, profile=profile, level=level)
-
-@hydra.main(config_name="config", version_base="1.3")
-def main(cfg: Config):
-
-    # Using this line to play games with characters (e.g. ` ) that don't agree with CL
-    # TODO: Fix this (by removing this character from filenames?)
-    # cfg.game = "-=lost=-"
-
-    if cfg.game is not None:
-        play_game(cfg.game, level=cfg.level, jit=cfg.jit, profile=cfg.profile, debug=cfg.debug)
-
-    else:
-        tree_paths = glob.glob(os.path.join(TREES_DIR, '*'))
-        tree_paths = sorted(tree_paths, reverse=True)
-        test_game_paths = [os.path.join(TREES_DIR, tg + '.pkl') for tg in TEST_GAMES]
-        tree_paths = test_game_paths + tree_paths
-        game_paths = [os.path.basename(tree_path)[:-4] for tree_path in tree_paths]
-        for tree_path in game_paths:
-            play_game(tree_path, jit=cfg.jit, debug=cfg.debug)
-    
-
-
-if __name__ == '__main__':
-    jax.config.update('jax_platform_name', 'cpu')
-    main()
