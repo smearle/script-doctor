@@ -920,6 +920,31 @@ class PSEnv:
             state = state.replace(multihot_level=lvl, rng=rng)
         obs = self.get_obs(state)
         return obs, state
+    
+    def reset_level(self, rng, lvl: chex.Array):
+        self.tick_fn = self.gen_tick_fn(lvl.shape[1:])
+        again = False
+        win, score, init_heuristic = self.check_win(lvl)
+        if PRINT_SCORE:
+            jax.debug.print('heuristic: {heuristic}, score: {score}, win: {win}', heuristic=init_heuristic, score=score, win=win)
+        state = PSState(
+            multihot_level=lvl,
+            win=jnp.array(False),
+            score=jnp.array(0, dtype=jnp.int32),
+            heuristic=init_heuristic,
+            restart=jnp.array(False),
+            step_i=jnp.array(0, dtype=jnp.int32),
+            init_heuristic=init_heuristic,
+            prev_heuristic=init_heuristic,
+            rng=rng,
+        )
+        if self.tree.prelude.run_rules_on_level_start:
+            lvl = self.apply_player_force(-1, state)
+            lvl, _, _, _, _, _, rng = self.tick_fn(rng, lvl)
+            lvl = lvl[:self.n_objs]
+            state = state.replace(multihot_level=lvl, rng=rng)
+        obs = self.get_obs(state)
+        return obs, state
 
     def get_obs(self, state):
         obs = PSObs(
