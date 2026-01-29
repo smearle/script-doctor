@@ -8,10 +8,13 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 
-from gen_tree import GenPSTree
-from puzzlejax.env import PuzzleJaxEnv, PJParams
-from preprocess_games import TREES_DIR, TEST_GAMES, DATA_DIR
-from ps_game import PSGameTree
+from globals import DATA_DIR, TREES_DIR
+from puzzlejax.gen_tree import GenPSTree
+from puzzlejax.env import PJState, PuzzleJaxEnv, PJParams
+from puzzlejax.ps_game import PSGameTree
+
+
+TEST_GAMES = ["zokoban"]
 
 
 scratch_dir = 'scratch'
@@ -23,7 +26,7 @@ if __name__ == '__main__':
     test_game_paths = [os.path.join(TREES_DIR, tg + '.pkl') for tg in TEST_GAMES]
     tree_paths = test_game_paths + tree_paths
     for tree_path in tree_paths:
-        print(tree_path)
+        print("Treepath:", tree_path)
         og_game_path = os.path.join(DATA_DIR, 'scraped_games', os.path.basename(tree_path)[:-3] + 'txt')
         print(f"Parsing {og_game_path}")
         with open(tree_path, 'rb') as f:
@@ -32,11 +35,13 @@ if __name__ == '__main__':
 
         tree: PSGameTree = GenPSTree().transform(tree)
 
+        # initialize environment
         env = PuzzleJaxEnv(tree)
         level = env.get_level(0)
         params = PJParams(level=level)
         key = jax.random.PRNGKey(0)
         _, state = env.reset(0, params = params)
+        state: PJState
         key, subkey = jax.random.split(key)
         state = state.replace(rng=subkey)
 

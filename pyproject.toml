@@ -1,0 +1,16 @@
+# pyproject.toml example
+[project]
+name = "puzzlejax"
+version = "0.1.0"
+authors = [
+    { name="Sam Earle", email="sam.earle@nyu.edu" },
+]
+description = "A JAX implementation of PuzzleScript supporting hardware-accelerated grid-based puzzle games."
+readme = "README.md"
+requires-python = ">=3.8"
+dependencies = [
+]
+
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"

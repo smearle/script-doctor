@@ -19,18 +19,15 @@ import numpy as np
 
 from conf.config import PreprocessConfig
 from puzzlejax.env import PuzzleJaxEnv
-from gen_tree import GenPSTree
+from puzzlejax.gen_tree import GenPSTree
 from globals import (
-    GAMES_N_RULES_SORTED_PATH, GAMES_TO_N_RULES_PATH, GAMES_TO_SKIP, GAMES_N_LEVELS_PATH, LARK_SYNTAX_PATH,
-    PRIORITY_GAMES, DATA_DIR, TREES_DIR, SIMPLIFIED_GAMES_DIR, MIN_GAMES_DIR, PRETTY_TREES_DIR, CUSTOM_GAMES_DIR,
+    GAMES_N_RULES_SORTED_PATH, GAMES_TO_N_RULES_PATH, GAMES_TO_SKIP, LARK_SYNTAX_PATH, TEST_GAMES,
+    TREES_DIR, SIMPLIFIED_GAMES_DIR, MIN_GAMES_DIR, PRETTY_TREES_DIR, CUSTOM_GAMES_DIR,
     GAMES_DIR,
 )
-from ps_game import PSGameTree
+from puzzlejax.ps_game import PSGameTree
 
 logger = logging.getLogger(__name__)
-
-# TEST_GAMES = ['blockfaker', 'sokoban_match3', 'notsnake', 'sokoban_basic']
-TEST_GAMES = []
 
 
 @contextlib.contextmanager

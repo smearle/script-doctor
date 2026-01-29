@@ -51,6 +51,7 @@ LARK_SYNTAX_PATH = os.path.join(par_dir, 'syntax.lark')
 GAMES_DIR = os.path.join(DATA_DIR, 'scraped_games')
 MIN_GAMES_DIR = os.path.join(DATA_DIR, 'min_games')
 SIMPLIFIED_GAMES_DIR = os.path.join(DATA_DIR, 'simplified_games')
+TEST_GAMES = ["sokoban_basic", "blockfaker", "notsnake", "sokoban_match3"]
 TREES_DIR = os.path.join(DATA_DIR, 'game_trees')
 PRETTY_TREES_DIR = os.path.join(DATA_DIR, 'pretty_trees')
 # parsed_games_filename = os.path.join(DATA_DIR, "parsed_games.txt")
