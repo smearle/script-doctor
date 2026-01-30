@@ -1,0 +1,176 @@
+title High Noon RPG game
+author Slatero
+noundo
+youtube watch?v=_bdOTUocn5w
+background_color LightBrown
+text_color Black
+norestart
+
+========
+OBJECTS
+========
+
+Solaire
+LightGrey Yellow
+.000.
+.000.
+00000
+.010.
+.0.0.
+
+WhiteCowboy
+Brown DarkBrown Orange DarkBlue White
+.000.
+.222.
+23432
+.111.
+.1.1.
+
+IdleWhiteCowboy
+Brown DarkBrown Orange DarkBlue White
+.000.
+.222.
+23432
+.111.
+.1.1.
+
+BlackCowboy
+Brown DarkBrown DarkBlue White
+.000.
+.000.
+02320
+.111.
+.1.1.
+
+Slave
+Brown Orange
+.000.
+.000.
+01110
+.111.
+.1.1.
+
+IdleSlave
+Brown Orange
+.000.
+.000.
+01110
+.111.
+.1.1.
+
+Sheriff
+Darkblue Orange Brown Yellow
+.222.
+.111.
+10031
+.000.
+.0.0.
+
+BadSlave
+DarkGray Orange DarkBrown
+.222.
+.2220
+21110
+.111.
+.1.1.
+
+Grass
+LightGreen
+
+Floor
+DarkBrown
+
+Bush
+Green
+
+Bricks
+Orange White
+00010
+01000
+00010
+01000
+00010
+
+Target
+White
+.....
+.....
+.....
+.....
+.....
+
+Street
+Gray
+
+None
+White
+.....
+.....
+.....
+.....
+.....
+
+=======
+LEGEND
+=======
+
+\ = BlackCowboy and Target
+* = Sheriff and Floor
+Wall = Bush or Bricks
+Background = Grass or Floor or Street
+Enemy = Sheriff or BadSlave
+Player = WhiteCowboy or Slave or BlackCowboy
+Cowboy = WhiteCowboy or BlackCowboy
+
+G = BlackCowboy
+C = WhiteCowboy
+S = Slave
+@ = Bush
+# = Bricks
+, = Floor
+. = Grass
+& = Sheriff
+! = Badslave
+T = Target
+' = Street
+I = IdleSlave
++ = Solaire
+_ = None
+K = IdleWhiteCowboy
+
+=======
+SOUNDS
+=======
+
+Enemy Destroy 80958902
+EndGame 80958902
+Restart 80958902
+
+================
+COLLISIONLAYERS
+================
+
+Background
+Target
+Enemy, Player, Wall, IdleSlave, Solaire, None, IdleWhiteCowboy
+
+======
+RULES
+======
+
+[ Enemy | ... | Player ] -> [ > Enemy | ... | Player ]
+
+==============
+WINCONDITIONS
+==============
+
+All Player on Target
+
+=======
+LEVELS
+=======
+
+....
+S...
+...!
+....
