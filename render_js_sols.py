@@ -12,10 +12,10 @@ from lark import Lark
 
 from conf.config import ProfileNodeJS
 from puzzlejax.env import PJState
-from preprocess_games import PS_LARK_GRAMMAR_PATH, PSErrors, get_env_from_ps_file
+from preprocess_games import PJParseErrors, get_env_from_ps_file
 from profile_nodejs import compile_game
 from puzzlejax.utils import get_list_of_games_for_testing, init_ps_lark_parser, level_to_int_arr
-from validate_sols import JS_SOLS_DIR, multihot_level_from_js_state, JAX_VALIDATED_JS_SOLS_DIR
+from validate_sols import JS_SOLS_DIR, multihot_level_from_js_state
 
 
 @hydra.main(version_base="1.3", config_path='./conf', config_name='profile_nodejs_config')
@@ -63,7 +63,7 @@ def main(cfg: ProfileNodeJS):
                     print(f"Error compiling game {game_name} level {level_i}: {e}")
                     continue
                 env, tree, success, err_msg = get_env_from_ps_file(parser, game_name)
-                if success != PSErrors.SUCCESS:
+                if success != PJParseErrors.SUCCESS:
                     print(f"Error parsing game {game_name} level {level_i}: {err_msg}")
                     break
             try:

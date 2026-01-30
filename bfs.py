@@ -17,7 +17,7 @@ from puzzlejax.env import PuzzleJaxEnv, PJParams, PJState
 from globals import PRIORITY_GAMES
 from human_env import SCALING_FACTOR
 from jax_utils import stack_leaves
-from preprocess_games import PS_LARK_GRAMMAR_PATH, get_tree_from_txt
+from preprocess_games import LARK_SYNTAX_PATH, get_tree_from_txt
 from sort_games_by_n_rules import GAMES_N_RULES_SORTED_PATH
 from puzzlejax.utils import save_gif_from_states
 from utils_rl import get_env_params_from_config
@@ -100,7 +100,7 @@ def bfs(env: PuzzleJaxEnv, state: PJState, params: PJParams,
 @hydra.main(version_base="1.3", config_path='./conf', config_name='bfs_config')
 def main(cfg: BFSConfig):
     os.makedirs(JAX_BFS_SOLS_DIR, exist_ok=True)
-    with open(PS_LARK_GRAMMAR_PATH, 'r', encoding='utf-8') as f:
+    with open(LARK_SYNTAX_PATH, 'r', encoding='utf-8') as f:
         puzzlescript_grammar = f.read()
     parser = Lark(puzzlescript_grammar, start="ps_game", maybe_placeholders=False)
     if cfg.game is not None:

@@ -507,7 +507,7 @@ def count_rules(tree: PSGameTree):
         n_rules += len(rule_block[0].rules)
     return n_rules
 
-class PSErrors(IntEnum):
+class PJParseErrors(IntEnum):
     SUCCESS = 0
     PARSE_ERROR = 1
     TREE_ERROR = 2
@@ -518,15 +518,15 @@ class PSErrors(IntEnum):
 
 def get_env_from_ps_file(parser, game, log_dir: str = None, overwrite: bool = True, timeout: int = 10):
     tree, success, err_msg = get_tree_from_txt(parser, game, log_dir, overwrite, test_env_init=False, timeout=timeout)
-    if success != PSErrors.SUCCESS:
+    if success != PJParseErrors.SUCCESS:
         return None, tree, success, err_msg 
     try:
         env = PuzzleJaxEnv(tree)
-        return env, tree, PSErrors.SUCCESS, ""
+        return env, tree, PJParseErrors.SUCCESS, ""
     except Exception as e:
         traceback.print_exc()
         print(f"Error initializing environment for {game}: {e}")
-        return None, tree, PSErrors.ENV_ERROR, gen_error_str(e)
+        return None, tree, PJParseErrors.ENV_ERROR, gen_error_str(e)
 
 # Keeping this here only for backwards compatibility
 def get_tree_from_txt(parser, game, log_dir: str = None, overwrite: bool = True, test_env_init: bool = True,
@@ -541,7 +541,7 @@ def get_tree_from_txt(parser, game, log_dir: str = None, overwrite: bool = True,
     # if game in parsed_games or os.path.basename(game) in games_to_skip:
     if os.path.basename(game) in GAMES_TO_SKIP:
         print(f"Skipping {filepath} because it has been marked for skippping in `GAMES_TO_SKIP`")
-        return None, PSErrors.SKIPPED, "Game marked for skipping in GAMES_TO_SKIP"
+        return None, PJParseErrors.SKIPPED, "Game marked for skipping in GAMES_TO_SKIP"
 
     # print(f"Parsing game {filepath} ({i+1}/{len(game_files)})")
     simp_filepath = os.path.join(SIMPLIFIED_GAMES_DIR, simp_filename)
@@ -554,7 +554,7 @@ def get_tree_from_txt(parser, game, log_dir: str = None, overwrite: bool = True,
             content = preprocess_ps(ps_text)
         except ValueError as e:
             print(f"Error preprocessing {filepath}: {e}")
-            return None, PSErrors.PREPROCESSING_ERROR, gen_error_str(e)
+            return None, PJParseErrors.PREPROCESSING_ERROR, gen_error_str(e)
         with open(simp_filepath, "w", encoding='utf-8') as file:
             file.write(content)
     else:
@@ -588,7 +588,7 @@ def get_tree_from_txt(parser, game, log_dir: str = None, overwrite: bool = True,
             print(f"Timeout parsing {simp_filepath}")
             # with open(parsed_games_filename, 'a') as file:
             #     file.write(game + "\n")
-        return None, PSErrors.TIMEOUT, ""
+        return None, PJParseErrors.TIMEOUT, ""
     except Exception as e:
         print(traceback.format_exc())
         if log_filename:
@@ -598,7 +598,7 @@ def get_tree_from_txt(parser, game, log_dir: str = None, overwrite: bool = True,
             print(f"Error parsing {simp_filepath}:\n{e}")
             # with open(parsed_games_filename, 'a') as file:
             #     file.write(game + "\n")
-        return None, PSErrors.PARSE_ERROR, gen_error_str(e)
+        return None, PJParseErrors.PARSE_ERROR, gen_error_str(e)
 
 
     try:
@@ -627,17 +627,17 @@ def get_tree_from_txt(parser, game, log_dir: str = None, overwrite: bool = True,
     except Exception as e:
         traceback.print_exc()
         print(f"Error transforming tree: {game}")
-        return None, PSErrors.TREE_ERROR, gen_error_str(e)
+        return None, PJParseErrors.TREE_ERROR, gen_error_str(e)
     if test_env_init:
         try:
             env = PuzzleJaxEnv(tree, level_i=0)
         except Exception as e:
             traceback.print_exc()
             print(f"Error initializing environment for {game}: {e}")
-            return tree, PSErrors.ENV_ERROR, gen_error_str(e)
+            return tree, PJParseErrors.ENV_ERROR, gen_error_str(e)
 
     print(f"Parsed {game} successfully")
-    return tree, PSErrors.SUCCESS, ""
+    return tree, PJParseErrors.SUCCESS, ""
 
 def gen_error_str(e):
     err_msg = f"{traceback.format_exc()}\n{type(e).__name__}: {e}"
@@ -717,23 +717,23 @@ def main(cfg: PreprocessConfig):
         print(f"Parsing {filename} ({i+1}/{len(game_files)})")
         env, ps_tree, success, err_msg = get_env_from_ps_file(parser, filename[:-4], log_dir=scrape_log_dir, overwrite=cfg.overwrite)
 
-        if success == PSErrors.SUCCESS:
+        if success == PJParseErrors.SUCCESS:
             parse_results['success'].append(game_name)
             n_rules = count_rules(ps_tree)
             has_randomness = env.has_randomness()
             games_n_rules_sorted.append((game_name, n_rules, has_randomness))
             games_to_n_rules[game_name] = (n_rules, has_randomness)
-        elif success == PSErrors.PARSE_ERROR:
+        elif success == PJParseErrors.PARSE_ERROR:
             if err_msg not in parse_results['parse_error']:
                 parse_results['parse_error'][err_msg] = []
             parse_results['parse_error'][err_msg].append(game_name)
-        elif success == PSErrors.TIMEOUT:
+        elif success == PJParseErrors.TIMEOUT:
             parse_results['parse_timeout'].append(game_name)
-        elif success == PSErrors.TREE_ERROR:
+        elif success == PJParseErrors.TREE_ERROR:
             if err_msg not in parse_results['tree_error']:
                 parse_results['tree_error'][err_msg] = []
             parse_results['tree_error'][err_msg].append(game_name)
-        elif success == PSErrors.ENV_ERROR:
+        elif success == PJParseErrors.ENV_ERROR:
             if err_msg not in parse_results['env_error']:
                 parse_results['env_error'][err_msg] = []
             n_rules = count_rules(ps_tree)
@@ -741,10 +741,10 @@ def main(cfg: PreprocessConfig):
             parse_results['env_error'][err_msg].append((game_name, n_rules))
             games_n_rules_sorted.append((game_name, n_rules, has_randomness))
             games_to_n_rules[game_name] = (n_rules, has_randomness)
-        elif success == PSErrors.SKIPPED:
+        elif success == PJParseErrors.SKIPPED:
             print(f"Skipping {game_name} because it has been marked for skipping in `GAMES_TO_SKIP`")
             continue
-        elif success == PSErrors.PREPROCESSING_ERROR:
+        elif success == PJParseErrors.PREPROCESSING_ERROR:
             if err_msg not in parse_results['parse_error']:
                 parse_results['parse_error'][err_msg] = []
             parse_results['parse_error'][err_msg].append(game_name)

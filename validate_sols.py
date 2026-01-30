@@ -6,6 +6,7 @@ import math
 import os
 import pickle
 import random
+import re
 import shutil
 import traceback
 from typing import List, Optional
@@ -24,8 +25,11 @@ import submitit
 
 from conf.config import JaxValidationConfig
 from puzzlejax.env import PuzzleJaxEnv
-from globals import SOLUTION_REWARDS_PATH, GAMES_TO_N_RULES_PATH, JS_SOLS_DIR, JAX_VALIDATED_JS_SOLS_DIR, JS_TO_JAX_ACTIONS
-from preprocess_games import PS_LARK_GRAMMAR_PATH, TREES_DIR, DATA_DIR, TEST_GAMES, PSErrors, get_tree_from_txt, count_rules
+from globals import (
+    SOLUTION_REWARDS_PATH, GAMES_TO_N_RULES_PATH, JS_SOLS_DIR, JAX_VALIDATED_JS_SOLS_DIR, JS_TO_JAX_ACTIONS, DATA_DIR,
+    LARK_SYNTAX_PATH,
+)
+from preprocess_games import PJParseErrors, get_tree_from_txt
 from standalone.utils import replay_actions_js
 from standalone.utils import compile_game as compile_game_js
 from puzzlejax.utils import get_list_of_games_for_testing, to_binary_vectors
@@ -95,7 +99,7 @@ def main(cfg: JaxValidationConfig, games: Optional[List[str]] = None):
         os.environ["CUDA_VISIBLE_DEVICES"] = ""
         os.environ["JAX_PLATFORMS"] = "cpu"
     # Initialize the Lark parser with the PuzzleScript grammar
-    with open(PS_LARK_GRAMMAR_PATH, "r", encoding='utf-8') as file:
+    with open(LARK_SYNTAX_PATH, "r", encoding='utf-8') as file:
         puzzlescript_grammar = file.read()
     parser = Lark(puzzlescript_grammar, start="ps_game", maybe_placeholders=False)
     with open(GAMES_TO_N_RULES_PATH, 'r') as f:
@@ -184,7 +188,6 @@ def main(cfg: JaxValidationConfig, games: Optional[List[str]] = None):
             print(f"Skipping {game_name} because it is in the skip list")
             continue
         jax_sol_dir = os.path.join(JAX_VALIDATED_JS_SOLS_DIR, game)
-        os.makedirs(jax_sol_dir, exist_ok=True)
         compile_log_path = os.path.join(jax_sol_dir, 'compile_err.txt')
         if cfg.overwrite:
             if os.path.exists(compile_log_path):
@@ -213,20 +216,35 @@ def main(cfg: JaxValidationConfig, games: Optional[List[str]] = None):
             level_ints_to_sols[level_i].append(level_sols[i])
         # Remove the level_sols with fewer number of steps in case of multiple solutions (at different step counts) for 
         # the same level.
+        # Prioritize BFS > AStar > MCTS
         new_level_sols = []
         level_ints = []
         for level_i, sols in level_ints_to_sols.items():
-            if len(sols) == 1:
-                new_level_sols.append(sols[0])
+            # Filter by algorithm priority
+            bfs_sols = [s for s in sols if 'solveBFS' in s]
+            astar_sols = [s for s in sols if 'solveAStar' in s]
+            mcts_sols = [s for s in sols if 'solveMCTS' in s]
+
+            if bfs_sols:
+                sols_to_consider = bfs_sols
+            elif astar_sols:
+                sols_to_consider = astar_sols
+            elif mcts_sols:
+                sols_to_consider = mcts_sols
+            else:
+                sols_to_consider = sols
+
+            if len(sols_to_consider) == 1:
+                new_level_sols.append(sols_to_consider[0])
             else:
                 # Sort by number of steps, and take the one with the most steps.
                 n_steps = [
                     int(os.path.basename(p).split('-steps_')[0].split('_')[-1])
                         if '-steps_' in os.path.basename(p)
-                        else 10_000 for p in sols
+                        else 10_000 for p in sols_to_consider
                     ]
                 max_steps_idx = np.argmax(n_steps)
-                new_level_sols.append(sols[max_steps_idx])
+                new_level_sols.append(sols_to_consider[max_steps_idx])
             level_ints.append(level_i)
         level_sols = new_level_sols
 
@@ -246,6 +264,7 @@ def main(cfg: JaxValidationConfig, games: Optional[List[str]] = None):
 
         game_text = compile_game_js(parser, engine, game_name, level_i=0)
 
+        os.makedirs(jax_sol_dir, exist_ok=True)
         for level_i, level_sol_path in zip(level_ints, level_sols):
         
             # if cfg.aggregate:
@@ -340,7 +359,7 @@ def main(cfg: JaxValidationConfig, games: Optional[List[str]] = None):
             # Otherwise, let's initialize the environment (if on level 0) and run the solution.
             if env is None:
                 tree, success, err_msg = get_tree_from_txt(parser, game, test_env_init=False, timeout=60*20)
-                if success == PSErrors.SUCCESS:
+                if success == PJParseErrors.SUCCESS:
                     try:
                         env = PuzzleJaxEnv(tree, debug=False, print_score=False)
                     except KeyboardInterrupt as e:
@@ -349,8 +368,8 @@ def main(cfg: JaxValidationConfig, games: Optional[List[str]] = None):
                         raise e
                     except Exception as e:
                         err_msg = traceback.format_exc()
-                        success = PSErrors.ENV_ERROR
-                if success != PSErrors.SUCCESS:
+                        success = PJParseErrors.ENV_ERROR
+                if success != PJParseErrors.SUCCESS:
                     with open(compile_log_path, 'w') as f:
                         f.write(err_msg)
                     print(f"Error creating env: {og_path}\n{err_msg}")
@@ -367,6 +386,7 @@ def main(cfg: JaxValidationConfig, games: Optional[List[str]] = None):
             if 'sol' not in sol_dict and 'actions' not in sol_dict:
                 print(f"No sol/actions found in sol_dict, skipping.")
                 continue
+            print(f"Using solution from {level_sol_path}")
             level_sol = sol_dict['sol'] if 'sol' in sol_dict else sol_dict['actions']
             level_win = sol_dict['won']
             level_score = sol_dict['score']
@@ -484,14 +504,16 @@ def main(cfg: JaxValidationConfig, games: Optional[List[str]] = None):
                     f.write(err_log)
                 continue
 
+            print(f"Rendering frames for level {level_i}")
             frames = jax.vmap(env.render, in_axes=(0, None))(state_v, None)
             frames = frames.astype(np.uint8)
 
             # Scale up the frames
             # print(f"Scaling up frames for level {level_i}")
-            scale = 10
+            scale = 1
             frames = jnp.repeat(frames, scale, axis=1)
             frames = jnp.repeat(frames, scale, axis=2)
+            frames = np.array(frames)
 
             # Save the frames
             # print(f"Saving frames for level {level_i}")
@@ -501,18 +523,15 @@ def main(cfg: JaxValidationConfig, games: Optional[List[str]] = None):
                 imageio.imsave(os.path.join(frames_dir, f'level-{level_i}_sol_{i:03d}.png'), js_frame)
 
             # Make a gif out of the frames
+            print(f"Making gif for level {level_i}")
             imageio.mimsave(gif_path, frames, duration=1, loop=0)
             print(f'Saved gif to {gif_path}')
 
-            js_gif_paths = glob.glob(os.path.join(sol_dir, f'*level-{level_i}_sol*.gif'))
-            n_steps = [int(os.path.basename(p).split('-steps_')[0]) if '-steps_' in os.path.basename(p) else 10_000 for p in js_gif_paths]
-            if len(js_gif_paths) > 0:
-                js_gif_path = js_gif_paths[np.argmax(n_steps)]
+            # Copy over the js gif corresponding to the solution
+            js_gif_path = level_sol_path.replace('.json', '_sol.gif')
 
-                # Copy over the js gif
-                if os.path.isfile(js_gif_path):
-                    shutil.copy(js_gif_path, os.path.join(jax_sol_dir, f'level-{level_i}_js.gif'))
-
+            if os.path.isfile(js_gif_path):
+                shutil.copy(js_gif_path, os.path.join(jax_sol_dir, f'level-{level_i}_js.gif'))
             else:
                 js_gif_path = None
 

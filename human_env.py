@@ -15,7 +15,7 @@ import numpy as np
 from globals import LARK_SYNTAX_PATH, TEST_GAMES, TREES_DIR, DATA_DIR
 from puzzlejax.env import PuzzleJaxEnv, PJParams, multihot_to_desc
 from preprocess_games import get_tree_from_txt
-from preprocess_games import PSErrors
+from preprocess_games import PJParseErrors
 
 logger = logging.getLogger(__name__)
 
@@ -172,7 +172,7 @@ def play_game(game: str, level: int = 0, jit: bool = False, profile: bool = Fals
     # min_parser = Lark(min_puzzlescript_grammar, start="ps_game")
     print(f"""Parsing game: \"{game}\"""")
     tree, success, err_msg = get_tree_from_txt(parser, game, overwrite=True, test_env_init=False)
-    if success != PSErrors.SUCCESS:
+    if success != PJParseErrors.SUCCESS:
         print(f"Error parsing game: {err_msg}")
         return
     print(f"Initializing environment for game: {game}")
