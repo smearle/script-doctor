@@ -9,7 +9,7 @@ import jax
 from lark import Lark
 from env_wrappers import RepresentationWrapper
 from puzzlejax.env import PJParams
-from preprocess_games import LARK_SYNTAX_PATH, get_tree_from_txt
+from puzzlejax.preprocess_games import LARK_SYNTAX_PATH, get_tree_from_txt
 from LLM_agent import LLMGameAgent
 from globals import PRIORITY_GAMES
 

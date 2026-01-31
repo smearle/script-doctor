@@ -17,7 +17,7 @@ from puzzlejax.env import PuzzleJaxEnv, PJParams, PJState
 from globals import PRIORITY_GAMES
 from human_env import SCALING_FACTOR
 from jax_utils import stack_leaves
-from preprocess_games import LARK_SYNTAX_PATH, get_tree_from_txt
+from puzzlejax.preprocess_games import LARK_SYNTAX_PATH, get_tree_from_txt
 from sort_games_by_n_rules import GAMES_N_RULES_SORTED_PATH
 from puzzlejax.utils import save_gif_from_states
 from utils_rl import get_env_params_from_config

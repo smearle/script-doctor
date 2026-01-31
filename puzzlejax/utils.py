@@ -21,7 +21,7 @@ from globals import (
 from collect_games import GALLERY_GAMES_DIR
 from puzzlejax.env import PuzzleJaxEnv
 from puzzlejax.gen_tree import GenPSTree
-from preprocess_games import get_tree_from_txt
+from puzzlejax.preprocess_games import get_tree_from_txt
 
 game_names_remap = {
     'constellationz': 'Constellation Z',

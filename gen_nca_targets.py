@@ -11,11 +11,11 @@ import jax
 from lark import Lark
 
 from conf.config import ProfileNodeJS
-from puzzlejax.env import PJState
-from puzzlejax.preprocess_games import PJParseErrors, get_env_from_ps_file
+from env import PSState
+from puzzlejax.preprocess_games import PS_LARK_GRAMMAR_PATH, PSErrors, get_env_from_ps_file
 from profile_nodejs import compile_game
-from puzzlejax.utils import get_list_of_games_for_testing, init_ps_lark_parser, level_to_int_arr
-from validate_sols import JS_SOLS_DIR, multihot_level_from_js_state
+from utils import get_list_of_games_for_testing, init_ps_lark_parser, level_to_int_arr
+from validate_sols import JS_SOLS_DIR, multihot_level_from_js_state, JAX_VALIDATED_JS_SOLS_DIR
 
 
 @hydra.main(version_base="1.3", config_path='./conf', config_name='profile_nodejs_config')
@@ -32,14 +32,14 @@ def main(cfg: ProfileNodeJS):
     else:
         game_sols_dirs = [os.path.join(JS_SOLS_DIR, cfg.game)]
     # A dummy state, only the multihot_level is used.
-    state = PJState(
+    state = PSState(
         multihot_level=None,
         win=False, score=0, heuristic=0, restart=False, init_heuristic=0, prev_heuristic=0,
         step_i=0, rng=jax.random.PRNGKey(0),
     )
     for game_dir in game_sols_dirs:
         game_name = game_dir.split(os.path.sep)[-1]
-        level_sol_jsons = glob.glob(f"{game_dir}/*.json")
+        level_ints, level_sol_jsons = collect_best_solutions(game_dir)
         game_text = None
         env = None
         for level_sol_json in level_sol_jsons:
@@ -63,7 +63,7 @@ def main(cfg: ProfileNodeJS):
                     print(f"Error compiling game {game_name} level {level_i}: {e}")
                     continue
                 env, tree, success, err_msg = get_env_from_ps_file(parser, game_name)
-                if success != PJParseErrors.SUCCESS:
+                if success != PSErrors.SUCCESS:
                     print(f"Error parsing game {game_name} level {level_i}: {err_msg}")
                     break
             try:
@@ -81,7 +81,8 @@ def main(cfg: ProfileNodeJS):
             elif 'sol' in data:
                 actions = data['sol']    
 
-            frames = []
+            multihot_levels = []
+            target_frames = []
             level_state = solver.getState(engine)
             n_objs = len(list(data['objs']))
             if n_objs > 64:
@@ -89,25 +90,23 @@ def main(cfg: ProfileNodeJS):
             level_state = level_to_int_arr(level_state, n_objs).tolist()
             multihot_level = multihot_level_from_js_state(level_state, data['objs'])
             state = state.replace(multihot_level=multihot_level)
-            frames.append(env.render(state, cv2=False))
+            multihot_levels.append(multihot_level)
             for action in actions:
                 _, _, _, _, _, level_state, _, _ = solver.takeAction(engine, action)
                 level_state = level_to_int_arr(level_state, n_objs).tolist()
                 multihot_level = multihot_level_from_js_state(level_state, data['objs'])
                 state = state.replace(multihot_level=multihot_level)
-                frames.append(env.render(state, cv2=False))
 
-            if len(frames) == 0:
+            if len(multihot_levels) == 0:
                 print(f"No frames to render for level {level_i}")
                 continue
-            imageio.mimsave(level_sol_gif_path, frames, duration=1, loop=0)
 
             # jax_val_game_dir = os.path.join(JAX_VALIDATED_JS_SOLS_DIR, game_name)
             # os.makedirs(jax_val_game_dir, exist_ok=True)
             # level_sol_jax_val_path = os.path.join(jax_val_game_dir, f"level-{level_i}_js.gif")
             # shutil.copyfile(level_sol_gif_path, level_sol_jax_val_path)
             # print(f"Level {level_i} rendered and saved to {level_sol_gif_path}, and copied to {level_sol_jax_val_path}")
-            print(f"Level {level_i} rendered and saved to {level_sol_gif_path}")
+            print(f"Level {level_i} solution rendered and saved to {level_sol_gif_path}")
 
             
 
