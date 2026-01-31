@@ -248,7 +248,7 @@ def main(cfg: JaxValidationConfig, games: Optional[List[str]] = None):
             level_ints.append(level_i)
         level_sols = new_level_sols
 
-        if len(level_sols) == 0:
+        if len(level_sols) == 0 and not cfg.aggregate:
             print(f"No js solutions found for {game_name}")
             continue
 
@@ -262,7 +262,8 @@ def main(cfg: JaxValidationConfig, games: Optional[List[str]] = None):
         game_compile_error = False
         env = None
 
-        game_text = compile_game_js(parser, engine, game_name, level_i=0)
+        if not cfg.aggregate:
+            game_text = compile_game_js(parser, engine, game_name, level_i=0)
 
         os.makedirs(jax_sol_dir, exist_ok=True)
         for level_i, level_sol_path in zip(level_ints, level_sols):
