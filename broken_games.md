@@ -12,3 +12,14 @@ Problem: In JAX, only one of the edges underneath the crate ends up having force
 ## ponies_jumping_synchronously_fixed
 
 Some problems with score/win condition, as yet undetermined.
+
+## Pipe_Navigation
+
+???
+
+# Fixed Games
+
+## Sponge_Game
+
+~~When the player slides over water and hits the sponge, they should stop (in JS) but in JAX, they also push the sponge.~~
+Solution: the issue was that we weren't removing forces from the multihot level between repeated calls to `apply_turn`.

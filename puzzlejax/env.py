@@ -2566,6 +2566,7 @@ class PuzzleJaxEnv:
                 turn_applied = jnp.any(lvl != init_lvl)
                 win_turn, score, heuristic = self.check_win(lvl[0])
                 win = win | win_turn
+                lvl = lvl.at[:, self.n_objs:].set(0)  # Remove leftover forces
 
                 return lvl, turn_applied, turn_app_i, cancelled, restart, block_again, win, rng
 
