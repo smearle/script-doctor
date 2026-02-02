@@ -188,10 +188,9 @@ def main(cfg: JaxValidationConfig, games: Optional[List[str]] = None):
             print(f"Skipping {game_name} because it is in the skip list")
             continue
         jax_sol_dir = os.path.join(JAX_VALIDATED_JS_SOLS_DIR, game)
-        compile_log_path = os.path.join(jax_sol_dir, 'compile_err.txt')
         if cfg.overwrite:
-            if os.path.exists(compile_log_path):
-                os.remove(compile_log_path)
+            shutil.rmtree(jax_sol_dir, ignore_errors=True)
+        compile_log_path = os.path.join(jax_sol_dir, 'compile_err.txt')
         if os.path.exists(compile_log_path) and not cfg.overwrite:
             if cfg.aggregate:
                 with open(compile_log_path, 'r') as f:
@@ -266,6 +265,7 @@ def main(cfg: JaxValidationConfig, games: Optional[List[str]] = None):
             game_text = compile_game_js(parser, engine, game_name, level_i=0)
 
         os.makedirs(jax_sol_dir, exist_ok=True)
+        print(f"Saving validation results to {jax_sol_dir}")
         for level_i, level_sol_path in zip(level_ints, level_sols):
         
             # if cfg.aggregate:
@@ -518,10 +518,10 @@ def main(cfg: JaxValidationConfig, games: Optional[List[str]] = None):
 
             # Save the frames
             # print(f"Saving frames for level {level_i}")
-            frames_dir = os.path.join(jax_sol_dir, 'frames')
-            os.makedirs(frames_dir, exist_ok=True)
-            for i, js_frame in enumerate(frames):
-                imageio.imsave(os.path.join(frames_dir, f'level-{level_i}_sol_{i:03d}.png'), js_frame)
+            # frames_dir = os.path.join(jax_sol_dir, 'frames')
+            # os.makedirs(frames_dir, exist_ok=True)
+            # for i, js_frame in enumerate(frames):
+            #     imageio.imsave(os.path.join(frames_dir, f'level-{level_i}_sol_{i:03d}.png'), js_frame)
 
             # Make a gif out of the frames
             print(f"Making gif for level {level_i}")

@@ -2552,6 +2552,8 @@ class PuzzleJaxEnv:
                 ### COMPILE VS RUNTIME ###
 
                 turn_applied = jnp.any(lvl != init_lvl)
+                win_turn, score, heuristic = self.check_win(lvl[0])
+                win = win | win_turn
 
                 return lvl, turn_applied, turn_app_i, cancelled, restart, block_again, win, rng
 
@@ -2562,12 +2564,12 @@ class PuzzleJaxEnv:
 
             carry = (lvl, turn_applied, turn_app_i, cancelled, restart, turn_again, win, rng)
             if not self.jit:
-                while (turn_again and turn_applied):
+                while (turn_again and turn_applied and not win):
                     carry = apply_turn(carry)
                     lvl, turn_applied, turn_app_i, cancelled, restart, turn_again, win, rng = carry
             else:
                 carry = jax.lax.while_loop(
-                    cond_fun=lambda x: ~x[3] & ~x[4] & (x[5] & x[1]),
+                    cond_fun=lambda x: ~x[3] & ~x[4] & (x[5] & x[1]) & (~x[6]),
                     body_fun=apply_turn,
                     init_val=carry,
                 )
