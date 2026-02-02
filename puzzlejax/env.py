@@ -982,7 +982,7 @@ class PuzzleJaxEnv:
             )
         else:
             if should_apply_force:
-                force_map = place_force(force_map, action)
+                force_map = place_force(jnp.array(force_map), action)
         # remove the dummy collision layer
         force_map = force_map[N_FORCES:]
 
@@ -1512,8 +1512,7 @@ class PuzzleJaxEnv:
                         obj = self.char_to_obj[obj]
                     obj_names.append(obj)
                     # TODO: we can remove these functions to individual objects and apply the more abstract meta-tile versions instead
-                    if len(obj_idxs) == 1:
-                    # if obj in obj_to_idxs:
+                    if (len(obj_idxs) == 1) and (obj in self.objs_to_idxs):
                         obj_idx = self.objs_to_idxs[obj]
                         if no:
                             fns.append(partial(detect_no_obj_in_cell, obj_idx=obj_idx))
