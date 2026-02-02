@@ -30,6 +30,10 @@ PRINT_SCORE = True
 # DEBUG = True
 
 
+class InvalidObjectError(Exception):
+    pass
+
+
 # @partial(jax.jit, static_argnums=(0))
 def disambiguate_meta(obj, cell_meta_objs, kernel_meta_objs, pattern_meta_objs, obj_to_idxs):
     """In the right pattern of rules, we may have a meta-object (mapping to a corresponding meta-object in the 
@@ -1496,7 +1500,12 @@ class PuzzleJaxEnv:
                     horizontal = True
                 else:
                     sub_objs = expand_meta_objs([obj], self.meta_objs, self.char_to_obj)
-                    obj_idxs = np.array([self.objs_to_idxs[so] for so in sub_objs])
+                    obj_idxs = []
+                    for so in sub_objs:
+                        if so not in self.objs_to_idxs:
+                            raise InvalidObjectError(f"Name {so}, referred to in a rule, does not exist.")
+                        obj_idxs.append(self.objs_to_idxs[so])
+                    obj_idxs = np.array(obj_idxs)
                     obj_vec = np.zeros((self.n_objs + len(self.collision_layers) * N_FORCES + 1), dtype=bool)
                     obj_vec[obj_idxs] = 1
                     if obj in self.char_to_obj:
@@ -2421,7 +2430,11 @@ class PuzzleJaxEnv:
             rule_grps = []
             last_subrule_fns_were_late = None
             for rule in rule_block.rules:
-                sub_rule_fns = self.gen_subrules_meta(rule, rule_name=str(rule), lvl_shape=lvl_shape)
+                try:
+                    sub_rule_fns = self.gen_subrules_meta(rule, rule_name=str(rule), lvl_shape=lvl_shape)
+                except InvalidObjectError as e:
+                    print(e)
+                    continue
                 if '+' in rule.prefixes:
                     # I'm not actually clear on how PS handles these groups combining late/non-late rules, so have just
                     # taken a best guess here (which seems to agree with game `Teh_Interwebs`).
