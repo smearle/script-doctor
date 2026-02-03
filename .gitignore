@@ -38,3 +38,4 @@ sols
 vids
 wandb
 *.egg-info
+build
