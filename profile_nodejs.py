@@ -19,7 +19,6 @@ import submitit
 
 from conf.config import ProfileNodeJS
 from globals import STANDALONE_NODEJS_RESULTS_PATH, JS_SOLS_DIR
-from preprocess_games import SIMPLIFIED_GAMES_DIR, get_tree_from_txt
 from standalone.utils import compile_game
 from puzzlejax.utils import get_list_of_games_for_testing, level_to_int_arr, init_ps_lark_parser
 
@@ -150,7 +149,7 @@ def main(cfg: ProfileNodeJS, games: Optional[List[str]] = None):
                 level_js_sol_path = os.path.join(
                     game_js_sols_dir, f'{algo_prefix}{cfg.n_steps}-steps_level-{level_i}.json')
                 print(f'Level: {level_i}')
-                if cfg.for_validation or cfg.for_solution and not cfg.overwrite and os.path.isfile(level_js_sol_path):
+                if (cfg.for_validation or cfg.for_solution) and not cfg.overwrite and os.path.isfile(level_js_sol_path):
                     print(f'Already solved (for validation) {game} level {level_i}.')
                     continue
                 if not cfg.for_validation and not cfg.for_solution and not cfg.overwrite and str(level_i) in results[run_name][game]:

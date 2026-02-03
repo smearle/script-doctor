@@ -30,6 +30,10 @@ PRINT_SCORE = True
 # DEBUG = True
 
 
+class InvalidObjectError(Exception):
+    pass
+
+
 # @partial(jax.jit, static_argnums=(0))
 def disambiguate_meta(obj, cell_meta_objs, kernel_meta_objs, pattern_meta_objs, obj_to_idxs):
     """In the right pattern of rules, we may have a meta-object (mapping to a corresponding meta-object in the 
@@ -982,7 +986,7 @@ class PuzzleJaxEnv:
             )
         else:
             if should_apply_force:
-                force_map = place_force(force_map, action)
+                force_map = place_force(jnp.array(force_map), action)
         # remove the dummy collision layer
         force_map = force_map[N_FORCES:]
 
@@ -1500,15 +1504,19 @@ class PuzzleJaxEnv:
                     horizontal = True
                 else:
                     sub_objs = expand_meta_objs([obj], self.meta_objs, self.char_to_obj)
-                    obj_idxs = np.array([self.objs_to_idxs[so] for so in sub_objs])
+                    obj_idxs = []
+                    for so in sub_objs:
+                        if so not in self.objs_to_idxs:
+                            raise InvalidObjectError(f"Name {so}, referred to in a rule, does not exist.")
+                        obj_idxs.append(self.objs_to_idxs[so])
+                    obj_idxs = np.array(obj_idxs)
                     obj_vec = np.zeros((self.n_objs + len(self.collision_layers) * N_FORCES + 1), dtype=bool)
                     obj_vec[obj_idxs] = 1
                     if obj in self.char_to_obj:
                         obj = self.char_to_obj[obj]
                     obj_names.append(obj)
                     # TODO: we can remove these functions to individual objects and apply the more abstract meta-tile versions instead
-                    if len(obj_idxs) == 1:
-                    # if obj in obj_to_idxs:
+                    if (len(obj_idxs) == 1) and (obj in self.objs_to_idxs):
                         obj_idx = self.objs_to_idxs[obj]
                         if no:
                             fns.append(partial(detect_no_obj_in_cell, obj_idx=obj_idx))
@@ -2425,7 +2433,11 @@ class PuzzleJaxEnv:
             rule_grps = []
             last_subrule_fns_were_late = None
             for rule in rule_block.rules:
-                sub_rule_fns = self.gen_subrules_meta(rule, rule_name=str(rule), lvl_shape=lvl_shape)
+                try:
+                    sub_rule_fns = self.gen_subrules_meta(rule, rule_name=str(rule), lvl_shape=lvl_shape)
+                except InvalidObjectError as e:
+                    print(e)
+                    continue
                 if '+' in rule.prefixes:
                     # I'm not actually clear on how PS handles these groups combining late/non-late rules, so have just
                     # taken a best guess here (which seems to agree with game `Teh_Interwebs`).
@@ -2556,6 +2568,9 @@ class PuzzleJaxEnv:
                 ### COMPILE VS RUNTIME ###
 
                 turn_applied = jnp.any(lvl != init_lvl)
+                win_turn, score, heuristic = self.check_win(lvl[0])
+                win = win | win_turn
+                lvl = lvl.at[:, self.n_objs:].set(0)  # Remove leftover forces
 
                 return lvl, turn_applied, turn_app_i, cancelled, restart, block_again, win, rng
 
@@ -2566,12 +2581,12 @@ class PuzzleJaxEnv:
 
             carry = (lvl, turn_applied, turn_app_i, cancelled, restart, turn_again, win, rng)
             if not self.jit:
-                while (turn_again and turn_applied):
+                while (turn_again and turn_applied and not win):
                     carry = apply_turn(carry)
                     lvl, turn_applied, turn_app_i, cancelled, restart, turn_again, win, rng = carry
             else:
                 carry = jax.lax.while_loop(
-                    cond_fun=lambda x: ~x[3] & ~x[4] & (x[5] & x[1]),
+                    cond_fun=lambda x: ~x[3] & ~x[4] & (x[5] & x[1]) & (~x[6]),
                     body_fun=apply_turn,
                     init_val=carry,
                 )

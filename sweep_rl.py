@@ -16,7 +16,7 @@ import wandb
 
 from conf.config import SweepRLConfig, TrainConfig, EnjoyConfig
 from puzzlejax.env import PJParams
-from preprocess_games import get_env_from_ps_file
+from puzzlejax.preprocess_games import get_env_from_ps_file
 from train import main as main_train
 from enjoy import main_enjoy
 from puzzlejax.utils import get_list_of_games_for_testing, get_n_levels_per_game, init_ps_lark_parser

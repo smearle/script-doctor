@@ -1,33 +1,66 @@
 import glob
 import json
+import math
 import os
 import shutil
 import traceback
+from typing import List, Optional
 
 import hydra
 import imageio
 from javascript import require
 import jax
 from lark import Lark
+import submitit
 
 from conf.config import ProfileNodeJS
 from puzzlejax.env import PJState
-from preprocess_games import PS_LARK_GRAMMAR_PATH, PSErrors, get_env_from_ps_file
+from puzzlejax.preprocess_games import PJParseErrors, get_env_from_ps_file
 from profile_nodejs import compile_game
 from puzzlejax.utils import get_list_of_games_for_testing, init_ps_lark_parser, level_to_int_arr
-from validate_sols import JS_SOLS_DIR, multihot_level_from_js_state, JAX_VALIDATED_JS_SOLS_DIR
+from validate_sols import JS_SOLS_DIR, multihot_level_from_js_state
 
 
 @hydra.main(version_base="1.3", config_path='./conf', config_name='profile_nodejs_config')
-def main(cfg: ProfileNodeJS):
+def main_launch(cfg: ProfileNodeJS):
+    if cfg.slurm:
+        games = get_list_of_games_for_testing(all_games=cfg.all_games, random_order=cfg.random_order)
+        # Get sub-lists of games to distribute across nodes.
+        n_jobs = math.ceil(len(games) / cfg.n_games_per_job)
+        game_sublists = [games[i::n_jobs] for i in range(n_jobs)]
+        assert sum(len(g) for g in game_sublists) == len(games), "Not all games are assigned to a job."
+        executor = submitit.AutoExecutor(folder=os.path.join("submitit_logs", "render_js_sols"))
+        executor.update_parameters(
+            slurm_job_name="render_js_sols",
+            mem_gb=30,
+            tasks_per_node=1,
+            cpus_per_task=1,
+            timeout_min=180,
+            slurm_array_parallelism=n_jobs,
+            slurm_account='pr_174_tandon_advanced',
+            slurm_setup=["export JAX_PLATFORMS=cpu"],
+        )
+        executor.map_array(main, [cfg] * n_jobs, game_sublists)
+    else:
+        main(cfg)
+
+
+def main(cfg: ProfileNodeJS, games: Optional[List[str]] = None):
     parser = init_ps_lark_parser()
     engine = require('./standalone/puzzlescript/engine.js')
     solver = require('./standalone/puzzlescript/solver.js')
-    if cfg.game is None:
+    if cfg.slurm:
+        os.environ["CUDA_VISIBLE_DEVICES"] = ""
+        os.environ["JAX_PLATFORMS"] = "cpu"
+    if games is not None:
+        game_sols_dirs = [os.path.join(JS_SOLS_DIR, game) for game in games]
+    elif cfg.game is None:
         if cfg.all_games:
             game_sols_dirs = glob.glob(f"{JS_SOLS_DIR}/*")
         else:
-            game_sols_dirs = get_list_of_games_for_testing(all_games=cfg.all_games)
+            game_sols_dirs = get_list_of_games_for_testing(
+                all_games=cfg.all_games, random_order=cfg.random_order
+            )
             game_sols_dirs = [os.path.join(JS_SOLS_DIR, game) for game in game_sols_dirs]
     else:
         game_sols_dirs = [os.path.join(JS_SOLS_DIR, cfg.game)]
@@ -63,7 +96,7 @@ def main(cfg: ProfileNodeJS):
                     print(f"Error compiling game {game_name} level {level_i}: {e}")
                     continue
                 env, tree, success, err_msg = get_env_from_ps_file(parser, game_name)
-                if success != PSErrors.SUCCESS:
+                if success != PJParseErrors.SUCCESS:
                     print(f"Error parsing game {game_name} level {level_i}: {err_msg}")
                     break
             try:
@@ -112,6 +145,6 @@ def main(cfg: ProfileNodeJS):
             
 
 if __name__ == '__main__':
-    main()
+    main_launch()
 
     

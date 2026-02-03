@@ -9,14 +9,9 @@ from typing import List, Dict, Optional, Any, Set, Tuple
 import copy
 import random
 
-import cv2
 from einops import rearrange
-import flax
-import jax
-import jax.numpy as jnp
 from lark import Token, Transformer, Tree
 import numpy as np
-from PIL import Image
 
 from puzzlejax.ps_game import LegendEntry, PSGameTree, PSObject, Prelude, Rule, RuleBlock, WinCondition
 

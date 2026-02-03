@@ -9,7 +9,7 @@ import jax
 from lark import Lark
 from env_wrappers import RepresentationWrapper
 from puzzlejax.env import PJParams
-from preprocess_games import PS_LARK_GRAMMAR_PATH, get_tree_from_txt
+from puzzlejax.preprocess_games import LARK_SYNTAX_PATH, get_tree_from_txt
 from LLM_agent import LLMGameAgent
 from globals import PRIORITY_GAMES
 
@@ -335,7 +335,7 @@ def collect_game_info(game_name, start_level):
 
     # Initialize environment parser
     try:
-        with open(PS_LARK_GRAMMAR_PATH, 'r', encoding='utf-8') as f:
+        with open(LARK_SYNTAX_PATH, 'r', encoding='utf-8') as f:
             puzzlescript_grammar = f.read()
         grammar_parser = Lark(puzzlescript_grammar, start="ps_game", maybe_placeholders=False)
         tree, success, err_msg = get_tree_from_txt(grammar_parser, game_name, test_env_init=False)

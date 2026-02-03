@@ -21,7 +21,7 @@ from lark import Lark
 from globals import LARK_SYNTAX_PATH
 from env_wrappers import RepresentationWrapper
 from puzzlejax.env import PJParams
-from preprocess_games import get_tree_from_txt
+from puzzlejax.preprocess_games import get_tree_from_txt
 
 CUSTOM_GAMES_DIR = "data/scraped_games"
 

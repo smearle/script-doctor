@@ -324,8 +324,24 @@ function getScore(engine) {
 						score += 1.0; // penalization for each case
 					}
 				}
+			} else if (wincondition[0] == 0) {
+				// "some" conditions
+				var globalMinDistance = maxDistance;
+				for (var i = 0; i < engine.getLevel().n_tiles; i++) {
+					if (!filter1.bitsClearInArray(engine.getLevel().getCellInto(i, engine.get_o10()).data)) {
+						for (var j = 0; j < engine.getLevel().n_tiles; j++) {
+							if (!filter2.bitsClearInArray(engine.getLevel().getCellInto(j, engine.get_o10()).data)) {
+								var dist = distanceTable[i][j];
+								if (dist < globalMinDistance) {
+									globalMinDistance = dist;
+								}
+							}
+						}
+					}
+				}
+				score += globalMinDistance;
 			} else {
-				// "some" or "all" conditions
+				// "all" conditions
 				for (var i = 0; i < engine.getLevel().n_tiles; i++) {
 					if (!filter1.bitsClearInArray(engine.getLevel().getCellInto(i, engine.get_o10()).data)) {
 						var minDistance = maxDistance;
@@ -366,8 +382,25 @@ function getScoreNormalized(engine) {
 					}
 					
 				}
+			} else if (wincondition[0] == 0) {
+				// "some" conditions
+				var globalMinDistance = maxDistance;
+				for (var i = 0; i < engine.getLevel().n_tiles; i++) {
+					if (!filter1.bitsClearInArray(engine.getLevel().getCellInto(i, engine.get_o10()).data)) {
+						for (var j = 0; j < engine.getLevel().n_tiles; j++) {
+							if (!filter2.bitsClearInArray(engine.getLevel().getCellInto(j, engine.get_o10()).data)) {
+								var dist = distanceTable[i][j];
+								if (dist < globalMinDistance) {
+									globalMinDistance = dist;
+								}
+							}
+						}
+					}
+				}
+				score += globalMinDistance;
+				normal_value += maxDistance;
 			} else {
-				// "some" or "all" conditions
+				// "all" conditions
 				for (var i = 0; i < engine.getLevel().n_tiles; i++) {
 					if (!filter1.bitsClearInArray(engine.getLevel().getCellInto(i, engine.get_o10()).data)) {
 						var minDistance = maxDistance;
