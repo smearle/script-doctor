@@ -17,7 +17,7 @@ import numpy as np
 
 from env_render import render_solid_color, render_sprite
 from puzzlejax.env_utils import N_MOVEMENTS, multihot_to_desc, N_FORCES, ACTION
-from jax_utils import stack_leaves
+from puzzlejax.jax_utils import stack_leaves
 from puzzlejax.ps_game import LegendEntry, PSGameTree, PSObject, Rule, WinCondition
 from gymnax.environments.spaces import Discrete, Box
 
@@ -779,11 +779,12 @@ class PuzzleJaxEnv:
                 im = render_solid_color(obj.colors[0])
 
             # Size the image up a bunch
-            im_s = PIL.Image.fromarray(im)
-            im_s = im_s.resize((50, 50), PIL.Image.NEAREST)
-            im = np.array(im_s)
+            #im_s = PIL.Image.fromarray(im)
+            #im_s = im_s.resize((50, 50), PIL.Image.NEAREST)
+            #im = np.array(im_s)
 
             if DEBUG:
+                im_s = PIL.Image.fromarray(im)
                 temp_dir = 'scratch'
                 os.makedirs(temp_dir, exist_ok=True)
                 sprite_path = os.path.join(temp_dir, f'sprite_{obj_key}.png')
@@ -876,16 +877,15 @@ class PuzzleJaxEnv:
         multihot_level = multihot_level.astype(bool)
         return multihot_level
 
-    # @partial(jax.jit, static_argnums=(0, 2))
-    def render(self, state: PJState, cv2=True):
+    def render(self, state: PJState, scale : int = 50, cv2=True):
         lvl = state.multihot_level
         level_height, level_width = lvl.shape[1:]
         sprite_height, sprite_width = self.sprite_stack.shape[1:3]
-        im = np.zeros((level_height * sprite_height, level_width * sprite_width, 4), dtype=np.uint8)
+        im = jnp.zeros((level_height * sprite_height, level_width * sprite_width, 4), dtype=jnp.uint8)
         im_lyrs = []
         for i, sprite in enumerate(self.sprite_stack):
-            sprite_stack_i = np.stack(
-                (np.zeros_like(sprite), sprite)
+            sprite_stack_i = jnp.stack(
+                (jnp.zeros_like(sprite), sprite)
             )
             lyr = lvl[i]
             im_lyr = jnp.array(sprite_stack_i)[lyr.astype(int)]
@@ -896,7 +896,11 @@ class PuzzleJaxEnv:
         if cv2:
             # swap the red and blue channels
             im = im[:, :, [2, 1, 0, 3]]
-
+        if scale != 1:
+            im = jax.image.resize(im, (level_height * sprite_height * scale, level_width * sprite_width * scale, 4), method='nearest')
+            # im_s = PIL.Image.fromarray(im)
+            # im_s = im_s.resize((scale, scale), PIL.Image.NEAREST)
+            # im = np.array(im_s)
         return im
 
     def reset(self, rng, params: PJParams) -> Tuple[chex.Array, PJState]:
