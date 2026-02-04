@@ -2210,10 +2210,12 @@ class PuzzleJaxEnv:
 
             def detect_pattern(lvl):
                 kernel_activations: List[chex.Array] = []
+                cell_activations: List[chex.Array] = []
                 cell_detect_outs: List[CellFnReturn] = []
                 kernel_detect_outs: List[KernelFnReturn] = []
                 for kernel_detection_fn in kernel_detection_fns:
-                    kernel_activations_i, cell_detect_outs_i, kernel_detect_out_i = kernel_detection_fn(lvl)
+                    kernel_activations_i, cell_activations_i, cell_detect_outs_i, kernel_detect_out_i = kernel_detection_fn(lvl)
+                    cell_activations.append(cell_activations_i)
                     kernel_activations.append(kernel_activations_i)
                     cell_detect_outs.append(cell_detect_outs_i)
                     kernel_detect_outs.append(kernel_detect_out_i)
@@ -2605,11 +2607,13 @@ class PuzzleJaxEnv:
             subkernel_detection_fns: List of functions that detect the subkernels in the line kernel. These need to be detected in sequence, along some line.
         """
         subkernel_activations = []
+        cell_activations = []
         subkernel_cell_detect_outs = []
         subkernel_detect_outs = []
         for subkernel_detection_fn in subkernel_detection_fns:
-            subkernel_activations_i, cell_detect_outs_i, subkernel_detect_out_i = subkernel_detection_fn(lvl)
+            subkernel_activations_i, cell_activations_i, cell_detect_outs_i, subkernel_detect_out_i = subkernel_detection_fn(lvl)
             subkernel_activations.append(subkernel_activations_i)
+            cell_activations.append(cell_activations_i)
             subkernel_cell_detect_outs.append(cell_detect_outs_i)
             subkernel_detect_outs.append(subkernel_detect_out_i)
 
@@ -2619,6 +2623,7 @@ class PuzzleJaxEnv:
             subkernel_activations = [jnp.pad(k, ((0, max_shape[0] - k.shape[0]), (0, max_shape[1] - k.shape[1]))) 
                                      for k in subkernel_activations]
         subkernel_activations = jnp.stack(subkernel_activations, axis=0)
+        cell_activations = jnp.stack(cell_activations, axis=0)
 
         if lp_is_vertical:
             dim = 2
@@ -2630,24 +2635,35 @@ class PuzzleJaxEnv:
 
         # (n_possible_lines, n_subkernels, height, width)
         per_line_subkernel_activations = jnp.zeros((one_hot_masks.shape[0], *subkernel_activations.shape))
+        per_line_cell_activations = jnp.zeros_like(per_line_subkernel_activations)
 
         if not self.jit:
             for i in range(subkernel_activations.shape[dim]):
                 if dim == 1:
-                    line_activations = subkernel_activations[:, i]
+                    kernel_line_activations = subkernel_activations[:, i]
                     per_line_subkernel_activations = per_line_subkernel_activations.at[:, :, i].set(
-                        mask_to_valid_sequences(line_activations, jit=self.jit, one_hot_masks=one_hot_masks))
+                        mask_to_valid_sequences(kernel_line_activations, jit=self.jit, one_hot_masks=one_hot_masks))
+                    cell_line_activations = cell_activations[:, i]
+                    per_line_cell_activations = per_line_cell_activations.at[:, :, i].set(
+                        mask_to_valid_sequences(cell_line_activations, jit=self.jit, one_hot_masks=one_hot_masks))
                 elif dim == 2:
-                    line_activations = subkernel_activations[:, :, i]
+                    kernel_line_activations = subkernel_activations[:, :, i]
                     per_line_subkernel_activations = per_line_subkernel_activations.at[:, :, :, i].set(
-                        mask_to_valid_sequences(line_activations, jit=self.jit, one_hot_masks=one_hot_masks))
+                        mask_to_valid_sequences(kernel_line_activations, jit=self.jit, one_hot_masks=one_hot_masks))
+                    cell_line_activations = cell_activations[:, :, i]
+                    per_line_cell_activations = per_line_cell_activations.at[:, :, :, i].set(
+                        mask_to_valid_sequences(cell_line_activations, jit=self.jit, one_hot_masks=one_hot_masks))
         else:
             per_line_subkernel_activations = jax.vmap(mask_to_valid_sequences, in_axes=(dim, None, None))(
                 subkernel_activations, one_hot_masks, True)
+            per_line_cell_activations = jax.vmap(mask_to_valid_sequences, in_axes=(dim, None, None))(
+                cell_activations, one_hot_masks, True)
             if dim == 1:
                 per_line_subkernel_activations = jnp.transpose(per_line_subkernel_activations, (1, 2, 0, 3))
+                per_line_cell_activations = jnp.transpose(per_line_cell_activations, (1, 2, 0, 3))
             elif dim == 2:
                 per_line_subkernel_activations = jnp.transpose(per_line_subkernel_activations, (1, 2, 3, 0))
+                per_line_cell_activations = jnp.transpose(per_line_cell_activations, (1, 2, 3, 0))
 
         detected_kernel_meta_objs = {}
         detected_kernel_moving_idx = None
@@ -2656,10 +2672,16 @@ class PuzzleJaxEnv:
             # Each kernel has detected meta-objects at different coordinates on the board.
             # To get pattern-wide meta-objs, take any detected meta-object index that is not -1 (indicating no meta-object was detected) 
             # (We can take the max here because we assume that if a meta-tile in the right pattern is not specified in the corresponding left kernel, it is only specified once in the rest of the left pattern)
-            # FIXME: We should be stacking then maxing these too. Currently we might overwrite a meta-obj dict entry
-            # with one from a kernel where the meta-obj is not detected? (Wait, is this ever a thing?)
-            boardwide_kernel_meta_objs = {k: v.max() for k, v in subkernel_detect_out.detected_meta_objs.items()}
-            detected_kernel_meta_objs.update(boardwide_kernel_meta_objs)
+            for k in subkernel_detect_out.detected_meta_objs:
+                subkernel_detected_meta_objs = subkernel_detect_out.detected_meta_objs[k]
+                subkernel_detected_meta_objs = jnp.pad(subkernel_detected_meta_objs,
+                                                       ((0, max_shape[0] - subkernel_detected_meta_objs.shape[0]),
+                                                        (0, max_shape[1] - subkernel_detected_meta_objs.shape[1])))
+                if k in detected_kernel_meta_objs:
+                    detected_kernel_meta_objs[k] = jnp.maximum(
+                        detected_kernel_meta_objs[k], subkernel_detected_meta_objs)
+                else:
+                    detected_kernel_meta_objs[k] = subkernel_detected_meta_objs
 
             # Propagate the detected moving index across kernels.
             detected_kernel_moving_idxs = [
@@ -2682,6 +2704,14 @@ class PuzzleJaxEnv:
 
                 detected_kernel_moving_idxs = jnp.stack(detected_kernel_moving_idxs, axis=0)
                 detected_kernel_moving_idx = jnp.max(detected_kernel_moving_idxs, axis=0)
+
+        kernel_activations = per_line_subkernel_activations.any(axis=(0,1))
+        cell_activations = per_line_cell_activations.any(axis=(0,1))
+
+        # Don't register meta-objects where the kernel is not detected.
+        # FIXME: Won't this break if the kernel is not 1x1 shape and we detect something in a cell beyond the first?
+        for k in detected_kernel_meta_objs:
+            detected_kernel_meta_objs[k] = jnp.where(cell_activations, detected_kernel_meta_objs[k], -1)
         
         kernel_detect_out = LineKernelFnReturn(
             per_line_subkernel_activations=per_line_subkernel_activations,
@@ -2689,9 +2719,8 @@ class PuzzleJaxEnv:
             detected_meta_objs=detected_kernel_meta_objs,
             detected_moving_idx=detected_kernel_moving_idx,
         )
-        kernel_activations = per_line_subkernel_activations.any(axis=(0,1))
 
-        return kernel_activations, subkernel_cell_detect_outs, kernel_detect_out
+        return kernel_activations, cell_activations, subkernel_cell_detect_outs, kernel_detect_out
 
 
     def project_line_kernel(self, rng, lvl, kernel_activations, subkernel_cell_detect_outs, kernel_detect_out: LineKernelFnReturn, pattern_detect_out,
@@ -2808,7 +2837,39 @@ class PuzzleJaxEnv:
         )
         if kernel_activations.shape[0] == 0:
             kernel_activations = jnp.pad(kernel_activations, ((0, 1), (0, 0)), constant_values=False)
-        return kernel_activations, cell_detect_outs, kernel_detect_out
+
+        # Mark all detected cells
+        # TODO: There should be a better way of doing this, where we get this info first-hand from the cell detection functions.
+        cell_activations = jnp.pad(
+            kernel_activations,
+            ((0, in_patch_shape[0] - 1), (0, in_patch_shape[1] - 1)),
+            constant_values=False,
+        )
+
+        H, W = in_patch_shape
+        x = cell_activations.astype(jnp.int32)[None, None, :, :]  # NCHW
+
+        if lp_is_vertical:
+            k = jnp.ones((1, 1, H, 1), dtype=jnp.int32)            # (O,I,KH,KW)
+            y = jax.lax.conv_general_dilated(
+                x, k,
+                window_strides=(1, 1),
+                padding=[(H - 1, 0), (0, 0)],                      # “flood downward”
+                dimension_numbers=("NCHW", "OIHW", "NCHW"),
+            )
+            cell_activations = (y[0, 0] > 0)
+
+        if lp_is_horizontal:
+            k = jnp.ones((1, 1, 1, W), dtype=jnp.int32)
+            y = jax.lax.conv_general_dilated(
+                x, k,
+                window_strides=(1, 1),
+                padding=[(0, 0), (W - 1, 0)],                      # “flood rightward”
+                dimension_numbers=("NCHW", "OIHW", "NCHW"),
+            )
+            cell_activations = (y[0, 0] > 0)
+
+        return kernel_activations, cell_activations, cell_detect_outs, kernel_detect_out
 
 
     def project_kernel(self, rng, lvl, kernel_activations, 
