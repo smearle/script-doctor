@@ -2274,45 +2274,141 @@ class PuzzleJaxEnv:
             def apply_pattern(rng, lvl):
                 kernel_activations, cell_detect_outs, kernel_detect_outs, pattern_detect_out = detect_pattern(lvl)
                 pattern_detected = jnp.all(jnp.sum(kernel_activations, axis=(1,2)) > 0)
+                init_lvl = lvl
 
-                def select_n_activations(kernel_activation, n):
-                    n = jnp.maximum(n, 0).astype(jnp.int32)
-                    flat = kernel_activation.reshape(-1)
-                    rank = jnp.cumsum(flat.astype(jnp.int32))
-                    keep = flat & (rank <= n)
-                    return keep.reshape(kernel_activation.shape)
-
-                # In the case of multi-kernel rules, apply as many kernel transformations in parallel as is appropriate.
-                if kernel_activations.shape[0] > 1:
-                    max_n_activations = jnp.min(jnp.sum(kernel_activations, axis=(1,2)))
-                    kernel_activations = jax.vmap(select_n_activations, in_axes=(0, None))(
-                        kernel_activations, max_n_activations
-                    )
-
-                def project_kernels(rng, lvl, kernel_activations, kernel_detect_outs):
+                def project_kernels(rng, lvl, kernel_activations, cell_detect_outs_i, kernel_detect_outs_i, pattern_detect_out_i):
                     for i, kernel_projection_fn in enumerate(kernel_projection_fns):
                         if DEBUG:
                             jax.debug.print('        projecting kernel {i}', i=i)
                         rng, lvl = kernel_projection_fn(
-                            rng, lvl, kernel_activations[i], cell_detect_outs[i], kernel_detect_outs[i], pattern_detect_out)
+                            rng, lvl, kernel_activations[i], cell_detect_outs_i[i], kernel_detect_outs_i[i], pattern_detect_out_i)
                     return rng, lvl
+
+                multi_kernel_projected = False
+
+                # In the case of multi-kernel rules, apply each tuple of matches sequentially, re-checking after each.
+                if kernel_activations.shape[0] > 1:
+                    if self.jit:
+                        max_coords = kernel_activations.shape[1] * kernel_activations.shape[2]
+                        coord_lists = jnp.stack(
+                            [
+                                jnp.argwhere(kernel_activations[i], size=max_coords, fill_value=-1)
+                                for i in range(kernel_activations.shape[0])
+                            ],
+                            axis=0,
+                        )  # (K, max_coords, 2)
+
+                        tuple_idx_grid = jnp.stack(
+                            jnp.meshgrid(
+                                *([jnp.arange(max_coords)] * kernel_activations.shape[0]),
+                                indexing='ij'
+                            ),
+                            axis=-1,
+                        )
+                        tuple_idxs = tuple_idx_grid.reshape(-1, kernel_activations.shape[0])  # (T, K)
+
+                        def idxs_to_coords(idxs):
+                            return coord_lists[jnp.arange(coord_lists.shape[0]), idxs]
+
+                        tuple_coords = jax.vmap(idxs_to_coords)(tuple_idxs)  # (T, K, 2)
+                        invalid = jnp.any(tuple_coords == -1, axis=(1, 2))
+                        tuple_coords = jnp.where(
+                            invalid[:, None, None],
+                            -jnp.ones_like(tuple_coords),
+                            tuple_coords,
+                        )
+
+                        def loop_cond(carry):
+                            _, _, i = carry
+                            return jnp.all(tuple_coords[i] != -1)
+
+                        def loop_body(carry):
+                            rng, lvl, i = carry
+                            kernel_activations_i, cell_detect_outs_i, kernel_detect_outs_i, pattern_detect_out_i = detect_pattern(lvl)
+                            tuple_xy = tuple_coords[i]
+
+                            def is_valid_for_kernel(k):
+                                xy = tuple_xy[k]
+                                return kernel_activations_i[k, xy[0], xy[1]]
+
+                            valid = jnp.all(
+                                jax.vmap(is_valid_for_kernel)(jnp.arange(kernel_activations_i.shape[0]))
+                            )
+
+                            def apply_tuple(args):
+                                rng, lvl = args
+
+                                def one_hot_for_kernel(k):
+                                    xy = tuple_xy[k]
+                                    mask = jnp.zeros_like(kernel_activations_i[k])
+                                    return mask.at[xy[0], xy[1]].set(True)
+
+                                tuple_acts = jax.vmap(one_hot_for_kernel)(
+                                    jnp.arange(kernel_activations_i.shape[0])
+                                )
+                                rng, lvl = project_kernels(
+                                    rng, lvl, tuple_acts, cell_detect_outs_i, kernel_detect_outs_i, pattern_detect_out_i
+                                )
+                                return rng, lvl
+
+                            rng, lvl = jax.lax.cond(
+                                valid,
+                                apply_tuple,
+                                lambda args: args,
+                                (rng, lvl),
+                            )
+                            return rng, lvl, i + 1
+
+                        rng, lvl, _ = jax.lax.while_loop(loop_cond, loop_body, (rng, lvl, 0))
+                    else:
+                        import itertools
+
+                        coords_per_kernel = [np.argwhere(k) for k in kernel_activations]
+                        if all(len(c) > 0 for c in coords_per_kernel):
+                            for tuple_xys in itertools.product(*coords_per_kernel):
+                                kernel_activations, cell_detect_outs, kernel_detect_outs, pattern_detect_out = detect_pattern(lvl)
+                                valid = True
+                                for k_i, xy in enumerate(tuple_xys):
+                                    if not kernel_activations[k_i][xy[0], xy[1]]:
+                                        valid = False
+                                        break
+                                if not valid:
+                                    continue
+
+                                tuple_acts = []
+                                for k_i, xy in enumerate(tuple_xys):
+                                    mask = np.zeros_like(kernel_activations[k_i], dtype=bool)
+                                    mask[xy[0], xy[1]] = True
+                                    tuple_acts.append(mask)
+                                tuple_acts = np.stack(tuple_acts, axis=0)
+                                rng, lvl = project_kernels(
+                                    rng, lvl, tuple_acts, cell_detect_outs, kernel_detect_outs, pattern_detect_out
+                                )
+
+                    multi_kernel_projected = True
 
                 cancel, restart, again, win = False, False, False, False
                 if has_right_pattern:
-                    if self.jit:
-                        rng, next_lvl = jax.lax.cond(
-                            pattern_detected,
-                            project_kernels,
-                            lambda rng, lvl, pattern_activations, pattern_detect_outs: (rng, lvl),
-                            rng, lvl, kernel_activations, kernel_detect_outs,
-                        )
+                    if multi_kernel_projected:
+                        next_lvl = lvl
+                        rule_applied = jnp.any(next_lvl != init_lvl)
                     else:
-                        if pattern_detected:
-                            rng, next_lvl = project_kernels(rng, lvl, kernel_activations, kernel_detect_outs)
+                        if self.jit:
+                            rng, next_lvl = jax.lax.cond(
+                                pattern_detected,
+                                project_kernels,
+                                lambda rng, lvl, pattern_activations, cell_detect_outs_i, kernel_detect_outs_i, pattern_detect_out_i: (rng, lvl),
+                                rng, lvl, kernel_activations, cell_detect_outs, kernel_detect_outs, pattern_detect_out,
+                            )
                         else:
-                            next_lvl = lvl
+                            if pattern_detected:
+                                rng, next_lvl = project_kernels(
+                                    rng, lvl, kernel_activations, cell_detect_outs, kernel_detect_outs, pattern_detect_out
+                                )
+                            else:
+                                next_lvl = lvl
 
-                    rule_applied = jnp.any(next_lvl != lvl)
+                        rule_applied = jnp.any(next_lvl != lvl)
                 else:
                     next_lvl = lvl
                     rule_applied = False
@@ -2528,6 +2624,7 @@ class PuzzleJaxEnv:
                     print('\n' + multihot_to_desc(lvl[0], self.objs_to_idxs, self.n_objs, obj_idxs_to_force_idxs=self.obj_idxs_to_force_idxs))
 
             def apply_turn(carry):
+                prev_carry = carry
                 init_lvl, _, turn_app_i, cancelled, restart, turn_again, win, rng = carry
                 lvl = init_lvl
                 turn_app_i += 1
@@ -2587,7 +2684,16 @@ class PuzzleJaxEnv:
                 win = win | win_turn
                 lvl = lvl.at[:, self.n_objs:].set(0)  # Remove leftover forces
 
-                return lvl, turn_applied, turn_app_i, cancelled, restart, block_again, win, rng
+                new_carry = (lvl, turn_applied, turn_app_i, cancelled, restart, block_again, win, rng)
+                # If cancelled, revert to the previous carry (pre-iteration).
+                # But update prev_carry's `cancelled` etc. flags to reflect the interruption.
+                prev_carry = (prev_carry[0], False, prev_carry[2], True, prev_carry[4], prev_carry[5], prev_carry[6], prev_carry[7])
+                return jax.lax.cond(
+                    cancelled,
+                    lambda _: prev_carry,
+                    lambda _: new_carry,
+                    operand=None,
+                )
 
             turn_applied = True
             turn_app_i = 0
