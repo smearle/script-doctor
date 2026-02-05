@@ -1031,8 +1031,11 @@ class PuzzleJaxEnv:
         restart = False
         final_lvl, tick_applied, turn_app_i, cancelled, restart, tick_win, rng = self.tick_fn(rng, lvl)
 
-        accept_lvl_change = ((not self.require_player_movement) or 
-                             player_has_moved(self.player_idxs, init_lvl, final_lvl, self.objs_to_idxs, self.meta_objs, self.char_to_obj)) & ~cancelled
+        accept_lvl_change = (
+            (not self.require_player_movement) or player_has_moved(
+                self.player_idxs, init_lvl, final_lvl, self.objs_to_idxs, 
+                self.meta_objs, self.char_to_obj)
+        ) 
         # if DEBUG:
         #     jax.debug.print('accept level change: {accept_lvl_change}', accept_lvl_change=accept_lvl_change) 
 
@@ -2272,6 +2275,20 @@ class PuzzleJaxEnv:
                 kernel_activations, cell_detect_outs, kernel_detect_outs, pattern_detect_out = detect_pattern(lvl)
                 pattern_detected = jnp.all(jnp.sum(kernel_activations, axis=(1,2)) > 0)
 
+                def select_n_activations(kernel_activation, n):
+                    n = jnp.maximum(n, 0).astype(jnp.int32)
+                    flat = kernel_activation.reshape(-1)
+                    rank = jnp.cumsum(flat.astype(jnp.int32))
+                    keep = flat & (rank <= n)
+                    return keep.reshape(kernel_activation.shape)
+
+                # In the case of multi-kernel rules, apply as many kernel transformations in parallel as is appropriate.
+                if kernel_activations.shape[0] > 1:
+                    max_n_activations = jnp.min(jnp.sum(kernel_activations, axis=(1,2)))
+                    kernel_activations = jax.vmap(select_n_activations, in_axes=(0, None))(
+                        kernel_activations, max_n_activations
+                    )
+
                 def project_kernels(rng, lvl, kernel_activations, kernel_detect_outs):
                     for i, kernel_projection_fn in enumerate(kernel_projection_fns):
                         if DEBUG:
@@ -2635,7 +2652,6 @@ class PuzzleJaxEnv:
 
         # (n_possible_lines, n_subkernels, height, width)
         per_line_subkernel_activations = jnp.zeros((one_hot_masks.shape[0], *subkernel_activations.shape))
-        per_line_cell_activations = jnp.zeros_like(per_line_subkernel_activations)
 
         if not self.jit:
             for i in range(subkernel_activations.shape[dim]):
@@ -2643,30 +2659,33 @@ class PuzzleJaxEnv:
                     kernel_line_activations = subkernel_activations[:, i]
                     per_line_subkernel_activations = per_line_subkernel_activations.at[:, :, i].set(
                         mask_to_valid_sequences(kernel_line_activations, jit=self.jit, one_hot_masks=one_hot_masks))
-                    cell_line_activations = cell_activations[:, i]
-                    per_line_cell_activations = per_line_cell_activations.at[:, :, i].set(
-                        mask_to_valid_sequences(cell_line_activations, jit=self.jit, one_hot_masks=one_hot_masks))
                 elif dim == 2:
                     kernel_line_activations = subkernel_activations[:, :, i]
                     per_line_subkernel_activations = per_line_subkernel_activations.at[:, :, :, i].set(
                         mask_to_valid_sequences(kernel_line_activations, jit=self.jit, one_hot_masks=one_hot_masks))
-                    cell_line_activations = cell_activations[:, :, i]
-                    per_line_cell_activations = per_line_cell_activations.at[:, :, :, i].set(
-                        mask_to_valid_sequences(cell_line_activations, jit=self.jit, one_hot_masks=one_hot_masks))
         else:
             per_line_subkernel_activations = jax.vmap(mask_to_valid_sequences, in_axes=(dim, None, None))(
                 subkernel_activations, one_hot_masks, True)
-            per_line_cell_activations = jax.vmap(mask_to_valid_sequences, in_axes=(dim, None, None))(
-                cell_activations, one_hot_masks, True)
             if dim == 1:
                 per_line_subkernel_activations = jnp.transpose(per_line_subkernel_activations, (1, 2, 0, 3))
-                per_line_cell_activations = jnp.transpose(per_line_cell_activations, (1, 2, 0, 3))
             elif dim == 2:
                 per_line_subkernel_activations = jnp.transpose(per_line_subkernel_activations, (1, 2, 3, 0))
-                per_line_cell_activations = jnp.transpose(per_line_cell_activations, (1, 2, 3, 0))
+
+        per_line_cell_activations = jnp.pad(
+            per_line_subkernel_activations, ((0,0), (0,0), 
+                                             (0, lvl.shape[-2] - per_line_subkernel_activations.shape[-2]),
+                                             (0, lvl.shape[-1] - per_line_subkernel_activations.shape[-1])), mode='constant', constant_values=0)
+
+        for i, subkernel_detection_fn in enumerate(subkernel_detection_fns):
+            in_patch_shape = subkernel_detection_fn.keywords['in_patch_shape']
+            per_line_cell_activations = per_line_cell_activations.at[:, i].set(
+                jax.vmap(flood_kernel_activations_to_cells, in_axes=(0, None))(
+                per_line_cell_activations[:, i], in_patch_shape)
+            )
 
         detected_kernel_meta_objs = {}
         detected_kernel_moving_idx = None
+        max_shape = lvl.shape[2:]
 
         for subkernel_detect_out in subkernel_detect_outs:
             # Each kernel has detected meta-objects at different coordinates on the board.
@@ -2807,13 +2826,17 @@ class PuzzleJaxEnv:
         # eliminate all but one activation
         kernel_detected = kernel_activations.sum() > 0
         if DEBUG:
-            jax.lax.cond(
-                # True,
-                kernel_detected,
-                lambda: jax.debug.print('      Rule {rule_name} left kernel {lp} detected: {kernel_detected}',
-                                        rule_name=rule_name, kernel_detected=kernel_detected, lp=lp),
-                lambda: None,
-            )
+            if self.jit:
+                jax.lax.cond(
+                    # True,
+                    kernel_detected,
+                    lambda: jax.debug.print('      Rule {rule_name} left kernel {lp} detected: {kernel_detected}',
+                                            rule_name=rule_name, kernel_detected=kernel_detected, lp=lp),
+                    lambda: None,
+                )
+            else:
+                if kernel_detected:
+                    print(f'      Rule {rule_name} left kernel {lp} detected: {kernel_detected}')
         cancelled = False
         detected_kernel_meta_objs = {}
         for cell_detect_out in cell_detect_outs:
@@ -2838,36 +2861,15 @@ class PuzzleJaxEnv:
         if kernel_activations.shape[0] == 0:
             kernel_activations = jnp.pad(kernel_activations, ((0, 1), (0, 0)), constant_values=False)
 
-        # Mark all detected cells
         # TODO: There should be a better way of doing this, where we get this info first-hand from the cell detection functions.
         cell_activations = jnp.pad(
             kernel_activations,
             ((0, in_patch_shape[0] - 1), (0, in_patch_shape[1] - 1)),
             constant_values=False,
         )
-
-        H, W = in_patch_shape
-        x = cell_activations.astype(jnp.int32)[None, None, :, :]  # NCHW
-
-        if lp_is_vertical:
-            k = jnp.ones((1, 1, H, 1), dtype=jnp.int32)            # (O,I,KH,KW)
-            y = jax.lax.conv_general_dilated(
-                x, k,
-                window_strides=(1, 1),
-                padding=[(H - 1, 0), (0, 0)],                      # “flood downward”
-                dimension_numbers=("NCHW", "OIHW", "NCHW"),
-            )
-            cell_activations = (y[0, 0] > 0)
-
-        if lp_is_horizontal:
-            k = jnp.ones((1, 1, 1, W), dtype=jnp.int32)
-            y = jax.lax.conv_general_dilated(
-                x, k,
-                window_strides=(1, 1),
-                padding=[(0, 0), (W - 1, 0)],                      # “flood rightward”
-                dimension_numbers=("NCHW", "OIHW", "NCHW"),
-            )
-            cell_activations = (y[0, 0] > 0)
+        
+        cell_activations = flood_kernel_activations_to_cells(cell_activations, in_patch_shape)
+        assert cell_activations.shape == lvl.shape[2:], (cell_activations.shape, lvl.shape[2:])
 
         return kernel_activations, cell_activations, cell_detect_outs, kernel_detect_out
 
@@ -3706,6 +3708,41 @@ def mask_to_valid_sequences(binary_matrix, one_hot_masks=None, jit=True):
         valid_mask_v = jax.vmap(body_fun, in_axes=(0,))(one_hot_masks)
 
     return valid_mask_v
+
+
+def flood_kernel_activations_to_cells(kernel_activations, in_patch_shape):
+    # Mark all detected cells
+
+    H, W = in_patch_shape
+    x = kernel_activations.astype(jnp.int32)[None, None, :, :]  # NCHW
+
+    lp_is_vertical = (H > 1)
+    lp_is_horizontal = (W > 1)
+
+    if lp_is_vertical:
+        k = jnp.ones((1, 1, H, 1), dtype=jnp.int32)            # (O,I,KH,KW)
+        y = jax.lax.conv_general_dilated(
+            x, k,
+            window_strides=(1, 1),
+            padding=[(H - 1, 0), (0, 0)],                      # “flood downward”
+            dimension_numbers=("NCHW", "OIHW", "NCHW"),
+        )
+
+    elif lp_is_horizontal:
+        k = jnp.ones((1, 1, 1, W), dtype=jnp.int32)
+        y = jax.lax.conv_general_dilated(
+            x, k,
+            window_strides=(1, 1),
+            padding=[(0, 0), (W - 1, 0)],                      # “flood rightward”
+            dimension_numbers=("NCHW", "OIHW", "NCHW"),
+        )
+    
+    else:
+        y = x
+
+    cell_activations = (y[0, 0] > 0)
+    
+    return cell_activations
 
 
 if __name__ == "__main__":

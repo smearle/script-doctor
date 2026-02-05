@@ -3,7 +3,7 @@ import random
 
 import tiktoken
 
-from prompts import fewshow_examples_prompt
+from script_doctor.prompts import fewshow_examples_prompt
 
 
 def num_tokens_from_string(string: str, model_name: str) -> int:
