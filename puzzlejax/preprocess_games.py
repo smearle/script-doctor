@@ -89,8 +89,12 @@ class StripPuzzleScript(Transformer):
         return Tree('collisionlayers_section', self.strip_section_items(items, 'layer_data'))
 
     def rules_section(self, items):
-
-        return Tree('rules_section', self.strip_section_items(items, 'rule_block'))
+        # Allow either wrapped rule_block nodes or direct rule_block_once/loop nodes
+        kept = []
+        for item in items:
+            if isinstance(item, Tree) and item.data in {'rule_block', 'rule_block_once', 'rule_block_loop'}:
+                kept.append(item)
+        return Tree('rules_section', kept)
 
     def sounds_section(self, items):
         return
@@ -374,6 +378,8 @@ def preprocess_rules(txt):
     txt = re.sub(r'\]\s*\.\.\.\s*\[', ' | ... | ', txt)
     # Replace any occurrence of `] | [` with `] [`
     txt = re.sub(r'\]\s*\|\s*\[', '] [', txt)
+    # Remove newlines
+    txt = re.sub(r'\n\n', '\n', txt)
     return txt
 
 def preprocess_collisionlayers(txt):

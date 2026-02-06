@@ -1787,6 +1787,9 @@ class PuzzleJaxEnv:
             kernel_meta_objs = kernel_detect_out.detected_meta_objs
             pattern_meta_objs = pattern_detect_out.detected_meta_objs
             obj_idx = disambiguate_meta(obj, meta_objs, kernel_meta_objs, pattern_meta_objs, self.objs_to_idxs)
+            if obj_idx is None:
+                obj_idx = -1
+            obj_idx = jnp.ravel(jnp.array(obj_idx))[0]
             # Add the object
             m_cell = m_cell.at[obj_idx].set(True)
             if force_idx is None:
@@ -1837,6 +1840,9 @@ class PuzzleJaxEnv:
             kernel_meta_objs = kernel_detect_out.detected_meta_objs
             pattern_meta_objs = pattern_detect_out.detected_meta_objs
             obj_idx = disambiguate_meta(obj, meta_objs, kernel_meta_objs, pattern_meta_objs, self.objs_to_idxs)
+            if obj_idx is None:
+                obj_idx = -1
+            obj_idx = jnp.ravel(jnp.array(obj_idx))[0]
 
             # Look for detected force index in corresponding input cell, then kernel, then pattern.
             # This should never end up as -1 (i.e. there should be a corresponding movement index somewhere in the LHS).
@@ -1861,6 +1867,7 @@ class PuzzleJaxEnv:
                 pattern_moving_idx,
                 force_idx,
             )
+            force_idx = jnp.ravel(jnp.array(force_idx))[0]
                 
             m_cell = m_cell.at[obj_idx].set(True)
 
@@ -1889,6 +1896,9 @@ class PuzzleJaxEnv:
                 m_cell = m_cell.at[force_idx: (force_idx + 1) * N_FORCES].set(False)
             else:
                 obj_idx = disambiguate_meta(obj, meta_objs, kernel_meta_objs, pattern_meta_objs, self.objs_to_idxs)
+                if obj_idx is None:
+                    obj_idx = -1
+                obj_idx = jnp.ravel(jnp.array(obj_idx))[0]
                 m_cell = jax.lax.dynamic_update_slice(
                     m_cell, jnp.zeros(N_FORCES, dtype=bool), (jnp.array(self.obj_idxs_to_force_idxs)[obj_idx],)
                 )
@@ -2531,8 +2541,8 @@ class PuzzleJaxEnv:
         for rule_block in self.tree.rules:
 
             # FIXME: what's with this unnecessary list?
-            assert len(rule_block) == 1
-            rule_block = rule_block[0]
+            # assert len(rule_block) == 1
+            # rule_block = rule_block[0]
 
             looping = rule_block.looping
             rule_grps = []
@@ -2552,6 +2562,7 @@ class PuzzleJaxEnv:
                     # I'm not actually clear on how PS handles these groups combining late/non-late rules, so have just
                     # taken a best guess here (which seems to agree with game `Teh_Interwebs`).
                     if last_subrule_fns_were_late is None:
+                        breakpoint()
                         logger.warn(
                             (f'Initial rule has `+` prefix, but no rule precedes it, so ignoring `+` and adding this rule'
                             ' as a new rule group.')
@@ -2577,6 +2588,7 @@ class PuzzleJaxEnv:
                             last_subrule_fns_were_late = False
                         else:
                             rule_grps[-1].extend(sub_rule_fns)
+                            last_subrule_fns_were_late = False
                 elif 'late' in rule.prefixes:
                     late_rule_grps.append(sub_rule_fns)
                     last_subrule_fns_were_late = True

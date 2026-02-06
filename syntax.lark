@@ -23,7 +23,7 @@ objects_section: "OBJECTS"i NEWLINES object_data+
 legend_section: "LEGEND"i NEWLINES legend_data*
 sounds_section: "SOUNDS"i NEWLINES sound_data*
 collisionlayers_section: "COLLISIONLAYERS"i NEWLINES layer_data+
-rules_section: "RULES"i NEWLINES rule_block*
+rules_section: "RULES"i NEWLINES rule_block_once? (rule_block_loop rule_block_once?)*
 winconditions_section: "WINCONDITIONS"i NEWLINES condition_data*
 levels_section: "LEVELS"i NEWLINES level_data+
 
@@ -87,8 +87,6 @@ layer_data: (object_name ("," | " "))* object_name ","? NEWLINES
 STARTLOOP: "startloop"i
 ENDLOOP: "endloop"i
 
-rule_block: rule_block_loop | rule_block_once
-
 rule_block_loop.1: STARTLOOP NEWLINES rule_data+ ENDLOOP NEWLINES
 rule_block_once.0: rule_data+
 
@@ -119,7 +117,7 @@ OBJECT_MODIFIER: DIRECTIONAL | "random"i | "randomDir"i | "horizontal"i | "verti
 
 DIRECTIONAL: /[\^v<>]/
 
-ID: /[a-z0-9.A-Z#_\/\\@!']/+
+ID: /[a-z0-9.A-Z#_\/\\@!'*]/+
 
 // Command
 command: command_keyword
