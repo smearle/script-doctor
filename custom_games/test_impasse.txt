@@ -1,0 +1,192 @@
+title Impasse
+author RatoLibre1 [Wanderlands's Impasse demake]
+homepage https://www.facebook.com/RatoLibre1Games
+noaction
+verbose_logging
+
+========
+OBJECTS
+========
+
+Background
+GREY
+
+Border
+BLACK
+
+Player
+BLACK WHITE
+.111.
+11011
+10001
+11011
+.111.
+
+Fixed
+DARKGREY
+.000.
+00000
+00000
+00000
+.000.
+
+Goal
+BLACK LIGHTGREEN
+.111.
+11101
+10101
+11011
+.111.
+
+Upper
+BLACK ORANGE
+.111.
+11011
+10101
+10101
+.111.
+
+Lower
+BLACK PINK
+.111.
+10101
+10101
+11011
+.111.
+
+Vanisher1
+BLACK LIGHTBLUE
+.111.
+11111
+10001
+11111
+.111.
+
+VanisherTemp
+BLACK LIGHTBLUE
+.111.
+11111
+10001
+11111
+.111.
+
+Vanisher2
+LIGHTBLUE
+.0.0.
+0...0
+.....
+0...0
+.0.0.
+
+PerpUp
+BLACK YELLOW
+.111.
+11011
+10101
+10101
+.111.
+
+PerpDown
+BLACK PURPLE
+.111.
+10101
+10101
+11011
+.111.
+
+Blocker1
+BLACK RED
+.111.
+10101
+11011
+10101
+.111.
+
+BlockerTemp
+BLACK RED
+.111.
+10101
+11011
+10101
+.111.
+
+Blocker2
+RED
+.0.0.
+0...0
+.....
+0...0
+.0.0.
+
+Switch
+BLACK GREEN
+.111.
+11011
+10101
+11011
+.111.
+
+=======
+LEGEND
+=======
+
+Obstacle = Fixed or Upper or Lower or Vanisher1 or VanisherTemp or PerpUp or PerpDown or Blocker1 or BlockerTemp
+Mover = Player or Upper or Lower or PerpUp or PerpDown
+
+.=Background
++=Border
+P=Player
+*=Fixed
+U=Upper
+L=Lower
+G=Goal
+Q=Vanisher1
+W=Vanisher2
+Y=PerpUp
+S=PerpDown
+B=Blocker1
+N=Blocker2
+/=Switch
+
+=======
+SOUNDS
+=======
+
+================
+COLLISIONLAYERS
+================
+
+Background
+Border
+Fixed
+Goal
+Vanisher1, Vanisher2, VanisherTemp
+Blocker1, Blocker2, BlockerTemp
+Switch
+Upper
+Lower
+PerpUp
+PerpDown
+Player
+
+======
+RULES
+======
+
+[ vertical Player ][ Upper ] -> [ vertical Player ][ up Upper ]
+
+(scroll border)
+late [Border Mover | ... | | Border ] -> [Border | ... | Mover | Border ]
+
+==============
+WINCONDITIONS
+==============
+
+=======
+LEVELS
+=======
+
+++++
+p.u.
+....
+++++

@@ -155,10 +155,13 @@ class StripPuzzleScript(Transformer):
             else:
                 row.append(s.value)
         max_row_len = max(len(r) for r in grid)
-        for r in grid:
+        for i, r in enumerate(grid):
             if len(r) < max_row_len:
-                r.append(r[-1] * (max_row_len - len(r)))
-        grid = np.array(grid)
+                r += [r[-1]] * (max_row_len - len(r))
+        try:
+            grid = np.array(grid)
+        except Exception as e:
+            breakpoint()
 
         return Tree('sprite', grid)
 

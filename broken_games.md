@@ -1,21 +1,10 @@
 # Broken Games
 
-## pusH
-
-Problem: Score is unaligned on the last level. It's 0 in jax but a big number in JS, maybe because in the latter, since goal is absent, we imagine it is off the edge of the board or something? 
-
 ## test_circuit
 
-(from Circuit_Breaker)
+(from `Circuit_Breaker`)
 Problem: In JAX, only one of the edges underneath the crate ends up having force applied. I think this is because `detect_any_objs_in_cell` always returns the first matching object. So after force is applied to the first edge, the second application of the rule does not apply force to the second edge.
-
-## ponies_jumping_synchronously_fixed
-
-Some problems with score/win condition, as yet undetermined.
-
-## GDD301_Game
-
-In JS, the player is able to slide through their own trail when the trail is 2 tiles away from the player without triggering a level restart. This bug is not present in the latest online version of PuzzleScript. We'll need to update the nodejs version
+So I guess this function instead needs to return the set of all matching objects, then when applying the rule, we iterate through each possible object, attempting to apply the rule to it? Yikes.
 
 ## Impasse
 
@@ -23,6 +12,19 @@ In JS, the player is able to slide through their own trail when the trail is 2 t
 The above was fixed hackishly, but ignoring meta-objects recognized in cells that did not belong to recognized lines. But the issue persists when we recognize _multiple_ lines with different sub-objects of the same meta-object type.
 
 What we really need to do is be much more careful about which detected meta-objects we use when projecting a given line kernel. Somewhere I think we are collapsing the `detected_meta_objs` dictionary entries (which have now been modified to be 2D arrays) to a single integer (I think with `max`). This should not be so.
+
+
+## ponies_jumping_synchronously_fixed
+
+Some problems with score/win condition, as yet undetermined.
+
+## pusH
+
+Problem: Score is unaligned on the last level. It's 0 in jax but a big number in JS, maybe because in the latter, since goal is absent, we imagine it is off the edge of the board or something? 
+
+## GDD301_Game
+
+In JS, the player is able to slide through their own trail when the trail is 2 tiles away from the player without triggering a level restart. This bug is not present in the latest online version of PuzzleScript. We'll need to update the nodejs version
 
 ## Pipe_Navigation
 

@@ -114,6 +114,7 @@ def main(cfg: JaxValidationConfig, games: Optional[List[str]] = None):
         results = {
             'stats': {},
             'compile_error': [],
+            'rigid_prefix_error': [],
             'runtime_error': {},
             'solution_error': {},
             'state_error': {},
@@ -134,6 +135,7 @@ def main(cfg: JaxValidationConfig, games: Optional[List[str]] = None):
 
     n_levels = 0
     n_compile_error = 0
+    n_rigid_prefix_error = 0
     n_runtime_error = 0
     n_solution_error = 0
     n_state_error = 0
@@ -148,12 +150,13 @@ def main(cfg: JaxValidationConfig, games: Optional[List[str]] = None):
     solution_rewards_dict = {}
     
 
-    def save_stats(results, n_levels, n_success, n_compile_error, n_runtime_error,
+    def save_stats(results, n_levels, n_success, n_compile_error, n_rigid_prefix_error, n_runtime_error,
                    n_solution_error, n_state_error, n_score_error, n_unvalidated_levels):
         results['stats']['total_games'] = len(games)
         results['stats']['total_levels'] = n_levels
         results['stats']['successful_solutions'] = n_success
         results['stats']['compile_error'] = n_compile_error
+        results['stats']['rigid_prefix_error'] = n_rigid_prefix_error
         results['stats']['runtime_error'] = n_runtime_error
         results['stats']['solution_error'] = n_solution_error
         results['stats']['state_error'] = n_state_error
@@ -195,8 +198,14 @@ def main(cfg: JaxValidationConfig, games: Optional[List[str]] = None):
             if cfg.aggregate:
                 with open(compile_log_path, 'r') as f:
                     compile_log = f.read()
-                results['compile_error'].append({'game': game, 'n_rules': n_rules, 'log': compile_log})
-            n_compile_error += 1
+                if 'Rigid prefix not implemented' in compile_log:
+                    results['rigid_prefix_error'].append({'game': game, 'n_rules': n_rules, 'log': compile_log})
+                    n_rigid_prefix_error += 1
+                else:
+                    results['compile_error'].append({'game': game, 'n_rules': n_rules, 'log': compile_log})
+                    n_compile_error += 1
+            else:
+                n_compile_error += 1
             n_levels += 1
             print(f"Skipping {game} because compile error log already exists")
             continue
@@ -375,7 +384,10 @@ def main(cfg: JaxValidationConfig, games: Optional[List[str]] = None):
                         f.write(err_msg)
                     print(f"Error creating env: {og_path}\n{err_msg}")
                     # results['compile_error'].append({'game': game, 'n_rules': n_rules, 'log': err_log})
-                    n_compile_error += 1
+                    if 'Rigid prefix not implemented' in err_msg:
+                        n_rigid_prefix_error += 1
+                    else:
+                        n_compile_error += 1
                     n_levels += 1
                     game_success = False
                     game_compile_error = True
@@ -548,8 +560,8 @@ def main(cfg: JaxValidationConfig, games: Optional[List[str]] = None):
         results['stats']['valid_games'] = len(results['valid_games'])
         results['stats']['partial_valid_games'] = len(results['partial_valid_games'])
         
-        save_stats(results, n_levels, n_success, n_compile_error, n_runtime_error,
-                   n_solution_error, n_state_error, n_score_error, n_unvalidated_levels)
+        save_stats(results, n_levels, n_success, n_compile_error, n_rigid_prefix_error, n_runtime_error,
+               n_solution_error, n_state_error, n_score_error, n_unvalidated_levels)
         print(f"Validation results saved to {val_results_path}")
         stats_dict = {
             "Total Games": len(games),

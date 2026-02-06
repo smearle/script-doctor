@@ -2545,7 +2545,12 @@ class PuzzleJaxEnv:
             last_subrule_fns_were_late = None
             for rule in rule_block.rules:
                 try:
-                    sub_rule_fns = self.gen_subrules_meta(rule, rule_name=str(rule), lvl_shape=lvl_shape)
+                    expanded_rules = _expand_or_meta_rules(self.meta_objs, rule)
+                    sub_rule_fns = []
+                    for expanded_rule in expanded_rules:
+                        sub_rule_fns.extend(
+                            self.gen_subrules_meta(expanded_rule, rule_name=str(expanded_rule), lvl_shape=lvl_shape)
+                        )
                 except InvalidObjectError as e:
                     print(e)
                     continue
@@ -3850,6 +3855,227 @@ def flood_kernel_activations_to_cells(kernel_activations, in_patch_shape):
     
     return cell_activations
 
+
+def _expand_or_meta_rules(meta_objs, rule: Rule) -> List[Rule]:
+    """Expand OR meta-objects into concrete rules, JS-style, so all sub-objects are handled.
+    Only expands when meta-objects are actually present in the rule. Repeated occurrences are
+    expanded via cartesian product across all occurrences.
+    """
+
+    def normalize_cell(cell):
+        if cell is None:
+            return None
+        if isinstance(cell, str):
+            return cell.split(' ')
+        return list(cell)
+
+    def copy_kernels(kernels):
+        if kernels is None:
+            return None
+        new_kernels = []
+        for kern in kernels:
+            new_kern = []
+            for row in kern:
+                new_row = []
+                for cell in row:
+                    new_row.append(normalize_cell(cell))
+                new_kern.append(new_row)
+            new_kern = list(new_kern)
+            new_kernels.append(new_kern)
+        return new_kernels
+
+    def denormalize_kernels(kernels):
+        if kernels is None:
+            return None
+        denorm = []
+        for kern in kernels:
+            denorm_kern = []
+            for row in kern:
+                denorm_row = []
+                for cell in row:
+                    if cell is None:
+                        denorm_row.append(cell)
+                    elif isinstance(cell, list):
+                        denorm_row.append(" ".join(cell))
+                    else:
+                        denorm_row.append(cell)
+                denorm_kern.append(denorm_row)
+            denorm.append(denorm_kern)
+        return denorm
+
+    def is_no_prefixed(tokens, idx):
+        if tokens is None or idx <= 0:
+            return False
+        prev = tokens[idx - 1]
+        return prev is not None and prev.lower() == "no"
+
+    def collect_meta_tokens(cell_tokens):
+        if cell_tokens is None:
+            return []
+        tokens = list(cell_tokens)
+        result = []
+        for idx, tok in enumerate(tokens):
+            if tok is None:
+                continue
+            tok_l = tok.lower()
+            if tok_l in meta_objs and len(meta_objs[tok_l]) > 1 and not is_no_prefixed(tokens, idx):
+                result.append(tok_l)
+        return result
+
+    # Compute ambiguous properties (meta-objects on RHS not present in corresponding LHS cell)
+    ambiguous_properties = {}
+    if rule.right_kernels is not None:
+        for k_i, (l_kern, r_kern) in enumerate(zip(rule.left_kernels, rule.right_kernels)):
+            for r_i, (l_row, r_row) in enumerate(zip(l_kern, r_kern)):
+                for c_i, (l_cell, r_cell) in enumerate(zip(l_row, r_row)):
+                    l_tokens = collect_meta_tokens(normalize_cell(l_cell))
+                    r_tokens = collect_meta_tokens(normalize_cell(r_cell))
+                    for tok in r_tokens:
+                        if tok not in l_tokens:
+                            ambiguous_properties[tok] = True
+
+    # Early out if no expandable meta-objects on LHS
+    has_expandable = False
+    for k_i, kern in enumerate(rule.left_kernels):
+        for r_i, row in enumerate(kern):
+            for c_i, cell in enumerate(row):
+                tokens = normalize_cell(cell)
+                for tok in collect_meta_tokens(tokens):
+                    has_expandable = True
+                    break
+            if has_expandable:
+                break
+        if has_expandable:
+            break
+    if not has_expandable:
+        return [rule]
+
+    # Expand occurrences on LHS, one at a time (cartesian product across occurrences),
+    # and propagate to RHS only for the corresponding cell.
+    result = [
+        {
+            "left": copy_kernels(rule.left_kernels),
+            "right": copy_kernels(rule.right_kernels),
+            "property_replacement": {},
+        }
+    ]
+    modified = True
+    while modified:
+        modified = False
+        i = 0
+        while i < len(result):
+            cur = result[i]
+            left_kerns = cur["left"]
+            right_kerns = cur["right"]
+            prop_repl = cur["property_replacement"]
+            should_remove = False
+            for k_i, kern in enumerate(left_kerns):
+                for r_i, row in enumerate(kern):
+                    for c_i, cell in enumerate(row):
+                        tokens = normalize_cell(cell)
+                        for t_i, tok in enumerate(tokens):
+                            tok_l = tok.lower()
+                            if tok_l in meta_objs and len(meta_objs[tok_l]) > 1 and not is_no_prefixed(tokens, t_i):
+                                # Expand this occurrence
+                                should_remove = True
+                                modified = True
+                                for choice in meta_objs[tok_l]:
+                                    new_left = copy_kernels(left_kerns)
+                                    new_right = copy_kernels(right_kerns)
+                                    new_prop_repl = {k: [v[0], v[1]] for k, v in prop_repl.items()}
+
+                                    new_left[k_i][r_i][c_i][t_i] = choice
+
+                                    # Replace in corresponding RHS cell if present
+                                    if new_right is not None:
+                                        if k_i < len(new_right) and r_i < len(new_right[k_i]) and c_i < len(new_right[k_i][r_i]):
+                                            if new_right[k_i][r_i][c_i] is not None:
+                                                rhs_tokens = new_right[k_i][r_i][c_i]
+                                                for rhs_t_i, rhs_tok in enumerate(rhs_tokens):
+                                                    if rhs_tok is not None and rhs_tok.lower() == tok_l:
+                                                        rhs_tokens[rhs_t_i] = choice
+
+                                    if tok_l not in new_prop_repl:
+                                        new_prop_repl[tok_l] = [choice, 1]
+                                    else:
+                                        new_prop_repl[tok_l][1] += 1
+
+                                    result.append(
+                                        {
+                                            "left": new_left,
+                                            "right": new_right,
+                                            "property_replacement": new_prop_repl,
+                                        }
+                                    )
+                                break
+                        if should_remove:
+                            break
+                    if should_remove:
+                        break
+                if should_remove:
+                    break
+
+            if should_remove:
+                result.pop(i)
+                i -= 1
+            i += 1
+
+    expanded_rules = []
+    for cur in result:
+        left_kerns = cur["left"]
+        right_kerns = cur["right"]
+        prop_repl = cur["property_replacement"]
+
+        # If a meta-object appears exactly once on LHS, replace all remaining RHS occurrences
+        if right_kerns is not None:
+            for tok, (choice, count) in prop_repl.items():
+                if count == 1:
+                    for k_i, kern in enumerate(right_kerns):
+                        for r_i, row in enumerate(kern):
+                            for c_i, cell in enumerate(row):
+                                if cell is None:
+                                    continue
+                                for t_i, cell_tok in enumerate(cell):
+                                    if cell_tok is not None and cell_tok.lower() == tok:
+                                        cell[t_i] = choice
+
+        # Check for ambiguous RHS meta-objects (JS-style error)
+        rhs_property_remains = None
+        if right_kerns is not None:
+            for kern in right_kerns:
+                for row in kern:
+                    for cell in row:
+                        if cell is None:
+                            continue
+                        for cell_tok in cell:
+                            if cell_tok is None:
+                                continue
+                            tok_l = cell_tok.lower()
+                            if tok_l in ambiguous_properties:
+                                rhs_property_remains = tok_l
+                                break
+                        if rhs_property_remains is not None:
+                            break
+                    if rhs_property_remains is not None:
+                        break
+                if rhs_property_remains is not None:
+                    break
+
+        if rhs_property_remains is not None:
+            raise InvalidObjectError(
+                f"Rule has meta-object '{rhs_property_remains}' on RHS that can't be inferred from LHS."
+            )
+
+        expanded_rules.append(
+            Rule(
+                left_patterns=denormalize_kernels(left_kerns),
+                right_patterns=denormalize_kernels(right_kerns),
+                prefixes=list(rule.prefixes),
+                command=rule.command,
+            )
+        )
+
+    return expanded_rules
 
 if __name__ == "__main__":
     binary_matrix = np.array([
