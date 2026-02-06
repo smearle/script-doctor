@@ -2297,35 +2297,29 @@ class PuzzleJaxEnv:
                             ],
                             axis=0,
                         )  # (K, max_coords, 2)
+                        coord_counts = jnp.sum(coord_lists[:, :, 0] != -1, axis=1)  # (K,)
+                        any_empty = jnp.any(coord_counts == 0)
+                        safe_counts = jnp.maximum(coord_counts, 1)
+                        total = jnp.where(any_empty, 0, jnp.prod(coord_counts))
 
-                        tuple_idx_grid = jnp.stack(
-                            jnp.meshgrid(
-                                *([jnp.arange(max_coords)] * kernel_activations.shape[0]),
-                                indexing='ij'
-                            ),
-                            axis=-1,
-                        )
-                        tuple_idxs = tuple_idx_grid.reshape(-1, kernel_activations.shape[0])  # (T, K)
-
-                        def idxs_to_coords(idxs):
-                            return coord_lists[jnp.arange(coord_lists.shape[0]), idxs]
-
-                        tuple_coords = jax.vmap(idxs_to_coords)(tuple_idxs)  # (T, K, 2)
-                        invalid = jnp.any(tuple_coords == -1, axis=(1, 2))
-                        tuple_coords = jnp.where(
-                            invalid[:, None, None],
-                            -jnp.ones_like(tuple_coords),
-                            tuple_coords,
-                        )
+                        def idx_to_tuple(flat_idx):
+                            idxs = []
+                            carry = flat_idx
+                            for k in range(kernel_activations.shape[0]):
+                                base = safe_counts[k]
+                                idxs.append(carry % base)
+                                carry = carry // base
+                            return jnp.array(idxs)
 
                         def loop_cond(carry):
                             _, _, i = carry
-                            return jnp.all(tuple_coords[i] != -1)
+                            return i < total
 
                         def loop_body(carry):
                             rng, lvl, i = carry
                             kernel_activations_i, cell_detect_outs_i, kernel_detect_outs_i, pattern_detect_out_i = detect_pattern(lvl)
-                            tuple_xy = tuple_coords[i]
+                            tuple_idxs = idx_to_tuple(i)
+                            tuple_xy = coord_lists[jnp.arange(coord_lists.shape[0]), tuple_idxs]
 
                             def is_valid_for_kernel(k):
                                 xy = tuple_xy[k]
