@@ -2258,6 +2258,15 @@ class PuzzleJaxEnv:
                     kernel_fns.append(gen_rotated_kernel_fns(lp, rp, rot))
             kernel_detection_fns, kernel_projection_fns = zip(*kernel_fns)
 
+            def is_col_major_kernel(kernel):
+                k = np.array(kernel)
+                if k.ndim != 2:
+                    return False
+                h, w = k.shape
+                return (h > 1) and (w == 1)
+
+            kernel_order_is_col = [is_col_major_kernel(lp) for lp in lps]
+
             def detect_pattern(lvl):
                 kernel_activations: List[chex.Array] = []
                 cell_activations: List[chex.Array] = []
@@ -2345,34 +2354,41 @@ class PuzzleJaxEnv:
                             axis=0,
                         )  # (K, max_coords, 2)
 
-                        tuple_idx_grid = jnp.stack(
-                            jnp.meshgrid(
-                                *([jnp.arange(max_coords)] * kernel_activations.shape[0]),
-                                indexing='ij'
-                            ),
-                            axis=-1,
-                        )
-                        tuple_idxs = tuple_idx_grid.reshape(-1, kernel_activations.shape[0])  # (T, K)
+                        order_is_col = jnp.array(kernel_order_is_col)
+                        h, w = kernel_activations.shape[1], kernel_activations.shape[2]
+                        rows = coord_lists[:, :, 0]
+                        cols = coord_lists[:, :, 1]
+                        valid = rows != -1
+                        row_major_key = rows * w + cols
+                        col_major_key = cols * h + rows
+                        keys = jnp.where(order_is_col[:, None], col_major_key, row_major_key)
+                        keys = jnp.where(valid, keys, jnp.iinfo(jnp.int32).max)
+                        sort_idxs = jnp.argsort(keys, axis=1)
+                        coord_lists = jnp.take_along_axis(coord_lists, sort_idxs[:, :, None], axis=1)
 
-                        def idxs_to_coords(idxs):
-                            return coord_lists[jnp.arange(coord_lists.shape[0]), idxs]
+                        coord_counts = jnp.sum(coord_lists[:, :, 0] != -1, axis=1)  # (K,)
+                        any_empty = jnp.any(coord_counts == 0)
+                        safe_counts = jnp.maximum(coord_counts, 1)
+                        total = jnp.where(any_empty, 0, jnp.prod(coord_counts))
 
-                        tuple_coords = jax.vmap(idxs_to_coords)(tuple_idxs)  # (T, K, 2)
-                        invalid = jnp.any(tuple_coords == -1, axis=(1, 2))
-                        tuple_coords = jnp.where(
-                            invalid[:, None, None],
-                            -jnp.ones_like(tuple_coords),
-                            tuple_coords,
-                        )
+                        def idx_to_tuple(flat_idx):
+                            idxs = []
+                            carry = flat_idx
+                            for k in range(kernel_activations.shape[0]):
+                                base = safe_counts[k]
+                                idxs.append(carry % base)
+                                carry = carry // base
+                            return jnp.array(idxs)
 
                         def loop_cond(carry):
                             _, _, i = carry
-                            return jnp.all(tuple_coords[i] != -1)
+                            return i < total
 
                         def loop_body(carry):
                             rng, lvl, i = carry
                             kernel_activations_i, cell_detect_outs_i, kernel_detect_outs_i, pattern_detect_out_i = detect_pattern(lvl)
-                            tuple_xy = tuple_coords[i]
+                            tuple_idxs = idx_to_tuple(i)
+                            tuple_xy = coord_lists[jnp.arange(coord_lists.shape[0]), tuple_idxs]
 
                             def is_valid_for_kernel(k):
                                 xy = tuple_xy[k]
@@ -2410,7 +2426,14 @@ class PuzzleJaxEnv:
                     else:
                         import itertools
 
-                        coords_per_kernel = [np.argwhere(k) for k in kernel_activations]
+                        coords_per_kernel = []
+                        for k_i, k in enumerate(kernel_activations):
+                            coords = np.argwhere(k)
+                            if kernel_order_is_col[k_i]:
+                                coords = coords[np.lexsort((coords[:, 0], coords[:, 1]))]
+                            else:
+                                coords = coords[np.lexsort((coords[:, 1], coords[:, 0]))]
+                            coords_per_kernel.append(coords)
                         if all(len(c) > 0 for c in coords_per_kernel):
                             for tuple_xys in itertools.product(*coords_per_kernel):
                                 kernel_activations, cell_detect_outs, kernel_detect_outs, pattern_detect_out = detect_pattern(lvl)
