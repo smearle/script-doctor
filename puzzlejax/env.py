@@ -172,6 +172,7 @@ def expand_collision_layers(collision_layers, meta_objs, char_to_obj, tree_obj_n
     obj_name_map = {name.lower(): name for name in tree_obj_names}
     meta_lower = {k.lower(): v for k, v in meta_objs.items()}
     conjoined_lower = {k.lower(): v for k, v in conjoined_tiles.items()}
+    char_to_obj_lower = {k.lower(): v for k, v in char_to_obj.items()}
 
     def _norm(n):
         return n.lower() if isinstance(n, str) else n
@@ -182,6 +183,10 @@ def expand_collision_layers(collision_layers, meta_objs, char_to_obj, tree_obj_n
         # Atomic object wins (do not expand properties with same name)
         if key in obj_name_map:
             return [obj_name_map[key]]
+
+        # Legend char -> object name
+        if key in char_to_obj_lower:
+            return resolve_name(char_to_obj_lower[key], visiting)
 
         # Aggregates not allowed in collision layers
         if key in conjoined_lower:
