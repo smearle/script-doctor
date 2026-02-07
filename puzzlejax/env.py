@@ -39,14 +39,23 @@ def disambiguate_meta(obj, cell_meta_objs, kernel_meta_objs, pattern_meta_objs, 
     """In the right pattern of rules, we may have a meta-object (mapping to a corresponding meta-object in the 
     left pattern). This function uses the `meta_objs` dictionary returned by the detection function to project
     the correct object during rule application."""
+    obj_key = obj.lower() if isinstance(obj, str) else obj
     if obj in obj_to_idxs:
         return obj_to_idxs[obj]
-    elif obj in cell_meta_objs:
+    if obj_key in obj_to_idxs:
+        return obj_to_idxs[obj_key]
+    if obj in cell_meta_objs:
         return cell_meta_objs[obj]
-    elif obj in kernel_meta_objs:
+    if obj_key in cell_meta_objs:
+        return cell_meta_objs[obj_key]
+    if obj in kernel_meta_objs:
         return kernel_meta_objs[obj]
-    elif obj in pattern_meta_objs:
+    if obj_key in kernel_meta_objs:
+        return kernel_meta_objs[obj_key]
+    if obj in pattern_meta_objs:
         return pattern_meta_objs[obj]
+    if obj_key in pattern_meta_objs:
+        return pattern_meta_objs[obj_key]
     else:
         # raise Exception(f"When compiling a meta-object projection rule, the meta-object {obj} in the output pattern is " 
         #         "not found in the return of the compiled detection function (either in meta_objs or pattern_meta_objs).")
@@ -178,30 +187,53 @@ def expand_collision_layers(collision_layers, meta_objs, char_to_obj, tree_obj_n
         cl.append(l_1)
     return cl[::-1]
 
+
+def compute_properties_single_layer(meta_objs, collision_layers, char_to_obj):
+    obj_to_layer = {}
+    for layer_idx, layer in enumerate(collision_layers):
+        for obj in layer:
+            obj_to_layer[obj] = layer_idx
+
+    properties_single_layer = {}
+    for prop, sub_objs in meta_objs.items():
+        if len(sub_objs) <= 1:
+            continue
+        expanded = expand_meta_objs([prop], meta_objs, char_to_obj)
+        layers = {obj_to_layer[o] for o in expanded if o in obj_to_layer}
+        if len(layers) == 1:
+            properties_single_layer[prop.lower()] = next(iter(layers))
+    return properties_single_layer
+
 def expand_meta_objs(tile_list: List, meta_objs, char_to_obj):
     assert isinstance(tile_list, list), f"tile_list should be a list, got {type(tile_list)}"
     expanded_meta_objs = []
-    seen = set()
+    seen_meta = set()
+    seen_objs = set()
     stack = list(tile_list)[::-1]  # So that we start expanding in the right order
     atomic_obj_names = char_to_obj.values()
+    meta_objs_lower = {k.lower(): v for k, v in meta_objs.items()}
 
     while stack:
         # Expand depth-first
         mo = stack.pop(-1)
-        if mo in meta_objs and mo not in seen:
-            stack.extend(meta_objs[mo])  # defer expanding sub-elements
-            seen.add(mo)  # mark the meta-object as seen
+        mo_key = mo.lower() if isinstance(mo, str) else mo
+        if isinstance(mo, str) and mo_key in meta_objs_lower and mo_key not in seen_meta:
+            stack.extend(meta_objs_lower[mo_key])  # defer expanding sub-elements
+            seen_meta.add(mo_key)  # mark the meta-object as seen
         elif mo in char_to_obj:
             obj = char_to_obj[mo]
-            if obj not in seen:
-                seen.add(obj)
-                if obj in meta_objs:
-                    stack.extend(meta_objs[obj])
+            obj_key = obj.lower() if isinstance(obj, str) else obj
+            if obj_key not in seen_objs:
+                seen_objs.add(obj_key)
+                obj_meta_key = obj.lower() if isinstance(obj, str) else obj
+                if isinstance(obj, str) and obj_meta_key in meta_objs_lower:
+                    stack.extend(meta_objs_lower[obj_meta_key])
                 else:
                     expanded_meta_objs.append(obj)
         else:
-            if mo not in seen:
-                seen.add(mo)
+            mo_obj_key = mo.lower() if isinstance(mo, str) else mo
+            if mo_obj_key not in seen_objs:
+                seen_objs.add(mo_obj_key)
                 expanded_meta_objs.append(mo)
             # Deals with `background = background or yardline` in Touchdown Heroes
             elif mo in atomic_obj_names:
@@ -664,6 +696,7 @@ class PuzzleJaxEnv:
         # alts_to_names, names_to_alts = {}, {}
 
         self.meta_objs = meta_objs
+        self.meta_objs_lower = {k.lower(): v for k, v in meta_objs.items()}
         self.max_steps = max_steps  
         self.state_history = []  
         self.total_reward = 0  
@@ -682,6 +715,9 @@ class PuzzleJaxEnv:
             print(f"Expanding collision layers for {self.title}")
         self.collision_layers = collision_layers = expand_collision_layers(tree.collision_layers, meta_objs,
                                                                            self.char_to_obj, list(tree.objects.keys()))
+        self.properties_single_layer = compute_properties_single_layer(
+            meta_objs, collision_layers, self.char_to_obj
+        )
         atomic_obj_names = [name for layer in collision_layers for name in layer]
         # dedupe
         # atomic_obj_names = [name for name in tree.objects.keys()]
@@ -1505,15 +1541,22 @@ class PuzzleJaxEnv:
                     sub_objs = expand_meta_objs([obj], self.meta_objs, self.char_to_obj)
                     obj_idxs = []
                     for so in sub_objs:
-                        if so not in self.objs_to_idxs:
+                        so_key = so
+                        if so_key not in self.objs_to_idxs and isinstance(so_key, str):
+                            so_key = so_key.lower()
+                        if so_key not in self.objs_to_idxs:
                             raise InvalidObjectError(f"Name {so}, referred to in a rule, does not exist.")
-                        obj_idxs.append(self.objs_to_idxs[so])
+                        obj_idxs.append(self.objs_to_idxs[so_key])
                     obj_idxs = np.array(obj_idxs)
                     obj_vec = np.zeros((self.n_objs + len(self.collision_layers) * N_FORCES + 1), dtype=bool)
                     obj_vec[obj_idxs] = 1
                     if obj in self.char_to_obj:
                         obj = self.char_to_obj[obj]
-                    obj_names.append(obj)
+                    obj_name_key = obj.lower() if isinstance(obj, str) else obj
+                    if obj_name_key in self.meta_objs_lower:
+                        obj_names.append(obj_name_key)
+                    else:
+                        obj_names.append(obj)
                     # TODO: we can remove these functions to individual objects and apply the more abstract meta-tile versions instead
                     if (len(obj_idxs) == 1) and (obj in self.objs_to_idxs):
                         obj_idx = self.objs_to_idxs[obj]
@@ -1540,7 +1583,7 @@ class PuzzleJaxEnv:
                             horizontal = False
                         else:
                             fns.append(partial(detect_obj_in_cell, obj_idx=obj_idx))
-                    elif obj in self.meta_objs:
+                    elif obj in self.meta_objs_lower:
                         if no:
                             if DEBUG:
                                 print(l_cell)
@@ -1787,9 +1830,6 @@ class PuzzleJaxEnv:
             kernel_meta_objs = kernel_detect_out.detected_meta_objs
             pattern_meta_objs = pattern_detect_out.detected_meta_objs
             obj_idx = disambiguate_meta(obj, meta_objs, kernel_meta_objs, pattern_meta_objs, self.objs_to_idxs)
-            if obj_idx is None:
-                obj_idx = -1
-            obj_idx = jnp.ravel(jnp.array(obj_idx))[0]
             # Add the object
             m_cell = m_cell.at[obj_idx].set(True)
             if force_idx is None:
@@ -1840,9 +1880,6 @@ class PuzzleJaxEnv:
             kernel_meta_objs = kernel_detect_out.detected_meta_objs
             pattern_meta_objs = pattern_detect_out.detected_meta_objs
             obj_idx = disambiguate_meta(obj, meta_objs, kernel_meta_objs, pattern_meta_objs, self.objs_to_idxs)
-            if obj_idx is None:
-                obj_idx = -1
-            obj_idx = jnp.ravel(jnp.array(obj_idx))[0]
 
             # Look for detected force index in corresponding input cell, then kernel, then pattern.
             # This should never end up as -1 (i.e. there should be a corresponding movement index somewhere in the LHS).
@@ -1867,7 +1904,6 @@ class PuzzleJaxEnv:
                 pattern_moving_idx,
                 force_idx,
             )
-            force_idx = jnp.ravel(jnp.array(force_idx))[0]
                 
             m_cell = m_cell.at[obj_idx].set(True)
 
@@ -1896,9 +1932,6 @@ class PuzzleJaxEnv:
                 m_cell = m_cell.at[force_idx: (force_idx + 1) * N_FORCES].set(False)
             else:
                 obj_idx = disambiguate_meta(obj, meta_objs, kernel_meta_objs, pattern_meta_objs, self.objs_to_idxs)
-                if obj_idx is None:
-                    obj_idx = -1
-                obj_idx = jnp.ravel(jnp.array(obj_idx))[0]
                 m_cell = jax.lax.dynamic_update_slice(
                     m_cell, jnp.zeros(N_FORCES, dtype=bool), (jnp.array(self.obj_idxs_to_force_idxs)[obj_idx],)
                 )
@@ -1949,45 +1982,49 @@ class PuzzleJaxEnv:
                 else:
                     if obj in self.char_to_obj:
                         obj = self.char_to_obj[obj]
-                    if (obj in self.objs_to_idxs) or (obj in self.meta_objs):
+                    obj_key = obj
+                    if obj_key not in self.objs_to_idxs and isinstance(obj_key, str):
+                        if obj_key.lower() in self.objs_to_idxs:
+                            obj_key = obj_key.lower()
+                    if (obj_key in self.objs_to_idxs) or (obj_key in self.meta_objs_lower):
                         if no:
-                            if obj in self.objs_to_idxs:
-                                fns.append(partial(project_no_obj, obj=obj))
-                            elif obj in self.meta_objs:
-                                fns.append(partial(project_no_meta, obj=obj))
+                            if obj_key in self.objs_to_idxs:
+                                fns.append(partial(project_no_obj, obj=obj_key))
+                            elif obj_key in self.meta_objs_lower:
+                                fns.append(partial(project_no_meta, obj=obj_key))
                             else:
                                 raise Exception(f'Invalid object `{obj}` in rule.')
                             no = False
                         elif force:
-                            if obj in self.objs_to_idxs:
-                                obj_idx = self.objs_to_idxs[obj]
+                            if obj_key in self.objs_to_idxs:
+                                obj_idx = self.objs_to_idxs[obj_key]
                                 fns.append(partial(project_force_obj, obj_idx=obj_idx, force_idx=force_idx))
                             else:
-                                fns.append(partial(project_force_meta, obj=obj, force_idx=force_idx))
+                                fns.append(partial(project_force_meta, obj=obj_key, force_idx=force_idx))
                             force = False
                         elif moving:
-                            fns.append(partial(project_moving_obj, obj=obj))
+                            fns.append(partial(project_moving_obj, obj=obj_key))
                             moving = False
                         elif orthogonal:
-                            fns.append(partial(project_moving_obj, obj=obj))
+                            fns.append(partial(project_moving_obj, obj=obj_key))
                             orthogonal = False
                         elif vertical:
-                            fns.append(partial(project_moving_obj, obj=obj))
+                            fns.append(partial(project_moving_obj, obj=obj_key))
                             vertical = False
                         elif horizontal:
-                            fns.append(partial(project_moving_obj, obj=obj))
+                            fns.append(partial(project_moving_obj, obj=obj_key))
                             horizontal = False
                         elif stationary:
-                            fns.append(partial(project_stationary_obj, obj=obj))
+                            fns.append(partial(project_stationary_obj, obj=obj_key))
                             stationary = False
                         elif random:
-                            fns.append(partial(project_obj, obj=obj, random=True))
+                            fns.append(partial(project_obj, obj=obj_key, random=True))
                             random = False
                         elif random_dir:
-                            fns.append(partial(project_force_meta, obj=obj, force_idx=None))
+                            fns.append(partial(project_force_meta, obj=obj_key, force_idx=None))
                             random_dir = False
                         else:
-                            fns.append(partial(project_obj, obj=obj))
+                            fns.append(partial(project_obj, obj=obj_key))
                     else:
                         raise Exception(f'Invalid object `{obj}` in rule.')
             
@@ -2307,29 +2344,35 @@ class PuzzleJaxEnv:
                             ],
                             axis=0,
                         )  # (K, max_coords, 2)
-                        coord_counts = jnp.sum(coord_lists[:, :, 0] != -1, axis=1)  # (K,)
-                        any_empty = jnp.any(coord_counts == 0)
-                        safe_counts = jnp.maximum(coord_counts, 1)
-                        total = jnp.where(any_empty, 0, jnp.prod(coord_counts))
 
-                        def idx_to_tuple(flat_idx):
-                            idxs = []
-                            carry = flat_idx
-                            for k in range(kernel_activations.shape[0]):
-                                base = safe_counts[k]
-                                idxs.append(carry % base)
-                                carry = carry // base
-                            return jnp.array(idxs)
+                        tuple_idx_grid = jnp.stack(
+                            jnp.meshgrid(
+                                *([jnp.arange(max_coords)] * kernel_activations.shape[0]),
+                                indexing='ij'
+                            ),
+                            axis=-1,
+                        )
+                        tuple_idxs = tuple_idx_grid.reshape(-1, kernel_activations.shape[0])  # (T, K)
+
+                        def idxs_to_coords(idxs):
+                            return coord_lists[jnp.arange(coord_lists.shape[0]), idxs]
+
+                        tuple_coords = jax.vmap(idxs_to_coords)(tuple_idxs)  # (T, K, 2)
+                        invalid = jnp.any(tuple_coords == -1, axis=(1, 2))
+                        tuple_coords = jnp.where(
+                            invalid[:, None, None],
+                            -jnp.ones_like(tuple_coords),
+                            tuple_coords,
+                        )
 
                         def loop_cond(carry):
                             _, _, i = carry
-                            return i < total
+                            return jnp.all(tuple_coords[i] != -1)
 
                         def loop_body(carry):
                             rng, lvl, i = carry
                             kernel_activations_i, cell_detect_outs_i, kernel_detect_outs_i, pattern_detect_out_i = detect_pattern(lvl)
-                            tuple_idxs = idx_to_tuple(i)
-                            tuple_xy = coord_lists[jnp.arange(coord_lists.shape[0]), tuple_idxs]
+                            tuple_xy = tuple_coords[i]
 
                             def is_valid_for_kernel(k):
                                 xy = tuple_xy[k]
@@ -2541,15 +2584,17 @@ class PuzzleJaxEnv:
         for rule_block in self.tree.rules:
 
             # FIXME: what's with this unnecessary list?
-            # assert len(rule_block) == 1
-            # rule_block = rule_block[0]
 
             looping = rule_block.looping
             rule_grps = []
             last_subrule_fns_were_late = None
             for rule in rule_block.rules:
                 try:
-                    expanded_rules = _expand_or_meta_rules(self.meta_objs, rule)
+                    expanded_rules = _expand_or_meta_rules(
+                        self.meta_objs,
+                        rule,
+                        properties_single_layer=self.properties_single_layer,
+                    )
                     sub_rule_fns = []
                     for expanded_rule in expanded_rules:
                         sub_rule_fns.extend(
@@ -2562,7 +2607,6 @@ class PuzzleJaxEnv:
                     # I'm not actually clear on how PS handles these groups combining late/non-late rules, so have just
                     # taken a best guess here (which seems to agree with game `Teh_Interwebs`).
                     if last_subrule_fns_were_late is None:
-                        breakpoint()
                         logger.warn(
                             (f'Initial rule has `+` prefix, but no rule precedes it, so ignoring `+` and adding this rule'
                             ' as a new rule group.')
@@ -2588,7 +2632,6 @@ class PuzzleJaxEnv:
                             last_subrule_fns_were_late = False
                         else:
                             rule_grps[-1].extend(sub_rule_fns)
-                            last_subrule_fns_were_late = False
                 elif 'late' in rule.prefixes:
                     late_rule_grps.append(sub_rule_fns)
                     last_subrule_fns_were_late = True
@@ -3862,39 +3905,96 @@ def flood_kernel_activations_to_cells(kernel_activations, in_patch_shape):
     return cell_activations
 
 
-def _expand_or_meta_rules(meta_objs, rule: Rule) -> List[Rule]:
-    """Expand OR meta-objects into concrete rules, JS-style, so all sub-objects are handled.
-    Only expands when meta-objects are actually present in the rule. Repeated occurrences are
-    expanded via cartesian product across all occurrences.
-    """
+def _expand_or_meta_rules(meta_objs, rule: Rule, properties_single_layer=None) -> List[Rule]:
+    """Expand OR meta-objects into concrete rules, matching the JS compiler semantics."""
+
+    meta_objs_lower = {k.lower(): v for k, v in meta_objs.items()}
+
+    direction_words = {
+        '>', '<', '^', 'v',
+        'up', 'down', 'left', 'right',
+        'moving', 'stationary', 'no', 'randomdir', 'random',
+        'horizontal', 'vertical', 'orthogonal', 'perpendicular', 'parallel',
+        'action',
+    }
+
+    properties_single_layer = properties_single_layer or {}
+
+    def _is_flat_cell_list(maybe_kern):
+        return (
+            isinstance(maybe_kern, list)
+            and (
+                len(maybe_kern) == 0
+                or all(
+                    (isinstance(cell, list) and all(not isinstance(x, list) for x in cell))
+                    or isinstance(cell, str)
+                    for cell in maybe_kern
+                )
+            )
+        )
+
+    def tokens_to_rule_contents(tokens):
+        pairs = []
+        i = 0
+        while i < len(tokens):
+            tok = tokens[i]
+            if tok is None:
+                i += 1
+                continue
+            tok_l = tok.lower()
+            if tok_l in direction_words:
+                if i + 1 >= len(tokens):
+                    break
+                pairs.append((tok, tokens[i + 1]))
+                i += 2
+            else:
+                pairs.append(("", tok))
+                i += 1
+        return pairs_to_tokens(pairs)
 
     def normalize_cell(cell):
         if cell is None:
             return None
         if isinstance(cell, str):
-            return cell.split(' ')
-        return list(cell)
+            return [cell]
+        cell_list = list(cell)
+        if any(isinstance(item, str) and ' ' in item for item in cell_list):
+            return cell_list
+        return tokens_to_rule_contents(cell_list)
 
-    def copy_kernels(kernels):
+    def normalize_kernels(kernels):
         if kernels is None:
-            return None
+            return None, None
         new_kernels = []
+        kernel_shapes = []
         for kern in kernels:
+            if kern is None:
+                new_kernels.append(kern)
+                kernel_shapes.append(None)
+                continue
+            if len(kern) > 0 and _is_flat_cell_list(kern):
+                rows = [kern]
+                kernel_shapes.append("1d")
+            else:
+                rows = kern
+                kernel_shapes.append("2d")
             new_kern = []
-            for row in kern:
+            for row in rows:
                 new_row = []
                 for cell in row:
                     new_row.append(normalize_cell(cell))
                 new_kern.append(new_row)
-            new_kern = list(new_kern)
             new_kernels.append(new_kern)
-        return new_kernels
+        return new_kernels, kernel_shapes
 
-    def denormalize_kernels(kernels):
+    def denormalize_kernels(kernels, kernel_shapes):
         if kernels is None:
             return None
         denorm = []
-        for kern in kernels:
+        for kern, shape in zip(kernels, kernel_shapes):
+            if kern is None:
+                denorm.append(kern)
+                continue
             denorm_kern = []
             for row in kern:
                 denorm_row = []
@@ -3902,69 +4002,132 @@ def _expand_or_meta_rules(meta_objs, rule: Rule) -> List[Rule]:
                     if cell is None:
                         denorm_row.append(cell)
                     elif isinstance(cell, list):
-                        denorm_row.append(" ".join(cell))
+                        denorm_row.append(list(cell))
                     else:
-                        denorm_row.append(cell)
+                        denorm_row.append([cell])
                 denorm_kern.append(denorm_row)
-            denorm.append(denorm_kern)
+            if shape == "1d":
+                denorm.append(denorm_kern[0] if len(denorm_kern) > 0 else [])
+            else:
+                denorm.append(denorm_kern)
         return denorm
 
-    def is_no_prefixed(tokens, idx):
-        if tokens is None or idx <= 0:
-            return False
-        prev = tokens[idx - 1]
-        return prev is not None and prev.lower() == "no"
-
-    def collect_meta_tokens(cell_tokens):
-        if cell_tokens is None:
-            return []
-        tokens = list(cell_tokens)
-        result = []
-        for idx, tok in enumerate(tokens):
-            if tok is None:
+    def copy_kernels(kernels):
+        if kernels is None:
+            return None
+        new_kernels = []
+        for kern in kernels:
+            if kern is None:
+                new_kernels.append(kern)
                 continue
-            tok_l = tok.lower()
-            if tok_l in meta_objs and len(meta_objs[tok_l]) > 1 and not is_no_prefixed(tokens, idx):
-                result.append(tok_l)
+            new_kern = []
+            for row in kern:
+                new_row = []
+                for cell in row:
+                    if cell is None:
+                        new_row.append(cell)
+                    elif isinstance(cell, list):
+                        new_row.append(list(cell))
+                    else:
+                        new_row.append(cell)
+                new_kern.append(new_row)
+            new_kernels.append(new_kern)
+        return new_kernels
+
+    def cell_to_pairs(cell_contents):
+        if cell_contents is None:
+            return []
+        pairs = []
+        for content in cell_contents:
+            if content is None:
+                continue
+            parts = content.split(' ')
+            if len(parts) == 1:
+                pairs.append(("", parts[0]))
+            elif len(parts) == 2:
+                pairs.append((parts[0], parts[1]))
+            else:
+                raise Exception(f"Invalid rule_content: {content}. Lark parsing issue?")
+        return pairs
+
+    def pairs_to_tokens(pairs):
+        tokens = []
+        for direction, name in pairs:
+            if direction:
+                tokens.append(f"{direction} {name}")
+            else:
+                tokens.append(name)
+        return tokens
+
+    def is_property(name):
+        name_l = name.lower()
+        return name_l in meta_objs_lower and len(meta_objs_lower[name_l]) > 1
+
+    def expand_no_prefixed_properties(cell_tokens):
+        if cell_tokens is None:
+            return None
+        pairs = cell_to_pairs(cell_tokens)
+        expanded = []
+        for direction, name in pairs:
+            if direction and direction.lower() == "no" and is_property(name):
+                for alias in meta_objs_lower[name.lower()]:
+                    expanded.append((direction, alias))
+            else:
+                expanded.append((direction, name))
+        return pairs_to_tokens(expanded)
+
+    def get_properties_from_cell(cell_tokens):
+        result = []
+        for direction, name in cell_to_pairs(cell_tokens):
+            if direction and direction.lower() == "random":
+                continue
+            if is_property(name):
+                result.append(name.lower())
         return result
 
-    # Compute ambiguous properties (meta-objects on RHS not present in corresponding LHS cell)
+    def concretize_property_in_cell(cell_tokens, prop, concrete_type):
+        if cell_tokens is None:
+            return None
+        pairs = cell_to_pairs(cell_tokens)
+        for i, (direction, name) in enumerate(pairs):
+            if direction and direction.lower() == "random":
+                continue
+            if name.lower() == prop:
+                pairs[i] = (direction, concrete_type)
+        return pairs_to_tokens(pairs)
+
+    left_kerns, left_shapes = normalize_kernels(rule.left_kernels)
+    right_kerns, right_shapes = normalize_kernels(rule.right_kernels)
+
+    # Step 1: expand "no <property>" into "no <obj>" per JS
+    for i, kern in enumerate(left_kerns):
+        for j, row in enumerate(kern):
+            for k, cell in enumerate(row):
+                left_kerns[i][j][k] = expand_no_prefixed_properties(cell)
+                if right_kerns is not None:
+                    if i < len(right_kerns) and j < len(right_kerns[i]) and k < len(right_kerns[i][j]):
+                        right_kerns[i][j][k] = expand_no_prefixed_properties(right_kerns[i][j][k])
+
+    # Step 2: compute ambiguous properties (RHS property not present in LHS cell)
     ambiguous_properties = {}
-    if rule.right_kernels is not None:
-        for k_i, (l_kern, r_kern) in enumerate(zip(rule.left_kernels, rule.right_kernels)):
-            for r_i, (l_row, r_row) in enumerate(zip(l_kern, r_kern)):
-                for c_i, (l_cell, r_cell) in enumerate(zip(l_row, r_row)):
-                    l_tokens = collect_meta_tokens(normalize_cell(l_cell))
-                    r_tokens = collect_meta_tokens(normalize_cell(r_cell))
-                    for tok in r_tokens:
-                        if tok not in l_tokens:
-                            ambiguous_properties[tok] = True
+    if right_kerns is not None:
+        for l_kern, r_kern in zip(left_kerns, right_kerns):
+            for l_row, r_row in zip(l_kern, r_kern):
+                for l_cell, r_cell in zip(l_row, r_row):
+                    l_props = get_properties_from_cell(l_cell)
+                    r_props = get_properties_from_cell(r_cell)
+                    for prop in r_props:
+                        if prop not in l_props:
+                            ambiguous_properties[prop] = True
 
-    # Early out if no expandable meta-objects on LHS
-    has_expandable = False
-    for k_i, kern in enumerate(rule.left_kernels):
-        for r_i, row in enumerate(kern):
-            for c_i, cell in enumerate(row):
-                tokens = normalize_cell(cell)
-                for tok in collect_meta_tokens(tokens):
-                    has_expandable = True
-                    break
-            if has_expandable:
-                break
-        if has_expandable:
-            break
-    if not has_expandable:
-        return [rule]
-
-    # Expand occurrences on LHS, one at a time (cartesian product across occurrences),
-    # and propagate to RHS only for the corresponding cell.
     result = [
         {
-            "left": copy_kernels(rule.left_kernels),
-            "right": copy_kernels(rule.right_kernels),
+            "left": left_kerns,
+            "right": right_kerns,
             "property_replacement": {},
         }
     ]
+
     modified = True
     while modified:
         modified = False
@@ -3978,42 +4141,43 @@ def _expand_or_meta_rules(meta_objs, rule: Rule) -> List[Rule]:
             for k_i, kern in enumerate(left_kerns):
                 for r_i, row in enumerate(kern):
                     for c_i, cell in enumerate(row):
-                        tokens = normalize_cell(cell)
-                        for t_i, tok in enumerate(tokens):
-                            tok_l = tok.lower()
-                            if tok_l in meta_objs and len(meta_objs[tok_l]) > 1 and not is_no_prefixed(tokens, t_i):
-                                # Expand this occurrence
-                                should_remove = True
-                                modified = True
-                                for choice in meta_objs[tok_l]:
-                                    new_left = copy_kernels(left_kerns)
-                                    new_right = copy_kernels(right_kerns)
-                                    new_prop_repl = {k: [v[0], v[1]] for k, v in prop_repl.items()}
+                        properties = get_properties_from_cell(cell)
+                        for prop in properties:
+                            if prop in properties_single_layer and ambiguous_properties.get(prop) is not True:
+                                continue
 
-                                    new_left[k_i][r_i][c_i][t_i] = choice
+                            aliases = meta_objs_lower[prop]
+                            should_remove = True
+                            modified = True
 
-                                    # Replace in corresponding RHS cell if present
-                                    if new_right is not None:
-                                        if k_i < len(new_right) and r_i < len(new_right[k_i]) and c_i < len(new_right[k_i][r_i]):
-                                            if new_right[k_i][r_i][c_i] is not None:
-                                                rhs_tokens = new_right[k_i][r_i][c_i]
-                                                for rhs_t_i, rhs_tok in enumerate(rhs_tokens):
-                                                    if rhs_tok is not None and rhs_tok.lower() == tok_l:
-                                                        rhs_tokens[rhs_t_i] = choice
+                            for choice in aliases:
+                                new_left = copy_kernels(left_kerns)
+                                new_right = copy_kernels(right_kerns)
+                                new_prop_repl = {k: [v[0], v[1]] for k, v in prop_repl.items()}
 
-                                    if tok_l not in new_prop_repl:
-                                        new_prop_repl[tok_l] = [choice, 1]
-                                    else:
-                                        new_prop_repl[tok_l][1] += 1
+                                new_left[k_i][r_i][c_i] = concretize_property_in_cell(
+                                    new_left[k_i][r_i][c_i], prop, choice
+                                )
 
-                                    result.append(
-                                        {
-                                            "left": new_left,
-                                            "right": new_right,
-                                            "property_replacement": new_prop_repl,
-                                        }
-                                    )
-                                break
+                                if new_right is not None:
+                                    if k_i < len(new_right) and r_i < len(new_right[k_i]) and c_i < len(new_right[k_i][r_i]):
+                                        new_right[k_i][r_i][c_i] = concretize_property_in_cell(
+                                            new_right[k_i][r_i][c_i], prop, choice
+                                        )
+
+                                if prop not in new_prop_repl:
+                                    new_prop_repl[prop] = [choice, 1]
+                                else:
+                                    new_prop_repl[prop][1] += 1
+
+                                result.append(
+                                    {
+                                        "left": new_left,
+                                        "right": new_right,
+                                        "property_replacement": new_prop_repl,
+                                    }
+                                )
+                            break
                         if should_remove:
                             break
                     if should_remove:
@@ -4032,20 +4196,18 @@ def _expand_or_meta_rules(meta_objs, rule: Rule) -> List[Rule]:
         right_kerns = cur["right"]
         prop_repl = cur["property_replacement"]
 
-        # If a meta-object appears exactly once on LHS, replace all remaining RHS occurrences
         if right_kerns is not None:
-            for tok, (choice, count) in prop_repl.items():
+            for prop, (choice, count) in prop_repl.items():
                 if count == 1:
                     for k_i, kern in enumerate(right_kerns):
                         for r_i, row in enumerate(kern):
                             for c_i, cell in enumerate(row):
                                 if cell is None:
                                     continue
-                                for t_i, cell_tok in enumerate(cell):
-                                    if cell_tok is not None and cell_tok.lower() == tok:
-                                        cell[t_i] = choice
+                                right_kerns[k_i][r_i][c_i] = concretize_property_in_cell(
+                                    right_kerns[k_i][r_i][c_i], prop, choice
+                                )
 
-        # Check for ambiguous RHS meta-objects (JS-style error)
         rhs_property_remains = None
         if right_kerns is not None:
             for kern in right_kerns:
@@ -4053,12 +4215,9 @@ def _expand_or_meta_rules(meta_objs, rule: Rule) -> List[Rule]:
                     for cell in row:
                         if cell is None:
                             continue
-                        for cell_tok in cell:
-                            if cell_tok is None:
-                                continue
-                            tok_l = cell_tok.lower()
-                            if tok_l in ambiguous_properties:
-                                rhs_property_remains = tok_l
+                        for prop in get_properties_from_cell(cell):
+                            if prop in ambiguous_properties:
+                                rhs_property_remains = prop
                                 break
                         if rhs_property_remains is not None:
                             break
@@ -4074,8 +4233,8 @@ def _expand_or_meta_rules(meta_objs, rule: Rule) -> List[Rule]:
 
         expanded_rules.append(
             Rule(
-                left_patterns=denormalize_kernels(left_kerns),
-                right_patterns=denormalize_kernels(right_kerns),
+                left_patterns=denormalize_kernels(left_kerns, left_shapes),
+                right_patterns=denormalize_kernels(right_kerns, right_shapes),
                 prefixes=list(rule.prefixes),
                 command=rule.command,
             )
