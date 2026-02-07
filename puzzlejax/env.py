@@ -152,7 +152,7 @@ def process_legend(legend):
     
     return objs_to_chars, meta_objs, conjoined_tiles, chars_to_objs
 
-def expand_collision_layers(collision_layers, meta_objs, char_to_obj, tree_obj_names):
+def expand_collision_layers(collision_layers, meta_objs, char_to_obj, tree_obj_names, conjoined_tiles=None):
     # Preprocess collision layers to replace joint objects with their sub-objects
     # TODO: could do this more elegantly using `expand_meta_objs`, right?
     # for i, l in enumerate(collision_layers):
@@ -167,23 +167,57 @@ def expand_collision_layers(collision_layers, meta_objs, char_to_obj, tree_obj_n
     #             j += len(subtiles)
     #         else:
     #             j += 1
+    conjoined_tiles = conjoined_tiles or {}
+
+    obj_name_map = {name.lower(): name for name in tree_obj_names}
+    meta_lower = {k.lower(): v for k, v in meta_objs.items()}
+    conjoined_lower = {k.lower(): v for k, v in conjoined_tiles.items()}
+
+    def _norm(n):
+        return n.lower() if isinstance(n, str) else n
+
+    def resolve_name(n, visiting):
+        key = _norm(n)
+
+        # Atomic object wins (do not expand properties with same name)
+        if key in obj_name_map:
+            return [obj_name_map[key]]
+
+        # Aggregates not allowed in collision layers
+        if key in conjoined_lower:
+            logger.error(f'Aggregate "{n}" cannot be added to collision layers.')
+            return []
+
+        # Properties/synonyms (OR)
+        if key in meta_lower:
+            if key in visiting:
+                return []
+            visiting.add(key)
+            result = []
+            for sub in meta_lower[key]:
+                if _norm(sub) == key:
+                    continue
+                result.extend(resolve_name(sub, visiting))
+            visiting.remove(key)
+            return result
+
+        logger.error(f'Cannot add "{n}" to a collision layer; it has not been declared.')
+        return []
+
     seen = set()
     cl = []
     # If an object appears multiple times, it belongs to the last collision layer in which we saw it
     for l in collision_layers[::-1]:
         l_1 = []
         for o in l:
-            sub_objs = expand_meta_objs([o], meta_objs, char_to_obj)
-            # If our meta-object is also atomic (e.g. in `Bug_Exterminator`), and does not recursively refer to itself,
-            # we still need to include it in the collision layers.
-            if o in tree_obj_names and o not in sub_objs:
-                sub_objs = [o] + sub_objs
+            sub_objs = resolve_name(o, set())
             for so in sub_objs:
-                if so not in seen:
-                    seen.add(so)
+                so_key = _norm(so)
+                if so_key not in seen:
+                    seen.add(so_key)
                     l_1.append(so)
                 else:
-                    logger.warn(f"Object {so} appears multiple times in collision layers.")
+                    logger.warning(f"Object {so} appears multiple times in collision layers.")
         cl.append(l_1)
     return cl[::-1]
 
@@ -245,10 +279,19 @@ def get_meta_channel(lvl, obj_idxs):
     """ Return a boolean array indicating whether any of the specified object indices are present in each cell of the level."""
     return jnp.any(lvl[jnp.array(obj_idxs)], axis=0)
 
-def compute_manhattan_dists(lvl, src, trg):
-    n_cells = np.prod(lvl.shape[1:])
-    src_channel = get_meta_channel(lvl, src)
-    trg_channel = get_meta_channel(lvl, trg)
+def get_meta_channel_all(lvl, obj_idxs):
+    """Return a boolean array indicating whether all specified object indices are present in each cell."""
+    return jnp.all(lvl[jnp.array(obj_idxs)], axis=0)
+
+def get_channel(lvl, obj_idxs, require_all=False):
+    if obj_idxs is None:
+        return None
+    if require_all:
+        return get_meta_channel_all(lvl, obj_idxs)
+    return get_meta_channel(lvl, obj_idxs)
+
+def compute_manhattan_dists_from_channels(src_channel, trg_channel):
+    n_cells = np.prod(src_channel.shape)
     src_coords = jnp.argwhere(src_channel, size=n_cells, fill_value=-1)
     trg_coords = jnp.argwhere(trg_channel, size=n_cells, fill_value=-1)
     src_coords = rearrange(src_coords, 'n c -> n 1 c')
@@ -260,55 +303,53 @@ def compute_manhattan_dists(lvl, src, trg):
     dists = jnp.where(jnp.all(trg_coords == -1, axis=-1), np.nan, dists)
     return dists
 
-def compute_sum_of_manhattan_dists(lvl, src, trg):
-    dists = compute_manhattan_dists(lvl, src, trg)
+def compute_sum_of_manhattan_dists_from_channels(src_channel, trg_channel):
+    dists = compute_manhattan_dists_from_channels(src_channel, trg_channel)
     # Get minimum of each source to any target
     dists = jnp.nanmin(dists, axis=1)
     dists = jnp.where(jnp.isnan(dists), 0, dists)
-    sum_dist = jnp.sum(dists, axis=0).astype(np.int32)
-    return sum_dist
+    return jnp.sum(dists, axis=0).astype(np.int32)
 
-def compute_min_manhattan_dist(lvl, src, trg):
-    dists = compute_manhattan_dists(lvl, src, trg)
+def compute_min_manhattan_dist_from_channels(src_channel, trg_channel):
+    dists = compute_manhattan_dists_from_channels(src_channel, trg_channel)
     dists = jnp.where(jnp.isnan(dists), jnp.iinfo(np.int32).max, dists)
-    min_dist = jnp.min(dists).astype(np.int32)
-    return min_dist
+    return jnp.min(dists).astype(np.int32)
 
-def check_all(lvl, src, trg):
-    src_channel = get_meta_channel(lvl, src)
+def check_all(lvl, src, trg, src_all=False, trg_all=False):
+    src_channel = get_channel(lvl, src, src_all)
     if trg is None:
         return True, 0, 0
-    trg_channel = get_meta_channel(lvl, trg)
+    trg_channel = get_channel(lvl, trg, trg_all)
     win = ~jnp.any(src_channel & ~trg_channel)
     score = jnp.count_nonzero(src_channel & trg_channel)
-    heuristic = compute_sum_of_manhattan_dists(lvl, src, trg)
+    heuristic = compute_sum_of_manhattan_dists_from_channels(src_channel, trg_channel)
     return win, score, -heuristic
 
-def check_some_on(lvl, src, trg):
-    src_channel = get_meta_channel(lvl, src)
-    trg_channel = get_meta_channel(lvl, trg)
+def check_some_on(lvl, src, trg, src_all=False, trg_all=False):
+    src_channel = get_channel(lvl, src, src_all)
+    trg_channel = get_channel(lvl, trg, trg_all)
     win = jnp.any(src_channel & trg_channel)
     score = win.astype(np.int32)
-    heuristic = compute_min_manhattan_dist(lvl, src, trg)
+    heuristic = compute_min_manhattan_dist_from_channels(src_channel, trg_channel)
     return win, score, -heuristic
 
-def check_some_exist(lvl, src):
-    src_channel = get_meta_channel(lvl, src)
+def check_some_exist(lvl, src, src_all=False):
+    src_channel = get_channel(lvl, src, src_all)
     win = jnp.any(src_channel)
     score = win.astype(np.int32)
     heuristic = score.astype(np.int32)
     return win, score, heuristic
 
-def check_none(lvl, src):
-    src_channel = get_meta_channel(lvl, src)
+def check_none(lvl, src, src_all=False):
+    src_channel = get_channel(lvl, src, src_all)
     win = ~jnp.any(src_channel)
     score = -jnp.count_nonzero(src_channel)
     heuristic = score
     return win, score, heuristic
 
-def check_none_on(lvl, src, trg):
-    src_channel = get_meta_channel(lvl, src)
-    trg_channel = get_meta_channel(lvl, trg)
+def check_none_on(lvl, src, trg, src_all=False, trg_all=False):
+    src_channel = get_channel(lvl, src, src_all)
+    trg_channel = get_channel(lvl, trg, trg_all)
     win = ~jnp.any(src_channel & trg_channel)
     score = -jnp.count_nonzero(src_channel & trg_channel)
     heuristic = score
@@ -318,7 +359,7 @@ def check_none_on(lvl, src, trg):
 #     src_channel = get_meta_channel(lvl, src)
 #     win = jnp.any(src_channel)
 #     score = jnp.count_nonzero(src_channel)
-#     heuristic = compute_min_manhattan_dist(lvl, src, trg)
+#     heuristic = compute_min_manhattan_dist_from_channels(src_channel, trg_channel)
 #     return win, score, -heuristic
 
 def check_win(lvl, funcs, jit):
@@ -336,34 +377,76 @@ def check_win(lvl, funcs, jit):
         wins, scores, heuristics = np.array(wins), np.array(scores), np.array(heuristics)
     return jnp.all(wins), scores.sum(), heuristics.sum()
 
-def gen_check_win(win_conditions: Iterable[WinCondition], obj_to_idxs, meta_objs, char_to_obj, jit=True):
+def gen_check_win(win_conditions: Iterable[WinCondition], obj_to_idxs, meta_objs, char_to_obj, joint_tiles=None, jit=True):
     funcs = []
+    joint_tiles = joint_tiles or {}
+    joint_tiles_lower = {k.lower(): v for k, v in joint_tiles.items()}
+
+    def _resolve_obj_key(obj):
+        if obj in obj_to_idxs:
+            return obj
+        if isinstance(obj, str) and obj.lower() in obj_to_idxs:
+            return obj.lower()
+        return obj
+
+    def _resolve_term(name):
+        if name is None:
+            return None, False
+        name_key = name.lower() if isinstance(name, str) else name
+        if isinstance(name, str) and name_key in joint_tiles_lower:
+            components = joint_tiles_lower[name_key]
+            expanded = []
+            for comp in components:
+                expanded.extend(expand_meta_objs([comp], meta_objs, char_to_obj))
+            obj_idxs = [obj_to_idxs[_resolve_obj_key(o)] for o in expanded]
+            return obj_idxs, True
+        if name in obj_to_idxs or (isinstance(name, str) and name_key in obj_to_idxs):
+            return [obj_to_idxs[_resolve_obj_key(name)]], False
+        expanded = expand_meta_objs([name], meta_objs, char_to_obj)
+        return [obj_to_idxs[_resolve_obj_key(obj)] for obj in expanded], False
+
     for win_condition in win_conditions:
         src, trg = win_condition.src_obj, win_condition.trg_obj
-        if src in obj_to_idxs:
-            src = [obj_to_idxs[src]]
-        else:
-            src_objs = expand_meta_objs([src], meta_objs, char_to_obj)
-            src = [obj_to_idxs[obj] for obj in src_objs]
-        if trg is not None:
-            if trg in obj_to_idxs:
-                trg = [obj_to_idxs[trg]]
-            else:
-                trg_objs = expand_meta_objs([trg], meta_objs, char_to_obj)
-                trg = [obj_to_idxs[obj] for obj in trg_objs]
+        src_idxs, src_all = _resolve_term(src)
+        trg_idxs, trg_all = _resolve_term(trg) if trg is not None else (None, False)
+
         if win_condition.quantifier == 'all':
-            func = partial(check_all, src=src, trg=trg)
+            func = partial(
+                check_all,
+                src=src_idxs,
+                trg=trg_idxs,
+                src_all=src_all,
+                trg_all=trg_all,
+            )
         elif win_condition.quantifier in ['some', 'any']:
-            if trg is not None:
-                func = partial(check_some_on, src=src, trg=trg)
+            if trg_idxs is not None:
+                func = partial(
+                    check_some_on,
+                    src=src_idxs,
+                    trg=trg_idxs,
+                    src_all=src_all,
+                    trg_all=trg_all,
+                )
             else:
-                func = partial(check_some_exist, src=src)
-        elif win_condition.quantifier == 'no' and trg is None:
-            func = partial(check_none, src=src)
+                func = partial(
+                    check_some_exist,
+                    src=src_idxs,
+                    src_all=src_all,
+                )
+        elif win_condition.quantifier == 'no' and trg_idxs is None:
+            func = partial(
+                check_none,
+                src=src_idxs,
+                src_all=src_all,
+            )
         elif win_condition.quantifier == 'no':
-            func = partial(check_none_on, src=src, trg=trg)
-        # elif win_condition.quantifier == 'any':
-        #     func = partial(check_any, src=src, trg=trg)
+            func = partial(
+                check_none_on,
+                src=src_idxs,
+                trg=trg_idxs,
+                src_all=src_all,
+                trg_all=trg_all,
+            )
         else:
             raise Exception('Invalid quantifier.')
         funcs.append(func)
@@ -713,8 +796,13 @@ class PuzzleJaxEnv:
 
         if DEBUG:
             print(f"Expanding collision layers for {self.title}")
-        self.collision_layers = collision_layers = expand_collision_layers(tree.collision_layers, meta_objs,
-                                                                           self.char_to_obj, list(tree.objects.keys()))
+        self.collision_layers = collision_layers = expand_collision_layers(
+            tree.collision_layers,
+            meta_objs,
+            self.char_to_obj,
+            list(tree.objects.keys()),
+            conjoined_tiles=joint_tiles,
+        )
         self.properties_single_layer = compute_properties_single_layer(
             meta_objs, collision_layers, self.char_to_obj
         )
@@ -763,7 +851,14 @@ class PuzzleJaxEnv:
             print(f"Generating tick function for {self.title}")
         if DEBUG:
             print(f"Generating check win function for {self.title}")
-        self.check_win = gen_check_win(tree.win_conditions, self.objs_to_idxs, meta_objs, self.char_to_obj, jit=self.jit)
+        self.check_win = gen_check_win(
+            tree.win_conditions,
+            self.objs_to_idxs,
+            meta_objs,
+            self.char_to_obj,
+            joint_tiles=joint_tiles,
+            jit=self.jit,
+        )
         if 'player' in self.objs_to_idxs:
             self.player_idxs = [self.objs_to_idxs['player']]
         elif 'player' in meta_objs:
