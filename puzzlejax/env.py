@@ -152,7 +152,7 @@ def process_legend(legend):
     
     return objs_to_chars, meta_objs, conjoined_tiles, chars_to_objs
 
-def expand_collision_layers(collision_layers, meta_objs, char_to_obj, tree_obj_names, conjoined_tiles=None):
+def expand_collision_layers(collision_layers, meta_objs, char_to_obj, tree_obj_names, conjoined_tiles=None, alt_name_map=None):
     # Preprocess collision layers to replace joint objects with their sub-objects
     # TODO: could do this more elegantly using `expand_meta_objs`, right?
     # for i, l in enumerate(collision_layers):
@@ -173,6 +173,8 @@ def expand_collision_layers(collision_layers, meta_objs, char_to_obj, tree_obj_n
     meta_lower = {k.lower(): v for k, v in meta_objs.items()}
     conjoined_lower = {k.lower(): v for k, v in conjoined_tiles.items()}
     char_to_obj_lower = {k.lower(): v for k, v in char_to_obj.items()}
+    alt_name_map = alt_name_map or {}
+    alt_name_map_lower = {k.lower(): v for k, v in alt_name_map.items()}
 
     def _norm(n):
         return n.lower() if isinstance(n, str) else n
@@ -187,6 +189,10 @@ def expand_collision_layers(collision_layers, meta_objs, char_to_obj, tree_obj_n
         # Legend char -> object name
         if key in char_to_obj_lower:
             return resolve_name(char_to_obj_lower[key], visiting)
+
+        # Alt name -> canonical object name
+        if key in alt_name_map_lower:
+            return resolve_name(alt_name_map_lower[key], visiting)
 
         # Aggregates not allowed in collision layers
         if key in conjoined_lower:
@@ -807,6 +813,7 @@ class PuzzleJaxEnv:
             self.char_to_obj,
             list(tree.objects.keys()),
             conjoined_tiles=joint_tiles,
+            alt_name_map=alts_to_names,
         )
         self.properties_single_layer = compute_properties_single_layer(
             meta_objs, collision_layers, self.char_to_obj
@@ -840,6 +847,8 @@ class PuzzleJaxEnv:
             # Now make sure all the alts are in the objs_to_idxs dict
             for alt_name in alt_names:
                 if alt_name not in self.objs_to_idxs:
+                    if obj_key == 'powerup':
+                        breakpoint()
                     self.objs_to_idxs[alt_name] = self.objs_to_idxs[obj_key]
 
         self.obj_force_masks = gen_obj_force_masks(self.n_objs, self.obj_idxs_to_force_idxs, len(self.collision_layers))
