@@ -2310,9 +2310,13 @@ class PuzzleJaxEnv:
                     if rp is not None:
                         for i, r_cell in enumerate(rp):
                             if r_cell == '...':
-                                # assert is_line_detector, f"`...` not found in left pattern of rule {rule_name}"
+                                # Match PuzzleScript compiler behavior: unmatched RHS ellipsis is treated as an empty output cell.
                                 if not is_line_detector:
-                                    logger.warn(f'`...` found in right pattern of rule {rule_name}, but not in left pattern. Removing it on the right side for now.')
+                                    logger.warn(
+                                        f'`...` found in right pattern of rule {rule_name}, but not in left pattern. '
+                                        'Treating it as an empty cell on the right side.'
+                                    )
+                                    cell_projection_fns.append(gen_cell_projection_fn(None, force_idx))
                                 else:
                                     cell_projection_fns.append('...')
                             else:
@@ -2356,12 +2360,12 @@ class PuzzleJaxEnv:
                     det_proj_fns = gen_rotated_line_kernel_fns(lp, rp, rot)
                     if det_proj_fns == (None, None):
                         return None
-                    kernel_fns.append(gen_rotated_line_kernel_fns(lp, rp, rot))
+                    kernel_fns.append(det_proj_fns)
                 else:
                     det_proj_fns = gen_rotated_kernel_fns(lp, rp, rot)
                     if det_proj_fns == (None, None):
                         return None
-                    kernel_fns.append(gen_rotated_kernel_fns(lp, rp, rot))
+                    kernel_fns.append(det_proj_fns)
             kernel_detection_fns, kernel_projection_fns = zip(*kernel_fns)
 
             def is_col_major_kernel(kernel):
@@ -3290,7 +3294,7 @@ class PuzzleJaxEnv:
                 out_cell_idxs = out_cell_idxs[0, :]
 
             # Either the rule has no right pattern, or it should detect as many cells as there are cell projection functions
-            if not (~has_right_pattern or (len(cell_detect_outs) == len(out_cell_idxs) == len(cell_projection_fns))):
+            if not (not has_right_pattern or (len(cell_detect_outs) == len(out_cell_idxs) == len(cell_projection_fns))):
                 raise RuntimeError(f"Warning: rule {rule_name} with has_right_pattern {has_right_pattern} results in len(cell_detect_outs) {len(cell_detect_outs)} != len(out_cell_idxs) {len(out_cell_idxs)} != len(cell_projection_fns) {len(cell_projection_fns)}")
             init_lvl = lvl
 
