@@ -8,6 +8,7 @@ gym
 gymnax
 hydra-core
 hydra-submitit-launcher
+javascript
 jax[cuda]
 jax
 lark

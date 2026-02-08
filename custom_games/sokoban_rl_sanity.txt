@@ -75,26 +75,38 @@ Player, Wall, Crate
 RULES
 ======
 
-[ > Player | Crate ] -> [ > Player | > Crate ]
-
-right [right Crate | ] -> [right Crate | down Crate]
-down [ down Crate | ] -> [down Crate | right Crate]
+[ > Player | Crate ] -> [ > Player | > Crate ] 
 
 ==============
 WINCONDITIONS
 ==============
 
+all Target on Crate
 
 =======
 LEVELS
 =======
 
-........
-........
-........
-..p*....
-........
-........
-........
-........
-........
+......
+..O...
+......
+..P...
+...*..
+......
+......
+
+####..
+#.O#..
+#..###
+#@P..#
+#..*.#
+#..###
+####..
+
+######
+#....#
+#.#P.#
+#.*@.#
+#.O@.#
+#....#
+######

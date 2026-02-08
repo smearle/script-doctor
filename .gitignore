@@ -17,11 +17,9 @@ src - Kopie
 node_modules/
 __pycache__
 
-data*
-scraped_puzzles
-scraped_games
+data/*
+!data/scraped_games
 scrape_logs
-min_games
 example_games.json
 example_sprites.json
 example_sprites_names.txt

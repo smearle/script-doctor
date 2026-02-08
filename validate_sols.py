@@ -85,7 +85,7 @@ def main_launch(cfg: JaxValidationConfig):
             # slurm_gres='gpu:1',
             slurm_setup=["export JAX_PLATFORMS=cpu"],
             slurm_array_parallelism=n_jobs,
-            slurm_account='pr_174_tandon_advanced',
+            slurm_account="torch_pr_84_tandon_advanced",
         )
         executor.map_array(main, [cfg] * n_jobs, game_sublists)
     else:
@@ -104,6 +104,7 @@ def main(cfg: JaxValidationConfig, games: Optional[List[str]] = None):
     parser = Lark(puzzlescript_grammar, start="ps_game", maybe_placeholders=False)
     with open(GAMES_TO_N_RULES_PATH, 'r') as f:
         games_to_n_rules = json.load(f)
+    games_to_n_rules_dirty = False
     if games is not None:
         games = games
     elif cfg.game is None:
@@ -115,9 +116,12 @@ def main(cfg: JaxValidationConfig, games: Optional[List[str]] = None):
             'stats': {},
             'compile_error': [],
             'rigid_prefix_error': [],
+            'timeout': [],
             'runtime_error': {},
             'solution_error': {},
             'state_error': {},
+            'random_solution_error': {},
+            'random_state_error': {},
             'score_error': {},
             'success': {},
             'valid_games': [],
@@ -136,12 +140,15 @@ def main(cfg: JaxValidationConfig, games: Optional[List[str]] = None):
     n_levels = 0
     n_compile_error = 0
     n_rigid_prefix_error = 0
+    n_timeout_error = 0
     n_runtime_error = 0
     n_solution_error = 0
     n_state_error = 0
     n_score_error = 0
     n_success = 0
     n_unvalidated_levels = 0
+    n_random_solution_error = 0
+    n_random_state_error = 0
 
     # if os.path.exists(SOLUTION_REWARDS_PATH):
     #     with open(SOLUTION_REWARDS_PATH, 'r') as f:
@@ -150,16 +157,20 @@ def main(cfg: JaxValidationConfig, games: Optional[List[str]] = None):
     solution_rewards_dict = {}
     
 
-    def save_stats(results, n_levels, n_success, n_compile_error, n_rigid_prefix_error, n_runtime_error,
-                   n_solution_error, n_state_error, n_score_error, n_unvalidated_levels):
+    def save_stats(results, n_levels, n_success, n_compile_error, n_rigid_prefix_error, n_timeout_error,
+                   n_runtime_error, n_solution_error, n_state_error, n_score_error, n_unvalidated_levels,
+                   n_random_solution_error, n_random_state_error):
         results['stats']['total_games'] = len(games)
         results['stats']['total_levels'] = n_levels
         results['stats']['successful_solutions'] = n_success
         results['stats']['compile_error'] = n_compile_error
         results['stats']['rigid_prefix_error'] = n_rigid_prefix_error
+        results['stats']['timeout'] = n_timeout_error
         results['stats']['runtime_error'] = n_runtime_error
         results['stats']['solution_error'] = n_solution_error
         results['stats']['state_error'] = n_state_error
+        results['stats']['random_solution_error'] = n_random_solution_error
+        results['stats']['random_state_error'] = n_random_state_error
         results['stats']['score_error'] = n_score_error
         results['stats']['unvalidated_levels'] = n_unvalidated_levels
 
@@ -168,6 +179,52 @@ def main(cfg: JaxValidationConfig, games: Optional[List[str]] = None):
 
         with open(SOLUTION_REWARDS_PATH, 'w') as f:
             json.dump(solution_rewards_dict, f, indent=4)
+
+
+    def is_runtime_timeout_log(log: str) -> bool:
+        if not log:
+            return False
+        log_lower = log.lower()
+        return (
+            'uncompletedjoberror' in log_lower
+            and ('timed-out' in log_lower or 'timed out' in log_lower)
+        )
+
+
+    def get_games_to_n_rules_entry(game: str):
+        if game in games_to_n_rules:
+            return game, games_to_n_rules[game]
+        if f"{game}.txt" in games_to_n_rules:
+            return f"{game}.txt", games_to_n_rules[f"{game}.txt"]
+        game_name = os.path.basename(game)
+        if game_name in games_to_n_rules:
+            return game_name, games_to_n_rules[game_name]
+        if f"{game_name}.txt" in games_to_n_rules:
+            return f"{game_name}.txt", games_to_n_rules[f"{game_name}.txt"]
+        return None, None
+
+
+    def is_random_game(n_rules_entry) -> bool:
+        if isinstance(n_rules_entry, (list, tuple)) and len(n_rules_entry) > 1:
+            return bool(n_rules_entry[1])
+        return False
+
+
+    def update_game_randomness(game_key, n_rules_entry, has_randomness: bool):
+        nonlocal games_to_n_rules_dirty
+        if game_key is None or n_rules_entry is None:
+            return n_rules_entry
+        if isinstance(n_rules_entry, list):
+            if len(n_rules_entry) > 1 and n_rules_entry[1] is None:
+                n_rules_entry[1] = bool(has_randomness)
+                games_to_n_rules[game_key] = n_rules_entry
+                games_to_n_rules_dirty = True
+        elif isinstance(n_rules_entry, tuple):
+            if len(n_rules_entry) > 1 and n_rules_entry[1] is None:
+                games_to_n_rules[game_key] = [n_rules_entry[0], bool(has_randomness)]
+                n_rules_entry = games_to_n_rules[game_key]
+                games_to_n_rules_dirty = True
+        return n_rules_entry
 
 
     key = jax.random.PRNGKey(0)
@@ -179,11 +236,7 @@ def main(cfg: JaxValidationConfig, games: Optional[List[str]] = None):
     # 4 - action
 
     for sol_dir, game in zip(sol_paths, games):
-        n_rules = None
-        if game in games_to_n_rules:
-            n_rules = games_to_n_rules[game]
-        if game + ".txt" in games_to_n_rules:
-            n_rules = games_to_n_rules[game + ".txt"]
+        n_rules_key, n_rules = get_games_to_n_rules_entry(game)
         if game not in solution_rewards_dict:
             solution_rewards_dict[game] = {}
         game_name = os.path.basename(game)
@@ -201,11 +254,21 @@ def main(cfg: JaxValidationConfig, games: Optional[List[str]] = None):
                 if 'Rigid prefix not implemented' in compile_log:
                     results['rigid_prefix_error'].append({'game': game, 'n_rules': n_rules, 'log': compile_log})
                     n_rigid_prefix_error += 1
+                elif 'timeout' in compile_log or compile_log.strip() == "":
+                    results['timeout'].append({'game': game, 'n_rules': n_rules, 'log': compile_log})
+                    n_timeout_error += 1
                 else:
                     results['compile_error'].append({'game': game, 'n_rules': n_rules, 'log': compile_log})
                     n_compile_error += 1
             else:
-                n_compile_error += 1
+                with open(compile_log_path, 'r') as f:
+                    compile_log = f.read()
+                if 'Rigid prefix not implemented' in compile_log:
+                    n_rigid_prefix_error += 1
+                elif 'timeout' in compile_log or compile_log.strip() == "":
+                    n_timeout_error += 1
+                else:
+                    n_compile_error += 1
             n_levels += 1
             print(f"Skipping {game} because compile error log already exists")
             continue
@@ -309,24 +372,51 @@ def main(cfg: JaxValidationConfig, games: Optional[List[str]] = None):
                         if cfg.aggregate:
                             with open(run_log_path, 'r') as f:
                                 run_log = f.read()
-                            if game_name not in results['runtime_error']:
-                                results['runtime_error'][game_name] = []
-                            results['runtime_error'][game_name].append({'level': level_i, 'n_rules': n_rules, 'log': run_log})
-                        n_runtime_error += 1
+                            if is_runtime_timeout_log(run_log):
+                                results['timeout'].append({'game': game_name, 'n_rules': n_rules, 'level': level_i, 'log': run_log})
+                                n_timeout_error += 1
+                            else:
+                                if game_name not in results['runtime_error']:
+                                    results['runtime_error'][game_name] = []
+                                results['runtime_error'][game_name].append({'level': level_i, 'n_rules': n_rules, 'log': run_log})
+                                n_runtime_error += 1
+                        else:
+                            with open(run_log_path, 'r') as f:
+                                run_log = f.read()
+                            if is_runtime_timeout_log(run_log):
+                                n_timeout_error += 1
+                            else:
+                                n_runtime_error += 1
                         game_success = False
                     elif os.path.exists(sol_log_path):
                         if cfg.aggregate:
-                            if game_name not in results['solution_error']:
-                                results['solution_error'][game_name] = []
-                            results['solution_error'][game_name].append({'n_rules': n_rules, 'level': level_i})
-                        n_solution_error += 1
+                            if is_random_game(n_rules):
+                                if game_name not in results['random_solution_error']:
+                                    results['random_solution_error'][game_name] = []
+                                results['random_solution_error'][game_name].append({'n_rules': n_rules, 'level': level_i})
+                                n_random_solution_error += 1
+                            else:
+                                if game_name not in results['solution_error']:
+                                    results['solution_error'][game_name] = []
+                                results['solution_error'][game_name].append({'n_rules': n_rules, 'level': level_i})
+                                n_solution_error += 1
+                        else:
+                            n_solution_error += 1
                         game_success = False
                     elif os.path.exists(state_log_path):
                         if cfg.aggregate:
-                            if game_name not in results['state_error']:
-                                results['state_error'][game_name] = []
-                            results['state_error'][game_name].append({'n_rules': n_rules, 'level': level_i})
-                        n_state_error += 1
+                            if is_random_game(n_rules):
+                                if game_name not in results['random_state_error']:
+                                    results['random_state_error'][game_name] = []
+                                results['random_state_error'][game_name].append({'n_rules': n_rules, 'level': level_i})
+                                n_random_state_error += 1
+                            else:
+                                if game_name not in results['state_error']:
+                                    results['state_error'][game_name] = []
+                                results['state_error'][game_name].append({'n_rules': n_rules, 'level': level_i})
+                                n_state_error += 1
+                        else:
+                            n_state_error += 1
                         game_success = False
                         # game_partial_success = True
                     elif os.path.exists(score_log_path):
@@ -372,6 +462,7 @@ def main(cfg: JaxValidationConfig, games: Optional[List[str]] = None):
                 if success == PJParseErrors.SUCCESS:
                     try:
                         env = PuzzleJaxEnv(tree, debug=False, print_score=False)
+                        n_rules = update_game_randomness(n_rules_key, n_rules, env.has_randomness())
                     except KeyboardInterrupt as e:
                         raise e
                     except bdb.BdbQuit as e:
@@ -380,12 +471,18 @@ def main(cfg: JaxValidationConfig, games: Optional[List[str]] = None):
                         err_msg = traceback.format_exc()
                         success = PJParseErrors.ENV_ERROR
                 if success != PJParseErrors.SUCCESS:
+                    if success == PJParseErrors.TIMEOUT and not err_msg:
+                        err_msg = "timeout"
                     with open(compile_log_path, 'w') as f:
                         f.write(err_msg)
                     print(f"Error creating env: {og_path}\n{err_msg}")
                     # results['compile_error'].append({'game': game, 'n_rules': n_rules, 'log': err_log})
                     if 'Rigid prefix not implemented' in err_msg:
                         n_rigid_prefix_error += 1
+                    elif success == PJParseErrors.TIMEOUT:
+                        if cfg.aggregate:
+                            results['timeout'].append({'game': game, 'n_rules': n_rules, 'log': err_msg})
+                        n_timeout_error += 1
                     else:
                         n_compile_error += 1
                     n_levels += 1
@@ -508,10 +605,12 @@ def main(cfg: JaxValidationConfig, games: Optional[List[str]] = None):
                 traceback.print_exc()
                 print(f"Error running solution: {og_path}")
                 err_log = traceback.format_exc()
-                # if game_name not in results['runtime_error']:
-                #     results['runtime_error'][game_name] = []
-                # results['runtime_error'][game_name].append({'n_rules': n_rules, 'level': level_i, 'log': err_log})
-                n_runtime_error += 1
+                if is_runtime_timeout_log(err_log):
+                    if cfg.aggregate:
+                        results['timeout'].append({'game': game_name, 'n_rules': n_rules, 'level': level_i, 'log': err_log})
+                    n_timeout_error += 1
+                else:
+                    n_runtime_error += 1
                 game_success = False
                 with open(run_log_path, 'w') as f:
                     f.write(err_log)
@@ -560,8 +659,9 @@ def main(cfg: JaxValidationConfig, games: Optional[List[str]] = None):
         results['stats']['valid_games'] = len(results['valid_games'])
         results['stats']['partial_valid_games'] = len(results['partial_valid_games'])
         
-        save_stats(results, n_levels, n_success, n_compile_error, n_rigid_prefix_error, n_runtime_error,
-               n_solution_error, n_state_error, n_score_error, n_unvalidated_levels)
+        save_stats(results, n_levels, n_success, n_compile_error, n_rigid_prefix_error, n_timeout_error,
+               n_runtime_error, n_solution_error, n_state_error, n_score_error, n_unvalidated_levels,
+               n_random_solution_error, n_random_state_error)
         print(f"Validation results saved to {val_results_path}")
         stats_dict = {
             "Total Games": len(games),
@@ -570,9 +670,12 @@ def main(cfg: JaxValidationConfig, games: Optional[List[str]] = None):
             "Total Levels": n_levels,
             "Successful Solutions": n_success,
             "Compile Errors": n_compile_error,
+            "Timeouts": n_timeout_error,
             "Runtime Errors": n_runtime_error,
             "Solution Errors": n_solution_error,
             "State Errors": n_state_error,
+            "Random Solution Errors": n_random_solution_error,
+            "Random State Errors": n_random_state_error,
             "Unvalidated Levels": n_unvalidated_levels,
         }
 
@@ -618,7 +721,11 @@ def main(cfg: JaxValidationConfig, games: Optional[List[str]] = None):
                                         caption="PuzzleScript games in which one or more levels were successfully validated in JAX (vis-a-vis solutions generated by breadth-first search in JavaScript).",
                                         label="tab:partial_valid_games")
         print(f"Partially valid games saved to {partial_valid_games_tex_path}")
-        
+
+    if games_to_n_rules_dirty:
+        with open(GAMES_TO_N_RULES_PATH, 'w') as f:
+            json.dump(games_to_n_rules, f, indent=4)
+        print(f"Updated games_to_n_rules with missing randomness flags at {GAMES_TO_N_RULES_PATH}")
 
     print(f"Finished validating solutions in jax.")
     
