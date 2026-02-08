@@ -1,0 +1,190 @@
+title Pitman MZ-700
+author BdR
+homepage www.bdrgames.nl
+flickscreen 11x8
+
+again_interval 0.06
+run_rules_on_level_start 
+
+========
+OBJECTS
+========
+
+Background
+DarkBlue
+
+Ladder
+Orange
+0...0
+00000
+0...0
+00000
+0...0
+
+Gold
+Yellow Orange Brown White
+..1..
+.301.
+00001
+00000
+00000
+
+Dirt
+Brown #765026
+00001
+00000
+10000
+00000
+00100
+
+Boulder
+Grey DarkGrey White
+.222.
+20001
+20001
+20001
+.111.
+
+
+Wall
+Red DarkRed 
+01000
+11111
+00010
+00010
+11111
+
+PlayerRight
+DarkGrey LightRed White Blue
+.000.
+.111.
+.2222
+.333.
+.3.33
+
+PlayerLeft
+DarkGrey LightRed White Blue
+.000.
+.111.
+2222.
+.333.
+33.3.
+
+PlayerLadder
+DarkGrey LightRed White Blue
+.000.
+.111.
+22222
+.333.
+33.33
+
+
+=======
+LEGEND
+=======
+
+- = Background
+
+R = PlayerRight
+P = PlayerLeft
+Q = PlayerLadder
+B = Boulder
+W = Wall
+D = Dirt
+L = Ladder
+G = Gold
+
+
+Player = PlayerLeft or PlayerRight or PlayerLadder
+
+BlockingAll = Ladder or Gold or Dirt or Wall or Boulder or Player
+
+BlockingObj = Gold or Dirt or Wall or Boulder or Player
+
+=======
+SOUNDS
+=======
+
+ShowMessage 72692706
+
+Boulder Move Horizontal 99804707
+
+Player Move Horizontal 68263307 (37184702)
+
+SFX1 16509700 (get gold)
+SFX2 97366302 (win)
+
+================
+COLLISIONLAYERS
+================
+
+Background
+Ladder, Gold, Dirt
+Wall, Boulder, Player
+
+======
+RULES
+======
+
+( ===============
+  NORMAL MOVEMENT
+  =============== )
+
+(push boulder left or right)
+LEFT [ > Player | Boulder | no BlockingAll ] -> [  PlayerLeft | > Boulder | ]
+RIGHT [ > Player | Boulder | no BlockingAll ] -> [  PlayerRight | > Boulder | ]
+
+(don't let the player move up or down unless they're on a ladder)
+UP [ > Player | BlockingObj ] -> [ Player | BlockingObj ]
+
+(player can't jump)
+UP [ > Player no Ladder ] -> [ Player ]
+
+(don't let the player grab gold or dirt from above)
+DOWN [ > Player | BlockingObj ] -> [ Player | BlockingObj]
+
+(make player face left or right)
+Right [ > Player ] -> [ > PlayerRight ]
+Left [ > Player ] -> [ > PlayerLeft ]
+
+(forces another turn after player movement to assert gravity)
+[ MOVING Player ] -> [ MOVING Player ] again
+
+(forces another turn after Boulder movement to assert gravity)
+[ MOVING Boulder ] -> [ MOVING Boulder ] again
+
+(assert gravity)
+DOWN [ STATIONARY Player no Ladder | no BlockingAll ] -> [ > Player no Ladder |  ] again
+DOWN [ STATIONARY Boulder | no BlockingAll ] -> [ > Boulder | ] again
+DOWN [ STATIONARY Gold | no BlockingAll ] -> [ > Gold | ] again
+
+(player digs through dirt)
+late [ Player Dirt ] -> [ Player ]
+
+(player grabs gold)
+late [ Player Gold ] -> [ Player ] SFX1
+
+(transform player on ladder)
+late [ Player Ladder ] -> [ PlayerLadder Ladder ]
+
+==============
+WINCONDITIONS
+==============
+
+(player wins when all gold collected)
+no Gold
+
+=======
+LEVELS
+=======
+
+message Level 18
+L---------L
+LDDDBDDDBDL
+L-DGDPDGB-L
+L-DDBBDBG-L
+L-DGG-DDD-L
+L--DG-GB--L
+L--GB-DB--L
+L-DDDD-DD-L
+

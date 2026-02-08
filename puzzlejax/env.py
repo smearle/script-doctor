@@ -385,7 +385,7 @@ def check_win(lvl, funcs, jit):
     else:
         func_returns = [f(lvl) for f in funcs]
         wins, scores, heuristics = zip(*func_returns)
-        wins, scores, heuristics = np.array(wins), np.array(scores), np.array(heuristics)
+        wins, scores, heuristics = jnp.array(wins), jnp.array(scores), jnp.array(heuristics)
     return jnp.all(wins), scores.sum(), heuristics.sum()
 
 def gen_check_win(win_conditions: Iterable[WinCondition], obj_to_idxs, meta_objs, char_to_obj, joint_tiles=None, jit=True):
@@ -847,8 +847,6 @@ class PuzzleJaxEnv:
             # Now make sure all the alts are in the objs_to_idxs dict
             for alt_name in alt_names:
                 if alt_name not in self.objs_to_idxs:
-                    if obj_key == 'powerup':
-                        breakpoint()
                     self.objs_to_idxs[alt_name] = self.objs_to_idxs[obj_key]
 
         self.obj_force_masks = gen_obj_force_masks(self.n_objs, self.obj_idxs_to_force_idxs, len(self.collision_layers))
@@ -1240,7 +1238,6 @@ class PuzzleJaxEnv:
 
     def gen_subrules_meta(self, rule: Rule, rule_name: str, lvl_shape: Tuple[int, int],):
         if 'random' in rule.prefixes:
-            # TODO: Randomize the order of rule rotations within a group
             self._has_randomness = True
         has_right_pattern = len(rule.right_kernels) > 0
 
@@ -2220,7 +2217,7 @@ class PuzzleJaxEnv:
                     subkernel_projection_fns=subkernel_projection_fns,
                     lp_is_horizontal=lp_is_horizontal,
                     lp_is_vertical=lp_is_vertical,
-                    random='random' in rule.prefixes,
+                    random=False,
                 )
                 return detect_kernel, project_kernel
 
@@ -2341,7 +2338,7 @@ class PuzzleJaxEnv:
                     lp_is_single=lp_is_single,
                     has_right_pattern=has_right_pattern,
                     rule_name=rule_name,
-                    random='random' in rule.prefixes,
+                    random=False,
                 )
                 return detect_kernel, project_kernel
 
@@ -2436,18 +2433,18 @@ class PuzzleJaxEnv:
                 )
                 return kernel_activations, cell_detect_outs, kernel_detect_outs, pattern_out
 
+            def project_kernels(rng, lvl, kernel_activations, cell_detect_outs_i, kernel_detect_outs_i, pattern_detect_out_i):
+                for i, kernel_projection_fn in enumerate(kernel_projection_fns):
+                    if DEBUG:
+                        jax.debug.print('        projecting kernel {i}', i=i)
+                    rng, lvl = kernel_projection_fn(
+                        rng, lvl, kernel_activations[i], cell_detect_outs_i[i], kernel_detect_outs_i[i], pattern_detect_out_i)
+                return rng, lvl
+
             def apply_pattern(rng, lvl):
                 kernel_activations, cell_detect_outs, kernel_detect_outs, pattern_detect_out = detect_pattern(lvl)
                 pattern_detected = jnp.all(jnp.sum(kernel_activations, axis=(1,2)) > 0)
                 init_lvl = lvl
-
-                def project_kernels(rng, lvl, kernel_activations, cell_detect_outs_i, kernel_detect_outs_i, pattern_detect_out_i):
-                    for i, kernel_projection_fn in enumerate(kernel_projection_fns):
-                        if DEBUG:
-                            jax.debug.print('        projecting kernel {i}', i=i)
-                        rng, lvl = kernel_projection_fn(
-                            rng, lvl, kernel_activations[i], cell_detect_outs_i[i], kernel_detect_outs_i[i], pattern_detect_out_i)
-                    return rng, lvl
 
                 multi_kernel_projected = False
 
@@ -2620,6 +2617,79 @@ class PuzzleJaxEnv:
 
                 return rule_state
 
+            def count_matches(lvl):
+                kernel_activations, _, _, _ = detect_pattern(lvl)
+                counts = jnp.sum(kernel_activations, axis=(1, 2))
+                total = jnp.where(jnp.any(counts == 0), 0, jnp.prod(counts))
+                return total
+
+            def apply_pattern_one(rng, lvl):
+                kernel_activations, cell_detect_outs, kernel_detect_outs, pattern_detect_out = detect_pattern(lvl)
+                counts = jnp.sum(kernel_activations, axis=(1, 2))
+                total = jnp.where(jnp.any(counts == 0), 0, jnp.prod(counts))
+
+                def no_match():
+                    return RuleState(
+                        lvl=lvl,
+                        applied=False,
+                        cancelled=False,
+                        restart=False,
+                        again=False,
+                        win=False,
+                        rng=rng,
+                    )
+
+                def do_apply():
+                    rng_select, rng_apply = jax.random.split(rng)
+                    r = jax.random.randint(rng_select, (1,), 0, total)[0]
+
+                    idxs = []
+                    carry = r
+                    for k in range(kernel_activations.shape[0]):
+                        base = counts[k]
+                        idx = carry % base
+                        carry = carry // base
+                        idxs.append(idx)
+
+                    tuple_acts = []
+                    for k in range(kernel_activations.shape[0]):
+                        coords_k = jnp.argwhere(
+                            kernel_activations[k],
+                            size=kernel_activations.shape[1] * kernel_activations.shape[2] + 1,
+                            fill_value=-1,
+                        )
+                        xy = coords_k[idxs[k]]
+                        mask = jnp.zeros_like(kernel_activations[k])
+                        mask = mask.at[xy[0], xy[1]].set(True)
+                        tuple_acts.append(mask)
+                    tuple_acts = jnp.stack(tuple_acts, axis=0)
+
+                    rng_out, next_lvl = project_kernels(
+                        rng_apply, lvl, tuple_acts, cell_detect_outs, kernel_detect_outs, pattern_detect_out
+                    )
+                    rule_applied = jnp.any(next_lvl != lvl)
+                    pattern_detected = total > 0
+
+                    cancel = pattern_detected if r_command == 'cancel' else False
+                    restart = pattern_detected if r_command == 'restart' else False
+                    again = pattern_detected if r_command == 'again' else False
+                    win = pattern_detected if r_command == 'win' else False
+
+                    return RuleState(
+                        lvl=next_lvl,
+                        applied=rule_applied,
+                        cancelled=cancel,
+                        restart=restart,
+                        again=again,
+                        win=win,
+                        rng=rng_out,
+                    )
+
+                return jax.lax.cond(total > 0, do_apply, no_match)
+
+            apply_pattern.count_matches = count_matches
+            apply_pattern.apply_one = apply_pattern_one
+
             return apply_pattern
 
         rule_fns = []
@@ -2735,7 +2805,14 @@ class PuzzleJaxEnv:
                 except InvalidObjectError as e:
                     print(e)
                     continue
+                is_random_group = 'random' in rule.prefixes
                 if '+' in rule.prefixes:
+                    if is_random_group:
+                        logger.warn(
+                            'Ignoring `random` on a `+`-prefixed rule; random is a rule-group modifier and must '
+                            'appear on the first rule in the group.'
+                        )
+                        is_random_group = False
                     # I'm not actually clear on how PS handles these groups combining late/non-late rules, so have just
                     # taken a best guess here (which seems to agree with game `Teh_Interwebs`).
                     if last_subrule_fns_were_late is None:
@@ -2743,16 +2820,16 @@ class PuzzleJaxEnv:
                             (f'Initial rule has `+` prefix, but no rule precedes it, so ignoring `+` and adding this rule'
                             ' as a new rule group.')
                         )
-                        rule_grps.append(sub_rule_fns)
+                        rule_grps.append((sub_rule_fns, is_random_group))
                     if 'late' in rule.prefixes:
                         if last_subrule_fns_were_late:
-                            late_rule_grps[-1].extend(sub_rule_fns)
+                            late_rule_grps[-1][0].extend(sub_rule_fns)
                         else:
                             logger.warn(
                                 (f'Attempting to add `late` rule to a non-late rule. Ignoring `+` and creating a new '
                                 '`late` rule group.')
                             )
-                            late_rule_grps.append(sub_rule_fns)
+                            late_rule_grps.append((sub_rule_fns, is_random_group))
                             last_subrule_fns_were_late = True
                     else:
                         if last_subrule_fns_were_late:
@@ -2760,25 +2837,25 @@ class PuzzleJaxEnv:
                                 (f'Attempting to add `+` non-late rule to a late rule. Ignoring `+` and creating a new '
                                 'non-late rule group.')
                             )
-                            rule_grps.append(sub_rule_fns)
+                            rule_grps.append((sub_rule_fns, is_random_group))
                             last_subrule_fns_were_late = False
                         else:
-                            rule_grps[-1].extend(sub_rule_fns)
+                            rule_grps[-1][0].extend(sub_rule_fns)
                 elif 'late' in rule.prefixes:
-                    late_rule_grps.append(sub_rule_fns)
+                    late_rule_grps.append((sub_rule_fns, is_random_group))
                     last_subrule_fns_were_late = True
                 else:
-                    rule_grps.append(sub_rule_fns)
+                    rule_grps.append((sub_rule_fns, is_random_group))
                     last_subrule_fns_were_late = False
             rule_blocks.append((looping, rule_grps))
 
         _move_rule_fn = partial(self.apply_movement, coll_mat=self.coll_mat,
                                 n_objs=self.n_objs, obj_force_masks=self.obj_force_masks, jit=self.jit)
-        rule_blocks.append((False, [[_move_rule_fn]]))
+        rule_blocks.append((False, [([_move_rule_fn], False)]))
         # Can we have loops in late rules? I hope not.
         rule_blocks.append((False, late_rule_grps))
 
-        all_rule_fns = [rule_fn for looping, rule_grps in rule_blocks for rule_grp in rule_grps for rule_fn in rule_grp]
+        all_rule_fns = [rule_fn for looping, rule_grps in rule_blocks for rule_grp, _ in rule_grps for rule_fn in rule_grp]
         n_rules_counted = 0
         # n_prior_rules = {}
         max_n_grps = max([len(rule_grps) for _, rule_grps in rule_blocks])
@@ -2788,7 +2865,7 @@ class PuzzleJaxEnv:
         for rule_block_i, rule_block in enumerate(rule_blocks):
             _, rule_grps = rule_block
             n_grps_per_block_arr[rule_block_i] = len(rule_grps)
-            for rule_grp_i, rule_grp in enumerate(rule_grps):
+            for rule_grp_i, (rule_grp, _) in enumerate(rule_grps):
                 # n_prior_rules[(rule_block_i, rule_grp_i)] = n_rules_counted
                 n_prior_rules_arr[rule_block_i, rule_grp_i] = n_rules_counted
                 n_rules_per_grp_arr[rule_block_i, rule_grp_i] = len(rule_grp)
@@ -3540,12 +3617,64 @@ class PuzzleJaxEnv:
 
         return rule_group_state
 
+    def apply_random_rule_grp(
+            self,
+            rule_group_state: RuleGroupState,
+            rule_grp,
+        ):
+        """Apply exactly one random match across all rules in the group (JS semantics)."""
+        init_lvl = rule_group_state.lvl
+        rng = rule_group_state.rng
+
+        totals = [rule_fn.count_matches(init_lvl) for rule_fn in rule_grp]
+        totals = jnp.array(totals)
+        total_matches = jnp.sum(totals)
+
+        def no_match():
+            return RuleGroupState(
+                lvl=init_lvl,
+                applied=False,
+                cancelled=rule_group_state.cancelled,
+                restart=rule_group_state.restart,
+                again=rule_group_state.again,
+                win=rule_group_state.win,
+                rng=rng,
+                rule_i=rule_group_state.rule_i,
+                grp_i=rule_group_state.grp_i,
+                block_i=rule_group_state.block_i,
+            )
+
+        def do_apply():
+            rng_select, rng_apply = jax.random.split(rng)
+            r = jax.random.randint(rng_select, (1,), 0, total_matches)[0]
+            cumsum = jnp.cumsum(totals)
+            rule_idx = jnp.argmax(r < cumsum)
+
+            apply_one_fns = [rule_fn.apply_one for rule_fn in rule_grp]
+            rule_state = jax.lax.switch(rule_idx, apply_one_fns, rng_apply, init_lvl)
+
+            return RuleGroupState(
+                lvl=rule_state.lvl,
+                applied=jnp.any(rule_state.lvl != init_lvl),
+                cancelled=rule_group_state.cancelled | rule_state.cancelled,
+                restart=rule_group_state.restart | rule_state.restart,
+                again=rule_group_state.again | rule_state.again,
+                win=rule_group_state.win | rule_state.win,
+                rng=rule_state.rng,
+                rule_i=rule_group_state.rule_i,
+                grp_i=rule_group_state.grp_i,
+                block_i=rule_group_state.block_i,
+            )
+
+        return jax.lax.cond(total_matches > 0, do_apply, no_match)
+
     def apply_rule_grp(
             self,
             loop_group_state: LoopRuleGroupState,
             ### COMPILE VS RUNTIME ###
             # all_rule_fns, n_prior_rules_arr, n_rules_per_grp_arr,
             rule_grp,
+            is_random,
             ### COMPILE VS RUNTIME ###
             ):
         """Iterate through each rule in the group. Loop it until it no longer has an effect."""
@@ -3577,29 +3706,11 @@ class PuzzleJaxEnv:
             block_i=block_i,
         )
 
-        # ### COMPILE VS RUNTIME ###
-        # if jit:
-        #     # Iterate through each rule in the group (and loop it). (Note that this is effectively a for loop.)
-        #     rule_group_state = jax.lax.while_loop(
-        #         cond_fun=lambda rule_group_state: (rule_group_state.rule_i < n_rules_in_grp) & ~rule_group_state.cancelled & ~rule_group_state.restart,
-        #         body_fun=_loop_rule_fn,
-        #         init_val=rule_group_state,
-        #     )
-        #     # We can't use scan because n_rules_in_grp is a jnp array, as are block_i and grp_i, which index into this
-        #     # array.
-        #     # rule_group_state = jax.lax.scan(
-        #     #     _loop_rule_fn,
-        #     #     init=rule_group_state,
-        #     #     length=n_rules_in_grp,
-        #     # )
-
-        # else:
-        #     while rule_group_state.rule_i < n_rules_in_grp and not rule_group_state.cancelled and not rule_group_state.restart:
-        #         rule_group_state = _loop_rule_fn(rule_group_state)
-
-        for rule_fn in rule_grp:
-            rule_group_state = _loop_rule_fn(rule_group_state, rule_fn)
-        # ### COMPILE VS RUNTIME ###
+        if is_random:
+            rule_group_state = self.apply_random_rule_grp(rule_group_state, rule_grp)
+        else:
+            for rule_fn in rule_grp:
+                rule_group_state = _loop_rule_fn(rule_group_state, rule_fn)
 
         again = loop_group_state.again | rule_group_state.again
         win = loop_group_state.win | rule_group_state.win
@@ -3638,6 +3749,7 @@ class PuzzleJaxEnv:
             ### COMPILE VS RUNTIME ###
             # n_prior_rules_arr, n_rules_per_grp_arr, all_rule_fns,
             rule_grp,
+            is_random,
             ### COMPILE VS RUNTIME ###
             ):
         """Given a rule group, repeatedly attempt to apply the group (by looping each rule in sequence) until the group no longer has an effect."""
@@ -3658,6 +3770,7 @@ class PuzzleJaxEnv:
             ### COMPILE VS RUNTIME ###
             # all_rule_fns=all_rule_fns, n_prior_rules_arr=n_prior_rules_arr, n_rules_per_grp_arr=n_rules_per_grp_arr,
             rule_grp=rule_grp,
+            is_random=is_random,
             ### COMPILE VS RUNTIME ###
         )
 
@@ -3677,22 +3790,31 @@ class PuzzleJaxEnv:
             block_i=block_i,
         )
 
-        if self.jit:
-            loop_rule_group_state = jax.lax.while_loop(
-                cond_fun=lambda x: x.applied & ~x.cancelled & ~x.restart & (x.app_i < MAX_LOOPS),
-                body_fun=_apply_rule_grp,
-                init_val=loop_rule_group_state,
-            )
+        if is_random:
+            loop_rule_group_state = _apply_rule_grp(loop_rule_group_state)
         else:
-            while loop_rule_group_state.applied and not loop_rule_group_state.cancelled and not loop_rule_group_state.restart and loop_rule_group_state.app_i < MAX_LOOPS:
-                loop_rule_group_state = \
-                    _apply_rule_grp(loop_rule_group_state)
-                if DEBUG:
-                    print(f'     group {grp_i} applied for the {loop_rule_group_state.app_i}th time')
+            if self.jit:
+                loop_rule_group_state = jax.lax.while_loop(
+                    cond_fun=lambda x: x.applied & ~x.cancelled & ~x.restart & (x.app_i < MAX_LOOPS),
+                    body_fun=_apply_rule_grp,
+                    init_val=loop_rule_group_state,
+                )
+            else:
+                while loop_rule_group_state.applied and not loop_rule_group_state.cancelled and not loop_rule_group_state.restart and loop_rule_group_state.app_i < MAX_LOOPS:
+                    loop_rule_group_state = \
+                        _apply_rule_grp(loop_rule_group_state)
+                    if DEBUG:
+                        print(f'     group {grp_i} applied for the {loop_rule_group_state.app_i}th time')
 
         lvl = loop_rule_group_state.lvl
         again = prev_again | loop_rule_group_state.again
-        grp_applied = loop_rule_group_state.app_i > 1
+        # Non-random groups run at least one extra no-op iteration to detect convergence,
+        # so app_i > 1 means the group changed the level at least once.
+        # Random groups only apply once, so use the applied flag directly.
+        grp_applied = jnp.logical_or(
+            loop_rule_group_state.app_i > 1,
+            jnp.logical_and(jnp.asarray(is_random), loop_rule_group_state.applied),
+        )
         block_applied = grp_applied_prev | grp_applied
 
         rule_block_state = RuleBlockState(
@@ -3769,8 +3891,8 @@ class PuzzleJaxEnv:
         #             rule_block_state.lvl, rule_block_state.applied, rule_block_state.cancelled, \
         #             rule_block_state.restart, rule_block_state.again, rule_block_state.win, rule_block_state.rng
 
-        for grp_i, rule_grp in enumerate(rule_block):
-            rule_block_state = _loop_rule_grp(rule_block_state, rule_grp=rule_grp)
+        for grp_i, (rule_grp, is_random) in enumerate(rule_block):
+            rule_block_state = _loop_rule_grp(rule_block_state, rule_grp=rule_grp, is_random=is_random)
         lvl, block_applied, cancelled, restart, again, win, rng = \
             rule_block_state.lvl, rule_block_state.applied, rule_block_state.cancelled, \
             rule_block_state.restart, rule_block_state.again, rule_block_state.win, rule_block_state.rng
@@ -4199,19 +4321,28 @@ def _expand_or_meta_rules(meta_objs, rule: Rule, properties_single_layer=None) -
         if cell_tokens is None:
             return None
         pairs = cell_to_pairs(cell_tokens)
-        expanded = []
-        for direction, name in pairs:
-            if direction and direction.lower() == "no" and is_property(name):
-                for alias in meta_objs_lower[name.lower()]:
-                    expanded.append((direction, alias))
-            else:
-                expanded.append((direction, name))
-        return pairs_to_tokens(expanded)
+        # JS semantics: `no <property>` means all concrete members are absent.
+        # Expand recursively so `no person` -> `no ninja1 no ninja2 no daimyo ...`
+        # `in Heroes of Sokoban - Ancient Japan`.
+        while True:
+            changed = False
+            expanded = []
+            for direction, name in pairs:
+                if direction and direction.lower() == "no" and is_property(name):
+                    for alias in meta_objs_lower[name.lower()]:
+                        expanded.append((direction, alias))
+                    changed = True
+                else:
+                    expanded.append((direction, name))
+            pairs = expanded
+            if not changed:
+                break
+        return pairs_to_tokens(pairs)
 
     def get_properties_from_cell(cell_tokens):
         result = []
         for direction, name in cell_to_pairs(cell_tokens):
-            if direction and direction.lower() == "random":
+            if direction and direction.lower() in {"random", "no"}:
                 continue
             if is_property(name):
                 result.append(name.lower())

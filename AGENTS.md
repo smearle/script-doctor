@@ -1,1 +1,1 @@
-`conda activate script-doctor`
+`source activate .venv/bin/activate`

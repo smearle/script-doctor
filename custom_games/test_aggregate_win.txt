@@ -1,0 +1,71 @@
+title AggregateWinDivergence
+author demo
+
+========
+OBJECTS
+========
+Background
+black
+
+Player
+white
+.....
+.000.
+.000.
+.000.
+.....
+
+Crate
+orange
+.....
+.000.
+.000.
+.000.
+.....
+
+Target
+blue
+.....
+.000.
+.000.
+.000.
+.....
+
+=======
+LEGEND
+=======
+. = Background
+P = Player
+* = Crate
+O = Target
+@ = Crate and Target
+Stacked = Crate and Target
+
+================
+SOUNDS
+================
+
+================
+COLLISIONLAYERS
+================
+Background
+Target
+Player, Crate
+
+==============
+RULES
+==============
+
+[Stacked] -> [Stacked]
+
+==============
+WINCONDITIONS
+==============
+all Stacked on Background
+
+=======
+LEVELS
+=======
+....
+.@P.
+....

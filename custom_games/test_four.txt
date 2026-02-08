@@ -1,0 +1,119 @@
+title  Tour de Four
+author Chris Pickel
+homepage sfiera.net
+again_interval 0.08
+background_color #222
+
+========
+OBJECTS
+========
+
+Background .
+Black
+
+Player @
+White Black
+.000.
+.010.
+00000
+.000.
+.0.0.
+
+Red R
+Red DarkRed
+00000
+00000
+00100
+00000
+00000
+
+Blue B
+Blue Purple
+00000
+00000
+01010
+00000
+00000
+
+Yellow Y
+Yellow Brown
+00000
+00100
+00000
+01010
+00000
+
+Cleared
+White
+.....
+.0.0.
+..0..
+.0.0.
+.....
+
+Unchecked
+Transparent
+
+Checking
+Transparent
+
+One
+Transparent
+
+Two
+Transparent
+
+Three
+Transparent
+
+Four
+Transparent
+
+=======
+LEGEND
+=======
+
+Block   = Red or Blue or Yellow
+Movable = Player or Block
+Number  = One or Two or Three or Four
+
+=======
+SOUNDS
+=======
+
+Block   move   34341907
+Cleared create 3567303
+endlevel       18798902
+
+================
+COLLISIONLAYERS
+================
+
+Background
+Player, Block, Cleared
+Unchecked, Checking
+Number
+
+======
+RULES     
+======     
+
+late random [Red] -> [Blue]
+
+
+==============
+WINCONDITIONS
+==============
+
+No Block
+No Cleared
+
+=======     
+LEVELS
+=======
+
+@....
+.R.R.
+.....
+.R.R.
+.....
