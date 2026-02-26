@@ -1620,12 +1620,19 @@ class PuzzleJaxEnv:
             obj_names = []
             for obj in l_cell:
                 obj = obj.lower()
+                # If a token is both a directional keyword and a declared object/property name
+                # (e.g. object `v`), interpret it as an object/property in rule contents.
+                token_is_declared = (
+                    (obj in self.objs_to_idxs)
+                    or (obj in self.meta_objs_lower)
+                    or (obj in self.char_to_obj)
+                )
                 if obj == 'no':
                     no = True
-                elif obj in ['>', '<', '^', 'v']:
+                elif obj in ['>', '<', '^', 'v'] and not token_is_declared:
                     force = True
                     force_idx = (rel_dirs_to_force_idx_offsets[obj] + right_force_idx) % 4
-                elif obj in ['up', 'down', 'left', 'right']:
+                elif obj in ['up', 'down', 'left', 'right'] and not token_is_declared:
                     force = True
                     force_idx = dirs_to_force_idx[obj]
                 elif obj == 'stationary':
@@ -2055,12 +2062,19 @@ class PuzzleJaxEnv:
                 False, False, False, False, False, False, False, False, False
             for obj in r_cell:
                 obj = obj.lower()
+                # If a token is both a directional keyword and a declared object/property name
+                # (e.g. object `v`), interpret it as an object/property in rule contents.
+                token_is_declared = (
+                    (obj in self.objs_to_idxs)
+                    or (obj in self.meta_objs_lower)
+                    or (obj in self.char_to_obj)
+                )
                 if obj == 'no':
                     no = True
-                elif obj in ['>', '<', '^', 'v']:
+                elif obj in ['>', '<', '^', 'v'] and not token_is_declared:
                     force = True
                     force_idx = (rel_dirs_to_force_idx_offsets[obj] + right_force_idx) % 4
-                elif obj in ['up', 'down', 'left', 'right']:
+                elif obj in ['up', 'down', 'left', 'right'] and not token_is_declared:
                     force = True
                     force_idx = dirs_to_force_idx[obj]
                 elif obj == 'action':

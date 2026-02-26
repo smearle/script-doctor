@@ -1,13 +1,13 @@
 # Broken Games
 
+## XL-Up_Maze
+
+We're not able to move. But this game is incomprehensible so I'll return to it later.   
+
 ## test_easyenigme
 
 (from Easy Enigma)
 An object (expanded from a property) appears as `v` in the rule, and is thereby mistaken as a force, leading to an empty list of cell detection functions in this cell.
-
-## test_pitman
-(from `Pitman_MZ-700`)
-The player spawns weirdly (wrongly?) in JavaScript. But not in the updated web version of PS. So I don't think this bug is on us. Looks like `run_rules_on_level_start` was not having the proper effect in the JS version, so the player was able to move in their first turn from on top of a floating boulder. Would be trivial to edit this level to make it solvable via an otherwise identical solution though at least.
 
 ## test_circuit
 
@@ -44,11 +44,25 @@ In JS, the player is able to slide through their own trail when the trail is 2 t
 From `Michael Bay's Legend of Zelda`. `cancel` triggers inside a hypothetical call to `again`, but it cancels the prior turn (the one in which `again` was triggered), when in fact it should only cancel the hypothetical current turn, resulting in `again` effectively not being applied (but the initial turn being applied).
 Attempting solution: `accept_lvl_change` inside `step_env` no longer cares about the value of `cancelled` received from `tick_fn`, since inside this latter tick function, `cancelled` will already prevent the offending call to `apply_turn`, so we should be set in general.
 
-# Games broken because of changes to PuzzleScript
+# Games broken because of potential errors in PuzzleScript
 
 ## Dogs, dogs and additional dogs
 
 The black square (bone?) does not appear in JAX nor in current PuzzleScript on web, but it does appear in nodejs.
+
+## test_pitman
+(from `Pitman_MZ-700`)
+The player spawns weirdly (wrongly?) in JavaScript. But not in the updated web version of PS. So I don't think this bug is on us. Looks like `run_rules_on_level_start` was not having the proper effect in the JS version, so the player was able to move in their first turn from on top of a floating boulder. Would be trivial to edit this level to make it solvable via an otherwise identical solution though at least.
+
+## Sokolor_Ex
+
+Level 4 JS solution looks erroneous, though it works in the current web version of PS and our standalone JS. But it doesn't seem like this is how the game should work given the game's own instructions.
+
+# Games broken because of genuine randomness that breaks winning playtraces
+
+## Lieutenant_Americium_
+
+## _Tour_de_Four
 
 # Fixed Games
 

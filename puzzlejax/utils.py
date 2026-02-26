@@ -111,7 +111,7 @@ def llm_text_query(system_prompt, prompt, model, api_key=None, base_url=None, mo
     elif model == "llama":
         # Portkey Llama-3
         virtual_key = os.environ.get("PORTKEY_LLAMA_KEY", "")
-        model = "@vertex-ai-3e806d/meta.llama-3.1-405b-instruct-maas"
+        model = "@vertexai/meta.llama-3.1-405b-instruct-maas"
     elif model == "deepseek":
         pass  # DeepSeek will be handled separately
     elif model == "qwen":

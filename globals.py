@@ -36,7 +36,7 @@ par_dir = os.path.dirname(os.path.abspath(__file__))
 
 CUSTOM_GAMES_DIR = os.path.join(par_dir, 'custom_games')
 DATA_DIR = os.path.join(par_dir, 'data')
-GAMES_TO_SKIP = set({'easyenigma', 'A_Plaid_Puzzle'})
+GAMES_TO_SKIP = set({})
 PLOTS_DIR = 'plots'
 GAMES_N_RULES_SORTED_PATH = os.path.join(DATA_DIR, 'games_n_rules.json')
 GAMES_TO_N_RULES_PATH = os.path.join(DATA_DIR, 'games_to_n_rules.json')

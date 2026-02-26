@@ -245,7 +245,7 @@ class LLMClient:
         """
         try:
             # Select appropriate virtual key
-            virtual_key = "vertex-ai-3e806d"  # Default to vertex-ai
+            virtual_key = os.environ.get("PORTKEY_VERTEX_KEY")
             
             if model == "o3-mini":
                 virtual_key = "o3-mini-5791cb"

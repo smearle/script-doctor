@@ -179,12 +179,6 @@ def profile(cfg: ProfileJaxRandConfig):
                 carry[0].multihot_level.block_until_ready()
                 print(f'Finished 2nd step in {(timer() - start)} seconds.')
 
-                start = timer()
-                # with jax.profiler.trace("/tmp/jax-trace", create_perfetto_link=True):
-                carry, _ = _env_step_jitted(carry, None)
-                carry[0].multihot_level.block_until_ready()
-                print(f'Finished 3rd step in {(timer() - start)} seconds.')
-
                 n_env_steps = cfg.n_steps * n_envs
                 times = []
                 for i in range(3):
