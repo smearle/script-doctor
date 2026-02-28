@@ -8,16 +8,23 @@ import numpy as np
 import pandas as pd
 import seaborn as sns
 
-from conf.config import PlotSearch
-from globals import PLOTS_DIR, STANDALONE_NODEJS_RESULTS_PATH, JS_SOLS_DIR
+from puzzlejax.conf.config import PlotSearch
+from puzzlejax.globals import PLOTS_DIR, STANDALONE_NODEJS_RESULTS_PATH, JS_SOLS_DIR
 from profile_nodejs import get_algo_name, get_standalone_run_params_from_name
 from puzzlejax.utils import get_list_of_games_for_testing, game_names_remap
 
 
 BFS_RESULTS_PATH = os.path.join('data', 'bfs_results.json')
+SEARCH_RESULTS_PATH = os.path.join('data', 'search_results.json')
+HEATMAP_SEARCH_DEPTHS = [1_000_000, 100_000]
+ALGO_DISPLAY_NAMES = {
+    'solveBFS': 'BFS',
+    'solveAStar': 'A*',
+    'solveMCTS': 'MCTS',
+}
 
 
-@hydra.main(version_base="1.3", config_path="conf", config_name="plot_standalone_bfs_config")
+@hydra.main(version_base="1.3", config_path="puzzlejax/conf", config_name="plot_standalone_bfs_config")
 def main(cfg: PlotSearch):
     if cfg.aggregate:
         aggregate_results(cfg)
@@ -26,79 +33,152 @@ def main(cfg: PlotSearch):
     
 
 def aggregate_results(cfg: PlotSearch):
-    # games = os.listdir(JS_SOLS_DIR)
     games = get_list_of_games_for_testing(cfg.all_games)
-    results = {}
-    max_iters = cfg.n_steps
-    if cfg.algo == 'bfs':
-        algo_name = 'solveBFS'
-    elif cfg.algo == 'astar':
-        algo_name = 'solveAStar'
-    elif cfg.algo == 'mcts':
-        algo_name = 'solveMCTS'
-    else:
-        raise ValueError(f'Unknown algo: {cfg.algo}')
+    print(games)
+    search_depths = [int(depth) for depth in HEATMAP_SEARCH_DEPTHS]
+    # results_by_algo[algo_name][depth][game] = stats_dict
+    results_by_algo = {}
     for game in games:
         if game.startswith('test_'):
             continue
         game_dir = os.path.join(JS_SOLS_DIR, game)
         sol_jsons = glob.glob(f"{game_dir}/*.json")
-        n_levels = 0
-        n_solved = 0
-        n_stepss = []
-        solution_lengths = []
+        # Collect per (algo, depth) stats
+        per_algo_depth_stats = {}
+
+        print(sol_jsons)
         for sol_json in sol_jsons:
             run_name, level_i = os.path.basename(sol_json).rsplit('_level-', 1)
             sol_algo_name = run_name.split('_')[0]
-            n_steps = run_name.split('_')[1].split('-steps')[0]
+            n_steps = int(run_name.split('_')[1].split('-steps')[0])
             level_i = level_i.split('.json')[0]
-            if sol_algo_name != algo_name or int(n_steps) != cfg.n_steps:
+            if n_steps not in search_depths:
                 continue
+
+            key = (sol_algo_name, n_steps)
+            if key not in per_algo_depth_stats:
+                per_algo_depth_stats[key] = {
+                    'n_levels': 0,
+                    'n_solved': 0,
+                    'n_stepss': [],
+                    'solution_lengths': [],
+                }
+
             with open(sol_json, 'r') as f:
                 sol_dict = json.load(f)
             if 'iterations' not in sol_dict or 'won' not in sol_dict:
                 print(f"Skipping {sol_json} because it doesn't have 'iterations' or 'won'")
                 continue
+
+            stats = per_algo_depth_stats[key]
             solved = sol_dict['won']
             actions = sol_dict.get('actions')
             if solved:
-                n_solved += 1
-                solution_lengths.append(len(actions))
-            n_levels += 1
-            n_steps = min(cfg.n_steps, sol_dict['iterations'])
-            n_stepss.append(n_steps)
-        if n_levels > 0:
-            n_steps_mean = np.mean(n_stepss)
-            pct_solved = n_solved / n_levels
-            mean_solution_length = float(np.mean(solution_lengths))
-            results[game] = {
+                stats['n_solved'] += 1
+                stats['solution_lengths'].append(len(actions))
+            stats['n_levels'] += 1
+            clipped_steps = min(n_steps, sol_dict['iterations'])
+            stats['n_stepss'].append(clipped_steps)
+
+        for (algo_name, depth), stats in per_algo_depth_stats.items():
+            if stats['n_levels'] == 0:
+                continue
+            if algo_name not in results_by_algo:
+                results_by_algo[algo_name] = {}
+            if depth not in results_by_algo[algo_name]:
+                results_by_algo[algo_name][depth] = {}
+            n_steps_mean = np.mean(stats['n_stepss'])
+            pct_solved = stats['n_solved'] / stats['n_levels']
+            mean_solution_length = float(np.mean(stats['solution_lengths'])) if stats['solution_lengths'] else 0.0
+            results_by_algo[algo_name][depth][game] = {
                 'pct_solved': pct_solved,
-                'n_levels': n_levels,
+                'n_levels': stats['n_levels'],
                 'n_iters': n_steps_mean,
                 'mean_sol_len': mean_solution_length
             }
-    print(results)
-    with open(BFS_RESULTS_PATH, 'w') as f:
-        json.dump(results, f, indent=4)
 
-    plot(cfg, results)
+    print(results_by_algo)
+    serializable = {
+        algo: {str(depth): games_dict for depth, games_dict in depths.items()}
+        for algo, depths in results_by_algo.items()
+    }
+    with open(SEARCH_RESULTS_PATH, 'w') as f:
+        json.dump(serializable, f, indent=4)
+
+    plot(cfg, results_by_algo)
+
+
+def _format_steps_label(n_steps: int) -> str:
+    if n_steps >= 1_000_000 and n_steps % 1_000_000 == 0:
+        return f"{n_steps // 1_000_000}M steps"
+    if n_steps >= 1_000 and n_steps % 1_000 == 0:
+        return f"{n_steps // 1_000}k steps"
+    return f"{n_steps:,} steps"
+
+
+def _normalize_results(results):
+    """Normalize results to {algo: {depth_int: {game: stats}}} format.
+
+    Handles both the new multi-algo format and the old depth-only format.
+    """
+    if not results:
+        return {}
+
+    first_val = next(iter(results.values()))
+    if not isinstance(first_val, dict):
+        return {}
+
+    # Check if first_val's values have 'pct_solved' directly (old per-depth format)
+    inner_first_val = next(iter(first_val.values()), None)
+    if isinstance(inner_first_val, dict) and 'pct_solved' in inner_first_val:
+        # Old format: {depth_str: {game: stats}} — attribute to BFS by default
+        return {'solveBFS': {int(d): games_dict for d, games_dict in results.items()}}
+
+    # New format: {algo: {depth_str_or_int: {game: stats}}}
+    return {
+        algo: {int(d): games_dict for d, games_dict in depths.items()}
+        for algo, depths in results.items()
+    }
 
 
 def plot(cfg: PlotSearch, results=None):
     M = 40  # max number of games per table
 
     if results is None:
-        with open(BFS_RESULTS_PATH, 'r') as f:
+        # Try new multi-algo format first, fall back to old BFS-only format
+        results_path = SEARCH_RESULTS_PATH if os.path.exists(SEARCH_RESULTS_PATH) else BFS_RESULTS_PATH
+        with open(results_path, 'r') as f:
             results = json.load(f)
-    
-    df = pd.DataFrame.from_dict(results, orient='index')
+
+    results_by_algo = _normalize_results(results)
+
+    # Build ordered (algo, depth) keys for heatmap rows, grouped by algorithm
+    algo_depth_order = []
+    for algo in sorted(results_by_algo.keys()):
+        preferred = [d for d in HEATMAP_SEARCH_DEPTHS if d in results_by_algo[algo]]
+        fallback = sorted(
+            [d for d in results_by_algo[algo].keys() if d not in preferred],
+            reverse=True,
+        )
+        for depth in preferred + fallback:
+            algo_depth_order.append((algo, depth))
+
+    if not algo_depth_order:
+        print('No search results found to plot.')
+        return
+
+    # Select the primary (algo, depth) for the CSV/LaTeX table
+    selected_algo, selected_depth = algo_depth_order[0]
+    selected_results = results_by_algo[selected_algo][selected_depth]
+
+    df = pd.DataFrame.from_dict(selected_results, orient='index')
     if 'sol_len' in df.columns and 'mean_sol_len' not in df.columns:
         df.rename(columns={'sol_len': 'mean_sol_len'}, inplace=True)
-    # df = df.sort_values(by=['pct_solved', 'n_iters'], ascending=[False, True])
 
     os.makedirs(PLOTS_DIR, exist_ok=True)
 
-    csv_file_path = os.path.join(PLOTS_DIR, 'standalone_bfs_results.csv')
+    algo_display = ALGO_DISPLAY_NAMES.get(selected_algo, selected_algo)
+    csv_file_path = os.path.join(PLOTS_DIR, 'standalone_search_results.csv')
     df.to_csv(csv_file_path, index=True, float_format="%.2f")
     print(f'Saved results to {csv_file_path}')
 
@@ -108,9 +188,20 @@ def plot(cfg: PlotSearch, results=None):
     df.index = df.index.str.replace('_', ' ')
     df.index = df.index.str.title()
 
-    heatmap_source_df = df.copy()
+    heatmap_source_dfs = {}
+    for algo, depth in algo_depth_order:
+        algo_depth_results = results_by_algo[algo].get(depth, {})
+        if not algo_depth_results:
+            continue
+        ad_df = pd.DataFrame.from_dict(algo_depth_results, orient='index')
+        if 'sol_len' in ad_df.columns and 'mean_sol_len' not in ad_df.columns:
+            ad_df.rename(columns={'sol_len': 'mean_sol_len'}, inplace=True)
+        ad_df.index = ad_df.index.to_series().replace(game_names_remap)
+        ad_df.index = ad_df.index.str.replace('_', ' ')
+        ad_df.index = ad_df.index.str.title()
+        heatmap_source_dfs[(algo, depth)] = ad_df
 
-    generate_heatmaps(heatmap_source_df)
+    generate_heatmaps(heatmap_source_dfs, algo_depth_order)
 
     latex_df = df.copy()
 
@@ -152,47 +243,59 @@ def plot(cfg: PlotSearch, results=None):
         if column in latex_df.columns:
             latex_df[column] = latex_df[column].apply(lambda value: _format_with_commas(value, decimals))
 
-    latex_file_path = os.path.join(PLOTS_DIR, 'bfs_results.tex')
+    latex_file_path = os.path.join(PLOTS_DIR, 'search_results.tex')
     with open(latex_file_path, 'w') as f:
-        f.write(latex_df.to_latex(index=True, float_format="%.2f", escape=False, caption="Results of BFS on full dataset of games, with max $100,000$ max search iterations and a timeout of 1 minute.",
-                            longtable=True, label="tab:bfs_results"))
+        f.write(latex_df.to_latex(index=True, float_format="%.2f", escape=False,
+                            caption=f"Results of {algo_display} search on full dataset of games, with max ${selected_depth:,}$ search iterations.",
+                            longtable=True, label="tab:search_results"))
     print(f'Saved latex table to {latex_file_path}')
 
-def generate_heatmaps(df: pd.DataFrame) -> None:
-    if df.empty:
+def generate_heatmaps(dfs_by_algo_depth: dict, algo_depth_order: list[tuple[str, int]]) -> None:
+    if not dfs_by_algo_depth:
         print('No data available for heatmap generation.')
         return
+
+    ordered_keys = [key for key in algo_depth_order if key in dfs_by_algo_depth]
+    if not ordered_keys:
+        print('No algorithm/depth data available for heatmap generation.')
+        return
+
+    all_games = []
+    for key in ordered_keys:
+        for game in dfs_by_algo_depth[key].index:
+            if game not in all_games:
+                all_games.append(game)
 
     heatmap_configs = [
         {
             'column': 'pct_solved',
-            'title': 'BFS Percent of Levels Solved per Game',
+            'title': 'Percent of Levels Solved per Game',
             'cmap': 'RdYlGn',
             'vmin': 0.0,
             'vmax': 1.0,
             'colorbar_label': 'Average Win Rate',
             'formatter': lambda v: f"{v:.0%}",
-            'output': 'bfs_pct_solved_heatmap.png',
+            'output': 'search_pct_solved_heatmap.png',
         },
         {
             'column': 'n_iters',
-            'title': 'BFS Mean Search Iterations per Game',
+            'title': 'Mean Search Iterations per Game',
             'cmap': 'Blues',
             'vmin': 0.0,
             'vmax': None,
             'colorbar_label': 'Mean Search Iterations',
             'formatter': lambda v: f"{v:.0f}",
-            'output': 'bfs_mean_iterations_heatmap.png',
+            'output': 'search_mean_iterations_heatmap.png',
         },
         {
             'column': 'mean_sol_len',
-            'title': 'BFS Mean Solution Length per Game',
+            'title': 'Mean Solution Length per Game',
             'cmap': 'Purples',
             'vmin': 0.0,
             'vmax': None,
             'colorbar_label': 'Mean Sol. Length',
             'formatter': lambda v: f"{v:.0f}",
-            'output': 'bfs_mean_solution_length_heatmap.png',
+            'output': 'search_mean_solution_length_heatmap.png',
         },
     ]
 
@@ -205,40 +308,52 @@ def generate_heatmaps(df: pd.DataFrame) -> None:
 
     for config in heatmap_configs:
         column = config['column']
-        if column not in df.columns:
+        if not any(column in df.columns for df in dfs_by_algo_depth.values()):
             continue
 
-        series = df[column]
-        if series.dropna().empty:
+        # Build row labels: "{AlgoDisplay} {DepthLabel}"
+        row_labels = []
+        for algo, depth in ordered_keys:
+            algo_display = ALGO_DISPLAY_NAMES.get(algo, algo)
+            row_labels.append(f"{algo_display} {_format_steps_label(depth)}")
+
+        heatmap_data = pd.DataFrame(index=row_labels, columns=all_games, dtype=float)
+
+        for (algo, depth), row_label in zip(ordered_keys, row_labels):
+            ad_df = dfs_by_algo_depth[(algo, depth)]
+            if column not in ad_df.columns:
+                continue
+            for game, value in ad_df[column].items():
+                heatmap_data.at[row_label, game] = value
+
+        stacked_values = heatmap_data.stack(future_stack=True).dropna()
+        if stacked_values.empty:
             continue
 
-        valid_series = series.dropna()
+        valid_values = stacked_values.astype(float)
 
         vmin = config.get('vmin')
         vmax = config.get('vmax')
         if vmin is None:
-            vmin = float(valid_series.min())
+            vmin = float(valid_values.min())
         if vmax is None:
-            vmax = float(valid_series.max())
+            vmax = float(valid_values.max())
         if np.isfinite(vmin) and np.isfinite(vmax) and np.isclose(vmin, vmax):
             vmax = vmin + (abs(vmin) * 0.05 + 1)
 
-        display_names = [name.replace('_', ' ') for name in series.index]
-        data = pd.DataFrame([series.values], columns=display_names, index=[''])
-
-        annot_row = [
-            config['formatter'](val) if pd.notnull(val) else ''
-            for val in series.values
+        annot_data = [
+            [config['formatter'](val) if pd.notnull(val) else '' for val in row]
+            for row in heatmap_data.values
         ]
-        annot_data = [annot_row]
 
-        num_cols = len(series)
-        fig_h = max(target_cell_height + v_padding, min_total_figure_height)
+        num_cols = len(heatmap_data.columns)
+        num_rows = len(heatmap_data.index)
+        fig_h = max(num_rows * target_cell_height + v_padding, min_total_figure_height)
         fig_w = max(num_cols * target_cell_width + h_padding, min_total_figure_width)
 
         plt.figure(figsize=(fig_w, fig_h))
         sns.heatmap(
-            data,
+            heatmap_data,
             annot=annot_data,
             fmt="",
             cmap=config['cmap'],
@@ -251,10 +366,9 @@ def generate_heatmaps(df: pd.DataFrame) -> None:
         )
         plt.title(config['title'])
         plt.xlabel('Game', labelpad=10)
-        plt.ylabel('')
-        plt.yticks([])
+        plt.ylabel('Algorithm / Search Depth', labelpad=10)
+        plt.yticks(rotation=0)
         plt.xticks(rotation=45, ha='right')
-        # plt.tight_layout(pad=1.2, rect=[0, 0, 0.92, 1])
         plt.tight_layout()
 
         output_path = os.path.join(PLOTS_DIR, config['output'])

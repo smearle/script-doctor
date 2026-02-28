@@ -7,7 +7,7 @@ import jax
 from lark import Lark
 import numpy as np
 
-from globals import LARK_SYNTAX_PATH
+from puzzlejax.globals import LARK_SYNTAX_PATH
 from puzzlejax.env import PuzzleJaxEnv, PJParams, PJState
 from puzzlejax.env_utils import multihot_to_desc
 from puzzlejax.preprocess_games import get_tree_from_txt

@@ -18,7 +18,7 @@ import sys
 import jax
 from lark import Lark
 
-from globals import LARK_SYNTAX_PATH
+from puzzlejax.globals import LARK_SYNTAX_PATH
 from env_wrappers import RepresentationWrapper
 from puzzlejax.env import PJParams
 from puzzlejax.preprocess_games import get_tree_from_txt

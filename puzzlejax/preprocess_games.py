@@ -17,10 +17,10 @@ import lark
 from lark import Lark, Transformer, Tree, Token, Visitor
 import numpy as np
 
-from conf.config import PreprocessConfig
+from puzzlejax.conf.config import PreprocessConfig
 from puzzlejax.env import PuzzleJaxEnv
 from puzzlejax.gen_tree import GenPSTree
-from globals import (
+from puzzlejax.globals import (
     GAMES_N_RULES_SORTED_PATH, GAMES_TO_N_RULES_PATH, GAMES_TO_SKIP, LARK_SYNTAX_PATH, TEST_GAMES,
     TREES_DIR, SIMPLIFIED_GAMES_DIR, MIN_GAMES_DIR, PRETTY_TREES_DIR, CUSTOM_GAMES_DIR,
     GAMES_DIR,

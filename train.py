@@ -19,7 +19,7 @@ import orbax.checkpoint as ocp
 import wandb
 # from tensorboardX import SummaryWriter
 
-from conf.config import RLConfig, TrainConfig
+from puzzlejax.conf.config import RLConfig, TrainConfig
 from purejaxrl.wrappers import LogWrapper
 from utils_rl import get_ckpt_dir, get_env_params_from_config, get_exp_dir, init_config, init_network, init_ps_env
 
@@ -664,7 +664,7 @@ def main_chunk(config, rng, restored_ckpt=None, checkpoint_manager=None):
     return out
 
     
-@hydra.main(version_base="1.3", config_path='./conf', config_name='train')
+@hydra.main(version_base="1.3", config_path='puzzlejax/conf', config_name='train')
 def main(config: TrainConfig):
     logging.getLogger().setLevel(logging.WARNING)
     config = init_config(config)

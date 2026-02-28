@@ -8,7 +8,7 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 
-from globals import DATA_DIR, TREES_DIR
+from puzzlejax.globals import DATA_DIR, TREES_DIR
 from puzzlejax.gen_tree import GenPSTree
 from puzzlejax.env import PJState, PuzzleJaxEnv, PJParams
 from puzzlejax.ps_game import PSGameTree

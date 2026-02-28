@@ -14,14 +14,14 @@ import pandas as pd
 import submitit
 import wandb
 
-from conf.config import SweepRLConfig, TrainConfig, EnjoyConfig
+from puzzlejax.conf.config import SweepRLConfig, TrainConfig, EnjoyConfig
 from puzzlejax.env import PJParams
 from puzzlejax.preprocess_games import get_env_from_ps_file
 from train import main as main_train
 from enjoy import main_enjoy
 from puzzlejax.utils import get_list_of_games_for_testing, get_n_levels_per_game, init_ps_lark_parser
 from utils_rl import init_config
-from globals import JS_TO_JAX_ACTIONS, JS_SOLS_DIR, SOLUTION_REWARDS_PATH
+from puzzlejax.globals import JS_TO_JAX_ACTIONS, JS_SOLS_DIR, SOLUTION_REWARDS_PATH
 
 
 def replay_solution(parser, game, level_i, actions):
@@ -118,6 +118,7 @@ def plot_rl_runs_reward(grid_cfgs: List[SweepRLConfig]):
             ax.set_xlabel("Timesteps")
 
             level_sols = glob.glob(os.path.join(JS_SOLS_DIR, game, f"*level-{level}.json"))
+            print(level_sols)
             n_search_steps = [level_sols.split('-steps')[0].split('/')[-1].split('_')[1] if '-steps' in level_sols else 100_000 for level_sols in level_sols]
             sorted_idxs = np.argsort(n_search_steps)
             level_sols = [level_sols[i] for i in sorted_idxs]
@@ -205,7 +206,7 @@ GAME_TO_N_ENVS = {
 TOTAL_TIMESTEPS = 5e7
 
 
-@hydra.main(version_base="1.3", config_path="conf", config_name="sweep_rl_config")
+@hydra.main(version_base="1.3", config_path="puzzlejax/conf", config_name="sweep_rl_config")
 def main(sweep_cfg: SweepRLConfig):
     if sweep_cfg.mode == 'train':
         main_fn = main_train

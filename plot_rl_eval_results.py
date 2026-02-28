@@ -8,7 +8,7 @@ import pandas as pd
 import seaborn as sns
 from matplotlib import pyplot as plt
 
-from globals import PLOTS_DIR
+from puzzlejax.globals import PLOTS_DIR
 from puzzlejax.utils import game_names_remap
 
 

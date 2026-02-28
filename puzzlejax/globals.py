@@ -23,19 +23,20 @@ PRIORITY_GAMES = [
     'Zen_Puzzle_Garden',
     'atlas shrank',
     'blocks',
+    'constellationz',
     'kettle',
     'limerick',
     'notsnake',
     'slidings',
     'sokoban_basic',
     'sokoban_match3',
-    'constellationz',
 ]
 
 par_dir = os.path.dirname(os.path.abspath(__file__))
+grand_par_dir = os.path.dirname(par_dir)
 
 CUSTOM_GAMES_DIR = os.path.join(par_dir, 'custom_games')
-DATA_DIR = os.path.join(par_dir, 'data')
+DATA_DIR = os.path.join(grand_par_dir, 'data')
 GAMES_TO_SKIP = set({})
 PLOTS_DIR = 'plots'
 GAMES_N_RULES_SORTED_PATH = os.path.join(DATA_DIR, 'games_n_rules.json')

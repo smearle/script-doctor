@@ -5,13 +5,14 @@ import json
 import time
 import fcntl
 import multiprocessing
+from concurrent.futures import ThreadPoolExecutor, wait, FIRST_COMPLETED
 import jax
 from lark import Lark
 from env_wrappers import RepresentationWrapper
 from puzzlejax.env import PJParams
 from puzzlejax.preprocess_games import LARK_SYNTAX_PATH, get_tree_from_txt
 from LLM_agent import LLMGameAgent
-from globals import PRIORITY_GAMES
+from puzzlejax.globals import PRIORITY_GAMES
 
 
 CUSTOM_GAMES_DIR = "data/scraped_games"
@@ -106,26 +107,14 @@ def release_job(state_path, model, game_name, level_index, run_id, think_aloud, 
 def worker_loop(args, all_jobs, game_info_map, save_dir_main):
     worker_id = args.worker_id if args.worker_id else f"{os.uname().nodename}-{os.getpid()}"
     state_path = args.state_path if args.state_path else os.path.join(save_dir_main, STATE_FILE_BASENAME)
-    # Initialize a new LLM agent for this worker
-    agent = LLMGameAgent(model_name=args.model)
     print(f"Worker {worker_id}: starting with state_path {state_path}")
-    while True:
-        job = claim_next_job(
-            state_path=state_path,
-            all_jobs=all_jobs,
-            save_dir=save_dir_main,
-            model=args.model,
-            think_aloud=args.think_aloud,
-            memory=args.memory,
-            force=args.force,
-            worker_id=worker_id,
-        )
-        if job is None:
-            print(f"Worker {worker_id}: no remaining claimable jobs. Exiting worker loop.")
-            break
-        game_name, level_index, run_id = job
+
+    def _run_one_job(job_tuple):
+        game_name, level_index, run_id = job_tuple
         print(f"Worker {worker_id} processing: {game_name} | Level {level_index} | Run {run_id}")
         game_info = game_info_map[game_name]
+        # Agent per concurrent job to avoid any shared mutable state between threads.
+        agent = LLMGameAgent(model_name=args.model)
         success = process_game_level(
             agent=agent,
             game_info=game_info,
@@ -136,9 +125,77 @@ def worker_loop(args, all_jobs, game_info_map, save_dir_main):
             model=args.model,
             max_steps=args.max_steps,
             memory=args.memory,
-            force=args.force
+            force=args.force,
         )
-        release_job(state_path, args.model, game_name, level_index, run_id, args.think_aloud, args.memory, 'done' if success else 'failed')
+        return job_tuple, success
+
+    max_inflight = max(1, int(getattr(args, "inflight_jobs", 1)))
+    if max_inflight == 1:
+        while True:
+            job = claim_next_job(
+                state_path=state_path,
+                all_jobs=all_jobs,
+                save_dir=save_dir_main,
+                model=args.model,
+                think_aloud=args.think_aloud,
+                memory=args.memory,
+                force=args.force,
+                worker_id=worker_id,
+            )
+            if job is None:
+                print(f"Worker {worker_id}: no remaining claimable jobs. Exiting worker loop.")
+                break
+            _, success = _run_one_job(job)
+            game_name, level_index, run_id = job
+            release_job(state_path, args.model, game_name, level_index, run_id, args.think_aloud, args.memory, 'done' if success else 'failed')
+        return
+
+    # Threaded mode: keep up to `max_inflight` jobs running concurrently in this worker.
+    futures_to_jobs = {}
+    exhausted = False
+    with ThreadPoolExecutor(max_workers=max_inflight) as executor:
+        while True:
+            while (not exhausted) and len(futures_to_jobs) < max_inflight:
+                job = claim_next_job(
+                    state_path=state_path,
+                    all_jobs=all_jobs,
+                    save_dir=save_dir_main,
+                    model=args.model,
+                    think_aloud=args.think_aloud,
+                    memory=args.memory,
+                    force=args.force,
+                    worker_id=worker_id,
+                )
+                if job is None:
+                    exhausted = True
+                    break
+                future = executor.submit(_run_one_job, job)
+                futures_to_jobs[future] = job
+
+            if not futures_to_jobs:
+                print(f"Worker {worker_id}: no remaining claimable jobs. Exiting worker loop.")
+                break
+
+            done, _ = wait(list(futures_to_jobs.keys()), return_when=FIRST_COMPLETED)
+            for fut in done:
+                fallback_job = futures_to_jobs.pop(fut)
+                try:
+                    completed_job, success = fut.result()
+                except Exception as e:
+                    completed_job, success = fallback_job, False
+                    print(f"Worker {worker_id}: threaded job failed with {type(e).__name__}: {e}")
+
+                game_name, level_index, run_id = completed_job
+                release_job(
+                    state_path,
+                    args.model,
+                    game_name,
+                    level_index,
+                    run_id,
+                    args.think_aloud,
+                    args.memory,
+                    'done' if success else 'failed',
+                )
 
 
 def extract_section(filepath, section):
@@ -256,19 +313,70 @@ def check_run_file_exists(save_dir, model, game_name, run_id, level_index, think
     legacy_orig_filename_without_level = f"{model}_{cot_prefix}{game_name}_run_{run_id}.json"
     legacy_orig_path_without_level = os.path.join(save_dir, legacy_orig_filename_without_level)
 
+    def _result_file_exists(path):
+        return os.path.exists(path)
+
     if level_index == 0:
         exists = (
-            os.path.exists(new_path_with_level) or
-            os.path.exists(new_path_without_level) or
-            os.path.exists(legacy_path_with_level) or
-            os.path.exists(legacy_orig_path_with_level) or
-            os.path.exists(legacy_path_without_level) or
-            os.path.exists(legacy_orig_path_without_level)
+            _result_file_exists(new_path_with_level) or
+            _result_file_exists(new_path_without_level) or
+            _result_file_exists(legacy_path_with_level) or
+            _result_file_exists(legacy_orig_path_with_level) or
+            _result_file_exists(legacy_path_without_level) or
+            _result_file_exists(legacy_orig_path_without_level)
         )
         return exists
 
-    exists = os.path.exists(new_path_with_level) or os.path.exists(legacy_path_with_level) or os.path.exists(legacy_orig_path_with_level)
+    exists = (
+        _result_file_exists(new_path_with_level) or
+        _result_file_exists(legacy_path_with_level) or
+        _result_file_exists(legacy_orig_path_with_level)
+    )
     return exists
+
+
+def is_running_result_file(path):
+    if not os.path.exists(path):
+        return False
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            payload = json.load(f)
+        return isinstance(payload, dict) and payload.get("status") == "running"
+    except Exception:
+        return False
+
+
+def list_step_log_files(logs_dir):
+    if not os.path.isdir(logs_dir):
+        return []
+    step_files = []
+    for name in os.listdir(logs_dir):
+        m = re.fullmatch(r"step_(\d+)\.txt", name)
+        if m:
+            step_files.append((int(m.group(1)), os.path.join(logs_dir, name)))
+    step_files.sort(key=lambda x: x[0])
+    return step_files
+
+
+def parse_step_log_file(step_file, valid_actions):
+    with open(step_file, "r", encoding="utf-8") as f:
+        txt = f.read()
+
+    ascii_match = re.search(r"Game state \(ASCII map\) and Legend:\n(.*?)\n\nGame rules:", txt, flags=re.DOTALL)
+    if not ascii_match:
+        raise ValueError("Could not parse ASCII section from step log")
+    ascii_state = ascii_match.group(1).strip("\n")
+
+    response_match = re.search(r"LLM Response:\n(.*)$", txt, flags=re.DOTALL)
+    if not response_match:
+        raise ValueError("Could not parse LLM response from step log")
+    response = response_match.group(1)
+    action_pattern = r"\b(" + "|".join(str(a) for a in valid_actions) + r")\b"
+    action_match = re.search(action_pattern, response)
+    if not action_match:
+        raise ValueError("Could not parse action id from LLM response")
+
+    return ascii_state, int(action_match.group(1))
 
 
 def get_run_file_path(save_dir, model, game_name, run_id, level_index, think_aloud: bool, memory: int):
@@ -400,19 +508,24 @@ def process_game_level(agent, game_info, level_index, run_id, save_dir, model,
     current_run_filepath = get_run_file_path(save_dir, model, game_name, run_id,
                                              level_index, think_aloud, memory)
 
-    # Create an empty run file as a lock before starting work
-    if os.path.exists(current_run_filepath) and not force:
+    current_run_logs_dir = current_run_filepath[:-5] + "_logs"
+    os.makedirs(current_run_logs_dir, exist_ok=True)
+
+    run_file_exists = os.path.exists(current_run_filepath)
+    run_file_is_running = is_running_result_file(current_run_filepath)
+
+    # Skip whenever a run file already exists (including {"status":"running"}) unless forcing.
+    if run_file_exists and not force:
         print(f"Run {run_id} for Game: {game_name}, Level: {level_index} already exists. Skipping.")
         return True
+
+    # Mark the run as in-progress.
     try:
         with open(current_run_filepath, "w", encoding="utf-8") as f:
             json.dump({"status": "running"}, f)
     except Exception as e:
         print(f"Failed to create lock file for {current_run_filepath}: {e}")
         return False
-
-    current_run_logs_dir = current_run_filepath[:-5] + "_logs"
-    os.makedirs(current_run_logs_dir, exist_ok=True)
     
     try:
         # Ensure level_index is valid
@@ -445,9 +558,84 @@ def process_game_level(agent, game_info, level_index, run_id, save_dir, model,
         state_history = set()
         state_history_lst = []
         current_state = state
+
+        # Resume from existing step logs only when no run JSON exists.
+        replayed_steps = 0
+        if not force:
+            step_files = list_step_log_files(current_run_logs_dir)
+            if step_files and (not run_file_exists):
+                print(f"Attempting resume from {len(step_files)} log steps in {current_run_logs_dir}")
+                replay_ok = True
+                parsed_steps = []
+                for _, step_file in step_files:
+                    try:
+                        parsed_steps.append(parse_step_log_file(step_file, action_space))
+                    except Exception as e:
+                        replay_ok = False
+                        print(f"Resume parse failed for {step_file}: {type(e).__name__}: {e}")
+                        break
+
+                if replay_ok:
+                    for idx, (logged_ascii, logged_action) in enumerate(parsed_steps):
+                        current_ascii = env.render_ascii_and_legend(current_state)
+                        if current_ascii.strip() != logged_ascii.strip():
+                            replay_ok = False
+                            print(
+                                f"Resume verification failed at step {idx+1}: "
+                                "current ASCII does not match step log input state."
+                            )
+                            break
+
+                        state_history.add(hash(current_state.multihot_level.tobytes()))
+                        state_history_lst.append((current_ascii, logged_action))
+                        result["action_sequence"].append(int(logged_action))
+
+                        rng, _rng = jax.random.split(rng)
+                        obs, next_state, rew, done, info = env.step_env(
+                            rng=rng, action=logged_action, state=current_state, params=env_params
+                        )
+                        next_ascii = env.render_ascii_and_legend(next_state)
+
+                        result["reward_sequence"].append(float(rew.item()))
+                        if idx == 0:
+                            result["initial_ascii"] = next_ascii.split('\n')
+                        result["heuristic_sequence"].append(float(next_state.heuristic.item()))
+                        result["state_data"] = {
+                            "score": int(next_state.score),
+                            "win": bool(next_state.win),
+                            "step": idx + 1
+                        }
+
+                        # Verify transition consistency against the following step log input state.
+                        if idx + 1 < len(parsed_steps):
+                            expected_next_ascii, _ = parsed_steps[idx + 1]
+                            if next_ascii.strip() != expected_next_ascii.strip():
+                                replay_ok = False
+                                print(
+                                    f"Resume verification failed between steps {idx+1} and {idx+2}: "
+                                    "next state does not match next step log input state."
+                                )
+                                break
+
+                        replayed_steps += 1
+                        current_state = next_state
+                        ascii_state = next_ascii
+
+                        if next_state.win:
+                            result["win"] = True
+                            print(f"Replay reached terminal win at step {idx+1}.")
+                            break
+                        if done:
+                            print(f"Replay reached terminal done at step {idx+1}.")
+                            break
+
+                if replayed_steps > 0:
+                    print(f"Resumed {replayed_steps} step(s) from logs.")
+                elif step_files:
+                    print("Resume replay was not applied; continuing from fresh initial state.")
         
         # Main action loop
-        for step in range(max_steps):
+        for step in range(replayed_steps, max_steps):
             print(f"\nStep {step+1}/{max_steps}")
             
             h = hash(current_state.multihot_level.tobytes())
@@ -483,7 +671,7 @@ def process_game_level(agent, game_info, level_index, run_id, save_dir, model,
             
             result["reward_sequence"].append(float(rew.item()))
             
-            if step == 0:
+            if step == 0 and "initial_ascii" not in result:
                 result["initial_ascii"] = ascii_state.split('\n')
             
             result["heuristic_sequence"].append(float(next_state.heuristic.item()))
@@ -510,13 +698,10 @@ def process_game_level(agent, game_info, level_index, run_id, save_dir, model,
             del result["heuristic_sequence"]
         result["final_ascii"] = ascii_state.split('\n')
         
-        # Save results to the originally-claimed run file path (do not change run_id under parallel workers)
-        if os.path.exists(current_run_filepath):
-            print(f"Result file already exists at {current_run_filepath}. Not overwriting.")
-        else:
-            with open(current_run_filepath, "w", encoding="utf-8") as f:
-                json.dump(result, f, indent=2, default=lambda o: f"<{type(o).__name__} instance>")
-            print(f"Result saved to {current_run_filepath} (Run ID: {run_id})")
+        # Persist final results for this claimed run.
+        with open(current_run_filepath, "w", encoding="utf-8") as f:
+            json.dump(result, f, indent=2, default=lambda o: f"<{type(o).__name__} instance>")
+        print(f"Result saved to {current_run_filepath} (Run ID: {run_id})")
         
         return True
         
@@ -559,6 +744,8 @@ def main():
                         help='Optional path to shared JSON state for coordinating workers')
     parser.add_argument('--workers', type=int, default=1,
                         help='Number of parallel worker processes to spawn (default: 1)')
+    parser.add_argument('--inflight_jobs', type=int, default=1,
+                        help='Concurrent jobs per worker process using threads (default: 1)')
     args = parser.parse_args()
 
     # Get the list of games from PRIORITY_GAMES

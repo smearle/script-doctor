@@ -16,10 +16,11 @@ import numpy as np
 import pandas as pd
 from timeit import default_timer as timer
 
-from conf.config import ProfileJaxRandConfig
+from puzzlejax.conf.config import ProfileJaxRandConfig
 from puzzlejax.env import PJState
-from globals import JAX_PROFILING_RESULTS_DIR
-from puzzlejax.utils import get_list_of_games_for_testing, load_games_n_rules_sorted
+from puzzlejax.env_switch import PuzzleJaxEnvSwitch
+from puzzlejax.globals import JAX_PROFILING_RESULTS_DIR
+from puzzlejax.utils import get_list_of_games_for_testing, load_games_n_rules_sorted, init_ps_lark_parser, get_tree_from_txt
 from utils_rl import get_env_params_from_config, init_ps_env
 
 
@@ -109,7 +110,9 @@ def profile(cfg: ProfileJaxRandConfig):
 
     device_dir = os.path.join(JAX_PROFILING_RESULTS_DIR, device_name)
     steps_dir = os.path.join(device_dir, step_str)
-    os.makedirs(steps_dir, exist_ok=True)
+    env_type_str = 'switch' if cfg.use_switch_env else 'standard'
+    env_dir = os.path.join(steps_dir, env_type_str)
+    os.makedirs(env_dir, exist_ok=True)
     last_game = None
 
     for (game, n_envs, vmap) in zip(games, BATCH_SIZES, VMAPS):
@@ -124,7 +127,7 @@ def profile(cfg: ProfileJaxRandConfig):
         # for level_i in range(len(env.levels)):
 
             level_str = get_level_str(level_i, vmap=vmap)
-            results_path = os.path.join(steps_dir, game, level_str + '.json')
+            results_path = os.path.join(env_dir, game, level_str + '.json')
             if os.path.exists(results_path):
                 n_envs_to_fps = json.load(open(results_path, 'r'))
             else:
@@ -135,7 +138,17 @@ def profile(cfg: ProfileJaxRandConfig):
                 continue
 
             if last_game != game:
-                env = init_ps_env(cfg)
+                if cfg.use_switch_env:
+                    parser = init_ps_lark_parser()
+                    tree, success, err_msg = get_tree_from_txt(parser, cfg.game, test_env_init=False)
+                    env = PuzzleJaxEnvSwitch(
+                        tree, jit=True, level_i=cfg.level, max_steps=cfg.max_episode_steps,
+                        print_score=False, debug=False, vmap=cfg.vmap,
+                    )
+                    print(f'  Using switch-based env (PuzzleJaxEnvSwitch)')
+                else:
+                    env = init_ps_env(cfg)
+                    print(f'  Using standard env (PuzzleJaxEnv)')
 
             last_game = game
 
@@ -163,21 +176,24 @@ def profile(cfg: ProfileJaxRandConfig):
 
             _env_step_jitted = jax.jit(_env_step)
 
-            start = timer()
-
             try:
+                # with jax.profiler.trace("/tmp/jax-trace", create_perfetto_link=True):
                 obsv, env_state = jax.vmap(env.reset, in_axes=(0, None))(reset_rng, env_params)
                 carry = (env_state, rng)
                 # jax.config.update('jax_log_compiles', True)
 
+                compile_start = timer()
                 carry, _ = _env_step_jitted(carry, None)
                 carry[0].multihot_level.block_until_ready()
-                print(f'Finished 1st step in {(timer() - start)} seconds.')
+                compile_time = timer() - compile_start
+                print(f'Finished 1st step (compile + execute) in {compile_time:.3f} seconds.')
                 
                 start = timer()
                 carry, _ = _env_step_jitted(carry, None)
                 carry[0].multihot_level.block_until_ready()
-                print(f'Finished 2nd step in {(timer() - start)} seconds.')
+                exec_time_2nd = timer() - start
+                print(f'Finished 2nd step (execute only) in {exec_time_2nd:.3f} seconds.')
+                print(f'Estimated compile time: {compile_time - exec_time_2nd:.3f} seconds.')
 
                 n_env_steps = cfg.n_steps * n_envs
                 times = []
@@ -193,7 +209,7 @@ def profile(cfg: ProfileJaxRandConfig):
                     times.append(timer() - start)
                     print(f'Loop {i} ran {n_env_steps} steps in {times[-1]} seconds. FPS: {n_env_steps / times[-1]:,.2f}')
 
-            except jaxlib.xla_extension.XlaRuntimeError as e:
+            except Exception as e:
                 err_msg = traceback.format_exc()
                 print(f'Error in first step: {err_msg}')
                 n_envs_to_fps[str(n_envs)] = {
@@ -218,7 +234,12 @@ def profile(cfg: ProfileJaxRandConfig):
             #     imageio.mimsave(gif_path, frames, duration=cfg.gif_frame_duration)
             #     print(f'Finished saving gif in {timer() - start} seconds.')
 
-            n_envs_to_fps[str(n_envs)] = fpss
+            n_envs_to_fps[str(n_envs)] = {
+                'fps': fpss,
+                'compile_time': compile_time,
+                'compile_time_est': compile_time - exec_time_2nd,
+                'use_switch_env': cfg.use_switch_env,
+            }
             save_results(n_envs_to_fps, results_path)
 
     else:

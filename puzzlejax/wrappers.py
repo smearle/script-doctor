@@ -1,5 +1,7 @@
 from functools import partial
 from typing import Any
+from importlib import import_module
+import math
 import chex
 import jax
 import jax.numpy as jnp
@@ -9,6 +11,26 @@ from puxle import Puzzle, PuzzleState, state_dataclass, FieldDescriptor
 from puzzlejax.env import PuzzleJaxEnv, PJState, PJParams
 from puzzlejax.env_utils import multihot_to_desc
 from puzzlejax.utils import init_ps_env
+
+
+def _ensure_jaxtar_current_padding_compat():
+    try:
+        Current = import_module("JAxtar.stars.search_base").Current
+    except Exception:
+        return
+
+    if hasattr(Current, "padding_as_batch"):
+        return
+
+    def _padding_as_batch(self, shape):
+        batch_size = shape[0] if isinstance(shape, tuple) else int(shape)
+        padded = Current.default((batch_size,))
+        return padded.at[0].set(self[0])
+
+    Current.padding_as_batch = _padding_as_batch
+
+
+_ensure_jaxtar_current_padding_compat()
 
 
 class PuzzleJaxPuxleEnv(Puzzle):
@@ -31,6 +53,33 @@ class PuzzleJaxPuxleEnv(Puzzle):
 
         super().__init__()
 
+    def get_actions(
+        self,
+        solve_config: Puzzle.SolveConfig,
+        state: Puzzle.State,
+        action: chex.Array,
+        filled: bool = True,
+    ) -> tuple[Puzzle.State, chex.Array]:
+        del solve_config
+        pj_state = self._state_to_pj(state)
+        _, next_state, _, _, _ = self.env.step_env(state.rng, pj_state, action, self.params)
+        next_state = self._pj_to_state(next_state)
+
+        changed = jnp.any(next_state.multihot_level != state.multihot_level)
+        cost = jnp.where(changed, jnp.array(1.0, dtype=jnp.float32), jnp.array(jnp.inf))
+
+        next_state = jax.lax.cond(
+            filled,
+            lambda: jax.tree.map(
+                lambda new_v, old_v: jnp.where(changed, new_v, old_v),
+                next_state,
+                state,
+            ),
+            lambda: next_state,
+        )
+
+        return next_state, cost
+
     def define_state_class(self):
         template = self._init_state_template
         string_parser = self.get_string_parser()
@@ -51,17 +100,67 @@ class PuzzleJaxPuxleEnv(Puzzle):
 
             @classmethod
             def default(cls, shape: Any = ...):
-                del shape
+                if shape is ... or shape == ():
+                    return State(
+                        multihot_level=template.multihot_level,
+                        win=template.win,
+                        heuristic=template.heuristic,
+                        rng=template.rng,
+                        prev_heuristic=template.prev_heuristic,
+                        init_heuristic=template.init_heuristic,
+                        restart=template.restart,
+                        step_i=template.step_i,
+                        score=template.score,
+                    )
+
+                if isinstance(shape, int):
+                    batch_shape = (shape,)
+                else:
+                    batch_shape = tuple(shape)
+
                 return State(
-                    multihot_level=template.multihot_level,
-                    win=template.win,
-                    heuristic=template.heuristic,
-                    rng=template.rng,
-                    prev_heuristic=template.prev_heuristic,
-                    init_heuristic=template.init_heuristic,
-                    restart=template.restart,
-                    step_i=template.step_i,
-                    score=template.score,
+                    multihot_level=jnp.broadcast_to(
+                        template.multihot_level, batch_shape + template.multihot_level.shape
+                    ),
+                    win=jnp.broadcast_to(template.win, batch_shape),
+                    heuristic=jnp.broadcast_to(template.heuristic, batch_shape),
+                    rng=jnp.broadcast_to(template.rng, batch_shape + template.rng.shape),
+                    prev_heuristic=jnp.broadcast_to(template.prev_heuristic, batch_shape),
+                    init_heuristic=jnp.broadcast_to(template.init_heuristic, batch_shape),
+                    restart=jnp.broadcast_to(template.restart, batch_shape),
+                    step_i=jnp.broadcast_to(template.step_i, batch_shape),
+                    score=jnp.broadcast_to(template.score, batch_shape),
+                )
+
+            def flatten(self):
+                flat_batch = (math.prod(self.win.shape),)
+                return State(
+                    multihot_level=jnp.reshape(self.multihot_level, flat_batch + multihot_shape),
+                    win=jnp.reshape(self.win, flat_batch),
+                    heuristic=jnp.reshape(self.heuristic, flat_batch),
+                    rng=jnp.reshape(self.rng, flat_batch + rng_shape),
+                    prev_heuristic=jnp.reshape(self.prev_heuristic, flat_batch),
+                    init_heuristic=jnp.reshape(self.init_heuristic, flat_batch),
+                    restart=jnp.reshape(self.restart, flat_batch),
+                    step_i=jnp.reshape(self.step_i, flat_batch),
+                    score=jnp.reshape(self.score, flat_batch),
+                )
+
+            def reshape(self, shape):
+                if isinstance(shape, int):
+                    batch_shape = (shape,)
+                else:
+                    batch_shape = tuple(shape)
+                return State(
+                    multihot_level=jnp.reshape(self.multihot_level, batch_shape + multihot_shape),
+                    win=jnp.reshape(self.win, batch_shape),
+                    heuristic=jnp.reshape(self.heuristic, batch_shape),
+                    rng=jnp.reshape(self.rng, batch_shape + rng_shape),
+                    prev_heuristic=jnp.reshape(self.prev_heuristic, batch_shape),
+                    init_heuristic=jnp.reshape(self.init_heuristic, batch_shape),
+                    restart=jnp.reshape(self.restart, batch_shape),
+                    step_i=jnp.reshape(self.step_i, batch_shape),
+                    score=jnp.reshape(self.score, batch_shape),
                 )
 
             def __str__(self, **kwargs):
@@ -78,33 +177,6 @@ class PuzzleJaxPuxleEnv(Puzzle):
         _, state = self.env.reset(key, self.params)
         return self._pj_to_state(state)
 
-    def get_neighbours(self, solve_config, state, filled=True):
-        actions = jnp.arange(self.action_size)
-        rng = state.rng
-        pj_state = self._state_to_pj(state)
-
-        def step_action(action):
-            _, next_state, _, _, _ = self.env.step_env(rng, pj_state, action, self.params)
-            return next_state
-
-        next_states = jax.vmap(step_action)(actions)
-        next_states = self.State(
-            multihot_level=next_states.multihot_level,
-            win=next_states.win,
-            heuristic=next_states.heuristic,
-            rng=next_states.rng,
-            prev_heuristic=next_states.prev_heuristic,
-            init_heuristic=next_states.init_heuristic,
-            restart=next_states.restart,
-            step_i=next_states.step_i,
-            score=next_states.score,
-        )
-
-        # All moves have cost 1
-        costs = jnp.ones(self.action_size)
-
-        return next_states, costs
-
     def _state_to_pj(self, state: Puzzle.State) -> PJState:
         return PJState(
             multihot_level=state.multihot_level,
@@ -119,16 +191,18 @@ class PuzzleJaxPuxleEnv(Puzzle):
         )
 
     def _pj_to_state(self, state: PJState) -> Puzzle.State:
+        level = state.multihot_level
+        win, _, heuristic = self.env.check_win(level)
         return self.State(
-            multihot_level=state.multihot_level,
-            win=state.win,
-            heuristic=state.heuristic,
-            rng=state.rng,
-            prev_heuristic=state.prev_heuristic,
-            init_heuristic=state.init_heuristic,
-            restart=state.restart,
-            step_i=state.step_i,
-            score=state.score,
+            multihot_level=level,
+            win=win,
+            heuristic=heuristic,
+            rng=self._init_state_template.rng,
+            prev_heuristic=heuristic,
+            init_heuristic=heuristic,
+            restart=jnp.array(False),
+            step_i=jnp.array(0, dtype=jnp.int32),
+            score=jnp.array(0, dtype=jnp.int32),
         )
 
     def is_solved(self, solve_config, state: Puzzle.State):
@@ -178,6 +252,9 @@ class PuzzleJaxHeuristic():
 
         Returns:
             The distance between the state and the target.
-            shape : single scalar
+            shape : single scalar (non-negative)
         """
-        return current.heuristic
+        # state.heuristic is stored as a negative value (e.g. -manhattan_dist)
+        # by the env's check_win functions.  Negate so callers get a proper
+        # non-negative distance estimate.
+        return -current.heuristic

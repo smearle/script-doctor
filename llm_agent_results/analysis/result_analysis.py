@@ -6,7 +6,22 @@ import seaborn as sns
 import re
 import argparse
 
-from puzzlejax.utils import game_names_remap
+from puzzlejax.utils import game_names_remap, get_list_of_games_for_testing
+
+
+def format_game_name_for_display(game_name: str) -> str:
+    game_name = game_names_remap.get(game_name, game_name)
+    return ' '.join(word.capitalize() for word in game_name.replace('_', ' ').split())
+
+
+def get_ordered_game_display_names(include_cot_games: bool) -> list[str]:
+    ordered_games_raw = get_list_of_games_for_testing(all_games=True)
+    if not include_cot_games:
+        ordered_games_raw = [g for g in ordered_games_raw if not g.lower().startswith('cot')]
+
+    ordered_games_display = [format_game_name_for_display(game) for game in ordered_games_raw]
+    # Deduplicate while preserving order
+    return list(dict.fromkeys(ordered_games_display))
 
 
 def parse_filename(filename, folder_llm=None):
@@ -176,10 +191,8 @@ def main():
     # Standardize game names - ensure all atlas shrank variations are normalized
     df['game'] = df['game'].apply(lambda x: "atlas_shrank" if "atlas" in x and "shrank" in x else x)
 
-    # Rename games
-    df['game'] = df['game'].replace(game_names_remap)
-    # Now remove any underscores, and capitalize each word
-    df['game'] = df['game'].apply(lambda x: ' '.join(word.capitalize() for word in x.replace('_', ' ').split()))
+    # Rename and format games for display
+    df['game'] = df['game'].apply(format_game_name_for_display)
 
     # Map LLM names (remove Gemini from mapping)
     llm_name_mapping = {
@@ -302,6 +315,14 @@ def main():
     if not llm_game_agg.empty:
         llm_game_win_rates_plot = llm_game_agg['average_win_rate'].unstack()
         llm_game_steps_plot = llm_game_agg['average_steps'].unstack()
+
+        canonical_game_order = get_ordered_game_display_names(args.include_cot_games)
+        ordered_present_games = [g for g in canonical_game_order if g in llm_game_win_rates_plot.columns]
+        remaining_games = [g for g in llm_game_win_rates_plot.columns if g not in ordered_present_games]
+        heatmap_game_order = ordered_present_games + remaining_games
+
+        llm_game_win_rates_plot = llm_game_win_rates_plot.reindex(columns=heatmap_game_order)
+        llm_game_steps_plot = llm_game_steps_plot.reindex(columns=heatmap_game_order)
         
         if not llm_game_win_rates_plot.empty:
             # --- Heatmap 3: LLM vs Game (Win Rates) ---

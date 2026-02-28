@@ -7,7 +7,7 @@ import jax
 from jax import numpy as jnp
 import numpy as np
 
-from conf.config import EnjoyConfig
+from puzzlejax.conf.config import EnjoyConfig
 from puzzlejax.env import PuzzleJaxEnv, PJState
 # from envs.probs.problem import get_loss
 # from eval import get_eval_name, init_config_for_eval

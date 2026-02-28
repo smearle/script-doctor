@@ -12,7 +12,7 @@ import jax.numpy as jnp
 from lark import Lark
 import numpy as np
 
-from globals import LARK_SYNTAX_PATH, TEST_GAMES, TREES_DIR, DATA_DIR
+from puzzlejax.globals import LARK_SYNTAX_PATH, TEST_GAMES, TREES_DIR, DATA_DIR
 from puzzlejax.env import PuzzleJaxEnv, PJParams, multihot_to_desc
 from puzzlejax.preprocess_games import get_tree_from_txt
 from puzzlejax.preprocess_games import PJParseErrors

@@ -52,6 +52,7 @@ class ProfileJaxRandConfig(PSConfig):
     n_steps: int = 5_000
     # reevaluate: bool = True  # Whether to continue profiling, or just plot the results
     render: bool = False
+    use_switch_env: bool = False  # Use jax.lax.switch-based env for faster compilation
 
 
     
@@ -220,6 +221,7 @@ class SweepRLConfig(TrainConfig):
     game: Optional[str] = None
     all_games: bool = False
     plot: bool = False
+    success_heatmap: bool = False
     slurm: bool = True
     mode: str = 'train'
     render_ims: bool = False

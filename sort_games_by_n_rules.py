@@ -18,7 +18,7 @@ from puzzlejax.gen_tree import GenPSTree
 from puzzlejax.preprocess_games import TREES_DIR, GAMES_DIR, count_rules, get_tree_from_txt
 from puzzlejax.ps_game import PSGameTree
 from puzzlejax.utils import GAMES_N_RULES_SORTED_PATH
-from globals import GAMES_TO_N_RULES_PATH, GAMES_N_RULES_SORTED_PATH, LARK_SYNTAX_PATH
+from puzzlejax.globals import GAMES_TO_N_RULES_PATH, GAMES_N_RULES_SORTED_PATH, LARK_SYNTAX_PATH
 
 
 @hydra.main(version_base="1.3", config_path="conf", config_name="preprocess_config")

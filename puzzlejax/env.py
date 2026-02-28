@@ -15,9 +15,9 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 
-from env_render import render_solid_color, render_sprite
+from puzzlejax.env_render import render_solid_color, render_sprite
 from puzzlejax.env_utils import N_MOVEMENTS, multihot_to_desc, N_FORCES, ACTION
-from jax_utils import stack_leaves
+from puzzlejax.jax_utils import stack_leaves
 from puzzlejax.ps_game import LegendEntry, PSGameTree, PSObject, Rule, WinCondition
 from gymnax.environments.spaces import Discrete, Box
 
@@ -1166,7 +1166,7 @@ class PuzzleJaxEnv:
 
     # @partial(jax.jit, static_argnums=(0))
     def step_env(self, rng, state: PJState, action, params: Optional[PJParams] = None):
-        init_lvl = state.multihot_level.copy()
+        init_lvl = state.multihot_level  # JAX arrays are immutable; no copy needed
         lvl = self.apply_player_force(action, state)
 
         # Actually, just apply the rule function once
@@ -2963,7 +2963,7 @@ class PuzzleJaxEnv:
                 turn_applied = jnp.any(lvl != init_lvl)
                 win_turn, score, heuristic = self.check_win(lvl[0])
                 win = win | win_turn
-                lvl = lvl.at[:, self.n_objs:].set(0)  # Remove leftover forces
+                lvl = lvl.at[:, self.n_objs:].set(False)  # Remove leftover forces
 
                 new_carry = (lvl, turn_applied, turn_app_i, cancelled, restart, block_again, win, rng)
                 # If cancelled, revert to the previous carry (pre-iteration).
@@ -3190,6 +3190,8 @@ class PuzzleJaxEnv:
         patches = jax.lax.conv_general_dilated_patches(
             lvl, in_patch_shape, window_strides=(1, 1), padding='VALID',
         )
+        # conv ops promote bool→float32; cast back to save ~4× VRAM on patches
+        patches = patches.astype(bool)
         assert patches.shape[0] == 1
         patches = patches[0]
         # patches = rearrange(patches, "c h w -> h w c")
@@ -3431,7 +3433,7 @@ class PuzzleJaxEnv:
             forces_to_deltas = jnp.array([[0, -1], [1, 0], [0, 1], [-1, 0]])
             delta = forces_to_deltas[c % N_MOVEMENTS]
             x_1, y_1 = x + delta[0], y + delta[1]
-            would_collide = jnp.any(lvl[0, :n_objs, x_1, y_1] * coll_mat[obj_idx])
+            would_collide = jnp.any(lvl[0, :n_objs, x_1, y_1] & coll_mat[obj_idx])
             out_of_bounds = (x_1 < 0) | (x_1 >= lvl.shape[2]) | (y_1 < 0) | (y_1 >= lvl.shape[3])
             can_move = obj_exists & is_force_present & ~would_collide & ~out_of_bounds
             # Now, in the new level, move the object in the direction of the force.

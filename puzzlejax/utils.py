@@ -1,4 +1,5 @@
 import glob
+import importlib
 import json
 import math
 import os
@@ -6,6 +7,8 @@ import pickle
 import random
 import re
 import time
+from functools import lru_cache
+from typing import Any
 
 import dotenv
 import jax
@@ -14,11 +17,11 @@ import numpy as np
 from openai import AzureOpenAI
 import tiktoken
 
-from globals import (
+from puzzlejax.globals import (
     GAMES_TO_N_RULES_PATH, GAMES_N_RULES_SORTED_PATH, PRIORITY_GAMES, GAMES_N_LEVELS_PATH, LARK_SYNTAX_PATH,
     GAMES_DIR, TREES_DIR
 )
-from collect_games import GALLERY_GAMES_DIR
+GALLERY_GAMES_DIR = "gallery_games"
 from puzzlejax.env import PuzzleJaxEnv
 from puzzlejax.gen_tree import GenPSTree
 from puzzlejax.preprocess_games import get_tree_from_txt
@@ -76,8 +79,103 @@ headers = {
 
 o_endpoint = os.getenv("ENDPOINT_URL", "https://sc-pn-m898m3wl-eastus2.openai.azure.com/")
 o_key = os.getenv("O3_MINI_KEY")
+PORTKEY_BASE_URL = os.environ.get("PORTKEY_BASE_URL")
+PORTKEY_MODEL_NAMESPACE = os.environ.get("PORTKEY_MODEL_NAMESPACE")
 
 client = None
+
+
+@lru_cache(maxsize=1)
+def get_portkey_client():
+    try:
+        Portkey = importlib.import_module("portkey_ai").Portkey
+    except ImportError as exc:
+        raise RuntimeError(
+            "portkey_ai is not installed. Install it to query Portkey models."
+        ) from exc
+
+    api_key = os.environ.get("PORTKEY_BEARER") or os.environ.get("PORTKEY_API_KEY")
+    if not api_key:
+        raise RuntimeError(
+            "PORTKEY_BEARER (or PORTKEY_API_KEY) is not set. Configure it before querying Portkey models."
+        )
+    return Portkey(base_url=PORTKEY_BASE_URL, api_key=api_key)
+
+
+def _resolve_portkey_model(model: str) -> str:
+    if "/" in model or model.startswith("@"):
+        return model
+    if PORTKEY_MODEL_NAMESPACE:
+        return f"{PORTKEY_MODEL_NAMESPACE}/{model}"
+    return model
+
+
+def _get_portkey_extra_headers(model_alias: str, resolved_model: str) -> dict:
+    headers = {}
+    portkey_config = os.environ.get("PORTKEY_CONFIG")
+    if portkey_config:
+        headers["x-portkey-config"] = portkey_config
+        return headers
+
+    provider = os.environ.get("PORTKEY_PROVIDER")
+    if not provider:
+        model_l = resolved_model.lower()
+        alias_l = (model_alias or "").lower()
+        if "gemini" in model_l or model_l.startswith("@vertexai/") or "vertex" in model_l:
+            provider = "vertex-ai"
+        elif "claude" in model_l:
+            provider = "anthropic"
+        else:
+            provider = "openai"
+        if alias_l in {"gemini", "gemini-2.5-pro"}:
+            provider = "vertex-ai"
+    headers["x-portkey-provider"] = provider
+
+    virtual_key = None
+    alias_l = (model_alias or "").lower()
+    if alias_l == "4o-mini":
+        virtual_key = os.environ.get("PORTKEY_GPT4O_KEY")
+    elif alias_l in {"gemini", "gemini-2.5-pro"}:
+        virtual_key = os.environ.get("PORTKEY_VERTEX_KEY")
+    elif alias_l == "llama":
+        virtual_key = os.environ.get("PORTKEY_LLAMA_KEY")
+    else:
+        virtual_key = os.environ.get("PORTKEY_O3MINI_KEY")
+    if virtual_key:
+        headers["x-portkey-virtual-key"] = virtual_key
+
+    return headers
+
+
+def _extract_portkey_response_text(response: Any) -> str:
+    choices = getattr(response, "choices", None) or []
+    if not choices:
+        return ""
+    first_choice = choices[0]
+    message = getattr(first_choice, "message", None)
+    if message is None and isinstance(first_choice, dict):
+        message = first_choice.get("message")
+    if message is None:
+        return ""
+
+    content = getattr(message, "content", None)
+    if content is None and isinstance(message, dict):
+        content = message.get("content")
+
+    if isinstance(content, str):
+        return content
+    if isinstance(content, list):
+        chunks = []
+        for item in content:
+            if isinstance(item, dict):
+                if item.get("type") == "text" and item.get("text"):
+                    chunks.append(str(item["text"]))
+                elif isinstance(item.get("content"), str):
+                    chunks.append(item["content"])
+            elif isinstance(item, str):
+                chunks.append(item)
+        return "\n".join(chunk for chunk in chunks if chunk)
+    return str(content or "")
 
 def llm_text_query(system_prompt, prompt, model, api_key=None, base_url=None, model_type=None):
     """
@@ -98,19 +196,12 @@ def llm_text_query(system_prompt, prompt, model, api_key=None, base_url=None, mo
         {"role": "user", "content": prompt},
     ]
     
-    # Select different virtual keys based on the model parameter
-    virtual_key = os.environ.get("PORTKEY_O3MINI_KEY", "")
-    if model == "4o-mini":
-        virtual_key = os.environ.get("PORTKEY_GPT4O_KEY", "")
-    elif model == "gemini":
-        virtual_key = os.environ.get("PORTKEY_VERTEX_KEY", "")
+    model_alias = model
+    if model == "gemini":
         model ="gemini-2.0-flash-exp"
     elif model == "gemini-2.5-pro":
-        virtual_key = os.environ.get("PORTKEY_VERTEX_KEY", "")
         model = "gemini-2.5-pro"
     elif model == "llama":
-        # Portkey Llama-3
-        virtual_key = os.environ.get("PORTKEY_LLAMA_KEY", "")
         model = "@vertexai/meta.llama-3.1-405b-instruct-maas"
     elif model == "deepseek":
         pass  # DeepSeek will be handled separately
@@ -119,7 +210,6 @@ def llm_text_query(system_prompt, prompt, model, api_key=None, base_url=None, mo
     # Try using Portkey API, DeepSeek API or Qwen API
     try:
         import requests
-        import json
 
         if model == "deepseek" or model == "deepseek-r1":
             model_name ='deepseek-chat' if model =="deepseek" else 'deepseek-reasoner'
@@ -153,56 +243,75 @@ def llm_text_query(system_prompt, prompt, model, api_key=None, base_url=None, mo
                 # "temperature": 0.7, # Example
             }
         else:
-            print(f'Querying API using model {model} with virtual key {virtual_key}...')
-            url = "anon"
-            headers = {
-                "Content-Type": "application/json",
-                "Authorization": f"Bearer {os.environ.get('PORTKEY_BEARER', '')}",
-                "x-portkey-virtual-key": virtual_key
-            }
-            payload = {
-                "model": model,
-                "messages": messages
-            }
+            print(f'Querying Portkey using model {model}...')
 
         max_retries = 80
         retry_count = 0
         base_wait = 10
+        max_wait = 300
+        portkey_timeout_seconds = 180
+        use_portkey = model not in ("deepseek", "deepseek-r1", "qwen")
 
         if model == "gemini-2.0-flash-exp":
             print("Detected Gemini model, enabling enhanced backoff strategy")
             max_retries = 5
             base_wait = 60
 
-        while retry_count < max_retries:
+        while use_portkey or (retry_count < max_retries):
             try:
-                response = requests.post(url, headers=headers, json=payload, timeout=60)
+                if model == "deepseek" or model == "deepseek-r1" or model == "qwen":
+                    response = requests.post(url, headers=headers, json=payload, timeout=60)
+                    if response.status_code == 200:
+                        response_data = response.json()
+                        print('Query completed successfully.')
+                        return response_data['choices'][0]['message']['content']
 
-                if response.status_code == 200:
-                    response_data = response.json()
+                    # For any other status code (including 429, 502, 504, etc.), log and prepare for a retry.
+                    print(f"Request failed with status code: {response.status_code}")
+                    print(f"Response text: {response.text}")
+
+                    # Determine wait time
+                    # Use Retry-After header if present (common for 429, 503), otherwise exponential backoff.
+                    wait_time_default = base_wait * (2 ** retry_count)
+                    wait_time = int(response.headers.get('Retry-After', wait_time_default))
+                else:
+                    resolved_model = _resolve_portkey_model(model)
+                    extra_headers = _get_portkey_extra_headers(model_alias, resolved_model)
+                    raw_response = get_portkey_client().chat.completions.create(
+                        model=resolved_model,
+                        messages=messages,
+                        extra_headers=extra_headers,
+                        timeout=portkey_timeout_seconds,
+                    )
                     print('Query completed successfully.')
-                    return response_data['choices'][0]['message']['content']
+                    return _extract_portkey_response_text(raw_response)
                 
-                # For any other status code (including 429, 502, 504, etc.), log and prepare for a retry.
-                print(f"Request failed with status code: {response.status_code}")
-                print(f"Response text: {response.text}")
-
-                # Determine wait time
-                # Use Retry-After header if present (common for 429, 503), otherwise exponential backoff.
-                wait_time_default = base_wait * (2 ** retry_count)
-                wait_time = int(response.headers.get('Retry-After', wait_time_default))
-                
-                print(f"Retrying in {wait_time}s ({retry_count+1}/{max_retries})")
+                if use_portkey:
+                    print(f"Retrying in {wait_time}s (attempt {retry_count+1}, infinite retries enabled)")
+                else:
+                    print(f"Retrying in {wait_time}s ({retry_count+1}/{max_retries})")
                 time.sleep(wait_time)
 
             except requests.exceptions.Timeout:
-                wait_time = base_wait * (2 ** retry_count)
-                print(f"Timeout, retrying in {wait_time}s ({retry_count+1}/{max_retries})")
+                wait_time = min(base_wait * (2 ** min(retry_count, 6)), max_wait)
+                if use_portkey:
+                    print(f"Timeout after {portkey_timeout_seconds}s, retrying in {wait_time}s (attempt {retry_count+1}, infinite retries enabled)")
+                else:
+                    print(f"Timeout, retrying in {wait_time}s ({retry_count+1}/{max_retries})")
                 time.sleep(wait_time)
 
             except requests.exceptions.RequestException as e:
                 print(f"Request exception: {e}")
                 wait_time = base_wait
+                time.sleep(wait_time)
+
+            except Exception as e:
+                wait_time = min(base_wait * (2 ** min(retry_count, 6)), max_wait)
+                print(f"Portkey exception: {e}")
+                if use_portkey:
+                    print(f"Retrying in {wait_time}s (attempt {retry_count+1}, infinite retries enabled)")
+                else:
+                    print(f"Retrying in {wait_time}s ({retry_count+1}/{max_retries})")
                 time.sleep(wait_time)
 
             retry_count += 1
@@ -290,27 +399,6 @@ def load_games_n_rules_sorted():
         games_n_rules = json.load(f)
     games_n_rules = sorted(games_n_rules, key=lambda x: x[1])
     return games_n_rules
-
-
-def get_list_of_games_for_testing_old(all_games=True, include_random=False, random_order=False):
-    gallery_games = glob.glob(os.path.join(GALLERY_GAMES_DIR, '*.txt'))
-    gallery_games = [os.path.basename(g)[:-4] for g in gallery_games]
-    if all_games:
-        with open(GAMES_N_RULES_SORTED_PATH, 'r') as f:
-            games_n_rules = json.load(f)
-        # Sort so that at the front of the list, we have games from our priority list, then the gallery then the rest of
-        # our dataset, with each subset in order of increasing complexity.
-        games_in_gallery_n_rules = [(game, game in PRIORITY_GAMES, game in gallery_games, n_rules) 
-                                    for game, n_rules, has_randomness in games_n_rules if not has_randomness or include_random]
-        games = sorted(games_in_gallery_n_rules, key=lambda x: (not x[1], not x[2], x[3]))
-        games = [g[0] for g in games]
-    else:
-        games = PRIORITY_GAMES
-    if random_order:
-        random.shuffle(games)
-    # HACK why is this happening??
-    games = [game[:-4] if game.endswith('.txt') else game for game in games]
-    return games
 
 
 def get_list_of_games_for_testing(all_games=True, include_random=False, random_order=False):

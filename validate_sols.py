@@ -23,9 +23,9 @@ import pandas as pd
 from skimage.transform import resize
 import submitit
 
-from conf.config import JaxValidationConfig
+from puzzlejax.conf.config import JaxValidationConfig
 from puzzlejax.env import PuzzleJaxEnv
-from globals import (
+from puzzlejax.globals import (
     SOLUTION_REWARDS_PATH, GAMES_TO_N_RULES_PATH, JS_SOLS_DIR, JAX_VALIDATED_JS_SOLS_DIR, JS_TO_JAX_ACTIONS, DATA_DIR,
     LARK_SYNTAX_PATH,
 )
@@ -67,7 +67,7 @@ def multihot_level_from_js_state(level_state, obj_list):
     return multihot_level_js
 
 
-@hydra.main(version_base="1.3", config_path='./conf', config_name='jax_validation_config')
+@hydra.main(version_base="1.3", config_path='puzzlejax/conf', config_name='jax_validation_config')
 def main_launch(cfg: JaxValidationConfig):
     if cfg.slurm:
         games = get_list_of_games_for_testing(all_games=cfg.all_games)

@@ -6,6 +6,7 @@ import shutil
 import traceback
 from typing import List, Optional
 
+import dotenv
 import hydra
 import imageio
 from javascript import require
@@ -13,7 +14,7 @@ import jax
 from lark import Lark
 import submitit
 
-from conf.config import ProfileNodeJS
+from puzzlejax.conf.config import ProfileNodeJS
 from puzzlejax.env import PJState
 from puzzlejax.preprocess_games import PJParseErrors, get_env_from_ps_file
 from profile_nodejs import compile_game
@@ -21,7 +22,10 @@ from puzzlejax.utils import get_list_of_games_for_testing, init_ps_lark_parser, 
 from validate_sols import JS_SOLS_DIR, multihot_level_from_js_state
 
 
-@hydra.main(version_base="1.3", config_path='./conf', config_name='profile_nodejs_config')
+dotenv.load_dotenv()
+
+
+@hydra.main(version_base="1.3", config_path='puzzlejax/conf', config_name='profile_nodejs_config')
 def main_launch(cfg: ProfileNodeJS):
     if cfg.slurm:
         games = get_list_of_games_for_testing(all_games=cfg.all_games, random_order=cfg.random_order)
@@ -37,7 +41,7 @@ def main_launch(cfg: ProfileNodeJS):
             cpus_per_task=1,
             timeout_min=180,
             slurm_array_parallelism=n_jobs,
-            slurm_account='torch_pr_84_tandon_advanced',
+            slurm_account=os.environ.get("SLURM_ACCOUNT"),
             slurm_setup=["export JAX_PLATFORMS=cpu"],
         )
         executor.map_array(main, [cfg] * n_jobs, game_sublists)
