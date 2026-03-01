@@ -7,8 +7,11 @@ neural heuristics on PuzzleScript games where the goal state is **unknown**
 The loop:
     1. Run batched A* search on puzzle levels using the current neural heuristic
     2. Extract training data from the search graph:
-       - Solved puzzles: exact h*(s) = optimal_cost - g(s) for all expanded nodes
-       - Unsolved puzzles: use g-values as distance-from-start supervision
+       For each expanded node s, compute the *minimum f-value* among all of
+       its descendants in the search tree:  min_desc_f(s).
+       The NN target is  min_desc_f(s) - g(s),  which equals h*(s) on the
+       optimal path but is *higher* for states on suboptimal/dead-end branches,
+       teaching the network which states lie on promising paths.
     3. Train the neural heuristic on this data (+ replay buffer)
     4. Repeat — improved heuristic → better search → better training data
 
@@ -237,6 +240,77 @@ class NeuralHeuristicWrapper(Heuristic):
         rule_h = current.heuristic.astype(jnp.float32)
         return self.blend_alpha * nn_h + (1.0 - self.blend_alpha) * rule_h
 
+    def batched_param_distance(self, params, solve_config, current):
+        """Batched heuristic evaluation with externally supplied NN params.
+
+        Supports dynamic search-time updates without rebuilding/recompiling A*.
+        Expected payload:
+            {
+                "nn_params": <flax params pytree>,
+                "blend_alpha": float scalar,
+            }
+        """
+        if isinstance(params, dict) and "nn_params" in params:
+            nn_params = params["nn_params"]
+            blend_alpha = jnp.asarray(params.get("blend_alpha", self.blend_alpha), dtype=jnp.float32)
+        else:
+            nn_params = params
+            blend_alpha = jnp.asarray(self.blend_alpha, dtype=jnp.float32)
+
+        nn_h = self.neural.batched_param_distance(nn_params, solve_config, current)
+        rule_h = current.heuristic.astype(jnp.float32)
+        return blend_alpha * nn_h + (1.0 - blend_alpha) * rule_h
+
+
+@jax.jit
+def _compute_targets_and_weights_jit(g_all, expanded_mask, env_h_all, parent_indices, solved_flag):
+    """Compute min-descendant-f targets and weights on device.
+
+    This is module-scoped (not nested) so JAX can compile once and reuse.
+    """
+    finite_mask = jnp.logical_and(jnp.isfinite(g_all), expanded_mask)
+    f_all = jnp.where(finite_mask, g_all + env_h_all, jnp.inf)
+    min_desc_f = f_all
+
+    n = g_all.shape[0]
+    idx_all = jnp.arange(n, dtype=jnp.int32)
+    sort_key = jnp.where(finite_mask, -g_all, jnp.inf)
+    sorted_idx = idx_all[jnp.argsort(sort_key)]
+
+    def body_fun(i, md):
+        idx = sorted_idx[i]
+        pidx = parent_indices[idx]
+
+        active = finite_mask[idx]
+        parent_ok = jnp.logical_and(pidx >= 0, pidx < n)
+        parent_finite = jnp.where(parent_ok, finite_mask[pidx], False)
+        update_ok = jnp.logical_and(active, parent_finite)
+
+        def do_update(arr):
+            child_v = arr[idx]
+            parent_v = arr[pidx]
+            new_parent_v = jnp.minimum(parent_v, child_v)
+            return arr.at[pidx].set(new_parent_v)
+
+        return jax.lax.cond(update_ok, do_update, lambda arr: arr, md)
+
+    min_desc_f = jax.lax.fori_loop(0, n, body_fun, min_desc_f)
+
+    h_targets_all = jnp.where(finite_mask, min_desc_f - g_all, 0.0)
+    h_targets_all = jnp.maximum(h_targets_all, 0.0)
+
+    expanded_indices = jnp.where(finite_mask, size=n, fill_value=-1)[0]
+    n_expanded_local = jnp.sum(finite_mask)
+
+    global_min_f = jnp.min(jnp.where(finite_mask, min_desc_f, jnp.inf))
+    path_quality_all = min_desc_f - global_min_f
+
+    solved_weights = jnp.where(path_quality_all < 1.0, 3.0, 1.0)
+    unsolved_weights = jnp.where(path_quality_all < 1.0, 1.5, 0.5)
+    weights_all = jnp.where(solved_flag, solved_weights, unsolved_weights).astype(jnp.float32)
+
+    return expanded_indices, n_expanded_local, h_targets_all, weights_all
+
 
 # ---------------------------------------------------------------------------
 # Extract training data from a completed A* search
@@ -248,21 +322,24 @@ def extract_training_data(
     solve_config,
     max_samples: int = 50000,
 ) -> Optional[dict]:
-    """Extract (state, heuristic_target) pairs from a completed A* search.
+    """Extract (state, min-descendant-f target) pairs from a completed A* search.
 
-    For solved puzzles:
-        h*(s) = optimal_cost - g(s) for every expanded node on the optimal path.
-        For other expanded nodes: h_target(s) = max(optimal_cost - g(s), 0) as an
-        upper-bound target (not exact, but useful supervision).
+    For each expanded node s, we compute the minimum f-value among all of s's
+    descendants in the search tree (including s itself), where
+        f(s) = g(s) + h_env(s)
 
-    For unsolved puzzles:
-        We still have useful g-values (cost-to-reach). We use the minimum
-        f-value in the open set as an estimate of the optimal cost, giving
-        h_target(s) = f_min - g(s) for expanded nodes.
+    The training target is then:
+        target(s) = min_desc_f(s) - g(s)
+
+    This teaches the NN to assign low values to states on promising paths
+    (descendants lead to low-f nodes) and high values to states on dead-end
+    or suboptimal branches.  On the optimal path, target(s) = h*(s) = optimal_cost - g(s),
+    i.e. equivalent to the old target.  Off the optimal path, targets are
+    *higher* than h*, penalizing the NN for recommending those states.
 
     Returns dict with:
-        - "multihot_levels": [N, *multihot_shape] bool array 
-        - "targets": [N] float array of heuristic targets
+        - "multihot_levels": [N, *multihot_shape] bool array
+        - "targets": [N] float array of min-descendant-f targets
         - "weights": [N] float array of sample weights
         - "solved": bool
     """
@@ -272,85 +349,50 @@ def extract_training_data(
     if generated < 2:
         return None
 
-    # Get the cost array — finite entries are expanded nodes
-    costs = np.array(search_result.cost)
-    finite_mask = np.isfinite(costs)
-    n_expanded = int(np.sum(finite_mask))
+    # 1-5. JAXified expanded-mask/filtering, min-descendant-f propagation,
+    #      targets, and sample weights.
+    costs = jnp.asarray(search_result.cost)  # g(s); inf for unexpanded
+    expanded_mask = jnp.asarray(search_result.pop_generation >= 0)
+    env_h_all = -jnp.asarray(search_result.hashtable.table.heuristic, dtype=jnp.float32)
+    parent_indices = jnp.asarray(search_result.parent.hashidx.index, dtype=jnp.int32)
 
+    g_all = costs.astype(jnp.float32)
+    expanded_indices_all, n_expanded_jax, h_targets_all, weights_all = _compute_targets_and_weights_jit(
+        g_all,
+        expanded_mask,
+        env_h_all,
+        parent_indices,
+        jnp.asarray(solved),
+    )
+
+    n_expanded = int(n_expanded_jax)
     if n_expanded < 1:
         return None
 
-    # Get all expanded states from the hashtable
-    finite_indices = np.where(finite_mask)[0]
+    finite_indices = np.asarray(expanded_indices_all[:n_expanded], dtype=np.int32)
 
-    # Subsample if too many
+    # 6. Subsample if too many expanded nodes
     if n_expanded > max_samples:
         rng = np.random.default_rng(42)
         finite_indices = rng.choice(finite_indices, max_samples, replace=False)
         n_expanded = max_samples
 
-    g_values = costs[finite_indices]
+    h_targets = np.asarray(h_targets_all[finite_indices], dtype=np.float32)
+    weights = np.asarray(weights_all[finite_indices], dtype=np.float32)
 
-    if solved:
-        # Optimal cost is the cost of the solved state
-        solved_idx = search_result.solved_idx
-        optimal_cost = float(search_result.get_cost(solved_idx))
-        h_targets = optimal_cost - g_values
-        h_targets = np.maximum(h_targets, 0.0)
+    # 7. Extract state representations (vectorized fast path + safe fallback)
+    # try:
+    all_multihot = jnp.asarray(search_result.hashtable.table.multihot_level)
+    multihot_levels = np.asarray(all_multihot[finite_indices])
+    # except Exception:
+    #     from xtructure import HashIdx
 
-        # Higher weight for nodes with higher g (closer to start, more reliable)
-        # and for nodes with lower h (closer to goal, rarer to see)
-        weights = np.ones(n_expanded, dtype=np.float32)
-
-        # Nodes on the optimal path get extra weight
-        # Extract path nodes
-        try:
-            path = search_result.get_solved_path()
-            path_indices = set()
-            for node in path:
-                idx = int(node.hashidx.index)
-                if idx >= 0:
-                    path_indices.add(idx)
-            # Boost path nodes
-            for i, idx in enumerate(finite_indices):
-                if idx in path_indices:
-                    weights[i] = 3.0
-        except Exception:
-            pass
-    else:
-        # Unsolved: use heuristic stored in dist array as a fallback target
-        dist_values = np.array(search_result.dist)
-        h_targets_from_dist = dist_values[finite_indices]
-        h_targets_from_dist = np.where(
-            np.isfinite(h_targets_from_dist),
-            np.maximum(h_targets_from_dist, 0.0),
-            0.0
-        )
-
-        # Also compute f_min from the open set as an upper bound estimate
-        f_values = costs + dist_values
-        f_values_finite = f_values[np.isfinite(f_values)]
-        if len(f_values_finite) > 0:
-            f_min = float(np.min(f_values_finite))
-        else:
-            f_min = float(np.max(g_values)) + 1.0
-
-        # h_target = max(f_min - g, rule_heuristic, 0)
-        h_targets = np.maximum(f_min - g_values, h_targets_from_dist)
-        h_targets = np.maximum(h_targets, 0.0)
-        weights = np.ones(n_expanded, dtype=np.float32) * 0.5  # Lower weight for unsolved
-
-    # Extract states
-    from xtructure import HashIdx
-    multihot_levels = []
-    for idx in finite_indices:
-        hash_idx = HashIdx(index=jnp.array(idx, dtype=jnp.int32))
-        state = search_result.hashtable[hash_idx]
-        multihot_levels.append(np.array(state.multihot_level))
-
-    multihot_levels = np.stack(multihot_levels, axis=0)
-    h_targets = np.array(h_targets, dtype=np.float32)
-    weights = np.array(weights, dtype=np.float32)
+    #     multihot_levels = []
+    #     for idx in finite_indices:
+    #         hash_idx = HashIdx(index=jnp.array(idx, dtype=jnp.int32))
+    #         state = search_result.hashtable[hash_idx]
+    #         multihot_levels.append(np.array(state.multihot_level))
+    #     multihot_levels = np.stack(multihot_levels, axis=0)
 
     return {
         "multihot_levels": multihot_levels,
@@ -374,29 +416,53 @@ class ReplayBuffer:
         self.targets = None
         self.weights = None
         self.size = 0
+        self.write_ptr = 0
+
+    def _ensure_storage(self, ml, tgt, w):
+        if self.multihot_levels is not None:
+            return
+        self.multihot_levels = np.empty((self.max_size, *ml.shape[1:]), dtype=ml.dtype)
+        self.targets = np.empty((self.max_size,), dtype=tgt.dtype)
+        self.weights = np.empty((self.max_size,), dtype=w.dtype)
 
     def add(self, data: dict):
         """Add a batch of data to the buffer."""
-        ml = data["multihot_levels"]
-        tgt = data["targets"]
-        w = data["weights"]
+        ml = np.asarray(data["multihot_levels"])
+        tgt = np.asarray(data["targets"])
+        w = np.asarray(data["weights"])
 
-        if self.multihot_levels is None:
-            self.multihot_levels = ml
-            self.targets = tgt
-            self.weights = w
+        if ml.shape[0] == 0:
+            return
+
+        self._ensure_storage(ml, tgt, w)
+
+        n = ml.shape[0]
+        if n >= self.max_size:
+            # Keep only the most recent max_size samples from this batch.
+            self.multihot_levels[...] = ml[-self.max_size :]
+            self.targets[...] = tgt[-self.max_size :]
+            self.weights[...] = w[-self.max_size :]
+            self.size = self.max_size
+            self.write_ptr = 0
+            return
+
+        end_ptr = self.write_ptr + n
+        if end_ptr <= self.max_size:
+            self.multihot_levels[self.write_ptr:end_ptr] = ml
+            self.targets[self.write_ptr:end_ptr] = tgt
+            self.weights[self.write_ptr:end_ptr] = w
         else:
-            self.multihot_levels = np.concatenate([self.multihot_levels, ml], axis=0)
-            self.targets = np.concatenate([self.targets, tgt], axis=0)
-            self.weights = np.concatenate([self.weights, w], axis=0)
+            first = self.max_size - self.write_ptr
+            second = n - first
+            self.multihot_levels[self.write_ptr:] = ml[:first]
+            self.targets[self.write_ptr:] = tgt[:first]
+            self.weights[self.write_ptr:] = w[:first]
+            self.multihot_levels[:second] = ml[first:]
+            self.targets[:second] = tgt[first:]
+            self.weights[:second] = w[first:]
 
-        # Trim if over capacity (keep most recent)
-        if self.multihot_levels.shape[0] > self.max_size:
-            self.multihot_levels = self.multihot_levels[-self.max_size:]
-            self.targets = self.targets[-self.max_size:]
-            self.weights = self.weights[-self.max_size:]
-
-        self.size = self.multihot_levels.shape[0]
+        self.write_ptr = (self.write_ptr + n) % self.max_size
+        self.size = min(self.max_size, self.size + n)
 
     def sample(self, batch_size: int, rng: np.random.Generator = None) -> dict:
         """Sample a minibatch from the buffer."""
@@ -415,16 +481,43 @@ class ReplayBuffer:
                 "multihot_levels": self.multihot_levels,
                 "targets": self.targets,
                 "weights": self.weights,
+                "size": self.size,
+                "write_ptr": self.write_ptr,
+                "max_size": self.max_size,
             }, f)
 
     def load(self, path: str):
         if os.path.exists(path):
             with open(path, "rb") as f:
                 data = pickle.load(f)
-            self.multihot_levels = data["multihot_levels"]
-            self.targets = data["targets"]
-            self.weights = data["weights"]
-            self.size = self.multihot_levels.shape[0] if self.multihot_levels is not None else 0
+
+            ml = data.get("multihot_levels", None)
+            tgt = data.get("targets", None)
+            w = data.get("weights", None)
+            if ml is None or tgt is None or w is None:
+                return False
+
+            saved_size = int(data.get("size", ml.shape[0]))
+            saved_ptr = int(data.get("write_ptr", saved_size % self.max_size))
+
+            # New format: full-capacity ring arrays
+            if ml.shape[0] == self.max_size:
+                self.multihot_levels = ml
+                self.targets = tgt
+                self.weights = w
+                self.size = min(saved_size, self.max_size)
+                self.write_ptr = saved_ptr % self.max_size
+            else:
+                # Backward compatibility: compact arrays from older checkpoints
+                n = min(ml.shape[0], self.max_size)
+                self.multihot_levels = np.empty((self.max_size, *ml.shape[1:]), dtype=ml.dtype)
+                self.targets = np.empty((self.max_size,), dtype=tgt.dtype)
+                self.weights = np.empty((self.max_size,), dtype=w.dtype)
+                self.multihot_levels[:n] = ml[-n:]
+                self.targets[:n] = tgt[-n:]
+                self.weights[:n] = w[-n:]
+                self.size = n
+                self.write_ptr = n % self.max_size
             return True
         return False
 
@@ -608,6 +701,18 @@ def run_exit_training(
     # ---- Get initial state ----
     solve_config, init_state = puzzle.get_inits(jax.random.PRNGKey(0))
 
+    # ---- Build A* once; pass heuristic params dynamically each iteration ----
+    print("  Compiling A* once with dynamic heuristic params ...", end=" ", flush=True)
+    search_fn = astar_builder(
+        puzzle,
+        combined_heuristic,
+        batch_size=batch_size,
+        max_nodes=max_nodes,
+        cost_weight=cost_weight,
+        dynamic_params=True,
+    )
+    print("done")
+
     # ---- Main ExIt loop ----
     for iteration in range(start_iter, n_iterations):
         iter_start = time.time()
@@ -620,21 +725,13 @@ def run_exit_training(
         # ==================================================================
         print("  [Search] Running A* ...", end=" ", flush=True)
 
-        # Update neural heuristic params for search
-        neural_heuristic.params = neural_heuristic.params  # already up to date
-
-        # Build fresh A* with current heuristic
-        # We rebuild each iteration because the heuristic closure captures params
-        search_fn = astar_builder(
-            puzzle,
-            combined_heuristic,
-            batch_size=batch_size,
-            max_nodes=max_nodes,
-            cost_weight=cost_weight,
-        )
+        search_params = {
+            "nn_params": neural_heuristic.params,
+            "blend_alpha": jnp.array(combined_heuristic.blend_alpha, dtype=jnp.float32),
+        }
 
         search_start = time.time()
-        search_result = search_fn(solve_config, init_state)
+        search_result = search_fn(solve_config, init_state, search_params)
         solved = bool(search_result.solved.block_until_ready())
         search_time = time.time() - search_start
         generated = int(search_result.generated_size)
@@ -650,6 +747,7 @@ def run_exit_training(
         print("  [Extract] Mining training data ...", end=" ", flush=True)
         data = extract_training_data(puzzle, search_result, solve_config)
         if data is not None:
+            print('adding data')
             replay.add(data)
             print(f"{data['n_expanded']} samples (buffer: {replay.size})")
         else:

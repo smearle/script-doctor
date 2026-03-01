@@ -218,12 +218,18 @@ def run_search_on_level(
                     if action is not None:
                         actions_list.append(int(action))
                 if render_gif:
-                    from helpers.visualization import build_path_steps_from_nodes
-                    path_steps = build_path_steps_from_nodes(
-                        search_result=search_result,
-                        path=path,
+                    # Use build_path_steps_from_actions (replaying actions from
+                    # the initial state) instead of build_path_steps_from_nodes
+                    # (which looks up states by hash-table slot index).  Cuckoo
+                    # hashing can relocate states during insertion, leaving
+                    # stale slot indices in the parent pointers and causing the
+                    # GIF to show impossible state transitions.
+                    path_steps = build_path_steps_from_actions(
                         puzzle=puzzle,
                         solve_config=solve_config,
+                        initial_state=init_state,
+                        actions=actions_list,
+                        heuristic=heuristic,
                     )
         except Exception as e:
             print(f"  Warning: could not extract solution path: {e}")

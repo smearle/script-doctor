@@ -22,6 +22,18 @@ from models import NCA, AutoEncoder, ConvForward, ConvForward2, SeqNCA, ActorCri
 N_AGENTS = 1
 
 def get_exp_dir(config: TrainConfig):
+    default_max_episode_steps = 100
+    default_lr = 1.0e-4
+
+    episode_len_slug = ""
+    if getattr(config, "max_episode_steps", default_max_episode_steps) != default_max_episode_steps:
+        episode_len_slug = f"_ep-len-{config.max_episode_steps}"
+
+    lr_slug = ""
+    lr_value = float(getattr(config, "lr", default_lr))
+    if not np.isclose(lr_value, float(default_lr)):
+        lr_slug = f"_lr-{lr_value:.8g}"
+
     exp_dir = os.path.join(
         "rl_logs", 
         f"{config.game}",
@@ -30,6 +42,8 @@ def get_exp_dir(config: TrainConfig):
             f"n-envs-{config.n_envs}_"
             f"{config.model}-{'-'.join([str(hd) for hd in config.hidden_dims])}_"
             f"seed-{config.seed}"
+            f"{episode_len_slug}"
+            f"{lr_slug}"
         )
     )
     return exp_dir

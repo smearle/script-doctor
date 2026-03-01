@@ -88,9 +88,18 @@ def _render_frames(frames, i, metric, steps_prev_complete, env, config: RLConfig
         t = int(timesteps[-1])
     else:
         t = 0
-    if config.render_freq <= 0 or i % config.render_freq != 0 or t == steps_prev_complete:
-    # if jnp.all(frames == 0):
+    if t <= steps_prev_complete or config.render_freq <= 0:
         return
+
+    # Gate rendering by global env step distance rather than update index.
+    # This is robust across checkpoint resume and different episode lengths.
+    render_every_steps = config.render_freq * config.num_steps * config.n_envs
+    if render_every_steps <= 0:
+        return
+    if ((t - steps_prev_complete) % render_every_steps) != 0:
+        return
+
+    # if jnp.all(frames == 0):
     print(f"Rendering episode gifs at update {i} to directory {config._exp_dir}")
     assert len(frames) == config.n_render_eps * 1 * env.max_steps,\
         "Not enough frames collected"
@@ -108,7 +117,7 @@ def _render_frames(frames, i, metric, steps_prev_complete, env, config: RLConfig
         #     new_frames.append(frame)
         # frames = new_frames
 
-    gif_name = f"{config._exp_dir}/update-{i}.gif"
+    gif_name = f"{config._exp_dir}/update-{i}_step-{t}.gif"
 
     try:
         imageio.v3.imwrite(
@@ -123,6 +132,11 @@ def _render_frames(frames, i, metric, steps_prev_complete, env, config: RLConfig
     except jax.errors.TracerArrayConversionError:
         print("Failed to save gif. Skipping...")
         return
+
+
+def _render_frames_io(frames, i, metric, steps_prev_complete, env, config: RLConfig):
+    _render_frames(frames, i, metric, steps_prev_complete, env, config)
+    return np.int32(0)
 
 def log_callback(metric, steps_prev_complete, config: RLConfig, train_start_time):
     timesteps = metric["timestep"][metric["returned_episode"]] * config.n_envs
@@ -261,6 +275,8 @@ def make_train(config: TrainConfig, restored_ckpt, checkpoint_manager):
             rng_r=rng_r, obsv_r=obsv_r, env_state_r=env_state_r, env_params=env_params)
         render_frames = partial(
             _render_frames, env=env_r, config=config)
+        render_frames_io = partial(
+            _render_frames_io, env=env_r, config=config)
         
         # obsv_r, env_state_r = jax.vmap(
         #     env_r.reset, in_axes=(0, None))(reset_rng_r, env_params)
@@ -511,17 +527,21 @@ def make_train(config: TrainConfig, restored_ckpt, checkpoint_manager):
             #     lambda _, __, ___: None,
             #     frames, runner_state.update_i, metric
             # )
-            jax.experimental.io_callback(callback=render_frames,
-                                         result_shape_dtypes=None,
-                                         frames=new_frames, i=runner_state.update_i, metric=metric,
-                                         steps_prev_complete=steps_prev_complete,)
+            render_token = jax.experimental.io_callback(
+                callback=render_frames_io,
+                result_shape_dtypes=jax.ShapeDtypeStruct((), jnp.int32),
+                frames=new_frames,
+                i=runner_state.update_i,
+                metric=metric,
+                steps_prev_complete=steps_prev_complete,
+            )
             # jax.debug.print(f'Rendering episode gifs took {timer() - start_time} seconds')
 
             jax.debug.callback(_log_callback, metric)
 
             runner_state = RunnerState(
                 train_state, env_state, last_obs, rng,
-                update_i=runner_state.update_i+1)
+                update_i=runner_state.update_i + 1 + (render_token * 0))
 
             return runner_state, metric
 

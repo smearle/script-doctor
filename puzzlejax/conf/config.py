@@ -79,12 +79,13 @@ class ProfileNodeJS(PSConfig):
 
 @dataclass
 class PlotSearch(ProfileNodeJS):
+    algo: str = "all"  # 'all', 'bfs', 'astar', 'mcts'
     aggregate: bool = True  # (Re-)collect all the solution JSONs to compile a results dict for plotting
 
 
 @dataclass
 class RLConfig(PSConfig):
-    max_episode_steps: int = 100
+    max_episode_steps: int = 200
     lr: float = 1.0e-4
     n_envs: int = 1_000
     # How many steps do I take in all of my batched environments before doing a gradient update
