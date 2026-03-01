@@ -44,7 +44,7 @@ games_to_skip = set({
 })
 
 
-def multihot_level_from_js_state(level_state, obj_list):
+def multihot_level_from_js_state(level_state, obj_list, target_obj_names=None):
     level_state = np.array(level_state).T
     multihot_level_js = to_binary_vectors(level_state, len(obj_list))
     multihot_level_js = rearrange(multihot_level_js, 'h w c -> c h w')[::-1]
@@ -53,6 +53,7 @@ def multihot_level_from_js_state(level_state, obj_list):
     new_multihot_level_js = []
     new_objs_to_idxs = {}
     for obj_idx, obj in enumerate(obj_list):
+        obj = obj.lower() if isinstance(obj, str) else obj
         if obj not in new_objs_to_idxs:
             new_objs_to_idxs[obj] = len(new_objs_to_idxs)
             new_multihot_level_js.append(multihot_level_js[obj_idx])
@@ -64,7 +65,16 @@ def multihot_level_from_js_state(level_state, obj_list):
             )
     multihot_level_js = np.array(new_multihot_level_js, dtype=bool)
 
-    return multihot_level_js
+    if target_obj_names is None:
+        return multihot_level_js
+
+    target_multihot_level = np.zeros((len(target_obj_names), *multihot_level_js.shape[1:]), dtype=bool)
+    for target_idx, obj in enumerate(target_obj_names):
+        obj = obj.lower() if isinstance(obj, str) else obj
+        if obj in new_objs_to_idxs:
+            target_multihot_level[target_idx] = multihot_level_js[new_objs_to_idxs[obj]]
+
+    return target_multihot_level
 
 
 @hydra.main(version_base="1.3", config_path='puzzlejax/conf', config_name='jax_validation_config')
@@ -502,7 +512,11 @@ def main(cfg: JaxValidationConfig, games: Optional[List[str]] = None):
             level_score = sol_dict['score']
             level_state = sol_dict['state']
             obj_list = sol_dict['objs']
-            multihot_level_js = multihot_level_from_js_state(level_state, obj_list)
+            multihot_level_js = multihot_level_from_js_state(
+                level_state,
+                obj_list,
+                target_obj_names=env.atomic_obj_names,
+            )
             actions = level_sol
             # print(f"Level {level_i} solution: {actions}")
             actions = [JS_TO_JAX_ACTIONS[a] for a in actions]

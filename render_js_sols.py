@@ -124,13 +124,21 @@ def main(cfg: ProfileNodeJS, games: Optional[List[str]] = None):
             if n_objs > 64:
                 continue
             level_state = level_to_int_arr(level_state, n_objs).tolist()
-            multihot_level = multihot_level_from_js_state(level_state, data['objs'])
+            multihot_level = multihot_level_from_js_state(
+                level_state,
+                data['objs'],
+                target_obj_names=env.atomic_obj_names,
+            )
             state = state.replace(multihot_level=multihot_level)
             frames.append(env.render(state, cv2=False))
             for action in actions:
                 _, _, _, _, _, level_state, _, _ = solver.takeAction(engine, action)
                 level_state = level_to_int_arr(level_state, n_objs).tolist()
-                multihot_level = multihot_level_from_js_state(level_state, data['objs'])
+                multihot_level = multihot_level_from_js_state(
+                    level_state,
+                    data['objs'],
+                    target_obj_names=env.atomic_obj_names,
+                )
                 state = state.replace(multihot_level=multihot_level)
                 frames.append(env.render(state, cv2=False))
 
