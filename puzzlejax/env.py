@@ -2318,8 +2318,8 @@ class PuzzleJaxEnv:
                             )
                 # FIXME: why is the normal way broken here?
                 # if has_right_pattern:
-                if has_right_pattern and rp is None and lp is not None:
-                    rp = np.array([None] * len(lp))
+                if has_right_pattern and (rp is None or (isinstance(rp, np.ndarray) and rp.size == 0)):
+                    rp = np.array([None] * max(len(cell_detection_fns), 1))
                 if has_right_pattern:
                     if rp is not None:
                         for i, r_cell in enumerate(rp):
