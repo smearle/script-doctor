@@ -35,7 +35,7 @@ PRIORITY_GAMES = [
 par_dir = os.path.dirname(os.path.abspath(__file__))
 grand_par_dir = os.path.dirname(par_dir)
 
-CUSTOM_GAMES_DIR = os.path.join(par_dir, 'custom_games')
+CUSTOM_GAMES_DIR = os.path.join(grand_par_dir, 'custom_games')
 DATA_DIR = os.path.join(grand_par_dir, 'data')
 GAMES_TO_SKIP = set({})
 PLOTS_DIR = 'plots'
