@@ -36,3 +36,4 @@ sols
 vids
 wandb
 *.egg-info
+tmp

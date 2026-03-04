@@ -224,15 +224,12 @@ def main(cfg: JaxValidationConfig, games: Optional[List[str]] = None):
         nonlocal games_to_n_rules_dirty
         if game_key is None or n_rules_entry is None:
             return n_rules_entry
-        if isinstance(n_rules_entry, list):
-            if len(n_rules_entry) > 1 and n_rules_entry[1] is None:
-                n_rules_entry[1] = bool(has_randomness)
+        new_val = bool(has_randomness)
+        if isinstance(n_rules_entry, (list, tuple)) and len(n_rules_entry) > 1:
+            if n_rules_entry[1] != new_val:
+                n_rules_entry = list(n_rules_entry)
+                n_rules_entry[1] = new_val
                 games_to_n_rules[game_key] = n_rules_entry
-                games_to_n_rules_dirty = True
-        elif isinstance(n_rules_entry, tuple):
-            if len(n_rules_entry) > 1 and n_rules_entry[1] is None:
-                games_to_n_rules[game_key] = [n_rules_entry[0], bool(has_randomness)]
-                n_rules_entry = games_to_n_rules[game_key]
                 games_to_n_rules_dirty = True
         return n_rules_entry
 
@@ -341,6 +338,7 @@ def main(cfg: JaxValidationConfig, games: Optional[List[str]] = None):
         game_success = True
         game_partial_success = False
         game_compile_error = False
+        game_randomness_updated = False
         env = None
 
         if not cfg.aggregate:
@@ -472,7 +470,6 @@ def main(cfg: JaxValidationConfig, games: Optional[List[str]] = None):
                 if success == PJParseErrors.SUCCESS:
                     try:
                         env = PuzzleJaxEnv(tree, debug=False, print_score=False)
-                        n_rules = update_game_randomness(n_rules_key, n_rules, env.has_randomness())
                     except KeyboardInterrupt as e:
                         raise e
                     except bdb.BdbQuit as e:
@@ -539,6 +536,9 @@ def main(cfg: JaxValidationConfig, games: Optional[List[str]] = None):
 
             try:
                 obs, init_state = env.reset(key, params)
+                if not game_randomness_updated:
+                    n_rules = update_game_randomness(n_rules_key, n_rules, env.has_randomness())
+                    game_randomness_updated = True
                 if len(actions) > 0:
                     state, (state_v, reward_v) = jax.lax.scan(step_env, init_state, actions)
                     reward = float(reward_v.sum().item())
@@ -555,12 +555,11 @@ def main(cfg: JaxValidationConfig, games: Optional[List[str]] = None):
                     sol_log = f"Level {level_i} solution failed\nActions: {actions}\n"
                     with open(sol_log_path, 'w') as f:
                         f.write(sol_log)
-                    # if game_name not in results['solution_error']:
-                    #     results['solution_error'][game_name] = []
-                    # results['solution_error'][game_name].append({'n_rules': n_rules, 'level': level_i})
-                    n_solution_error += 1
+                    if is_random_game(n_rules):
+                        n_random_solution_error += 1
+                    else:
+                        n_solution_error += 1
                     game_success = False
-                        # f.write(f"State: {state}\n")
                     print(f"Level {level_i} solution failed (won in JS, did not win in jax)")
                 elif np.any(multihot_level_js != state.multihot_level):
                     js_state = state.replace(multihot_level=multihot_level_js)
@@ -574,9 +573,9 @@ def main(cfg: JaxValidationConfig, games: Optional[List[str]] = None):
                         f.write(f"Level {level_i} solution failed\n")
                         f.write(f"Actions: {actions}\n")
                         f.write(f"State: {state}\n")
-                        # if game_name not in results['state_error']:
-                        #     results['state_error'][game_name] = []
-                        # results['state_error'][game_name].append({'n_rules': n_rules, 'level': level_i})
+                    if is_random_game(n_rules):
+                        n_random_state_error += 1
+                    else:
                         n_state_error += 1
                     
                     print(f"Level {level_i} solution failed (state mismatch)")

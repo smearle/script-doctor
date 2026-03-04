@@ -113,7 +113,7 @@ def init_network(env: PuzzleJaxEnv, env_params: PJParams, config: RLConfig):
     elif config.model == "conv2":
         network = ConvForward2(
             action_dim=action_dim, activation=config.activation,
-            act_shape=config.act_shape,
+            act_shape=(1,1),
             hidden_dims=config.hidden_dims,
         )
     elif config.model == "seqnca":

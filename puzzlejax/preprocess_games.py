@@ -395,6 +395,8 @@ def preprocess_levels(txt):
     return txt
 
 def preprocess_ps(txt):
+    # If the game starts with a comment of the style `/*...*/`, (Keys_and_Doors_0.1.0), remove it.
+    txt = re.sub(r'^/\*.*?\*/', '', txt, flags=re.DOTALL)
 
     # Remove whitespace at end of any line
     txt = re.sub(r'[ \t]+$', '', txt, flags=re.MULTILINE)

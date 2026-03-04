@@ -92,6 +92,8 @@ def main(cfg: ProfileNodeJS, games: Optional[List[str]] = None):
         # algos = [solver.solveBFS, solver.solveAStar, solver.solveMCTS]:
     elif cfg.algo == 'astar':
         algos = [solver.solveAStar]
+    elif cfg.algo == 'gbfs':
+        algos = [solver.solveGBFS]
     elif cfg.algo == 'mcts':
         algos = [solver.solveMCTS]
     elif cfg.algo == 'random':

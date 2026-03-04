@@ -1,5 +1,5 @@
-from dataclasses import dataclass
-from typing import Iterable, List, Optional, Tuple, Union
+from dataclasses import dataclass, field
+from typing import Dict, Iterable, List, Optional, Tuple, Union
 
 from hydra.core.config_store import ConfigStore
 import numpy as np
@@ -59,7 +59,7 @@ class ProfileJaxRandConfig(PSConfig):
 @dataclass
 class ProfileNodeJS(PSConfig):
     # algo: str = "random"  # 'bfs', 'random'
-    algo: str = "bfs"  # 'bfs', 'random'
+    algo: str = "bfs"  # 'bfs', 'astar', 'gbfs', 'mcts', 'random'
     game: Optional[str] = None
     # all_games: bool = False
     all_games: bool = True
@@ -109,49 +109,10 @@ class RLConfig(PSConfig):
 
     model: str = "conv2"
 
-    map_width: int = 16
-    randomize_map_shape: bool = False
-    is_3d: bool = False
-    # ctrl_metrics: Tuple[str] = ('diameter', 'n_regions')
-    ctrl_metrics: Tuple[str] = ()
-    # Size of the receptive field to be fed to the action subnetwork.
-    vrf_size: Optional[int] = -1  # -1 means 2 * map_width - 1, i.e. full observation, 31 if map_width=16
-    # Size of the receptive field to be fed to the value subnetwork.
-    arf_size: Optional[int] = -1  # -1 means 2 * map_width - 1, i.e. full observation, 31 if map_width=16
-    # TODO: actually take arf and vrf into account in models, where possible
-
-    change_pct: float = -1.0
-
-    # The shape of the (patch of) edit(s) to be made by the edited by the generator at each step.
-    act_shape: Tuple[int, int] = (1, 1)
-
-    static_tile_prob: Optional[float] = 0.0
-    n_freezies: int = 0
-    n_agents: int = 1  # multi-agent is fake and broken
-    multiagent: bool = False
-
     # How many milliseconds to wait between frames of the rendered gifs
     gif_frame_duration: float = 0.1
 
-    # To make the task simpler, always start with an empty map
-    empty_start: bool = False
-    # Or a full (all-wall) map
-    full_start: bool = False
-
-    # In problems with tile-types with specified valid numbers, fix/freeze their random placement at the beginning of 
-    # each episode.
-    pinpoints: bool = False
-
     hidden_dims: Tuple[int] = (128, 128)
-
-    # TODO: Implement this. Just a placeholder for now.
-    reward_every: int = 1
-
-    # A toggle, will add `n_envs` to the experiment name if we are profiling training FPS, so that we can distinguish 
-    # results.
-    profile_fps: bool = False
-
-    reward_freq: int = 1
 
     overwrite: bool = False
 
@@ -226,6 +187,11 @@ class SweepRLConfig(TrainConfig):
     slurm: bool = True
     mode: str = 'train'
     render_ims: bool = False
+    sweep_name: str = "learning_rate"
+    sweep_axes: dict = field(default_factory=lambda: {
+        "seed": (0, 1, 2, 3, 4),
+        "lr": (1.0e-4,),
+    })
 
 
 cs = ConfigStore.instance()

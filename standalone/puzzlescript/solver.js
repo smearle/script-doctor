@@ -696,12 +696,10 @@ function solveAStar(engine, maxIters=100_000) {
     return sol;
   }
 
-  function byScoreAndLength(a, b) {
-    if (a[0] != b[0]) {
-      return a[0] < b[0];
-    } else {
-      return a[2].length < b[2].length;
-    }
+  // Tiebreak on lower h (= higher g = higher numSteps), which is canonical for A*
+  function byScoreThenLowerH(a, b) {
+    if (a[0] != b[0]) return a[0] < b[0];
+    return a[2] > b[2];
   }
 
   function shuffleALittle(array) {
@@ -730,7 +728,7 @@ function solveAStar(engine, maxIters=100_000) {
   var bestScore = getScore(engine);
 	exploredStates[engine.getLevel().objects] = [engine.getLevel().objects.slice(0), -1];
 	var queue;
-	queue = new FastPriorityQueue(byScoreAndLength);
+	queue = new FastPriorityQueue(byScoreThenLowerH);
 	queue.add([0, engine.getLevel().objects.slice(0), 0]);
 	// var solvingProgress = document.getElementById("solvingProgress");
 	// var cancelLink = document.getElementById("cancelClickLink");
@@ -802,7 +800,7 @@ function solveAStar(engine, maxIters=100_000) {
 					return [true, solution, totalIters, ((Date.now() - start_time) / 1000), bestScore, bestState, false, engine.getState().idDict];
 				}
 				size++;
-				queue.add([score, engine.getLevel().objects.slice(0), numSteps + 1]);
+				queue.add([score + numSteps + 1, engine.getLevel().objects.slice(0), numSteps + 1]);
 			}
 		}
     totalIters++;
@@ -820,6 +818,122 @@ function solveAStar(engine, maxIters=100_000) {
 	deltatime = oldDT;
 	// redraw();
 	// cancelLink.hidden = true;
+  return [false, [], totalIters, ((Date.now() - start_time) / 1000), bestScore, bestState, false, engine.getState().idDict];
+}
+
+function solveGBFS(engine, maxIters=100_000) {
+  function MakeSolution(state) {
+    var sol = [];
+    while (true) {
+      var p = exploredStates[state];
+      if (p[1] == -1) {
+        break;
+      } else {
+        sol = [p[1]].concat(sol);
+        state = p[0];
+      }
+    }
+    return sol;
+  }
+
+  // Tiebreak on lower g (= fewer steps) for GBFS
+  function byScoreThenLowerG(a, b) {
+    if (a[0] != b[0]) return a[0] < b[0];
+    return a[2] < b[2];
+  }
+
+  function shuffleALittle(array) {
+    randomIndex = 1 + Math.floor(Math.random() * (array.length - 1));
+    temporaryValue = array[0];
+    array[0] = array[randomIndex];
+    array[randomIndex] = temporaryValue;
+  }
+
+	precalcDistances(engine);
+	abortSolver = false;
+	muted = true;
+	solving = true;
+	DoRestartSearch(engine, 0);
+	hasUsedCheckpoint = false;
+	backups = [];
+	var oldDT = engine.getDeltaTime();
+	engine.setDeltaTime(0);
+	var actions = [0, 1, 2, 3, 4];
+	if ('noaction' in engine.getState().metadata) {
+		actions = [0, 1, 2, 3];
+	}
+	exploredStates = {};
+  var bestState = getState(engine);
+  var bestScore = getScore(engine);
+	exploredStates[engine.getLevel().objects] = [engine.getLevel().objects.slice(0), -1];
+	var queue;
+	queue = new FastPriorityQueue(byScoreThenLowerG);
+	queue.add([0, engine.getLevel().objects.slice(0), 0]);
+  var totalIters = 0
+	var iters = 0;
+	var size = 1;
+
+	var start_time = Date.now();
+
+	while (!queue.isEmpty() && totalIters < maxIters) {
+    if (totalIters > maxIters) {
+      break;
+    }
+		iters++;
+		if (iters > 500) {
+			iters = 0;
+		}
+		var temp = queue.poll();
+		var parentState = temp[1];
+		var numSteps = temp[2];
+		shuffleALittle(actions);
+		for (var i = 0, len = actions.length; i < len; i++) {
+			for (var k = 0, len2 = parentState.length; k < len2; k++) {
+				engine.getLevel().objects[k] = parentState[k];
+			}
+			var changedSomething = engine.processInput(actions[i]);
+			while (engine.getAgaining()) {
+				changedSomething = engine.processInput(-1) || changedSomething;
+			}
+
+			if (changedSomething) {
+				if (engine.getLevel().objects in exploredStates) {
+					continue;
+				}
+
+        score = getScore(engine)
+        if (score < bestScore) {
+          bestScore = score;
+          bestState = getState(engine)
+        }
+
+				exploredStates[engine.getLevel().objects] = [parentState, actions[i]];
+				if (engine.getWinning() || engine.getHasUsedCheckpoint()) {
+					muted = false;
+					solving = false;
+					winning = false;
+					engine.setHasUsedCheckpoint(false);
+					var solution = MakeSolution(engine.getLevel().objects);
+					engine.setDeltaTime(oldDT);
+					DoRestartSearch(engine);
+					return [true, solution, totalIters, ((Date.now() - start_time) / 1000), bestScore, bestState, false, engine.getState().idDict];
+				}
+				size++;
+				// Greedy best-first: priority = h(n) only, no path cost
+				queue.add([score, engine.getLevel().objects.slice(0), numSteps + 1]);
+			}
+		}
+    totalIters++;
+		if (totalIters > 0 && totalIters % 10000 === 0) {
+			const now = Date.now();
+			console.log('Iteration:', totalIters);
+			console.log('FPS:', (totalIters / (now - start_time) * 1000).toFixed(2));
+		}
+	}
+	muted = false;
+	solving = false;
+	DoRestartSearch(engine);
+	deltatime = oldDT;
   return [false, [], totalIters, ((Date.now() - start_time) / 1000), bestScore, bestState, false, engine.getState().idDict];
 }
 
@@ -1095,6 +1209,7 @@ function getNLevels(engine) {
 module.exports = {
   solveMCTS,
   solveAStar,
+  solveGBFS,
   solveBFS,
   solveRandom,
   randomRollout,
