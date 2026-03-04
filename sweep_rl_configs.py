@@ -27,14 +27,22 @@ class SweepBasePreset(SweepConfig):
     """No-op preset: keep defaults unless overridden via Hydra CLI."""
 
 
-# ACTIVE PRESETS ##############################################################
+@dataclass
+class MaxEpisodeStepsSweep(SweepConfig):
+    sweep_axes: dict = field(default_factory=lambda: {
+        "seed": (0, 1, 2, 3, 4),
+        "max_episode_steps": (
+            # 100,
+            200,
+        ),
+    })
 
 @dataclass
 class LearningRateSweep(SweepConfig):
     sweep_axes: dict = field(default_factory=lambda: {
         "seed": (0, 1, 2, 3, 4),
         "max_episode_steps": (
-            100,
+            # 100,
             200,
         ),
         "lr": (
@@ -49,4 +57,5 @@ class LearningRateSweep(SweepConfig):
 _NAMED_SWEEPS: Dict[str, Type[SweepConfig]] = {
     "sweep": SweepBasePreset,
     "learning_rate": LearningRateSweep,
+    "max_episode_steps": MaxEpisodeStepsSweep,
 }

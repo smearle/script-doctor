@@ -70,6 +70,7 @@ def main_launch(cfg: ProfileNodeJS):
             cpus_per_task=1,
             timeout_min=180,
             slurm_array_parallelism=n_jobs,
+            slurm_account=os.environ.get("SLURM_ACCOUNT")
         )
         executor.map_array(main, [cfg] * n_jobs, game_sublists)
     else:

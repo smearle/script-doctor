@@ -271,11 +271,29 @@ def gen_grid_cfgs(sweep_cfg: SweepRLConfig, base_cfg: TrainConfig):
     sweep_updates = _expand_sweep_updates(sweep_axes)
     sweep_axis_names = set(sweep_axes.keys())
 
-    games_to_n_levels = get_n_levels_per_game()
-    if sweep_cfg.game is None:
+    # Determine which games we will run.
+    if "game" in sweep_axes:
+        games = [str(g) for g in sweep_axes["game"]]
+        explicit_games = True
+    elif sweep_cfg.game is None:
         games = get_list_of_games_for_testing(all_games=sweep_cfg.all_games)
+        explicit_games = False
     else:
         games = [sweep_cfg.game]
+        explicit_games = True
+
+    # Only compute level counts for games we actually need.
+    games_to_n_levels = get_n_levels_per_game(games=games, skip_failures=(not explicit_games))
+    missing_games = [g for g in games if g not in games_to_n_levels]
+    if missing_games:
+        msg = (
+            "Some requested games have no precomputed level counts and were skipped: "
+            + ", ".join(sorted(missing_games))
+        )
+        if explicit_games:
+            raise ValueError(msg)
+        print(f"[sweep_rl.gen_grid_cfgs] WARNING: {msg}")
+        games = [g for g in games if g in games_to_n_levels]
     grid_cfgs = {}
     for game in games:
         grid_cfgs[game] = {}
@@ -369,18 +387,6 @@ def main(sweep_cfg: SweepRLConfig):
     if sweep_cfg.plot:
         return plot_rl_runs_reward(grid_cfgs)
 
-    executor = submitit.AutoExecutor(folder=os.path.join("submitit_logs", "rl"))
-    executor.update_parameters(
-        # slurm_job_name=f"{game}-{level}",
-        slurm_job_name=f"puzzlejax-ppo",
-        mem_gb=30,
-        tasks_per_node=1,
-        cpus_per_task=1,
-        timeout_min=60*24,
-        slurm_gres='gpu:1',
-        slurm_array_parallelism=1_000,
-        slurm_account=os.environ.get("SLURM_ACCOUNT")
-    )
     all_cfgs = []
 
     for game in grid_cfgs:
@@ -412,6 +418,18 @@ def main(sweep_cfg: SweepRLConfig):
     if not sweep_cfg.slurm:
         [main_fn(cfg) for cfg in all_cfgs]
     else:
+        executor = submitit.AutoExecutor(folder=os.path.join("submitit_logs", "rl"))
+        executor.update_parameters(
+            # slurm_job_name=f"{game}-{level}",
+            slurm_job_name=f"puzzlejax-ppo",
+            mem_gb=30,
+            tasks_per_node=1,
+            cpus_per_task=1,
+            timeout_min=60*24,
+            slurm_gres='gpu:1',
+            slurm_array_parallelism=1_000,
+            slurm_account=os.environ.get("SLURM_ACCOUNT")
+        )
         executor.map_array(
             main_fn,
             all_cfgs,

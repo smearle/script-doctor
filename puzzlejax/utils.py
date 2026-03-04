@@ -486,27 +486,64 @@ def level_to_int_arr(level: dict, n_objs: int):
     level_arr = np.array(level_arr, dtype=dtype)
     return level_arr
 
-def get_n_levels_per_game():
+def get_n_levels_per_game(games: list[str] | None = None, *, skip_failures: bool = False) -> dict:
+    """Return {game_name: n_levels}.
+
+    Historically this function built the mapping by parsing *all* games when the cache
+    file was missing. That can fail due to unsupported PuzzleScript features in some
+    games (e.g. `rigid` rules) even if the caller only needs a single game.
+
+    Args:
+        games: If provided, only compute/return entries for these games.
+        skip_failures: If True, skip games that fail to load/transform, printing a
+            warning. Useful when enumerating many games.
+    """
+
+    cached: dict[str, int] = {}
     if os.path.exists(GAMES_N_LEVELS_PATH):
         with open(GAMES_N_LEVELS_PATH, 'r') as f:
-            n_levels_per_game = json.load(f)
-        return n_levels_per_game
+            cached = json.load(f)
+        if games is None:
+            return cached
 
-    parser = init_ps_lark_parser()
-    games = get_list_of_games_for_testing(all_games=True)
-    n_levels_per_game = {}
-    for game in games:
+    if games is None:
+        games = get_list_of_games_for_testing(all_games=True)
+
+    # Determine which requested games are missing from cache.
+    missing = [g for g in games if g not in cached]
+    if not missing:
+        return {g: cached[g] for g in games}
+
+    updated = dict(cached)
+    for game in missing:
         min_tree_path = os.path.join(TREES_DIR, game + '.pkl')
-        if os.path.exists(min_tree_path):
+        if not os.path.exists(min_tree_path):
+            msg = f"Missing preprocessed tree for game={game!r}: {min_tree_path}"
+            if skip_failures:
+                print(f"[get_n_levels_per_game] WARNING: {msg}; skipping.")
+                continue
+            raise FileNotFoundError(msg)
+
+        try:
             with open(min_tree_path, 'rb') as f:
                 tree = pickle.load(f)
             tree = GenPSTree().transform(tree)
             env = PuzzleJaxEnv(tree)
-            n_levels = len(env.levels)
-            n_levels_per_game[game] = n_levels
-    with open(GAMES_N_LEVELS_PATH, 'w') as f:
-        json.dump(n_levels_per_game, f, indent=4)
-    return n_levels_per_game
+            updated[game] = len(env.levels)
+        except Exception as exc:
+            msg = f"Failed to compute n_levels for game={game!r}: {exc}"
+            if skip_failures:
+                print(f"[get_n_levels_per_game] WARNING: {msg}; skipping.")
+                continue
+            raise
+
+    # Persist updated cache so later runs don't have to re-parse.
+    if updated != cached:
+        os.makedirs(os.path.dirname(GAMES_N_LEVELS_PATH) or '.', exist_ok=True)
+        with open(GAMES_N_LEVELS_PATH, 'w') as f:
+            json.dump(updated, f, indent=4)
+
+    return {g: updated[g] for g in games if g in updated}
 
 
     
