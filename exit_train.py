@@ -44,6 +44,7 @@ if JAXTAR_DIR not in sys.path:
     sys.path.insert(0, JAXTAR_DIR)
 
 from puzzlejax.wrappers import PuzzleJaxPuxleEnv, PuzzleJaxHeuristic
+from puzzlejax.utils import get_list_of_games_for_testing, get_n_levels_per_game
 from JAxtar.stars.astar import astar_builder
 from JAxtar.stars.search_base import SearchResult
 from heuristic.heuristic_base import Heuristic
@@ -903,9 +904,13 @@ def main():
         description="ExIt training for PuzzleScript games (neural heuristic + A* search)",
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
-    parser.add_argument("--game", type=str, required=True, help="PuzzleScript game name")
-    parser.add_argument("--level", type=int, default=0, help="Level index (default: 0)")
-    parser.add_argument("--iterations", type=int, default=50, help="Number of ExIt iterations")
+    parser.add_argument("--game", type=str, default=None,
+                        help="PuzzleScript game name (default: run a game set)")
+    parser.add_argument("--level", type=int, default=None,
+                        help="Level index (default: run all levels)")
+    parser.add_argument("--all_games", action="store_true",
+                        help="If set, use all games; otherwise default to PRIORITY_GAMES")
+    parser.add_argument("--iterations", type=int, default=200, help="Number of ExIt iterations")
     parser.add_argument("-m", "--max_nodes", type=int, default=100_000, help="Max A* search nodes")
     parser.add_argument("-b", "--batch_size", type=int, default=1000, help="A* batch size")
     parser.add_argument("-w", "--cost_weight", type=float, default=0.6, help="A* cost weight")
@@ -925,24 +930,66 @@ def main():
 
     args = parser.parse_args()
 
-    run_exit_training(
-        game=args.game,
-        level_i=args.level,
-        n_iterations=args.iterations,
-        max_nodes=args.max_nodes,
-        batch_size=args.batch_size,
-        cost_weight=args.cost_weight,
-        train_steps_per_iter=args.train_steps_per_iter,
-        train_batch_size=args.train_batch_size,
-        lr=args.lr,
-        blend_alpha=args.blend_alpha,
-        replay_max_size=args.replay_max_size,
-        save_dir=args.save_dir,
-        resume=args.resume,
-        initial_dim=args.initial_dim,
-        hidden_dim=args.hidden_dim,
-        res_n=args.res_n,
-    )
+    # Resolve which games to run.
+    if args.game is not None:
+        games_to_run = [args.game]
+    else:
+        games_to_run = get_list_of_games_for_testing(all_games=args.all_games)
+
+    levels_per_game = get_n_levels_per_game(games_to_run, skip_failures=True)
+
+    # Build (game, level) jobs according to optional filters.
+    jobs = []
+    for game in games_to_run:
+        if game not in levels_per_game:
+            print(f"Skipping {game}: could not determine level count.")
+            continue
+
+        n_levels = int(levels_per_game[game])
+        if args.level is None:
+            level_indices = range(n_levels)
+        elif 0 <= args.level < n_levels:
+            level_indices = [args.level]
+        else:
+            print(f"Skipping {game}: level {args.level} is out of range [0, {n_levels - 1}].")
+            continue
+
+        for level_i in level_indices:
+            jobs.append((game, level_i))
+
+    if not jobs:
+        raise RuntimeError("No valid (game, level) jobs to run.")
+
+    multi_run = len(jobs) > 1
+    print(f"Running ExIt on {len(jobs)} job(s).")
+
+    for game, level_i in jobs:
+        job_save_dir = args.save_dir
+        if multi_run and args.save_dir is not None:
+            job_save_dir = os.path.join(args.save_dir, f"{game}_level{level_i}")
+
+        print(f"\n=== ExIt job: game={game} level={level_i} ===")
+        try:
+            run_exit_training(
+                game=game,
+                level_i=level_i,
+                n_iterations=args.iterations,
+                max_nodes=args.max_nodes,
+                batch_size=args.batch_size,
+                cost_weight=args.cost_weight,
+                train_steps_per_iter=args.train_steps_per_iter,
+                train_batch_size=args.train_batch_size,
+                lr=args.lr,
+                blend_alpha=args.blend_alpha,
+                replay_max_size=args.replay_max_size,
+                save_dir=job_save_dir,
+                resume=args.resume,
+                initial_dim=args.initial_dim,
+                hidden_dim=args.hidden_dim,
+                res_n=args.res_n,
+            )
+        except Exception as exc:
+            print(f"Job failed for game={game} level={level_i}: {exc}")
 
 
 if __name__ == "__main__":

@@ -22,6 +22,7 @@ ALL_RESULTS_PATH = os.path.join('data', 'all_search_results.json')
 ALGO_SOLVER_NAMES = {
     'astar': 'solveAStar',
     'bfs': 'solveBFS',
+    'gbfs': 'solveGBFS',
     'mcts': 'solveMCTS',
 }
 
@@ -34,16 +35,38 @@ def _algo_label(algo: str) -> str:
     labels = {
         'bfs': 'BFS',
         'astar': 'A*',
+        'gbfs': 'GBFS',
         'mcts': 'MCTS',
     }
     return labels.get(algo, algo.upper())
 
 
 def _parse_solver_run_name(filename: str):
-    match = re.match(r'^(solve[A-Za-z0-9]+)_(\d+)-steps_level-\d+\.json$', filename)
+    match = re.match(r'^(solve[A-Za-z0-9]+)_(\d+)-steps_level-(\d+)\.json$', filename)
     if match is None:
-        return None, None
-    return match.group(1), int(match.group(2))
+        return None, None, None
+    return match.group(1), int(match.group(2)), int(match.group(3))
+
+
+def _format_level_ranges(levels: list[int]) -> str:
+    if not levels:
+        return ''
+
+    sorted_levels = sorted(set(levels))
+    ranges = []
+    start = sorted_levels[0]
+    end = sorted_levels[0]
+
+    for level in sorted_levels[1:]:
+        if level == end + 1:
+            end = level
+            continue
+        ranges.append(str(start) if start == end else f'{start}-{end}')
+        start = level
+        end = level
+
+    ranges.append(str(start) if start == end else f'{start}-{end}')
+    return ', '.join(ranges)
 
 
 def _collect_results_for_algo(games: list[str], solver_name: str) -> dict[int, dict]:
@@ -54,11 +77,22 @@ def _collect_results_for_algo(games: list[str], solver_name: str) -> dict[int, d
         game_dir = os.path.join(JS_SOLS_DIR, game)
         sol_jsons = glob.glob(f"{game_dir}/*.json")
         per_depth_stats = {}
+        expected_levels = set()
+        levels_seen_by_depth = {}
         for sol_json in sol_jsons:
             filename = os.path.basename(sol_json)
-            sol_algo_name, n_steps = _parse_solver_run_name(filename)
-            if sol_algo_name is None or sol_algo_name != solver_name:
+            sol_algo_name, n_steps, level_id = _parse_solver_run_name(filename)
+            if sol_algo_name is None:
                 continue
+
+            expected_levels.add(level_id)
+
+            if sol_algo_name != solver_name:
+                continue
+
+            if n_steps not in levels_seen_by_depth:
+                levels_seen_by_depth[n_steps] = set()
+            levels_seen_by_depth[n_steps].add(level_id)
 
             with open(sol_json, 'r') as f:
                 sol_dict = json.load(f)
@@ -83,6 +117,17 @@ def _collect_results_for_algo(games: list[str], solver_name: str) -> dict[int, d
             stats['n_levels'] += 1
             clipped_steps = min(n_steps, sol_dict['iterations'])
             stats['n_stepss'].append(clipped_steps)
+
+        for depth, seen_levels in sorted(levels_seen_by_depth.items()):
+            missing_levels = sorted(expected_levels - seen_levels)
+            if missing_levels:
+                depth_label = _format_steps_label(depth)
+                missing_levels_summary = _format_level_ranges(missing_levels)
+                expected_levels_summary = _format_level_ranges(list(expected_levels))
+                print(
+                    f"Warning: missing search results for algorithm '{solver_name}', game '{game}', depth {depth_label} "
+                    f"on levels {missing_levels_summary} (expected levels: {expected_levels_summary})."
+                )
 
         for depth, stats in per_depth_stats.items():
             if stats['n_levels'] == 0:
@@ -136,7 +181,6 @@ def aggregate_results(cfg: PlotSearch):
     for algo in algos:
         solver_name = ALGO_SOLVER_NAMES[algo]
         results_by_depth = _collect_results_for_algo(games, solver_name)
-        print({algo: results_by_depth})
         results_path = _results_path_for_algo(algo)
         with open(results_path, 'w') as f:
             json.dump({str(k): v for k, v in results_by_depth.items()}, f, indent=4)
