@@ -2946,7 +2946,9 @@ class PuzzleJaxEnv:
                 # lvl, applied, again, cancelled, restart, win, rng, block_i = carry
                 ### COMPILE VS RUNTIME ###
 
-                turn_applied = jnp.any(lvl != init_lvl)
+                # Only compare object channels (not force channels) to match JS
+                # semantics, where `modified` checks level.objects only.
+                turn_applied = jnp.any(lvl[:, :self.n_objs] != init_lvl[:, :self.n_objs])
                 win_turn, score, heuristic = self.check_win(lvl[0])
                 win = win | win_turn
                 lvl = lvl.at[:, self.n_objs:].set(False)  # Remove leftover forces
@@ -2969,7 +2971,8 @@ class PuzzleJaxEnv:
 
             carry = (lvl, turn_applied, turn_app_i, cancelled, restart, turn_again, win, rng)
             if not self.jit:
-                while (turn_again and turn_applied and not win):
+                while (turn_again and turn_applied and not win
+                       and not cancelled and not restart):
                     carry = apply_turn(carry)
                     lvl, turn_applied, turn_app_i, cancelled, restart, turn_again, win, rng = carry
             else:

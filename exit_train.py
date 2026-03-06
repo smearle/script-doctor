@@ -895,6 +895,41 @@ def run_exit_training(
     return history
 
 
+def _get_completed_iterations(save_dir: str) -> int:
+    """Return completed ExIt iterations for a save directory.
+
+    Prefers checkpoint metadata; falls back to history length when needed.
+    Returns 0 when no prior run data is found.
+    """
+    checkpoint_path = os.path.join(save_dir, "checkpoint.json")
+    history_path = os.path.join(save_dir, "history.json")
+
+    if os.path.exists(checkpoint_path):
+        try:
+            with open(checkpoint_path, "r") as f:
+                ckpt = json.load(f)
+            last_iter = ckpt.get("iteration", None)
+            if isinstance(last_iter, int):
+                return max(0, last_iter + 1)
+
+            ckpt_history = ckpt.get("history", None)
+            if isinstance(ckpt_history, list):
+                return len(ckpt_history)
+        except Exception:
+            pass
+
+    if os.path.exists(history_path):
+        try:
+            with open(history_path, "r") as f:
+                hist = json.load(f)
+            if isinstance(hist, list):
+                return len(hist)
+        except Exception:
+            pass
+
+    return 0
+
+
 # ---------------------------------------------------------------------------
 # CLI
 # ---------------------------------------------------------------------------
@@ -921,7 +956,10 @@ def main():
     parser.add_argument("--blend_alpha", type=float, default=0.5,
                         help="Initial blend weight (0=rule only, 1=neural only)")
     parser.add_argument("--replay_max_size", type=int, default=200_000, help="Replay buffer capacity")
-    parser.add_argument("--resume", action="store_true", help="Resume from checkpoint")
+    parser.add_argument("--resume", dest="resume", action="store_true", default=True,
+                        help="Resume from checkpoint (default: enabled)")
+    parser.add_argument("--no-resume", dest="resume", action="store_false",
+                        help="Disable resume and start fresh for selected jobs")
     parser.add_argument("--save_dir", type=str, default=None, help="Override save directory")
     # Architecture
     parser.add_argument("--initial_dim", type=int, default=512, help="Neural net initial dim")
@@ -967,6 +1005,16 @@ def main():
         job_save_dir = args.save_dir
         if multi_run and args.save_dir is not None:
             job_save_dir = os.path.join(args.save_dir, f"{game}_level{level_i}")
+        if job_save_dir is None:
+            job_save_dir = os.path.join(SCRIPT_DIR, "data", "exit_training", f"{game}_level{level_i}")
+
+        completed_iterations = _get_completed_iterations(job_save_dir)
+        if completed_iterations >= args.iterations:
+            print(
+                f"\n=== Skipping ExIt job: game={game} level={level_i} "
+                f"(completed {completed_iterations}/{args.iterations} iterations) ==="
+            )
+            continue
 
         print(f"\n=== ExIt job: game={game} level={level_i} ===")
         try:

@@ -18,6 +18,8 @@ from puzzlejax.utils import get_list_of_games_for_testing, game_names_remap
 BFS_RESULTS_PATH = os.path.join('data', 'bfs_results.json')
 HEATMAP_SEARCH_DEPTHS = [1_000_000, 100_000]
 ALL_RESULTS_PATH = os.path.join('data', 'all_search_results.json')
+EXIT_RESULTS_PATH = os.path.join('data', 'exit_results.json')
+EXIT_TRAINING_DIR = os.path.join('data', 'exit_training')
 
 ALGO_SOLVER_NAMES = {
     'astar': 'solveAStar',
@@ -28,6 +30,8 @@ ALGO_SOLVER_NAMES = {
 
 
 def _results_path_for_algo(algo: str) -> str:
+    if algo == 'exit':
+        return EXIT_RESULTS_PATH
     return os.path.join('data', f'{algo}_results.json')
 
 
@@ -37,8 +41,93 @@ def _algo_label(algo: str) -> str:
         'astar': 'A*',
         'gbfs': 'GBFS',
         'mcts': 'MCTS',
+        'exit': 'ExIt',
     }
     return labels.get(algo, algo.upper())
+
+
+def _parse_exit_job_dirname(dirname: str):
+    match = re.match(r'^(.*)_level(\d+)$', dirname)
+    if match is None:
+        return None, None
+    return match.group(1), int(match.group(2))
+
+
+def _load_exit_history(job_dir: str):
+    checkpoint_path = os.path.join(job_dir, 'checkpoint.json')
+    history_path = os.path.join(job_dir, 'history.json')
+
+    if os.path.exists(checkpoint_path):
+        try:
+            with open(checkpoint_path, 'r') as f:
+                ckpt = json.load(f)
+            ckpt_history = ckpt.get('history')
+            if isinstance(ckpt_history, list):
+                return ckpt_history
+        except Exception:
+            pass
+
+    if os.path.exists(history_path):
+        try:
+            with open(history_path, 'r') as f:
+                hist = json.load(f)
+            if isinstance(hist, list):
+                return hist
+        except Exception:
+            pass
+
+    return None
+
+
+def _collect_exit_results(games: list[str]) -> dict:
+    if not os.path.exists(EXIT_TRAINING_DIR):
+        return {}
+
+    game_filter = set(games) if games is not None else None
+
+    candidate_dirs = set()
+    checkpoint_paths = glob.glob(os.path.join(EXIT_TRAINING_DIR, '**', 'checkpoint.json'), recursive=True)
+    history_paths = glob.glob(os.path.join(EXIT_TRAINING_DIR, '**', 'history.json'), recursive=True)
+    for path in checkpoint_paths + history_paths:
+        candidate_dirs.add(os.path.dirname(path))
+
+    per_game = {}
+    for job_dir in sorted(candidate_dirs):
+        dirname = os.path.basename(job_dir)
+        game, level = _parse_exit_job_dirname(dirname)
+        if game is None:
+            continue
+        if game_filter is not None and game not in game_filter:
+            continue
+
+        history = _load_exit_history(job_dir)
+        if not history:
+            continue
+
+        solved_any = any(bool(record.get('solved', False)) for record in history if isinstance(record, dict))
+
+        if game not in per_game:
+            per_game[game] = {
+                'solved_levels': 0,
+                'n_levels': 0,
+                'iter_counts': [],
+            }
+
+        per_game[game]['n_levels'] += 1
+        per_game[game]['solved_levels'] += int(solved_any)
+        per_game[game]['iter_counts'].append(len(history))
+
+    results = {}
+    for game, stats in per_game.items():
+        n_levels = stats['n_levels']
+        if n_levels <= 0:
+            continue
+        results[game] = {
+            'pct_solved': stats['solved_levels'] / n_levels,
+            'n_levels': n_levels,
+            'n_iters': float(np.mean(stats['iter_counts'])) if stats['iter_counts'] else float('nan'),
+        }
+    return results
 
 
 def _parse_solver_run_name(filename: str):
@@ -172,6 +261,13 @@ def aggregate_results(cfg: PlotSearch):
     print(games)
     if cfg.algo == 'all':
         algos = list(ALGO_SOLVER_NAMES.keys())
+    elif cfg.algo == 'exit':
+        exit_results = _collect_exit_results(games)
+        with open(EXIT_RESULTS_PATH, 'w') as f:
+            json.dump(exit_results, f, indent=4)
+        print(f'Saved aggregated ExIt results to {EXIT_RESULTS_PATH}')
+        plot(cfg, exit_results)
+        return
     elif cfg.algo in ALGO_SOLVER_NAMES:
         algos = [cfg.algo]
     else:
@@ -223,6 +319,16 @@ def plot(cfg: PlotSearch, results=None):
 
     if cfg.algo == 'all':
         plot_all_algos(cfg, results)
+        return
+
+    if cfg.algo == 'exit':
+        if results is None:
+            if os.path.exists(EXIT_RESULTS_PATH):
+                with open(EXIT_RESULTS_PATH, 'r') as f:
+                    results = json.load(f)
+            else:
+                results = {}
+        plot_exit_heatmap(results)
         return
 
     if results is None:
@@ -323,6 +429,75 @@ def plot(cfg: PlotSearch, results=None):
         f.write(latex_df.to_latex(index=True, float_format="%.2f", escape=False, caption=f"Results of {algo_label} on full dataset of games, with max {caption_steps} and a timeout of 1 minute.",
                             longtable=True, label="tab:bfs_results"))
     print(f'Saved latex table to {latex_file_path}')
+
+
+def plot_exit_heatmap(results: dict) -> None:
+    if not results:
+        print('No ExIt results found to plot.')
+        return
+
+    df = pd.DataFrame.from_dict(results, orient='index')
+    if df.empty or 'pct_solved' not in df.columns:
+        print('No ExIt solve-rate data found to plot.')
+        return
+
+    os.makedirs(PLOTS_DIR, exist_ok=True)
+    csv_file_path = os.path.join(PLOTS_DIR, 'exit_results.csv')
+    df.to_csv(csv_file_path, index=True, float_format='%.4f')
+    print(f'Saved results to {csv_file_path}')
+
+    pretty_index = df.index.to_series().replace(game_names_remap)
+    pretty_index = pretty_index.str.replace('_', ' ')
+    pretty_index = pretty_index.str.title()
+
+    solved_row = pd.DataFrame(
+        [df['pct_solved'].to_numpy(dtype=float)],
+        index=['ExIt (any solved during training)'],
+        columns=pretty_index,
+    )
+
+    annot_data = [[f"{value:.0%}" if pd.notnull(value) else '' for value in solved_row.iloc[0]]]
+
+    target_cell_height = 1.0
+    target_cell_width = 1.0
+    min_total_figure_width = 8.0
+    min_total_figure_height = 3.0
+    h_padding = 3.0
+    v_padding = 1.5
+
+    num_cols = len(solved_row.columns)
+    num_rows = len(solved_row.index)
+    fig_h = max(num_rows * target_cell_height + v_padding, min_total_figure_height)
+    fig_w = max(num_cols * target_cell_width + h_padding, min_total_figure_width)
+
+    plt.figure(figsize=(fig_w, fig_h))
+    sns.heatmap(
+        solved_row,
+        annot=annot_data,
+        fmt='',
+        cmap='RdYlGn',
+        vmin=0.0,
+        vmax=1.0,
+        cbar_kws={'label': 'Solved Levels (%)', 'shrink': 0.8, 'pad': 0.01},
+        annot_kws={'size': 9},
+        linewidths=0.5,
+        linecolor='white',
+    )
+    plt.title('ExIt Percent of Levels Solved per Game')
+    plt.xlabel('Game', labelpad=10)
+    plt.ylabel('Method', labelpad=10)
+    plt.yticks(rotation=0)
+    plt.xticks(rotation=45, ha='right')
+    plt.tight_layout()
+
+    output_path = os.path.join(PLOTS_DIR, 'exit_pct_solved_heatmap.png')
+    try:
+        plt.savefig(output_path, dpi=300)
+        print(f'Saved heatmap to {output_path}')
+    except Exception as e:
+        print(f'Error saving ExIt heatmap: {e}')
+    finally:
+        plt.close()
 
 
 def plot_all_algos(cfg: PlotSearch, results_by_algo=None):
