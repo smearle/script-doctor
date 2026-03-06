@@ -9,6 +9,12 @@ import numpy as np
 import pandas as pd
 import seaborn as sns
 
+from exit_training_config import (
+    EXIT_TRAINING_RELATIVE_DIR,
+    format_run_label,
+    format_variable_run_label,
+    varying_run_fields,
+)
 from puzzlejax.conf.config import PlotSearch
 from puzzlejax.globals import PLOTS_DIR, STANDALONE_NODEJS_RESULTS_PATH, JS_SOLS_DIR
 from profile_nodejs import get_algo_name, get_standalone_run_params_from_name
@@ -19,7 +25,7 @@ BFS_RESULTS_PATH = os.path.join('data', 'bfs_results.json')
 HEATMAP_SEARCH_DEPTHS = [1_000_000, 100_000]
 ALL_RESULTS_PATH = os.path.join('data', 'all_search_results.json')
 EXIT_RESULTS_PATH = os.path.join('data', 'exit_results.json')
-EXIT_TRAINING_DIR = os.path.join('data', 'exit_training')
+EXIT_TRAINING_DIR = EXIT_TRAINING_RELATIVE_DIR
 
 ALGO_SOLVER_NAMES = {
     'astar': 'solveAStar',
@@ -79,54 +85,115 @@ def _load_exit_history(job_dir: str):
     return None
 
 
-def _collect_exit_results(games: list[str]) -> dict:
-    if not os.path.exists(EXIT_TRAINING_DIR):
-        return {}
+def _load_exit_run_config(job_dir: str):
+    run_config_path = os.path.join(job_dir, 'run_config.json')
+    if os.path.exists(run_config_path):
+        try:
+            with open(run_config_path, 'r') as f:
+                run_config = json.load(f)
+            if isinstance(run_config, dict):
+                return run_config
+        except Exception:
+            pass
 
-    game_filter = set(games) if games is not None else None
+    checkpoint_path = os.path.join(job_dir, 'checkpoint.json')
+    if os.path.exists(checkpoint_path):
+        try:
+            with open(checkpoint_path, 'r') as f:
+                checkpoint = json.load(f)
+            run_config = checkpoint.get('run_config')
+            if isinstance(run_config, dict):
+                return run_config
+        except Exception:
+            pass
 
+    return None
+
+
+def _iter_exit_run_dirs():
     candidate_dirs = set()
     checkpoint_paths = glob.glob(os.path.join(EXIT_TRAINING_DIR, '**', 'checkpoint.json'), recursive=True)
     history_paths = glob.glob(os.path.join(EXIT_TRAINING_DIR, '**', 'history.json'), recursive=True)
     for path in checkpoint_paths + history_paths:
         candidate_dirs.add(os.path.dirname(path))
 
-    per_game = {}
-    for job_dir in sorted(candidate_dirs):
-        dirname = os.path.basename(job_dir)
-        game, level = _parse_exit_job_dirname(dirname)
+    for run_dir in sorted(candidate_dirs):
+        level_root = os.path.dirname(run_dir)
+        game, level = _parse_exit_job_dirname(os.path.basename(level_root))
         if game is None:
             continue
+        yield {
+            'game': game,
+            'level': level,
+            'level_root': level_root,
+            'run_dir': run_dir,
+            'run_name': os.path.basename(run_dir),
+        }
+
+
+def _collect_exit_results(games: list[str]) -> dict:
+    if not os.path.exists(EXIT_TRAINING_DIR):
+        return {}
+
+    game_filter = set(games) if games is not None else None
+
+    per_config = {}
+    run_configs_by_label = {}
+    for run_info in _iter_exit_run_dirs():
+        game = run_info['game']
         if game_filter is not None and game not in game_filter:
             continue
 
-        history = _load_exit_history(job_dir)
+        history = _load_exit_history(run_info['run_dir'])
         if not history:
             continue
 
         solved_any = any(bool(record.get('solved', False)) for record in history if isinstance(record, dict))
+        run_config = _load_exit_run_config(run_info['run_dir'])
+        run_label = format_run_label(run_config, run_info['run_name'])
+        run_configs_by_label.setdefault(run_label, run_config)
 
-        if game not in per_game:
-            per_game[game] = {
+        if run_label not in per_config:
+            per_config[run_label] = {}
+        if game not in per_config[run_label]:
+            per_config[run_label][game] = {
                 'solved_levels': 0,
                 'n_levels': 0,
                 'iter_counts': [],
             }
 
-        per_game[game]['n_levels'] += 1
-        per_game[game]['solved_levels'] += int(solved_any)
-        per_game[game]['iter_counts'].append(len(history))
+        per_config[run_label][game]['n_levels'] += 1
+        per_config[run_label][game]['solved_levels'] += int(solved_any)
+        per_config[run_label][game]['iter_counts'].append(len(history))
 
+    display_labels = {
+        run_label: format_variable_run_label(
+            run_configs_by_label.get(run_label),
+            fallback_name=run_label,
+            varying_fields=varying_run_fields(list(run_configs_by_label.values())),
+        )
+        for run_label in per_config
+    }
+
+    duplicate_counts = {}
     results = {}
-    for game, stats in per_game.items():
-        n_levels = stats['n_levels']
-        if n_levels <= 0:
-            continue
-        results[game] = {
-            'pct_solved': stats['solved_levels'] / n_levels,
-            'n_levels': n_levels,
-            'n_iters': float(np.mean(stats['iter_counts'])) if stats['iter_counts'] else float('nan'),
-        }
+    for run_label, per_game_stats in per_config.items():
+        display_label = display_labels[run_label]
+        duplicate_index = duplicate_counts.get(display_label, 0)
+        duplicate_counts[display_label] = duplicate_index + 1
+        if duplicate_index > 0:
+            display_label = f"{display_label} [{duplicate_index + 1}]"
+
+        results[display_label] = {}
+        for game, stats in per_game_stats.items():
+            n_levels = stats['n_levels']
+            if n_levels <= 0:
+                continue
+            results[display_label][game] = {
+                'pct_solved': stats['solved_levels'] / n_levels,
+                'n_levels': n_levels,
+                'n_iters': float(np.mean(stats['iter_counts'])) if stats['iter_counts'] else float('nan'),
+            }
     return results
 
 
@@ -436,43 +503,69 @@ def plot_exit_heatmap(results: dict) -> None:
         print('No ExIt results found to plot.')
         return
 
-    df = pd.DataFrame.from_dict(results, orient='index')
-    if df.empty or 'pct_solved' not in df.columns:
+    row_labels = sorted(results.keys())
+    game_names = sorted({game for per_game in results.values() for game in per_game.keys()})
+    if not row_labels or not game_names:
         print('No ExIt solve-rate data found to plot.')
         return
 
+    heatmap_df = pd.DataFrame(index=row_labels, columns=game_names, dtype=float)
+    counts_df = pd.DataFrame(index=row_labels, columns=game_names, dtype=object)
+    iter_df = pd.DataFrame(index=row_labels, columns=game_names, dtype=float)
+
+    for run_label, per_game in results.items():
+        for game, stats in per_game.items():
+            heatmap_df.loc[run_label, game] = stats.get('pct_solved', np.nan)
+            counts_df.loc[run_label, game] = stats.get('n_levels', '')
+            iter_df.loc[run_label, game] = stats.get('n_iters', np.nan)
+
     os.makedirs(PLOTS_DIR, exist_ok=True)
     csv_file_path = os.path.join(PLOTS_DIR, 'exit_results.csv')
-    df.to_csv(csv_file_path, index=True, float_format='%.4f')
+    heatmap_df.to_csv(csv_file_path, index=True, float_format='%.4f')
     print(f'Saved results to {csv_file_path}')
 
-    pretty_index = df.index.to_series().replace(game_names_remap)
-    pretty_index = pretty_index.str.replace('_', ' ')
-    pretty_index = pretty_index.str.title()
+    counts_csv_path = os.path.join(PLOTS_DIR, 'exit_level_counts.csv')
+    counts_df.to_csv(counts_csv_path, index=True)
+    print(f'Saved ExIt level counts to {counts_csv_path}')
 
-    solved_row = pd.DataFrame(
-        [df['pct_solved'].to_numpy(dtype=float)],
-        index=['ExIt (any solved during training)'],
-        columns=pretty_index,
-    )
+    iter_csv_path = os.path.join(PLOTS_DIR, 'exit_mean_iterations.csv')
+    iter_df.to_csv(iter_csv_path, index=True, float_format='%.2f')
+    print(f'Saved ExIt mean iteration counts to {iter_csv_path}')
 
-    annot_data = [[f"{value:.0%}" if pd.notnull(value) else '' for value in solved_row.iloc[0]]]
+    pretty_columns = heatmap_df.columns.to_series().replace(game_names_remap)
+    pretty_columns = pretty_columns.str.replace('_', ' ')
+    pretty_columns = pretty_columns.str.title()
+    pretty_column_lookup = pretty_columns.to_dict()
+    heatmap_df.columns = [pretty_column_lookup[col] for col in heatmap_df.columns]
+
+    annot_data = []
+    for row_label in heatmap_df.index:
+        row_annotations = []
+        for game in game_names:
+            value = heatmap_df.loc[row_label, pretty_column_lookup[game]]
+            n_levels = counts_df.loc[row_label, game]
+            if pd.isna(value):
+                row_annotations.append('')
+                continue
+            level_suffix = f'\n(n={n_levels})' if n_levels not in ('', None) and not pd.isna(n_levels) else ''
+            row_annotations.append(f'{value:.0%}{level_suffix}')
+        annot_data.append(row_annotations)
 
     target_cell_height = 1.0
     target_cell_width = 1.0
     min_total_figure_width = 8.0
     min_total_figure_height = 3.0
     h_padding = 3.0
-    v_padding = 1.5
+    v_padding = 2.5
 
-    num_cols = len(solved_row.columns)
-    num_rows = len(solved_row.index)
+    num_cols = len(heatmap_df.columns)
+    num_rows = len(heatmap_df.index)
     fig_h = max(num_rows * target_cell_height + v_padding, min_total_figure_height)
     fig_w = max(num_cols * target_cell_width + h_padding, min_total_figure_width)
 
     plt.figure(figsize=(fig_w, fig_h))
     sns.heatmap(
-        solved_row,
+        heatmap_df,
         annot=annot_data,
         fmt='',
         cmap='RdYlGn',
@@ -483,9 +576,9 @@ def plot_exit_heatmap(results: dict) -> None:
         linewidths=0.5,
         linecolor='white',
     )
-    plt.title('ExIt Percent of Levels Solved per Game')
+    plt.title('ExIt Percent of Levels Solved per Game and Hyperparameter Setting')
     plt.xlabel('Game', labelpad=10)
-    plt.ylabel('Method', labelpad=10)
+    plt.ylabel('ExIt Run Config', labelpad=10)
     plt.yticks(rotation=0)
     plt.xticks(rotation=45, ha='right')
     plt.tight_layout()

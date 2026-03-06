@@ -513,9 +513,18 @@ def strip_comments(text):
     return new_text
 
 def count_rules(tree: PSGameTree):
+    def count_rule_block(rule_block):
+        n_rules = 0
+        for rule in rule_block.rules:
+            if hasattr(rule, "rules"):
+                n_rules += count_rule_block(rule)
+            else:
+                n_rules += 1
+        return n_rules
+
     n_rules = 0
     for rule_block in tree.rules:
-        n_rules += len(rule_block[0].rules)
+        n_rules += count_rule_block(rule_block)
     return n_rules
 
 class PJParseErrors(IntEnum):

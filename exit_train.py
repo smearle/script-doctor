@@ -22,7 +22,6 @@ Usage:
 
 import argparse
 import json
-import math
 import os
 import pickle
 import sys
@@ -53,6 +52,36 @@ from neural_util.modules import DTYPE, HEAD_DTYPE, get_norm_fn, get_activation_f
 from neural_util.param_manager import save_params_with_metadata, load_params_with_metadata
 from train_util.optimizer import setup_optimizer, get_eval_params, get_learning_rate
 from helpers.visualization import PathStep, build_path_steps_from_actions
+from exit_training_config import EXIT_TRAINING_RELATIVE_DIR, build_run_config, run_subdir_name
+
+
+EXIT_TRAINING_DIR = os.path.join(SCRIPT_DIR, EXIT_TRAINING_RELATIVE_DIR)
+
+
+def _job_root_dir(game: str, level_i: int, save_dir: Optional[str] = None) -> str:
+    if save_dir is not None:
+        return save_dir
+    return os.path.join(EXIT_TRAINING_DIR, f"{game}_level{level_i}")
+
+
+def _resolve_run_dir(run_root_dir: str, run_config: dict[str, Any]) -> str:
+    return os.path.join(run_root_dir, run_subdir_name(run_config))
+
+
+def _run_config_path(save_dir: str) -> str:
+    return os.path.join(save_dir, "run_config.json")
+
+
+def _write_run_config(save_dir: str, run_config: dict[str, Any]) -> None:
+    with open(_run_config_path(save_dir), "w") as f:
+        json.dump(run_config, f, indent=2, sort_keys=True)
+
+
+def _model_metadata(run_config: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "puzzle_type": str(PuzzleJaxPuxleEnv),
+        "run_config": run_config,
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -626,9 +655,25 @@ def run_exit_training(
         hidden_dim: Neural net hidden dimension
         res_n: Number of residual blocks
     """
-    if save_dir is None:
-        save_dir = os.path.join(SCRIPT_DIR, "data", "exit_training", f"{game}_level{level_i}")
+    run_config = build_run_config(
+        game=game,
+        level_i=level_i,
+        n_iterations=n_iterations,
+        max_nodes=max_nodes,
+        batch_size=batch_size,
+        cost_weight=cost_weight,
+        train_steps_per_iter=train_steps_per_iter,
+        train_batch_size=train_batch_size,
+        lr=lr,
+        blend_alpha=blend_alpha,
+        replay_max_size=replay_max_size,
+        initial_dim=initial_dim,
+        hidden_dim=hidden_dim,
+        res_n=res_n,
+    )
+    save_dir = _resolve_run_dir(_job_root_dir(game, level_i, save_dir=save_dir), run_config)
     os.makedirs(save_dir, exist_ok=True)
+    _write_run_config(save_dir, run_config)
 
     print(f"{'='*70}")
     print(f"ExIt Training: {game} level {level_i}")
@@ -761,7 +806,10 @@ def run_exit_training(
                 best_cost = sol_cost
                 best_iter = iteration
                 # Save best model
-                neural_heuristic.save_model(os.path.join(save_dir, "heuristic_best.pkl"))
+                neural_heuristic.save_model(
+                    os.path.join(save_dir, "heuristic_best.pkl"),
+                    metadata=_model_metadata(run_config),
+                )
 
         # ==================================================================
         # Phase 2b: BEST-F PATH (env heuristic) for diagnostics
@@ -856,7 +904,7 @@ def run_exit_training(
 
         # Periodic save
         if iteration % 5 == 0 or iteration == n_iterations - 1:
-            neural_heuristic.save_model(model_path)
+            neural_heuristic.save_model(model_path, metadata=_model_metadata(run_config))
             replay.save(replay_path)
             with open(checkpoint_path, "w") as f:
                 json.dump({
@@ -865,6 +913,7 @@ def run_exit_training(
                     "best_iter": best_iter,
                     "global_train_step": global_train_step,
                     "history": history,
+                    "run_config": run_config,
                 }, f, indent=2)
 
         # Gradually increase neural heuristic influence
@@ -887,8 +936,9 @@ def run_exit_training(
     print(f"  Checkpoints saved to: {save_dir}")
 
     # Save final model and history
-    neural_heuristic.save_model(model_path)
+    neural_heuristic.save_model(model_path, metadata=_model_metadata(run_config))
     replay.save(replay_path)
+    _write_run_config(save_dir, run_config)
     with open(os.path.join(save_dir, "history.json"), "w") as f:
         json.dump(history, f, indent=2)
 
@@ -1002,12 +1052,29 @@ def main():
     print(f"Running ExIt on {len(jobs)} job(s).")
 
     for game, level_i in jobs:
-        job_save_dir = args.save_dir
+        job_root_dir = args.save_dir
         if multi_run and args.save_dir is not None:
-            job_save_dir = os.path.join(args.save_dir, f"{game}_level{level_i}")
-        if job_save_dir is None:
-            job_save_dir = os.path.join(SCRIPT_DIR, "data", "exit_training", f"{game}_level{level_i}")
+            job_root_dir = os.path.join(args.save_dir, f"{game}_level{level_i}")
+        job_root_dir = _job_root_dir(game, level_i, save_dir=job_root_dir)
 
+        run_config = build_run_config(
+            game=game,
+            level_i=level_i,
+            n_iterations=args.iterations,
+            max_nodes=args.max_nodes,
+            batch_size=args.batch_size,
+            cost_weight=args.cost_weight,
+            train_steps_per_iter=args.train_steps_per_iter,
+            train_batch_size=args.train_batch_size,
+            lr=args.lr,
+            blend_alpha=args.blend_alpha,
+            replay_max_size=args.replay_max_size,
+            initial_dim=args.initial_dim,
+            hidden_dim=args.hidden_dim,
+            res_n=args.res_n,
+        )
+
+        job_save_dir = _resolve_run_dir(job_root_dir, run_config)
         completed_iterations = _get_completed_iterations(job_save_dir)
         if completed_iterations >= args.iterations:
             print(
@@ -1030,7 +1097,7 @@ def main():
                 lr=args.lr,
                 blend_alpha=args.blend_alpha,
                 replay_max_size=args.replay_max_size,
-                save_dir=job_save_dir,
+                save_dir=job_root_dir,
                 resume=args.resume,
                 initial_dim=args.initial_dim,
                 hidden_dim=args.hidden_dim,
