@@ -1,4 +1,5 @@
 import copy
+import functools
 import os
 
 import hydra
@@ -78,7 +79,8 @@ def main_enjoy(enjoy_config: EnjoyConfig):
             rng_step, env_state, action, env_params
 
         )
-        frames = jax.vmap(env.render, in_axes=(0))(env_state.env_state)
+        env_render = functools.partial(env.render, cv2=False)
+        frames = jax.vmap(env_render, in_axes=(0))(env_state.env_state)
         # frame = env.render(env_state)
         rng = jax.random.split(rng)[0]
         # Can't concretize these values inside jitted function (?)

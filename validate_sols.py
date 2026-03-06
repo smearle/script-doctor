@@ -30,6 +30,7 @@ from puzzlejax.globals import (
     LARK_SYNTAX_PATH,
 )
 from puzzlejax.preprocess_games import PJParseErrors, get_tree_from_txt
+from puzzlejax.env_utils import multihot_to_desc
 from standalone.utils import replay_actions_js
 from standalone.utils import compile_game as compile_game_js
 from puzzlejax.utils import get_list_of_games_for_testing, to_binary_vectors
@@ -75,6 +76,28 @@ def multihot_level_from_js_state(level_state, obj_list, target_obj_names=None):
             target_multihot_level[target_idx] = multihot_level_js[new_objs_to_idxs[obj]]
 
     return target_multihot_level
+
+
+def format_state_for_log(state, env):
+    multihot_desc = multihot_to_desc(
+        np.asarray(state.multihot_level),
+        env.objs_to_idxs,
+        env.n_objs,
+        env.obj_idxs_to_force_idxs,
+    )
+    return (
+        "PJState(\n"
+        f"  multihot_level=\n{multihot_desc}\n"
+        f"  win={state.win},\n"
+        f"  score={state.score},\n"
+        f"  heuristic={state.heuristic},\n"
+        f"  restart={state.restart},\n"
+        f"  init_heuristic={state.init_heuristic},\n"
+        f"  prev_heuristic={state.prev_heuristic},\n"
+        f"  step_i={state.step_i},\n"
+        f"  rng={state.rng}\n"
+        ")"
+    )
 
 
 @hydra.main(version_base="1.3", config_path='puzzlejax/conf', config_name='jax_validation_config')
@@ -572,7 +595,8 @@ def main(cfg: JaxValidationConfig, games: Optional[List[str]] = None):
                     with open(state_log_path, 'w') as f:
                         f.write(f"Level {level_i} solution failed\n")
                         f.write(f"Actions: {actions}\n")
-                        f.write(f"State: {state}\n")
+                        f.write(f"Expected JS state:\n{format_state_for_log(js_state, env)}\n")
+                        f.write(f"Actual JAX state:\n{format_state_for_log(state, env)}\n")
                     if is_random_game(n_rules):
                         n_random_state_error += 1
                     else:

@@ -18,6 +18,7 @@ from lark import Lark, Transformer, Tree, Token, Visitor
 import numpy as np
 
 from puzzlejax.conf.config import PreprocessConfig
+from puzzlejax.detect_randomness import tree_has_randomness
 from puzzlejax.env import PuzzleJaxEnv
 from puzzlejax.gen_tree import GenPSTree
 from puzzlejax.globals import (
@@ -740,7 +741,7 @@ def main(cfg: PreprocessConfig):
         if success == PJParseErrors.SUCCESS:
             parse_results['success'].append(game_name)
             n_rules = count_rules(ps_tree)
-            has_randomness = env.has_randomness()
+            has_randomness = tree_has_randomness(ps_tree)
             games_n_rules_sorted.append((game_name, n_rules, has_randomness))
             games_to_n_rules[game_name] = (n_rules, has_randomness)
         elif success == PJParseErrors.PARSE_ERROR:
@@ -757,7 +758,7 @@ def main(cfg: PreprocessConfig):
             if err_msg not in parse_results['env_error']:
                 parse_results['env_error'][err_msg] = []
             n_rules = count_rules(ps_tree)
-            has_randomness = None
+            has_randomness = tree_has_randomness(ps_tree)
             parse_results['env_error'][err_msg].append((game_name, n_rules))
             games_n_rules_sorted.append((game_name, n_rules, has_randomness))
             games_to_n_rules[game_name] = (n_rules, has_randomness)

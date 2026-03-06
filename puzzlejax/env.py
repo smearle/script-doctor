@@ -18,6 +18,7 @@ import numpy as np
 from puzzlejax.env_render import render_solid_color, render_sprite
 from puzzlejax.env_utils import N_MOVEMENTS, multihot_to_desc, N_FORCES, ACTION
 from puzzlejax.jax_utils import stack_leaves
+from puzzlejax.detect_randomness import tree_has_randomness
 from puzzlejax.ps_game import LegendEntry, PSGameTree, PSObject, Rule, WinCondition
 from gymnax.environments.spaces import Discrete, Box
 
@@ -776,7 +777,7 @@ class PuzzleJaxEnv:
         self.jit = jit
         self.vmap = vmap
         self.title = tree.prelude.title
-        self._has_randomness = False
+        self._has_randomness = tree_has_randomness(tree)
         self.tree = tree
         self.levels = tree.levels
         self.level_i = level_i
@@ -1002,19 +1003,30 @@ class PuzzleJaxEnv:
         multihot_level = self.obj_vecs[int_level]
         multihot_level = rearrange(multihot_level, "h w c -> c h w")
 
-        # Add a default background object everywhere
+        # Match PuzzleScript's calcBackgroundMask(): choose the first populated
+        # cell on the background layer, then fill cells missing that layer.
         background_sub_objs = expand_meta_objs(['background'], self.meta_objs, self.char_to_obj)
         if 'background' in background_sub_objs:
             bg_obj = 'background'
         else:
-            flat_int_level = int_level.flatten()
-            # bg_obj = background_sub_objs[0]
-            for bg_obj in background_sub_objs:
-                bg_obj_int = self.objs_to_idxs[bg_obj]
-                if bg_obj_int in flat_int_level:
-                    break
+            bg_obj = background_sub_objs[0]
+
         bg_idx = self.objs_to_idxs[bg_obj]
-        multihot_level[bg_idx] = 1
+        bg_layer_idx = np.where(self.layer_masks[:, bg_idx])[0][0]
+        bg_layer_mask = self.layer_masks[bg_layer_idx][:, None, None]
+
+        level_bg = multihot_level & bg_layer_mask
+        flat_level_bg = rearrange(level_bg, 'c h w -> w h c')
+        flat_level_bg = flat_level_bg.reshape(-1, flat_level_bg.shape[-1])
+        nonempty_bg_cells = flat_level_bg.any(axis=1)
+        if np.any(nonempty_bg_cells):
+            level_bg_mask = flat_level_bg[np.argmax(nonempty_bg_cells)].copy()
+        else:
+            level_bg_mask = np.zeros((self.n_objs,), dtype=bool)
+            level_bg_mask[bg_idx] = True
+
+        missing_bg = ~level_bg.any(axis=0)
+        multihot_level |= level_bg_mask[:, None, None] & missing_bg[None]
 
         multihot_level = multihot_level.astype(bool)
         return multihot_level
@@ -1237,8 +1249,6 @@ class PuzzleJaxEnv:
         return multihot_level
 
     def gen_subrules_meta(self, rule: Rule, rule_name: str, lvl_shape: Tuple[int, int],):
-        if 'random' in rule.prefixes:
-            self._has_randomness = True
         has_right_pattern = len(rule.right_kernels) > 0
 
         def is_meta_subobj_forceless(obj_idx, m_cell):
@@ -2074,14 +2084,12 @@ class PuzzleJaxEnv:
                     stationary = True
                 elif obj == 'random':
                     random = True
-                    self._has_randomness = True
                 elif obj == 'horizontal':
                     horizontal = True
                 elif obj == 'vertical':
                     vertical = True
                 elif obj == 'randomdir':
                     random_dir = True
-                    self._has_randomness = True
                 # ignore sound effects (which can exist incide rules (?))
                 elif obj.startswith('sfx'):
                     continue
