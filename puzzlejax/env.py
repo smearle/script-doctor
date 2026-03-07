@@ -3674,8 +3674,15 @@ class PuzzleJaxEnv:
             rule_fn,
             ### COMPILE VS RUNTIME ###
         ):
-        """Repeatedly apply an atomic rule to the level until it no longer has an effect. This function is called in 
-        sequence on each rule in the group."""
+        """Apply an atomic rule once to the level (all spatial matches).
+
+        Per-rule convergence is intentionally NOT done here; the group-level
+        while_loop in ``loop_rule_grp`` handles reconvergence, matching the JS
+        engine's ``applyRuleGroup`` semantics.  Removing the per-rule
+        while_loop eliminates N nested ``jax.lax.while_loop`` ops from the XLA
+        trace (one per rule), which significantly reduces both compile time and
+        per-step overhead from GPU condition-check syncs.
+        """
 
         _apply_rule_fn = partial(
             self.apply_rule_fn, 
@@ -3700,25 +3707,16 @@ class PuzzleJaxEnv:
         )
         loop_rule_state: LoopRuleState
 
-        if self.jit:
-            # For the current rule in the group, apply it as many times as possible.
-            loop_rule_state = jax.lax.while_loop(
-                cond_fun=lambda loop_rule_state: loop_rule_state.applied & ~loop_rule_state.cancelled & ~loop_rule_state.restart \
-                    & (loop_rule_state.app_i < MAX_LOOPS),
-                body_fun=lambda loop_rule_state: _apply_rule_fn(loop_rule_state),
-                init_val=loop_rule_state,
-            )
-        else:
-            while loop_rule_state.applied and not loop_rule_state.cancelled and not loop_rule_state.restart:
-                loop_rule_state = _apply_rule_fn(loop_rule_state)
+        # Apply once — group-level while_loop handles reconvergence.
+        loop_rule_state = _apply_rule_fn(loop_rule_state)
 
-        rule_applied = loop_rule_state.app_i > 1
+        rule_applied = loop_rule_state.applied
         again = rule_group_state.again | loop_rule_state.again
         win = rule_group_state.win | loop_rule_state.win
         if DEBUG:
             jax.debug.print('    loop_rule_rn: rule {rule_i} applied: {rule_applied}. again: {again}. win: {win}',
                             rule_i=rule_group_state.rule_i, rule_applied=rule_applied, again=again, win=win)
-        grp_applied = rule_applied | loop_rule_state.applied
+        grp_applied = rule_applied
 
         rule_group_state = RuleGroupState(
             lvl=loop_rule_state.lvl,
@@ -3789,26 +3787,18 @@ class PuzzleJaxEnv:
     def apply_rule_grp(
             self,
             loop_group_state: LoopRuleGroupState,
-            ### COMPILE VS RUNTIME ###
-            # all_rule_fns, n_prior_rules_arr, n_rules_per_grp_arr,
             rule_grp,
             is_random,
-            ### COMPILE VS RUNTIME ###
             ):
-        """Iterate through each rule in the group. Loop it until it no longer has an effect."""
+        """Apply each rule in the group once (all spatial matches per rule).
+        
+        Group-level reconvergence is handled by the while_loop in loop_rule_grp."""
 
         _loop_rule_fn = partial(
             self.loop_rule_fn, 
-            ### COMPILE VS RUNTIME ###
-            # all_rule_fns=all_rule_fns, n_prior_rules_arr=n_prior_rules_arr,
-            ### COMPILE VS RUNTIME ###
             )
 
         block_i, grp_i = loop_group_state.block_i, loop_group_state.grp_i
-
-        ### COMPILE VS RUNTIME ###
-        # n_rules_in_grp = n_rules_per_grp_arr[block_i, grp_i]
-        ### COMPILE VS RUNTIME ###
 
         rule_group_state = RuleGroupState(
             lvl=loop_group_state.lvl,
