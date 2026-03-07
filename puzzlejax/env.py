@@ -35,6 +35,33 @@ class InvalidObjectError(Exception):
     pass
 
 
+def _extract_bool_patches(lvl, in_patch_shape):
+    """Extract sliding-window patches without bool->float32 promotion.
+
+    ``jax.lax.conv_general_dilated_patches`` builds an identity convolution
+    kernel and runs a full conv, which promotes bool inputs to float32
+    (~4x VRAM).  This helper gathers the same patches via simple slices
+    that keep the original dtype.
+
+    Returns the same ``(1, C*ph*pw, oh, ow)`` layout as
+    ``conv_general_dilated_patches``.
+    """
+    ph, pw = in_patch_shape
+    C, H, W = lvl.shape[1], lvl.shape[2], lvl.shape[3]
+    oh, ow = H - ph + 1, W - pw + 1
+
+    # One shifted slice per spatial offset — stays in bool
+    offset_slices = []
+    for di in range(ph):
+        for dj in range(pw):
+            offset_slices.append(lvl[0, :, di:di + oh, dj:dj + ow])
+
+    # (ph*pw, C, oh, ow) -> C-major (C, ph*pw, oh, ow) -> (C*ph*pw, oh, ow)
+    patches = jnp.stack(offset_slices, axis=0)
+    patches = patches.transpose(1, 0, 2, 3).reshape(C * ph * pw, oh, ow)
+    return patches[None]  # (1, C*ph*pw, oh, ow)
+
+
 # @partial(jax.jit, static_argnums=(0))
 def disambiguate_meta(obj, cell_meta_objs, kernel_meta_objs, pattern_meta_objs, obj_to_idxs):
     """In the right pattern of rules, we may have a meta-object (mapping to a corresponding meta-object in the 
@@ -3263,11 +3290,7 @@ class PuzzleJaxEnv:
                 cell_outs_patch.append(cell_out)
             return patch_active, cell_outs_patch
 
-        patches = jax.lax.conv_general_dilated_patches(
-            lvl, in_patch_shape, window_strides=(1, 1), padding='VALID',
-        )
-        # conv ops promote bool→float32; cast back to save ~4× VRAM on patches
-        patches = patches.astype(bool)
+        patches = _extract_bool_patches(lvl, in_patch_shape)
         assert patches.shape[0] == 1
         patches = patches[0]
         # patches = rearrange(patches, "c h w -> h w c")
