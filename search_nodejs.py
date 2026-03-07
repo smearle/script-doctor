@@ -17,7 +17,7 @@ from javascript.proxy import Proxy
 import numpy as np
 import submitit
 
-from puzzlejax.conf.config import ProfileNodeJS
+from conf.config import ProfileNodeJS
 from puzzlejax.globals import STANDALONE_NODEJS_RESULTS_PATH, JS_SOLS_DIR
 from standalone.utils import compile_game
 from puzzlejax.utils import get_list_of_games_for_testing, level_to_int_arr, init_ps_lark_parser

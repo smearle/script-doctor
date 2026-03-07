@@ -1,8 +1,9 @@
 from dataclasses import dataclass, field
-from typing import Dict, Iterable, List, Optional, Tuple, Union
+from typing import Optional, Tuple
 
 from hydra.core.config_store import ConfigStore
-import numpy as np
+
+from puzzlejax.config import PSConfig
 
 
 @dataclass
@@ -14,14 +15,6 @@ class PreprocessConfig:
 @dataclass
 class PlotRandProfileConfig:
     all_games: bool = True  # Plot as many games as we have (partial) results for
-
-@dataclass
-class PSConfig:
-    game: str = "sokoban_basic"
-    level: int = 0
-    max_episode_steps: int = np.iinfo(np.int32).max
-    overwrite: bool = False  # Whether to overwrite existing results
-    vmap: bool = True
 
 
 @dataclass
@@ -198,7 +191,6 @@ cs = ConfigStore.instance()
 cs.store(name="preprocess_config", node=PreprocessConfig)
 cs.store(name="plot_rand_profile_config", node=PlotRandProfileConfig)
 cs.store(name="plot_standalone_bfs_config", node=PlotSearch)
-cs.store(name="ps_config", node=PSConfig)
 cs.store(name="jax_validation_config", node=JaxValidationConfig)
 cs.store(name="config", node=RLConfig)
 cs.store(name="bfs_config", node=BFSConfig)

@@ -75,12 +75,14 @@ class PuzzleJaxEnvSwitch(PuzzleJaxEnv):
             init_heuristic=init_heuristic,
             prev_heuristic=init_heuristic,
             rng=rng,
+            view_bounds=self._get_default_view_bounds(lvl.shape[1:]),
         )
         if self.tree.prelude.run_rules_on_level_start:
             lvl = self.apply_player_force(-1, state)
             lvl, _, _, _, _, _, rng = self.tick_fn(rng, lvl)
             lvl = lvl[:self.n_objs]
             state = state.replace(multihot_level=lvl, rng=rng)
+        state = state.replace(view_bounds=self._compute_view_bounds(state.multihot_level, state.view_bounds))
         obs = self.get_obs(state)
         return obs, state
 

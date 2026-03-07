@@ -10,7 +10,7 @@ import jax
 from lark import Lark
 from env_wrappers import RepresentationWrapper
 from puzzlejax.env import PJParams
-from puzzlejax.preprocess_games import LARK_SYNTAX_PATH, get_tree_from_txt
+from puzzlejax.preprocessing import LARK_SYNTAX_PATH, get_tree_from_txt
 from LLM_agent import LLMGameAgent
 from puzzlejax.globals import PRIORITY_GAMES
 
@@ -114,7 +114,8 @@ def worker_loop(args, all_jobs, game_info_map, save_dir_main):
         print(f"Worker {worker_id} processing: {game_name} | Level {level_index} | Run {run_id}")
         game_info = game_info_map[game_name]
         # Agent per concurrent job to avoid any shared mutable state between threads.
-        agent = LLMGameAgent(model_name=args.model)
+        enable_thinking = args.enable_thinking if args.model.startswith("vllm") else None
+        agent = LLMGameAgent(model_name=args.model, enable_thinking=enable_thinking)
         success = process_game_level(
             agent=agent,
             game_info=game_info,
@@ -715,8 +716,16 @@ def main():
     import multiprocessing
     multiprocessing.set_start_method("spawn", force=True)
     parser = argparse.ArgumentParser(description='LLM agent loop experiment (env+rules/ascii/mapping)')
-    parser.add_argument('--model', type=str, required=True, choices=['4o-mini', 'o3-mini', 'gemini', 'gemini-2.5-pro', 'deepseek', 'qwen', 'deepseek-r1', 'llama'],
-                        help='LLM model alias (4o-mini=4o-mini, o3=O3-mini, gemini=Gemini-2.0, gemini-2.5-Pro, deepseek=DeepSeek, qwen=Qwen, llama=Llama-3 via Portkey)')
+    parser.add_argument('--model', type=str, required=True,
+                        choices=['4o-mini', 'o3-mini', 'gemini', 'gemini-2.5-pro', 'deepseek', 'qwen',
+                                 'deepseek-r1', 'llama',
+                                 'vllm', 'vllm-qwen3', 'vllm-qwen3-4b', 'vllm-qwen3-30b', 'vllm-qwen3-32b',
+                                 'vllm-llama3', 'vllm-llama3-70b', 'vllm-mistral',
+                                 'vllm-deepseek', 'vllm-deepseek-r1'],
+                        help='LLM model alias. API models: 4o-mini, o3-mini, gemini, gemini-2.5-pro, deepseek, '
+                             'deepseek-r1, qwen, llama. vLLM (local/remote): vllm (reads VLLM_MODEL env), '
+                             'vllm-qwen3 (Qwen3-8B), vllm-qwen3-4b, vllm-qwen3-30b, vllm-qwen3-32b, '
+                             'vllm-llama3, vllm-llama3-70b, vllm-mistral, vllm-deepseek, vllm-deepseek-r1')
     parser.add_argument('--max_steps', type=int, default=100,
                         help='Maximum steps per episode (default: 100)')
     parser.add_argument('--num_runs', type=int, default=10,
@@ -746,7 +755,15 @@ def main():
                         help='Number of parallel worker processes to spawn (default: 1)')
     parser.add_argument('--inflight_jobs', type=int, default=1,
                         help='Concurrent jobs per worker process using threads (default: 1)')
+    parser.add_argument('--vllm_base_url', type=str, default='',
+                        help='Base URL for vLLM server (default: uses VLLM_BASE_URL env or http://localhost:8000/v1)')
+    parser.add_argument('--enable_thinking', action='store_true', default=False,
+                        help='Enable Qwen3 thinking mode for vLLM models (default: False)')
     args = parser.parse_args()
+
+    # Propagate vLLM CLI options to environment so they are picked up by llm_text_query
+    if args.vllm_base_url:
+        os.environ['VLLM_BASE_URL'] = args.vllm_base_url
 
     # Get the list of games from PRIORITY_GAMES
     if args.game:

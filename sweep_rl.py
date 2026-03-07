@@ -17,11 +17,11 @@ from omegaconf import ListConfig, OmegaConf
 import pandas as pd
 import submitit
 
-from puzzlejax.conf.config import SweepRLConfig, TrainConfig, EnjoyConfig
+from conf.config import SweepRLConfig, TrainConfig, EnjoyConfig
 from puzzlejax.env import PJParams
-from puzzlejax.preprocess_games import get_env_from_ps_file
+from puzzlejax.preprocessing import get_env_from_ps_file
 from train import main as main_train
-from enjoy import main_enjoy
+from eval_rl import main_enjoy
 from sweep_rl_configs import _NAMED_SWEEPS
 from puzzlejax.utils import get_list_of_games_for_testing, get_n_levels_per_game, init_ps_lark_parser
 from utils_rl import init_config
@@ -372,7 +372,7 @@ def _apply_named_sweep(sweep_cfg: SweepRLConfig) -> SweepRLConfig:
     return resolved_cfg
 
 
-@hydra.main(version_base="1.3", config_path="puzzlejax/conf", config_name="sweep_rl_config")
+@hydra.main(version_base="1.3", config_path="conf", config_name="sweep_rl_config")
 def main(sweep_cfg: SweepRLConfig):
     sweep_cfg = _apply_named_sweep(sweep_cfg)
     if sweep_cfg.mode == 'train':

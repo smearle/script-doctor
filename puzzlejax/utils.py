@@ -24,7 +24,7 @@ from puzzlejax.globals import (
 GALLERY_GAMES_DIR = "gallery_games"
 from puzzlejax.env import PuzzleJaxEnv
 from puzzlejax.gen_tree import GenPSTree
-from puzzlejax.preprocess_games import get_tree_from_txt
+from puzzlejax.preprocessing import get_tree_from_txt
 
 game_names_remap = {
     'constellationz': 'Constellation Z',
@@ -177,19 +177,167 @@ def _extract_portkey_response_text(response: Any) -> str:
         return "\n".join(chunk for chunk in chunks if chunk)
     return str(content or "")
 
-def llm_text_query(system_prompt, prompt, model, api_key=None, base_url=None, model_type=None):
-    """
-    Use Portkey API to call LLM
-    
-    Parameters:
-        system_prompt: System prompt
-        prompt: User prompt
+def _strip_thinking_block(text: str) -> str:
+    """Strip Qwen3 ``<think>...</think>`` blocks from model output."""
+    return re.sub(r"<think>.*?</think>", "", text, flags=re.DOTALL).strip()
 
-        model: Model name, can be "o3-mini", "4o-mini", "gemini"
-        
-    Returns:
-        LLM response text
+
+def _vllm_text_query(system_prompt, prompt, model_name, base_url=None, max_retries=5,
+                     timeout=300, temperature=0.7, max_tokens=4096,
+                     enable_thinking=None, strip_thinking=True):
     """
+    Query a vLLM server via OpenAI-compatible chat completions API.
+
+    The server URL is resolved in order:
+      1. ``base_url`` argument
+      2. ``VLLM_BASE_URL`` environment variable
+      3. ``http://localhost:8000/v1``
+
+    The model name sent to the server is resolved in order:
+      1. ``model_name`` argument
+      2. ``VLLM_MODEL`` environment variable
+
+    Parameters:
+        system_prompt: System/instruction prompt.
+        prompt: User prompt.
+        model_name: Model identifier (passed as-is to the server).
+        base_url: Optional vLLM server base URL.
+        max_retries: Number of retry attempts on transient failures.
+        timeout: HTTP request timeout in seconds.
+        temperature: Sampling temperature.
+        max_tokens: Maximum tokens to generate.
+        enable_thinking: Enable Qwen3 thinking mode (True/False/None).
+            When *None* the server decides (usually based on chat template).
+        strip_thinking: If True (default), remove ``<think>`` blocks from
+            the returned text so the caller sees only the final answer.
+
+    Returns:
+        Response text or None on failure.
+    """
+    import requests as _requests
+
+    server_url = base_url or os.environ.get("VLLM_BASE_URL", "http://localhost:8000/v1")
+    server_url = server_url.rstrip("/")
+    resolved_model = model_name or os.environ.get("VLLM_MODEL", "")
+    if not resolved_model:
+        raise ValueError(
+            "No model name provided for vLLM backend. Set VLLM_MODEL or pass a "
+            "model name like 'vllm-qwen3' / 'vllm-qwen3-30b'."
+        )
+    api_key = os.environ.get("VLLM_API_KEY", "EMPTY")
+
+    messages = [
+        {"role": "system", "content": system_prompt},
+        {"role": "user", "content": prompt},
+    ]
+    payload: dict = {
+        "model": resolved_model,
+        "messages": messages,
+        "max_tokens": max_tokens,
+        "temperature": temperature,
+    }
+    # Qwen3 thinking-mode support (passed as extra_body by OpenAI client,
+    # but with raw requests we can merge directly into the payload).
+    if enable_thinking is not None:
+        payload["chat_template_kwargs"] = {"enable_thinking": bool(enable_thinking)}
+
+    req_headers = {
+        "Content-Type": "application/json",
+        "Authorization": f"Bearer {api_key}",
+    }
+
+    base_wait = 5
+    for attempt in range(max_retries):
+        try:
+            print(f"Querying vLLM server at {server_url} with model {resolved_model}...")
+            resp = _requests.post(
+                f"{server_url}/chat/completions",
+                headers=req_headers,
+                json=payload,
+                timeout=timeout,
+            )
+            if resp.status_code == 200:
+                data = resp.json()
+                text = data["choices"][0]["message"]["content"]
+                if strip_thinking:
+                    text = _strip_thinking_block(text)
+                print("vLLM query completed successfully.")
+                return text
+            # Log and fall through to retry
+            print(f"vLLM request failed (status {resp.status_code}): {resp.text[:500]}")
+        except _requests.exceptions.Timeout:
+            print(f"vLLM request timed out after {timeout}s.")
+        except _requests.exceptions.ConnectionError as e:
+            print(f"vLLM connection error (server may be starting): {e}")
+        except _requests.exceptions.RequestException as e:
+            print(f"vLLM request exception: {e}")
+
+        wait = base_wait * (2 ** min(attempt, 4))
+        print(f"Retrying in {wait}s (attempt {attempt + 1}/{max_retries})")
+        time.sleep(wait)
+
+    print("vLLM: max retries reached. Returning None.")
+    return None
+
+
+# Mapping from CLI vllm aliases to HuggingFace model identifiers.
+_VLLM_MODEL_ALIASES = {
+    "vllm": None,              # generic – resolved from VLLM_MODEL env var at runtime
+    # Qwen3 text-only models
+    "vllm-qwen3": "Qwen/Qwen3-8B",
+    "vllm-qwen3-4b": "Qwen/Qwen3-4B",
+    "vllm-qwen3-30b": "Qwen/Qwen3-30B-A3B",
+    "vllm-qwen3-32b": "Qwen/Qwen3-32B",
+    # Llama models
+    "vllm-llama3": "meta-llama/Llama-3.1-8B-Instruct",
+    "vllm-llama3-70b": "meta-llama/Llama-3.1-70B-Instruct",
+    # Mistral / Mixtral
+    "vllm-mistral": "mistralai/Mistral-7B-Instruct-v0.3",
+    # DeepSeek
+    "vllm-deepseek": "deepseek-ai/DeepSeek-V3",
+    "vllm-deepseek-r1": "deepseek-ai/DeepSeek-R1",
+}
+
+
+def resolve_vllm_model(alias: str) -> str:
+    """Return the HF model name for a vllm-* alias, falling back to VLLM_MODEL env."""
+    name = _VLLM_MODEL_ALIASES.get(alias)
+    if name is not None:
+        return name
+    # For the bare 'vllm' alias or unknown sub-aliases, defer to env.
+    return os.environ.get("VLLM_MODEL", alias)
+
+
+def llm_text_query(system_prompt, prompt, model, api_key=None, base_url=None,
+                   model_type=None, enable_thinking=None):
+    """
+    Unified LLM text query interface.
+
+    Supports Portkey-routed API models, direct DeepSeek/Qwen API, and local/remote
+    vLLM servers (OpenAI-compatible).
+
+    Parameters:
+        system_prompt: System prompt.
+        prompt: User prompt.
+        model: Model alias. API models: "o3-mini", "4o-mini", "gemini", etc.
+            vLLM models: any string starting with "vllm" (e.g. "vllm-qwen3").
+        api_key: Unused (kept for back-compat).
+        base_url: Optional override for the vLLM server URL.
+        model_type: Unused (kept for back-compat).
+        enable_thinking: For vLLM Qwen3 models, explicitly enable/disable
+            thinking mode.  *None* lets the server decide.
+
+    Returns:
+        LLM response text (str), or None on repeated failures.
+    """
+    # ---- vLLM backend (local / remote open-weight models) ----
+    if model.startswith("vllm"):
+        resolved = resolve_vllm_model(model)
+        return _vllm_text_query(
+            system_prompt, prompt, model_name=resolved, base_url=base_url,
+            enable_thinking=enable_thinking,
+        )
+
     # Prepare messages
     messages = [
         {"role": "system", "content": system_prompt},

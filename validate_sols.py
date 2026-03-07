@@ -23,13 +23,13 @@ import pandas as pd
 from skimage.transform import resize
 import submitit
 
-from puzzlejax.conf.config import JaxValidationConfig
+from conf.config import JaxValidationConfig
 from puzzlejax.env import PuzzleJaxEnv
 from puzzlejax.globals import (
     SOLUTION_REWARDS_PATH, GAMES_TO_N_RULES_PATH, JS_SOLS_DIR, JAX_VALIDATED_JS_SOLS_DIR, JS_TO_JAX_ACTIONS, DATA_DIR,
     LARK_SYNTAX_PATH,
 )
-from puzzlejax.preprocess_games import PJParseErrors, get_tree_from_txt
+from puzzlejax.preprocessing import PJParseErrors, get_tree_from_txt
 from puzzlejax.env_utils import multihot_to_desc
 from standalone.utils import replay_actions_js
 from standalone.utils import compile_game as compile_game_js
@@ -100,7 +100,7 @@ def format_state_for_log(state, env):
     )
 
 
-@hydra.main(version_base="1.3", config_path='puzzlejax/conf', config_name='jax_validation_config')
+@hydra.main(version_base="1.3", config_path='conf', config_name='jax_validation_config')
 def main_launch(cfg: JaxValidationConfig):
     if cfg.slurm:
         games = get_list_of_games_for_testing(all_games=cfg.all_games)

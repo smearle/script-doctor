@@ -14,8 +14,8 @@ import numpy as np
 
 from puzzlejax.globals import LARK_SYNTAX_PATH, TEST_GAMES, TREES_DIR, DATA_DIR
 from puzzlejax.env import PuzzleJaxEnv, PJParams, multihot_to_desc
-from puzzlejax.preprocess_games import get_tree_from_txt
-from puzzlejax.preprocess_games import PJParseErrors
+from puzzlejax.preprocessing import get_tree_from_txt
+from puzzlejax.preprocessing import PJParseErrors
 
 logger = logging.getLogger(__name__)
 

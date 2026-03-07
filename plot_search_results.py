@@ -15,9 +15,9 @@ from exit_training_config import (
     format_variable_run_label,
     varying_run_fields,
 )
-from puzzlejax.conf.config import PlotSearch
+from conf.config import PlotSearch
 from puzzlejax.globals import PLOTS_DIR, STANDALONE_NODEJS_RESULTS_PATH, JS_SOLS_DIR
-from profile_nodejs import get_algo_name, get_standalone_run_params_from_name
+from search_nodejs import get_algo_name, get_standalone_run_params_from_name
 from puzzlejax.utils import get_list_of_games_for_testing, game_names_remap
 
 
@@ -312,7 +312,7 @@ def _depth_order_for_results(results_by_depth: dict[int, dict]) -> list[int]:
     return preferred_depth_order + fallback_depth_order
 
 
-@hydra.main(version_base="1.3", config_path="puzzlejax/conf", config_name="plot_standalone_bfs_config")
+@hydra.main(version_base="1.3", config_path="conf", config_name="plot_standalone_bfs_config")
 def main(cfg: PlotSearch):
     if cfg.aggregate:
         aggregate_results(cfg)

@@ -85,6 +85,7 @@ class PuzzleJaxPuxleEnv(Puzzle):
         string_parser = self.get_string_parser()
         multihot_shape = template.multihot_level.shape
         rng_shape = template.rng.shape
+        view_bounds_shape = template.view_bounds.shape
 
         @state_dataclass
         class State(PuzzleState):
@@ -97,6 +98,7 @@ class PuzzleJaxPuxleEnv(Puzzle):
             restart: FieldDescriptor[jnp.bool_, (), False]
             step_i: FieldDescriptor[jnp.int32, (), 0]
             score: FieldDescriptor[jnp.int32, (), 0]
+            view_bounds: FieldDescriptor[jnp.int32, view_bounds_shape, 0]
 
             @classmethod
             def default(cls, shape: Any = ...):
@@ -111,6 +113,7 @@ class PuzzleJaxPuxleEnv(Puzzle):
                         restart=template.restart,
                         step_i=template.step_i,
                         score=template.score,
+                        view_bounds=template.view_bounds,
                     )
 
                 if isinstance(shape, int):
@@ -130,6 +133,7 @@ class PuzzleJaxPuxleEnv(Puzzle):
                     restart=jnp.broadcast_to(template.restart, batch_shape),
                     step_i=jnp.broadcast_to(template.step_i, batch_shape),
                     score=jnp.broadcast_to(template.score, batch_shape),
+                    view_bounds=jnp.broadcast_to(template.view_bounds, batch_shape + view_bounds_shape),
                 )
 
             def flatten(self):
@@ -144,6 +148,7 @@ class PuzzleJaxPuxleEnv(Puzzle):
                     restart=jnp.reshape(self.restart, flat_batch),
                     step_i=jnp.reshape(self.step_i, flat_batch),
                     score=jnp.reshape(self.score, flat_batch),
+                    view_bounds=jnp.reshape(self.view_bounds, flat_batch + view_bounds_shape),
                 )
 
             def reshape(self, shape):
@@ -161,6 +166,7 @@ class PuzzleJaxPuxleEnv(Puzzle):
                     restart=jnp.reshape(self.restart, batch_shape),
                     step_i=jnp.reshape(self.step_i, batch_shape),
                     score=jnp.reshape(self.score, batch_shape),
+                    view_bounds=jnp.reshape(self.view_bounds, batch_shape + view_bounds_shape),
                 )
 
             def __str__(self, **kwargs):
@@ -188,6 +194,7 @@ class PuzzleJaxPuxleEnv(Puzzle):
             prev_heuristic=state.prev_heuristic,
             step_i=state.step_i,
             rng=state.rng,
+            view_bounds=state.view_bounds,
         )
 
     def _pj_to_state(self, state: PJState) -> Puzzle.State:
@@ -203,6 +210,7 @@ class PuzzleJaxPuxleEnv(Puzzle):
             restart=jnp.array(False),
             step_i=jnp.array(0, dtype=jnp.int32),
             score=jnp.array(0, dtype=jnp.int32),
+            view_bounds=state.view_bounds,
         )
 
     def is_solved(self, solve_config, state: Puzzle.State):
@@ -215,7 +223,10 @@ class PuzzleJaxPuxleEnv(Puzzle):
             obj_idxs_to_force_idxs=self.obj_idxs_to_force_idxs, show_background=False, show_forces=False)
         def string_parser(state: Puzzle.State, solve_config=None, **kwargs):
             del solve_config, kwargs
-            return _multi_hot_to_desc(state.multihot_level)
+            visible_level = self.env.get_visible_multihot_level(
+                level=state.multihot_level, view_bounds=state.view_bounds
+            )
+            return _multi_hot_to_desc(visible_level)
 
         return string_parser
 

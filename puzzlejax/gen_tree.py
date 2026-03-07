@@ -21,6 +21,15 @@ class GenPSTree(Transformer):
     """
     Reduces the parse tree to a minimal functional version of the grammar.
     """
+    @staticmethod
+    def _parse_screen_dims(value: Optional[str]) -> Optional[Tuple[int, int]]:
+        if value is None:
+            return None
+        match = re.fullmatch(r"\s*(\d+)\s*[xX]\s*(\d+)\s*", value)
+        if match is None:
+            return None
+        return (int(match.group(1)), int(match.group(2)))
+
     def object_data(self, items):
         name_line = items[0]
         name = str(name_line.children[0].children[0]).lower()
@@ -160,7 +169,7 @@ class GenPSTree(Transformer):
                         continue
                     elif r.children[0].data.value == 'command_keyword':
                         command = r.children[0].children[0].value.lower()
-                        if command in ['again', 'win']:
+                        if command in ['again', 'win', 'cancel', 'restart']:
                             pass
                         elif command == 'checkpoint':
                             # ignore this for the sake of RL environments
@@ -224,7 +233,8 @@ class GenPSTree(Transformer):
     def ps_game(self, items):
         prelude_items = items[0].children
         title, author, homepage = None, None, None
-        flickscreen = False
+        flickscreen = None
+        zoomscreen = None
         verbose_logging = False
         require_player_movement = False
         run_rules_on_level_start = False
@@ -233,7 +243,7 @@ class GenPSTree(Transformer):
             keyword = pi_items[0].lower()
             value = None
             if len(pi_items) > 1:
-                value = str(pi_items[1])
+                value = " ".join(str(item) for item in pi_items[1:])
             if keyword == 'title':
                 title = value
             elif keyword == 'author':
@@ -241,7 +251,9 @@ class GenPSTree(Transformer):
             elif keyword == 'homepage':
                 homepage = value
             elif keyword == 'flickscreen':
-                flickscreen = True
+                flickscreen = self._parse_screen_dims(value)
+            elif keyword == 'zoomscreen':
+                zoomscreen = self._parse_screen_dims(value)
             elif keyword == 'verbose_logging':
                 verbose_logging = value
             elif keyword == 'require_player_movement':
@@ -255,6 +267,7 @@ class GenPSTree(Transformer):
                 author=author,
                 homepage=homepage,
                 flickscreen=flickscreen,
+                zoomscreen=zoomscreen,
                 verbose_logging=verbose_logging,
                 require_player_movement=require_player_movement,
                 run_rules_on_level_start=run_rules_on_level_start,
@@ -268,5 +281,3 @@ class GenPSTree(Transformer):
         )
 
 data_dir = 'data'
-
-

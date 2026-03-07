@@ -7,7 +7,7 @@ from matplotlib.ticker import StrMethodFormatter
 
 from conf.config import PlotRandProfileConfig
 from puzzlejax.globals import PLOTS_DIR, GAMES_TO_N_RULES_PATH, PRIORITY_GAMES
-from puzzlejax.preprocess_games import count_rules
+from puzzlejax.preprocessing import count_rules
 from profile_rand_jax import get_step_int, get_level_int, get_vmap, VMAPS
 from puzzlejax.globals import STANDALONE_NODEJS_RESULTS_PATH, JAX_PROFILING_RESULTS_DIR
 from puzzlejax.utils import init_ps_env

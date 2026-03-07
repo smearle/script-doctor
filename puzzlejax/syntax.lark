@@ -25,7 +25,7 @@ sounds_section: "SOUNDS"i NEWLINES sound_data*
 collisionlayers_section: "COLLISIONLAYERS"i NEWLINES layer_data+
 rules_section: "RULES"i NEWLINES rule_block_once? (rule_block_loop rule_block_once?)*
 winconditions_section: "WINCONDITIONS"i NEWLINES condition_data*
-levels_section: "LEVELS"i NEWLINES level_data+
+levels_section: "LEVELS"i NEWLINES level_data*
 
 STRING: /[^\n]+/
 
@@ -117,7 +117,7 @@ OBJECT_MODIFIER: DIRECTIONAL | "random"i | "randomDir"i | "horizontal"i | "verti
 
 DIRECTIONAL: /[\^v<>]/
 
-ID: /[a-z0-9.A-Z#_\/\\@!'*]/+
+ID: /[\w.#\/\\@!'*]+/
 
 // Command
 command: command_keyword

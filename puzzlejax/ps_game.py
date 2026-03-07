@@ -100,7 +100,8 @@ class Prelude:
     title: str
     author: Optional[str] = None
     homepage: Optional[str] = None
-    flickscreen: bool = False
+    flickscreen: Optional[Tuple[int, int]] = None
+    zoomscreen: Optional[Tuple[int, int]] = None
     verbose_logging: bool = False
     require_player_movement: bool = False
     run_rules_on_level_start: bool = False
@@ -136,4 +137,3 @@ class PSGameTree:
                 f"legends={self.legend}, layers={self.collision_layers}, "
                 f"rules={self.rules}, wcs={self.win_conditions}, "
                 f"levels=...)")
-

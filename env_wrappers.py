@@ -10,7 +10,7 @@ import numpy as np
 from puzzlejax.globals import LARK_SYNTAX_PATH
 from puzzlejax.env import PuzzleJaxEnv, PJParams, PJState
 from puzzlejax.env_utils import multihot_to_desc
-from puzzlejax.preprocess_games import get_tree_from_txt
+from puzzlejax.preprocessing import get_tree_from_txt
 
 
 def vec_to_obj_names(vec, idxs_to_objs):
@@ -188,7 +188,7 @@ class RepresentationWrapper(PuzzleJaxEnv):
 
     def render_ascii(self, state: PJState):
         """Render the game state as ASCII art."""
-        map_arr = state.multihot_level
+        map_arr = np.asarray(self.get_visible_multihot_level(state=state))
         ascii_map = np.full(map_arr.shape[1:], " ", dtype="<U1")
         for i in range(map_arr.shape[1]):
             for j in range(map_arr.shape[2]):
@@ -199,7 +199,7 @@ class RepresentationWrapper(PuzzleJaxEnv):
 
     def render_ascii_and_legend(self, state: PJState):
         """Render the game state as ASCII art."""
-        map_arr = state.multihot_level
+        map_arr = np.asarray(self.get_visible_multihot_level(state=state))
         ascii_map = np.full(map_arr.shape[1:], " ", dtype="<U1")
         partial_legend = {}
         partial_legend_lines = []
@@ -219,7 +219,8 @@ class RepresentationWrapper(PuzzleJaxEnv):
 
 
     def render_text(self, state: PJState):
-        return multihot_to_desc(state.multihot_level, self.objs_to_idxs, self.n_objs, obj_idxs_to_force_idxs=self.obj_idxs_to_force_idxs, show_background=False)
+        visible_level = np.asarray(self.get_visible_multihot_level(state=state))
+        return multihot_to_desc(visible_level, self.objs_to_idxs, self.n_objs, obj_idxs_to_force_idxs=self.obj_idxs_to_force_idxs, show_background=False)
 
 
 def test_log_wrapper():

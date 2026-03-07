@@ -649,6 +649,7 @@ class PJState:
     prev_heuristic: int
     step_i: int
     rng: chex.PRNGKey
+    view_bounds: chex.Array
 
 @flax.struct.dataclass
 class PJParams:
@@ -781,6 +782,8 @@ class PuzzleJaxEnv:
         self.tree = tree
         self.levels = tree.levels
         self.level_i = level_i
+        self.flickscreen = tree.prelude.flickscreen
+        self.zoomscreen = tree.prelude.zoomscreen
         self.require_player_movement = tree.prelude.require_player_movement
         if DEBUG:
             print(f"Processing legend for {self.title}")
@@ -985,17 +988,90 @@ class PuzzleJaxEnv:
             self.render = jax.jit(self.render, static_argnums=(1,))
         self.joint_tiles = joint_tiles
 
-        multihot_level = self.get_level(level_i)
-        self.observation_space = Box(low=0, high=1, shape=multihot_level.shape)
         self.action_space = Discrete(5)
 
     def has_randomness(self):
         return self._has_randomness
 
     def gen_dummy_obs(self, params):
+        obs_shape = self.observation_space(params).shape
         return PSObs(
-            multihot_level=jnp.zeros(self.observation_space.shape)[None],
+            multihot_level=jnp.zeros(obs_shape)[None],
             flat_obs=None,
+        )
+
+    def observation_space(self, params: Optional[PJParams] = None):
+        if params is None:
+            level = self.get_level(self.level_i)
+        else:
+            level = params.level
+        view_height, view_width = self._get_view_shape(level.shape[1:])
+        return Box(low=0, high=1, shape=(level.shape[0], view_height, view_width))
+
+    def _get_default_view_bounds(self, level_shape: Tuple[int, int]) -> chex.Array:
+        view_height, view_width = self._get_view_shape(level_shape)
+        return jnp.array([0, view_height, 0, view_width], dtype=jnp.int32)
+
+    def _get_view_shape(self, level_shape: Tuple[int, int]) -> Tuple[int, int]:
+        level_height, level_width = level_shape
+        screen_dims = self.flickscreen if self.flickscreen is not None else self.zoomscreen
+        if screen_dims is None:
+            return level_height, level_width
+        screen_width, screen_height = screen_dims
+        return min(screen_height, level_height), min(screen_width, level_width)
+
+    def _compute_view_bounds(self, lvl: chex.Array, prev_bounds: chex.Array) -> chex.Array:
+        if self.flickscreen is None and self.zoomscreen is None:
+            return self._get_default_view_bounds(lvl.shape[1:])
+
+        player_mask = jnp.any(lvl[self.player_idxs], axis=0)
+        player_pos = jnp.argwhere(player_mask, size=1, fill_value=-1)[0]
+        has_player = jnp.all(player_pos >= 0)
+
+        view_height, view_width = self._get_view_shape(lvl.shape[1:])
+
+        if self.flickscreen is not None:
+            screen_width, screen_height = self.flickscreen
+            row0 = (player_pos[0] // screen_height) * screen_height
+            col0 = (player_pos[1] // screen_width) * screen_width
+        else:
+            max_row0 = jnp.maximum(lvl.shape[1] - view_height, 0)
+            max_col0 = jnp.maximum(lvl.shape[2] - view_width, 0)
+            row0 = jnp.clip(player_pos[0] - view_height // 2, 0, max_row0)
+            col0 = jnp.clip(player_pos[1] - view_width // 2, 0, max_col0)
+
+        bounds = jnp.array(
+            [
+                row0,
+                jnp.minimum(row0 + view_height, lvl.shape[1]),
+                col0,
+                jnp.minimum(col0 + view_width, lvl.shape[2]),
+            ],
+            dtype=jnp.int32,
+        )
+        return jax.lax.select(has_player, bounds, prev_bounds)
+
+    def get_visible_multihot_level(
+        self,
+        state: Optional[PJState] = None,
+        level: Optional[chex.Array] = None,
+        view_bounds: Optional[chex.Array] = None,
+    ) -> chex.Array:
+        if state is not None:
+            level = state.multihot_level
+            view_bounds = state.view_bounds
+        if level is None:
+            raise ValueError("Must provide either `state` or `level`.")
+        if view_bounds is None:
+            view_bounds = self._get_default_view_bounds(level.shape[1:])
+
+        view_height, view_width = self._get_view_shape(level.shape[1:])
+        row0 = view_bounds[0]
+        col0 = view_bounds[2]
+        return jax.lax.dynamic_slice(
+            level,
+            (0, row0, col0),
+            (level.shape[0], view_height, view_width),
         )
 
     def char_level_to_multihot(self, level):
@@ -1033,7 +1109,7 @@ class PuzzleJaxEnv:
 
     # @partial(jax.jit, static_argnums=(0, 2))
     def render(self, state: PJState, cv2=True):
-        lvl = state.multihot_level
+        lvl = self.get_visible_multihot_level(state=state)
         level_height, level_width = lvl.shape[1:]
         sprite_height, sprite_width = self.sprite_stack.shape[1:3]
         im = np.zeros((level_height * sprite_height, level_width * sprite_width, 4), dtype=np.uint8)
@@ -1071,18 +1147,20 @@ class PuzzleJaxEnv:
             init_heuristic=init_heuristic,
             prev_heuristic=init_heuristic,
             rng=rng,
+            view_bounds=self._get_default_view_bounds(lvl.shape[1:]),
         )
         if self.tree.prelude.run_rules_on_level_start:
             lvl = self.apply_player_force(-1, state)
             lvl, _, _, _, _, _, rng = self.tick_fn(rng, lvl)
             lvl = lvl[:self.n_objs]
             state = state.replace(multihot_level=lvl, rng=rng)
+        state = state.replace(view_bounds=self._compute_view_bounds(state.multihot_level, state.view_bounds))
         obs = self.get_obs(state)
         return obs, state
 
     def get_obs(self, state):
         obs = PSObs(
-            multihot_level=state.multihot_level,
+            multihot_level=self.get_visible_multihot_level(state=state),
             flat_obs=None,
         )
         return obs
@@ -1230,6 +1308,7 @@ class PuzzleJaxEnv:
             init_heuristic=state.init_heuristic,
             prev_heuristic=heuristic,
             rng=rng,
+            view_bounds=self._compute_view_bounds(multihot_level, state.view_bounds),
         )
         obs = self.get_obs(state)
         if DEBUG:
@@ -4530,4 +4609,3 @@ if __name__ == "__main__":
 
     masked = mask_to_valid_sequences(binary_matrix)
     print(masked)
-

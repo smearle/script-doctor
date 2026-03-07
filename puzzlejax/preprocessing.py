@@ -1,6 +1,4 @@
-import argparse
 from enum import IntEnum
-import glob
 import json
 import logging
 import os
@@ -17,7 +15,7 @@ import lark
 from lark import Lark, Transformer, Tree, Token, Visitor
 import numpy as np
 
-from puzzlejax.conf.config import PreprocessConfig
+from conf.config import PreprocessConfig
 from puzzlejax.detect_randomness import tree_has_randomness
 from puzzlejax.env import PuzzleJaxEnv
 from puzzlejax.gen_tree import GenPSTree
@@ -575,6 +573,8 @@ def get_tree_from_txt(parser, game, log_dir: str = None, overwrite: bool = True,
             content = preprocess_ps(ps_text)
         except ValueError as e:
             print(f"Error preprocessing {filepath}: {e}")
+            # Print the full traceback
+            traceback.print_exc()
             return None, PJParseErrors.PREPROCESSING_ERROR, gen_error_str(e)
         with open(simp_filepath, "w", encoding='utf-8') as file:
             file.write(content)

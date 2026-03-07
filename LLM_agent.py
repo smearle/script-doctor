@@ -6,8 +6,10 @@ class LLMGameAgent:
     LLM agent for games: given ascii_map, mapping, rules, and action_space, returns an action id (1-5).
     """
 
-    def __init__(self, model_name: str = "gpt-4o"):
+    def __init__(self, model_name: str = "gpt-4o", enable_thinking: Optional[bool] = None):
         self.model_name = model_name
+        # For vLLM Qwen3 models: True enables thinking, False disables, None lets server decide.
+        self.enable_thinking = enable_thinking
 
     def choose_action(self, ascii_map: str, rules: str, action_space: List[int], action_meanings: Dict[int, str],
                       think_aloud: bool, memory: int, state_history: List, log_file: Optional[str] = None) -> Tuple[int, Optional[str]]:
@@ -53,6 +55,7 @@ class LLMGameAgent:
             system_prompt,
             prompt,
             model=self.model_name,
+            enable_thinking=self.enable_thinking,
         )
 
         if log_file is not None:

@@ -11,13 +11,14 @@ import hydra
 import imageio
 from javascript import require
 import jax
+import jax.numpy as jnp
 from lark import Lark
 import submitit
 
-from puzzlejax.conf.config import ProfileNodeJS
+from conf.config import ProfileNodeJS
 from puzzlejax.env import PJState
-from puzzlejax.preprocess_games import PJParseErrors, get_env_from_ps_file
-from profile_nodejs import compile_game
+from puzzlejax.preprocessing import PJParseErrors, get_env_from_ps_file
+from search_nodejs import compile_game
 from puzzlejax.utils import get_list_of_games_for_testing, init_ps_lark_parser, level_to_int_arr
 from validate_sols import JS_SOLS_DIR, multihot_level_from_js_state
 
@@ -25,7 +26,7 @@ from validate_sols import JS_SOLS_DIR, multihot_level_from_js_state
 dotenv.load_dotenv()
 
 
-@hydra.main(version_base="1.3", config_path='puzzlejax/conf', config_name='profile_nodejs_config')
+@hydra.main(version_base="1.3", config_path='conf', config_name='profile_nodejs_config')
 def main_launch(cfg: ProfileNodeJS):
     if cfg.slurm:
         games = get_list_of_games_for_testing(all_games=cfg.all_games, random_order=cfg.random_order)
@@ -73,6 +74,7 @@ def main(cfg: ProfileNodeJS, games: Optional[List[str]] = None):
         multihot_level=None,
         win=False, score=0, heuristic=0, restart=False, init_heuristic=0, prev_heuristic=0,
         step_i=0, rng=jax.random.PRNGKey(0),
+        view_bounds=jnp.zeros((4,), dtype=jnp.int32),
     )
     for game_dir in game_sols_dirs:
         game_name = game_dir.split(os.path.sep)[-1]
@@ -81,6 +83,8 @@ def main(cfg: ProfileNodeJS, games: Optional[List[str]] = None):
         env = None
         for level_sol_json in level_sol_jsons:
             level_i = level_sol_json.split(os.path.sep)[-1].split(".")[0].split('-')[-1]
+            if cfg.level is not None and int(level_i) != cfg.level:
+                continue
             if '-steps' in level_sol_json:
                 n_steps = level_sol_json.split(os.path.sep)[-1].split(".")[0].split('-steps')[0]
             else:
@@ -129,7 +133,11 @@ def main(cfg: ProfileNodeJS, games: Optional[List[str]] = None):
                 data['objs'],
                 target_obj_names=env.atomic_obj_names,
             )
-            state = state.replace(multihot_level=multihot_level)
+            view_bounds = env._compute_view_bounds(
+                multihot_level,
+                env._get_default_view_bounds(multihot_level.shape[1:]),
+            )
+            state = state.replace(multihot_level=multihot_level, view_bounds=view_bounds)
             frames.append(env.render(state, cv2=False))
             for action in actions:
                 _, _, _, _, _, level_state, _, _ = solver.takeAction(engine, action)
@@ -139,7 +147,8 @@ def main(cfg: ProfileNodeJS, games: Optional[List[str]] = None):
                     data['objs'],
                     target_obj_names=env.atomic_obj_names,
                 )
-                state = state.replace(multihot_level=multihot_level)
+                view_bounds = env._compute_view_bounds(multihot_level, state.view_bounds)
+                state = state.replace(multihot_level=multihot_level, view_bounds=view_bounds)
                 frames.append(env.render(state, cv2=False))
 
             if len(frames) == 0:

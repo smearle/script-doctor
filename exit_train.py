@@ -216,8 +216,7 @@ class PuzzleScriptNeuralHeuristic(NeuralHeuristicBase):
 
     def __init__(self, puzzle: PuzzleJaxPuxleEnv, path: str = None, **kwargs):
         # Compute input dimension from the multihot shape
-        dummy_state = puzzle.State.default()
-        self.multihot_shape = dummy_state.multihot_level.shape
+        self.multihot_shape = puzzle.env.observation_space(puzzle.params).shape
         self.input_dim = int(np.prod(self.multihot_shape))
 
         # Use smaller defaults suitable for PuzzleScript (much smaller than Rubik's cube)
@@ -230,7 +229,11 @@ class PuzzleScriptNeuralHeuristic(NeuralHeuristicBase):
 
     def pre_process(self, solve_config, current) -> jnp.ndarray:
         """Flatten multihot board to a float vector in [-1, 1]."""
-        board = current.multihot_level.astype(jnp.float32)
+        del solve_config
+        board = self.puzzle.env.get_visible_multihot_level(
+            level=current.multihot_level,
+            view_bounds=current.view_bounds,
+        ).astype(jnp.float32)
         flat = jnp.reshape(board, (-1,))
         return ((flat - 0.5) * 2.0).astype(DTYPE)
 
