@@ -1899,8 +1899,8 @@ class PuzzleJaxEnv:
                     obj_idx = self.objs_to_idxs[obj]
                 else:
                     obj_idx = disambiguate_meta(obj, detected_meta_objs, kernel_meta_objs, pattern_meta_objs, self.objs_to_idxs)
-            if DEBUG:
-                jax.debug.print('        projecting obj {obj}, disambiguated index: {obj_idx}', obj=obj, obj_idx=obj_idx)
+                if DEBUG:
+                    jax.debug.print('        projecting obj {obj}, disambiguated index: {obj_idx}', obj=obj, obj_idx=obj_idx)
             if not self.jit:
                 if obj_idx == -1:
                     raise RuntimeError(f'Object `{obj}` not found in cell {cell_i}.')
@@ -3388,7 +3388,8 @@ class PuzzleJaxEnv:
             # Either the rule has no right pattern, or it should detect as many cells as there are cell projection functions
             if not (not has_right_pattern or (len(cell_detect_outs) == len(out_cell_idxs) == len(cell_projection_fns))):
                 raise RuntimeError(f"Warning: rule {rule_name} with has_right_pattern {has_right_pattern} results in len(cell_detect_outs) {len(cell_detect_outs)} != len(out_cell_idxs) {len(out_cell_idxs)} != len(cell_projection_fns) {len(cell_projection_fns)}")
-            init_lvl = lvl
+            if DEBUG:
+                init_lvl = lvl
 
             #TODO: vmap this. But then we risk overlapping? But we do here, too.
             for i, (out_cell_idx, cell_proj_fn) in enumerate(zip(out_cell_idxs, cell_projection_fns)):
@@ -3411,8 +3412,8 @@ class PuzzleJaxEnv:
             
             # lvl, _ = jax.lax.scan(apply_cell_proj_fn, lvl, jnp.arange(len(out_cell_idxs)))
 
-            lvl_changed = jnp.any(lvl != init_lvl)
             if DEBUG:
+                lvl_changed = jnp.any(lvl != init_lvl)
                 jax.debug.print('      at position {xy}, the level changed: {lvl_changed}', xy=xy, lvl_changed=lvl_changed)
             # if not jit:
             #     print('\n' + multihot_to_desc(lvl[0], obj_to_idxs=obj_to_idxs, n_objs=n_objs))
@@ -3485,7 +3486,7 @@ class PuzzleJaxEnv:
 
         def attempt_move(carry):
             # NOTE: This depends on movement forces preceding any other forces (per object) in the channel dimension.
-            lvl, _, _, i = carry
+            lvl, prev_can_move, _, i = carry
             y, x, c = coords[i]
             # Get the obj idx on which the force is applied.
             # First get the collision layer idx.
@@ -3534,7 +3535,7 @@ class PuzzleJaxEnv:
             #     jax.debug.print('      at position {xy}, the object {obj} moved to {new_xy}', xy=(x, y), obj=obj_idx, new_xy=(x_1, y_1))
             #     jax.debug.print('      would collide: {would_collide}, out of bounds: {out_of_bounds}, can_move: {can_move}',
             #                     would_collide=would_collide, out_of_bounds=out_of_bounds, can_move=can_move)
-            return lvl, can_move, rng, i
+            return lvl, prev_can_move | can_move, rng, i
 
         init_carry = (lvl, 0)
 
@@ -3611,9 +3612,7 @@ class PuzzleJaxEnv:
         rule_state = rule_fn(rng, lvl)
         ### COMPILE VS RUNTIME ###
 
-        # FIXME: Should just be able to use rule_state.applied
-        # rule_had_effect = rule_state.applied
-        rule_had_effect = jnp.any(rule_state.lvl != lvl)
+        rule_had_effect = rule_state.applied
 
         # HACK (?): Random rules do not count as having had effect (otherwise we'll end up in an infinite loop)
         applied = rule_had_effect & jnp.all(rng == rule_state.rng)
@@ -3751,7 +3750,7 @@ class PuzzleJaxEnv:
 
             return RuleGroupState(
                 lvl=rule_state.lvl,
-                applied=jnp.any(rule_state.lvl != init_lvl),
+                applied=rule_state.applied,
                 cancelled=rule_group_state.cancelled | rule_state.cancelled,
                 restart=rule_group_state.restart | rule_state.restart,
                 again=rule_group_state.again | rule_state.again,
@@ -3783,7 +3782,6 @@ class PuzzleJaxEnv:
             )
 
         block_i, grp_i = loop_group_state.block_i, loop_group_state.grp_i
-        init_lvl = loop_group_state.lvl
 
         ### COMPILE VS RUNTIME ###
         # n_rules_in_grp = n_rules_per_grp_arr[block_i, grp_i]
@@ -3805,8 +3803,11 @@ class PuzzleJaxEnv:
         if is_random:
             rule_group_state = self.apply_random_rule_grp(rule_group_state, rule_grp)
         else:
+            any_rule_applied = False
             for rule_fn in rule_grp:
                 rule_group_state = _loop_rule_fn(rule_group_state, rule_fn)
+                any_rule_applied = any_rule_applied | rule_group_state.applied
+            rule_group_state = rule_group_state.replace(applied=any_rule_applied)
 
         again = loop_group_state.again | rule_group_state.again
         win = loop_group_state.win | rule_group_state.win
@@ -3824,10 +3825,7 @@ class PuzzleJaxEnv:
 
         loop_group_state = LoopRuleGroupState(
             lvl=lvl,
-            # applied=rule_group_state.applied,
-            # FIXME: Shouldn't have to do this...
-            # (if we don't `test_electrician` breaks, for example)
-            applied=np.any(lvl != init_lvl),
+            applied=rule_group_state.applied,
             cancelled=rule_group_state.cancelled,
             restart=rule_group_state.restart,
             again=again,
