@@ -52,8 +52,8 @@ def main_launch(cfg: ProfileNodeJS):
 
 def main(cfg: ProfileNodeJS, games: Optional[List[str]] = None):
     parser = init_ps_lark_parser()
-    engine = require('./standalone/puzzlescript/engine.js')
-    solver = require('./standalone/puzzlescript/solver.js')
+    engine = require('./puzzlescript_nodejs/puzzlescript/engine.js')
+    solver = require('./puzzlescript_nodejs/puzzlescript/solver.js')
     if cfg.slurm:
         os.environ["CUDA_VISIBLE_DEVICES"] = ""
         os.environ["JAX_PLATFORMS"] = "cpu"

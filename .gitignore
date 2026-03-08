@@ -9,6 +9,8 @@ logs*
 plots/
 multirun
 submitit_logs
+node.def
+package-lock.json
 
 script-doctor-nodejs
 

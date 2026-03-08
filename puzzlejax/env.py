@@ -1231,7 +1231,9 @@ class PuzzleJaxEnv:
             return force_map
 
         # apply movement (<4) and/or action (if not noaction)
-        should_apply_force = (action != -1) & (action < 4) | (not self.tree.prelude.noaction)
+        should_apply_force = (action != -1) & (
+            (action < 4) | (not self.tree.prelude.noaction)
+        )
 
         if self.jit:
             force_map = jax.lax.cond(

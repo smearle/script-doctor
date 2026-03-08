@@ -144,9 +144,11 @@ def collect_eval_stats(root: Path) -> pd.DataFrame:
         return pd.DataFrame(columns=['config_label', 'game', 'avg_win_rate', 'n_eval_files', 'total_eval_episodes', 'n_levels'])
 
     varying_fields = _varying_config_fields([run_info['config'] for run_info in run_infos])
+    expected_levels_by_game = {}
     grouped_stats = {}
 
     for run_info in run_infos:
+        expected_levels_by_game.setdefault(run_info['game'], set()).add(run_info['level'])
         stats = _load_eval_stats(run_info['eval_path'])
         if stats is None:
             continue
@@ -157,34 +159,51 @@ def collect_eval_stats(root: Path) -> pd.DataFrame:
             grouped_stats[key] = {
                 'config_label': config_label,
                 'game': run_info['game'],
-                'total_wins': 0.0,
-                'total_eps': 0,
-                'mean_win_samples': [],
+                'level_win_rates': {},
                 'n_eval_files': 0,
-                'levels': set(),
+                'total_eval_episodes': 0,
             }
 
         grouped = grouped_stats[key]
         grouped['n_eval_files'] += 1
-        grouped['levels'].add(run_info['level'])
+        if stats['n_eps'] is not None:
+            grouped['total_eval_episodes'] += stats['n_eps']
 
-        if stats['n_wins'] is not None and stats['n_eps'] is not None:
-            grouped['total_wins'] += stats['n_wins']
-            grouped['total_eps'] += stats['n_eps']
+        level_win_rate = None
+        if stats['n_wins'] is not None and stats['n_eps'] is not None and stats['n_eps'] > 0:
+            level_win_rate = stats['n_wins'] / stats['n_eps']
+        elif stats['mean_wins'] is not None:
+            level_win_rate = stats['mean_wins']
 
-        if stats['mean_wins'] is not None:
-            grouped['mean_win_samples'].append(stats['mean_wins'])
+        if level_win_rate is None:
+            continue
+
+        grouped['level_win_rates'].setdefault(run_info['level'], []).append(level_win_rate)
 
     rows = []
     for grouped in grouped_stats.values():
-        if grouped['total_eps'] == 0 and not grouped['mean_win_samples']:
+        expected_levels = expected_levels_by_game.get(grouped['game'], set())
+        if not expected_levels:
             continue
 
-        avg_win_rate = (
-            grouped['total_wins'] / grouped['total_eps']
-            if grouped['total_eps'] > 0
-            else float(np.mean(grouped['mean_win_samples']))
-        )
+        observed_levels = set(grouped['level_win_rates'])
+        missing_levels = sorted(expected_levels - observed_levels)
+        if missing_levels:
+            missing_levels_str = ', '.join(str(level) for level in missing_levels)
+            print(
+                f"Warning: missing RL eval results for config '{grouped['config_label']}', "
+                f"game '{grouped['game']}' on levels {missing_levels_str}. Treating them as 0 win-rate."
+            )
+
+        per_level_win_rates = []
+        for level in sorted(expected_levels):
+            level_samples = grouped['level_win_rates'].get(level)
+            if level_samples:
+                per_level_win_rates.append(float(np.mean(level_samples)))
+            else:
+                per_level_win_rates.append(0.0)
+
+        avg_win_rate = float(np.mean(per_level_win_rates))
 
         rows.append(
             {
@@ -192,8 +211,8 @@ def collect_eval_stats(root: Path) -> pd.DataFrame:
                 'game': grouped['game'],
                 'avg_win_rate': avg_win_rate,
                 'n_eval_files': grouped['n_eval_files'],
-                'total_eval_episodes': grouped['total_eps'],
-                'n_levels': len(grouped['levels']),
+                'total_eval_episodes': grouped['total_eval_episodes'],
+                'n_levels': len(expected_levels),
             }
         )
 

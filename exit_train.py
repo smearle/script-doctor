@@ -414,10 +414,22 @@ def extract_training_data(
     h_targets = np.asarray(h_targets_all[finite_indices], dtype=np.float32)
     weights = np.asarray(weights_all[finite_indices], dtype=np.float32)
 
-    # 7. Extract state representations (vectorized fast path + safe fallback)
-    # try:
+    # 7. Extract state representations using the same visible observation that
+    # the heuristic sees during search. This keeps training inputs aligned with
+    # observation_space() for flickscreen/zoomscreen games.
     all_multihot = jnp.asarray(search_result.hashtable.table.multihot_level)
-    multihot_levels = np.asarray(all_multihot[finite_indices])
+    all_view_bounds = getattr(search_result.hashtable.table, "view_bounds", None)
+    if all_view_bounds is not None:
+        all_view_bounds = jnp.asarray(all_view_bounds)
+        visible_multihot = jax.vmap(
+            lambda level, view_bounds: puzzle.env.get_visible_multihot_level(
+                level=level,
+                view_bounds=view_bounds,
+            )
+        )(all_multihot[finite_indices], all_view_bounds[finite_indices])
+        multihot_levels = np.asarray(visible_multihot)
+    else:
+        multihot_levels = np.asarray(all_multihot[finite_indices])
     # except Exception:
     #     from xtructure import HashIdx
 
@@ -444,8 +456,9 @@ def extract_training_data(
 class ReplayBuffer:
     """Simple replay buffer that stores (state, target, weight) tuples."""
 
-    def __init__(self, max_size: int = 200000):
+    def __init__(self, max_size: int = 200000, expected_multihot_shape: Optional[tuple[int, ...]] = None):
         self.max_size = max_size
+        self.expected_multihot_shape = expected_multihot_shape
         self.multihot_levels = None
         self.targets = None
         self.weights = None
@@ -455,6 +468,11 @@ class ReplayBuffer:
     def _ensure_storage(self, ml, tgt, w):
         if self.multihot_levels is not None:
             return
+        if self.expected_multihot_shape is not None and tuple(ml.shape[1:]) != tuple(self.expected_multihot_shape):
+            raise ValueError(
+                f"Replay buffer sample shape {tuple(ml.shape[1:])} does not match expected "
+                f"{tuple(self.expected_multihot_shape)}."
+            )
         self.multihot_levels = np.empty((self.max_size, *ml.shape[1:]), dtype=ml.dtype)
         self.targets = np.empty((self.max_size,), dtype=tgt.dtype)
         self.weights = np.empty((self.max_size,), dtype=w.dtype)
@@ -529,6 +547,12 @@ class ReplayBuffer:
             tgt = data.get("targets", None)
             w = data.get("weights", None)
             if ml is None or tgt is None or w is None:
+                return False
+            if self.expected_multihot_shape is not None and tuple(ml.shape[1:]) != tuple(self.expected_multihot_shape):
+                print(
+                    "  Replay buffer shape mismatch; ignoring saved buffer "
+                    f"{tuple(ml.shape[1:])} != expected {tuple(self.expected_multihot_shape)}"
+                )
                 return False
 
             saved_size = int(data.get("size", ml.shape[0]))
@@ -709,7 +733,10 @@ def run_exit_training(
     )
 
     # ---- Replay buffer ----
-    replay = ReplayBuffer(max_size=replay_max_size)
+    replay = ReplayBuffer(
+        max_size=replay_max_size,
+        expected_multihot_shape=neural_heuristic.multihot_shape,
+    )
     replay_path = os.path.join(save_dir, "replay_buffer.pkl")
     if resume:
         replay.load(replay_path)

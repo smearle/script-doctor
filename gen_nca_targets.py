@@ -21,8 +21,8 @@ from validate_sols import JS_SOLS_DIR, multihot_level_from_js_state, JAX_VALIDAT
 @hydra.main(version_base="1.3", config_path='./conf', config_name='search_nodejs_config')
 def main(cfg: ProfileNodeJS):
     parser = init_ps_lark_parser()
-    engine = require('./standalone/puzzlescript/engine.js')
-    solver = require('./standalone/puzzlescript/solver.js')
+    engine = require('./puzzlescript_nodejs/puzzlescript/engine.js')
+    solver = require('./puzzlescript_nodejs/puzzlescript/solver.js')
     if cfg.game is None:
         if cfg.all_games:
             game_sols_dirs = glob.glob(f"{JS_SOLS_DIR}/*")

@@ -54,6 +54,7 @@ class ProfileNodeJS(PSConfig):
     # algo: str = "random"  # 'bfs', 'random'
     algo: str = "bfs"  # 'bfs', 'astar', 'gbfs', 'mcts', 'random'
     game: Optional[str] = None
+    level: Optional[int] = None
     # all_games: bool = False
     all_games: bool = True
     random_order: bool = False
@@ -66,6 +67,7 @@ class ProfileNodeJS(PSConfig):
     for_profiling: bool = False  # To compare FPS of the vanilla engine with our JAX reimplementation
     for_validation: bool = False  # To validate that our JAX reimplementation matches the vanilla engine
     for_solution: bool = True  # To find solutions for their own sake
+    render: bool = False
     slurm: bool = False
     n_games_per_job: int = 1
 

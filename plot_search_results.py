@@ -282,20 +282,22 @@ def _collect_results_for_algo(games: list[str], solver_name: str) -> dict[int, d
                 expected_levels_summary = _format_level_ranges(list(expected_levels))
                 print(
                     f"Warning: missing search results for algorithm '{solver_name}', game '{game}', depth {depth_label} "
-                    f"on levels {missing_levels_summary} (expected levels: {expected_levels_summary})."
+                    f"on levels {missing_levels_summary} (expected levels: {expected_levels_summary}). "
+                    f"Treating them as 0 solve-rate."
                 )
 
         for depth, stats in per_depth_stats.items():
-            if stats['n_levels'] == 0:
+            expected_count = len(expected_levels)
+            if expected_count == 0:
                 continue
             n_steps_mean = np.mean(stats['n_stepss'])
-            pct_solved = stats['n_solved'] / stats['n_levels']
+            pct_solved = stats['n_solved'] / expected_count
             mean_solution_length = float(np.mean(stats['solution_lengths'])) if stats['solution_lengths'] else float('nan')
             if depth not in results_by_depth:
                 results_by_depth[depth] = {}
             results_by_depth[depth][game] = {
                 'pct_solved': pct_solved,
-                'n_levels': stats['n_levels'],
+                'n_levels': expected_count,
                 'n_iters': n_steps_mean,
                 'mean_sol_len': mean_solution_length
             }

@@ -19,7 +19,7 @@ import submitit
 
 from conf.config import ProfileNodeJS
 from puzzlejax.globals import STANDALONE_NODEJS_RESULTS_PATH, JS_SOLS_DIR
-from standalone.utils import compile_game
+from puzzlescript_nodejs.utils import compile_game
 from puzzlejax.utils import get_list_of_games_for_testing, level_to_int_arr, init_ps_lark_parser
 
 
@@ -52,7 +52,6 @@ def get_standalone_run_params_from_name(run_name: str):
     return algo_name, n_steps, device_name
 
 
-# @hydra.main(version_base="1.3", config_path='./', config_name='profile_standalone')
 @hydra.main(version_base="1.3", config_path='./', config_name='profile_nodejs_config')
 def main_launch(cfg: ProfileNodeJS):
     if cfg.slurm:
@@ -82,8 +81,8 @@ def main(cfg: ProfileNodeJS, games: Optional[List[str]] = None):
         cfg.n_steps = 5_000
         cfg.algo = 'random'
 
-    engine = require('./standalone/puzzlescript/engine.js')
-    solver = require('./standalone/puzzlescript/solver.js')
+    engine = require('./puzzlescript_nodejs/puzzlescript/engine.js')
+    solver = require('./puzzlescript_nodejs/puzzlescript/solver.js')
     timeout_ms = cfg.timeout * 1_000 if cfg.timeout > 0 else -1
     parser = init_ps_lark_parser()
     print(f'Timeout: {timeout_ms} ms')
@@ -225,6 +224,11 @@ def main(cfg: ProfileNodeJS, games: Optional[List[str]] = None):
         if not cfg.for_validation or cfg.for_solution:
             with open(STANDALONE_NODEJS_RESULTS_PATH, 'w') as f:
                 json.dump(results, f, indent=4)
+
+    if cfg.render:
+        import render_js_sols
+        print("Rendering solution GIFs.")
+        render_js_sols.main(cfg, games_to_test)
 
 
 if __name__ == "__main__":

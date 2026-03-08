@@ -32,8 +32,8 @@ from puzzlejax.globals import (
 )
 from puzzlejax.preprocessing import PJParseErrors, get_tree_from_txt
 from puzzlejax.env_utils import multihot_to_desc
-from standalone.utils import replay_actions_js
-from standalone.utils import compile_game as compile_game_js
+from puzzlescript_nodejs.utils import replay_actions_js
+from puzzlescript_nodejs.utils import compile_game as compile_game_js
 from puzzlejax.utils import get_list_of_games_for_testing, to_binary_vectors
 from utils_rl import get_env_params_from_config
 
@@ -135,8 +135,8 @@ def main_launch(cfg: JaxValidationConfig):
 
 
 def main(cfg: JaxValidationConfig, games: Optional[List[str]] = None):
-    engine = require('./standalone/puzzlescript/engine.js')
-    solver = require('./standalone/puzzlescript/solver.js')
+    engine = require('./puzzlescript_nodejs/puzzlescript/engine.js')
+    solver = require('./puzzlescript_nodejs/puzzlescript/solver.js')
     if cfg.slurm:
         os.environ["CUDA_VISIBLE_DEVICES"] = ""
         os.environ["JAX_PLATFORMS"] = "cpu"
