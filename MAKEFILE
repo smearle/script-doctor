@@ -1,0 +1,28 @@
+.PHONY: llm-agent vllm-server
+
+VLLM_MODEL ?= Qwen/Qwen3-8B
+VLLM_SERVED_MODEL_NAME ?= $(VLLM_MODEL)
+VLLM_HOST ?= 0.0.0.0
+VLLM_PORT ?= 8000
+VLLM_TENSOR_PARALLEL_SIZE ?= 1
+VLLM_GPU_MEMORY_UTILIZATION ?= 0.95
+VLLM_MAX_MODEL_LEN ?= 32768
+VLLM_MAX_CUDAGRAPH_CAPTURE_SIZE ?= 0
+VLLM_ENFORCE_EAGER ?= 1
+
+llm-agent:
+	python llm_agent_loop.py \
+		--model vllm-qwen3 \
+		--num_runs 1
+
+vllm-server:
+	python -m vllm.entrypoints.openai.api_server \
+		--model "$(VLLM_MODEL)" \
+		--served-model-name "$(VLLM_SERVED_MODEL_NAME)" \
+		--host "$(VLLM_HOST)" \
+		--port "$(VLLM_PORT)" \
+		--tensor-parallel-size "$(VLLM_TENSOR_PARALLEL_SIZE)" \
+		--gpu-memory-utilization "$(VLLM_GPU_MEMORY_UTILIZATION)" \
+		--max-model-len "$(VLLM_MAX_MODEL_LEN)" \
+		--max-cudagraph-capture-size "$(VLLM_MAX_CUDAGRAPH_CAPTURE_SIZE)" \
+		$(if $(filter 1 true yes,$(VLLM_ENFORCE_EAGER)),--enforce-eager,)

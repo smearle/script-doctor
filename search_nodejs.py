@@ -1,46 +1,22 @@
-import copy
 import math
 import os
 import json
-import multiprocessing as mp
-import random
 import re
 import shutil
-from timeit import default_timer as timer
 import traceback
 from typing import List, Optional
 
 import cpuinfo
 import hydra
-from javascript import require
-from javascript.proxy import Proxy
 import numpy as np
 import submitit
 
 from conf.config import ProfileNodeJS
+from puzzlejax.backends import NodeJSPuzzleScriptBackend
 from puzzlejax.globals import STANDALONE_NODEJS_RESULTS_PATH, JS_SOLS_DIR
-from puzzlescript_nodejs.utils import compile_game
-from puzzlejax.utils import get_list_of_games_for_testing, level_to_int_arr, init_ps_lark_parser
+from puzzlejax.utils import get_list_of_games_for_testing, init_ps_lark_parser
 
 
-actions = ["LEFT", "RIGHT", "UP", "DOWN", "ACTION"]
-
-
-def get_algo_name(algo):
-    return str(algo).split(' ')[1].strip(']')
-
-
-def rand_rollout_from_python(engine, solver, game_text, level_i, n_steps, timeout):
-    start_time = timer()
-    for i in range(n_steps):
-        if timeout > 0 and (i % 1_000 == 0) and (timer() - start_time > timeout):
-            fps = i / (timer() - start_time)
-            return False, [], i, fps, score, state, False, []
-        action = random.randint(0, 5)
-        _, _, _, _, score, state, _, objects = solver.takeAction(engine, action)
-    return False, [], i, timer() - start_time, score, state, False, list(objects)
-
-    
 def get_standalone_run_name(cfg: ProfileNodeJS, algo_name, cpu_name):
     return f'algo-{algo_name}_{cfg.n_steps}-steps_{cpu_name}'
 
@@ -81,23 +57,21 @@ def main(cfg: ProfileNodeJS, games: Optional[List[str]] = None):
         cfg.n_steps = 5_000
         cfg.algo = 'random'
 
-    engine = require('./puzzlescript_nodejs/puzzlescript/engine.js')
-    solver = require('./puzzlescript_nodejs/puzzlescript/solver.js')
+    backend = NodeJSPuzzleScriptBackend()
     timeout_ms = cfg.timeout * 1_000 if cfg.timeout > 0 else -1
     parser = init_ps_lark_parser()
     print(f'Timeout: {timeout_ms} ms')
 
     if cfg.algo == 'bfs':
-        algos = [solver.solveBFS]
-        # algos = [solver.solveBFS, solver.solveAStar, solver.solveMCTS]:
+        algos = ['bfs']
     elif cfg.algo == 'astar':
-        algos = [solver.solveAStar]
+        algos = ['astar']
     elif cfg.algo == 'gbfs':
-        algos = [solver.solveGBFS]
+        algos = ['gbfs']
     elif cfg.algo == 'mcts':
-        algos = [solver.solveMCTS]
+        algos = ['mcts']
     elif cfg.algo == 'random':
-        algos = [solver.randomRollout, rand_rollout_from_python]
+        algos = ['random', 'python_random']
     else:
         raise ValueError(f"Invalid search algorithm: {cfg.algo}")
     cpu_name = cpuinfo.get_cpu_info()['brand_raw']
@@ -109,7 +83,7 @@ def main(cfg: ProfileNodeJS, games: Optional[List[str]] = None):
             all_games=cfg.all_games, include_random=cfg.include_randomness, random_order=cfg.random_order)
     else:
         games_to_test = [cfg.game]
-    results = {get_algo_name(algo): {} for algo in algos}
+    results = {algo: {} for algo in algos}
     if os.path.isfile(STANDALONE_NODEJS_RESULTS_PATH) and not cfg.overwrite and not cfg.for_validation \
             and not cfg.for_solution:
         shutil.copyfile(STANDALONE_NODEJS_RESULTS_PATH, STANDALONE_NODEJS_RESULTS_PATH[:-5] + '_bkp.json')
@@ -123,16 +97,15 @@ def main(cfg: ProfileNodeJS, games: Optional[List[str]] = None):
         print(f'\nGame: {game}')
         # TODO: How to get the available number of levels from nodejs?
         for algo in algos:
-            algo_name = get_algo_name(algo)
-            run_name = get_standalone_run_name(cfg, algo_name, cpu_name)
-            print(f'Algorithm: {algo_name}')
+            run_name = get_standalone_run_name(cfg, algo, cpu_name)
+            print(f'Algorithm: {algo}')
             if run_name not in results:
                 results[run_name] = {}
             if game not in results[run_name]:
                 results[run_name][game] = {}
             try:
-                engine.unloadGame()
-                game_text = compile_game(parser, engine, game, 0)
+                backend.unload_game()
+                game_text = backend.compile_game(parser, game)
             except Exception as e:
                 print(f'Error compiling game {game} level {0}: {e}')
                 results[run_name][game] = {"Error": traceback.print_exc()}
@@ -141,13 +114,12 @@ def main(cfg: ProfileNodeJS, games: Optional[List[str]] = None):
             if cfg.for_profiling:
                 n_levels = 1
             else:
-                n_levels = engine.getNumLevels()
+                n_levels = backend.get_num_levels()
             game_js_sols_dir = os.path.join(JS_SOLS_DIR, game)
             os.makedirs(game_js_sols_dir, exist_ok=True)
 
             for level_i in range(n_levels):
-                # algo_prefix = f'{algo_name}_' if cfg.algo != 'bfs' else ''
-                algo_prefix = f'{algo_name}_'
+                algo_prefix = f'{algo}_'
                 level_js_sol_path = os.path.join(
                     game_js_sols_dir, f'{algo_prefix}{cfg.n_steps}-steps_level-{level_i}.json')
                 print(f'Level: {level_i}')
@@ -157,38 +129,14 @@ def main(cfg: ProfileNodeJS, games: Optional[List[str]] = None):
                 if not cfg.for_validation and not cfg.for_solution and not cfg.overwrite and str(level_i) in results[run_name][game]:
                     print(f'Already solved (for profiling) {game} level {level_i} with {run_name}, skipping.')
                     continue
-                engine.compile(['loadLevel', level_i], game_text)
-                if algo == rand_rollout_from_python:
-                    result = rand_rollout_from_python(engine, solver, game_text, level_i, timeout=timeout_ms, n_steps=cfg.n_steps)
-                else:
-                    # Make the javascript timeout longer so that we can timeout from inside JS and return stats properly
-                    def call_algo():
-                        result = algo(engine,
-                                    cfg.n_steps, timeout_ms,
-                                    timeout=timeout_ms*1.5 if timeout_ms > 0 else None,)
-                        return result
-                    # If profiling, let the nodejs engine warm up (the same way we do for JAX). Maybe we should tweak
-                    # the number of warmup loops? I don't think warming up really applies for the python-nodejs bridge,
-                    # so we don't do it in that case above.
-                    if cfg.for_profiling:
-                        for _ in range(3):
-                            result = call_algo()
-                    else:
-                        result = call_algo()
-
-                n_objs = len(list(result[7]))
-                end_level_state = level_to_int_arr(result[5], n_objs).tolist()
-                result = {
-                    'solved': result[0],
-                    'actions': tuple(result[1]),
-                    'iterations': result[2],
-                    'time': result[3],
-                    'FPS': result[2] / (result[3] if result[3] > 0 else 1e4),
-                    'score': result[4],
-                    'state': end_level_state,
-                    'timeout': result[6],
-                    'objs': list(result[7]),
-                }
+                result = backend.run_search(
+                    algo,
+                    game_text=game_text,
+                    level_i=level_i,
+                    n_steps=cfg.n_steps,
+                    timeout_ms=timeout_ms,
+                    warmup=cfg.for_profiling and algo != 'python_random',
+                ).to_dict()
 
                 if os.path.isfile(level_js_sol_path):
                     with open(level_js_sol_path, 'r') as f:

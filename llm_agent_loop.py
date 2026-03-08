@@ -7,10 +7,12 @@ import fcntl
 import multiprocessing
 from concurrent.futures import ThreadPoolExecutor, wait, FIRST_COMPLETED
 import jax
+import jax.numpy as jnp
 from lark import Lark
 from env_wrappers import RepresentationWrapper
 from puzzlejax.env import PJParams
 from puzzlejax.preprocessing import LARK_SYNTAX_PATH, get_tree_from_txt
+from puzzlejax.utils import save_gif_from_states
 from LLM_agent import LLMGameAgent
 from puzzlejax.globals import PRIORITY_GAMES
 
@@ -541,6 +543,7 @@ def process_game_level(agent, game_info, level_index, run_id, save_dir, model,
         
         obs, state = env.reset(rng=rng, params=env_params)
         ascii_state = env.render_ascii_and_legend(state)
+        state_sequence = [state]
         
         action_space = [0, 1, 2, 3, 4]
         action_meanings = {0: "left", 1: "down", 2: "right", 3: "up", 4: "action"}
@@ -621,6 +624,7 @@ def process_game_level(agent, game_info, level_index, run_id, save_dir, model,
                         replayed_steps += 1
                         current_state = next_state
                         ascii_state = next_ascii
+                        state_sequence.append(next_state)
 
                         if next_state.win:
                             result["win"] = True
@@ -676,6 +680,7 @@ def process_game_level(agent, game_info, level_index, run_id, save_dir, model,
                 result["initial_ascii"] = ascii_state.split('\n')
             
             result["heuristic_sequence"].append(float(next_state.heuristic.item()))
+            state_sequence.append(next_state)
             
             result["state_data"] = {
                 "score": int(next_state.score),
@@ -698,6 +703,16 @@ def process_game_level(agent, game_info, level_index, run_id, save_dir, model,
         if "heuristic_sequence" in result:
             del result["heuristic_sequence"]
         result["final_ascii"] = ascii_state.split('\n')
+
+        if getattr(process_game_level, "_render_default", True):
+            try:
+                gif_base_path = current_run_filepath[:-5]
+                stacked_states = jax.tree.map(lambda *xs: jnp.stack(xs), *state_sequence)
+                save_gif_from_states(env, stacked_states, gif_base_path)
+                result["render_gif"] = f"{gif_base_path}.gif"
+                print(f"Episode GIF saved to {gif_base_path}.gif")
+            except Exception as e:
+                print(f"Warning: failed to render episode GIF for {current_run_filepath}: {type(e).__name__}: {e}")
         
         # Persist final results for this claimed run.
         with open(current_run_filepath, "w", encoding="utf-8") as f:
@@ -759,7 +774,10 @@ def main():
                         help='Base URL for vLLM server (default: uses VLLM_BASE_URL env or http://localhost:8000/v1)')
     parser.add_argument('--enable_thinking', action='store_true', default=False,
                         help='Enable Qwen3 thinking mode for vLLM models (default: False)')
+    parser.add_argument('--no_render', action='store_true',
+                        help='Disable default post-episode GIF rendering')
     args = parser.parse_args()
+    process_game_level._render_default = not args.no_render
 
     # Propagate vLLM CLI options to environment so they are picked up by llm_text_query
     if args.vllm_base_url:

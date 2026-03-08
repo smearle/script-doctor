@@ -34,6 +34,7 @@ cs.store(name="config", node=Config)
 
 # Create Flask application
 app = Flask(__name__)
+STATIC_DIR = 'script_doctor/puzzlescript_deprecated_hack'
 
 # Global variables
 driver = None
@@ -47,11 +48,11 @@ cfg = None  # Global configuration object
 # Route: Serve static files
 @app.route('/')
 def serve_doctor():
-    return send_from_directory('src', 'doctor.html')
+    return send_from_directory(STATIC_DIR, 'doctor.html')
 
 @app.route('/<path:filename>')
 def serve_static(filename):
-    return send_from_directory('src', filename)
+    return send_from_directory(STATIC_DIR, filename)
 
 # Load game rules from data/min_games directory
 def load_game_rules(game_name):

@@ -41,11 +41,14 @@ class BFSConfig(PSConfig):
 class ProfileJaxRandConfig(PSConfig):
     game: Optional[str] = None
     all_games: bool = False
+    random_order: bool = False
     # max_episode_steps: int = 100
     n_steps: int = 5_000
     # reevaluate: bool = True  # Whether to continue profiling, or just plot the results
     render: bool = False
     use_switch_env: bool = False  # Use jax.lax.switch-based env for faster compilation
+    slurm: bool = False
+    n_games_per_job: int = 1
 
 
     
@@ -58,8 +61,7 @@ class ProfileNodeJS(PSConfig):
     # all_games: bool = False
     all_games: bool = True
     random_order: bool = False
-    # n_steps: int = 5_000
-    n_steps: int = 1_000_000
+    n_steps: int = 5_000
     overwrite: bool = False
     include_randomness: bool = True
     # timeout: int = 60
@@ -70,6 +72,42 @@ class ProfileNodeJS(PSConfig):
     render: bool = False
     slurm: bool = False
     n_games_per_job: int = 1
+
+
+@dataclass
+class EvolveLevelConfig:
+    game: Optional[str] = None
+    level: int = 0
+    gens: int = 10_000
+    pop: int = 6
+    n_mutations_min: int = 1
+    n_mutations_max: int = 3
+    max_nodes: int = 1_000_000
+    batch_size: int = 10_000
+    cost_weight: float = 0.6
+    render_gif: bool = False
+    seed: int = 42
+    fitness: str = "states"
+    allow_player_change: bool = False
+
+
+@dataclass
+class EvolveLevelNodeJSConfig:
+    game: Optional[str] = None
+    level: int = 0
+    gens: int = 10_000
+    pop: int = 6
+    n_mutations_min: int = 1
+    n_mutations_max: int = 3
+    max_steps: int = 1_000_000
+    timeout: int = -1
+    algo: str = "astar"
+    seed: int = 42
+    fitness: str = "states"
+    allow_player_change: bool = False
+    render_gif: bool = True
+    gif_frame_duration: float = 0.1
+    gif_scale: int = 10
 
 
 @dataclass
@@ -198,6 +236,8 @@ cs.store(name="config", node=RLConfig)
 cs.store(name="bfs_config", node=BFSConfig)
 cs.store(name="profile_jax_config", node=ProfileJaxRandConfig)
 cs.store(name="profile_nodejs_config", node=ProfileNodeJS)
+cs.store(name="evolve_level_config", node=EvolveLevelConfig)
+cs.store(name="evolve_level_nodejs_config", node=EvolveLevelNodeJSConfig)
 cs.store(name="train_config", node=TrainConfig)
 cs.store(name="eval_config", node=EvalConfig)
 cs.store(name="enjoy_config", node=EnjoyConfig)

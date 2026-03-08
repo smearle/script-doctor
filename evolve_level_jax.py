@@ -9,27 +9,26 @@ pick up where the last run left off (checkpoint is saved in the output dir).
 
 Usage examples:
     # Evolve from sokoban_basic level 0
-    python evolve_level.py --game sokoban_basic --level 0
+    python evolve_level.py game=sokoban_basic level=0
 
     # Larger population, more generations
-    python evolve_level.py --game sokoban_basic --level 0 --pop 8 --gens 50
+    python evolve_level.py game=sokoban_basic level=0 pop=8 gens=50
 
     # Resume the same run for 50 more generations
-    python evolve_level.py --game sokoban_basic --level 0 --pop 8 --gens 100
+    python evolve_level.py game=sokoban_basic level=0 pop=8 gens=100
 
     # Use more search budget per evaluation
-    python evolve_level.py --game sokoban_basic --level 0 -m 2000000
+    python evolve_level.py game=sokoban_basic level=0 max_nodes=2000000
 
     # Save GIF of each new champion
-    python evolve_level.py --game sokoban_basic --level 0 --gif
+    python evolve_level.py game=sokoban_basic level=0 render_gif=true
 
     # Allow the number of players to change during evolution
-    python evolve_level.py --game sokoban_basic --level 0 --allow_player_change
+    python evolve_level.py game=sokoban_basic level=0 allow_player_change=true
 
 Results are saved to data/evolved_levels/<GAME>/<run-subdir>/
 """
 
-import argparse
 import copy
 import json
 import math
@@ -40,6 +39,7 @@ import time
 import traceback
 from typing import List, Optional, Tuple
 
+import hydra
 import jax
 import jax.numpy as jnp
 import numpy as np
@@ -58,6 +58,7 @@ from puzzlejax.wrappers import PuzzleJaxPuxleEnv, PuzzleJaxHeuristic
 
 from JAxtar.stars.astar import astar_builder
 from JAxtar.stars.search_base import SearchResult
+from conf.config import EvolveLevelConfig
 from helpers.visualization import PathStep, build_path_steps_from_actions
 
 EVOLVED_DIR = os.path.join(DATA_DIR, "evolved_levels")
@@ -736,64 +737,35 @@ def _save_checkpoint(
 
 
 # ============================================================================
-# CLI
+# Hydra entrypoint
 # ============================================================================
 
-def main():
-    parser = argparse.ArgumentParser(
-        description="Evolve a PuzzleScript level to maximise A* search depth.",
-        formatter_class=argparse.RawDescriptionHelpFormatter,
-        epilog=__doc__,
-    )
-    parser.add_argument("--game", type=str, required=True,
-                        help="Game name to evolve.")
-    parser.add_argument("--level", type=int, default=0,
-                        help="Initial level index (default: 0).")
-    parser.add_argument("--gens", type=int, default=30,
-                        help="Number of generations (default: 30).")
-    parser.add_argument("--pop", type=int, default=6,
-                        help="Children per generation / λ (default: 6).")
-    parser.add_argument("--n_mutations_min", type=int, default=1,
-                        help="Min mutations per child (default: 1).")
-    parser.add_argument("--n_mutations_max", type=int, default=3,
-                        help="Max mutations per child (default: 3).")
-    parser.add_argument("-m", "--max_nodes", type=int, default=1_000_000,
-                        help="Max search nodes for A* (default: 1000000).")
-    parser.add_argument("-b", "--batch_size", type=int, default=10_000,
-                        help="Batch size for A* (default: 10000).")
-    parser.add_argument("-w", "--cost_weight", type=float, default=0.6,
-                        help="A* cost weight f = g + w*h (default: 0.6).")
-    parser.add_argument("--gif", action="store_true",
-                        help="Render GIF of each new champion.")
-    parser.add_argument("--seed", type=int, default=42,
-                        help="Random seed (default: 42).")
-    parser.add_argument("--fitness", type=str, default="states",
-                        choices=["cost", "states", "cost+states"],
-                        help="Fitness mode: 'cost' (solution length), "
-                             "'states' (search effort), "
-                             "'cost+states' (combined). Default: states.")
-    parser.add_argument("--allow_player_change", action="store_true",
-                        help="Allow mutations to change the number of players "
-                             "(by default the original player count is preserved).")
-
-    args = parser.parse_args()
-
+def main(cfg: EvolveLevelConfig):
+    if cfg.game is None:
+        raise ValueError("`game` must be set, e.g. `python evolve_level.py game=sokoban_basic`.")
+    if cfg.fitness not in {"cost", "states", "cost+states"}:
+        raise ValueError(f"Unsupported fitness mode: {cfg.fitness}")
     evolve(
-        game=args.game,
-        level_i=args.level,
-        n_gens=args.gens,
-        pop_size=args.pop,
-        n_mutations_min=args.n_mutations_min,
-        n_mutations_max=args.n_mutations_max,
-        max_nodes=args.max_nodes,
-        batch_size=args.batch_size,
-        cost_weight=args.cost_weight,
-        render_gif=args.gif,
-        seed=args.seed,
-        fitness_mode=args.fitness,
-        preserve_players=not args.allow_player_change,
+        game=cfg.game,
+        level_i=cfg.level,
+        n_gens=cfg.gens,
+        pop_size=cfg["pop"],
+        n_mutations_min=cfg.n_mutations_min,
+        n_mutations_max=cfg.n_mutations_max,
+        max_nodes=cfg.max_nodes,
+        batch_size=cfg.batch_size,
+        cost_weight=cfg.cost_weight,
+        render_gif=cfg.render_gif,
+        seed=cfg.seed,
+        fitness_mode=cfg.fitness,
+        preserve_players=not cfg.allow_player_change,
     )
+
+
+@hydra.main(version_base="1.3", config_path="conf", config_name="evolve_level")
+def main_launch(cfg: EvolveLevelConfig):
+    main(cfg)
 
 
 if __name__ == "__main__":
-    main()
+    main_launch()

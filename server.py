@@ -71,11 +71,12 @@ max_gen_attempts = None
 load_dotenv()
 openai_client = None
 app = Flask(__name__)
+STATIC_DIR = 'script_doctor/puzzlescript_deprecated_hack'
 
 
 @app.route('/')
 def serve_doctor():
-    return send_from_directory('src', 'doctor.html')
+    return send_from_directory(STATIC_DIR, 'doctor.html')
 
 @app.route('/get_mode', methods=['GET'])
 def get_mode():
@@ -85,7 +86,7 @@ def get_mode():
 # Route to serve JavaScript files dynamically
 @app.route('/<path:filename>')
 def serve_js(filename):
-    return send_from_directory('src', filename)
+    return send_from_directory(STATIC_DIR, filename)
 
 
 # @app.route('/save_sweep_stats', methods=['POST'])

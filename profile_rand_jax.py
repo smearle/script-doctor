@@ -3,8 +3,10 @@ import functools
 import glob
 import itertools
 import logging
+import math
 import os
 import traceback
+from typing import List, Optional
 
 import hydra
 import imageio
@@ -14,6 +16,7 @@ import json
 import jaxlib
 import numpy as np
 import pandas as pd
+import submitit
 from timeit import default_timer as timer
 
 from conf.config import ProfileJaxRandConfig
@@ -84,25 +87,62 @@ def save_results(results, results_path):
 
 
 @hydra.main(version_base="1.3", config_path='./conf', config_name='profile_jax')
-def profile(cfg: ProfileJaxRandConfig):
+def main_launch(cfg: ProfileJaxRandConfig):
+    if cfg.slurm:
+        if cfg.game is None:
+            games = get_list_of_games_for_testing(
+                all_games=cfg.all_games,
+                random_order=cfg.random_order,
+            )
+        else:
+            games = [cfg.game]
+        if not games:
+            return
+
+        n_jobs = math.ceil(len(games) / cfg.n_games_per_job)
+        game_sublists = [games[i::n_jobs] for i in range(n_jobs)]
+        assert sum(len(game_list) for game_list in game_sublists) == len(games), (
+            "Not all games are assigned to a job."
+        )
+        executor = submitit.AutoExecutor(folder=os.path.join("submitit_logs", "profile_rand_jax"))
+        executor.update_parameters(
+            slurm_job_name="profile_rand_jax",
+            mem_gb=30,
+            tasks_per_node=1,
+            cpus_per_task=1,
+            timeout_min=1440,
+            slurm_array_parallelism=n_jobs,
+            slurm_account=os.environ.get("SLURM_ACCOUNT"),
+        )
+        executor.map_array(main, [cfg] * n_jobs, game_sublists)
+    else:
+        main(cfg)
+
+
+def main(cfg: ProfileJaxRandConfig, games: Optional[List[str]] = None):
     logging.getLogger().setLevel(logging.WARNING)
     devices = jax.devices()
     assert len(devices) == 1, f'JAX is not using a single device. Found {len(devices)} devices: {devices}. This is unexpected.'
     device_name = devices[0].device_kind
     device_name = device_name.replace(' ', '_')
 
-    if cfg.game is None:
-        games = get_list_of_games_for_testing(all_games=cfg.all_games)
+    if games is not None:
+        games_to_profile = list(games)
+    elif cfg.game is None:
+        games_to_profile = get_list_of_games_for_testing(
+            all_games=cfg.all_games,
+            random_order=cfg.random_order,
+        )
     else:
-        games = [cfg.game]
+        games_to_profile = [cfg.game]
+    if not games_to_profile:
+        return
 
-    global BATCH_SIZES, VMAPS
     hparams = itertools.product(
-        games,
+        games_to_profile,
         BATCH_SIZES,
         VMAPS,
     )
-    games, BATCH_SIZES, VMAPS = zip(*hparams)
 
     vids_dir = 'vids'
     if cfg.render:
@@ -120,7 +160,7 @@ def profile(cfg: ProfileJaxRandConfig):
     os.makedirs(env_dir, exist_ok=True)
     last_game = None
 
-    for (game, n_envs, vmap) in zip(games, BATCH_SIZES, VMAPS):
+    for game, n_envs, vmap in hparams:
 
         cfg.game = game
         cfg.vmap = vmap
@@ -247,11 +287,6 @@ def profile(cfg: ProfileJaxRandConfig):
             }
             save_results(n_envs_to_fps, results_path)
 
-    else:
-        # Load from json
-        with open(results_path, 'r') as f:
-            results = json.load(f)
-
 if __name__ == '__main__':
     # with jax.numpy_dtype_promotion('strict'):
-    profile() 
+    main_launch()

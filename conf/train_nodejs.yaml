@@ -1,0 +1,6 @@
+defaults:
+  - train_config
+  - _self_
+
+hydra:
+  verbose: true

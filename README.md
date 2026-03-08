@@ -19,7 +19,7 @@ But first! Make sure the lines requiring `jax` or `jax[cuda]` are (un)commented 
 
 ## Collecting and parsing data
 
-First, collect games, both from the original PuzzleScript website/editor/javascript-engine repository, (which is checkpointed here under `src`) and an online archive with the following command:
+First, collect games, both from the original PuzzleScript website/editor/javascript-engine repository, (which is checkpointed here under `script_doctor/puzzlescript_deprecated_hack`) and an online archive with the following command:
 ```
 python collect_games.py
 ```
@@ -61,6 +61,21 @@ We can then validate that these solutions lead to the same win conditions and le
 python validate_sols.py overwrite=True
 ```
 This will run the solutions generated above in PuzzleJAX, and ensure that they lead to the same results.
+
+## Backend direction
+
+The codebase now has an explicit backend seam for search against the original PuzzleScript engine:
+
+- `puzzlejax.backends.base` defines the search backend contract.
+- `puzzlejax.backends.nodejs` wraps the original engine via `puzzlescript_nodejs`.
+
+The intended refactor direction is to stop baking `puzzlejax` assumptions directly into new tooling. New engine-facing work should target the backend contract first, then provide:
+
+- a JAX implementation when we need accelerator-friendly execution
+- a simple Python/PyTorch implementation when we need clarity or debuggability
+- the original-engine NodeJS wrapper when we need authoritative behavior
+
+That keeps search, validation, and tooling logic shared while backends differ only in engine execution.
 
 ## Profiling the speed of random actions
 ```
