@@ -1213,9 +1213,11 @@ bool Engine::processInput(int dir) {
     againing_ = false;
 
     LevelBackup bak = backupLevel();
-    (void)dir;  // inputindex only needed for sound, which we skip
 
+    // Capture player positions BEFORE movement for require_player_movement check
+    std::vector<int> playerPositions;
     if (dir >= 0) {
+        playerPositions = getPlayerPositions();
         int dirMask;
         switch (dir) {
             case 0: dirMask = 0b00001; break;  // up
@@ -1280,26 +1282,29 @@ bool Engine::processInput(int dir) {
     } while (iteration < 50 && rigidloop);
 
     // Check for require_player_movement
-    if (dir >= 0 && metadata_.count("require_player_movement")) {
-        auto playerPositions = getPlayerPositions();
-        if (!playerPositions.empty()) {
-            // Check if any player actually moved (compare with backup)
-            // The JS checks if player is still at ALL of the original positions
-            bool someMoved = false;
-            for (int pos : playerPositions) {
-                int base = pos * STRIDE_OBJ_;
-                for (int i = 0; i < STRIDE_OBJ_; ++i) {
-                    if (playerMask_.data[i] & ~level_.objects[base + i]) {
-                        someMoved = true;
-                        break;
-                    }
+    // Uses pre-movement playerPositions captured before startMovement
+    // JS checks if player is no longer at ANY of the original positions
+    if (dir >= 0 && metadata_.count("require_player_movement") && !playerPositions.empty()) {
+        bool someMoved = false;
+        for (int pos : playerPositions) {
+            int base = pos * STRIDE_OBJ_;
+            // Check if player mask bits are ALL clear at this old position
+            // (meaning the player has left this cell)
+            bool allClear = true;
+            for (int i = 0; i < STRIDE_OBJ_; ++i) {
+                if (playerMask_.data[i] & level_.objects[base + i]) {
+                    allClear = false;
+                    break;
                 }
-                if (someMoved) break;
             }
-            if (!someMoved) {
-                restoreLevel(bak);
-                return false;
+            if (allClear) {
+                someMoved = true;
+                break;
             }
+        }
+        if (!someMoved) {
+            restoreLevel(bak);
+            return false;
         }
     }
 

@@ -111,7 +111,7 @@ class CppPuzzleScriptBackend:
         from puzzlescript_nodejs.utils import compile_game
         game_text = compile_game(parser, self._js_engine, game, 0)
         # Serialize the compiled state from JS and load into C++
-        json_str = str(self._js_engine.serializeCompiledState())
+        json_str = str(self._js_engine.serializeCompiledStateJSON())
         self.cpp_engine.load_from_json(json_str)
         return game_text
 
@@ -120,7 +120,7 @@ class CppPuzzleScriptBackend:
         self._ensure_js_engine()
         from puzzlescript_nodejs.utils import compile_game
         compile_game(parser, self._js_engine, game, 0)
-        return str(self._js_engine.serializeCompiledState())
+        return str(self._js_engine.serializeCompiledStateJSON())
 
     def load_from_json(self, json_str: str) -> None:
         """Load a pre-compiled game state from JSON."""
