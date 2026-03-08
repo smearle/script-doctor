@@ -1,13 +1,13 @@
 import argparse
 import multiprocessing
 import os
-import string
 import json
 from dataclasses import dataclass
 
 from lark import Lark
 
 from LLM_agent import LLMGameAgent
+from ascii_prompting import ASCIIStateFormatter
 from llm_agent_loop import (
     CUSTOM_GAMES_DIR,
     STATE_FILE_BASENAME,
@@ -29,74 +29,27 @@ ACTION_SPACE = [0, 1, 2, 3, 4]
 ACTION_MEANINGS = {0: "left", 1: "down", 2: "right", 3: "up", 4: "action"}
 
 
-def _available_render_chars():
-    chars = [c for c in string.printable if (not c.isspace()) and c not in {"`"}]
-    extras = [
-        "■", "□", "▲", "△", "●", "○", "◆", "◇", "★", "☆",
-        "♠", "♣", "♥", "♦", "☉", "☼", "☯", "☒", "☐", "☑",
-        "◉", "◎", "◍", "◌", "◐", "◑", "◒", "◓", "◔", "◕",
-    ]
-    for ch in extras:
-        if ch not in chars:
-            chars.append(ch)
-    return chars
-
-
 @dataclass
 class NodeJSAsciiRenderer:
     legend_mapping: dict[str, list[str]]
 
     def __post_init__(self):
-        self.combo_to_char: dict[tuple[str, ...], str] = {}
-        self.available_chars = _available_render_chars()
-        self._seed_chars_from_legend()
-
-    def _seed_chars_from_legend(self):
-        for char, objs in self.legend_mapping.items():
-            if len(char) != 1 or char.isspace():
-                continue
-            combo = tuple(obj for obj in objs if obj != "background")
-            if not combo:
-                combo = ("background",)
-            self.combo_to_char.setdefault(combo, char)
-            if char in self.available_chars:
-                self.available_chars.remove(char)
-
-    def _char_for_combo(self, combo: tuple[str, ...]) -> str:
-        if combo not in self.combo_to_char:
-            if not self.available_chars:
-                raise ValueError("Ran out of characters while rendering NodeJS PuzzleScript state.")
-            self.combo_to_char[combo] = self.available_chars.pop(0)
-        return self.combo_to_char[combo]
+        self.formatter = ASCIIStateFormatter(self.legend_mapping)
 
     def render(self, backend: NodeJSPuzzleScriptBackend, level, objs: list[str]) -> str:
         level_arr = level_to_int_arr(level, len(objs))
         mini, minj, maxi, maxj = backend._get_visible_bounds(level)
-        used_chars: list[str] = []
-        seen_chars: set[str] = set()
-        rows: list[str] = []
+        name_grid = []
 
         for y in range(minj, maxj):
-            row_chars = []
+            row = []
             for x in range(mini, maxi):
                 cell_bits = int(level_arr[x, y])
                 names = [objs[obj_i] for obj_i in range(len(objs)) if ((cell_bits >> obj_i) & 1) == 1]
-                combo = tuple(name for name in names if name != "background")
-                if not combo:
-                    combo = ("background",)
-                char = self._char_for_combo(combo)
-                if char not in seen_chars:
-                    seen_chars.add(char)
-                    used_chars.append(char)
-                row_chars.append(char)
-            rows.append("".join(row_chars))
+                row.append(tuple(names))
+            name_grid.append(row)
 
-        legend_lines = []
-        for char in used_chars:
-            combo = next(combo for combo, combo_char in self.combo_to_char.items() if combo_char == char)
-            legend_lines.append(f"{char}: {', '.join(combo)}")
-
-        return f"LEGEND:\n" + "\n".join(legend_lines) + "\n\nMAP:\n" + "\n".join(rows)
+        return self.formatter.render_from_name_grid(name_grid)
 
 
 def collect_game_info(game_name, start_level):

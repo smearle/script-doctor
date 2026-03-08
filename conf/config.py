@@ -79,6 +79,11 @@ class ProfileRandNodeJSConfig(NodeJSConfig):
 
 
 @dataclass
+class ProfileRandCppConfig(NodeJSConfig):
+    pass
+
+
+@dataclass
 class EvolveLevelConfig:
     game: Optional[str] = None
     level: int = 0
@@ -241,6 +246,7 @@ cs.store(name="bfs_config", node=BFSConfig)
 cs.store(name="profile_jax_config", node=ProfileJaxRandConfig)
 cs.store(name="search_nodejs_config", node=SearchNodeJSConfig)
 cs.store(name="profile_rand_nodejs_config", node=ProfileRandNodeJSConfig)
+cs.store(name="profile_rand_cpp_config", node=ProfileRandCppConfig)
 cs.store(name="evolve_level_config", node=EvolveLevelConfig)
 cs.store(name="evolve_level_nodejs_config", node=EvolveLevelNodeJSConfig)
 cs.store(name="train_config", node=TrainConfig)

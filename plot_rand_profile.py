@@ -8,6 +8,7 @@ from matplotlib.ticker import StrMethodFormatter
 from conf.config import PlotRandProfileConfig
 from profile_rand_jax import get_level_int, get_step_int, get_vmap
 from puzzlejax.globals import (
+    CPP_PROFILING_RESULTS_DIR,
     GAMES_TO_N_RULES_PATH,
     JAX_PROFILING_RESULTS_DIR,
     NODEJS_PROFILING_RESULTS_DIR,
@@ -41,7 +42,11 @@ def _normalize_device_label(device: str) -> str:
 
 def _discover_rollout_lengths() -> list[str]:
     rollout_lengths = set()
-    for root_dir in (JAX_PROFILING_RESULTS_DIR, NODEJS_PROFILING_RESULTS_DIR):
+    for root_dir in (
+        JAX_PROFILING_RESULTS_DIR,
+        NODEJS_PROFILING_RESULTS_DIR,
+        CPP_PROFILING_RESULTS_DIR,
+    ):
         if not os.path.isdir(root_dir):
             continue
         for device in os.listdir(root_dir):
@@ -181,8 +186,78 @@ def _collect_nodejs_series(rollout_len_str: str) -> dict[str, list[dict]]:
     return series_by_game
 
 
-def _get_games_to_plot(cfg: PlotRandProfileConfig, jax_series: dict, nodejs_series: dict) -> list[str]:
-    available_games = sorted(set(jax_series) | set(nodejs_series))
+def _collect_cpp_series(rollout_len_str: str) -> dict[str, list[dict]]:
+    series_by_game = {}
+    if not os.path.isdir(CPP_PROFILING_RESULTS_DIR):
+        return series_by_game
+
+    cpp_devices = [d for d in os.listdir(CPP_PROFILING_RESULTS_DIR) if os.path.isdir(os.path.join(CPP_PROFILING_RESULTS_DIR, d))]
+    include_device_in_label = len(cpp_devices) > 1
+
+    for device in cpp_devices:
+        rollout_dir = os.path.join(CPP_PROFILING_RESULTS_DIR, device, rollout_len_str)
+        if not os.path.isdir(rollout_dir):
+            continue
+
+        for game in os.listdir(rollout_dir):
+            game_dir = os.path.join(rollout_dir, game)
+            if not os.path.isdir(game_dir):
+                continue
+
+            level_results_path = os.path.join(game_dir, "level-0.json")
+            if not os.path.isfile(level_results_path):
+                continue
+
+            with open(level_results_path, "r") as f:
+                stats_by_key = json.load(f)
+
+            mode_to_points = {
+                "cpp_native": [],
+                "cpp_native_multiprocess": [],
+            }
+            for stats_key, stats in stats_by_key.items():
+                if "error_type" in stats:
+                    continue
+                if "-" not in stats_key:
+                    continue
+                n_envs_str, execution_mode = stats_key.split("-", 1)
+                if execution_mode not in mode_to_points:
+                    continue
+                mode_to_points[execution_mode].append((int(n_envs_str), stats["fps"][-1]))
+
+            for execution_mode, points in mode_to_points.items():
+                if not points:
+                    continue
+                points.sort()
+                if execution_mode == "cpp_native":
+                    base_label = "C++ (native)"
+                    color = "C6"
+                    marker = "P"
+                else:
+                    base_label = "C++ (native multiprocess)"
+                    color = "C7"
+                    marker = "v"
+                if include_device_in_label:
+                    base_label = f"{base_label} [{_normalize_device_label(device)}]"
+                series_by_game.setdefault(game, []).append({
+                    "label": base_label,
+                    "x": [x for x, _ in points],
+                    "y": [y for _, y in points],
+                    "color": color,
+                    "linestyle": "-.",
+                    "marker": marker,
+                })
+
+    return series_by_game
+
+
+def _get_games_to_plot(
+    cfg: PlotRandProfileConfig,
+    jax_series: dict,
+    nodejs_series: dict,
+    cpp_series: dict,
+) -> list[str]:
+    available_games = sorted(set(jax_series) | set(nodejs_series) | set(cpp_series))
     if cfg.all_games:
         return available_games
     return [game for game in GAMES_TO_PLOT if game in available_games]
@@ -202,7 +277,8 @@ def main(cfg: PlotRandProfileConfig):
         print(f"Rollout len: {rollout_len_str}")
         jax_series = _collect_jax_series(rollout_len_str)
         nodejs_series = _collect_nodejs_series(rollout_len_str)
-        games = _get_games_to_plot(cfg, jax_series, nodejs_series)
+        cpp_series = _collect_cpp_series(rollout_len_str)
+        games = _get_games_to_plot(cfg, jax_series, nodejs_series, cpp_series)
 
         if not games:
             print(f"No games with profiling results for {rollout_len_str}.")
@@ -230,7 +306,7 @@ def main(cfg: PlotRandProfileConfig):
             else:
                 ax = axes[ax_x, ax_y]
 
-            all_series = jax_series.get(game, []) + nodejs_series.get(game, [])
+            all_series = jax_series.get(game, []) + nodejs_series.get(game, []) + cpp_series.get(game, [])
             for series in all_series:
                 ax.plot(
                     series["x"],
@@ -263,6 +339,8 @@ def main(cfg: PlotRandProfileConfig):
                     "NodeJS (native)",
                     "NodeJS (multiprocess)",
                     "NodeJS (native multiprocess)",
+                    "C++ (native)",
+                    "C++ (native multiprocess)",
                 ]
                 ordered_labels = [label for label in labels_order if label in label_to_handle]
                 remaining_labels = [label for label in labels if label not in ordered_labels]

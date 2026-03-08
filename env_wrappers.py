@@ -1,14 +1,20 @@
 import copy
 from itertools import product, combinations
 import itertools
-import unicodedata
 
 import jax
 from lark import Lark
 import numpy as np
 
+from ascii_prompting import (
+    ASCIIStateFormatter,
+    get_braille_chars,
+    get_box_drawing_and_shapes,
+    get_extended_chars,
+    get_llm_friendly_chars,
+)
 from puzzlejax.globals import LARK_SYNTAX_PATH
-from puzzlejax.env import PuzzleJaxEnv, PJParams, PJState
+from puzzlejax.env import PuzzleJaxEnv, PJParams, PJState, expand_meta_objs
 from puzzlejax.env_utils import multihot_to_desc
 from puzzlejax.preprocessing import get_tree_from_txt
 
@@ -23,28 +29,28 @@ def vec_to_obj_names(vec, idxs_to_objs):
                 obj_names.append(obj_name)
     return obj_names
 
-def get_extended_chars():
-    return set(chr(i) for i in range(160, 592)  # U+00A0 to U+024F
-            if unicodedata.category(chr(i))[0] in {'L', 'S', 'P'})
-
-def get_box_drawing_and_shapes():
-    return set([chr(i) for i in range(0x2500, 0x2600)])
-
-def get_braille_chars():
-    return set(chr(i) for i in range(0x2800, 0x28FF + 1))
-
-def get_llm_friendly_chars():
-    chars = set()
-    for i in range(33, 0x2B00):  # Skip control chars
-        c = chr(i)
-        cat = unicodedata.category(c)
-        if cat[0] in {'L', 'S', 'P'} and not c.isspace():
-            chars.add(c)
-    return chars
-
 class RepresentationWrapper(PuzzleJaxEnv):
     """Log the episode returns and lengths."""
 
+    def _get_background_obj_name(self):
+        """Resolve the concrete background object used by the game."""
+        if "background" in self.objs_to_idxs:
+            return "background"
+
+        background_sub_objs = expand_meta_objs(["background"], self.meta_objs, self.char_to_obj)
+        if not background_sub_objs:
+            raise KeyError("Could not resolve background object for representation wrapper.")
+
+        for obj_name in background_sub_objs:
+            if obj_name in self.objs_to_idxs:
+                return obj_name
+            obj_name_lower = obj_name.lower() if isinstance(obj_name, str) else obj_name
+            if obj_name_lower in self.objs_to_idxs:
+                return obj_name_lower
+
+        raise KeyError(
+            f"Resolved background candidates {background_sub_objs}, but none were present in objs_to_idxs."
+        )
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -67,7 +73,8 @@ class RepresentationWrapper(PuzzleJaxEnv):
                 self.idxs_to_chars[idx] = all_chars.pop()
 
         # By default, background is always overlapping with everything
-        background_idx = self.objs_to_idxs['background']
+        background_obj_name = self._get_background_obj_name()
+        background_idx = self.objs_to_idxs[background_obj_name]
         user_assigned_chars = set(self.idxs_to_chars.values())
         if background_idx not in self.idxs_to_chars:
             background_char = '.'
@@ -119,7 +126,7 @@ class RepresentationWrapper(PuzzleJaxEnv):
             all_combinations.append(vec)
 
         # Add background to all combinations
-        background_idx = self.objs_to_idxs['background']
+        background_idx = self.objs_to_idxs[background_obj_name]
         for vec in all_combinations:
             vec[background_idx] = 1
 
@@ -139,6 +146,7 @@ class RepresentationWrapper(PuzzleJaxEnv):
         self.chars_to_vecs = {v: k for k, v in self.vecs_to_chars.items()}
         self.ascii_legend, legend_lines = self.get_ascii_legend()
         self.full_ascii_legend_str = "\n".join(legend_lines)
+        self.prompt_formatter = ASCIIStateFormatter(self.get_ascii_mapping())
 
 
     def get_ascii_legend(self) -> str:
@@ -174,6 +182,22 @@ class RepresentationWrapper(PuzzleJaxEnv):
             mapping[char] = obj_names
         return mapping
 
+    def get_visible_object_name_grid(self, state: PJState):
+        map_arr = np.asarray(self.get_visible_multihot_level(state=state))
+        name_grid = []
+        for i in range(map_arr.shape[1]):
+            row = []
+            for j in range(map_arr.shape[2]):
+                obj_idxs = [idx for idx, val in enumerate(map_arr[:, i, j]) if val]
+                obj_names = [
+                    obj for obj, idx in self.objs_to_idxs.items() if idx in obj_idxs and obj != "background"
+                ]
+                if not obj_names:
+                    obj_names = ["background"]
+                row.append(tuple(obj_names))
+            name_grid.append(row)
+        return name_grid
+
     def get_action_meanings(self):
         """
         Return a dictionary mapping action index to its meaning.
@@ -198,24 +222,8 @@ class RepresentationWrapper(PuzzleJaxEnv):
 
 
     def render_ascii_and_legend(self, state: PJState):
-        """Render the game state as ASCII art."""
-        map_arr = np.asarray(self.get_visible_multihot_level(state=state))
-        ascii_map = np.full(map_arr.shape[1:], " ", dtype="<U1")
-        partial_legend = {}
-        partial_legend_lines = []
-        for i in range(map_arr.shape[1]):
-            for j in range(map_arr.shape[2]):
-                vec = tuple([int(i) for i in map_arr[:, i, j]])
-                char = self.vecs_to_chars[vec]
-                ascii_map[i, j] = char
-                if char not in partial_legend:
-                    obj_name = self.ascii_legend[char]
-                    partial_legend[char] = obj_name
-                    partial_legend_lines.append(f"{char}: {', '.join(obj_name)}")
-
-        legend_str = "\n".join(partial_legend_lines)
-        map_str = "\n".join("".join(row) for row in ascii_map)
-        return f"LEGEND:\n{legend_str}\n\nMAP:\n{map_str}"
+        """Render the visible state using the shared prompt formatter."""
+        return self.prompt_formatter.render_from_name_grid(self.get_visible_object_name_grid(state))
 
 
     def render_text(self, state: PJState):

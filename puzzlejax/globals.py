@@ -48,6 +48,7 @@ GAMES_N_LEVELS_PATH = os.path.join(DATA_DIR, 'games_n_levels.json')
 SOLUTION_REWARDS_PATH = os.path.join(DATA_DIR, 'solution_rewards.json')
 JAX_PROFILING_RESULTS_DIR = os.path.join(DATA_DIR, 'jax_profiling_results')
 NODEJS_PROFILING_RESULTS_DIR = os.path.join(DATA_DIR, 'nodejs_profiling_results')
+CPP_PROFILING_RESULTS_DIR = os.path.join(DATA_DIR, 'cpp_profiling_results')
 JAX_VALIDATED_JS_SOLS_DIR = os.path.join(DATA_DIR, 'jax_validated_js_sols')
 JS_TO_JAX_ACTIONS = [3, 0, 1, 2, 4]
 JS_SOLS_DIR = os.path.join(DATA_DIR, 'js_sols')

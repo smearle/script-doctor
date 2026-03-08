@@ -707,8 +707,7 @@ def process_game_level(agent, game_info, level_index, run_id, save_dir, model,
         if getattr(process_game_level, "_render_default", True):
             try:
                 gif_base_path = current_run_filepath[:-5]
-                stacked_states = jax.tree.map(lambda *xs: jnp.stack(xs), *state_sequence)
-                save_gif_from_states(env, stacked_states, gif_base_path)
+                save_gif_from_states(env, state_sequence, gif_base_path)
                 result["render_gif"] = f"{gif_base_path}.gif"
                 print(f"Episode GIF saved to {gif_base_path}.gif")
             except Exception as e:
@@ -734,12 +733,12 @@ def main():
     parser.add_argument('--model', type=str, required=True,
                         choices=['4o-mini', 'o3-mini', 'gemini', 'gemini-2.5-pro', 'deepseek', 'qwen',
                                  'deepseek-r1', 'llama',
-                                 'vllm', 'vllm-qwen3', 'vllm-qwen3-4b', 'vllm-qwen3-30b', 'vllm-qwen3-32b',
+                                 'vllm', 'vllm-qwen3', 'vllm-qwen3-4b', 'vllm-qwen3-8b', 'vllm-qwen3-30b', 'vllm-qwen3-32b',
                                  'vllm-llama3', 'vllm-llama3-70b', 'vllm-mistral',
                                  'vllm-deepseek', 'vllm-deepseek-r1'],
                         help='LLM model alias. API models: 4o-mini, o3-mini, gemini, gemini-2.5-pro, deepseek, '
                              'deepseek-r1, qwen, llama. vLLM (local/remote): vllm (reads VLLM_MODEL env), '
-                             'vllm-qwen3 (Qwen3-8B), vllm-qwen3-4b, vllm-qwen3-30b, vllm-qwen3-32b, '
+                             'vllm-qwen3 (Qwen3-8B), vllm-qwen3-4b, vllm-qwen3-8b, vllm-qwen3-30b, vllm-qwen3-32b, '
                              'vllm-llama3, vllm-llama3-70b, vllm-mistral, vllm-deepseek, vllm-deepseek-r1')
     parser.add_argument('--max_steps', type=int, default=100,
                         help='Maximum steps per episode (default: 100)')

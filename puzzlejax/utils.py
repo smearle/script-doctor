@@ -286,6 +286,8 @@ _VLLM_MODEL_ALIASES = {
     # Qwen3 text-only models
     "vllm-qwen3": "Qwen/Qwen3-8B",
     "vllm-qwen3-4b": "Qwen/Qwen3-4B",
+    "vllm-qwen3-8b": "Qwen/Qwen3-8B",
+    "vllm_qwen3-8b": "Qwen/Qwen3-8B",
     "vllm-qwen3-30b": "Qwen/Qwen3-30B-A3B",
     "vllm-qwen3-32b": "Qwen/Qwen3-32B",
     # Llama models
@@ -301,7 +303,8 @@ _VLLM_MODEL_ALIASES = {
 
 def resolve_vllm_model(alias: str) -> str:
     """Return the HF model name for a vllm-* alias, falling back to VLLM_MODEL env."""
-    name = _VLLM_MODEL_ALIASES.get(alias)
+    normalized_alias = alias.strip().lower()
+    name = _VLLM_MODEL_ALIASES.get(normalized_alias)
     if name is not None:
         return name
     # For the bare 'vllm' alias or unknown sub-aliases, defer to env.
@@ -525,21 +528,32 @@ import imageio
 from jax import numpy as jnp
 
 
-def save_gif_from_states(env, states, save_path):
-    frames = jax.vmap(env.render, in_axes=(0, None))(states, None)
-    frames = frames.astype(np.uint8)
-
-    scale = 10
-    frames = jnp.repeat(frames, scale, axis=1)
-    frames = jnp.repeat(frames, scale, axis=2)
-
+def save_gif_from_states(env, states, save_path, scale=1):
     frames_dir = os.path.join(save_path, 'frames')
     os.makedirs(frames_dir, exist_ok=True)
-    for i, js_frame in enumerate(frames):
-        imageio.imsave(os.path.join(frames_dir, f'{i:03d}.png'), js_frame)
 
     gif_path = os.path.join(f'{save_path}.gif')
-    imageio.mimsave(gif_path, frames, duration=0.1, loop=0)
+    with imageio.get_writer(gif_path, mode='I', duration=0.1, loop=0) as writer:
+        if isinstance(states, list):
+            state_iter = iter(states)
+        else:
+            leaves = jax.tree.leaves(states)
+            if not leaves:
+                return
+            n_states = int(leaves[0].shape[0])
+            state_iter = (
+                jax.tree.map(lambda x, idx=i: x[idx], states)
+                for i in range(n_states)
+            )
+
+        for i, state in enumerate(state_iter):
+            frame = env.render(state, None)
+            frame = np.asarray(jax.device_get(frame), dtype=np.uint8)
+            if scale != 1:
+                frame = np.repeat(frame, scale, axis=0)
+                frame = np.repeat(frame, scale, axis=1)
+            imageio.imsave(os.path.join(frames_dir, f'{i:03d}.png'), frame)
+            writer.append_data(frame)
 
 
 def load_games_n_rules_sorted():
