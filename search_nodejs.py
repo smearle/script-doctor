@@ -169,7 +169,7 @@ def main(cfg: SearchNodeJSConfig, games: Optional[List[str]] = None):
     if cfg.render:
         import render_js_sols
         print("Rendering solution GIFs.")
-        render_js_sols.main(cfg, games_to_test)
+        render_js_sols.main(cfg, games_to_test, backend=backend)
 
 
 if __name__ == "__main__":

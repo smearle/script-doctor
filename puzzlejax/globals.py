@@ -30,6 +30,8 @@ PRIORITY_GAMES = [
     'slidings',
     'sokoban_basic',
     'sokoban_match3',
+    'Smother',
+    'sokodig',
 ]
 
 par_dir = os.path.dirname(os.path.abspath(__file__))

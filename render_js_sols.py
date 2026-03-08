@@ -2,25 +2,17 @@ import glob
 import json
 import math
 import os
-import shutil
 import traceback
 from typing import List, Optional
 
 import dotenv
 import hydra
-import imageio
-from javascript import require
-import jax
-import jax.numpy as jnp
-from lark import Lark
 import submitit
 
 from conf.config import SearchNodeJSConfig
-from puzzlejax.env import PJState
-from puzzlejax.preprocessing import PJParseErrors, get_env_from_ps_file
-from search_nodejs import compile_game
-from puzzlejax.utils import get_list_of_games_for_testing, init_ps_lark_parser, level_to_int_arr
-from validate_sols import JS_SOLS_DIR, multihot_level_from_js_state
+from puzzlejax.backends import NodeJSPuzzleScriptBackend
+from puzzlejax.globals import JS_SOLS_DIR
+from puzzlejax.utils import get_list_of_games_for_testing, init_ps_lark_parser
 
 
 dotenv.load_dotenv()
@@ -50,10 +42,13 @@ def main_launch(cfg: SearchNodeJSConfig):
         main(cfg)
 
 
-def main(cfg: SearchNodeJSConfig, games: Optional[List[str]] = None):
+def main(
+    cfg: SearchNodeJSConfig,
+    games: Optional[List[str]] = None,
+    backend: Optional[NodeJSPuzzleScriptBackend] = None,
+):
     parser = init_ps_lark_parser()
-    engine = require('./puzzlescript_nodejs/puzzlescript/engine.js')
-    solver = require('./puzzlescript_nodejs/puzzlescript/solver.js')
+    backend = backend or NodeJSPuzzleScriptBackend()
     if cfg.slurm:
         os.environ["CUDA_VISIBLE_DEVICES"] = ""
         os.environ["JAX_PLATFORMS"] = "cpu"
@@ -69,18 +64,10 @@ def main(cfg: SearchNodeJSConfig, games: Optional[List[str]] = None):
             game_sols_dirs = [os.path.join(JS_SOLS_DIR, game) for game in game_sols_dirs]
     else:
         game_sols_dirs = [os.path.join(JS_SOLS_DIR, cfg.game)]
-    # A dummy state, only the multihot_level is used.
-    state = PJState(
-        multihot_level=None,
-        win=False, score=0, heuristic=0, restart=False, init_heuristic=0, prev_heuristic=0,
-        step_i=0, rng=jax.random.PRNGKey(0),
-        view_bounds=jnp.zeros((4,), dtype=jnp.int32),
-    )
     for game_dir in game_sols_dirs:
         game_name = game_dir.split(os.path.sep)[-1]
         level_sol_jsons = glob.glob(f"{game_dir}/*.json")
         game_text = None
-        env = None
         for level_sol_json in level_sol_jsons:
             level_i = level_sol_json.split(os.path.sep)[-1].split(".")[0].split('-')[-1]
             if cfg.level is not None and int(level_i) != cfg.level:
@@ -97,64 +84,35 @@ def main(cfg: SearchNodeJSConfig, games: Optional[List[str]] = None):
 
             if game_text is None:
                 try:
-                    engine.unloadGame()
-                    game_text = compile_game(parser, engine, game_name, level_i=level_i)
+                    backend.unload_game()
+                    game_text = backend.compile_game(parser, game_name)
                 except Exception as e:
                     traceback.print_exc()
                     print(f"Error compiling game {game_name} level {level_i}: {e}")
                     continue
-                env, tree, success, err_msg = get_env_from_ps_file(parser, game_name)
-                if success != PJParseErrors.SUCCESS:
-                    print(f"Error parsing game {game_name} level {level_i}: {err_msg}")
-                    break
-            try:
-                engine.compile(['loadLevel', level_i], game_text)
-            except Exception as e:
-                traceback.print_exc()
-                print(f"Error compiling game {game_name} level {level_i}: {e}")
-                break
-            solver.precalcDistances(engine)
 
             with open(level_sol_json, "r") as f:
                 data = json.load(f)
             if 'actions' in data:
                 actions = data['actions']
             elif 'sol' in data:
-                actions = data['sol']    
-
-            frames = []
-            level_state = solver.getState(engine)
-            n_objs = len(list(data['objs']))
-            if n_objs > 64:
+                actions = data['sol']
+            else:
+                print(f"No actions found in {level_sol_json}")
                 continue
-            level_state = level_to_int_arr(level_state, n_objs).tolist()
-            multihot_level = multihot_level_from_js_state(
-                level_state,
-                data['objs'],
-                target_obj_names=env.atomic_obj_names,
-            )
-            view_bounds = env._compute_view_bounds(
-                multihot_level,
-                env._get_default_view_bounds(multihot_level.shape[1:]),
-            )
-            state = state.replace(multihot_level=multihot_level, view_bounds=view_bounds)
-            frames.append(env.render(state, cv2=False))
-            for action in actions:
-                _, _, _, _, _, level_state, _, _ = solver.takeAction(engine, action)
-                level_state = level_to_int_arr(level_state, n_objs).tolist()
-                multihot_level = multihot_level_from_js_state(
-                    level_state,
-                    data['objs'],
-                    target_obj_names=env.atomic_obj_names,
+
+            try:
+                backend.render_gif(
+                    game_text=game_text,
+                    level_i=int(level_i),
+                    actions=actions,
+                    gif_path=level_sol_gif_path,
+                    frame_duration_s=1.0,
                 )
-                view_bounds = env._compute_view_bounds(multihot_level, state.view_bounds)
-                state = state.replace(multihot_level=multihot_level, view_bounds=view_bounds)
-                frames.append(env.render(state, cv2=False))
-
-            if len(frames) == 0:
-                print(f"No frames to render for level {level_i}")
+            except Exception as e:
+                traceback.print_exc()
+                print(f"Error rendering game {game_name} level {level_i}: {e}")
                 continue
-            imageio.mimsave(level_sol_gif_path, frames, duration=1, loop=0)
 
             # jax_val_game_dir = os.path.join(JAX_VALIDATED_JS_SOLS_DIR, game_name)
             # os.makedirs(jax_val_game_dir, exist_ok=True)

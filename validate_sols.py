@@ -15,7 +15,6 @@ from typing import List, Optional
 from einops import rearrange
 import hydra
 import imageio
-from javascript import require
 import jax
 import jax.numpy as jnp
 from lark import Lark
@@ -25,6 +24,7 @@ from skimage.transform import resize
 import submitit
 
 from conf.config import JaxValidationConfig
+from puzzlejax.backends import NodeJSPuzzleScriptBackend
 from puzzlejax.env import PuzzleJaxEnv
 from puzzlejax.globals import (
     SOLUTION_REWARDS_PATH, GAMES_TO_N_RULES_PATH, JS_SOLS_DIR, JAX_VALIDATED_JS_SOLS_DIR, JS_TO_JAX_ACTIONS, DATA_DIR,
@@ -33,7 +33,6 @@ from puzzlejax.globals import (
 from puzzlejax.preprocessing import PJParseErrors, get_tree_from_txt
 from puzzlejax.env_utils import multihot_to_desc
 from puzzlescript_nodejs.utils import replay_actions_js
-from puzzlescript_nodejs.utils import compile_game as compile_game_js
 from puzzlejax.utils import get_list_of_games_for_testing, to_binary_vectors
 from utils_rl import get_env_params_from_config
 
@@ -135,8 +134,9 @@ def main_launch(cfg: JaxValidationConfig):
 
 
 def main(cfg: JaxValidationConfig, games: Optional[List[str]] = None):
-    engine = require('./puzzlescript_nodejs/puzzlescript/engine.js')
-    solver = require('./puzzlescript_nodejs/puzzlescript/solver.js')
+    backend = NodeJSPuzzleScriptBackend()
+    engine = backend.engine
+    solver = backend.solver
     if cfg.slurm:
         os.environ["CUDA_VISIBLE_DEVICES"] = ""
         os.environ["JAX_PLATFORMS"] = "cpu"
@@ -381,7 +381,7 @@ def main(cfg: JaxValidationConfig, games: Optional[List[str]] = None):
         print(f"Processing solution for game: {og_path}")
 
         if not cfg.aggregate:
-            game_text = compile_game_js(parser, engine, game_name, level_i=0)
+            game_text = backend.compile_game(parser, game_name)
 
         os.makedirs(jax_sol_dir, exist_ok=True)
         print(f"Saving validation results to {jax_sol_dir}")
@@ -568,6 +568,19 @@ def main(cfg: JaxValidationConfig, games: Optional[List[str]] = None):
             params = params.replace(level=level)
             print(f"Level {level_i} solution: {actions}")
             js_scores, js_states = replay_actions_js(engine, solver, level_sol, game_text, level_i)
+            if not os.path.isfile(js_gif_path):
+                print(f"Generating missing JS gif for level {level_i}")
+                try:
+                    backend.render_gif(
+                        game_text=game_text,
+                        level_i=level_i,
+                        actions=level_sol,
+                        gif_path=js_gif_path,
+                        frame_duration_s=1.0,
+                    )
+                except Exception:
+                    print(f"Failed to generate JS gif for level {level_i}")
+                    traceback.print_exc()
 
             def step_env(state, action):
                 obs, state, reward, done, info = env.step_env(key, state, action, params)
@@ -602,8 +615,7 @@ def main(cfg: JaxValidationConfig, games: Optional[List[str]] = None):
                     print(f"Level {level_i} solution failed (won in JS, did not win in jax)")
                 elif np.any(multihot_level_js != state.multihot_level):
                     js_state = state.replace(multihot_level=multihot_level_js)
-                    js_frame = env.render(js_state, cv2=False)
-                    js_frame = np.array(js_frame, dtype=np.uint8)
+                    js_frame = backend.render_frame(js_states[-1])
                     imageio.imsave(os.path.join(jax_sol_dir, f'level-{level_i}_state_js.png'), js_frame)
                     jax_frame = env.render(state, cv2=False)
                     jax_frame = np.array(jax_frame, dtype=np.uint8)
