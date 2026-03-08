@@ -7,17 +7,21 @@ import traceback
 from typing import List, Optional
 
 import cpuinfo
+import dotenv
 import hydra
 import numpy as np
 import submitit
 
-from conf.config import ProfileNodeJS
+from conf.config import SearchNodeJSConfig
 from puzzlejax.backends import NodeJSPuzzleScriptBackend
 from puzzlejax.globals import STANDALONE_NODEJS_RESULTS_PATH, JS_SOLS_DIR
 from puzzlejax.utils import get_list_of_games_for_testing, init_ps_lark_parser
 
 
-def get_standalone_run_name(cfg: ProfileNodeJS, algo_name, cpu_name):
+dotenv.load_dotenv()
+
+
+def get_standalone_run_name(cfg: SearchNodeJSConfig, algo_name, cpu_name):
     return f'algo-{algo_name}_{cfg.n_steps}-steps_{cpu_name}'
 
 
@@ -28,8 +32,8 @@ def get_standalone_run_params_from_name(run_name: str):
     return algo_name, n_steps, device_name
 
 
-@hydra.main(version_base="1.3", config_path='./', config_name='profile_nodejs_config')
-def main_launch(cfg: ProfileNodeJS):
+@hydra.main(version_base="1.3", config_path='./', config_name='search_nodejs_config')
+def main_launch(cfg: SearchNodeJSConfig):
     if cfg.slurm:
         games = get_list_of_games_for_testing(
             all_games=cfg.all_games, include_random=cfg.include_randomness, random_order=cfg.random_order)
@@ -37,9 +41,9 @@ def main_launch(cfg: ProfileNodeJS):
         n_jobs = math.ceil(len(games) / cfg.n_games_per_job)
         game_sublists = [games[i::n_jobs] for i in range(n_jobs)]
         assert np.sum([len(g) for g in game_sublists]) == len(games), "Not all games are assigned to a job."
-        executor = submitit.AutoExecutor(folder=os.path.join("submitit_logs", "profile_nodejs"))
+        executor = submitit.AutoExecutor(folder=os.path.join("submitit_logs", "search_nodejs"))
         executor.update_parameters(
-            slurm_job_name=f"profile_nodejs",
+            slurm_job_name=f"search_nodejs",
             mem_gb=30,
             tasks_per_node=1,
             cpus_per_task=1,
@@ -52,10 +56,7 @@ def main_launch(cfg: ProfileNodeJS):
         main(cfg)
 
 
-def main(cfg: ProfileNodeJS, games: Optional[List[str]] = None):
-    if cfg.for_profiling:
-        cfg.n_steps = 5_000
-        cfg.algo = 'random'
+def main(cfg: SearchNodeJSConfig, games: Optional[List[str]] = None):
 
     backend = NodeJSPuzzleScriptBackend()
     timeout_ms = cfg.timeout * 1_000 if cfg.timeout > 0 else -1
@@ -84,8 +85,7 @@ def main(cfg: ProfileNodeJS, games: Optional[List[str]] = None):
     else:
         games_to_test = [cfg.game]
     results = {algo: {} for algo in algos}
-    if os.path.isfile(STANDALONE_NODEJS_RESULTS_PATH) and not cfg.overwrite and not cfg.for_validation \
-            and not cfg.for_solution:
+    if os.path.isfile(STANDALONE_NODEJS_RESULTS_PATH) and not cfg.overwrite:
         shutil.copyfile(STANDALONE_NODEJS_RESULTS_PATH, STANDALONE_NODEJS_RESULTS_PATH[:-5] + '_bkp.json')
         with open(STANDALONE_NODEJS_RESULTS_PATH, 'r') as f:
             results = json.load(f)
@@ -111,10 +111,7 @@ def main(cfg: ProfileNodeJS, games: Optional[List[str]] = None):
                 results[run_name][game] = {"Error": traceback.print_exc()}
                 continue
 
-            if cfg.for_profiling:
-                n_levels = 1
-            else:
-                n_levels = backend.get_num_levels()
+            n_levels = backend.get_num_levels()
             game_js_sols_dir = os.path.join(JS_SOLS_DIR, game)
             os.makedirs(game_js_sols_dir, exist_ok=True)
 
@@ -123,11 +120,8 @@ def main(cfg: ProfileNodeJS, games: Optional[List[str]] = None):
                 level_js_sol_path = os.path.join(
                     game_js_sols_dir, f'{algo_prefix}{cfg.n_steps}-steps_level-{level_i}.json')
                 print(f'Level: {level_i}')
-                if (cfg.for_validation or cfg.for_solution) and not cfg.overwrite and os.path.isfile(level_js_sol_path):
-                    print(f'Already solved (for validation) {game} level {level_i}.')
-                    continue
-                if not cfg.for_validation and not cfg.for_solution and not cfg.overwrite and str(level_i) in results[run_name][game]:
-                    print(f'Already solved (for profiling) {game} level {level_i} with {run_name}, skipping.')
+                if not cfg.overwrite and os.path.isfile(level_js_sol_path):
+                    print(f'Already solved {game} level {level_i}.')
                     continue
                 result = backend.run_search(
                     algo,
@@ -135,7 +129,7 @@ def main(cfg: ProfileNodeJS, games: Optional[List[str]] = None):
                     level_i=level_i,
                     n_steps=cfg.n_steps,
                     timeout_ms=timeout_ms,
-                    warmup=cfg.for_profiling and algo != 'python_random',
+                    warmup=False,
                 ).to_dict()
 
                 if os.path.isfile(level_js_sol_path):
@@ -169,9 +163,8 @@ def main(cfg: ProfileNodeJS, games: Optional[List[str]] = None):
                 # print(json.dumps(result))
                 results[run_name][game][level_i] = result
 
-        if not cfg.for_validation or cfg.for_solution:
-            with open(STANDALONE_NODEJS_RESULTS_PATH, 'w') as f:
-                json.dump(results, f, indent=4)
+        with open(STANDALONE_NODEJS_RESULTS_PATH, 'w') as f:
+            json.dump(results, f, indent=4)
 
     if cfg.render:
         import render_js_sols

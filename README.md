@@ -52,7 +52,7 @@ python server.py mode=None headless=False auto_launch_client=True port=8002
 
 To generate solutions PuzzleScript games by applying tree search to the original engine, run:
 ```
-python profile_nodejs.py for_validation=True
+python search_nodejs.py
 ```
 This will run a standalone NodeJS version of the original PuzzleScript engine and save solutions (and terminal states) to disk.
 

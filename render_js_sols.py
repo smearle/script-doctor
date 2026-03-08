@@ -15,7 +15,7 @@ import jax.numpy as jnp
 from lark import Lark
 import submitit
 
-from conf.config import ProfileNodeJS
+from conf.config import SearchNodeJSConfig
 from puzzlejax.env import PJState
 from puzzlejax.preprocessing import PJParseErrors, get_env_from_ps_file
 from search_nodejs import compile_game
@@ -26,8 +26,8 @@ from validate_sols import JS_SOLS_DIR, multihot_level_from_js_state
 dotenv.load_dotenv()
 
 
-@hydra.main(version_base="1.3", config_path='conf', config_name='profile_nodejs_config')
-def main_launch(cfg: ProfileNodeJS):
+@hydra.main(version_base="1.3", config_path='conf', config_name='search_nodejs_config')
+def main_launch(cfg: SearchNodeJSConfig):
     if cfg.slurm:
         games = get_list_of_games_for_testing(all_games=cfg.all_games, random_order=cfg.random_order)
         # Get sub-lists of games to distribute across nodes.
@@ -50,7 +50,7 @@ def main_launch(cfg: ProfileNodeJS):
         main(cfg)
 
 
-def main(cfg: ProfileNodeJS, games: Optional[List[str]] = None):
+def main(cfg: SearchNodeJSConfig, games: Optional[List[str]] = None):
     parser = init_ps_lark_parser()
     engine = require('./puzzlescript_nodejs/puzzlescript/engine.js')
     solver = require('./puzzlescript_nodejs/puzzlescript/solver.js')

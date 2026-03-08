@@ -53,25 +53,29 @@ class ProfileJaxRandConfig(PSConfig):
 
     
 @dataclass
-class ProfileNodeJS(PSConfig):
-    # algo: str = "random"  # 'bfs', 'random'
-    algo: str = "bfs"  # 'bfs', 'astar', 'gbfs', 'mcts', 'random'
+class NodeJSConfig(PSConfig):
     game: Optional[str] = None
     level: Optional[int] = None
-    # all_games: bool = False
     all_games: bool = False
     random_order: bool = False
     n_steps: int = 5_000
     overwrite: bool = False
     include_randomness: bool = True
-    # timeout: int = 60
     timeout: int = -1
-    for_profiling: bool = False  # To compare FPS of the vanilla engine with our JAX reimplementation
-    for_validation: bool = False  # To validate that our JAX reimplementation matches the vanilla engine
-    for_solution: bool = True  # To find solutions for their own sake
     render: bool = False
     slurm: bool = False
     n_games_per_job: int = 1
+
+
+@dataclass
+class SearchNodeJSConfig(NodeJSConfig):
+    algo: str = "bfs"  # 'bfs', 'astar', 'gbfs', 'mcts', 'random'
+    n_steps: int = 100_000
+
+
+@dataclass
+class ProfileRandNodeJSConfig(NodeJSConfig):
+    pass
 
 
 @dataclass
@@ -111,7 +115,7 @@ class EvolveLevelNodeJSConfig:
 
 
 @dataclass
-class PlotSearch(ProfileNodeJS):
+class PlotSearch(SearchNodeJSConfig):
     algo: str = "all"  # 'all', 'bfs', 'astar', 'mcts'
     aggregate: bool = True  # (Re-)collect all the solution JSONs to compile a results dict for plotting
 
@@ -235,7 +239,8 @@ cs.store(name="jax_validation_config", node=JaxValidationConfig)
 cs.store(name="config", node=RLConfig)
 cs.store(name="bfs_config", node=BFSConfig)
 cs.store(name="profile_jax_config", node=ProfileJaxRandConfig)
-cs.store(name="profile_nodejs_config", node=ProfileNodeJS)
+cs.store(name="search_nodejs_config", node=SearchNodeJSConfig)
+cs.store(name="profile_rand_nodejs_config", node=ProfileRandNodeJSConfig)
 cs.store(name="evolve_level_config", node=EvolveLevelConfig)
 cs.store(name="evolve_level_nodejs_config", node=EvolveLevelNodeJSConfig)
 cs.store(name="train_config", node=TrainConfig)

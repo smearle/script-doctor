@@ -15,7 +15,7 @@ import hydra
 import multiprocessing as mp
 import submitit
 
-from conf.config import ProfileNodeJS
+from conf.config import ProfileRandNodeJSConfig
 from puzzlejax.backends import NodeJSPuzzleScriptBackend
 from puzzlejax.globals import GAMES_DIR, NODEJS_PROFILING_RESULTS_DIR, SIMPLIFIED_GAMES_DIR
 from puzzlejax.utils import get_list_of_games_for_testing
@@ -425,8 +425,8 @@ def _run_nodejs_native_pool(
     return runs
 
 
-@hydra.main(version_base="1.3", config_path="./", config_name="profile_nodejs_config")
-def main_launch(cfg: ProfileNodeJS):
+@hydra.main(version_base="1.3", config_path="./", config_name="profile_rand_nodejs_config")
+def main_launch(cfg: ProfileRandNodeJSConfig):
     if cfg.slurm:
         if cfg.game is None:
             games = get_list_of_games_for_testing(
@@ -459,7 +459,7 @@ def main_launch(cfg: ProfileNodeJS):
         main(cfg)
 
 
-def main(cfg: ProfileNodeJS, games: Optional[List[str]] = None):
+def main(cfg: ProfileRandNodeJSConfig, games: Optional[List[str]] = None):
     logging.getLogger().setLevel(logging.WARNING)
     cpu_name = cpuinfo.get_cpu_info()["brand_raw"].replace(" ", "_")
     step_str = get_step_str(cfg.n_steps)
