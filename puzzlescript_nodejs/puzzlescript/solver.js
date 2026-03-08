@@ -447,11 +447,54 @@ function takeAction(engine, action) {
   return [false, [], 0, 0, score, level, false, Array.from(engine.getState().idDict)];
 }
 
+function randomRolloutRaw(engine, maxIters=100_000, timeoutMS=-1) {
+  let i = 0;
+  const start_time = Date.now();
+  let actions = [0, 1, 2, 3, 4];
+  if ('noaction' in engine.getState().metadata) {
+    actions = [0, 1, 2, 3];
+  }
+
+  while (i < maxIters) {
+    if (timeoutMS > 0 && i % 1000 === 0) {
+      if ((Date.now() - start_time) > timeoutMS) {
+        return {
+          iterations: i,
+          time: (Date.now() - start_time) / 1000,
+          timeout: true,
+        };
+      }
+    }
+
+    const action = actions[Math.floor(Math.random() * actions.length)];
+    engine.processInput(action);
+    while (engine.getAgaining()) {
+      engine.processInput(-1);
+    }
+
+    if (engine.getWinning()) {
+      DoRestartSearch(engine);
+    }
+
+    i += 1;
+  }
+
+  return {
+    iterations: i,
+    time: (Date.now() - start_time) / 1000,
+    timeout: false,
+  };
+}
+
 function randomRollout(engine, maxIters=100_000) {
   precalcDistances(engine);
   let i = 0;
   let start_time = Date.now();
   const timeout_ms = 60 * 1000;
+  let actions = [0, 1, 2, 3, 4];
+  if ('noaction' in engine.getState().metadata) {
+    actions = [0, 1, 2, 3];
+  }
   var score = getScore(engine);
   var new_level = engine.backupLevel();
   var level_map = engine.backupLevel()['dat'];
@@ -463,8 +506,8 @@ function randomRollout(engine, maxIters=100_000) {
       return [false, [], i, ((Date.now() - start_time) / 1000), score, new_level, true, Array.from(engine.getState().idDict)];
     }
     // }
-    // let changed = engine.processInput(Math.min(5, Math.floor(Math.random() * 6)));
-    let changed = processInputSearch(engine, Math.min(5, Math.floor(Math.random() * 6)));
+    const action = actions[Math.floor(Math.random() * actions.length)];
+    let changed = processInputSearch(engine, action);
     if (changed) {
       score = getScore(engine);
       new_level = engine.backupLevel();
@@ -498,6 +541,10 @@ function solveRandom(engine, maxLength=100, maxIters=100_000) {
   let i = 0;
   let start_time = Date.now();
   const timeout_ms = 60 * 1000;
+  let actions = [0, 1, 2, 3, 4];
+  if ('noaction' in engine.getState().metadata) {
+    actions = [0, 1, 2, 3];
+  }
   let solution = [];
   while (i < maxIters) {
     if (i % maxLength == 0){
@@ -511,8 +558,7 @@ function solveRandom(engine, maxLength=100, maxIters=100_000) {
       return [false, [], i, ((Date.now() - start_time) / 1000)];
     }
     // }
-    // let changed = engine.processInput(Math.min(5, Math.floor(Math.random() * 6)));
-    let action = Math.min(5, Math.floor(Math.random() * 6));
+    let action = actions[Math.floor(Math.random() * actions.length)];
     solution.push(action);
     let changed = processInputSearch(engine, action);
     if (changed) {
@@ -1212,6 +1258,7 @@ module.exports = {
   solveGBFS,
   solveBFS,
   solveRandom,
+  randomRolloutRaw,
   randomRollout,
   takeAction,
   precalcDistances,

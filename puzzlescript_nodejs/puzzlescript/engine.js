@@ -99,6 +99,25 @@ function createSandbox() {
     sandbox.window = sandbox;
     sandbox.globalThis = sandbox;
     sandbox.self = sandbox;
+    sandbox.Audio = function Audio() {
+        return {
+            currentTime: 0,
+            volume: 0,
+            paused: true,
+            play() {},
+            pause() {},
+            load() {},
+            addEventListener() {},
+            removeEventListener() {},
+            setAttribute() {},
+            cloneNode() {
+                return this;
+            },
+            canPlayType() {
+                return '';
+            },
+        };
+    };
     sandbox.canvas = null;
     sandbox.lastDownTarget = null;
     sandbox.input = makeElement();

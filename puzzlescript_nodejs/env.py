@@ -1,7 +1,8 @@
-from javascript import require
+from puzzlejax.backends.nodejs import NodeJSPuzzleScriptBackend
 
-engine = require('./puzzlescript_nodejs/puzzlescript/engine.js')
-solver = require('./puzzlescript_nodejs/puzzlescript/solver.js')
+backend = NodeJSPuzzleScriptBackend()
+engine = backend.engine
+solver = backend.solver
 
 
 # TODO: Wrap standalone nodejs engine in a gym environment
