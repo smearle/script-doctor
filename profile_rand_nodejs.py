@@ -4,6 +4,7 @@ import json
 import logging
 import math
 import os
+import subprocess
 import traceback
 from dataclasses import dataclass
 from timeit import default_timer as timer
@@ -16,7 +17,7 @@ import submitit
 
 from conf.config import ProfileNodeJS
 from puzzlejax.backends import NodeJSPuzzleScriptBackend
-from puzzlejax.globals import GAMES_DIR, NODEJS_PROFILING_RESULTS_DIR
+from puzzlejax.globals import GAMES_DIR, NODEJS_PROFILING_RESULTS_DIR, SIMPLIFIED_GAMES_DIR
 from puzzlejax.utils import get_list_of_games_for_testing
 
 
@@ -27,10 +28,9 @@ BATCH_SIZES = [
     8,
     16,
     32,
-    # 10,
-    # 100,
-    # 1_000,
-    # 10_000,
+    36,
+    40,
+    48,
 ]
 WORKER_TIMEOUT_GRACE_SECONDS = 15.0
 WORKER_TIMEOUT_MULTIPLIER = 2.0
@@ -90,6 +90,21 @@ def _load_original_game_text(game: str) -> str:
     game_path = os.path.join(GAMES_DIR, f"{game}.txt")
     with open(game_path, "r", encoding="utf-8") as f:
         return _strip_level_messages(f.read())
+
+
+def _load_nodejs_native_game_text(game: str) -> str:
+    simplified_path = os.path.join(SIMPLIFIED_GAMES_DIR, f"{game}_simplified.txt")
+    if os.path.isfile(simplified_path):
+        with open(simplified_path, "r", encoding="utf-8") as f:
+            return f.read()
+    return _load_original_game_text(game)
+
+
+def _get_nodejs_native_game_path(game: str) -> str:
+    simplified_path = os.path.join(SIMPLIFIED_GAMES_DIR, f"{game}_simplified.txt")
+    if os.path.isfile(simplified_path):
+        return simplified_path
+    return os.path.join(GAMES_DIR, f"{game}.txt")
 
 
 def _random_rollout_worker(game_text: str, level_i: int, n_steps: int, timeout_ms: int) -> dict:
@@ -327,6 +342,89 @@ def _profile_single_process_rollout(
     }
 
 
+def _profile_nodejs_native_rollout(
+    backend: NodeJSPuzzleScriptBackend,
+    *,
+    game_text: str,
+    level_i: int,
+    n_steps: int,
+    timeout_ms: int,
+) -> dict:
+    start = timer()
+    result = backend.run_search(
+        "random",
+        game_text=game_text,
+        level_i=level_i,
+        n_steps=n_steps,
+        timeout_ms=timeout_ms,
+        warmup=False,
+    )
+    wall_time = timer() - start
+
+    return {
+        "n_envs": 1,
+        "total_iterations": result.iterations,
+        "requested_iterations": n_steps,
+        "completed_ratio": result.iterations / n_steps if n_steps > 0 else 0.0,
+        "successful_workers": 1,
+        "failed_workers": 0,
+        "wall_time": wall_time,
+        "fps": result.fps,
+        "mean_worker_fps": result.fps,
+        "engine_time": result.time,
+        "timeouts": int(result.timeout),
+        "timed_out": bool(result.timeout),
+        "had_worker_failures": False,
+        "sample_worker_error": None,
+        "execution_mode": "nodejs_native",
+    }
+
+
+def _run_nodejs_native_pool(
+    *,
+    game_path: str,
+    level_i: int,
+    n_envs: int,
+    n_steps: int,
+    timeout_ms: int,
+    repeats: int,
+    execution_mode: str,
+) -> list[dict]:
+    pool_script_path = os.path.join(
+        os.path.dirname(__file__),
+        "puzzlescript_nodejs",
+        "puzzlescript",
+        "random_rollout_pool.js",
+    )
+    payload = json.dumps({
+        "gamePath": game_path,
+        "levelI": level_i,
+        "nEnvs": n_envs,
+        "nSteps": n_steps,
+        "timeoutMs": timeout_ms,
+        "repeats": repeats,
+    })
+    result = subprocess.run(
+        ["node", pool_script_path, payload],
+        cwd=os.getcwd(),
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if result.returncode != 0:
+        raise RuntimeError(result.stderr.strip() or result.stdout.strip() or "Node rollout pool failed.")
+
+    stdout_lines = [line for line in result.stdout.splitlines() if line.strip()]
+    if not stdout_lines:
+        raise RuntimeError("Node rollout pool returned no JSON output.")
+
+    payload = json.loads(stdout_lines[-1])
+    runs = payload["runs"]
+    for run in runs:
+        run["execution_mode"] = execution_mode
+    return runs
+
+
 @hydra.main(version_base="1.3", config_path="./", config_name="profile_nodejs_config")
 def main_launch(cfg: ProfileNodeJS):
     if cfg.slurm:
@@ -378,7 +476,11 @@ def main(cfg: ProfileNodeJS, games: Optional[List[str]] = None):
     else:
         games = [cfg.game]
 
-    run_specs = [(1, "single_process")] + [(n_envs, "multiprocess") for n_envs in BATCH_SIZES]
+    run_specs = ([]
+        + [(1, "single_process"), (1, "nodejs_native")]
+        + [(n_envs, "multiprocess") for n_envs in BATCH_SIZES]
+        + [(n_envs, "nodejs_native_multiprocess") for n_envs in BATCH_SIZES if n_envs > 1]
+    )
 
     for game, (n_envs, execution_mode) in itertools.product(games, run_specs):
         print(f"\nGame: {game}, n_envs: {n_envs}, mode: {execution_mode}.")
@@ -407,6 +509,7 @@ def main(cfg: ProfileNodeJS, games: Optional[List[str]] = None):
                 single_process_stats_fn = None
                 persistent_workers = None
                 game_text = _load_original_game_text(game)
+                native_runs = None
                 if execution_mode == "single_process":
                     backend = NodeJSPuzzleScriptBackend()
                     single_process_stats_fn = lambda: _profile_single_process_rollout(
@@ -415,6 +518,26 @@ def main(cfg: ProfileNodeJS, games: Optional[List[str]] = None):
                         level_i=level_i,
                         n_steps=cfg.n_steps,
                         timeout_ms=timeout_ms,
+                    )
+                elif execution_mode == "nodejs_native":
+                    native_runs = _run_nodejs_native_pool(
+                        game_path=_get_nodejs_native_game_path(game),
+                        level_i=level_i,
+                        n_envs=1,
+                        n_steps=cfg.n_steps,
+                        timeout_ms=timeout_ms,
+                        repeats=3,
+                        execution_mode="nodejs_native",
+                    )
+                elif execution_mode == "nodejs_native_multiprocess":
+                    native_runs = _run_nodejs_native_pool(
+                        game_path=_get_nodejs_native_game_path(game),
+                        level_i=level_i,
+                        n_envs=n_envs,
+                        n_steps=cfg.n_steps,
+                        timeout_ms=timeout_ms,
+                        repeats=3,
+                        execution_mode="nodejs_native_multiprocess",
                     )
                 else:
                     persistent_workers = PersistentRolloutWorkers.start(
@@ -427,8 +550,11 @@ def main(cfg: ProfileNodeJS, games: Optional[List[str]] = None):
                 fpss = []
                 last_stats = None
                 try:
-                    for run_i in range(3):
-                        if single_process_stats_fn is not None:
+                    run_count = 3 if native_runs is None else len(native_runs)
+                    for run_i in range(run_count):
+                        if native_runs is not None:
+                            stats = native_runs[run_i]
+                        elif single_process_stats_fn is not None:
                             stats = single_process_stats_fn()
                         else:
                             stats = persistent_workers.run_batch(
@@ -456,6 +582,7 @@ def main(cfg: ProfileNodeJS, games: Optional[List[str]] = None):
                     "failed_workers": last_stats["failed_workers"],
                     "wall_time": last_stats["wall_time"],
                     "mean_worker_fps": last_stats["mean_worker_fps"],
+                    "engine_time": last_stats.get("engine_time"),
                     "timeouts": last_stats["timeouts"],
                     "timed_out": last_stats["timed_out"],
                     "had_worker_failures": last_stats["had_worker_failures"],

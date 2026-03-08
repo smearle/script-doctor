@@ -59,7 +59,7 @@ class ProfileNodeJS(PSConfig):
     game: Optional[str] = None
     level: Optional[int] = None
     # all_games: bool = False
-    all_games: bool = True
+    all_games: bool = False
     random_order: bool = False
     n_steps: int = 5_000
     overwrite: bool = False
