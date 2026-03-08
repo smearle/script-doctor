@@ -81,8 +81,7 @@ RULES
 ======
 
 [> Player | Block ] -> [ Player | > Block]
-(Will the player move in the same direction as the block would have moved? Only if on the same collision layer! I.e., 
-the forces of the old object are just "left" there (?))
+(Will the player move in the same direction as the block would have moved?)
 [Player | Block] -> [Player | Player]
 
 ==============

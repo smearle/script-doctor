@@ -1,0 +1,100 @@
+title Again Loop Cap Test
+author test
+again_interval 0
+
+(
+  DISCREPANCY: neither JS nor JAX cap the outer "again" loop.
+  JS relies on a dry-run check to break the loop when the next turn
+  would produce no changes, but if every turn DOES produce changes,
+  the loop runs forever.
+
+  In this game two markers on separate layers toggle every turn via
+  "again".  Each turn flips A->B and B->A in a two-cell pattern so
+  the level is always changing.  Without an iteration cap the game
+  hangs in both engines.
+
+  Expected behaviour after fix: the again loop should be capped
+  (e.g. 50 iterations) so the game eventually stops.
+)
+
+========
+OBJECTS
+========
+
+Background
+black
+
+Player
+blue
+.000.
+.111.
+00100
+.000.
+.0.0.
+
+Wall
+brown
+
+MarkerA
+red
+.....
+.000.
+.000.
+.000.
+.....
+
+MarkerB
+green
+.....
+.000.
+.000.
+.000.
+.....
+
+=======
+LEGEND
+=======
+
+. = Background
+# = Wall
+P = Player
+A = MarkerA
+B = MarkerB
+
+=======
+SOUNDS
+=======
+
+================
+COLLISIONLAYERS
+================
+
+Background
+Player, Wall
+MarkerA
+MarkerB
+
+======
+RULES
+======
+
+( On each turn MarkerA and MarkerB toggle:
+  cell 1 has A, cell 2 has B  -->  cell 1 gets B, cell 2 gets A
+  Next again turn: they swap back.  Infinite oscillation. )
+
+[ MarkerA | MarkerB ] -> [ MarkerB | MarkerA ] again
+
+==============
+WINCONDITIONS
+==============
+
+no MarkerA
+
+=======
+LEVELS
+=======
+
+#####
+#P..#
+#AB.#
+#####

@@ -1,0 +1,78 @@
+title Runtime Meta Binding
+author Codex
+
+========
+OBJECTS
+========
+
+Background
+white
+
+Player
+black
+00000
+00000
+0.0.0
+00000
+00000
+
+RedThing
+red
+00000
+0...0
+0...0
+0...0
+00000
+
+BlueThing
+blue
+00000
+0...0
+0...0
+0...0
+00000
+
+Goal
+green
+
+=======
+LEGEND
+=======
+
+. = Background
+P = Player
+R = RedThing
+B = BlueThing
+G = Goal
+Thing = RedThing or BlueThing
+
+=========
+SOUNDS
+=========
+
+================
+COLLISIONLAYERS
+================
+
+Background
+Goal
+Player, RedThing, BlueThing
+
+======
+RULES
+======
+
+[ > Player | Thing ] -> [ > Player | Thing Goal ]
+
+==============
+WINCONDITIONS
+==============
+
+(some Goal on Player)
+
+=======
+LEVELS
+=======
+
+PRG
+PBG

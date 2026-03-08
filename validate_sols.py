@@ -9,6 +9,7 @@ import random
 import re
 import shutil
 import traceback
+from collections import OrderedDict
 from typing import List, Optional
 
 from einops import rearrange
@@ -43,6 +44,14 @@ os.makedirs(scratch_dir, exist_ok = True)
 games_to_skip = set({
     '2048',  # hangs
 })
+
+
+def _dedupe_preserve_order(items, key_fn=None):
+    seen = OrderedDict()
+    for item in items:
+        key = key_fn(item) if key_fn is not None else item
+        seen[key] = item
+    return list(seen.values())
 
 
 def multihot_level_from_js_state(level_state, obj_list, target_obj_names=None):
@@ -144,6 +153,13 @@ def main(cfg: JaxValidationConfig, games: Optional[List[str]] = None):
         games = get_list_of_games_for_testing(all_games=cfg.all_games, random_order=cfg.random_order)
     else:
         games = [cfg.game]
+    current_game_names = {os.path.splitext(game_file)[0] for game_file in os.listdir(os.path.join(DATA_DIR, 'scraped_games'))}
+    games = [game for game in games if game in current_game_names]
+    games = _dedupe_preserve_order(games)
+    games_to_n_rules = {
+        game_key: game_val for game_key, game_val in games_to_n_rules.items()
+        if os.path.splitext(os.path.basename(game_key))[0] in current_game_names
+    }
     if cfg.aggregate:
         results = {
             'stats': {},
@@ -349,20 +365,20 @@ def main(cfg: JaxValidationConfig, games: Optional[List[str]] = None):
             level_ints.append(level_i)
         level_sols = new_level_sols
 
-        if len(level_sols) == 0 and not cfg.aggregate:
-            print(f"No js solutions found for {game_name}")
-            continue
-
-        og_path = os.path.join(DATA_DIR, 'scraped_games', game_name + '.txt')
-
-        print(f"Processing solution for game: {og_path}")
-
-
         game_success = True
         game_partial_success = False
         game_compile_error = False
         game_randomness_updated = False
         env = None
+
+        if len(level_sols) == 0:
+            print(f"No js solutions found for {game_name}")
+            game_success = False
+            continue
+
+        og_path = os.path.join(DATA_DIR, 'scraped_games', game_name + '.txt')
+
+        print(f"Processing solution for game: {og_path}")
 
         if not cfg.aggregate:
             game_text = compile_game_js(parser, engine, game_name, level_i=0)

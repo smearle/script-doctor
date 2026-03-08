@@ -1,0 +1,151 @@
+title Again Dry-Run Test
+author test
+again_interval 0
+
+(
+  DISCREPANCY: JS does a speculative dry-run before committing to
+  another "again" turn.  JAX simply checks whether the current turn
+  produced changes.
+
+  Setup:
+  - A Blob sits next to a single Target.
+  - A rule moves the Blob onto the Target and triggers "again".
+  - A late rule creates a Token wherever a Blob exists.
+
+  After the first turn the Blob is on the Target and Token is created.
+  The main rule no longer matches because there is no empty cell
+  adjacent for the Blob to move into.
+
+  JS behaviour:
+    The dry-run simulates a second turn.  The main rule does not fire
+    so "modified" is false.  But the late rule fires *again* in the
+    dry-run, which... actually doesn't create new tokens because Token
+    already exists.  So the dry-run reports no changes, and "againing"
+    is NOT set.  Result: 1 again-triggered turn total.  One Token.
+
+  JAX behaviour:
+    The first turn produced changes and "again" was set, so the
+    while_loop enters a second iteration.  In that second turn the
+    main rule does not fire, but the late rule fires and finds Token
+    already present — no change.  turn_applied = false, loop exits.
+    Result: same as JS in this case.
+
+  To expose the difference we put two Blobs and Targets at different
+  distances.  Blob1 reaches Target1 in 1 step.  Blob2 reaches Target2
+  in 2 steps.  The "again" keeps the whole turn going.  A late rule
+  counts how many again iterations happened by spawning Counters in
+  a row of empty cells.
+
+  In JS the dry-run after the last real change may see no changes,
+  saving one turn.  In JAX the extra no-op turn still runs the late
+  rule one additional time, potentially creating one extra Counter.
+)
+
+========
+OBJECTS
+========
+
+Background
+black
+
+Player
+blue
+.000.
+.111.
+00100
+.000.
+.0.0.
+
+Wall
+brown
+
+Blob
+red
+.....
+.000.
+.000.
+.000.
+.....
+
+Target
+darkblue
+.....
+.000.
+.0.0.
+.000.
+.....
+
+Counter
+yellow
+.....
+..0..
+.000.
+..0..
+.....
+
+Spawner
+purple
+.....
+.000.
+.000.
+.000.
+.....
+
+=======
+LEGEND
+=======
+
+. = Background
+# = Wall
+P = Player
+B = Blob
+T = Target
+C = Counter
+S = Spawner
+
+=======
+SOUNDS
+=======
+
+================
+COLLISIONLAYERS
+================
+
+Background
+Player, Wall
+Blob
+Target
+Counter
+Spawner
+
+======
+RULES
+======
+
+( Blob slides right one cell per turn )
+right [ Blob | no Wall no Blob ] -> [ | Blob ] again
+
+( Late rule: each again-turn, advance the Spawner right by one cell,
+  leaving a Counter behind.  This counts the number of turns. )
+late right [ Spawner | no Wall no Spawner no Counter ] -> [ Counter | Spawner ]
+
+==============
+WINCONDITIONS
+==============
+
+All Blob on Target
+
+=======
+LEVELS
+=======
+
+( Blob must slide 3 cells right to reach Target.
+  Spawner has 6 empty cells to count into.
+  JS dry-run should yield 3 Counters.
+  JAX without dry-run should yield 4 Counters (one extra no-op turn). )
+
+##########
+#P.......#
+#B..T....#
+#S.......#
+##########

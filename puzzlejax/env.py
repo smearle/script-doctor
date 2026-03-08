@@ -2299,23 +2299,22 @@ class PuzzleJaxEnv:
                     rp_subkernels = [rps[None] for rps in rp_subkernels]
                     row_len = np.sum([np.sum([len(c) for c in k if c[0] != '...']) for k in lp_subkernels])
                     if row_len > lvl_shape[1]:
-                        return None, None
+                        return None, None, None, None
                 elif lp_is_vertical:
                     lp_subkernels = [lps[:, None] for lps in lp_subkernels]
                     rp_subkernels = [rps[:, None] for rps in rp_subkernels]
                     col_len = np.sum([np.sum([len(c) for c in k if c[0] != '...']) for k in lp_subkernels])
                     if col_len > lvl_shape[0]:
-                        return None, None
+                        return None, None, None, None
                 
                 subkernel_detection_fns = []
                 subkernel_projection_fns = []
                 for lp, rp in zip(lp_subkernels, rp_subkernels):
-                    subkernel_detection_fn, subkernel_projection_fn = gen_rotated_kernel_fns(lp, rp, rot)
-                    if subkernel_detection_fn is None and subkernel_projection_fn is None:
-                        return None, None
-                        
-                    subkernel_detection_fns.append(subkernel_detection_fn)
-                    subkernel_projection_fns.append(subkernel_projection_fn)
+                    result = gen_rotated_kernel_fns(lp, rp, rot)
+                    if result[0] is None:
+                        return None, None, None, None
+                    subkernel_detection_fns.append(result[0])
+                    subkernel_projection_fns.append(result[1])
                 
                 detect_kernel = partial(
                     self.detect_line_kernel,
@@ -2333,7 +2332,7 @@ class PuzzleJaxEnv:
                     lp_is_vertical=lp_is_vertical,
                     random=False,
                 )
-                return detect_kernel, project_kernel
+                return detect_kernel, project_kernel, None, None
 
 
             def gen_rotated_kernel_fns(lp, rp, rot):
@@ -2357,12 +2356,12 @@ class PuzzleJaxEnv:
                     lp = lp[0, :]
                     row_len = lp.shape[0]
                     if row_len > lvl_shape[1]:
-                        return None, None
+                        return None, None, None, None
                 elif lp_is_vertical:
                     lp = lp[:, 0]
                     col_height = lp.shape[0]
                     if col_height > lvl_shape[0]:
-                        return None, None
+                        return None, None, None, None
                 elif lp_is_single:
                     lp = lp[0, 0]
                 else:
@@ -2458,7 +2457,67 @@ class PuzzleJaxEnv:
                     rule_name=rule_name,
                     random=False,
                 )
-                return detect_kernel, project_kernel
+
+                # Point-level detection/projection closures for efficient re-checking.
+                # These check/apply at a single (y, x) position instead of the full grid.
+                _in_patch_shape = in_patch_shape
+                _cell_detection_fns = cell_detection_fns
+                _cell_projection_fns = cell_projection_fns
+
+                def detect_at_xy(lvl, xy):
+                    n_chan = lvl.shape[1]
+                    ph, pw = _in_patch_shape
+                    patch = jax.lax.dynamic_slice(
+                        lvl, (0, 0, xy[0], xy[1]), (1, n_chan, ph, pw)
+                    )[0]  # (C, ph, pw)
+                    cell_outs = []
+                    patch_active = True
+                    for ci, cell_fn in enumerate(_cell_detection_fns):
+                        if lp_is_vertical:
+                            m_cell = patch[:, ci, 0]
+                        elif lp_is_horizontal:
+                            m_cell = patch[:, 0, ci]
+                        else:  # lp_is_single
+                            m_cell = patch[:, 0, 0]
+                        cell_active, cell_out = cell_fn(m_cell=m_cell)
+                        patch_active = patch_active & cell_active
+                        cell_outs.append(cell_out)
+                    # Kernel-level aggregation (same as detect_kernel, but point-level)
+                    det_meta = {}
+                    for co in cell_outs:
+                        det_meta.update(co.detected_meta_objs)
+                    mov_idxs = [co.detected_moving_idx for co in cell_outs
+                                if co.detected_moving_idx is not None]
+                    if len(mov_idxs) == 0:
+                        det_mov = None
+                    else:
+                        det_mov = jnp.max(jnp.stack(mov_idxs, axis=0), axis=0)
+                    k_out = KernelFnReturn(
+                        detected_meta_objs=det_meta,
+                        detected_moving_idx=det_mov,
+                    )
+                    return patch_active, cell_outs, k_out
+
+                def project_at_xy(rng, lvl, xy, cell_detect_outs_pt, kernel_detect_out_pt, pattern_detect_out_pt):
+                    out_cell_idxs = np.indices(_in_patch_shape).transpose(1, 2, 0)
+                    if lp_is_vertical:
+                        out_cell_idxs = out_cell_idxs[:, 0]
+                    elif lp_is_horizontal:
+                        out_cell_idxs = out_cell_idxs[0, :]
+                    elif lp_is_single:
+                        out_cell_idxs = out_cell_idxs[0, :]
+                    for ci, (oci, cpf) in enumerate(zip(out_cell_idxs, _cell_projection_fns)):
+                        cell_xy = jnp.array(oci) + xy
+                        m_cell = lvl[0, :, cell_xy[0], cell_xy[1]]
+                        rng, m_cell = cpf(
+                            rng=rng, m_cell=m_cell, cell_i=ci,
+                            cell_detect_out=cell_detect_outs_pt[ci],
+                            kernel_detect_out=kernel_detect_out_pt,
+                            pattern_detect_out=pattern_detect_out_pt)
+                        lvl = lvl.at[0, :, cell_xy[0], cell_xy[1]].set(m_cell)
+                    return rng, lvl
+
+                return detect_kernel, project_kernel, detect_at_xy, project_at_xy
 
 
             if not has_right_pattern:
@@ -2472,15 +2531,16 @@ class PuzzleJaxEnv:
             for lp, rp in zip(lps, rps):
                 if is_line_detector_in_kernel(lp):
                     det_proj_fns = gen_rotated_line_kernel_fns(lp, rp, rot)
-                    if det_proj_fns == (None, None):
+                    if det_proj_fns[0] is None:
                         return None
                     kernel_fns.append(det_proj_fns)
                 else:
                     det_proj_fns = gen_rotated_kernel_fns(lp, rp, rot)
-                    if det_proj_fns == (None, None):
+                    if det_proj_fns[0] is None:
                         return None
                     kernel_fns.append(det_proj_fns)
-            kernel_detection_fns, kernel_projection_fns = zip(*kernel_fns)
+            kernel_detection_fns, kernel_projection_fns, kernel_detection_at_fns, kernel_projection_at_fns = zip(*kernel_fns)
+            has_point_fns = all(fn is not None for fn in kernel_detection_at_fns)
 
             def is_col_major_kernel(kernel):
                 k = np.array(kernel)
@@ -2564,10 +2624,11 @@ class PuzzleJaxEnv:
                 pattern_detected = jnp.all(jnp.sum(kernel_activations, axis=(1,2)) > 0)
                 init_lvl = lvl
 
-                multi_kernel_projected = False
-
-                # In the case of multi-kernel rules, apply each tuple of matches sequentially, re-checking after each.
-                if kernel_activations.shape[0] > 1:
+                # Apply each tuple of matches sequentially, re-checking after each
+                # (matching JS semantics where overlapping matches are re-verified
+                # before projection, for both single- and multi-kernel rules).
+                # Only needed when we actually have replacements to project.
+                if kernel_activations.shape[0] >= 1 and has_right_pattern:
                     if self.jit:
                         max_coords = kernel_activations.shape[1] * kernel_activations.shape[2]
                         coord_lists = jnp.stack(
@@ -2595,10 +2656,12 @@ class PuzzleJaxEnv:
                         safe_counts = jnp.maximum(coord_counts, 1)
                         total = jnp.where(any_empty, 0, jnp.prod(coord_counts))
 
+                        n_kernels = kernel_activations.shape[0]
+
                         def idx_to_tuple(flat_idx):
                             idxs = []
                             carry = flat_idx
-                            for k in range(kernel_activations.shape[0]):
+                            for k in range(n_kernels):
                                 base = safe_counts[k]
                                 idxs.append(carry % base)
                                 carry = carry // base
@@ -2608,43 +2671,90 @@ class PuzzleJaxEnv:
                             _, _, i = carry
                             return i < total
 
-                        def loop_body(carry):
-                            rng, lvl, i = carry
-                            kernel_activations_i, cell_detect_outs_i, kernel_detect_outs_i, pattern_detect_out_i = detect_pattern(lvl)
-                            tuple_idxs = idx_to_tuple(i)
-                            tuple_xy = coord_lists[jnp.arange(coord_lists.shape[0]), tuple_idxs]
+                        if has_point_fns:
+                            # Efficient path: re-check only at the specific positions
+                            def loop_body(carry):
+                                rng, lvl, i = carry
+                                tuple_idxs = idx_to_tuple(i)
+                                tuple_xy = coord_lists[jnp.arange(n_kernels), tuple_idxs]
 
-                            def is_valid_for_kernel(k):
-                                xy = tuple_xy[k]
-                                return kernel_activations_i[k, xy[0], xy[1]]
+                                # Point-level re-detection at each kernel position
+                                all_valid = True
+                                pt_cell_outs = []
+                                pt_kernel_outs = []
+                                for k in range(n_kernels):
+                                    xy_k = tuple_xy[k]
+                                    is_active, co_k, ko_k = kernel_detection_at_fns[k](lvl, xy_k)
+                                    all_valid = all_valid & is_active
+                                    pt_cell_outs.append(co_k)
+                                    pt_kernel_outs.append(ko_k)
 
-                            valid = jnp.all(
-                                jax.vmap(is_valid_for_kernel)(jnp.arange(kernel_activations_i.shape[0]))
-                            )
+                                # Build point-level pattern detect out
+                                pt_meta = {}
+                                for ko in pt_kernel_outs:
+                                    pt_meta.update(ko.detected_meta_objs)
+                                pt_mov_idxs = [ko.detected_moving_idx for ko in pt_kernel_outs
+                                               if ko.detected_moving_idx is not None]
+                                if len(pt_mov_idxs) == 0:
+                                    pt_mov = None
+                                else:
+                                    pt_mov = jnp.max(jnp.stack(pt_mov_idxs, axis=0), axis=0)
+                                pt_pattern_out = PatternFnReturn(
+                                    detected_meta_objs=pt_meta,
+                                    detected_moving_idx=pt_mov,
+                                )
 
-                            def apply_tuple(args):
-                                rng, lvl = args
+                                def apply_tuple(args):
+                                    rng, lvl = args
+                                    for k in range(n_kernels):
+                                        xy_k = tuple_xy[k]
+                                        rng, lvl = kernel_projection_at_fns[k](
+                                            rng, lvl, xy_k,
+                                            pt_cell_outs[k], pt_kernel_outs[k], pt_pattern_out)
+                                    return rng, lvl
 
-                                def one_hot_for_kernel(k):
+                                rng, lvl = jax.lax.cond(
+                                    all_valid,
+                                    apply_tuple,
+                                    lambda args: args,
+                                    (rng, lvl),
+                                )
+                                return rng, lvl, i + 1
+                        else:
+                            # Fallback for line kernels: full grid re-detection
+                            def loop_body(carry):
+                                rng, lvl, i = carry
+                                kernel_activations_i, cell_detect_outs_i, kernel_detect_outs_i, pattern_detect_out_i = detect_pattern(lvl)
+                                tuple_idxs = idx_to_tuple(i)
+                                tuple_xy = coord_lists[jnp.arange(n_kernels), tuple_idxs]
+
+                                def is_valid_for_kernel(k):
                                     xy = tuple_xy[k]
-                                    mask = jnp.zeros_like(kernel_activations_i[k])
-                                    return mask.at[xy[0], xy[1]].set(True)
+                                    return kernel_activations_i[k, xy[0], xy[1]]
 
-                                tuple_acts = jax.vmap(one_hot_for_kernel)(
-                                    jnp.arange(kernel_activations_i.shape[0])
+                                valid = jnp.all(
+                                    jax.vmap(is_valid_for_kernel)(jnp.arange(n_kernels))
                                 )
-                                rng, lvl = project_kernels(
-                                    rng, lvl, tuple_acts, cell_detect_outs_i, kernel_detect_outs_i, pattern_detect_out_i
-                                )
-                                return rng, lvl
 
-                            rng, lvl = jax.lax.cond(
-                                valid,
-                                apply_tuple,
-                                lambda args: args,
-                                (rng, lvl),
-                            )
-                            return rng, lvl, i + 1
+                                def apply_tuple(args):
+                                    rng, lvl = args
+                                    def one_hot_for_kernel(k):
+                                        xy = tuple_xy[k]
+                                        mask = jnp.zeros_like(kernel_activations_i[k])
+                                        return mask.at[xy[0], xy[1]].set(True)
+                                    tuple_acts = jax.vmap(one_hot_for_kernel)(jnp.arange(n_kernels))
+                                    rng, lvl = project_kernels(
+                                        rng, lvl, tuple_acts, cell_detect_outs_i, kernel_detect_outs_i, pattern_detect_out_i
+                                    )
+                                    return rng, lvl
+
+                                rng, lvl = jax.lax.cond(
+                                    valid,
+                                    apply_tuple,
+                                    lambda args: args,
+                                    (rng, lvl),
+                                )
+                                return rng, lvl, i + 1
 
                         rng, lvl, _ = jax.lax.while_loop(loop_cond, loop_body, (rng, lvl, 0))
                     else:
@@ -2660,49 +2770,64 @@ class PuzzleJaxEnv:
                             coords_per_kernel.append(coords)
                         if all(len(c) > 0 for c in coords_per_kernel):
                             for tuple_xys in itertools.product(*coords_per_kernel):
-                                kernel_activations, cell_detect_outs, kernel_detect_outs, pattern_detect_out = detect_pattern(lvl)
-                                valid = True
-                                for k_i, xy in enumerate(tuple_xys):
-                                    if not kernel_activations[k_i][xy[0], xy[1]]:
-                                        valid = False
-                                        break
-                                if not valid:
-                                    continue
-
-                                tuple_acts = []
-                                for k_i, xy in enumerate(tuple_xys):
-                                    mask = np.zeros_like(kernel_activations[k_i], dtype=bool)
-                                    mask[xy[0], xy[1]] = True
-                                    tuple_acts.append(mask)
-                                tuple_acts = np.stack(tuple_acts, axis=0)
-                                rng, lvl = project_kernels(
-                                    rng, lvl, tuple_acts, cell_detect_outs, kernel_detect_outs, pattern_detect_out
-                                )
-
-                    multi_kernel_projected = True
+                                if has_point_fns:
+                                    # Efficient point-level re-check
+                                    all_valid = True
+                                    pt_cell_outs = []
+                                    pt_kernel_outs = []
+                                    for k_i, xy in enumerate(tuple_xys):
+                                        is_active, co_k, ko_k = kernel_detection_at_fns[k_i](lvl, jnp.array(xy))
+                                        all_valid = all_valid and bool(is_active)
+                                        pt_cell_outs.append(co_k)
+                                        pt_kernel_outs.append(ko_k)
+                                        if not all_valid:
+                                            break
+                                    if not all_valid:
+                                        continue
+                                    # Build pattern detect out
+                                    pt_meta = {}
+                                    for ko in pt_kernel_outs:
+                                        pt_meta.update(ko.detected_meta_objs)
+                                    pt_mov_idxs = [ko.detected_moving_idx for ko in pt_kernel_outs
+                                                   if ko.detected_moving_idx is not None]
+                                    if len(pt_mov_idxs) == 0:
+                                        pt_mov = None
+                                    else:
+                                        pt_mov = jnp.max(jnp.stack(pt_mov_idxs, axis=0), axis=0)
+                                    pt_pattern_out = PatternFnReturn(
+                                        detected_meta_objs=pt_meta,
+                                        detected_moving_idx=pt_mov,
+                                    )
+                                    for k_i, xy in enumerate(tuple_xys):
+                                        rng, lvl = kernel_projection_at_fns[k_i](
+                                            rng, lvl, jnp.array(xy),
+                                            pt_cell_outs[k_i], pt_kernel_outs[k_i], pt_pattern_out)
+                                else:
+                                    # Fallback: full grid re-detection
+                                    kernel_activations, cell_detect_outs, kernel_detect_outs, pattern_detect_out = detect_pattern(lvl)
+                                    valid = True
+                                    for k_i, xy in enumerate(tuple_xys):
+                                        if not kernel_activations[k_i][xy[0], xy[1]]:
+                                            valid = False
+                                            break
+                                    if not valid:
+                                        continue
+                                    tuple_acts = []
+                                    for k_i, xy in enumerate(tuple_xys):
+                                        mask = np.zeros_like(kernel_activations[k_i], dtype=bool)
+                                        mask[xy[0], xy[1]] = True
+                                        tuple_acts.append(mask)
+                                    tuple_acts = np.stack(tuple_acts, axis=0)
+                                    rng, lvl = project_kernels(
+                                        rng, lvl, tuple_acts, cell_detect_outs, kernel_detect_outs, pattern_detect_out
+                                    )
 
                 cancel, restart, again, win = False, False, False, False
                 if has_right_pattern:
-                    if multi_kernel_projected:
-                        next_lvl = lvl
-                        rule_applied = jnp.any(next_lvl != init_lvl)
-                    else:
-                        if self.jit:
-                            rng, next_lvl = jax.lax.cond(
-                                pattern_detected,
-                                project_kernels,
-                                lambda rng, lvl, pattern_activations, cell_detect_outs_i, kernel_detect_outs_i, pattern_detect_out_i: (rng, lvl),
-                                rng, lvl, kernel_activations, cell_detect_outs, kernel_detect_outs, pattern_detect_out,
-                            )
-                        else:
-                            if pattern_detected:
-                                rng, next_lvl = project_kernels(
-                                    rng, lvl, kernel_activations, cell_detect_outs, kernel_detect_outs, pattern_detect_out
-                                )
-                            else:
-                                next_lvl = lvl
-
-                        rule_applied = jnp.any(next_lvl != lvl)
+                    # Sequential re-check path always runs for rules with replacements,
+                    # so results are in `lvl` (potentially modified by projections).
+                    next_lvl = lvl
+                    rule_applied = jnp.any(next_lvl != init_lvl)
                 else:
                     next_lvl = lvl
                     rule_applied = False

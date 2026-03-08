@@ -82,6 +82,7 @@ def save_results(results, results_path):
     with open(results_path, 'w') as f:
         json.dump(results, f, indent=4)
 
+
 @hydra.main(version_base="1.3", config_path='./conf', config_name='profile_jax')
 def profile(cfg: ProfileJaxRandConfig):
     logging.getLogger().setLevel(logging.WARNING)
@@ -118,7 +119,6 @@ def profile(cfg: ProfileJaxRandConfig):
     env_dir = os.path.join(steps_dir, env_type_str)
     os.makedirs(env_dir, exist_ok=True)
     last_game = None
-    compiled_env_cache = {}
 
     for (game, n_envs, vmap) in zip(games, BATCH_SIZES, VMAPS):
 
@@ -160,40 +160,6 @@ def profile(cfg: ProfileJaxRandConfig):
             # jax.clear_caches()
 
             env_params = get_env_params_from_config(env, cfg)
-            cache_key = (game, level_i, vmap, cfg.use_switch_env)
-            cached_env = compiled_env_cache.get(cache_key)
-            if cached_env is None:
-                print('  Compiling single-environment reset/step for cache reuse across n_envs...')
-                single_env_reset = jax.jit(functools.partial(env.reset, params=env_params))
-                single_env_step = jax.jit(functools.partial(env.step, params=env_params))
-
-                rng, reset_compile_rng = jax.random.split(rng)
-                _, sample_env_state = single_env_reset(reset_compile_rng)
-                sample_env_state.multihot_level.block_until_ready()
-
-                rng, step_compile_rng = jax.random.split(rng)
-                env_compile_start = timer()
-                _, sample_env_state, _, _, _ = single_env_step(step_compile_rng, sample_env_state, 0)
-                sample_env_state.multihot_level.block_until_ready()
-                env_compile_time = timer() - env_compile_start
-                print(f'  Finished single-environment compile in {env_compile_time:.3f} seconds.')
-
-                cached_env = {
-                    'reset': single_env_reset,
-                    'step': single_env_step,
-                    'env_compile_time': env_compile_time,
-                }
-                compiled_env_cache[cache_key] = cached_env
-                env_compile_reused = False
-            else:
-                print('  Reusing cached single-environment compilation.')
-                env_compile_reused = True
-
-            single_env_reset = cached_env['reset']
-            single_env_step = cached_env['step']
-            env_compile_time = 0.0 if env_compile_reused else cached_env['env_compile_time']
-            batched_reset = jax.vmap(single_env_reset, in_axes=(0,))
-            batched_step = jax.vmap(single_env_step, in_axes=(0, 0, 0))
 
             # INIT ENV
             rng, _rng = jax.random.split(rng)
@@ -207,7 +173,9 @@ def profile(cfg: ProfileJaxRandConfig):
 
                 # STEP ENV
                 rng_step = jax.random.split(_rng, n_envs)
-                obsv, env_state, reward, done, info = batched_step(rng_step, env_state, action)
+                obsv, env_state, reward, done, info = jax.vmap(
+                    env.step, in_axes=(0, 0, 0, None)
+                )(rng_step, env_state, action, env_params)
                 carry = (env_state, rng)
                 return carry, None
 
@@ -215,7 +183,7 @@ def profile(cfg: ProfileJaxRandConfig):
 
             try:
                 # with jax.profiler.trace("/tmp/jax-trace", create_perfetto_link=True):
-                obsv, env_state = batched_reset(reset_rng)
+                obsv, env_state = jax.vmap(env.reset, in_axes=(0, None))(reset_rng, env_params)
                 carry = (env_state, rng)
                 # jax.config.update('jax_log_compiles', True)
 
@@ -230,10 +198,7 @@ def profile(cfg: ProfileJaxRandConfig):
                 carry[0].multihot_level.block_until_ready()
                 exec_time_2nd = timer() - start
                 print(f'Finished 2nd step (execute only) in {exec_time_2nd:.3f} seconds.')
-                batch_compile_time_est = compile_time - exec_time_2nd
-                total_compile_time_est = env_compile_time + batch_compile_time_est
-                print(f'Estimated batched-wrapper compile time: {batch_compile_time_est:.3f} seconds.')
-                print(f'Estimated total incremental compile time: {total_compile_time_est:.3f} seconds.')
+                print(f'Estimated compile time: {compile_time - exec_time_2nd:.3f} seconds.')
 
                 n_env_steps = cfg.n_steps * n_envs
                 times = []
@@ -277,10 +242,7 @@ def profile(cfg: ProfileJaxRandConfig):
             n_envs_to_fps[str(n_envs)] = {
                 'fps': fpss,
                 'compile_time': compile_time,
-                'compile_time_est': total_compile_time_est,
-                'batch_compile_time_est': batch_compile_time_est,
-                'env_compile_time': env_compile_time,
-                'env_compile_reused': env_compile_reused,
+                'compile_time_est': compile_time - exec_time_2nd,
                 'use_switch_env': cfg.use_switch_env,
             }
             save_results(n_envs_to_fps, results_path)

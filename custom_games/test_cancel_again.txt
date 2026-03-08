@@ -1,0 +1,132 @@
+title Cancel During Again Test
+author test
+again_interval 0
+
+(
+  DISCREPANCY: When "cancel" fires during an "again" sequence, what
+  state does the level revert to?
+
+  JS behaviour:
+    Each "again" iteration is a fresh processInput call.
+    bak = backupLevel() captures the state BEFORE this processInput.
+    If cancel fires, DoUndo(bak) reverts to the start of THIS
+    again-iteration only.  Changes from prior again-iterations persist.
+
+  JAX behaviour:
+    In apply_turn, prev_carry holds the state at the start of the
+    current while_loop iteration.  If cancelled, we revert to
+    prev_carry[0].  This should match JS -- prior iterations' changes
+    persist.
+
+  Setup:
+  - A Blob slides right via "again".
+  - A Trap sits 3 cells to the right of the Blob.
+  - When the Blob lands on the Trap, "cancel" fires.
+
+  Expected result:
+  - The Blob should end up one cell LEFT of the Trap.
+    (The iteration that moved it onto the Trap is cancelled, but
+     prior again-iterations that moved it toward the Trap persist.)
+
+  If reversion goes too far back (to before ANY again iterations),
+  the Blob stays at its original position -- that would be a bug.
+)
+
+========
+OBJECTS
+========
+
+Background
+black
+
+Player
+blue
+.000.
+.111.
+00100
+.000.
+.0.0.
+
+Wall
+brown
+
+Blob
+red
+.....
+.000.
+.000.
+.000.
+.....
+
+Trap
+orange
+.....
+.0.0.
+..0..
+.0.0.
+.....
+
+Target
+green
+.....
+.000.
+.0.0.
+.000.
+.....
+
+=======
+LEGEND
+=======
+
+. = Background
+# = Wall
+P = Player
+B = Blob
+R = Trap
+T = Target
+
+=======
+SOUNDS
+=======
+
+================
+COLLISIONLAYERS
+================
+
+Background
+Player, Wall
+Blob
+Trap
+Target
+
+======
+RULES
+======
+
+( Slide Blob right, one cell per again-turn )
+right [ Blob | no Wall no Blob ] -> [ | Blob ] again
+
+( If Blob lands on Trap, cancel the turn )
+late [ Blob Trap ] -> cancel
+
+==============
+WINCONDITIONS
+==============
+
+All Blob on Target
+
+=======
+LEVELS
+=======
+
+( Blob starts 3 cells left of Trap.
+  Target is just left of Trap -- where the Blob should end up.
+  B . . T R .
+  After 3 again-iterations the Blob reaches the Trap cell.
+  Late cancel fires, reverting the 3rd iteration.
+  Blob ends on the Target cell (2 cells right of start). )
+
+########
+#P.....#
+#B..TR.#
+########

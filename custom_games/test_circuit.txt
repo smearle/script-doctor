@@ -1,0 +1,113 @@
+title Circuit Breaker
+author Zithral
+homepage www.puzzlescript.net
+
+noaction
+key_repeat_interval 0.15
+
+========
+OBJECTS
+========
+
+Background
+BLACK #333333
+00000
+01100
+01010
+00110
+00000
+
+Wall
+BLACK DARKGRAY
+11111
+11111
+11111
+11111
+11111
+
+Player
+DARKBROWN Orange White Blue
+.000.
+.111.
+22222
+.333.
+.3.3.
+
+Crate
+BLACK #333333 #555555 #666666
+22222
+23332
+23332
+23332
+22222
+
+EdgeU
+#00aa00
+..0..
+..0..
+..0..
+.....
+.....
+
+EdgeL
+#00aa00
+.....
+.....
+000..
+.....
+.....
+
+
+=======
+LEGEND
+=======
+
+. = Background
+# = Wall
+P = Player
+╝ = Crate and EdgeL and EdgeU
+
+Blocker = Wall or Crate
+Edge = EdgeU or EdgeL
+
+=======
+SOUNDS
+=======
+
+Crate MOVE 36772507
+
+================
+COLLISIONLAYERS
+================
+
+Background
+Player, Wall, Crate
+EdgeU
+EdgeL
+
+
+======
+RULES
+======
+
+[ > Player | Crate ] -> [ > Player | > Crate ]
+[ > Crate Edge ] -> [ > Crate > Edge ]
+
+==============
+WINCONDITIONS
+==============
+
+
+
+=======
+LEVELS
+=======
+
+#######
+#.....#
+#..╝p.#
+#.....#
+#######
+
+
+
