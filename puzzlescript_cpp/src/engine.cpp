@@ -59,6 +59,102 @@ Engine::~Engine() {
     clearEngine();
 }
 
+Engine::Engine(Engine&& other) noexcept
+    : objectCount_(other.objectCount_),
+      layerCount_(other.layerCount_),
+      STRIDE_OBJ_(other.STRIDE_OBJ_),
+      STRIDE_MOV_(other.STRIDE_MOV_),
+      rigid_(other.rigid_),
+      idDict_(std::move(other.idDict_)),
+      playerMask_(std::move(other.playerMask_)),
+      playerMaskAggregate_(other.playerMaskAggregate_),
+      layerMasks_(std::move(other.layerMasks_)),
+      rules_(std::move(other.rules_)),
+      lateRules_(std::move(other.lateRules_)),
+      loopPoint_(std::move(other.loopPoint_)),
+      lateLoopPoint_(std::move(other.lateLoopPoint_)),
+      winconditions_(std::move(other.winconditions_)),
+      levels_(std::move(other.levels_)),
+      backgroundid_(other.backgroundid_),
+      backgroundlayer_(other.backgroundlayer_),
+      rigidGroupIndex_to_GroupIndex_(std::move(other.rigidGroupIndex_to_GroupIndex_)),
+      groupNumber_to_RigidGroupIndex_(std::move(other.groupNumber_to_RigidGroupIndex_)),
+      metadata_(std::move(other.metadata_)),
+      objectInfos_(std::move(other.objectInfos_)),
+      level_(std::move(other.level_)),
+      winning_(other.winning_),
+      againing_(other.againing_),
+      rng_(other.rng_),
+      curLevel_(other.curLevel_),
+      _o1(std::move(other._o1)), _o2(std::move(other._o2)),
+      _o2_5(std::move(other._o2_5)), _o3(std::move(other._o3)),
+      _o4(std::move(other._o4)), _o5(std::move(other._o5)),
+      _o6(std::move(other._o6)), _o7(std::move(other._o7)),
+      _o8(std::move(other._o8)),
+      _m1(std::move(other._m1)), _m2(std::move(other._m2)),
+      _m3(std::move(other._m3)),
+      sfxCreateMask_(std::move(other.sfxCreateMask_)),
+      sfxDestroyMask_(std::move(other.sfxDestroyMask_)),
+      allCellPatterns_(std::move(other.allCellPatterns_)),
+      allCellReplacements_(std::move(other.allCellReplacements_)),
+      allRules_(std::move(other.allRules_))
+{
+    // Clear other's ownership vectors so its destructor doesn't free
+    other.allCellPatterns_.clear();
+    other.allCellReplacements_.clear();
+    other.allRules_.clear();
+}
+
+Engine& Engine::operator=(Engine&& other) noexcept {
+    if (this != &other) {
+        clearEngine();
+
+        objectCount_ = other.objectCount_;
+        layerCount_ = other.layerCount_;
+        STRIDE_OBJ_ = other.STRIDE_OBJ_;
+        STRIDE_MOV_ = other.STRIDE_MOV_;
+        rigid_ = other.rigid_;
+        idDict_ = std::move(other.idDict_);
+        playerMask_ = std::move(other.playerMask_);
+        playerMaskAggregate_ = other.playerMaskAggregate_;
+        layerMasks_ = std::move(other.layerMasks_);
+        rules_ = std::move(other.rules_);
+        lateRules_ = std::move(other.lateRules_);
+        loopPoint_ = std::move(other.loopPoint_);
+        lateLoopPoint_ = std::move(other.lateLoopPoint_);
+        winconditions_ = std::move(other.winconditions_);
+        levels_ = std::move(other.levels_);
+        backgroundid_ = other.backgroundid_;
+        backgroundlayer_ = other.backgroundlayer_;
+        rigidGroupIndex_to_GroupIndex_ = std::move(other.rigidGroupIndex_to_GroupIndex_);
+        groupNumber_to_RigidGroupIndex_ = std::move(other.groupNumber_to_RigidGroupIndex_);
+        metadata_ = std::move(other.metadata_);
+        objectInfos_ = std::move(other.objectInfos_);
+        level_ = std::move(other.level_);
+        winning_ = other.winning_;
+        againing_ = other.againing_;
+        rng_ = other.rng_;
+        curLevel_ = other.curLevel_;
+        _o1 = std::move(other._o1); _o2 = std::move(other._o2);
+        _o2_5 = std::move(other._o2_5); _o3 = std::move(other._o3);
+        _o4 = std::move(other._o4); _o5 = std::move(other._o5);
+        _o6 = std::move(other._o6); _o7 = std::move(other._o7);
+        _o8 = std::move(other._o8);
+        _m1 = std::move(other._m1); _m2 = std::move(other._m2);
+        _m3 = std::move(other._m3);
+        sfxCreateMask_ = std::move(other.sfxCreateMask_);
+        sfxDestroyMask_ = std::move(other.sfxDestroyMask_);
+        allCellPatterns_ = std::move(other.allCellPatterns_);
+        allCellReplacements_ = std::move(other.allCellReplacements_);
+        allRules_ = std::move(other.allRules_);
+
+        other.allCellPatterns_.clear();
+        other.allCellReplacements_.clear();
+        other.allRules_.clear();
+    }
+    return *this;
+}
+
 void Engine::clearEngine() {
     for (auto* cp : allCellPatterns_) delete cp;
     allCellPatterns_.clear();
@@ -1206,6 +1302,19 @@ bool Engine::checkWin() {
     return winning_;
 }
 
+bool Engine::cellMatchesWinMask(const WinCondition& wc, const BitVec& mask, bool aggregate,
+                                bool mask_is_all, int tileIndex) const {
+    if (mask_is_all) {
+        return true;
+    }
+    BitVec cell(level_.STRIDE_OBJ);
+    level_.getCellInto(tileIndex, cell);
+    if (aggregate) {
+        return mask.bitsSetInArray(cell.data.data());
+    }
+    return mask.anyBitsInCommon(cell);
+}
+
 // ============================================================
 // processInput
 // ============================================================
@@ -1356,3 +1465,4 @@ const std::vector<int32_t>& Engine::getObjects() const {
 int Engine::getWidth() const { return level_.width; }
 int Engine::getHeight() const { return level_.height; }
 int Engine::getObjectCount() const { return objectCount_; }
+bool Engine::hasMetadata(const std::string& key) const { return metadata_.find(key) != metadata_.end(); }

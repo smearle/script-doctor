@@ -1,0 +1,9 @@
+- game=sokoban_basic
+- level=0
+- n_envs=8
+- num_steps=16
+- total_timesteps=4096
+- wandb_mode=disabled
+- save_freq=5
+- render_freq=10
+- n_render_eps=2

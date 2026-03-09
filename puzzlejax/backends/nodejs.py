@@ -29,10 +29,12 @@ class NodeJSPuzzleScriptBackend(PuzzleScriptSearchBackend):
     _ROOT_DIR = Path(__file__).resolve().parents[2]
     _ENGINE_PATH = str(_ROOT_DIR / "puzzlescript_nodejs" / "puzzlescript" / "engine.js")
     _SOLVER_PATH = str(_ROOT_DIR / "puzzlescript_nodejs" / "puzzlescript" / "solver.js")
+    _GIF_PATH = str(_ROOT_DIR / "puzzlescript_nodejs" / "puzzlescript" / "gif.js")
 
     def __init__(self) -> None:
         self.engine = require(self._ENGINE_PATH)
         self.solver = require(self._SOLVER_PATH)
+        self.gif = require(self._GIF_PATH)
 
     def compile_game(self, parser: Any, game: str) -> str:
         return compile_game(parser, self.engine, game, 0)
@@ -46,32 +48,34 @@ class NodeJSPuzzleScriptBackend(PuzzleScriptSearchBackend):
     def unload_game(self) -> None:
         self.engine.unloadGame()
 
-    def render_frame(self, level) -> np.ndarray:
-        state = self.engine.getState()
-        n_objs = len(list(state["idDict"]))
-        level_arr = level_to_int_arr(level, n_objs)
-        sprites = self._get_sprite_specs(state)
-        visible_bounds = self._get_visible_bounds(level)
-        mini, minj, maxi, maxj = visible_bounds
-        cell_h, cell_w = sprites[0]["pixels"].shape[:2]
-        frame = np.zeros(((maxj - minj) * cell_h, (maxi - mini) * cell_w, 3), dtype=np.uint8)
-        frame[:] = self._hex_to_rgb(state["bgcolor"])
+    def render_frame(self, level=None) -> np.ndarray:
+        """Render current (or given) level state using the JS-native renderer.
 
-        for x in range(mini, maxi):
-            for y in range(minj, maxj):
-                cell_bits = int(level_arr[x, y])
-                if cell_bits == 0:
-                    continue
-                px = (x - mini) * cell_w
-                py = (y - minj) * cell_h
-                for obj_id, sprite in enumerate(sprites):
-                    if ((cell_bits >> obj_id) & 1) == 0:
-                        continue
-                    sprite_pixels = sprite["pixels"]
-                    alpha_mask = sprite["mask"]
-                    tile = frame[py:py + cell_h, px:px + cell_w]
-                    tile[alpha_mask] = sprite_pixels[alpha_mask]
-        return frame
+        ``level`` can be a JS level object (from backupLevel / takeAction) or
+        ``None`` to render the current engine level.
+        """
+        if level is not None:
+            result = self.engine.renderFrame(level)
+        else:
+            result = self.engine.renderFrame()
+        if result is None:
+            raise RuntimeError("JS renderFrame returned null — is a game compiled?")
+        width = int(result["width"])
+        height = int(result["height"])
+        data = list(result["data"])
+        return np.array(data, dtype=np.uint8).reshape((height, width, 3))
+
+    def render_frame_from_objects(
+        self, objects: list[int], grid_w: int, grid_h: int,
+    ) -> np.ndarray:
+        """Render a frame from a raw objects array via JS-native renderer."""
+        result = self.engine.renderFrameFromObjects(objects, grid_w, grid_h)
+        if result is None:
+            raise RuntimeError("JS renderFrameFromObjects returned null")
+        width = int(result["width"])
+        height = int(result["height"])
+        data = list(result["data"])
+        return np.array(data, dtype=np.uint8).reshape((height, width, 3))
 
     def render_gif(
         self,
@@ -81,26 +85,39 @@ class NodeJSPuzzleScriptBackend(PuzzleScriptSearchBackend):
         actions: list[int] | tuple[int, ...],
         gif_path: str,
         frame_duration_s: float = 0.1,
-        scale: int = 10,
+        scale: int = 1,
     ) -> str:
-        self.load_level(game_text, level_i)
-        self.solver.precalcDistances(self.engine)
-        frames = [self.render_frame(self.engine.backupLevel())]
-        for action in actions:
-            _, _, _, _, _, level, _, _ = self.solver.takeAction(self.engine, action)
-            frames.append(self.render_frame(level))
-
-        if scale > 1:
-            frames = [
-                np.repeat(np.repeat(frame, scale, axis=0), scale, axis=1)
-                for frame in frames
-            ]
-
         gif_dir = os.path.dirname(gif_path)
         if gif_dir:
             os.makedirs(gif_dir, exist_ok=True)
-        imageio.mimsave(gif_path, frames, duration=frame_duration_s, loop=0)
-        return gif_path
+        try:
+            return self.gif.renderSolutionGif(
+                {
+                    "gameText": game_text,
+                    "levelIndex": int(level_i),
+                    "actions": [int(action) for action in actions],
+                    "gifPath": gif_path,
+                    "frameDurationMs": int(round(frame_duration_s * 1000)),
+                    "scale": int(scale),
+                }
+            )
+        except Exception:
+            # Fallback preserves existing behavior if the JS-native path breaks.
+            self.load_level(game_text, level_i)
+            self.solver.precalcDistances(self.engine)
+            frames = [self.render_frame(self.engine.backupLevel())]
+            for action in actions:
+                _, _, _, _, _, level, _, _ = self.solver.takeAction(self.engine, action)
+                frames.append(self.render_frame(level))
+
+            if scale > 1:
+                frames = [
+                    np.repeat(np.repeat(frame, scale, axis=0), scale, axis=1)
+                    for frame in frames
+                ]
+
+            imageio.mimsave(gif_path, frames, duration=frame_duration_s, loop=0)
+            return gif_path
 
     def run_search(
         self,
@@ -229,26 +246,3 @@ class NodeJSPuzzleScriptBackend(PuzzleScriptSearchBackend):
         if mini >= maxi or minj >= maxj:
             return 0, 0, width, height
         return mini, minj, min(maxi, width), min(maxj, height)
-
-    @classmethod
-    def _get_sprite_specs(cls, state) -> list[dict[str, np.ndarray]]:
-        sprites = []
-        for obj_name in list(state["idDict"]):
-            obj = state["objects"][obj_name]
-            sprite_rows = np.array([list(row) for row in obj["spritematrix"]], dtype=np.int16)
-            mask = sprite_rows >= 0
-            pixels = np.zeros((*sprite_rows.shape, 3), dtype=np.uint8)
-            colors = [cls._hex_to_rgb(color) for color in list(obj["colors"])]
-            for color_idx, color in enumerate(colors):
-                pixels[sprite_rows == color_idx] = color
-            sprites.append({"pixels": pixels, "mask": mask})
-        return sprites
-
-    @staticmethod
-    def _hex_to_rgb(value: str) -> np.ndarray:
-        value = value.lstrip("#")
-        if len(value) == 3:
-            value = "".join(ch * 2 for ch in value)
-        if len(value) != 6:
-            raise ValueError(f"Unsupported color value: {value!r}")
-        return np.array([int(value[i:i + 2], 16) for i in (0, 2, 4)], dtype=np.uint8)

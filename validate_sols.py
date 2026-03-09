@@ -53,6 +53,52 @@ def _dedupe_preserve_order(items, key_fn=None):
     return list(seen.values())
 
 
+def make_side_by_side_frames(left_frames, right_frames, separator_w=2):
+    if len(left_frames) == 0 or len(right_frames) == 0:
+        return []
+
+    def normalize_frame(frame):
+        frame = np.asarray(frame, dtype=np.uint8)
+        if frame.ndim != 3:
+            raise ValueError(f"Expected HWC frame, got shape {frame.shape}")
+        if frame.shape[2] == 4:
+            return frame[:, :, :3]
+        if frame.shape[2] == 3:
+            return frame
+        raise ValueError(f"Unsupported channel count {frame.shape[2]} for frame shape {frame.shape}")
+
+    left_frames = [normalize_frame(frame) for frame in left_frames]
+    right_frames = [normalize_frame(frame) for frame in right_frames]
+    max_len = max(len(left_frames), len(right_frames))
+    while len(left_frames) < max_len:
+        left_frames.append(left_frames[-1])
+    while len(right_frames) < max_len:
+        right_frames.append(right_frames[-1])
+
+    combo_frames = []
+    for left_frame, right_frame in zip(left_frames, right_frames):
+        left_h, _ = left_frame.shape[:2]
+        right_h, _ = right_frame.shape[:2]
+        frame_h = max(left_h, right_h)
+        if left_h < frame_h:
+            left_frame = np.pad(left_frame, ((0, frame_h - left_h), (0, 0), (0, 0)))
+        if right_h < frame_h:
+            right_frame = np.pad(right_frame, ((0, frame_h - right_h), (0, 0), (0, 0)))
+        separator = np.full((frame_h, separator_w, 3), 128, dtype=np.uint8)
+        combo_frames.append(np.concatenate([left_frame, separator, right_frame], axis=1))
+
+    return combo_frames
+
+
+def get_trace_js_gif_path(level_sol_json_path: str) -> str:
+    return os.path.splitext(level_sol_json_path)[0] + '_sol.gif'
+
+
+def resolve_js_gif_path(level_sol_json_path: str, sol_dir: str, level_i: int) -> str:
+    trace_path = get_trace_js_gif_path(level_sol_json_path)
+    return trace_path
+
+
 def multihot_level_from_js_state(level_state, obj_list, target_obj_names=None):
     level_state = np.array(level_state).T
     multihot_level_js = to_binary_vectors(level_state, len(obj_list))
@@ -399,17 +445,23 @@ def main(cfg: JaxValidationConfig, games: Optional[List[str]] = None):
             run_log_path = os.path.join(jax_sol_dir, f'level-{level_i}_runtime_err.txt')
             state_log_path = os.path.join(jax_sol_dir, f'level-{level_i}_state_err.txt')
             gif_path = os.path.join(jax_sol_dir, f'level-{level_i}.gif')
+            compare_gif_path = os.path.join(jax_sol_dir, f'level-{level_i}_compare.gif')
 
             # Skip if we already have a result and are not overwritiing.
             if (os.path.exists(gif_path) or os.path.exists(sol_log_path) or os.path.exists(score_log_path)
-                    or os.path.exists(run_log_path) or os.path.exists(state_log_path)):
+                    or os.path.exists(run_log_path) or os.path.exists(state_log_path)
+                    or os.path.exists(compare_gif_path) or os.path.exists(intermediary_scores_log_path)):
                 if cfg.overwrite:
                     if os.path.exists(gif_path):
                         os.remove(gif_path)
+                    if os.path.exists(compare_gif_path):
+                        os.remove(compare_gif_path)
                     if os.path.exists(sol_log_path):
                         os.remove(sol_log_path)
                     if os.path.exists(score_log_path):
                         os.remove(score_log_path)
+                    if os.path.exists(intermediary_scores_log_path):
+                        os.remove(intermediary_scores_log_path)
                     if os.path.exists(run_log_path):
                         os.remove(run_log_path)
                     if os.path.exists(state_log_path):
@@ -559,7 +611,7 @@ def main(cfg: JaxValidationConfig, games: Optional[List[str]] = None):
             actions = jnp.array([int(a) for a in actions], dtype=jnp.int32)
 
             params = get_env_params_from_config(env, cfg)
-            js_gif_path = os.path.join(sol_dir, f'level-{level_i}_sol.gif')
+            js_gif_path = resolve_js_gif_path(level_sol_path, sol_dir, level_i)
             level = env.get_level(level_i)
             if level is None:
                 print(f"Level {level_i} not found in game {game_name}, skipping. Must be an old JS solution generated "
@@ -704,13 +756,29 @@ def main(cfg: JaxValidationConfig, games: Optional[List[str]] = None):
             imageio.mimsave(gif_path, frames, duration=1, loop=0)
             print(f'Saved gif to {gif_path}')
 
-            # Copy over the js gif corresponding to the solution
-            js_gif_path = level_sol_path.replace('.json', '_sol.gif')
-
+            # Copy over the JS gif corresponding to the level solution. This is
+            # stored per-level in data/js_sols/<game>/level-{i}_sol.gif.
+            copied_js_gif_path = os.path.join(jax_sol_dir, f'level-{level_i}_js.gif')
             if os.path.isfile(js_gif_path):
-                shutil.copy(js_gif_path, os.path.join(jax_sol_dir, f'level-{level_i}_js.gif'))
+                shutil.copy(js_gif_path, copied_js_gif_path)
             else:
+                print(f"Warning: JS gif missing for level {level_i}; expected {js_gif_path}. "
+                      "Skipping comparison gif generation.")
                 js_gif_path = None
+
+            try:
+                if js_gif_path is not None and os.path.isfile(js_gif_path) and os.path.isfile(gif_path):
+                    js_frames = imageio.mimread(js_gif_path)
+                    jax_frames = imageio.mimread(gif_path)
+                    compare_frames = make_side_by_side_frames(js_frames, jax_frames)
+                    if compare_frames:
+                        imageio.mimsave(compare_gif_path, compare_frames, duration=1, loop=0)
+                        print(f'Saved comparison gif to {compare_gif_path}')
+                    else:
+                        print(f'Could not make comparison gif for level {level_i} because js_frames or jax_frames is empty')
+            except Exception:
+                print(f"Failed to generate comparison gif for level {level_i}")
+                traceback.print_exc()
 
             jax.clear_caches()
 

@@ -346,6 +346,160 @@ globalThis.__PS_NODE_API__ = {
     serializeCompiledState,
     serializeCompiledStateJSON: () => JSON.stringify(serializeCompiledState()),
     serializeLevel,
+    serializeSpriteDataJSON: () => {
+        if (!state) return '{}';
+        const sprites = [];
+        for (const name of state.idDict) {
+            const obj = state.objects[name];
+            const colors = obj.colors.map(c => String(c));
+            const matrix = [];
+            for (let r = 0; r < obj.spritematrix.length; r++) {
+                matrix.push(Array.from(obj.spritematrix[r]));
+            }
+            sprites.push({ name, colors, spritematrix: matrix });
+        }
+        const bgcolor = (state.bgcolor || '#000000').toString();
+        return JSON.stringify({ sprites, bgcolor });
+    },
+
+    // ---------------------------------------------------------------
+    // JS-native frame rendering (mirrors graphics.js redraw logic)
+    // Returns { width, height, cellWidth, cellHeight, data: [...] }
+    // where data is a flat array of RGB uint8 values (h*ch, w*cw, 3).
+    // If levelObj is provided, render that; otherwise render current level.
+    // ---------------------------------------------------------------
+    renderFrame: (levelObj) => {
+        if (!state) return null;
+        const lv = levelObj || level;
+        if (!lv) return null;
+        // backupLevel() stores objects in 'dat'; Level objects use 'objects'
+        const objArr = lv.objects || lv.dat;
+        if (!objArr) return null;
+
+        const w = lv.width;
+        const h = lv.height;
+        const objectCount = state.objectCount;
+
+        // Parse hex color to [r,g,b]
+        function hexToRGB(hex) {
+            hex = hex.replace('#', '');
+            if (hex.length === 3) hex = hex[0]+hex[0]+hex[1]+hex[1]+hex[2]+hex[2];
+            return [
+                parseInt(hex.substring(0, 2), 16),
+                parseInt(hex.substring(2, 4), 16),
+                parseInt(hex.substring(4, 6), 16),
+            ];
+        }
+
+        // Pre-render sprites into pixel arrays (matching createSprite logic)
+        // Each sprite: { pixels: Uint8Array(ch*cw*3), mask: Uint8Array(ch*cw) }
+        const spriteData = state.idDict.map(name => {
+            const obj = state.objects[name];
+            const grid = obj.spritematrix;
+            const colors = obj.colors;
+            const gh = grid.length;
+            const gw = gh > 0 ? grid[0].length : 0;
+            // Cell size = sprite grid size (typically 5x5)
+            // In graphics.js: cw = ~~(cellwidth / w), ch = ~~(cellheight / h)
+            // But without a canvas, cellwidth/cellheight are the sprite dimensions.
+            // The original uses cellwidth = canvas.width / screenwidth, and
+            // each sprite is drawn at grid[j][k] -> fillRect(k*cw, j*ch, cw, pixh).
+            // Without a canvas, the natural cell size = sprite grid dimensions.
+            const pixels = new Uint8Array(gh * gw * 3);
+            const mask = new Uint8Array(gh * gw);
+            for (let j = 0; j < gh; j++) {
+                for (let k = 0; k < gw; k++) {
+                    const val = grid[j][k];
+                    if (val >= 0) {
+                        const rgb = hexToRGB(String(colors[val]));
+                        const idx = (j * gw + k);
+                        pixels[idx * 3    ] = rgb[0];
+                        pixels[idx * 3 + 1] = rgb[1];
+                        pixels[idx * 3 + 2] = rgb[2];
+                        mask[idx] = 1;
+                    }
+                }
+            }
+            return { pixels, mask, cw: gw, ch: gh };
+        });
+
+        // Determine cell size from first sprite
+        const cellW = spriteData.length > 0 ? spriteData[0].cw : 5;
+        const cellH = spriteData.length > 0 ? spriteData[0].ch : 5;
+
+        // Allocate output frame
+        const frameW = w * cellW;
+        const frameH = h * cellH;
+        const data = new Uint8Array(frameH * frameW * 3);
+
+        // Fill background
+        const bg = hexToRGB(String(state.bgcolor || '#000000'));
+        for (let p = 0; p < frameH * frameW; p++) {
+            data[p * 3    ] = bg[0];
+            data[p * 3 + 1] = bg[1];
+            data[p * 3 + 2] = bg[2];
+        }
+
+        // Render cells — matching redraw() iteration order exactly:
+        //   for i (x/col) in [0, width), for j (y/row) in [0, height)
+        //     posIndex = j + i * height  (column-major)
+        //     for each object k, if bit set, composite sprite
+        for (let i = 0; i < w; i++) {
+            for (let j = 0; j < h; j++) {
+                const posIndex = j + i * h;
+                const baseIdx = posIndex * STRIDE_OBJ;
+                // Check if any bits are set (skip empty cells)
+                let anySet = false;
+                for (let s = 0; s < STRIDE_OBJ; s++) {
+                    if (objArr[baseIdx + s] !== 0) { anySet = true; break; }
+                }
+                if (!anySet) continue;
+
+                const px = i * cellW;
+                const py = j * cellH;
+                for (let k = 0; k < objectCount; k++) {
+                    const word = k >> 5;    // k / 32
+                    const bit = k & 31;     // k % 32
+                    if ((objArr[baseIdx + word] & (1 << bit)) === 0) continue;
+                    if (k >= spriteData.length) continue;
+                    const sp = spriteData[k];
+                    // Composite sprite pixels onto frame
+                    for (let sj = 0; sj < sp.ch; sj++) {
+                        for (let sk = 0; sk < sp.cw; sk++) {
+                            const si = sj * sp.cw + sk;
+                            if (!sp.mask[si]) continue;
+                            const fx = px + sk;
+                            const fy = py + sj;
+                            const fi = (fy * frameW + fx) * 3;
+                            data[fi    ] = sp.pixels[si * 3    ];
+                            data[fi + 1] = sp.pixels[si * 3 + 1];
+                            data[fi + 2] = sp.pixels[si * 3 + 2];
+                        }
+                    }
+                }
+            }
+        }
+
+        return {
+            width: frameW,
+            height: frameH,
+            cellWidth: cellW,
+            cellHeight: cellH,
+            gridWidth: w,
+            gridHeight: h,
+            data: Array.from(data),
+        };
+    },
+
+    // Render from a raw objects array (e.g. from a saved state / backup)
+    // objects: flat Int32Array or Array of column-major bitfield words
+    // gridW, gridH: level dimensions
+    renderFrameFromObjects: (objects, gridW, gridH) => {
+        if (!state) return null;
+        // Create a minimal level-like object
+        const fakeLv = { width: gridW, height: gridH, objects: objects };
+        return globalThis.__PS_NODE_API__.renderFrame(fakeLv);
+    },
 };
 `;
 

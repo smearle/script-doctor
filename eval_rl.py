@@ -13,7 +13,7 @@ from puzzlejax.env import PuzzleJaxEnv, PJState
 # from envs.probs.problem import get_loss
 # from eval import get_eval_name, init_config_for_eval
 from purejaxrl.wrappers import LogWrapper
-from train import init_checkpointer
+from train_jax import init_checkpointer
 from utils_rl import get_env_params_from_config, get_exp_dir, init_network, init_ps_env, init_config
 
 

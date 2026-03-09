@@ -27,7 +27,7 @@ PRIORITY_GAMES = [
     'kettle',
     'limerick',
     'notsnake',
-    'slidings',
+    'Slidings',
     'sokoban_basic',
     'sokoban_match3',
     'Smother',
@@ -44,14 +44,17 @@ PLOTS_DIR = 'plots'
 GAMES_N_RULES_SORTED_PATH = os.path.join(DATA_DIR, 'games_n_rules.json')
 GAMES_TO_N_RULES_PATH = os.path.join(DATA_DIR, 'games_to_n_rules.json')
 STANDALONE_NODEJS_RESULTS_PATH = os.path.join(DATA_DIR, 'standalone_nodejs_results.json')
+STANDALONE_CPP_RESULTS_PATH = os.path.join(DATA_DIR, 'standalone_cpp_results.json')
 GAMES_N_LEVELS_PATH = os.path.join(DATA_DIR, 'games_n_levels.json')
 SOLUTION_REWARDS_PATH = os.path.join(DATA_DIR, 'solution_rewards.json')
 JAX_PROFILING_RESULTS_DIR = os.path.join(DATA_DIR, 'jax_profiling_results')
 NODEJS_PROFILING_RESULTS_DIR = os.path.join(DATA_DIR, 'nodejs_profiling_results')
 CPP_PROFILING_RESULTS_DIR = os.path.join(DATA_DIR, 'cpp_profiling_results')
 JAX_VALIDATED_JS_SOLS_DIR = os.path.join(DATA_DIR, 'jax_validated_js_sols')
+CPP_VALIDATED_JS_SOLS_DIR = os.path.join(DATA_DIR, 'cpp_validated_js_sols')
 JS_TO_JAX_ACTIONS = [3, 0, 1, 2, 4]
 JS_SOLS_DIR = os.path.join(DATA_DIR, 'js_sols')
+CPP_SOLS_DIR = os.path.join(DATA_DIR, 'cpp_sols')
 LARK_SYNTAX_PATH = os.path.join(par_dir, 'syntax.lark')
 GAMES_DIR = os.path.join(DATA_DIR, 'scraped_games')
 MIN_GAMES_DIR = os.path.join(DATA_DIR, 'min_games')

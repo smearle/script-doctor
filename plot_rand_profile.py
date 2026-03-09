@@ -20,6 +20,81 @@ from puzzlejax.utils import init_ps_env
 
 
 GAMES_TO_PLOT = PRIORITY_GAMES
+JAX_RUN_STYLES = {
+    True: {"label": "PuzzleJAX", "color": "C0", "marker": "x", "linestyle": "-"},
+    False: {"label": "PuzzleJAX (for loop)", "color": "C1", "marker": "x", "linestyle": "-"},
+}
+NODEJS_RUN_STYLES = {
+    "single_process": {"label": "NodeJS", "color": "C3", "marker": "o", "linestyle": "--"},
+    "nodejs_native": {"label": "NodeJS (native)", "color": "C4", "marker": "^", "linestyle": "--"},
+    "nodejs_batched": {"label": "NodeJS (batched)", "color": "C5", "marker": "D", "linestyle": "--"},
+    "multiprocess": {"label": "NodeJS (multiprocess)", "color": "C2", "marker": "s", "linestyle": "--"},
+    "nodejs_native_multiprocess": {
+        "label": "NodeJS (native multiprocess)",
+        "color": "C9",
+        "marker": "D",
+        "linestyle": "--",
+    },
+}
+CPP_RUN_STYLES = {
+    "cpp_batched": {"label": "C++ (batched)", "color": "C8", "marker": "*", "linestyle": "-"},
+    "cpp_native": {"label": "C++ (native)", "color": "C6", "marker": "P", "linestyle": "-."},
+    "cpp_native_multiprocess": {
+        "label": "C++ (native multiprocess)",
+        "color": "C7",
+        "marker": "v",
+        "linestyle": "-.",
+    },
+}
+INCLUDED_JAX_RUN_TYPES = [
+    True,
+    # False,
+]
+INCLUDED_NODEJS_RUN_TYPES = [
+    # "single_process",
+    # "nodejs_native",
+    "nodejs_batched",
+    # "multiprocess",
+    # "nodejs_native_multiprocess",
+]
+INCLUDED_CPP_RUN_TYPES = [
+    "cpp_batched",
+    # "cpp_native",
+    # "cpp_native_multiprocess",
+]
+LEGEND_LABEL_ORDER = [
+    "PuzzleJAX",
+    "PuzzleJAX (for loop)",
+    "NodeJS",
+    "NodeJS (native)",
+    "NodeJS (batched)",
+    "NodeJS (multiprocess)",
+    "NodeJS (native multiprocess)",
+    "C++ (batched)",
+    "C++ (native)",
+    "C++ (native multiprocess)",
+]
+
+
+def _get_best_fps(stats: dict) -> float:
+    fpss = stats.get("fps", ())
+    if not fpss:
+        return 0.0
+    return float(max(fpss))
+
+
+def _truncate_series_on_first_best_fps_drop(points: list[dict]) -> list[dict]:
+    truncated_points = []
+    prev_best_fps = None
+
+    for point in points:
+        current_best_fps = point["best_fps"]
+        truncated_points.append(point)
+        if prev_best_fps is not None and current_best_fps < prev_best_fps:
+            break
+        prev_best_fps = current_best_fps
+
+    return truncated_points
 
 
 def _load_games_to_n_rules() -> dict:
@@ -92,20 +167,30 @@ def _collect_jax_series(rollout_len_str: str) -> dict[str, list[dict]]:
                         n_envs_to_stats = json.load(f)
 
                     n_envs = sorted(int(n_env) for n_env in n_envs_to_stats)
-                    fps = [n_envs_to_stats[str(n_env)]["fps"][-1] for n_env in n_envs]
+                    points = [
+                        {
+                            "x": n_env,
+                            "y": n_envs_to_stats[str(n_env)]["fps"][-1],
+                            "best_fps": _get_best_fps(n_envs_to_stats[str(n_env)]),
+                        }
+                        for n_env in n_envs
+                    ]
+                    points = _truncate_series_on_first_best_fps_drop(points)
                     vmap = get_vmap(level_str)
-                    label = "PuzzleJAX" if vmap else "PuzzleJAX (for loop)"
+                    if vmap not in INCLUDED_JAX_RUN_TYPES:
+                        continue
+                    style = JAX_RUN_STYLES[vmap]
+                    label = style["label"]
                     if len(os.listdir(JAX_PROFILING_RESULTS_DIR)) > 1:
                         label = f"{label} [{_normalize_device_label(device)}]"
-                    color = "C0" if vmap else "C1"
 
                     series_by_game.setdefault(game, []).append({
                         "label": label,
-                        "x": n_envs,
-                        "y": fps,
-                        "color": color,
-                        "linestyle": "-",
-                        "marker": "x",
+                        "x": [point["x"] for point in points],
+                        "y": [point["y"] for point in points],
+                        "color": style["color"],
+                        "linestyle": style["linestyle"],
+                        "marker": style["marker"],
                     })
     return series_by_game
 
@@ -135,12 +220,7 @@ def _collect_nodejs_series(rollout_len_str: str) -> dict[str, list[dict]]:
             with open(level_results_path, "r") as f:
                 stats_by_key = json.load(f)
 
-            mode_to_points = {
-                "single_process": [],
-                "nodejs_native": [],
-                "multiprocess": [],
-                "nodejs_native_multiprocess": [],
-            }
+            mode_to_points = {run_type: [] for run_type in INCLUDED_NODEJS_RUN_TYPES}
             for stats_key, stats in stats_by_key.items():
                 if "error_type" in stats:
                     continue
@@ -149,38 +229,28 @@ def _collect_nodejs_series(rollout_len_str: str) -> dict[str, list[dict]]:
                 n_envs_str, execution_mode = stats_key.split("-", 1)
                 if execution_mode not in mode_to_points:
                     continue
-                mode_to_points[execution_mode].append((int(n_envs_str), stats["fps"][-1]))
+                mode_to_points[execution_mode].append({
+                    "x": int(n_envs_str),
+                    "y": stats["fps"][-1],
+                    "best_fps": _get_best_fps(stats),
+                })
 
             for execution_mode, points in mode_to_points.items():
                 if not points:
                     continue
-                points.sort()
-                if execution_mode == "single_process":
-                    base_label = "NodeJS"
-                    color = "C3"
-                    marker = "o"
-                elif execution_mode == "nodejs_native":
-                    base_label = "NodeJS (native)"
-                    color = "C4"
-                    marker = "^"
-                elif execution_mode == "nodejs_native_multiprocess":
-                    base_label = "NodeJS (native multiprocess)"
-                    color = "C5"
-                    marker = "D"
-                else:
-                    base_label = "NodeJS (multiprocess)"
-                    color = "C2"
-                    marker = "s"
+                points.sort(key=lambda point: point["x"])
+                points = _truncate_series_on_first_best_fps_drop(points)
+                style = NODEJS_RUN_STYLES[execution_mode]
+                base_label = style["label"]
                 if include_device_in_label:
                     base_label = f"{base_label} [{_normalize_device_label(device)}]"
-                linestyle = "--"
                 series_by_game.setdefault(game, []).append({
                     "label": base_label,
-                    "x": [x for x, _ in points],
-                    "y": [y for _, y in points],
-                    "color": color,
-                    "linestyle": linestyle,
-                    "marker": marker,
+                    "x": [point["x"] for point in points],
+                    "y": [point["y"] for point in points],
+                    "color": style["color"],
+                    "linestyle": style["linestyle"],
+                    "marker": style["marker"],
                 })
 
     return series_by_game
@@ -211,10 +281,7 @@ def _collect_cpp_series(rollout_len_str: str) -> dict[str, list[dict]]:
             with open(level_results_path, "r") as f:
                 stats_by_key = json.load(f)
 
-            mode_to_points = {
-                "cpp_native": [],
-                "cpp_native_multiprocess": [],
-            }
+            mode_to_points = {run_type: [] for run_type in INCLUDED_CPP_RUN_TYPES}
             for stats_key, stats in stats_by_key.items():
                 if "error_type" in stats:
                     continue
@@ -223,29 +290,28 @@ def _collect_cpp_series(rollout_len_str: str) -> dict[str, list[dict]]:
                 n_envs_str, execution_mode = stats_key.split("-", 1)
                 if execution_mode not in mode_to_points:
                     continue
-                mode_to_points[execution_mode].append((int(n_envs_str), stats["fps"][-1]))
+                mode_to_points[execution_mode].append({
+                    "x": int(n_envs_str),
+                    "y": stats["fps"][-1],
+                    "best_fps": _get_best_fps(stats),
+                })
 
             for execution_mode, points in mode_to_points.items():
                 if not points:
                     continue
-                points.sort()
-                if execution_mode == "cpp_native":
-                    base_label = "C++ (native)"
-                    color = "C6"
-                    marker = "P"
-                else:
-                    base_label = "C++ (native multiprocess)"
-                    color = "C7"
-                    marker = "v"
+                points.sort(key=lambda point: point["x"])
+                points = _truncate_series_on_first_best_fps_drop(points)
+                style = CPP_RUN_STYLES[execution_mode]
+                base_label = style["label"]
                 if include_device_in_label:
                     base_label = f"{base_label} [{_normalize_device_label(device)}]"
                 series_by_game.setdefault(game, []).append({
                     "label": base_label,
-                    "x": [x for x, _ in points],
-                    "y": [y for _, y in points],
-                    "color": color,
-                    "linestyle": "-.",
-                    "marker": marker,
+                    "x": [point["x"] for point in points],
+                    "y": [point["y"] for point in points],
+                    "color": style["color"],
+                    "linestyle": style["linestyle"],
+                    "marker": style["marker"],
                 })
 
     return series_by_game
@@ -261,6 +327,32 @@ def _get_games_to_plot(
     if cfg.all_games:
         return available_games
     return [game for game in GAMES_TO_PLOT if game in available_games]
+
+
+def _plot_peak_reference_line(ax, series: dict) -> None:
+    if not series["y"]:
+        return
+    ax.axhline(
+        y=max(series["y"]),
+        color=series["color"],
+        linestyle=series["linestyle"],
+        linewidth=1,
+        alpha=0.8,
+        zorder=0,
+        label="_nolegend_",
+    )
+
+
+def _set_log_axes(ax, all_series: list[dict]) -> None:
+    positive_x = [x for series in all_series for x in series["x"] if x > 0]
+    positive_y = [y for series in all_series for y in series["y"] if y > 0]
+    if not positive_x or not positive_y:
+        return
+
+    ax.set_xscale("log")
+    ax.set_yscale("log")
+    ax.set_xlim(left=min(positive_x))
+    ax.set_ylim(bottom=min(positive_y))
 
 
 @hydra.main(version_base="1.3", config_path="conf", config_name="plot_rand_profile_config")
@@ -317,9 +409,9 @@ def main(cfg: PlotRandProfileConfig):
                     linestyle=series["linestyle"],
                     color=series["color"],
                 )
+                # _plot_peak_reference_line(ax, series)
 
-            ax.set_yscale("linear")
-            ax.set_xscale("linear")
+            _set_log_axes(ax, all_series)
             ax.set_xlabel("batch size")
             ax.set_ylabel("FPS")
             ax.yaxis.set_major_formatter(StrMethodFormatter("{x:,.0f}"))
@@ -332,17 +424,7 @@ def main(cfg: PlotRandProfileConfig):
             handles, labels = ax.get_legend_handles_labels()
             if labels:
                 label_to_handle = dict(zip(labels, handles))
-                labels_order = [
-                    "PuzzleJAX",
-                    "PuzzleJAX (for loop)",
-                    "NodeJS",
-                    "NodeJS (native)",
-                    "NodeJS (multiprocess)",
-                    "NodeJS (native multiprocess)",
-                    "C++ (native)",
-                    "C++ (native multiprocess)",
-                ]
-                ordered_labels = [label for label in labels_order if label in label_to_handle]
+                ordered_labels = [label for label in LEGEND_LABEL_ORDER if label in label_to_handle]
                 remaining_labels = [label for label in labels if label not in ordered_labels]
                 final_labels = ordered_labels + remaining_labels
                 final_handles = [label_to_handle[label] for label in final_labels]

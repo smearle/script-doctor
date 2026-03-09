@@ -77,7 +77,7 @@ def main(
             else:
                 n_steps = 10_000
             print(f"Game: {game_name}, Level: {level_i}, Steps: {n_steps}")
-            level_sol_gif_path = os.path.join(game_dir, f"{n_steps}-steps_level-{level_i}_sol.gif")
+            level_sol_gif_path = os.path.splitext(level_sol_json)[0] + "_sol.gif"
             if os.path.isfile(level_sol_gif_path) and not cfg.overwrite:
                 print(f"Level {level_i} already rendered")
                 continue

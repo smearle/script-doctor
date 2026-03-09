@@ -952,9 +952,9 @@ class PuzzleJaxEnv:
                     print(f'rendering solid color for {obj_key}')
                 im = render_solid_color(obj.colors[0])
 
-            # Size the image up a bunch
+            # Keep native PuzzleScript sprite resolution by default so renders
+            # match the minimal NodeJS output.
             im_s = PIL.Image.fromarray(im)
-            im_s = im_s.resize((50, 50), PIL.Image.NEAREST)
             im = np.array(im_s)
 
             if DEBUG:

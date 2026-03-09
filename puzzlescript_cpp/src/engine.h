@@ -85,6 +85,12 @@ public:
     Engine();
     ~Engine();
 
+    // Non-copyable (owns raw pointers), but movable
+    Engine(const Engine&) = delete;
+    Engine& operator=(const Engine&) = delete;
+    Engine(Engine&& other) noexcept;
+    Engine& operator=(Engine&& other) noexcept;
+
     // Load from serialized JSON (as produced by JS serializeCompiledState)
     bool loadFromJSON(const std::string& json_str);
 
@@ -97,6 +103,9 @@ public:
 
     // Check win conditions. Returns true if won.
     bool checkWin();
+    double getScore() const;
+    double getScoreNormalized() const;
+    bool hasMetadata(const std::string& key) const;
 
     // Get the current level state as a flat int32 array (objects)
     const std::vector<int32_t>& getObjects() const;
@@ -206,4 +215,7 @@ private:
 
     void initScratchVecs();
     void clearEngine();
+    bool cellMatchesWinMask(const WinCondition& wc, const BitVec& mask, bool aggregate,
+                            bool mask_is_all, int tileIndex) const;
+    int manhattanDistance(int tileIndex1, int tileIndex2) const;
 };

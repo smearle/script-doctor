@@ -26,6 +26,21 @@ class JaxValidationConfig(PSConfig):
     aggregate: bool = False  # Don't run any new validations, just aggregate existing results.
     random_order: bool = False
     include_test_games: bool = True
+
+
+@dataclass
+class CppValidationConfig(PSConfig):
+    all_games: bool = True
+    slurm: bool = False
+    n_games_per_job: int = 1
+    game: Optional[str] = None
+    aggregate: bool = False
+    random_order: bool = False
+    include_test_games: bool = True
+    render: bool = True
+    render_scale: int = 4
+    render_mismatches_only: bool = False
+    output_dir: str = "data/cpp_validated_js_sols"
     
 @dataclass
 class BFSConfig(PSConfig):
@@ -69,6 +84,12 @@ class NodeJSConfig(PSConfig):
 
 @dataclass
 class SearchNodeJSConfig(NodeJSConfig):
+    algo: str = "bfs"  # 'bfs', 'astar', 'gbfs', 'mcts', 'random'
+    n_steps: int = 100_000
+
+
+@dataclass
+class SearchCppConfig(NodeJSConfig):
     algo: str = "bfs"  # 'bfs', 'astar', 'gbfs', 'mcts', 'random'
     n_steps: int = 100_000
 
@@ -241,10 +262,12 @@ cs.store(name="preprocess_config", node=PreprocessConfig)
 cs.store(name="plot_rand_profile_config", node=PlotRandProfileConfig)
 cs.store(name="plot_standalone_bfs_config", node=PlotSearch)
 cs.store(name="jax_validation_config", node=JaxValidationConfig)
+cs.store(name="cpp_validation_config", node=CppValidationConfig)
 cs.store(name="config", node=RLConfig)
 cs.store(name="bfs_config", node=BFSConfig)
 cs.store(name="profile_jax_config", node=ProfileJaxRandConfig)
 cs.store(name="search_nodejs_config", node=SearchNodeJSConfig)
+cs.store(name="search_cpp_config", node=SearchCppConfig)
 cs.store(name="profile_rand_nodejs_config", node=ProfileRandNodeJSConfig)
 cs.store(name="profile_rand_cpp_config", node=ProfileRandCppConfig)
 cs.store(name="evolve_level_config", node=EvolveLevelConfig)

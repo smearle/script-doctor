@@ -13,12 +13,14 @@ from typing import Any, List, Optional
 import cpuinfo
 import hydra
 import multiprocessing as mp
+import numpy as np
 import submitit
 
 from conf.config import ProfileRandNodeJSConfig
 from puzzlejax.backends import NodeJSPuzzleScriptBackend
 from puzzlejax.globals import GAMES_DIR, NODEJS_PROFILING_RESULTS_DIR, SIMPLIFIED_GAMES_DIR
 from puzzlejax.utils import get_list_of_games_for_testing
+from puzzlescript_nodejs.rl_env import NodeJSBatchedPuzzleEnv
 
 
 BATCH_SIZES = [
@@ -31,6 +33,11 @@ BATCH_SIZES = [
     36,
     40,
     48,
+]
+INCLUDED_NODEJS_EXECUTION_MODES = [
+    # "single_process",
+    # "nodejs_native",
+    "nodejs_batched",
 ]
 WORKER_TIMEOUT_GRACE_SECONDS = 15.0
 WORKER_TIMEOUT_MULTIPLIER = 2.0
@@ -46,6 +53,18 @@ def get_level_str(level_i: int) -> str:
 
 def get_stats_key(n_envs: int, execution_mode: str) -> str:
     return f"{n_envs}-{execution_mode}"
+
+
+def _get_run_specs() -> list[tuple[int, str]]:
+    run_specs = []
+    for execution_mode in INCLUDED_NODEJS_EXECUTION_MODES:
+        if execution_mode in {"single_process", "nodejs_native"}:
+            run_specs.append((1, execution_mode))
+        elif execution_mode == "nodejs_batched":
+            run_specs.extend((n_envs, execution_mode) for n_envs in BATCH_SIZES)
+        else:
+            raise ValueError(f"Unsupported NodeJS execution mode: {execution_mode}")
+    return run_specs
 
 
 def save_results(results: dict, results_path: str) -> None:
@@ -380,6 +399,55 @@ def _profile_nodejs_native_rollout(
     }
 
 
+def _profile_nodejs_batched_rollout(
+    env: NodeJSBatchedPuzzleEnv,
+    *,
+    n_steps: int,
+    timeout_ms: int,
+) -> dict:
+    env.reset()
+    start = timer()
+    completed_steps = 0
+    wins = 0
+    timeout = False
+
+    for completed_steps in range(n_steps):
+        if timeout_ms > 0 and completed_steps % 1_000 == 0:
+            if (timer() - start) * 1_000 > timeout_ms:
+                timeout = True
+                break
+
+        actions = np.random.randint(0, env.num_actions, size=env.batch_size, dtype=np.int32)
+        _, _, dones, truncated, infos = env.step(actions)
+        del dones, truncated
+        wins += int(np.sum(infos["won"]))
+    else:
+        completed_steps = n_steps
+
+    wall_time = timer() - start
+    total_iterations = completed_steps * env.batch_size
+    requested_iterations = n_steps * env.batch_size
+    fps = total_iterations / wall_time if wall_time > 0 else 0.0
+
+    return {
+        "n_envs": env.batch_size,
+        "total_iterations": total_iterations,
+        "requested_iterations": requested_iterations,
+        "completed_ratio": total_iterations / requested_iterations if requested_iterations > 0 else 0.0,
+        "successful_workers": env.batch_size,
+        "failed_workers": 0,
+        "wall_time": wall_time,
+        "fps": fps,
+        "mean_worker_fps": fps / env.batch_size if env.batch_size > 0 else 0.0,
+        "wins": wins,
+        "timeouts": int(timeout),
+        "timed_out": timeout,
+        "had_worker_failures": False,
+        "sample_worker_error": None,
+        "execution_mode": "nodejs_batched",
+    }
+
+
 def _run_nodejs_native_pool(
     *,
     game_path: str,
@@ -476,11 +544,7 @@ def main(cfg: ProfileRandNodeJSConfig, games: Optional[List[str]] = None):
     else:
         games = [cfg.game]
 
-    run_specs = ([]
-        + [(1, "single_process"), (1, "nodejs_native")]
-        + [(n_envs, "multiprocess") for n_envs in BATCH_SIZES]
-        + [(n_envs, "nodejs_native_multiprocess") for n_envs in BATCH_SIZES if n_envs > 1]
-    )
+    run_specs = _get_run_specs()
 
     for game, (n_envs, execution_mode) in itertools.product(games, run_specs):
         print(f"\nGame: {game}, n_envs: {n_envs}, mode: {execution_mode}.")
@@ -508,6 +572,7 @@ def main(cfg: ProfileRandNodeJSConfig, games: Optional[List[str]] = None):
             try:
                 single_process_stats_fn = None
                 persistent_workers = None
+                batched_env = None
                 game_text = _load_original_game_text(game)
                 native_runs = None
                 if execution_mode == "single_process":
@@ -529,15 +594,12 @@ def main(cfg: ProfileRandNodeJSConfig, games: Optional[List[str]] = None):
                         repeats=3,
                         execution_mode="nodejs_native",
                     )
-                elif execution_mode == "nodejs_native_multiprocess":
-                    native_runs = _run_nodejs_native_pool(
-                        game_path=_get_nodejs_native_game_path(game),
+                elif execution_mode == "nodejs_batched":
+                    batched_env = NodeJSBatchedPuzzleEnv(
+                        game=game,
                         level_i=level_i,
-                        n_envs=n_envs,
-                        n_steps=cfg.n_steps,
-                        timeout_ms=timeout_ms,
-                        repeats=3,
-                        execution_mode="nodejs_native_multiprocess",
+                        batch_size=n_envs,
+                        max_episode_steps=max(cfg.n_steps, 1),
                     )
                 else:
                     persistent_workers = PersistentRolloutWorkers.start(
@@ -556,6 +618,12 @@ def main(cfg: ProfileRandNodeJSConfig, games: Optional[List[str]] = None):
                             stats = native_runs[run_i]
                         elif single_process_stats_fn is not None:
                             stats = single_process_stats_fn()
+                        elif batched_env is not None:
+                            stats = _profile_nodejs_batched_rollout(
+                                batched_env,
+                                n_steps=cfg.n_steps,
+                                timeout_ms=timeout_ms,
+                            )
                         else:
                             stats = persistent_workers.run_batch(
                                 n_steps=cfg.n_steps,
@@ -569,6 +637,8 @@ def main(cfg: ProfileRandNodeJSConfig, games: Optional[List[str]] = None):
                             f"{stats['wall_time']:.3f} seconds. FPS: {stats['fps']:,.2f}"
                         )
                 finally:
+                    if batched_env is not None:
+                        batched_env.close()
                     if persistent_workers is not None:
                         persistent_workers.close()
 
@@ -583,6 +653,7 @@ def main(cfg: ProfileRandNodeJSConfig, games: Optional[List[str]] = None):
                     "wall_time": last_stats["wall_time"],
                     "mean_worker_fps": last_stats["mean_worker_fps"],
                     "engine_time": last_stats.get("engine_time"),
+                    "wins": last_stats.get("wins"),
                     "timeouts": last_stats["timeouts"],
                     "timed_out": last_stats["timed_out"],
                     "had_worker_failures": last_stats["had_worker_failures"],

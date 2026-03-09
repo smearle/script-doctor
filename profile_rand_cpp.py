@@ -1,5 +1,4 @@
 """Profile C++ PuzzleScript engine speed while taking random actions in parallel."""
-import itertools
 import json
 import logging
 import math
@@ -13,13 +12,14 @@ from typing import Any, List, Optional
 import cpuinfo
 import hydra
 import multiprocessing as mp
+import numpy as np
 import submitit
 from javascript import require
 
 from conf.config import ProfileRandCppConfig
 from puzzlejax.globals import CPP_PROFILING_RESULTS_DIR
 from puzzlejax.utils import get_list_of_games_for_testing, init_ps_lark_parser
-from puzzlescript_cpp import CppPuzzleScriptEngine
+from puzzlescript_cpp import CppBatchedPuzzleScriptEnv, CppPuzzleScriptEngine
 from puzzlescript_nodejs.utils import compile_game
 
 
@@ -33,6 +33,13 @@ BATCH_SIZES = [
     36,
     40,
     48,
+]
+INCLUDED_CPP_FIXED_EXECUTION_MODES = [
+    # "cpp_native",
+    # "cpp_native_multiprocess",
+]
+INCLUDED_CPP_SWEEP_EXECUTION_MODES = [
+    "cpp_batched",
 ]
 MAX_AGAIN = 50
 WORKER_TIMEOUT_GRACE_SECONDS = 15.0
@@ -53,10 +60,29 @@ def get_stats_key(n_envs: int, execution_mode: str) -> str:
     return f"{n_envs}-{execution_mode}"
 
 
+def _get_fixed_run_specs() -> list[tuple[int, str]]:
+    run_specs = []
+    for execution_mode in INCLUDED_CPP_FIXED_EXECUTION_MODES:
+        if execution_mode == "cpp_native":
+            run_specs.append((1, execution_mode))
+        elif execution_mode == "cpp_native_multiprocess":
+            run_specs.extend((n_envs, execution_mode) for n_envs in BATCH_SIZES if n_envs > 1)
+        else:
+            raise ValueError(f"Unsupported C++ fixed execution mode: {execution_mode}")
+    return run_specs
+
+
 def save_results(results: dict, results_path: str) -> None:
     os.makedirs(os.path.dirname(results_path), exist_ok=True)
     with open(results_path, "w") as f:
         json.dump(results, f, indent=4)
+
+
+def _best_fps(stats: dict) -> float:
+    fpss = stats.get("fps", ())
+    if not fpss:
+        return 0.0
+    return float(max(fpss))
 
 
 def _compile_game_for_cpp(parser: Any, game: str) -> str:
@@ -327,6 +353,54 @@ def _profile_single_process_rollout(
     }
 
 
+def _profile_batched_rollout(
+    env: CppBatchedPuzzleScriptEnv,
+    *,
+    n_steps: int,
+    timeout_ms: int,
+) -> dict:
+    env.reset()
+    start = timer()
+    completed_steps = 0
+    wins = 0
+    timeout = False
+
+    for completed_steps in range(n_steps):
+        if timeout_ms > 0 and completed_steps % 1_000 == 0:
+            if (timer() - start) * 1_000 > timeout_ms:
+                timeout = True
+                break
+
+        actions = np.random.randint(0, env.num_actions, size=env.batch_size, dtype=np.int32)
+        _, _, _, _, infos = env.step(actions)
+        wins += int(np.sum(infos["won"]))
+    else:
+        completed_steps = n_steps
+
+    wall_time = timer() - start
+    total_iterations = completed_steps * env.batch_size
+    requested_iterations = n_steps * env.batch_size
+    fps = total_iterations / wall_time if wall_time > 0 else 0.0
+
+    return {
+        "n_envs": env.batch_size,
+        "total_iterations": total_iterations,
+        "requested_iterations": requested_iterations,
+        "completed_ratio": total_iterations / requested_iterations if requested_iterations > 0 else 0.0,
+        "successful_workers": env.batch_size,
+        "failed_workers": 0,
+        "wall_time": wall_time,
+        "fps": fps,
+        "mean_worker_fps": fps / env.batch_size if env.batch_size > 0 else 0.0,
+        "wins": wins,
+        "timeouts": int(timeout),
+        "timed_out": timeout,
+        "had_worker_failures": False,
+        "sample_worker_error": None,
+        "execution_mode": "cpp_batched",
+    }
+
+
 @hydra.main(version_base="1.3", config_path="./", config_name="profile_rand_cpp_config")
 def main_launch(cfg: ProfileRandCppConfig):
     if cfg.slurm:
@@ -380,13 +454,13 @@ def main(cfg: ProfileRandCppConfig, games: Optional[List[str]] = None):
 
     parser = init_ps_lark_parser()
     serialized_by_game = {}
-    run_specs = (
-        [(1, "cpp_native")]
-        + [(n_envs, "cpp_native_multiprocess") for n_envs in BATCH_SIZES if n_envs > 1]
-    )
+    fixed_run_specs = _get_fixed_run_specs()
 
-    for game, (n_envs, execution_mode) in itertools.product(games, run_specs):
-        print(f"\nGame: {game}, n_envs: {n_envs}, mode: {execution_mode}.")
+    for game in games:
+        if game not in serialized_by_game:
+            serialized_by_game[game] = _compile_game_for_cpp(parser, game)
+        serialized_json = serialized_by_game[game]
+
         for level_i in range(1):
             results_path = os.path.join(device_dir, game, f"{get_level_str(level_i)}.json")
             if os.path.exists(results_path):
@@ -395,88 +469,177 @@ def main(cfg: ProfileRandCppConfig, games: Optional[List[str]] = None):
             else:
                 n_envs_to_stats = {}
 
-            stats_key = get_stats_key(n_envs, execution_mode)
-            if not cfg.overwrite and stats_key in n_envs_to_stats:
-                print(
-                    f"Skipping {game} level {level_i} with n_envs={n_envs} mode={execution_mode} "
-                    f"as results already exist."
-                )
-                continue
-
             timeout_ms = cfg.timeout * 1_000 if cfg.timeout > 0 else -1
 
-            try:
-                if game not in serialized_by_game:
-                    serialized_by_game[game] = _compile_game_for_cpp(parser, game)
-                serialized_json = serialized_by_game[game]
+            for n_envs, execution_mode in fixed_run_specs:
+                print(f"\nGame: {game}, n_envs: {n_envs}, mode: {execution_mode}.")
+                stats_key = get_stats_key(n_envs, execution_mode)
+                if not cfg.overwrite and stats_key in n_envs_to_stats:
+                    print(
+                        f"Skipping {game} level {level_i} with n_envs={n_envs} mode={execution_mode} "
+                        f"as results already exist."
+                    )
+                    continue
 
-                persistent_workers = None
-                iterations = []
-                fpss = []
-                last_stats = None
                 try:
-                    if execution_mode == "cpp_native":
-                        stats_fn = lambda: _profile_single_process_rollout(
-                            serialized_json,
-                            level_i=level_i,
-                            n_steps=cfg.n_steps,
-                            timeout_ms=timeout_ms,
-                        )
-                    else:
-                        persistent_workers = PersistentRolloutWorkers.start(
-                            serialized_json=serialized_json,
-                            level_i=level_i,
-                            n_envs=n_envs,
-                        )
-                        stats_fn = lambda: persistent_workers.run_batch(
-                            n_steps=cfg.n_steps,
-                            timeout_ms=timeout_ms,
-                        )
+                    persistent_workers = None
+                    iterations = []
+                    fpss = []
+                    last_stats = None
+                    try:
+                        if execution_mode == "cpp_native":
+                            stats_fn = lambda: _profile_single_process_rollout(
+                                serialized_json,
+                                level_i=level_i,
+                                n_steps=cfg.n_steps,
+                                timeout_ms=timeout_ms,
+                            )
+                        else:
+                            persistent_workers = PersistentRolloutWorkers.start(
+                                serialized_json=serialized_json,
+                                level_i=level_i,
+                                n_envs=n_envs,
+                            )
+                            stats_fn = lambda: persistent_workers.run_batch(
+                                n_steps=cfg.n_steps,
+                                timeout_ms=timeout_ms,
+                            )
 
-                    for run_i in range(3):
-                        stats = stats_fn()
-                        iterations.append(stats["total_iterations"])
-                        fpss.append(stats["fps"])
-                        last_stats = stats
+                        for run_i in range(3):
+                            stats = stats_fn()
+                            iterations.append(stats["total_iterations"])
+                            fpss.append(stats["fps"])
+                            last_stats = stats
+                            print(
+                                f"Loop {run_i} ran {stats['total_iterations']} steps in "
+                                f"{stats['wall_time']:.3f} seconds. FPS: {stats['fps']:,.2f}"
+                            )
+                    finally:
+                        if persistent_workers is not None:
+                            persistent_workers.close()
+
+                    n_envs_to_stats[stats_key] = {
+                        "fps": tuple(fpss),
+                        "iterations": tuple(iterations),
+                        "total_iterations": last_stats["total_iterations"],
+                        "requested_iterations": last_stats["requested_iterations"],
+                        "completed_ratio": last_stats["completed_ratio"],
+                        "successful_workers": last_stats["successful_workers"],
+                        "failed_workers": last_stats["failed_workers"],
+                        "wall_time": last_stats["wall_time"],
+                        "mean_worker_fps": last_stats["mean_worker_fps"],
+                        "wins": last_stats["wins"],
+                        "timeouts": last_stats["timeouts"],
+                        "timed_out": last_stats["timed_out"],
+                        "had_worker_failures": last_stats["had_worker_failures"],
+                        "sample_worker_error": last_stats["sample_worker_error"],
+                        "execution_mode": last_stats["execution_mode"],
+                    }
+                except Exception as exc:
+                    err_msg = traceback.format_exc()
+                    print(
+                        f"Error profiling {game} level {level_i} with n_envs={n_envs} "
+                        f"mode={execution_mode}: {err_msg}"
+                    )
+                    n_envs_to_stats[stats_key] = {
+                        "error_type": type(exc).__name__,
+                        "error": str(exc),
+                        "error_traceback": err_msg,
+                        "execution_mode": execution_mode,
+                    }
+
+                save_results(n_envs_to_stats, results_path)
+
+            if "cpp_batched" in INCLUDED_CPP_SWEEP_EXECUTION_MODES:
+                prev_batched_best_fps = None
+                n_envs = 1
+                while True:
+                    execution_mode = "cpp_batched"
+                    stats_key = get_stats_key(n_envs, execution_mode)
+                    print(f"\nGame: {game}, n_envs: {n_envs}, mode: {execution_mode}.")
+
+                    if not cfg.overwrite and stats_key in n_envs_to_stats:
                         print(
-                            f"Loop {run_i} ran {stats['total_iterations']} steps in "
-                            f"{stats['wall_time']:.3f} seconds. FPS: {stats['fps']:,.2f}"
+                            f"Skipping {game} level {level_i} with n_envs={n_envs} mode={execution_mode} "
+                            f"as results already exist."
                         )
-                finally:
-                    if persistent_workers is not None:
-                        persistent_workers.close()
+                        stats_entry = n_envs_to_stats[stats_key]
+                    else:
+                        try:
+                            batched_env = CppBatchedPuzzleScriptEnv(
+                                serialized_json,
+                                batch_size=n_envs,
+                                level_indices=[level_i] * n_envs,
+                                max_episode_steps=max(cfg.n_steps, 1),
+                            )
+                            iterations = []
+                            fpss = []
+                            last_stats = None
+                            for run_i in range(3):
+                                stats = _profile_batched_rollout(
+                                    batched_env,
+                                    n_steps=cfg.n_steps,
+                                    timeout_ms=timeout_ms,
+                                )
+                                iterations.append(stats["total_iterations"])
+                                fpss.append(stats["fps"])
+                                last_stats = stats
+                                print(
+                                    f"Loop {run_i} ran {stats['total_iterations']} steps in "
+                                    f"{stats['wall_time']:.3f} seconds. FPS: {stats['fps']:,.2f}"
+                                )
 
-                n_envs_to_stats[stats_key] = {
-                    "fps": tuple(fpss),
-                    "iterations": tuple(iterations),
-                    "total_iterations": last_stats["total_iterations"],
-                    "requested_iterations": last_stats["requested_iterations"],
-                    "completed_ratio": last_stats["completed_ratio"],
-                    "successful_workers": last_stats["successful_workers"],
-                    "failed_workers": last_stats["failed_workers"],
-                    "wall_time": last_stats["wall_time"],
-                    "mean_worker_fps": last_stats["mean_worker_fps"],
-                    "wins": last_stats["wins"],
-                    "timeouts": last_stats["timeouts"],
-                    "timed_out": last_stats["timed_out"],
-                    "had_worker_failures": last_stats["had_worker_failures"],
-                    "sample_worker_error": last_stats["sample_worker_error"],
-                    "execution_mode": last_stats["execution_mode"],
-                }
-            except Exception as exc:
-                err_msg = traceback.format_exc()
-                print(
-                    f"Error profiling {game} level {level_i} with n_envs={n_envs} "
-                    f"mode={execution_mode}: {err_msg}"
-                )
-                n_envs_to_stats[stats_key] = {
-                    "error_type": type(exc).__name__,
-                    "error": str(exc),
-                    "error_traceback": err_msg,
-                    "execution_mode": execution_mode,
-                }
+                            stats_entry = {
+                                "fps": tuple(fpss),
+                                "iterations": tuple(iterations),
+                                "total_iterations": last_stats["total_iterations"],
+                                "requested_iterations": last_stats["requested_iterations"],
+                                "completed_ratio": last_stats["completed_ratio"],
+                                "successful_workers": last_stats["successful_workers"],
+                                "failed_workers": last_stats["failed_workers"],
+                                "wall_time": last_stats["wall_time"],
+                                "mean_worker_fps": last_stats["mean_worker_fps"],
+                                "wins": last_stats["wins"],
+                                "timeouts": last_stats["timeouts"],
+                                "timed_out": last_stats["timed_out"],
+                                "had_worker_failures": last_stats["had_worker_failures"],
+                                "sample_worker_error": last_stats["sample_worker_error"],
+                                "execution_mode": last_stats["execution_mode"],
+                            }
+                            n_envs_to_stats[stats_key] = stats_entry
+                        except Exception as exc:
+                            err_msg = traceback.format_exc()
+                            print(
+                                f"Error profiling {game} level {level_i} with n_envs={n_envs} "
+                                f"mode={execution_mode}: {err_msg}"
+                            )
+                            stats_entry = {
+                                "error_type": type(exc).__name__,
+                                "error": str(exc),
+                                "error_traceback": err_msg,
+                                "execution_mode": execution_mode,
+                            }
+                            n_envs_to_stats[stats_key] = stats_entry
 
-            save_results(n_envs_to_stats, results_path)
+                        save_results(n_envs_to_stats, results_path)
+
+                    if "error_type" in stats_entry:
+                        break
+
+                    current_batched_best_fps = _best_fps(stats_entry)
+                    if (
+                        prev_batched_best_fps is not None
+                        and current_batched_best_fps < prev_batched_best_fps
+                    ):
+                        print(
+                            f"Stopping cpp_batched sweep for {game} level {level_i}: "
+                            f"best FPS dropped from {prev_batched_best_fps:,.2f} "
+                            f"to {current_batched_best_fps:,.2f}."
+                        )
+                        break
+
+                    prev_batched_best_fps = current_batched_best_fps
+                    n_envs *= 2
 
 
 if __name__ == "__main__":

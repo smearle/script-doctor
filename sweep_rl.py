@@ -20,7 +20,7 @@ import submitit
 from conf.config import SweepRLConfig, TrainConfig, EnjoyConfig
 from puzzlejax.env import PJParams
 from puzzlejax.preprocessing import get_env_from_ps_file
-from train import main as main_train
+from train_jax import main as main_train
 from eval_rl import main_enjoy
 from sweep_rl_configs import _NAMED_SWEEPS
 from puzzlejax.utils import get_list_of_games_for_testing, get_n_levels_per_game, init_ps_lark_parser

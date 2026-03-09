@@ -20,15 +20,16 @@ node_modules/
 __pycache__
 
 data/*
-!data/scraped_games
+# !data/scraped_games
 scrape_logs
 example_games.json
 example_sprites.json
 example_sprites_names.txt
 outputs
-llm_agent_results/*/*/step_*.txt
+# llm_agent_results/*/*/step_*.txt
+llm_agent_results/*
 logs
-rl_logs
+rl_logs*
 pretty_trees
 simplified_games
 script-doctor-py
@@ -39,3 +40,7 @@ vids
 wandb
 *.egg-info
 tmp
+
+# Exclude cpp build artifacts
+*.o
+*.so

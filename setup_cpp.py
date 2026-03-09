@@ -18,6 +18,10 @@ ext_modules = [
         'puzzlescript_cpp._puzzlescript_cpp',
         sources=[
             'puzzlescript_cpp/src/engine.cpp',
+            'puzzlescript_cpp/src/heuristic.cpp',
+            'puzzlescript_cpp/src/batched_engine.cpp',
+            'puzzlescript_cpp/src/renderer.cpp',
+            'puzzlescript_cpp/src/solver.cpp',
             'puzzlescript_cpp/src/bindings.cpp',
         ],
         include_dirs=[
