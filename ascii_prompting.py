@@ -103,3 +103,42 @@ class ASCIIStateFormatter:
             legend_lines.append(f"{char}: {', '.join(combo)}")
 
         return "LEGEND:\n" + "\n".join(legend_lines) + "\n\nMAP:\n" + "\n".join(rows)
+
+
+def build_game_action_prompt(
+    ascii_map,
+    rules,
+    action_space,
+    action_meanings,
+    think_aloud,
+    memory,
+    state_history,
+):
+    action_space_str = ", ".join(str(a) for a in action_space)
+    action_map_str = ", ".join(f"{k}={v}" for k, v in action_meanings.items())
+
+    prompt_parts = [f"Game description and rules:\n{rules}"]
+
+    if memory > 0 and state_history:
+        recent_states = state_history[-memory:]
+        history_lines = ["Previous turns:"]
+        for turn_i, (prev_ascii_state, prev_action_id) in enumerate(recent_states, start=1):
+            history_lines.append(f"Turn -{len(recent_states) - turn_i + 1} state:")
+            history_lines.append(prev_ascii_state)
+            history_lines.append(f"Turn -{len(recent_states) - turn_i + 1} action: {prev_action_id}")
+            history_lines.append("")
+        prompt_parts.append("\n".join(history_lines).rstrip())
+
+    prompt_parts.append(f"Game state (ASCII map) and Legend:\n{ascii_map}")
+    prompt_parts.append(f"Available actions (action_space): {action_space_str}\nAction mapping: {action_map_str}")
+
+    if not think_aloud:
+        prompt_parts.append(
+            "Please select the best action and ONLY return the action id (an integer from action_space)."
+        )
+    else:
+        prompt_parts.append(
+            "You may first reason about the problem, then output `ACTION: ID`, where `ID` is an integer from action_space."
+        )
+
+    return "\n\n".join(prompt_parts)

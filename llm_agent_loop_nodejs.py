@@ -14,6 +14,7 @@ from llm_agent_loop import (
     check_run_file_exists,
     claim_next_job,
     extract_section,
+    get_run_logs_dir,
     get_run_file_path,
     list_step_log_files,
     parse_legend,
@@ -103,7 +104,7 @@ def process_game_level(agent, game_info, level_index, run_id, save_dir, model,
     game_name = game_info["game_name"]
     current_run_filepath = get_run_file_path(save_dir, model, game_name, run_id,
                                              level_index, think_aloud, memory)
-    current_run_logs_dir = current_run_filepath[:-5] + "_logs"
+    current_run_logs_dir = get_run_logs_dir(current_run_filepath, memory)
     os.makedirs(current_run_logs_dir, exist_ok=True)
 
     run_file_exists = os.path.exists(current_run_filepath)

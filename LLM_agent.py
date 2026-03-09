@@ -1,4 +1,5 @@
 from typing import Iterable, List, Dict, Optional, Tuple
+from ascii_prompting import build_game_action_prompt
 from puzzlejax.utils import llm_text_query
 
 class LLMGameAgent:
@@ -27,29 +28,15 @@ class LLMGameAgent:
         else:
             system_prompt += "You may first reason about the problem, then select an action by outputting `ACTION: ID`, where `ID` is an integer from the provided action_space."
 
-        action_space_str = ", ".join(str(a) for a in action_space)
-        # Provide action mapping (number to meaning) dynamically
-        action_map_str = ", ".join([f"{k}={v}" for k, v in action_meanings.items()])
-        prompt = ""
-        if memory > 0 and len(state_history) > 0:
-            recent_states = state_history[-memory:] if len(state_history) >= memory else state_history
-            prompt += "Previous states:\n"
-            for i, state in enumerate(recent_states):
-                prev_ascii_state = state[0]
-                prev_action_id = state[1]
-                prompt += f"\n{prev_ascii_state}\n\nAction: {prev_action_id}\n"
-            prompt += "\n"
-        prompt += (
-            f"Game state (ASCII map) and Legend:\n{ascii_map}\n\n"
-  
-            f"Game rules:\n{rules}\n\n"
-            f"Available actions (action_space): {action_space_str}\n"
-            f"Action mapping: {action_map_str}\n"
+        prompt = build_game_action_prompt(
+            ascii_map=ascii_map,
+            rules=rules,
+            action_space=action_space,
+            action_meanings=action_meanings,
+            think_aloud=think_aloud,
+            memory=memory,
+            state_history=state_history,
         )
-        if not think_aloud:
-            prompt += f"Please select the best action and ONLY return the action id (an integer from action_space)."
-        else:
-            prompt += f"You may first reason about the problem, then output `ACTION: ID`, where `ID` is an integer from action_space."
         # Use a fixed seed for reproducibility if needed
         response = llm_text_query(
             system_prompt,

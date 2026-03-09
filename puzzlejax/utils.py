@@ -529,9 +529,6 @@ from jax import numpy as jnp
 
 
 def save_gif_from_states(env, states, save_path, scale=1):
-    frames_dir = os.path.join(save_path, 'frames')
-    os.makedirs(frames_dir, exist_ok=True)
-
     gif_path = os.path.join(f'{save_path}.gif')
     with imageio.get_writer(gif_path, mode='I', duration=0.1, loop=0) as writer:
         if isinstance(states, list):
@@ -552,7 +549,6 @@ def save_gif_from_states(env, states, save_path, scale=1):
             if scale != 1:
                 frame = np.repeat(frame, scale, axis=0)
                 frame = np.repeat(frame, scale, axis=1)
-            imageio.imsave(os.path.join(frames_dir, f'{i:03d}.png'), frame)
             writer.append_data(frame)
 
 

@@ -365,7 +365,17 @@ def parse_step_log_file(step_file, valid_actions):
     with open(step_file, "r", encoding="utf-8") as f:
         txt = f.read()
 
-    ascii_match = re.search(r"Game state \(ASCII map\) and Legend:\n(.*?)\n\nGame rules:", txt, flags=re.DOTALL)
+    ascii_match = re.search(
+        r"Game state \(ASCII map\) and Legend:\n(.*?)\n\nAvailable actions \(action_space\):",
+        txt,
+        flags=re.DOTALL,
+    )
+    if not ascii_match:
+        ascii_match = re.search(
+            r"Game state \(ASCII map\) and Legend:\n(.*?)\n\nGame rules:",
+            txt,
+            flags=re.DOTALL,
+        )
     if not ascii_match:
         raise ValueError("Could not parse ASCII section from step log")
     ascii_state = ascii_match.group(1).strip("\n")
@@ -392,6 +402,11 @@ def get_run_file_path(save_dir, model, game_name, run_id, level_index, think_alo
     filename = (('CoT_' if think_aloud else '') +
                 f"{formatted_game_name}_run_{run_id}_level_{level_index}.json")
     return os.path.join(save_dir, filename)
+
+
+def get_run_logs_dir(run_filepath, memory):
+    history_suffix = f"_hist-{memory}_logs" if memory and memory > 0 else "_logs"
+    return run_filepath[:-5] + history_suffix
 
 
 def find_next_available_run_id(save_dir, model, game_name, level_index, initial_run_id, think_aloud, memory):
@@ -511,7 +526,7 @@ def process_game_level(agent, game_info, level_index, run_id, save_dir, model,
     current_run_filepath = get_run_file_path(save_dir, model, game_name, run_id,
                                              level_index, think_aloud, memory)
 
-    current_run_logs_dir = current_run_filepath[:-5] + "_logs"
+    current_run_logs_dir = get_run_logs_dir(current_run_filepath, memory)
     os.makedirs(current_run_logs_dir, exist_ok=True)
 
     run_file_exists = os.path.exists(current_run_filepath)
