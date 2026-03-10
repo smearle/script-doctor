@@ -1,4 +1,4 @@
-from puzzlejax.backends.nodejs import NodeJSPuzzleScriptBackend
+from backends.nodejs import NodeJSPuzzleScriptBackend
 
 backend = NodeJSPuzzleScriptBackend()
 engine = backend.engine

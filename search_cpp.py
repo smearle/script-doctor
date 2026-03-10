@@ -13,8 +13,8 @@ import numpy as np
 import submitit
 
 from conf.config import SearchCppConfig
-from puzzlejax.globals import CPP_SOLS_DIR, STANDALONE_CPP_RESULTS_PATH
-from puzzlejax.utils import get_list_of_games_for_testing, init_ps_lark_parser
+from puzzlescript_jax.globals import CPP_SOLS_DIR, STANDALONE_CPP_RESULTS_PATH
+from puzzlescript_jax.utils import get_list_of_games_for_testing, init_ps_lark_parser
 from puzzlescript_cpp import CppPuzzleScriptBackend
 
 
@@ -117,28 +117,20 @@ def main(cfg: SearchCppConfig, games: Optional[List[str]] = None):
                 print(f'Level: {level_i}')
                 if not cfg.overwrite and os.path.isfile(level_cpp_sol_path):
                     print(f'Already solved {game} level {level_i}.')
-                    continue
-                result = backend.run_search(
-                    algo,
-                    game_text=game_text,
-                    level_i=level_i,
-                    n_steps=cfg.n_steps,
-                    timeout_ms=timeout_ms,
-                    warmup=False,
-                ).to_dict()
-
-                if os.path.isfile(level_cpp_sol_path):
                     with open(level_cpp_sol_path, 'r') as f:
-                        level_cpp_sol_dict = json.load(f)
-                    best_solve = level_cpp_sol_dict['won']
-                    best_score = level_cpp_sol_dict['score']
-                    solution_exists = 'sol' in level_cpp_sol_dict or 'actions' in level_cpp_sol_dict
-                else:
-                    best_solve = False
-                    best_score = -np.inf
-                    solution_exists = False
+                        result = json.load(f)
+                    results[run_name][game][level_i] = result
 
-                if cfg.overwrite or not solution_exists or result['solved'] > best_solve or result['score'] > best_score:
+                else:
+                    result = backend.run_search(
+                        algo,
+                        game_text=game_text,
+                        level_i=level_i,
+                        n_steps=cfg.n_steps,
+                        timeout_ms=timeout_ms,
+                        warmup=False,
+                    ).to_dict()
+
                     result_dict = {
                         'won': result['solved'],
                         'actions': result['actions'],
@@ -153,15 +145,25 @@ def main(cfg: SearchCppConfig, games: Optional[List[str]] = None):
                     with open(level_cpp_sol_path, 'w') as f:
                         json.dump(result_dict, f, indent=4)
                     print(f"Saved solution to {level_cpp_sol_path}")
+                    results[run_name][game][level_i] = result
 
-                results[run_name][game][level_i] = result
+                if cfg.render:
+                    level_cpp_gif_path = os.path.splitext(level_cpp_sol_path)[0] + "_sol.gif"
+                    try:
+                        backend.render_gif(
+                            game_text=game_text,
+                            level_i=level_i,
+                            actions=result['actions'],
+                            gif_path=level_cpp_gif_path,
+                            frame_duration_s=0.5,
+                        )
+                        print(f"Saved GIF to {level_cpp_gif_path}")
+                    except Exception as e:
+                        print(f"Error rendering game {game} level {level_i}: {e}")
+                        traceback.print_exc()
+
 
         with open(STANDALONE_CPP_RESULTS_PATH, 'w') as f:
             json.dump(results, f, indent=4)
-
-    if cfg.render:
-        print("Rendering C++ solutions is not wired yet. Search results were saved without GIF rendering.")
-
-
 if __name__ == "__main__":
     main_launch()

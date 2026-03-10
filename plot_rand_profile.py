@@ -7,7 +7,7 @@ from matplotlib.ticker import StrMethodFormatter
 
 from conf.config import PlotRandProfileConfig
 from profile_rand_jax import get_level_int, get_step_int, get_vmap
-from puzzlejax.globals import (
+from puzzlescript_jax.globals import (
     CPP_PROFILING_RESULTS_DIR,
     GAMES_TO_N_RULES_PATH,
     JAX_PROFILING_RESULTS_DIR,
@@ -15,8 +15,8 @@ from puzzlejax.globals import (
     PLOTS_DIR,
     PRIORITY_GAMES,
 )
-from puzzlejax.preprocessing import count_rules
-from puzzlejax.utils import init_ps_env
+from puzzlescript_jax.preprocessing import count_rules
+from puzzlescript_jax.utils import init_ps_env
 
 
 GAMES_TO_PLOT = PRIORITY_GAMES
@@ -51,9 +51,9 @@ INCLUDED_JAX_RUN_TYPES = [
     # False,
 ]
 INCLUDED_NODEJS_RUN_TYPES = [
+    "nodejs_batched",
     # "single_process",
     # "nodejs_native",
-    "nodejs_batched",
     # "multiprocess",
     # "nodejs_native_multiprocess",
 ]
@@ -81,6 +81,11 @@ def _get_best_fps(stats: dict) -> float:
     if not fpss:
         return 0.0
     return float(max(fpss))
+
+
+def _has_valid_fps(stats: dict) -> bool:
+    fpss = stats.get("fps")
+    return isinstance(fpss, list) and len(fpss) > 0
 
 
 def _truncate_series_on_first_best_fps_drop(points: list[dict]) -> list[dict]:
@@ -166,7 +171,11 @@ def _collect_jax_series(rollout_len_str: str) -> dict[str, list[dict]]:
                     with open(level_results_path, "r") as f:
                         n_envs_to_stats = json.load(f)
 
-                    n_envs = sorted(int(n_env) for n_env in n_envs_to_stats)
+                    n_envs = sorted(
+                        int(n_env)
+                        for n_env, stats in n_envs_to_stats.items()
+                        if _has_valid_fps(stats)
+                    )
                     points = [
                         {
                             "x": n_env,
@@ -222,7 +231,7 @@ def _collect_nodejs_series(rollout_len_str: str) -> dict[str, list[dict]]:
 
             mode_to_points = {run_type: [] for run_type in INCLUDED_NODEJS_RUN_TYPES}
             for stats_key, stats in stats_by_key.items():
-                if "error_type" in stats:
+                if not _has_valid_fps(stats):
                     continue
                 if "-" not in stats_key:
                     continue
@@ -283,7 +292,7 @@ def _collect_cpp_series(rollout_len_str: str) -> dict[str, list[dict]]:
 
             mode_to_points = {run_type: [] for run_type in INCLUDED_CPP_RUN_TYPES}
             for stats_key, stats in stats_by_key.items():
-                if "error_type" in stats:
+                if not _has_valid_fps(stats):
                     continue
                 if "-" not in stats_key:
                     continue

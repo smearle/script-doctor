@@ -21,9 +21,9 @@ from llm_agent_loop import (
     parse_step_log_file,
     release_job,
 )
-from puzzlejax.backends.nodejs import NodeJSPuzzleScriptBackend
-from puzzlejax.globals import LARK_SYNTAX_PATH, PRIORITY_GAMES
-from puzzlejax.utils import level_to_int_arr
+from backends.nodejs import NodeJSPuzzleScriptBackend
+from puzzlescript_jax.globals import LARK_SYNTAX_PATH, PRIORITY_GAMES
+from puzzlescript_jax.utils import level_to_int_arr
 
 
 ACTION_SPACE = [0, 1, 2, 3, 4]
@@ -281,7 +281,7 @@ def process_game_level(agent, game_info, level_index, run_id, save_dir, model,
                     level_i=level_index,
                     actions=action_sequence_for_render,
                     gif_path=gif_path,
-                    frame_duration_s=0.1,
+                    frame_duration_s=0.05,
                     scale=10,
                 )
                 result["render_gif"] = gif_path

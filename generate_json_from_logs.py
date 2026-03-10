@@ -18,10 +18,10 @@ import sys
 import jax
 from lark import Lark
 
-from puzzlejax.globals import LARK_SYNTAX_PATH
+from puzzlescript_jax.globals import LARK_SYNTAX_PATH
 from env_wrappers import RepresentationWrapper
-from puzzlejax.env import PJParams
-from puzzlejax.preprocessing import get_tree_from_txt
+from puzzlescript_jax.env import PJParams
+from puzzlescript_jax.preprocessing import get_tree_from_txt
 
 CUSTOM_GAMES_DIR = "data/scraped_games"
 

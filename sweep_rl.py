@@ -18,14 +18,14 @@ import pandas as pd
 import submitit
 
 from conf.config import SweepRLConfig, TrainConfig, EnjoyConfig
-from puzzlejax.env import PJParams
-from puzzlejax.preprocessing import get_env_from_ps_file
+from puzzlescript_jax.env import PJParams
+from puzzlescript_jax.preprocessing import get_env_from_ps_file
 from train_jax import main as main_train
 from eval_rl import main_enjoy
 from sweep_rl_configs import _NAMED_SWEEPS
-from puzzlejax.utils import get_list_of_games_for_testing, get_n_levels_per_game, init_ps_lark_parser
+from puzzlescript_jax.utils import get_list_of_games_for_testing, get_n_levels_per_game, init_ps_lark_parser
 from utils_rl import init_config
-from puzzlejax.globals import JS_TO_JAX_ACTIONS, JS_SOLS_DIR, SOLUTION_REWARDS_PATH
+from puzzlescript_jax.globals import JS_TO_JAX_ACTIONS, JS_SOLS_DIR, SOLUTION_REWARDS_PATH
 
 
 dotenv.load_dotenv()
@@ -106,7 +106,7 @@ def _curve_key(cfg: TrainConfig, curve_fields: Sequence[str]) -> Tuple[Tuple[str
 def _curve_label(curve_key: Tuple[Tuple[str, Any], ...]) -> str:
     if not curve_key:
         return "mean"
-    return ", ".join(f"{k}={_format_value(v)}" for k, v in curve_key)
+    return ", ".join(f"{k} = {_format_value(v)}" for k, v in curve_key)
 
 
 def _extract_sweep_axes(sweep_cfg: SweepRLConfig, run_fields: set[str]) -> Dict[str, List[Any]]:
@@ -166,9 +166,8 @@ def plot_rl_runs_reward(grid_cfgs: List[SweepRLConfig]):
             # ax = axs[level_i]
 
             level_cfgs = game_cfgs[level]
-            varying_fields = _infer_varying_fields(level_cfgs)
-            curve_fields = [f for f in varying_fields if f != "seed"]
-            curve_to_dfs: Dict[Tuple[Tuple[str, Any], ...], List[pd.DataFrame]] = {}
+            available_cfgs = []
+            available_dfs = []
             for cfg in [init_config(cfg) for cfg in level_cfgs]:
                 exp_dir = cfg._exp_dir
                 progress_csv = os.path.join(exp_dir, "progress.csv")
@@ -181,7 +180,8 @@ def plot_rl_runs_reward(grid_cfgs: List[SweepRLConfig]):
                 if len(df) == 0:
                     print(f"{progress_csv} is empty, skipping.")
                     continue
-                curve_to_dfs.setdefault(_curve_key(cfg, curve_fields), []).append(df)
+                available_cfgs.append(cfg)
+                available_dfs.append(df)
 
                 # Load wandb history
                 # print(f"Loading wandb run for {cfg._exp_dir}...")
@@ -197,8 +197,17 @@ def plot_rl_runs_reward(grid_cfgs: List[SweepRLConfig]):
                 #             os.system(f'wandb sync {os.path.join(exp_dir, "wandb", d)}')
                 # train_metrics = sc_run.history()
 
-            if not curve_to_dfs:
+            if not available_cfgs:
                 continue
+
+            varying_fields = _infer_varying_fields(available_cfgs)
+            curve_fields = [
+                f for f in varying_fields
+                if f not in {"seed", "game", "level"} and not f.startswith("_")
+            ]
+            curve_to_dfs: Dict[Tuple[Tuple[str, Any], ...], List[pd.DataFrame]] = {}
+            for cfg, df in zip(available_cfgs, available_dfs):
+                curve_to_dfs.setdefault(_curve_key(cfg, curve_fields), []).append(df)
 
             fig, ax = plt.subplots(figsize=(8, 4))
             for key, dfs in sorted(curve_to_dfs.items(), key=lambda x: str(x[0])):
@@ -214,8 +223,8 @@ def plot_rl_runs_reward(grid_cfgs: List[SweepRLConfig]):
                 std = ep_returns.std(axis=1)
                 label = _curve_label(key)
 
-                ax.plot(common_timesteps, mean, label=f"{label} mean")
-                ax.fill_between(common_timesteps, mean - std, mean + std, alpha=0.2, label=f"{label} std")
+                ax.plot(common_timesteps, mean, label=label)
+                ax.fill_between(common_timesteps, mean - std, mean + std, alpha=0.2)
             ax.set_title(f"{game}, level {level}")
             ax.set_ylabel("Episodic Return")
             ax.set_xlabel("Timesteps")
@@ -381,6 +390,12 @@ def main(sweep_cfg: SweepRLConfig):
     elif sweep_cfg.mode == 'enjoy':
         main_fn = main_enjoy
         CfgCls = EnjoyConfig
+    elif sweep_cfg.mode == 'plot':
+        main_fn = None
+        CfgCls = TrainConfig
+        sweep_cfg.plot = True
+    else:
+        raise ValueError(f"Unsupported sweep mode: {sweep_cfg.mode!r}. Expected one of: 'train', 'enjoy', 'plot'.")
     base_cfg = CfgCls()
 
     grid_cfgs = gen_grid_cfgs(sweep_cfg, base_cfg)

@@ -17,8 +17,8 @@ import submitit
 from javascript import require
 
 from conf.config import ProfileRandCppConfig
-from puzzlejax.globals import CPP_PROFILING_RESULTS_DIR
-from puzzlejax.utils import get_list_of_games_for_testing, init_ps_lark_parser
+from puzzlescript_jax.globals import CPP_PROFILING_RESULTS_DIR
+from puzzlescript_jax.utils import get_list_of_games_for_testing, init_ps_lark_parser
 from puzzlescript_cpp import CppBatchedPuzzleScriptEnv, CppPuzzleScriptEngine
 from puzzlescript_nodejs.utils import compile_game
 
@@ -36,7 +36,7 @@ BATCH_SIZES = [
 ]
 INCLUDED_CPP_FIXED_EXECUTION_MODES = [
     # "cpp_native",
-    # "cpp_native_multiprocess",
+    "cpp_native_multiprocess",
 ]
 INCLUDED_CPP_SWEEP_EXECUTION_MODES = [
     "cpp_batched",

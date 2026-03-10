@@ -141,6 +141,8 @@ def _render_frames_io(frames, i, metric, steps_prev_complete, env, config: RLCon
 def log_callback(metric, steps_prev_complete, config: RLConfig, train_start_time):
     timesteps = metric["timestep"][metric["returned_episode"]] * config.n_envs
     return_values = metric["returned_episode_returns"][metric["returned_episode"]]
+    level_ids = metric.get("level_i")
+    win_flags = metric.get("won")
 
     # for t in range(len(timesteps)):
     #     print(
@@ -178,6 +180,20 @@ def log_callback(metric, steps_prev_complete, config: RLConfig, train_start_time
             },
             step=t,
         )
+
+        if level_ids is not None and win_flags is not None:
+            done_mask = np.asarray(metric["returned_episode"])
+            finished_levels = np.asarray(level_ids)[done_mask]
+            finished_returns = np.asarray(return_values)
+            finished_wins = np.asarray(win_flags)[done_mask]
+            if finished_levels.size > 0:
+                level_payload = {}
+                for level_i in np.unique(finished_levels):
+                    level_mask = finished_levels == level_i
+                    level_payload[f"level/{int(level_i)}/ep_return"] = float(finished_returns[level_mask].mean())
+                    level_payload[f"level/{int(level_i)}/win_rate"] = float(finished_wins[level_mask].mean())
+                if level_payload:
+                    wandb.log(level_payload, step=t)
 
         # for k, v in zip(env.prob.metric_names, env.prob.stats):
         #     writer.add_scalar(k, v, t)

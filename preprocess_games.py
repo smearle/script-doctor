@@ -7,15 +7,15 @@ from collections import OrderedDict
 import hydra
 from lark import Lark
 
-from puzzlejax.preprocessing import count_rules, get_env_from_ps_file
+from puzzlescript_jax.preprocessing import count_rules, get_env_from_ps_file
 from conf.config import PreprocessConfig
-from puzzlejax.detect_randomness import tree_has_randomness
-from puzzlejax.globals import (
+from puzzlescript_jax.detect_randomness import tree_has_randomness
+from puzzlescript_jax.globals import (
     GAMES_N_RULES_SORTED_PATH, GAMES_TO_N_RULES_PATH, GAMES_TO_SKIP, LARK_SYNTAX_PATH, TEST_GAMES,
     TREES_DIR, SIMPLIFIED_GAMES_DIR, MIN_GAMES_DIR, PRETTY_TREES_DIR, CUSTOM_GAMES_DIR,
     GAMES_DIR,
 )
-from puzzlejax.preprocessing import PJParseErrors
+from puzzlescript_jax.preprocessing import PJParseErrors
 
 logger = logging.getLogger(__name__)
 

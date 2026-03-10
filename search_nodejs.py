@@ -13,9 +13,9 @@ import numpy as np
 import submitit
 
 from conf.config import SearchNodeJSConfig
-from puzzlejax.backends import NodeJSPuzzleScriptBackend
-from puzzlejax.globals import STANDALONE_NODEJS_RESULTS_PATH, JS_SOLS_DIR
-from puzzlejax.utils import get_list_of_games_for_testing, init_ps_lark_parser
+from backends import NodeJSPuzzleScriptBackend
+from puzzlescript_jax.globals import STANDALONE_NODEJS_RESULTS_PATH, JS_SOLS_DIR
+from puzzlescript_jax.utils import get_list_of_games_for_testing, init_ps_lark_parser
 
 
 dotenv.load_dotenv()
@@ -159,17 +159,23 @@ def main(cfg: SearchNodeJSConfig, games: Optional[List[str]] = None):
                         json.dump(result_dict, f, indent=4)
                     print(f"Saved solution to {level_js_sol_path}")
 
+                    if cfg.render:
+                        gif_path = os.path.join(
+                            game_js_sols_dir, f'{algo_prefix}{cfg.n_steps}-steps_level-{level_i}.gif')
+                        backend.render_solution_gif(
+                            game_text=game_text,
+                            level_i=level_i,
+                            actions=result['actions'],
+                            gif_path=gif_path,
+                            frame_duration_s=0.5,
+                            scale=1,
+                        )
 
                 # print(json.dumps(result))
                 results[run_name][game][level_i] = result
 
         with open(STANDALONE_NODEJS_RESULTS_PATH, 'w') as f:
             json.dump(results, f, indent=4)
-
-    if cfg.render:
-        import render_js_sols
-        print("Rendering solution GIFs.")
-        render_js_sols.main(cfg, games_to_test, backend=backend)
 
 
 if __name__ == "__main__":

@@ -42,6 +42,10 @@ public:
     /// Environments that are done are auto-reset.
     void step(const std::vector<int>& actions);
 
+    /// Control whether terminal environments are automatically reset on step.
+    void setAutoReset(bool auto_reset) { auto_reset_ = auto_reset; }
+    bool autoReset() const { return auto_reset_; }
+
     // ---- Observation access ------------------------------------------
 
     /// Return the current observations as flat uint8 buffer.
@@ -98,6 +102,7 @@ private:
     // Per-env state for reward computation
     std::vector<bool> prev_winning_;
     std::vector<float> prev_scores_;
+    bool auto_reset_ = true;
 
     void fillObs(int env_idx);
     void fillObsAll();

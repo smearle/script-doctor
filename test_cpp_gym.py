@@ -8,7 +8,7 @@ import numpy as np
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from puzzlejax.globals import SIMPLIFIED_GAMES_DIR, JS_SOLS_DIR
+from puzzlescript_jax.globals import SIMPLIFIED_GAMES_DIR, JS_SOLS_DIR
 from javascript import require
 
 

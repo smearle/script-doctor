@@ -21,7 +21,6 @@ PRIORITY_GAMES = [
     'Take_Heart_Lass',
     'Travelling_salesman',
     'Zen_Puzzle_Garden',
-    'atlas shrank',
     'blocks',
     'constellationz',
     'kettle',
@@ -32,6 +31,8 @@ PRIORITY_GAMES = [
     'sokoban_match3',
     'Smother',
     'sokodig',
+    'atlas shrank',
+    'MicroChip',
 ]
 
 par_dir = os.path.dirname(os.path.abspath(__file__))

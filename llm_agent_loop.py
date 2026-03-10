@@ -10,11 +10,11 @@ import jax
 import jax.numpy as jnp
 from lark import Lark
 from env_wrappers import RepresentationWrapper
-from puzzlejax.env import PJParams
-from puzzlejax.preprocessing import LARK_SYNTAX_PATH, get_tree_from_txt
-from puzzlejax.utils import save_gif_from_states
+from puzzlescript_jax.env import PJParams
+from puzzlescript_jax.preprocessing import LARK_SYNTAX_PATH, get_tree_from_txt
+from puzzlescript_jax.utils import save_gif_from_states
 from LLM_agent import LLMGameAgent
-from puzzlejax.globals import PRIORITY_GAMES
+from puzzlescript_jax.globals import PRIORITY_GAMES
 
 
 CUSTOM_GAMES_DIR = "data/scraped_games"

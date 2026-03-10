@@ -8,9 +8,9 @@ import jax.numpy as jnp
 import numpy as np
 from puxle import Puzzle, PuzzleState, state_dataclass, FieldDescriptor
 
-from puzzlejax.env import PuzzleJaxEnv, PJState, PJParams
-from puzzlejax.env_utils import multihot_to_desc
-from puzzlejax.utils import init_ps_env
+from puzzlescript_jax.env import PuzzleJaxEnv, PJState, PJParams
+from puzzlescript_jax.env_utils import multihot_to_desc
+from puzzlescript_jax.utils import init_ps_env
 
 
 def _ensure_jaxtar_current_padding_compat():

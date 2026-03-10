@@ -9,7 +9,7 @@ from jax import numpy as jnp
 import numpy as np
 
 from conf.config import EnjoyConfig
-from puzzlejax.env import PuzzleJaxEnv, PJState
+from puzzlescript_jax.env import PuzzleJaxEnv, PJState
 # from envs.probs.problem import get_loss
 # from eval import get_eval_name, init_config_for_eval
 from purejaxrl.wrappers import LogWrapper
@@ -28,7 +28,8 @@ def main_enjoy(enjoy_config: EnjoyConfig):
         steps_prev_complete = 0
     else:
         if not os.path.exists(exp_dir):
-            exit(f"Experiment directory {exp_dir} does not exist")
+            print(f"Warning: experiment directory {exp_dir} does not exist. Skipping evaluation.")
+            return
         print(f'Loading checkpoint from {exp_dir}')
         checkpoint_manager, restored_ckpt, wandb_run_id = init_checkpointer(enjoy_config)
         runner_state = restored_ckpt['runner_state']

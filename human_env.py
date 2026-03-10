@@ -12,10 +12,10 @@ import jax.numpy as jnp
 from lark import Lark
 import numpy as np
 
-from puzzlejax.globals import LARK_SYNTAX_PATH, TEST_GAMES, TREES_DIR, DATA_DIR
-from puzzlejax.env import PuzzleJaxEnv, PJParams, multihot_to_desc
-from puzzlejax.preprocessing import get_tree_from_txt
-from puzzlejax.preprocessing import PJParseErrors
+from puzzlescript_jax.globals import LARK_SYNTAX_PATH, TEST_GAMES, TREES_DIR, DATA_DIR
+from puzzlescript_jax.env import PuzzleJaxEnv, PJParams, multihot_to_desc
+from puzzlescript_jax.preprocessing import get_tree_from_txt
+from puzzlescript_jax.preprocessing import PJParseErrors
 
 logger = logging.getLogger(__name__)
 

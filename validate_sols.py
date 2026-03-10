@@ -24,16 +24,16 @@ from skimage.transform import resize
 import submitit
 
 from conf.config import JaxValidationConfig
-from puzzlejax.backends import NodeJSPuzzleScriptBackend
-from puzzlejax.env import PuzzleJaxEnv
-from puzzlejax.globals import (
+from backends import NodeJSPuzzleScriptBackend
+from puzzlescript_jax.env import PuzzleJaxEnv
+from puzzlescript_jax.globals import (
     SOLUTION_REWARDS_PATH, GAMES_TO_N_RULES_PATH, JS_SOLS_DIR, JAX_VALIDATED_JS_SOLS_DIR, JS_TO_JAX_ACTIONS, DATA_DIR,
     LARK_SYNTAX_PATH,
 )
-from puzzlejax.preprocessing import PJParseErrors, get_tree_from_txt
-from puzzlejax.env_utils import multihot_to_desc
+from puzzlescript_jax.preprocessing import PJParseErrors, get_tree_from_txt
+from puzzlescript_jax.env_utils import multihot_to_desc
 from puzzlescript_nodejs.utils import replay_actions_js
-from puzzlejax.utils import get_list_of_games_for_testing, to_binary_vectors
+from puzzlescript_jax.utils import get_list_of_games_for_testing, to_binary_vectors
 from utils_rl import get_env_params_from_config
 
 

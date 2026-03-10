@@ -1,12 +1,13 @@
 import os
 import json
 import pandas as pd
+import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
 import re
 import argparse
 
-from puzzlejax.utils import game_names_remap, get_list_of_games_for_testing
+from puzzlescript_jax.utils import game_names_remap, get_list_of_games_for_testing
 
 
 def format_game_name_for_display(game_name: str) -> str:
@@ -22,6 +23,145 @@ def get_ordered_game_display_names(include_cot_games: bool) -> list[str]:
     ordered_games_display = [format_game_name_for_display(game) for game in ordered_games_raw]
     # Deduplicate while preserving order
     return list(dict.fromkeys(ordered_games_display))
+
+
+def build_expanded_heatmap_columns(
+    ordered_games: list[str], expected_levels_by_game: dict[str, list[int]]
+) -> tuple[list[tuple[str, int]], list[tuple[str, int, int]]]:
+    columns = []
+    game_spans = []
+    for game in ordered_games:
+        levels = expected_levels_by_game.get(game, [])
+        if not levels:
+            continue
+        start = len(columns)
+        for level in levels:
+            columns.append((game, level))
+        end = len(columns)
+        game_spans.append((game, start, end))
+    return columns, game_spans
+
+
+def draw_game_dividers(ax, game_spans: list[tuple[str, int, int]], n_rows: int) -> None:
+    for _, _, end in game_spans[:-1]:
+        ax.vlines(end, ymin=0, ymax=n_rows, colors='black', linewidth=2.0)
+
+    for game, start, end in game_spans:
+        center = (start + end) / 2
+        ax.text(
+            center,
+            1.005,
+            game,
+            ha='center',
+            va='bottom',
+            fontsize=9,
+            transform=ax.get_xaxis_transform(),
+        )
+
+
+def plot_expanded_llm_heatmap(
+    df: pd.DataFrame,
+    ordered_games: list[str],
+    expected_levels_by_game: dict[str, list[int]],
+    value_column: str,
+    title: str,
+    output_path: str,
+    cmap: str,
+    colorbar_label: str,
+    vmin=None,
+    vmax=None,
+) -> None:
+    if df.empty:
+        print(f"No data available for expanded LLM heatmap '{title}'.")
+        return
+
+    columns, game_spans = build_expanded_heatmap_columns(ordered_games, expected_levels_by_game)
+    if not columns:
+        print(f"No levels available for expanded LLM heatmap '{title}'.")
+        return
+
+    llm_order = list(dict.fromkeys(df['llm']))
+    column_keys = [f'{game}::level-{level}' for game, level in columns]
+    heatmap_df = pd.DataFrame(index=llm_order, columns=column_keys, dtype=float)
+
+    grouped = (
+        df.groupby(['llm', 'game', 'level'])[value_column]
+        .mean()
+        .reset_index()
+    )
+    value_lookup = {
+        (row.llm, row.game, int(row.level)): float(row[value_column])
+        for _, row in grouped.iterrows()
+    }
+
+    for llm in llm_order:
+        for game, level in columns:
+            value = value_lookup.get((llm, game, level))
+            if value is not None:
+                heatmap_df.at[llm, f'{game}::level-{level}'] = value
+
+    valid_values = heatmap_df.to_numpy(dtype=float)
+    finite_values = valid_values[np.isfinite(valid_values)]
+    if finite_values.size == 0:
+        print(f"No finite values available for expanded LLM heatmap '{title}'.")
+        return
+
+    if vmin is None:
+        vmin = float(np.min(finite_values))
+    if vmax is None:
+        vmax = float(np.max(finite_values))
+    if np.isfinite(vmin) and np.isfinite(vmax) and np.isclose(vmin, vmax):
+        vmax = vmin + (abs(vmin) * 0.05 + 1)
+
+    annot_data = None
+    if len(columns) <= 40:
+        if value_column == 'win':
+            annot_data = [
+                [f"{val:.0%}" if pd.notnull(val) else '' for val in row]
+                for row in heatmap_df.to_numpy(dtype=float)
+            ]
+        else:
+            annot_data = [
+                [f"{val:.0f}" if pd.notnull(val) else '' for val in row]
+                for row in heatmap_df.to_numpy(dtype=float)
+            ]
+
+    target_cell_width = 0.35
+    target_cell_height = 0.8
+    min_total_width = 12.0
+    min_total_height = 3.0
+    h_padding = 3.0
+    v_padding = 2.5
+    fig_w = max(len(columns) * target_cell_width + h_padding, min_total_width)
+    fig_h = max(len(llm_order) * target_cell_height + v_padding, min_total_height)
+
+    plt.figure(figsize=(fig_w, fig_h))
+    ax = sns.heatmap(
+        heatmap_df,
+        annot=annot_data if annot_data is not None else False,
+        fmt="",
+        cmap=cmap,
+        vmin=vmin,
+        vmax=vmax,
+        cbar_kws={'label': colorbar_label, 'shrink': 0.8, 'pad': 0.01},
+        annot_kws={"size": 7},
+        linewidths=0.25,
+        linecolor='white',
+    )
+    draw_game_dividers(ax, game_spans, len(llm_order))
+    ax.set_title(title, pad=32)
+    plt.xlabel("Level", labelpad=10)
+    plt.ylabel("LLM Model")
+    plt.yticks(rotation=0)
+    ax.set_xticklabels([str(level) for _, level in columns], rotation=0, fontsize=7)
+    plt.tight_layout(rect=[0, 0, 1, 0.9])
+
+    try:
+        plt.savefig(output_path)
+        print(f"Expanded LLM heatmap saved to {output_path}")
+    except Exception as e:
+        print(f"Error saving expanded LLM heatmap '{title}': {e}")
+    plt.close()
 
 
 def parse_filename(filename, folder_llm=None):
@@ -320,6 +460,10 @@ def main():
         ordered_present_games = [g for g in canonical_game_order if g in llm_game_win_rates_plot.columns]
         remaining_games = [g for g in llm_game_win_rates_plot.columns if g not in ordered_present_games]
         heatmap_game_order = ordered_present_games + remaining_games
+        expected_levels_by_game = {
+            game_name: sorted(df.loc[df["game"] == game_name, "level"].dropna().astype(int).unique().tolist())
+            for game_name in heatmap_game_order
+        }
 
         llm_game_win_rates_plot = llm_game_win_rates_plot.reindex(columns=heatmap_game_order)
         llm_game_steps_plot = llm_game_steps_plot.reindex(columns=heatmap_game_order)
@@ -402,6 +546,31 @@ def main():
             except Exception as e:
                 print(f"Error saving LLM vs Game steps heatmap: {e}")
             plt.close()
+
+            plot_expanded_llm_heatmap(
+                df=df,
+                ordered_games=heatmap_game_order,
+                expected_levels_by_game=expected_levels_by_game,
+                value_column='win',
+                title='Average Win Rate: LLM vs. Level Across Games',
+                output_path=os.path.join(current_script_path, "llm_vs_game_win_rate_expanded_heatmap.png"),
+                cmap='RdYlGn',
+                colorbar_label='Average Win Rate',
+                vmin=0,
+                vmax=1,
+            )
+            plot_expanded_llm_heatmap(
+                df=df,
+                ordered_games=heatmap_game_order,
+                expected_levels_by_game=expected_levels_by_game,
+                value_column='steps',
+                title='Average Steps: LLM vs. Level Across Games',
+                output_path=os.path.join(current_script_path, "llm_vs_game_steps_expanded_heatmap.png"),
+                cmap='Blues',
+                colorbar_label='Average Steps',
+                vmin=max(0, min_steps),
+                vmax=max_steps,
+            )
         else:
             print("No win rate data for LLM vs Game heatmap.")
     else:

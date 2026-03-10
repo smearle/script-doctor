@@ -11,9 +11,9 @@ import jax.numpy as jnp
 import numpy as np
 from gymnasium import spaces
 
-from puzzlejax.backends import NodeJSPuzzleScriptBackend
-from puzzlejax.env import PSObs
-from puzzlejax.utils import init_ps_lark_parser, level_to_int_arr
+from backends import NodeJSPuzzleScriptBackend
+from puzzlescript_jax.env import PSObs
+from puzzlescript_jax.utils import init_ps_lark_parser, level_to_int_arr
 
 
 @dataclass
@@ -21,6 +21,7 @@ class NodeJSEnvState:
     score: float
     won: bool
     steps: int
+    level_i: int
     level: dict[str, Any]
     objs: list[str]
 
@@ -28,40 +29,79 @@ class NodeJSEnvState:
 class NodeJSPuzzleEnv:
     """Small imperative RL wrapper around the original PuzzleScript engine."""
 
-    def __init__(self, game: str, level_i: int, max_episode_steps: int) -> None:
+    def __init__(
+        self,
+        game: str,
+        level_i: int,
+        max_episode_steps: int,
+        *,
+        game_text: str | None = None,
+    ) -> None:
         self.game = game
         self.level_i = level_i
         self.max_steps = max_episode_steps
         self.parser = init_ps_lark_parser()
         self.backend = NodeJSPuzzleScriptBackend()
-        self.game_text = self.backend.compile_game(self.parser, game)
+        # Allow callers with an already compiled runtime to skip reparsing.
+        self.game_text = game_text if game_text is not None else self.backend.compile_game(self.parser, game)
         self.action_space = spaces.Discrete(self.backend.MAX_ACTION_ID + 1)
+        self.num_levels = int(self.backend.get_num_levels())
         self._obs_shape = self._infer_obs_shape()
 
+    def _get_max_level_shape(self) -> tuple[int, int]:
+        if self.level_i >= 0:
+            level = self.backend.engine.serializeLevel(int(self.level_i))
+            return int(level["height"]), int(level["width"])
+        max_width = 0
+        max_height = 0
+        for level_i in range(self.num_levels):
+            level = self.backend.engine.serializeLevel(level_i)
+            if level is None:
+                continue
+            max_width = max(max_width, int(level["width"]))
+            max_height = max(max_height, int(level["height"]))
+        return max_height, max_width
+
     def _infer_obs_shape(self) -> tuple[int, int, int]:
-        self.backend.load_level(self.game_text, self.level_i)
+        probe_level_i = self.level_i if self.level_i >= 0 else 0
+        self.backend.load_level(self.game_text, probe_level_i)
         level = self.backend.engine.backupLevel()
         objs = list(self.backend.engine.getState().idDict)
-        obs = self._obs_from_level(level, objs)
-        return tuple(int(dim) for dim in obs.multihot_level.shape)
+        max_height, max_width = self._get_max_level_shape()
+        return (len(objs), max_height, max_width)
+
+    def _sample_level_i(self) -> int:
+        if self.level_i >= 0:
+            return int(self.level_i)
+        return int(np.random.randint(self.num_levels))
 
     def _obs_from_level(self, level: dict[str, Any], objs: list[str]) -> PSObs:
         int_level = level_to_int_arr(level, len(objs))
         multihot = ((int_level[..., None] & (1 << np.arange(len(objs)))) > 0).astype(np.float32)
-        multihot = np.transpose(multihot, (2, 0, 1))
-        return PSObs(multihot_level=jnp.asarray(multihot), flat_obs=None)
+        multihot = np.transpose(multihot, (2, 1, 0))
+        padded = np.zeros(self._obs_shape, dtype=np.float32)
+        padded[:, : multihot.shape[1], : multihot.shape[2]] = multihot
+        return PSObs(multihot_level=jnp.asarray(padded), flat_obs=None)
 
     def gen_dummy_obs(self, _params=None) -> PSObs:
         return PSObs(multihot_level=jnp.zeros((1,) + self._obs_shape, dtype=jnp.float32), flat_obs=None)
 
     def reset(self, seed: int | None = None) -> tuple[PSObs, NodeJSEnvState]:
         del seed
-        self.backend.load_level(self.game_text, self.level_i)
+        reset_level_i = self._sample_level_i()
+        self.backend.load_level(self.game_text, reset_level_i)
         self.backend.solver.precalcDistances(self.backend.engine)
         level = self.backend.engine.backupLevel()
         objs = list(self.backend.engine.getState().idDict)
         score = float(self.backend.solver.getScore(self.backend.engine))
-        state = NodeJSEnvState(score=score, won=bool(self.backend.engine.getWinning()), steps=0, level=level, objs=objs)
+        state = NodeJSEnvState(
+            score=score,
+            won=bool(self.backend.engine.getWinning()),
+            steps=0,
+            level_i=reset_level_i,
+            level=level,
+            objs=objs,
+        )
         return self._obs_from_level(level, objs), state
 
     def step(
@@ -70,7 +110,7 @@ class NodeJSPuzzleEnv:
         _, _, _, _, score, level, _, objs = self.backend.solver.takeAction(self.backend.engine, int(action))
         won = bool(self.backend.engine.getWinning())
         next_steps = state.steps + 1
-        reward = float(score) - float(state.score)
+        reward = float(state.score) - float(score)
         if won:
             reward += 1.0
         reward -= 0.01
@@ -79,6 +119,7 @@ class NodeJSPuzzleEnv:
             score=float(score),
             won=won,
             steps=next_steps,
+            level_i=state.level_i,
             level=level,
             objs=list(objs),
         )
@@ -86,6 +127,7 @@ class NodeJSPuzzleEnv:
             "score": float(score),
             "won": won,
             "steps": next_steps,
+            "level_i": state.level_i,
         }
         return self._obs_from_level(level, next_state.objs), next_state, reward, done, info
 
@@ -111,9 +153,18 @@ class _NodeJSBatchedController:
     _ROOT_DIR = Path(__file__).resolve().parent
     _CONTROLLER_PATH = _ROOT_DIR / "puzzlescript" / "batched_env_controller.js"
 
-    def __init__(self, *, game_text: str, level_i: int, n_envs: int, max_episode_steps: int) -> None:
+    def __init__(
+        self,
+        *,
+        game_text: str,
+        level_i: int,
+        n_envs: int,
+        max_episode_steps: int,
+        auto_reset: bool = True,
+    ) -> None:
         self.n_envs = int(n_envs)
         self.max_episode_steps = int(max_episode_steps)
+        self.auto_reset = bool(auto_reset)
         self.proc = subprocess.Popen(
             ["node", str(self._CONTROLLER_PATH)],
             cwd=os.getcwd(),
@@ -128,6 +179,7 @@ class _NodeJSBatchedController:
                 "levelI": int(level_i),
                 "nEnvs": self.n_envs,
                 "maxEpisodeSteps": self.max_episode_steps,
+                "autoReset": self.auto_reset,
             },
             obs_shape=None,
         )
@@ -135,7 +187,8 @@ class _NodeJSBatchedController:
         self.height = int(ready["height"])
         self.object_count = int(ready["object_count"])
         self.object_names = list(ready["object_names"])
-        self.obs_shape = (self.n_envs, self.object_count, self.width, self.height)
+        self.num_levels = int(ready["num_levels"])
+        self.obs_shape = (self.n_envs, self.object_count, self.height, self.width)
         self._last_obs = None if obs is None else obs.reshape(self.obs_shape)
 
     def _read_exact(self, n_bytes: int) -> bytes:
@@ -210,6 +263,8 @@ class _NodeJSBatchedController:
             "won": np.asarray(header["won"], dtype=bool),
             "steps": np.asarray(header["steps"], dtype=np.int32),
             "score": np.asarray(header["score"], dtype=np.float32),
+            "level_i": np.asarray(header["level_i"], dtype=np.int32),
+            "next_level_i": np.asarray(header["next_level_i"], dtype=np.int32),
         }
         return obs, rewards, dones, truncated, infos
 
@@ -227,20 +282,32 @@ class _NodeJSBatchedController:
 class NodeJSBatchedPuzzleEnv:
     """Vectorized NodeJS PuzzleScript environment backed by a Node-managed worker pool."""
 
-    def __init__(self, game: str, level_i: int, batch_size: int, max_episode_steps: int) -> None:
+    def __init__(
+        self,
+        game: str,
+        level_i: int,
+        batch_size: int,
+        max_episode_steps: int,
+        auto_reset: bool = True,
+        *,
+        game_text: str | None = None,
+    ) -> None:
         self.game = game
         self.level_i = level_i
         self.batch_size = int(batch_size)
         self.max_steps = int(max_episode_steps)
+        self.auto_reset = bool(auto_reset)
         self.parser = init_ps_lark_parser()
         self.backend = NodeJSPuzzleScriptBackend()
-        self.game_text = self.backend.compile_game(self.parser, game)
+        # Allow callers with an already compiled runtime to skip reparsing.
+        self.game_text = game_text if game_text is not None else self.backend.compile_game(self.parser, game)
         self.action_space = spaces.Discrete(self.backend.MAX_ACTION_ID + 1)
         self._controller = _NodeJSBatchedController(
             game_text=self.game_text,
             level_i=self.level_i,
             n_envs=self.batch_size,
             max_episode_steps=self.max_steps,
+            auto_reset=self.auto_reset,
         )
         self._obs_shape = self._controller.obs_shape
 
@@ -251,6 +318,10 @@ class NodeJSBatchedPuzzleEnv:
     @property
     def observation_shape(self) -> tuple[int, int, int, int]:
         return self._obs_shape
+
+    @property
+    def num_levels(self) -> int:
+        return self._controller.num_levels
 
     def reset(self, env_indices: list[int] | None = None) -> np.ndarray:
         return self._controller.reset(env_indices)

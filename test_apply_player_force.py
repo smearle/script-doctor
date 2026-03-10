@@ -4,10 +4,10 @@ import jax
 import jax.numpy as jnp
 from lark import Lark
 
-from puzzlejax.env import PJState, PuzzleJaxEnv
-from puzzlejax.gen_tree import GenPSTree
-from puzzlejax.globals import LARK_SYNTAX_PATH
-from puzzlejax.preprocessing import StripPuzzleScript, preprocess_ps
+from puzzlescript_jax.env import PJState, PuzzleJaxEnv
+from puzzlescript_jax.gen_tree import GenPSTree
+from puzzlescript_jax.globals import LARK_SYNTAX_PATH
+from puzzlescript_jax.preprocessing import StripPuzzleScript, preprocess_ps
 
 
 TEST_GAME = """title Force Sentinel

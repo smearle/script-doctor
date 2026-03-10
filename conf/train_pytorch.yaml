@@ -1,0 +1,3 @@
+defaults:
+  - train_pytorch_config
+  - _self_

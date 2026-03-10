@@ -2,16 +2,16 @@ from __future__ import annotations
 
 import os
 import random
-from timeit import default_timer as timer
 from pathlib import Path
+from timeit import default_timer as timer
 from typing import Any
 
 import imageio
 import numpy as np
 from javascript import require
 
-from puzzlejax.backends.base import PuzzleScriptSearchBackend, SearchResult
-from puzzlejax.utils import level_to_int_arr
+from backends.base import PuzzleScriptSearchBackend, SearchResult
+from puzzlescript_jax.utils import level_to_int_arr
 from puzzlescript_nodejs.utils import compile_game
 
 
@@ -26,7 +26,7 @@ class NodeJSPuzzleScriptBackend(PuzzleScriptSearchBackend):
         "random": "randomRollout",
         "python_random": "pythonRandomRollout",
     }
-    _ROOT_DIR = Path(__file__).resolve().parents[2]
+    _ROOT_DIR = Path(__file__).resolve().parents[1]
     _ENGINE_PATH = str(_ROOT_DIR / "puzzlescript_nodejs" / "puzzlescript" / "engine.js")
     _SOLVER_PATH = str(_ROOT_DIR / "puzzlescript_nodejs" / "puzzlescript" / "solver.js")
     _GIF_PATH = str(_ROOT_DIR / "puzzlescript_nodejs" / "puzzlescript" / "gif.js")
@@ -59,7 +59,7 @@ class NodeJSPuzzleScriptBackend(PuzzleScriptSearchBackend):
         else:
             result = self.engine.renderFrame()
         if result is None:
-            raise RuntimeError("JS renderFrame returned null — is a game compiled?")
+            raise RuntimeError("JS renderFrame returned null -- is a game compiled?")
         width = int(result["width"])
         height = int(result["height"])
         data = list(result["data"])
@@ -77,6 +77,27 @@ class NodeJSPuzzleScriptBackend(PuzzleScriptSearchBackend):
         data = list(result["data"])
         return np.array(data, dtype=np.uint8).reshape((height, width, 3))
 
+    def render_frame_from_multihot_obs(self, obs: np.ndarray) -> np.ndarray:
+        """Render a frame from a ``(C, H, W)`` multihot observation."""
+        obs = np.asarray(obs)
+        if obs.ndim != 3:
+            raise ValueError(f"Expected obs with shape (C, H, W), got {obs.shape}")
+
+        n_objs, grid_h, grid_w = (int(v) for v in obs.shape)
+        stride_obj = (n_objs + 31) // 32
+        objects = [0] * (grid_w * grid_h * stride_obj)
+
+        for x in range(grid_w):
+            for y in range(grid_h):
+                flat_idx = (x * grid_h + y) * stride_obj
+                for obj_i in range(n_objs):
+                    if obs[obj_i, y, x]:
+                        word = obj_i // 32
+                        bit = obj_i % 32
+                        objects[flat_idx + word] |= (1 << bit)
+
+        return self.render_frame_from_objects(objects, grid_w, grid_h)
+
     def render_gif(
         self,
         *,
@@ -84,7 +105,7 @@ class NodeJSPuzzleScriptBackend(PuzzleScriptSearchBackend):
         level_i: int,
         actions: list[int] | tuple[int, ...],
         gif_path: str,
-        frame_duration_s: float = 0.1,
+        frame_duration_s: float = 0.05,
         scale: int = 1,
     ) -> str:
         gif_dir = os.path.dirname(gif_path)

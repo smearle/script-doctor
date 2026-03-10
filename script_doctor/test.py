@@ -1,7 +1,7 @@
 
 import os
 import dotenv
-from puzzlejax.utils import llm_text_query
+from puzzlescript_jax.utils import llm_text_query
 
 dotenv.load_dotenv()
 

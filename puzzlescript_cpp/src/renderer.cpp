@@ -16,20 +16,25 @@ uint8_t Renderer::hexCharVal(char c) {
     return 0;
 }
 
-void Renderer::hexToRGB(const std::string& hex, uint8_t out[3]) {
+bool Renderer::hexToRGB(const std::string& hex, uint8_t out[3]) {
     // Accept "#RGB" or "#RRGGBB"
     std::string h = hex;
+    if (h == "transparent" || h == "Transparent" || h == "TRANSPARENT") {
+        return false;
+    }
     if (!h.empty() && h[0] == '#') h = h.substr(1);
     if (h.size() == 3) {
         out[0] = hexCharVal(h[0]) * 17;
         out[1] = hexCharVal(h[1]) * 17;
         out[2] = hexCharVal(h[2]) * 17;
+        return true;
     } else if (h.size() >= 6) {
         out[0] = hexCharVal(h[0]) * 16 + hexCharVal(h[1]);
         out[1] = hexCharVal(h[2]) * 16 + hexCharVal(h[3]);
         out[2] = hexCharVal(h[4]) * 16 + hexCharVal(h[5]);
+        return true;
     } else {
-        out[0] = out[1] = out[2] = 0;
+        return false;
     }
 }
 
@@ -46,7 +51,9 @@ bool Renderer::loadSpriteData(const std::string& json_str) {
 
     // bgcolor
     if (j.contains("bgcolor") && j["bgcolor"].is_string()) {
-        hexToRGB(j["bgcolor"].get<std::string>(), bgcolor_);
+        if (!hexToRGB(j["bgcolor"].get<std::string>(), bgcolor_)) {
+            bgcolor_[0] = bgcolor_[1] = bgcolor_[2] = 0;
+        }
     }
 
     if (!j.contains("sprites") || !j["sprites"].is_array()) {
@@ -62,13 +69,15 @@ bool Renderer::loadSpriteData(const std::string& json_str) {
 
         // Parse colors
         std::vector<uint8_t> color_rgb; // flat R,G,B per palette entry
+        std::vector<uint8_t> color_valid;
         if (spr.contains("colors") && spr["colors"].is_array()) {
             for (const auto& c : spr["colors"]) {
                 uint8_t rgb[3];
-                hexToRGB(c.get<std::string>(), rgb);
+                bool valid = hexToRGB(c.get<std::string>(), rgb);
                 color_rgb.push_back(rgb[0]);
                 color_rgb.push_back(rgb[1]);
                 color_rgb.push_back(rgb[2]);
+                color_valid.push_back(valid ? 1 : 0);
             }
         }
 
@@ -90,7 +99,10 @@ bool Renderer::loadSpriteData(const std::string& json_str) {
                 for (int c = 0; c < cols && c < static_cast<int>(mat[r].size()); ++c) {
                     int val = mat[r][c].get<int>();
                     int idx = r * cols + c;
-                    if (val >= 0 && (val * 3 + 2) < static_cast<int>(color_rgb.size())) {
+                    if (val >= 0
+                        && val < static_cast<int>(color_valid.size())
+                        && color_valid[val]
+                        && (val * 3 + 2) < static_cast<int>(color_rgb.size())) {
                         info.mask[idx] = true;
                         info.pixels[idx * 3 + 0] = color_rgb[val * 3 + 0];
                         info.pixels[idx * 3 + 1] = color_rgb[val * 3 + 1];

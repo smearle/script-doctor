@@ -1,6 +1,6 @@
 from collections.abc import Iterable
 
-from puzzlejax.ps_game import PSGameTree, Rule, RuleBlock
+from puzzlescript_jax.ps_game import PSGameTree, Rule, RuleBlock
 
 
 RANDOM_RULE_PREFIXES = frozenset({"random"})

@@ -40,6 +40,7 @@ vids
 wandb
 *.egg-info
 tmp
+models/diff_lm
 
 # Exclude cpp build artifacts
 *.o

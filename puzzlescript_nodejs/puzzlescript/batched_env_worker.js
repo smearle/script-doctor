@@ -5,6 +5,10 @@ const solver = require('./solver.js');
 
 let gameText = null;
 let levelI = 0;
+let currentLevelI = 0;
+let numLevels = 0;
+let maxWidth = 0;
+let maxHeight = 0;
 let maxEpisodeSteps = 0;
 let objectNames = [];
 let objectCount = 0;
@@ -13,6 +17,7 @@ let height = 0;
 let strideObj = 0;
 let stepCount = 0;
 let currentScore = 0;
+let autoReset = true;
 
 function doRestart(force) {
     engine.clearBackups();
@@ -32,11 +37,15 @@ function doRestart(force) {
     }
     engine.getLevel().commandQueue = [];
     engine.getLevel().commandQueueSourceRules = [];
+    // Match the search helpers: a restart should leave the env in a fresh,
+    // non-terminal state for the next action.
+    engine.setWinning(false);
     engine.setRestarting(false);
 }
 
 function loadLevel() {
-    engine.compile(['loadLevel', levelI], gameText);
+    currentLevelI = levelI >= 0 ? levelI : Math.floor(Math.random() * numLevels);
+    engine.compile(['loadLevel', currentLevelI], gameText);
     const level = engine.backupLevel();
     objectNames = Array.from(engine.getState().idDict);
     objectCount = objectNames.length;
@@ -44,13 +53,14 @@ function loadLevel() {
     height = level.height;
     strideObj = Math.ceil(objectCount / 32);
     stepCount = 0;
+    engine.setWinning(false);
     solver.precalcDistances(engine);
     currentScore = Number(solver.getScore(engine));
     return level;
 }
 
 function levelToObservation(level) {
-    const obs = Buffer.alloc(objectCount * width * height, 0);
+    const obs = Buffer.alloc(objectCount * maxWidth * maxHeight, 0);
     for (let x = 0; x < width; x += 1) {
         for (let y = 0; y < height; y += 1) {
             const cellOffset = x * height + y;
@@ -63,7 +73,8 @@ function levelToObservation(level) {
                         break;
                     }
                     if ((raw & (1 << bit)) !== 0) {
-                        obs[objI * width * height + cellOffset] = 1;
+                        const obsOffset = objI * maxWidth * maxHeight + y * maxWidth + x;
+                        obs[obsOffset] = 1;
                     }
                 }
             }
@@ -79,6 +90,7 @@ function snapshot() {
         score: currentScore,
         steps: stepCount,
         won: false,
+        level_i: currentLevelI,
     };
 }
 
@@ -89,6 +101,7 @@ function resetEnv() {
 
 function stepEnv(action) {
     const prevScore = currentScore;
+    const episodeLevelI = currentLevelI;
     engine.processInput(action);
     while (engine.getAgaining()) {
         engine.processInput(-1);
@@ -98,12 +111,16 @@ function stepEnv(action) {
     const won = Boolean(engine.getWinning());
     stepCount += 1;
     const truncated = stepCount >= maxEpisodeSteps;
-    const reward = (scoreBeforeReset - prevScore) + (won ? 1.0 : 0.0) - 0.01;
+    const reward = (prevScore - scoreBeforeReset) + (won ? 1.0 : 0.0) - 0.01;
 
-    if (won) {
-        doRestart(true);
+    if (autoReset && won) {
+        if (levelI >= 0) {
+            doRestart(true);
+        } else {
+            loadLevel();
+        }
         stepCount = 0;
-    } else if (truncated) {
+    } else if (autoReset && truncated) {
         loadLevel();
     }
 
@@ -117,6 +134,8 @@ function stepEnv(action) {
         won,
         score: scoreBeforeReset,
         steps: stepCount,
+        level_i: episodeLevelI,
+        next_level_i: currentLevelI,
     };
 }
 
@@ -127,18 +146,39 @@ process.on('message', (message) => {
         if (cmd === 'init') {
             gameText = String(message.gameText);
             levelI = Number(message.levelI);
+            engine.compile(['loadLevel', 0], gameText);
+            numLevels = Number(engine.getNumLevels());
+            if (levelI >= 0) {
+                const levelInfo = engine.serializeLevel(levelI);
+                maxWidth = Number(levelInfo.width);
+                maxHeight = Number(levelInfo.height);
+            } else {
+                maxWidth = 0;
+                maxHeight = 0;
+                for (let i = 0; i < numLevels; i += 1) {
+                    const levelInfo = engine.serializeLevel(i);
+                    if (!levelInfo) {
+                        continue;
+                    }
+                    maxWidth = Math.max(maxWidth, Number(levelInfo.width));
+                    maxHeight = Math.max(maxHeight, Number(levelInfo.height));
+                }
+            }
             maxEpisodeSteps = Number(message.maxEpisodeSteps);
+            autoReset = message.autoReset !== false;
             const initial = resetEnv();
             process.send({
                 ok: true,
                 cmd: 'ready',
-                width,
-                height,
+                width: maxWidth,
+                height: maxHeight,
                 objectCount,
                 objectNames,
+                numLevels,
                 obs: initial.obs,
                 score: initial.score,
                 steps: initial.steps,
+                level_i: initial.level_i,
             });
             return;
         }
@@ -151,6 +191,7 @@ process.on('message', (message) => {
                 obs: result.obs,
                 score: result.score,
                 steps: result.steps,
+                level_i: result.level_i,
             });
             return;
         }

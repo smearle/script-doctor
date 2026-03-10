@@ -13,7 +13,7 @@ from einops import rearrange
 from lark import Token, Transformer, Tree
 import numpy as np
 
-from puzzlejax.ps_game import LegendEntry, PSGameTree, PSObject, Prelude, Rule, RuleBlock, WinCondition
+from puzzlescript_jax.ps_game import LegendEntry, PSGameTree, PSObject, Prelude, Rule, RuleBlock, WinCondition
 
 logger = logging.getLogger(__name__)
 

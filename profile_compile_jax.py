@@ -21,7 +21,7 @@ import jaxlib
 import numpy as np
 
 from utils_rl import get_env_params_from_config
-from puzzlejax.utils import init_ps_env
+from puzzlescript_jax.utils import init_ps_env
 
 
 @dataclass

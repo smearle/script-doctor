@@ -1,6 +1,6 @@
 from typing import Iterable, List, Dict, Optional, Tuple
 from ascii_prompting import build_game_action_prompt
-from puzzlejax.utils import llm_text_query
+from puzzlescript_jax.utils import llm_text_query
 
 class LLMGameAgent:
     """

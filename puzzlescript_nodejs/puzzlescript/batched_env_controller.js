@@ -137,6 +137,7 @@ async function main() {
                     gameText: message.gameText,
                     levelI: message.levelI,
                     maxEpisodeSteps: state.maxEpisodeSteps,
+                    autoReset: message.autoReset !== false,
                 }, INIT_REQUEST_TIMEOUT_MS)));
                 ensureWorkerResultsOkay(ready);
 
@@ -152,10 +153,11 @@ async function main() {
                     cmd: 'ready',
                     width: state.width,
                     height: state.height,
-                    object_count: state.objectCount,
-                    object_names: state.objectNames,
-                    n_envs: state.nEnvs,
-                }, Buffer.concat(state.obsBuffers));
+        object_count: state.objectCount,
+        object_names: state.objectNames,
+        n_envs: state.nEnvs,
+        num_levels: Number(first.numLevels),
+    }, Buffer.concat(state.obsBuffers));
                 continue;
             }
 
@@ -209,6 +211,8 @@ async function main() {
                     won: results.map((item) => Boolean(item.won)),
                     score: results.map((item) => Number(item.score)),
                     steps: results.map((item) => Number(item.steps)),
+                    level_i: results.map((item) => Number(item.level_i)),
+                    next_level_i: results.map((item) => Number(item.next_level_i)),
                 }, Buffer.concat(state.obsBuffers));
                 continue;
             }

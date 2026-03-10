@@ -10,9 +10,9 @@ import hydra
 import submitit
 
 from conf.config import SearchNodeJSConfig
-from puzzlejax.backends import NodeJSPuzzleScriptBackend
-from puzzlejax.globals import JS_SOLS_DIR
-from puzzlejax.utils import get_list_of_games_for_testing, init_ps_lark_parser
+from backends import NodeJSPuzzleScriptBackend
+from puzzlescript_jax.globals import JS_SOLS_DIR
+from puzzlescript_jax.utils import get_list_of_games_for_testing, init_ps_lark_parser
 
 
 dotenv.load_dotenv()
@@ -107,7 +107,7 @@ def main(
                     level_i=int(level_i),
                     actions=actions,
                     gif_path=level_sol_gif_path,
-                    frame_duration_s=1.0,
+                    frame_duration_s=0.5,
                 )
             except Exception as e:
                 traceback.print_exc()

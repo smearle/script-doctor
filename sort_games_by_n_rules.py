@@ -13,12 +13,12 @@ import hydra
 from lark import Lark
 
 from conf.config import PreprocessConfig
-from puzzlejax.env import PuzzleJaxEnv
-from puzzlejax.gen_tree import GenPSTree
-from puzzlejax.preprocessing import TREES_DIR, GAMES_DIR, count_rules, get_tree_from_txt
-from puzzlejax.ps_game import PSGameTree
-from puzzlejax.utils import GAMES_N_RULES_SORTED_PATH
-from puzzlejax.globals import GAMES_TO_N_RULES_PATH, GAMES_N_RULES_SORTED_PATH, LARK_SYNTAX_PATH
+from puzzlescript_jax.env import PuzzleJaxEnv
+from puzzlescript_jax.gen_tree import GenPSTree
+from puzzlescript_jax.preprocessing import TREES_DIR, GAMES_DIR, count_rules, get_tree_from_txt
+from puzzlescript_jax.ps_game import PSGameTree
+from puzzlescript_jax.utils import GAMES_N_RULES_SORTED_PATH
+from puzzlescript_jax.globals import GAMES_TO_N_RULES_PATH, GAMES_N_RULES_SORTED_PATH, LARK_SYNTAX_PATH
 
 
 @hydra.main(version_base="1.3", config_path="conf", config_name="preprocess_config")

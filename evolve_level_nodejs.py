@@ -11,9 +11,9 @@ import hydra
 import numpy as np
 
 from conf.config import EvolveLevelNodeJSConfig
-from puzzlejax.backends import NodeJSPuzzleScriptBackend
-from puzzlejax.globals import DATA_DIR, SIMPLIFIED_GAMES_DIR
-from puzzlejax.utils import init_ps_lark_parser, get_tree_from_txt
+from backends import NodeJSPuzzleScriptBackend
+from puzzlescript_jax.globals import DATA_DIR, SIMPLIFIED_GAMES_DIR
+from puzzlescript_jax.utils import init_ps_lark_parser, get_tree_from_txt
 
 
 EVOLVED_DIR = os.path.join(DATA_DIR, "evolved_levels_nodejs")
@@ -286,7 +286,7 @@ def save_champion(
     history: list,
     backend: Optional[NodeJSPuzzleScriptBackend] = None,
     render_gif: bool = False,
-    gif_frame_duration: float = 0.1,
+    gif_frame_duration: float = 0.05,
     gif_scale: int = 10,
 ) -> None:
     base = f"evolved_lv{level_i}"

@@ -31,10 +31,10 @@ import pandas as pd
 import requests
 
 from client import open_browser
-from puzzlejax.globals import LARK_SYNTAX_PATH
-from puzzlejax.preprocessing import MIN_GAMES_DIR, PrintPuzzleScript, RepairPuzzleScript, StripPuzzleScript, add_empty_sounds_section, preprocess_ps, TEST_GAMES
+from puzzlescript_jax.globals import LARK_SYNTAX_PATH
+from puzzlescript_jax.preprocessing import MIN_GAMES_DIR, PrintPuzzleScript, RepairPuzzleScript, StripPuzzleScript, add_empty_sounds_section, preprocess_ps, TEST_GAMES
 from script_doctor.prompts import *
-from puzzlejax.utils import (extract_ps_code, get_list_of_games_for_testing, llm_text_query,
+from puzzlescript_jax.utils import (extract_ps_code, get_list_of_games_for_testing, llm_text_query,
                    save_prompts, level_to_int_arr)
 from script_doctor.utils import gen_fewshot_examples
 

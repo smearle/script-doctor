@@ -32,7 +32,7 @@ class MaxEpisodeStepsSweep(SweepConfig):
     sweep_axes: dict = field(default_factory=lambda: {
         "seed": (0, 1, 2, 3, 4),
         "max_episode_steps": (
-            # 100,
+            100,
             200,
         ),
     })

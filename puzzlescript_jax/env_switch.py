@@ -21,7 +21,7 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 
-from puzzlejax.env import (
+from puzzlescript_jax.env import (
     DEBUG,
     MAX_LOOPS,
     InvalidObjectError,
@@ -34,7 +34,7 @@ from puzzlejax.env import (
     RuleState,
     _expand_or_meta_rules,
 )
-from puzzlejax.env_utils import multihot_to_desc
+from puzzlescript_jax.env_utils import multihot_to_desc
 
 logger = logging.getLogger(__name__)
 
@@ -56,8 +56,25 @@ class PuzzleJaxEnvSwitch(PuzzleJaxEnv):
 
     def reset(self, rng, params):
         """Override reset to skip gen_tick_fn (pre-generated in __init__)."""
-        from puzzlejax.env import PJState, PSObs, PRINT_SCORE
-        lvl = params.level
+        from puzzlescript_jax.env import PJState, PSObs, PRINT_SCORE
+        requested_level_i = jnp.asarray(params.level_i, dtype=jnp.int32)
+        rng, level_rng = jax.random.split(rng)
+        sampled_level_i = jax.lax.cond(
+            requested_level_i < 0,
+            lambda key: jax.random.randint(key, shape=(), minval=0, maxval=len(self._compiled_levels), dtype=jnp.int32),
+            lambda _key: requested_level_i,
+            level_rng,
+        )
+        lvl = jax.lax.cond(
+            requested_level_i < 0,
+            lambda idx: jax.lax.switch(
+                idx,
+                tuple(lambda _, level=level: level for level in self._compiled_levels),
+                None,
+            ),
+            lambda _idx: params.level,
+            sampled_level_i,
+        )
         # NOTE: tick_fn already generated in __init__, do NOT regenerate here.
         win, score, init_heuristic = self.check_win(lvl)
         if PRINT_SCORE:
@@ -67,6 +84,7 @@ class PuzzleJaxEnvSwitch(PuzzleJaxEnv):
             )
         state = PJState(
             multihot_level=lvl,
+            level_i=sampled_level_i,
             win=jnp.array(False),
             score=jnp.array(0, dtype=jnp.int32),
             heuristic=init_heuristic,

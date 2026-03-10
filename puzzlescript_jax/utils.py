@@ -17,14 +17,14 @@ import numpy as np
 from openai import AzureOpenAI
 import tiktoken
 
-from puzzlejax.globals import (
+from puzzlescript_jax.globals import (
     GAMES_TO_N_RULES_PATH, GAMES_N_RULES_SORTED_PATH, PRIORITY_GAMES, GAMES_N_LEVELS_PATH, LARK_SYNTAX_PATH,
     GAMES_DIR, TREES_DIR
 )
 GALLERY_GAMES_DIR = "gallery_games"
-from puzzlejax.env import PuzzleJaxEnv
-from puzzlejax.gen_tree import GenPSTree
-from puzzlejax.preprocessing import get_tree_from_txt
+from puzzlescript_jax.env import PuzzleJaxEnv
+from puzzlescript_jax.gen_tree import GenPSTree
+from puzzlescript_jax.preprocessing import get_tree_from_txt
 
 game_names_remap = {
     'constellationz': 'Constellation Z',

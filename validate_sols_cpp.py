@@ -18,9 +18,9 @@ from lark import Lark
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from conf.config import CppValidationConfig
-from puzzlejax.globals import CPP_VALIDATED_JS_SOLS_DIR, DATA_DIR, JS_SOLS_DIR, LARK_SYNTAX_PATH
-from puzzlejax.preprocessing import SIMPLIFIED_GAMES_DIR, get_tree_from_txt
-from puzzlejax.utils import get_list_of_games_for_testing
+from puzzlescript_jax.globals import CPP_VALIDATED_JS_SOLS_DIR, DATA_DIR, JS_SOLS_DIR, LARK_SYNTAX_PATH
+from puzzlescript_jax.preprocessing import SIMPLIFIED_GAMES_DIR, get_tree_from_txt
+from puzzlescript_jax.utils import get_list_of_games_for_testing
 
 
 def _dedupe_preserve_order(items, key_fn=None):

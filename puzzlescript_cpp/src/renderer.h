@@ -58,5 +58,5 @@ private:
     int cell_h_ = 5;
 
     static uint8_t hexCharVal(char c);
-    static void hexToRGB(const std::string& hex, uint8_t out[3]);
+    static bool hexToRGB(const std::string& hex, uint8_t out[3]);
 };

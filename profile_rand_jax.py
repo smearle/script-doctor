@@ -19,10 +19,10 @@ import submitit
 from timeit import default_timer as timer
 
 from conf.config import ProfileJaxRandConfig
-from puzzlejax.env import PJState
-from puzzlejax.env_switch import PuzzleJaxEnvSwitch
-from puzzlejax.globals import JAX_PROFILING_RESULTS_DIR
-from puzzlejax.utils import get_list_of_games_for_testing, load_games_n_rules_sorted, init_ps_lark_parser, get_tree_from_txt
+from puzzlescript_jax.env import PJState
+from puzzlescript_jax.env_switch import PuzzleJaxEnvSwitch
+from puzzlescript_jax.globals import JAX_PROFILING_RESULTS_DIR
+from puzzlescript_jax.utils import get_list_of_games_for_testing, load_games_n_rules_sorted, init_ps_lark_parser, get_tree_from_txt
 from utils_rl import get_env_params_from_config, init_ps_env
 
 
@@ -46,7 +46,7 @@ BATCH_SIZES = [
     # 5_000,
     # 7_500,
     # 8_000,
-    10_000,
+    # 10_000,
 ]
 ADAPTIVE_BATCH_SIZE_START = 20_000
 # batch_sizes = batch_sizes[::-1]

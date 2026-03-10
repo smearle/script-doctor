@@ -3,7 +3,7 @@ from typing import Optional, Tuple
 
 from hydra.core.config_store import ConfigStore
 
-from puzzlejax.config import PSConfig
+from puzzlescript_jax.config import PSConfig
 
 
 @dataclass
@@ -86,6 +86,7 @@ class NodeJSConfig(PSConfig):
 class SearchNodeJSConfig(NodeJSConfig):
     algo: str = "bfs"  # 'bfs', 'astar', 'gbfs', 'mcts', 'random'
     n_steps: int = 100_000
+    render: bool = True
 
 
 @dataclass
@@ -136,7 +137,7 @@ class EvolveLevelNodeJSConfig:
     fitness: str = "states"
     allow_player_change: bool = False
     render_gif: bool = True
-    gif_frame_duration: float = 0.1
+    gif_frame_duration: float = 0.05
     gif_scale: int = 10
 
 
@@ -173,7 +174,7 @@ class RLConfig(PSConfig):
     model: str = "conv2"
 
     # How many milliseconds to wait between frames of the rendered gifs
-    gif_frame_duration: float = 0.1
+    gif_frame_duration: float = 0.05
 
     hidden_dims: Tuple[int] = (128, 128)
 

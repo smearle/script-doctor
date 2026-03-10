@@ -8,15 +8,15 @@ import jax.numpy as jnp
 from flax import struct
 # from flax.training import orbax_utils
 import numpy as np
-from puzzlejax.jax_utils import stack_leaves
+from puzzlescript_jax.jax_utils import stack_leaves
 import orbax.checkpoint as ocp
-from puzzlejax.preprocessing import get_tree_from_txt
+from puzzlescript_jax.preprocessing import get_tree_from_txt
 import wandb
 from flax.training.train_state import TrainState
 from time import perf_counter
 
 from conf.config import RLConfig, TrainConfig
-from puzzlejax.env import PuzzleJaxEnv, PSObs, PJState, PJParams
+from puzzlescript_jax.env import PuzzleJaxEnv, PSObs, PJState, PJParams
 from models import NCA, AutoEncoder, ConvForward, ConvForward2, SeqNCA, ActorCriticPS, Dense
 
 N_AGENTS = 1
@@ -49,9 +49,11 @@ def get_exp_dir(config: TrainConfig):
     return exp_dir
 
 def get_env_params_from_config(env: PuzzleJaxEnv, config: RLConfig):
-    level = env.get_level(config.level)
+    default_level_i = config.level if config.level >= 0 else 0
+    level = env.get_level(default_level_i)
     return PJParams(
-        level=level
+        level=level,
+        level_i=config.level,
     )
 
 @struct.dataclass
@@ -172,7 +174,7 @@ def save_checkpoint(config: TrainConfig, ckpt_manager, runner_state, t):
     ckpt_manager.save(t.item(), args=ocp.args.StandardSave(runner_state))
     ckpt_manager.wait_until_finished() 
 
-import puzzlejax.utils as utils
+import puzzlescript_jax.utils as utils
 
 def init_ps_env(config: RLConfig, verbose: bool = False) -> PuzzleJaxEnv:
     #return utils.init_ps_env(config.game, config.level, config.max_episode_steps, vmap=config.vmap)

@@ -4,7 +4,7 @@ from typing import List
 
 from javascript.proxy import Proxy
 
-from puzzlejax.preprocessing import SIMPLIFIED_GAMES_DIR, get_tree_from_txt
+from puzzlescript_jax.preprocessing import SIMPLIFIED_GAMES_DIR, get_tree_from_txt
 
 
 def compile_game(parser, engine, game, level_i):

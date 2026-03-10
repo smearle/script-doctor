@@ -13,10 +13,10 @@ from ascii_prompting import (
     get_extended_chars,
     get_llm_friendly_chars,
 )
-from puzzlejax.globals import LARK_SYNTAX_PATH
-from puzzlejax.env import PuzzleJaxEnv, PJParams, PJState, expand_meta_objs
-from puzzlejax.env_utils import multihot_to_desc
-from puzzlejax.preprocessing import get_tree_from_txt
+from puzzlescript_jax.globals import LARK_SYNTAX_PATH
+from puzzlescript_jax.env import PuzzleJaxEnv, PJParams, PJState, expand_meta_objs
+from puzzlescript_jax.env_utils import multihot_to_desc
+from puzzlescript_jax.preprocessing import get_tree_from_txt
 
 
 def vec_to_obj_names(vec, idxs_to_objs):

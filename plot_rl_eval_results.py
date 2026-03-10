@@ -8,8 +8,8 @@ import pandas as pd
 import seaborn as sns
 from matplotlib import pyplot as plt
 
-from puzzlejax.globals import PLOTS_DIR
-from puzzlejax.utils import game_names_remap
+from puzzlescript_jax.globals import PLOTS_DIR
+from puzzlescript_jax.utils import game_names_remap
 
 
 RL_CONFIG_FIELD_ORDER = (
@@ -137,11 +137,21 @@ def _format_config_label(config: dict, varying_fields: list[str]) -> str:
     return ', '.join(parts)
 
 
-def collect_eval_stats(root: Path) -> pd.DataFrame:
-    """Aggregate evaluation win rates for each game and RL config under ``root``."""
+def _format_game_label(game: str) -> str:
+    label = game_names_remap.get(game, game)
+    label = label.replace('_', ' ')
+    return label.title()
+
+
+def collect_eval_data(root: Path) -> tuple[pd.DataFrame, pd.DataFrame, dict[str, list[int]]]:
+    """Collect both aggregate and per-level evaluation win rates under ``root``."""
     run_infos = list(_iter_eval_runs(root))
     if not run_infos:
-        return pd.DataFrame(columns=['config_label', 'game', 'avg_win_rate', 'n_eval_files', 'total_eval_episodes', 'n_levels'])
+        return (
+            pd.DataFrame(columns=['config_label', 'game', 'avg_win_rate', 'n_eval_files', 'total_eval_episodes', 'n_levels']),
+            pd.DataFrame(columns=['config_label', 'game', 'level', 'win_rate']),
+            {},
+        )
 
     varying_fields = _varying_config_fields([run_info['config'] for run_info in run_infos])
     expected_levels_by_game = {}
@@ -181,6 +191,7 @@ def collect_eval_stats(root: Path) -> pd.DataFrame:
         grouped['level_win_rates'].setdefault(run_info['level'], []).append(level_win_rate)
 
     rows = []
+    level_rows = []
     for grouped in grouped_stats.values():
         expected_levels = expected_levels_by_game.get(grouped['game'], set())
         if not expected_levels:
@@ -199,9 +210,18 @@ def collect_eval_stats(root: Path) -> pd.DataFrame:
         for level in sorted(expected_levels):
             level_samples = grouped['level_win_rates'].get(level)
             if level_samples:
-                per_level_win_rates.append(float(np.mean(level_samples)))
+                level_win_rate = float(np.mean(level_samples))
             else:
-                per_level_win_rates.append(0.0)
+                level_win_rate = 0.0
+            per_level_win_rates.append(level_win_rate)
+            level_rows.append(
+                {
+                    'config_label': grouped['config_label'],
+                    'game': grouped['game'],
+                    'level': level,
+                    'win_rate': level_win_rate,
+                }
+            )
 
         avg_win_rate = float(np.mean(per_level_win_rates))
 
@@ -217,9 +237,22 @@ def collect_eval_stats(root: Path) -> pd.DataFrame:
         )
 
     if not rows:
-        return pd.DataFrame(columns=['config_label', 'game', 'avg_win_rate', 'n_eval_files', 'total_eval_episodes', 'n_levels'])
+        return (
+            pd.DataFrame(columns=['config_label', 'game', 'avg_win_rate', 'n_eval_files', 'total_eval_episodes', 'n_levels']),
+            pd.DataFrame(columns=['config_label', 'game', 'level', 'win_rate']),
+            {game: sorted(levels) for game, levels in expected_levels_by_game.items()},
+        )
 
-    return pd.DataFrame(rows)
+    return (
+        pd.DataFrame(rows),
+        pd.DataFrame(level_rows),
+        {game: sorted(levels) for game, levels in expected_levels_by_game.items()},
+    )
+
+
+def collect_eval_stats(root: Path) -> pd.DataFrame:
+    summary_df, _, _ = collect_eval_data(root)
+    return summary_df
 
 
 def prettify_game_index(df: pd.DataFrame) -> pd.DataFrame:
@@ -286,9 +319,118 @@ def plot_win_rate_heatmap(df: pd.DataFrame, output_path: Path) -> None:
     print(f"Saved RL win-rate heatmap to {output_path}")
 
 
+def _build_expanded_heatmap_columns(
+    ordered_games: list[str], expected_levels_by_game: dict[str, list[int]]
+) -> tuple[list[tuple[str, int]], list[tuple[str, int, int]]]:
+    columns = []
+    game_spans = []
+    for game in ordered_games:
+        levels = expected_levels_by_game.get(game, [])
+        if not levels:
+            continue
+        start = len(columns)
+        for level in levels:
+            columns.append((game, level))
+        end = len(columns)
+        game_spans.append((game, start, end))
+    return columns, game_spans
+
+
+def _draw_game_dividers(ax, game_spans: list[tuple[str, int, int]], n_rows: int) -> None:
+    for _, _, end in game_spans[:-1]:
+        ax.vlines(end, ymin=0, ymax=n_rows, colors='black', linewidth=2.0)
+
+    for game, start, end in game_spans:
+        center = (start + end) / 2
+        ax.text(
+            center,
+            1.005,
+            _format_game_label(game),
+            ha='center',
+            va='bottom',
+            fontsize=9,
+            transform=ax.get_xaxis_transform(),
+        )
+
+
+def plot_expanded_win_rate_heatmap(
+    level_df: pd.DataFrame,
+    expected_levels_by_game: dict[str, list[int]],
+    output_path: Path,
+) -> None:
+    if level_df.empty:
+        print('No data available for expanded RL win-rate heatmap.')
+        return
+
+    ordered_games = [game for game in sorted(expected_levels_by_game) if expected_levels_by_game[game]]
+    columns, game_spans = _build_expanded_heatmap_columns(ordered_games, expected_levels_by_game)
+    if not columns:
+        print('No level columns available for expanded RL win-rate heatmap.')
+        return
+
+    config_labels = list(dict.fromkeys(level_df['config_label']))
+    column_keys = [f'{game}::level-{level}' for game, level in columns]
+    heatmap_df = pd.DataFrame(index=config_labels, columns=column_keys, dtype=float)
+    value_lookup = {
+        (row.config_label, row.game, int(row.level)): float(row.win_rate)
+        for row in level_df.itertuples(index=False)
+    }
+
+    for config_label in config_labels:
+        for game, level in columns:
+            value = value_lookup.get((config_label, game, level))
+            if value is not None:
+                heatmap_df.at[config_label, f'{game}::level-{level}'] = value
+
+    annot_data = None
+    if len(columns) <= 40:
+        annot_data = [
+            [f"{val:.0%}" if np.isfinite(val) else '' for val in row]
+            for row in heatmap_df.to_numpy(dtype=float)
+        ]
+
+    num_cols = len(columns)
+    num_rows = len(config_labels)
+    target_cell_width = 0.35
+    target_cell_height = 0.8
+    min_total_width = 12.0
+    min_total_height = 3.0
+    h_padding = 3.0
+    v_padding = 2.5
+
+    fig_w = max(num_cols * target_cell_width + h_padding, min_total_width)
+    fig_h = max(num_rows * target_cell_height + v_padding, min_total_height)
+
+    plt.figure(figsize=(fig_w, fig_h))
+    ax = sns.heatmap(
+        heatmap_df,
+        annot=annot_data if annot_data is not None else False,
+        fmt='',
+        cmap='RdYlGn',
+        vmin=0.0,
+        vmax=1.0,
+        cbar_kws={'label': 'Win Rate', 'shrink': 0.8, 'pad': 0.01},
+        annot_kws={'size': 7},
+        linewidths=0.25,
+        linecolor='white',
+    )
+    _draw_game_dividers(ax, game_spans, num_rows)
+    ax.set_title('RL Win Rate per Level and Hyperparameter Setting', pad=32)
+    plt.xlabel('Level', labelpad=10)
+    plt.ylabel('RL Run Config', labelpad=10)
+    plt.yticks(rotation=0)
+    ax.set_xticklabels([str(level) for _, level in columns], rotation=0, fontsize=7)
+    plt.tight_layout(rect=[0, 0, 1, 0.9])
+
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    plt.savefig(output_path, dpi=300)
+    plt.close()
+    print(f"Saved expanded RL win-rate heatmap to {output_path}")
+
+
 def main(args: argparse.Namespace) -> None:
     rl_root = Path(args.rl_logs_dir)
-    df = collect_eval_stats(rl_root)
+    df, level_df, expected_levels_by_game = collect_eval_data(rl_root)
 
     if df.empty:
         print('No evaluation stats found; nothing to plot.')
@@ -305,6 +447,7 @@ def main(args: argparse.Namespace) -> None:
 
     heatmap_df = display_df.pivot(index='config_label', columns='game', values='avg_win_rate')
     plot_win_rate_heatmap(heatmap_df, plots_dir / 'rl_avg_win_rate_heatmap.png')
+    plot_expanded_win_rate_heatmap(level_df, expected_levels_by_game, plots_dir / 'rl_win_rate_expanded_heatmap.png')
 
 
 def parse_args(argv: Iterable[str] = None) -> argparse.Namespace:

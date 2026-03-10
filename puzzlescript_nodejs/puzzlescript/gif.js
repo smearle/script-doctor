@@ -85,7 +85,7 @@ function renderSolutionGif({
     levelIndex,
     actions,
     gifPath,
-    frameDurationMs = 100,
+    frameDurationMs = 50,
     scale = 1,
 }) {
     ensureGifEncoderLoaded();

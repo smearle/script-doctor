@@ -6,9 +6,9 @@ import jax
 import jax.numpy as jnp
 from timeit import default_timer as timer
 
-from puzzlejax.utils import init_ps_lark_parser, get_tree_from_txt
-from puzzlejax.env import PuzzleJaxEnv, PJParams
-from puzzlejax.env_switch import PuzzleJaxEnvSwitch
+from puzzlescript_jax.utils import init_ps_lark_parser, get_tree_from_txt
+from puzzlescript_jax.env import PuzzleJaxEnv, PJParams
+from puzzlescript_jax.env_switch import PuzzleJaxEnvSwitch
 
 GAME = "notsnake"
 

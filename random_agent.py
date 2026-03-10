@@ -8,10 +8,10 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 
-from puzzlejax.globals import DATA_DIR, TREES_DIR
-from puzzlejax.gen_tree import GenPSTree
-from puzzlejax.env import PJState, PuzzleJaxEnv, PJParams
-from puzzlejax.ps_game import PSGameTree
+from puzzlescript_jax.globals import DATA_DIR, TREES_DIR
+from puzzlescript_jax.gen_tree import GenPSTree
+from puzzlescript_jax.env import PJState, PuzzleJaxEnv, PJParams
+from puzzlescript_jax.ps_game import PSGameTree
 
 
 TEST_GAMES = ["zokoban"]

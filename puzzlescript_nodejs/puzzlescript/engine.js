@@ -382,8 +382,12 @@ globalThis.__PS_NODE_API__ = {
 
         // Parse hex color to [r,g,b]
         function hexToRGB(hex) {
+            if (hex == null) return null;
+            hex = String(hex).trim();
+            if (hex.toLowerCase() === 'transparent') return null;
             hex = hex.replace('#', '');
             if (hex.length === 3) hex = hex[0]+hex[0]+hex[1]+hex[1]+hex[2]+hex[2];
+            if (!/^[0-9a-fA-F]{6}$/.test(hex)) return null;
             return [
                 parseInt(hex.substring(0, 2), 16),
                 parseInt(hex.substring(2, 4), 16),
@@ -411,7 +415,8 @@ globalThis.__PS_NODE_API__ = {
                 for (let k = 0; k < gw; k++) {
                     const val = grid[j][k];
                     if (val >= 0) {
-                        const rgb = hexToRGB(String(colors[val]));
+                        const rgb = hexToRGB(colors[val]);
+                        if (rgb === null) continue;
                         const idx = (j * gw + k);
                         pixels[idx * 3    ] = rgb[0];
                         pixels[idx * 3 + 1] = rgb[1];
@@ -433,7 +438,7 @@ globalThis.__PS_NODE_API__ = {
         const data = new Uint8Array(frameH * frameW * 3);
 
         // Fill background
-        const bg = hexToRGB(String(state.bgcolor || '#000000'));
+        const bg = hexToRGB(state.bgcolor || '#000000') || [0, 0, 0];
         for (let p = 0; p < frameH * frameW; p++) {
             data[p * 3    ] = bg[0];
             data[p * 3 + 1] = bg[1];

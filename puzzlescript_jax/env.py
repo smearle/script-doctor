@@ -15,11 +15,11 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 
-from puzzlejax.env_render import render_solid_color, render_sprite
-from puzzlejax.env_utils import N_MOVEMENTS, multihot_to_desc, N_FORCES, ACTION
-from puzzlejax.jax_utils import stack_leaves
-from puzzlejax.detect_randomness import tree_has_randomness
-from puzzlejax.ps_game import LegendEntry, PSGameTree, PSObject, Rule, WinCondition
+from puzzlescript_jax.env_render import render_solid_color, render_sprite
+from puzzlescript_jax.env_utils import N_MOVEMENTS, multihot_to_desc, N_FORCES, ACTION
+from puzzlescript_jax.jax_utils import stack_leaves
+from puzzlescript_jax.detect_randomness import tree_has_randomness
+from puzzlescript_jax.ps_game import LegendEntry, PSGameTree, PSObject, Rule, WinCondition
 from gymnax.environments.spaces import Discrete, Box
 
 
@@ -668,6 +668,7 @@ def expand_joint_objs_in_pattern(pattern, joint_tiles):
 @flax.struct.dataclass
 class PJState:
     multihot_level: np.ndarray
+    level_i: int
     win: bool
     score: int
     heuristic: int
@@ -681,6 +682,7 @@ class PJState:
 @flax.struct.dataclass
 class PJParams:
     level: chex.Array
+    level_i: int = 0
 
 @flax.struct.dataclass
 class PSObs:
@@ -1007,6 +1009,11 @@ class PuzzleJaxEnv:
                     sub_objs = expand_meta_objs([obj], meta_objs, self.char_to_obj)
                     self.chars_to_idxs[char] = self.objs_to_idxs[sub_objs[0]]
 
+        self._compiled_levels = tuple(
+            jnp.array(self.pad_level_to_max_shape(self.char_level_to_multihot(level[0])))
+            for level in self.levels
+        )
+
         if self.jit:
             self.step = jax.jit(self.step)
             self.step_env = jax.jit(self.step_env)
@@ -1134,6 +1141,28 @@ class PuzzleJaxEnv:
         multihot_level = multihot_level.astype(bool)
         return multihot_level
 
+    def pad_level_to_max_shape(self, multihot_level):
+        if self.level_i >= 0:
+            max_height = self.levels[self.level_i][0].shape[0]
+            max_width = self.levels[self.level_i][0].shape[1]
+        else:
+            max_height = max(level[0].shape[0] for level in self.levels)
+            max_width = max(level[0].shape[1] for level in self.levels)
+        if multihot_level.shape[1:] == (max_height, max_width):
+            return multihot_level
+
+        background_sub_objs = expand_meta_objs(['background'], self.meta_objs, self.char_to_obj)
+        if 'background' in background_sub_objs:
+            bg_obj = 'background'
+        else:
+            bg_obj = background_sub_objs[0]
+        bg_idx = self.objs_to_idxs[bg_obj]
+
+        padded = np.zeros((self.n_objs, max_height, max_width), dtype=bool)
+        padded[bg_idx] = True
+        padded[:, : multihot_level.shape[1], : multihot_level.shape[2]] = multihot_level
+        return padded
+
     # @partial(jax.jit, static_argnums=(0, 2))
     def render(self, state: PJState, cv2=True):
         lvl = self.get_visible_multihot_level(state=state)
@@ -1158,7 +1187,24 @@ class PuzzleJaxEnv:
         return im
 
     def reset(self, rng, params: PJParams) -> Tuple[chex.Array, PJState]:
-        lvl = params.level
+        requested_level_i = jnp.asarray(params.level_i, dtype=jnp.int32)
+        rng, level_rng = jax.random.split(rng)
+        sampled_level_i = jax.lax.cond(
+            requested_level_i < 0,
+            lambda key: jax.random.randint(key, shape=(), minval=0, maxval=len(self._compiled_levels), dtype=jnp.int32),
+            lambda _key: requested_level_i,
+            level_rng,
+        )
+        lvl = jax.lax.cond(
+            requested_level_i < 0,
+            lambda idx: jax.lax.switch(
+                idx,
+                tuple(lambda _, level=level: level for level in self._compiled_levels),
+                None,
+            ),
+            lambda _idx: params.level,
+            sampled_level_i,
+        )
         self.tick_fn = self.gen_tick_fn(lvl.shape[1:])
         again = False
         win, score, init_heuristic = self.check_win(lvl)
@@ -1166,6 +1212,7 @@ class PuzzleJaxEnv:
             jax.debug.print('heuristic: {heuristic}, score: {score}, win: {win}', heuristic=init_heuristic, score=score, win=win)
         state = PJState(
             multihot_level=lvl,
+            level_i=sampled_level_i,
             win=jnp.array(False),
             score=jnp.array(0, dtype=jnp.int32),
             heuristic=init_heuristic,
@@ -1262,6 +1309,7 @@ class PuzzleJaxEnv:
     ) -> Tuple[chex.Array, PJState, float, bool, dict]:
         """Performs step transitions in the environment."""
         key, key_reset = jax.random.split(key)
+        prev_level_i = state.level_i
         if self.jit:
             obs_st, state_st, reward, done, info = self.step_env(
                 key, state, action, params
@@ -1279,6 +1327,8 @@ class PuzzleJaxEnv:
             obs, state, reward, done, info = self.step_env(key, state, action, params)
             if done:
                 obs, state = self.reset(key_reset, params)
+        info["level_i"] = prev_level_i
+        info["next_level_i"] = state.level_i
         return obs, state, reward, done, info
 
 
@@ -1326,9 +1376,15 @@ class PuzzleJaxEnv:
         reward = reward.astype(float) - 0.01
 
         done = win | ((state.step_i + 1) >= self.max_steps)
-        info = {}
+        info = {
+            "won": win,
+            "score": score,
+            "steps": state.step_i + 1,
+            "level_i": state.level_i,
+        }
         state = PJState(
             multihot_level=multihot_level,
+            level_i=state.level_i,
             win=win,
             score=score,
             heuristic=heuristic,
@@ -1350,11 +1406,7 @@ class PuzzleJaxEnv:
         return obs, state, reward, done, info
 
     def get_level(self, level_idx):
-        level = self.levels[level_idx][0]
-        # Convert the level to a multihot representation and render it
-        multihot_level = self.char_level_to_multihot(level)
-        multihot_level = jnp.array(multihot_level)
-        return multihot_level
+        return self._compiled_levels[level_idx]
 
     def gen_subrules_meta(self, rule: Rule, rule_name: str, lvl_shape: Tuple[int, int],):
         has_right_pattern = len(rule.right_kernels) > 0
@@ -4138,8 +4190,13 @@ class PuzzleJaxEnv:
             jax.debug.print('apply_rule_block: block {block_i} applied: {block_applied}. again: {again}', block_i=block_i, block_applied=block_applied, again=again)
             if not self.jit:
                 if block_applied:
-                    print(f'Level state after rule block {block_i} application:\n{multihot_to_desc(lvl[0], objs_to_idxs=self.objs_to_idxs, n_objs=self.n_objs,
-                                                                                                   obj_idxs_to_force_idxs=self.obj_idxs_to_force_idxs)}')
+                    level_desc = multihot_to_desc(
+                        lvl[0],
+                        objs_to_idxs=self.objs_to_idxs,
+                        n_objs=self.n_objs,
+                        obj_idxs_to_force_idxs=self.obj_idxs_to_force_idxs,
+                    )
+                    print(f"Level state after rule block {block_i} application:\n{level_desc}")
 
         rule_block_state = LoopRuleBlockState(
             lvl=lvl,

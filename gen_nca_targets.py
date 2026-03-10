@@ -12,7 +12,7 @@ from lark import Lark
 
 from conf.config import SearchNodeJSConfig
 from env import PSState
-from puzzlejax.preprocessing import PS_LARK_GRAMMAR_PATH, PSErrors, get_env_from_ps_file
+from puzzlescript_jax.preprocessing import PS_LARK_GRAMMAR_PATH, PSErrors, get_env_from_ps_file
 from search_nodejs import compile_game
 from utils import get_list_of_games_for_testing, init_ps_lark_parser, level_to_int_arr
 from validate_sols import JS_SOLS_DIR, multihot_level_from_js_state, JAX_VALIDATED_JS_SOLS_DIR

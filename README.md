@@ -66,8 +66,8 @@ This will run the solutions generated above in PuzzleJAX, and ensure that they l
 
 The codebase now has an explicit backend seam for search against the original PuzzleScript engine:
 
-- `puzzlejax.backends.base` defines the search backend contract.
-- `puzzlejax.backends.nodejs` wraps the original engine via `puzzlescript_nodejs`.
+- `backends.base` defines the search backend contract.
+- `backends.nodejs` wraps the original engine via `puzzlescript_nodejs`.
 
 The intended refactor direction is to stop baking `puzzlejax` assumptions directly into new tooling. New engine-facing work should target the backend contract first, then provide:
 

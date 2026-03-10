@@ -17,9 +17,9 @@ import numpy as np
 import submitit
 
 from conf.config import ProfileRandNodeJSConfig
-from puzzlejax.backends import NodeJSPuzzleScriptBackend
-from puzzlejax.globals import GAMES_DIR, NODEJS_PROFILING_RESULTS_DIR, SIMPLIFIED_GAMES_DIR
-from puzzlejax.utils import get_list_of_games_for_testing
+from backends import NodeJSPuzzleScriptBackend
+from puzzlescript_jax.globals import GAMES_DIR, NODEJS_PROFILING_RESULTS_DIR, SIMPLIFIED_GAMES_DIR
+from puzzlescript_jax.utils import get_list_of_games_for_testing
 from puzzlescript_nodejs.rl_env import NodeJSBatchedPuzzleEnv
 
 

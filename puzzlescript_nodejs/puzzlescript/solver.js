@@ -770,6 +770,7 @@ function solveAStar(engine, maxIters=100_000) {
 		actions = [0, 1, 2, 3];
 	}
 	exploredStates = {};
+  var sol = [];
   var bestState = getState(engine);
   var bestScore = getScore(engine);
 	exploredStates[engine.getLevel().objects] = [engine.getLevel().objects.slice(0), -1];
@@ -819,16 +820,18 @@ function solveAStar(engine, maxIters=100_000) {
 					continue;
 				}
 
+				exploredStates[engine.getLevel().objects] = [parentState, actions[i]];
         score = getScore(engine)
-        if (score < bestScore) {
+        var candidateSolution = MakeSolution(engine.getLevel().objects);
+        if ((score < bestScore) || (score == bestScore && candidateSolution.length > sol.length)) {
           bestScore = score;
           bestState = getState(engine)
+          sol = candidateSolution;
         }
 
         // await new Promise(resolve => setTimeout(resolve, 1)); // Small delay for live feedback
         // redraw();
 
-				exploredStates[engine.getLevel().objects] = [parentState, actions[i]];
 				if (engine.getWinning() || engine.getHasUsedCheckpoint()) {
           // console.log('Winning!');
 					muted = false;
@@ -864,7 +867,7 @@ function solveAStar(engine, maxIters=100_000) {
 	deltatime = oldDT;
 	// redraw();
 	// cancelLink.hidden = true;
-  return [false, [], totalIters, ((Date.now() - start_time) / 1000), bestScore, bestState, false, engine.getState().idDict];
+  return [false, sol, totalIters, ((Date.now() - start_time) / 1000), bestScore, bestState, false, engine.getState().idDict];
 }
 
 function solveGBFS(engine, maxIters=100_000) {
@@ -909,6 +912,7 @@ function solveGBFS(engine, maxIters=100_000) {
 		actions = [0, 1, 2, 3];
 	}
 	exploredStates = {};
+  var sol = [];
   var bestState = getState(engine);
   var bestScore = getScore(engine);
 	exploredStates[engine.getLevel().objects] = [engine.getLevel().objects.slice(0), -1];
@@ -947,13 +951,15 @@ function solveGBFS(engine, maxIters=100_000) {
 					continue;
 				}
 
+				exploredStates[engine.getLevel().objects] = [parentState, actions[i]];
         score = getScore(engine)
-        if (score < bestScore) {
+        var candidateSolution = MakeSolution(engine.getLevel().objects);
+        if ((score < bestScore) || (score == bestScore && candidateSolution.length > sol.length)) {
           bestScore = score;
           bestState = getState(engine)
+          sol = candidateSolution;
         }
 
-				exploredStates[engine.getLevel().objects] = [parentState, actions[i]];
 				if (engine.getWinning() || engine.getHasUsedCheckpoint()) {
 					muted = false;
 					solving = false;
@@ -980,7 +986,7 @@ function solveGBFS(engine, maxIters=100_000) {
 	solving = false;
 	DoRestartSearch(engine);
 	deltatime = oldDT;
-  return [false, [], totalIters, ((Date.now() - start_time) / 1000), bestScore, bestState, false, engine.getState().idDict];
+  return [false, sol, totalIters, ((Date.now() - start_time) / 1000), bestScore, bestState, false, engine.getState().idDict];
 }
 
 class MCTSNode{

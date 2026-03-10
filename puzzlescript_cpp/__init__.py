@@ -13,9 +13,10 @@ import os
 from pathlib import Path
 from typing import Any
 
+import imageio
 import numpy as np
 
-from puzzlejax.backends.base import SearchResult
+from backends.base import SearchResult
 from puzzlescript_cpp._puzzlescript_cpp import Engine as _CppEngine, LevelBackup
 from puzzlescript_cpp._puzzlescript_cpp import BatchedEngine as _BatchedEngine
 from puzzlescript_cpp._puzzlescript_cpp import Renderer
@@ -153,11 +154,17 @@ class CppPuzzleScriptBackend:
     def __init__(self):
         self.cpp_engine = CppPuzzleScriptEngine()
         self._js_engine = None
+        self._renderer = None
 
     def _ensure_js_engine(self):
         if self._js_engine is None:
             from javascript import require
             self._js_engine = require(self._ENGINE_JS_PATH)
+
+    def _ensure_renderer(self):
+        if self._renderer is None:
+            self._renderer = Renderer()
+        return self._renderer
 
     def compile_game(self, parser: Any, game: str) -> str:
         """Compile a game using the JS compiler and load into C++ engine."""
@@ -167,6 +174,8 @@ class CppPuzzleScriptBackend:
         # Serialize the compiled state from JS and load into C++
         json_str = str(self._js_engine.serializeCompiledStateJSON())
         self.cpp_engine.load_from_json(json_str)
+        renderer = self._ensure_renderer()
+        renderer.load_sprite_data(str(self._js_engine.serializeSpriteDataJSON()))
         return game_text
 
     def compile_and_serialize(self, parser: Any, game: str) -> str:
@@ -186,9 +195,60 @@ class CppPuzzleScriptBackend:
 
     def unload_game(self) -> None:
         self.cpp_engine = CppPuzzleScriptEngine()
+        self._renderer = None
 
     def get_num_levels(self) -> int:
         return self.cpp_engine.num_levels
+
+    def render_frame(self) -> np.ndarray:
+        renderer = self._ensure_renderer()
+        if not renderer.ready():
+            raise RuntimeError("Renderer sprite data is not loaded")
+        return np.asarray(renderer.render_engine(self.cpp_engine._engine), dtype=np.uint8)
+
+    def render_frame_from_objects(
+        self, objects: list[int] | np.ndarray, grid_w: int, grid_h: int,
+    ) -> np.ndarray:
+        renderer = self._ensure_renderer()
+        if not renderer.ready():
+            raise RuntimeError("Renderer sprite data is not loaded")
+        objects_arr = np.asarray(objects, dtype=np.int32)
+        return np.asarray(
+            renderer.render_objects(objects_arr, int(grid_w), int(grid_h), self.cpp_engine.object_count),
+            dtype=np.uint8,
+        )
+
+    def render_gif(
+        self,
+        *,
+        game_text: str,
+        level_i: int,
+        actions: list[int] | tuple[int, ...],
+        gif_path: str,
+        frame_duration_s: float = 0.05,
+        scale: int = 1,
+    ) -> str:
+        self.load_level(game_text, level_i)
+        frames = [self.render_frame()]
+        for action in actions:
+            self.process_input(int(action))
+            again_steps = 0
+            while self.againing and again_steps < MAX_AGAIN:
+                self.process_input(-1)
+                again_steps += 1
+            frames.append(self.render_frame())
+
+        if scale > 1:
+            frames = [
+                np.repeat(np.repeat(frame, scale, axis=0), scale, axis=1)
+                for frame in frames
+            ]
+
+        gif_dir = os.path.dirname(gif_path)
+        if gif_dir:
+            os.makedirs(gif_dir, exist_ok=True)
+        imageio.mimsave(gif_path, frames, duration=frame_duration_s, loop=0)
+        return gif_path
 
     def process_input(self, direction: int) -> bool:
         return self.cpp_engine.process_input(direction)
@@ -291,17 +351,36 @@ class CppPuzzleScriptEnv:
         if not self._engine.load_from_json(json_str):
             raise RuntimeError("Failed to load compiled game JSON")
         self._json_str = json_str
+        self._compiled = json.loads(json_str)
         self._level_i = level_i
         self._max_steps = max_episode_steps
         self._steps = 0
+        self._max_height, self._max_width = self._compute_max_level_shape([level_i])
 
         # Load level once to get geometry
-        self._engine.load_level(level_i)
+        probe_level_i = level_i if level_i >= 0 else 0
+        self._engine.load_level(probe_level_i)
         self._n_objs = self._engine.get_object_count()
-        self._width = self._engine.get_width()
-        self._height = self._engine.get_height()
+        self._width = self._max_width
+        self._height = self._max_height
         self._stride_obj = (self._n_objs + 31) // 32
         self._prev_score = float(self._engine.get_score())
+
+    def _compute_max_level_shape(self, level_indices: list[int] | None = None) -> tuple[int, int]:
+        if level_indices is None or any(level_i < 0 for level_i in level_indices):
+            allowed_indices = None
+        else:
+            allowed_indices = {int(level_i) for level_i in level_indices}
+        max_width = 0
+        max_height = 0
+        for level in self._compiled.get("levels", []):
+            if level.get("type") != "level":
+                continue
+            if allowed_indices is not None and int(level["index"]) not in allowed_indices:
+                continue
+            max_width = max(max_width, int(level["width"]))
+            max_height = max(max_height, int(level["height"]))
+        return max_height, max_width
 
     @property
     def observation_shape(self) -> tuple[int, int, int]:
@@ -319,11 +398,13 @@ class CppPuzzleScriptEnv:
         self._level_i = level_i
 
     def reset(self) -> tuple[np.ndarray, dict]:
+        if self._level_i < 0:
+            self._level_i = int(np.random.randint(self.num_levels))
         self._engine.load_level(self._level_i)
         self._steps = 0
         self._prev_score = float(self._engine.get_score())
         obs = self._get_obs()
-        return obs, {"won": False, "steps": 0, "score": self._prev_score, "score_delta": 0.0}
+        return obs, {"won": False, "steps": 0, "score": self._prev_score, "score_delta": 0.0, "level_i": self._level_i}
 
     def step(self, action: int) -> tuple[np.ndarray, float, bool, bool, dict]:
         self._engine.process_input(action)
@@ -341,7 +422,7 @@ class CppPuzzleScriptEnv:
         reward = score_delta + (1.0 if won else 0.0) - 0.01
         self._prev_score = score
         obs = self._get_obs()
-        info = {"won": won, "steps": self._steps, "score": score, "score_delta": score_delta}
+        info = {"won": won, "steps": self._steps, "score": score, "score_delta": score_delta, "level_i": self._level_i}
         return obs, reward, done, truncated, info
 
     def get_objects(self) -> np.ndarray:
@@ -349,14 +430,17 @@ class CppPuzzleScriptEnv:
 
     def _get_obs(self) -> np.ndarray:
         objects = self._engine.get_objects()
+        width = self._engine.get_width()
+        height = self._engine.get_height()
+        stride_obj = len(objects) // (width * height)
         obs = np.zeros((self._n_objs, self._height, self._width), dtype=np.uint8)
-        for x in range(self._width):
-            for y in range(self._height):
-                flat_idx = (x * self._height + y) * self._stride_obj
+        for x in range(width):
+            for y in range(height):
+                flat_idx = (x * height + y) * stride_obj
                 for obj in range(self._n_objs):
                     word = obj // 32
                     bit = obj % 32
-                    if word < self._stride_obj and (int(objects[flat_idx + word]) & (1 << bit)):
+                    if word < stride_obj and (int(objects[flat_idx + word]) & (1 << bit)):
                         obs[obj, y, x] = 1
         return obs
 
@@ -373,26 +457,34 @@ class CppBatchedPuzzleScriptEnv:
 
     Observations: uint8 ``(batch, n_objs, height, width)``
     Actions: int32 ``(batch,)``, values 0-4.
-    Auto-resets environments that reach ``done``.
+    Auto-resets environments that reach ``done`` when ``auto_reset=True``.
     """
 
     def __init__(self, json_str: str, batch_size: int,
                  level_indices: list[int] | None = None,
-                 max_episode_steps: int = 200):
+                 max_episode_steps: int = 200,
+                 auto_reset: bool = True):
         self._be = _BatchedEngine(batch_size)
         if not self._be.load_from_json(json_str):
             raise RuntimeError("Failed to load compiled game JSON")
         self._json_str = json_str
+        self._compiled = json.loads(json_str)
         self._max_steps = max_episode_steps
-
+        self._auto_reset = bool(auto_reset)
         if level_indices is None:
             level_indices = [0] * batch_size
-        self._be.set_levels(level_indices)
-
-        # Do an initial reset to populate geometry caches
-        self._be.reset_all()
-
+        self._max_height, self._max_width = self._compute_max_level_shape(level_indices)
+        self._n_objs = int(self._compiled["objectCount"])
+        self._stride_obj = (self._n_objs + 31) // 32
+        self._base_level_indices = np.asarray(level_indices, dtype=np.int32)
+        self._active_level_indices = self._base_level_indices.copy()
         self._steps = np.zeros(batch_size, dtype=np.int32)
+        self._be.set_levels(self._active_level_indices.tolist())
+        if hasattr(self._be, "set_auto_reset"):
+            self._be.set_auto_reset(False)
+
+        # Do an initial reset to populate geometry caches.
+        self.reset()
 
     @property
     def batch_size(self) -> int:
@@ -405,7 +497,7 @@ class CppBatchedPuzzleScriptEnv:
     @property
     def observation_shape(self) -> tuple[int, int, int, int]:
         """(batch, n_objs, height, width)"""
-        return tuple(self._be.get_obs_shape())
+        return (self.batch_size, self._n_objs, self._max_height, self._max_width)
 
     @property
     def num_actions(self) -> int:
@@ -416,24 +508,85 @@ class CppBatchedPuzzleScriptEnv:
         return self._be.num_levels
 
     def set_levels(self, level_indices: list[int]) -> None:
-        self._be.set_levels(level_indices)
+        self._base_level_indices = np.asarray(level_indices, dtype=np.int32)
+        self._active_level_indices = self._base_level_indices.copy()
+        self._max_height, self._max_width = self._compute_max_level_shape(level_indices)
+        self._be.set_levels(self._active_level_indices.tolist())
+
+    def _compute_max_level_shape(self, level_indices: list[int] | None = None) -> tuple[int, int]:
+        if level_indices is None or any(level_i < 0 for level_i in level_indices):
+            allowed_indices = None
+        else:
+            allowed_indices = {int(level_i) for level_i in level_indices}
+        max_width = 0
+        max_height = 0
+        for level in self._compiled.get("levels", []):
+            if level.get("type") != "level":
+                continue
+            if allowed_indices is not None and int(level["index"]) not in allowed_indices:
+                continue
+            max_width = max(max_width, int(level["width"]))
+            max_height = max(max_height, int(level["height"]))
+        return max_height, max_width
+
+    def _get_obs_for_env(self, env_idx: int) -> np.ndarray:
+        objects = np.array(self._be.get_objects(env_idx), dtype=np.int32)
+        width = int(self._be.get_width(env_idx))
+        height = int(self._be.get_height(env_idx))
+        stride_obj = len(objects) // (width * height)
+        obs = np.zeros((self._n_objs, self._max_height, self._max_width), dtype=np.uint8)
+        for x in range(width):
+            for y in range(height):
+                flat_idx = (x * height + y) * stride_obj
+                for obj in range(self._n_objs):
+                    word = obj // 32
+                    bit = obj % 32
+                    if word < stride_obj and (int(objects[flat_idx + word]) & (1 << bit)):
+                        obs[obj, y, x] = 1
+        return obs
+
+    def _get_obs_batch(self) -> np.ndarray:
+        return np.stack([self._get_obs_for_env(i) for i in range(self.batch_size)], axis=0)
+
+    def _sample_level_indices(self) -> np.ndarray:
+        random_mask = self._base_level_indices < 0
+        if not np.any(random_mask):
+            return self._base_level_indices.copy()
+        sampled = self._base_level_indices.copy()
+        sampled[random_mask] = np.random.randint(self.num_levels, size=int(random_mask.sum()), dtype=np.int32)
+        return sampled
+
+    def _assign_levels_for_reset(self, env_indices: np.ndarray) -> None:
+        if env_indices.size == 0:
+            return
+        random_mask = self._base_level_indices[env_indices] < 0
+        if not np.any(random_mask):
+            return
+        sampled = np.random.randint(self.num_levels, size=int(random_mask.sum()), dtype=np.int32)
+        self._active_level_indices[env_indices[random_mask]] = sampled
+        self._be.set_levels(self._active_level_indices.tolist())
 
     def reset(self, env_indices: list[int] | None = None) -> np.ndarray:
         if env_indices is None:
+            self._active_level_indices = self._sample_level_indices()
+            self._be.set_levels(self._active_level_indices.tolist())
             self._be.reset_all()
             self._steps[:] = 0
         else:
+            env_indices_arr = np.asarray(env_indices, dtype=np.int32)
+            self._assign_levels_for_reset(env_indices_arr)
             self._be.reset(env_indices)
-            for i in env_indices:
+            for i in env_indices_arr.tolist():
                 self._steps[i] = 0
-        return np.array(self._be.get_obs())
+        return self._get_obs_batch()
 
     def step(self, actions: np.ndarray) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, dict]:
         actions = np.asarray(actions, dtype=np.int32)
+        level_indices = self._active_level_indices.copy()
         self._be.step(actions)
         self._steps += 1
 
-        obs = np.array(self._be.get_obs())
+        obs = self._get_obs_batch()
         rewards = np.array(self._be.get_rewards())
         scores = np.array(self._be.get_scores())
         score_deltas = np.array(self._be.get_score_deltas())
@@ -441,25 +594,19 @@ class CppBatchedPuzzleScriptEnv:
         wins = np.array(self._be.get_wins())
         truncated = self._steps >= self._max_steps
 
-        # Auto-reset truncated envs (won envs already auto-reset in C++)
-        trunc_only = truncated & ~dones
-        trunc_indices = np.where(trunc_only)[0].tolist()
-        if trunc_indices:
-            self._be.reset(trunc_indices)
-            # Re-read obs for the reset envs
-            obs = np.array(self._be.get_obs())
-            for i in trunc_indices:
-                self._steps[i] = 0
-
-        # Also reset step counters for done (won) envs
-        done_indices = np.where(dones)[0]
-        self._steps[done_indices] = 0
+        if self._auto_reset:
+            reset_indices = np.where(dones | truncated)[0].tolist()
+            if reset_indices:
+                self.reset(reset_indices)
+                obs = self._get_obs_batch()
 
         infos = {
             "won": wins,
             "steps": self._steps.copy(),
             "score": scores,
             "score_delta": score_deltas,
+            "level_i": level_indices,
+            "next_level_i": self._active_level_indices.copy(),
         }
         return obs, rewards, dones | truncated, truncated, infos
 

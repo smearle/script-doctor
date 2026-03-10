@@ -113,8 +113,8 @@ void BatchedEngine::step(const std::vector<int>& actions) {
         prev_scores_[i] = score;
         prev_winning_[i] = won;
 
-        // Auto-reset on done
-        if (dones_[i]) {
+        // Preserve the current fast RL path by keeping auto-reset enabled by default.
+        if (auto_reset_ && dones_[i]) {
             resetEnv(i);
         }
 

@@ -51,10 +51,10 @@ JAXTAR_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "JAXtar")
 if JAXTAR_DIR not in sys.path:
     sys.path.insert(0, JAXTAR_DIR)
 
-from puzzlejax.globals import DATA_DIR
-from puzzlejax.utils import init_ps_lark_parser, get_tree_from_txt
-from puzzlejax.env import PuzzleJaxEnv, PJParams, PJState
-from puzzlejax.wrappers import PuzzleJaxPuxleEnv, PuzzleJaxHeuristic
+from puzzlescript_jax.globals import DATA_DIR
+from puzzlescript_jax.utils import init_ps_lark_parser, get_tree_from_txt
+from puzzlescript_jax.env import PuzzleJaxEnv, PJParams, PJState
+from puzzlescript_jax.wrappers import PuzzleJaxPuxleEnv, PuzzleJaxHeuristic
 
 from JAxtar.stars.astar import astar_builder
 from JAxtar.stars.search_base import SearchResult

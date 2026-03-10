@@ -16,15 +16,15 @@ from lark import Lark, Transformer, Tree, Token, Visitor
 import numpy as np
 
 from conf.config import PreprocessConfig
-from puzzlejax.detect_randomness import tree_has_randomness
-from puzzlejax.env import PuzzleJaxEnv
-from puzzlejax.gen_tree import GenPSTree
-from puzzlejax.globals import (
+from puzzlescript_jax.detect_randomness import tree_has_randomness
+from puzzlescript_jax.env import PuzzleJaxEnv
+from puzzlescript_jax.gen_tree import GenPSTree
+from puzzlescript_jax.globals import (
     GAMES_N_RULES_SORTED_PATH, GAMES_TO_N_RULES_PATH, GAMES_TO_SKIP, LARK_SYNTAX_PATH, TEST_GAMES,
     TREES_DIR, SIMPLIFIED_GAMES_DIR, MIN_GAMES_DIR, PRETTY_TREES_DIR, CUSTOM_GAMES_DIR,
     GAMES_DIR,
 )
-from puzzlejax.ps_game import PSGameTree
+from puzzlescript_jax.ps_game import PSGameTree
 
 logger = logging.getLogger(__name__)
 

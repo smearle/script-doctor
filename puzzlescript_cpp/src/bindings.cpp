@@ -109,6 +109,9 @@ PYBIND11_MODULE(_puzzlescript_cpp, m) {
              "Reset specific environments (empty list = reset all)")
         .def("reset_all", &BatchedEngine::resetAll,
              "Reset all environments")
+        .def("set_auto_reset", &BatchedEngine::setAutoReset,
+             py::arg("auto_reset"),
+             "Enable or disable automatic reset when an environment reaches a terminal state")
         .def("step", [](BatchedEngine& be, py::array_t<int32_t> actions) {
             auto buf = actions.request();
             if (buf.ndim != 1 || buf.shape[0] != be.batchSize()) {
@@ -173,6 +176,7 @@ PYBIND11_MODULE(_puzzlescript_cpp, m) {
         .def_property_readonly("level_width", &BatchedEngine::levelWidth)
         .def_property_readonly("level_height", &BatchedEngine::levelHeight)
         .def_property_readonly("num_levels", &BatchedEngine::numLevels)
+        .def_property_readonly("auto_reset", &BatchedEngine::autoReset)
         .def("get_objects", [](const BatchedEngine& be, int env_idx) {
             const auto& objs = be.getObjects(env_idx);
             return py::array_t<int32_t>(
