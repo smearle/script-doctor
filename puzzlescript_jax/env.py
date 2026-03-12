@@ -3741,9 +3741,9 @@ class PuzzleJaxEnv:
         n_layers = len(self.collision_layers)
         max_possible_forces = n_layers * lvl.shape[2] * lvl.shape[3]
         if self._is_multi_level:
-            force_arr = lvl[0, n_objs:-1]
+            force_arr = lvl[0, n_objs:-2]  # exclude player_effect channel and valid_mask channel
         else:
-            force_arr = lvl[0, n_objs:]
+            force_arr = lvl[0, n_objs:-1]  # exclude player_effect channel
         # Mask out all forces corresponding to ACTION.
         force_mask = np.ones((force_arr.shape[0],), dtype=bool)
         force_mask[ACTION::N_FORCES] = 0
