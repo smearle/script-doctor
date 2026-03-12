@@ -21,6 +21,15 @@ from puzzlescript_jax.utils import get_list_of_games_for_testing, init_ps_lark_p
 dotenv.load_dotenv()
 
 
+OOM_ERROR_PATTERNS = (
+    "out of memory",
+    "oom",
+    "heap out of memory",
+    "allocation failed",
+    "memory limit",
+)
+
+
 def get_standalone_run_name(cfg: SearchNodeJSConfig, algo_name, cpu_name):
     return f'algo-{algo_name}_{cfg.n_steps}-steps_{cpu_name}'
 
@@ -30,6 +39,49 @@ def get_standalone_run_params_from_name(run_name: str):
     groups = re.match(r'algo-(.*)_(\d+)-steps_(.*)', run_name)
     algo_name, n_steps, device_name = groups.groups()
     return algo_name, n_steps, device_name
+
+
+def is_oom_error(exc: BaseException) -> bool:
+    if isinstance(exc, MemoryError):
+        return True
+    error_text = " ".join(
+        part for part in (
+            str(exc),
+            repr(exc),
+            traceback.format_exc(),
+        ) if part
+    ).lower()
+    return any(pattern in error_text for pattern in OOM_ERROR_PATTERNS)
+
+
+def write_level_error_log(path: str, error_type: str, error_message: str) -> dict:
+    result_dict = {
+        'won': False,
+        'actions': [],
+        'score': None,
+        'timeout': False,
+        'iterations': 0,
+        'FPS': 0,
+        'time': 0,
+        'objs': [],
+        'state': [],
+        'error': error_type,
+        'error_message': error_message,
+    }
+    with open(path, 'w') as f:
+        json.dump(result_dict, f, indent=4)
+    return result_dict
+
+
+def should_skip_existing_level_result(path: str) -> bool:
+    if not os.path.isfile(path):
+        return False
+    try:
+        with open(path, 'r') as f:
+            json.load(f)
+    except Exception:
+        return True
+    return True
 
 
 @hydra.main(version_base="1.3", config_path='./', config_name='search_nodejs_config')
@@ -120,17 +172,30 @@ def main(cfg: SearchNodeJSConfig, games: Optional[List[str]] = None):
                 level_js_sol_path = os.path.join(
                     game_js_sols_dir, f'{algo_prefix}{cfg.n_steps}-steps_level-{level_i}.json')
                 print(f'Level: {level_i}')
-                if not cfg.overwrite and os.path.isfile(level_js_sol_path):
+                if not cfg.overwrite and should_skip_existing_level_result(level_js_sol_path):
                     print(f'Already solved {game} level {level_i}.')
                     continue
-                result = backend.run_search(
-                    algo,
-                    game_text=game_text,
-                    level_i=level_i,
-                    n_steps=cfg.n_steps,
-                    timeout_ms=timeout_ms,
-                    warmup=False,
-                ).to_dict()
+                try:
+                    result = backend.run_search(
+                        algo,
+                        game_text=game_text,
+                        level_i=level_i,
+                        n_steps=cfg.n_steps,
+                        timeout_ms=timeout_ms,
+                        warmup=False,
+                    ).to_dict()
+                except Exception as e:
+                    if not is_oom_error(e):
+                        raise
+                    error_message = str(e) or repr(e)
+                    print(f'OOM during {game} level {level_i} with {algo}: {error_message}')
+                    result = write_level_error_log(
+                        level_js_sol_path,
+                        error_type='oom',
+                        error_message=error_message,
+                    )
+                    results[run_name][game][level_i] = result
+                    continue
 
                 if os.path.isfile(level_js_sol_path):
                     with open(level_js_sol_path, 'r') as f:

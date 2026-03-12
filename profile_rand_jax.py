@@ -48,7 +48,7 @@ BATCH_SIZES = [
     # 8_000,
     # 10_000,
 ]
-ADAPTIVE_BATCH_SIZE_START = 20_000
+ADAPTIVE_BATCH_SIZE_START = 1_000
 # batch_sizes = batch_sizes[::-1]
 VMAPS = [
     True,
@@ -179,7 +179,9 @@ def main(cfg: ProfileJaxRandConfig, games: Optional[List[str]] = None):
 
                 batch_sizes_to_run = fixed_batch_sizes[:]
                 while True:
-                    if adaptive_batch_size is not None:
+                    # Avoid re-enqueuing the same adaptive batch size while it is
+                    # already pending in the fixed/adaptive sweep queue.
+                    if adaptive_batch_size is not None and adaptive_batch_size not in batch_sizes_to_run:
                         batch_sizes_to_run.append(adaptive_batch_size)
                     if not batch_sizes_to_run:
                         break

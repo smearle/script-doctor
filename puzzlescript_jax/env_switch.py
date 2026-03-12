@@ -56,25 +56,36 @@ class PuzzleJaxEnvSwitch(PuzzleJaxEnv):
 
     def reset(self, rng, params):
         """Override reset to skip gen_tick_fn (pre-generated in __init__)."""
-        from puzzlescript_jax.env import PJState, PSObs, PRINT_SCORE
+        from puzzlescript_jax.env import PJState, PJStateMultiLevel, PSObs, PRINT_SCORE
         requested_level_i = jnp.asarray(params.level_i, dtype=jnp.int32)
-        rng, level_rng = jax.random.split(rng)
-        sampled_level_i = jax.lax.cond(
-            requested_level_i < 0,
-            lambda key: jax.random.randint(key, shape=(), minval=0, maxval=len(self._compiled_levels), dtype=jnp.int32),
-            lambda _key: requested_level_i,
-            level_rng,
-        )
-        lvl = jax.lax.cond(
-            requested_level_i < 0,
-            lambda idx: jax.lax.switch(
-                idx,
-                tuple(lambda _, level=level: level for level in self._compiled_levels),
-                None,
-            ),
-            lambda _idx: params.level,
-            sampled_level_i,
-        )
+        if not self._is_multi_level:
+            sampled_level_i = requested_level_i
+            lvl = params.level
+            level_height = None
+            level_width = None
+            valid_mask = None
+        else:
+            rng, level_rng = jax.random.split(rng)
+            sampled_level_i = jax.lax.cond(
+                requested_level_i < 0,
+                lambda key: jax.random.randint(key, shape=(), minval=0, maxval=len(self._compiled_levels), dtype=jnp.int32),
+                lambda _key: requested_level_i,
+                level_rng,
+            )
+            lvl = jax.lax.cond(
+                requested_level_i < 0,
+                lambda idx: jax.lax.switch(
+                    idx,
+                    tuple(lambda _, level=level: level for level in self._compiled_levels),
+                    None,
+                ),
+                lambda _idx: params.level,
+                sampled_level_i,
+            )
+            level_height = self._level_heights[sampled_level_i]
+            level_width = self._level_widths[sampled_level_i]
+            valid_mask = self._make_valid_mask(level_height, level_width)
+            lvl = jnp.where(valid_mask[None], lvl, False)
         # NOTE: tick_fn already generated in __init__, do NOT regenerate here.
         win, score, init_heuristic = self.check_win(lvl)
         if PRINT_SCORE:
@@ -95,6 +106,13 @@ class PuzzleJaxEnvSwitch(PuzzleJaxEnv):
             rng=rng,
             view_bounds=self._get_default_view_bounds(lvl.shape[1:]),
         )
+        if self._is_multi_level:
+            state = PJStateMultiLevel(
+                **state,
+                level_height=level_height,
+                level_width=level_width,
+                valid_mask=valid_mask,
+            )
         if self.tree.prelude.run_rules_on_level_start:
             lvl = self.apply_player_force(-1, state)
             lvl, _, _, _, _, _, rng = self.tick_fn(rng, lvl)

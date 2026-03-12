@@ -329,6 +329,20 @@ def get_channel(lvl, obj_idxs, require_all=False):
         return get_meta_channel_all(lvl, obj_idxs)
     return get_meta_channel(lvl, obj_idxs)
 
+
+def _first_true_idx_large(mask):
+    idx = jnp.argmax(mask)
+    return jnp.where(jnp.any(mask), idx, -1)
+
+
+def _first_true_coord_large(mask):
+    flat = mask.reshape(-1)
+    flat_idx = jnp.argmax(flat)
+    has_any = jnp.any(flat)
+    row = flat_idx // mask.shape[1]
+    col = flat_idx % mask.shape[1]
+    return jnp.where(has_any, jnp.array([row, col], dtype=jnp.int32), jnp.array([-1, -1], dtype=jnp.int32))
+
 def compute_manhattan_dists_from_channels(src_channel, trg_channel):
     n_cells = np.prod(src_channel.shape)
     src_coords = jnp.argwhere(src_channel, size=n_cells, fill_value=-1)
@@ -405,16 +419,17 @@ def check_win(lvl, funcs, jit):
     if len(funcs) == 0:
         return False, 0, 0
 
-    def apply_win_condition_func(i, lvl):
-        return jax.lax.switch(i, funcs, lvl)
+    all_win = True
+    total_score = 0
+    total_heuristic = 0
 
-    if jit:
-        wins, scores, heuristics = jax.vmap(apply_win_condition_func, in_axes=(0, None))(jnp.arange(len(funcs)), lvl)
-    else:
-        func_returns = [f(lvl) for f in funcs]
-        wins, scores, heuristics = zip(*func_returns)
-        wins, scores, heuristics = jnp.array(wins), jnp.array(scores), jnp.array(heuristics)
-    return jnp.all(wins), scores.sum(), heuristics.sum()
+    for f in funcs:
+        win, score, heuristic = f(lvl)
+        all_win = all_win & win
+        total_score = total_score + score
+        total_heuristic = total_heuristic + heuristic
+
+    return all_win, total_score, total_heuristic
 
 def gen_check_win(win_conditions: Iterable[WinCondition], obj_to_idxs, meta_objs, char_to_obj, joint_tiles=None, jit=True):
     funcs = []
@@ -668,7 +683,6 @@ def expand_joint_objs_in_pattern(pattern, joint_tiles):
 @flax.struct.dataclass
 class PJState:
     multihot_level: np.ndarray
-    level_i: int
     win: bool
     score: int
     heuristic: int
@@ -678,6 +692,14 @@ class PJState:
     step_i: int
     rng: chex.PRNGKey
     view_bounds: chex.Array
+
+
+@flax.struct.dataclass
+class PJStateMultiLevel(PJState):
+    level_i: int
+    level_height: int
+    level_width: int
+    valid_mask: chex.Array
 
 @flax.struct.dataclass
 class PJParams:
@@ -811,6 +833,7 @@ class PuzzleJaxEnv:
         self.tree = tree
         self.levels = tree.levels
         self.level_i = level_i
+        self._is_multi_level = level_i < 0
         self.flickscreen = tree.prelude.flickscreen
         self.zoomscreen = tree.prelude.zoomscreen
         self.require_player_movement = tree.prelude.require_player_movement
@@ -892,6 +915,15 @@ class PuzzleJaxEnv:
             if len(sub_objs) == 1 and (obj not in self.objs_to_idxs):
                 self.objs_to_idxs[obj] = self.objs_to_idxs[sub_objs[0]]
         self.coll_mat = np.einsum('ij,ik->jk', coll_masks, coll_masks, dtype=bool)
+        self.obj_idxs_to_force_idxs_jnp = jnp.array(self.obj_idxs_to_force_idxs, dtype=jnp.int32)
+        self.layer_masks_jnp = jnp.array(self.layer_masks, dtype=bool)
+        self.n_objs_per_layer_jnp = jnp.array(self.n_objs_per_layer, dtype=jnp.int32)
+        self.n_objs_prior_to_layer_jnp = jnp.array(self.n_objs_prior_to_layer, dtype=jnp.int32)
+        self.coll_mat_jnp = jnp.array(self.coll_mat, dtype=bool)
+        self.vertical_force_mask_jnp = jnp.array([0, 1, 0, 1, 0], dtype=bool)
+        self.horizontal_force_mask_jnp = jnp.array([1, 0, 1, 0, 0], dtype=bool)
+        self.orthogonal_force_mask_jnp = jnp.array([1, 1, 1, 1, 0], dtype=bool)
+        self.forces_to_deltas_jnp = jnp.array([[0, -1], [1, 0], [0, 1], [-1, 0]], dtype=jnp.int32)
         if DEBUG:
             print(f"Generating tick function for {self.title}")
         if DEBUG:
@@ -917,6 +949,11 @@ class PuzzleJaxEnv:
         else: 
             raise ValueError("Cannot figure out what indices to assign to player.")
         self.player_idxs = np.array(self.player_idxs)
+        self.player_idxs_jnp = jnp.array(self.player_idxs, dtype=jnp.int32)
+        self.player_force_obj_idxs_jnp = jnp.array(
+            np.concat((np.array([0]), self.obj_idxs_to_force_idxs + N_FORCES - self.n_objs)),
+            dtype=jnp.int32,
+        )
         if DEBUG:
             print(f'player_idxs: {self.player_idxs}')
         sprite_stack = []
@@ -1009,10 +1046,19 @@ class PuzzleJaxEnv:
                     sub_objs = expand_meta_objs([obj], meta_objs, self.char_to_obj)
                     self.chars_to_idxs[char] = self.objs_to_idxs[sub_objs[0]]
 
-        self._compiled_levels = tuple(
-            jnp.array(self.pad_level_to_max_shape(self.char_level_to_multihot(level[0])))
-            for level in self.levels
-        )
+        if self.level_i >= 0:
+            self._board_height = int(self.levels[self.level_i][0].shape[0])
+            self._board_width = int(self.levels[self.level_i][0].shape[1])
+            self._compiled_levels = None
+        else:
+            self._level_heights = jnp.array([level[0].shape[0] for level in self.levels], dtype=jnp.int32)
+            self._level_widths = jnp.array([level[0].shape[1] for level in self.levels], dtype=jnp.int32)
+            self._board_height = int(max(level[0].shape[0] for level in self.levels))
+            self._board_width = int(max(level[0].shape[1] for level in self.levels))
+            self._compiled_levels = tuple(
+                jnp.array(self.pad_level_to_board_shape(self.char_level_to_multihot(level[0])))
+                for level in self.levels
+            )
 
         if self.jit:
             self.step = jax.jit(self.step)
@@ -1059,7 +1105,7 @@ class PuzzleJaxEnv:
             return self._get_default_view_bounds(lvl.shape[1:])
 
         player_mask = jnp.any(lvl[self.player_idxs], axis=0)
-        player_pos = jnp.argwhere(player_mask, size=1, fill_value=-1)[0]
+        player_pos = _first_true_coord_large(player_mask)
         has_player = jnp.all(player_pos >= 0)
 
         view_height, view_width = self._get_view_shape(lvl.shape[1:])
@@ -1141,27 +1187,20 @@ class PuzzleJaxEnv:
         multihot_level = multihot_level.astype(bool)
         return multihot_level
 
-    def pad_level_to_max_shape(self, multihot_level):
-        if self.level_i >= 0:
-            max_height = self.levels[self.level_i][0].shape[0]
-            max_width = self.levels[self.level_i][0].shape[1]
-        else:
-            max_height = max(level[0].shape[0] for level in self.levels)
-            max_width = max(level[0].shape[1] for level in self.levels)
+    def pad_level_to_board_shape(self, multihot_level):
+        max_height = self._board_height
+        max_width = self._board_width
         if multihot_level.shape[1:] == (max_height, max_width):
             return multihot_level
 
-        background_sub_objs = expand_meta_objs(['background'], self.meta_objs, self.char_to_obj)
-        if 'background' in background_sub_objs:
-            bg_obj = 'background'
-        else:
-            bg_obj = background_sub_objs[0]
-        bg_idx = self.objs_to_idxs[bg_obj]
-
         padded = np.zeros((self.n_objs, max_height, max_width), dtype=bool)
-        padded[bg_idx] = True
         padded[:, : multihot_level.shape[1], : multihot_level.shape[2]] = multihot_level
         return padded
+
+    def _make_valid_mask(self, level_height: chex.Array, level_width: chex.Array) -> chex.Array:
+        rows = jnp.arange(self._board_height)[:, None]
+        cols = jnp.arange(self._board_width)[None, :]
+        return (rows < level_height) & (cols < level_width)
 
     # @partial(jax.jit, static_argnums=(0, 2))
     def render(self, state: PJState, cv2=True):
@@ -1188,23 +1227,33 @@ class PuzzleJaxEnv:
 
     def reset(self, rng, params: PJParams) -> Tuple[chex.Array, PJState]:
         requested_level_i = jnp.asarray(params.level_i, dtype=jnp.int32)
-        rng, level_rng = jax.random.split(rng)
-        sampled_level_i = jax.lax.cond(
-            requested_level_i < 0,
-            lambda key: jax.random.randint(key, shape=(), minval=0, maxval=len(self._compiled_levels), dtype=jnp.int32),
-            lambda _key: requested_level_i,
-            level_rng,
-        )
-        lvl = jax.lax.cond(
-            requested_level_i < 0,
-            lambda idx: jax.lax.switch(
-                idx,
-                tuple(lambda _, level=level: level for level in self._compiled_levels),
-                None,
-            ),
-            lambda _idx: params.level,
-            sampled_level_i,
-        )
+        if self._is_multi_level:
+            rng, level_rng = jax.random.split(rng)
+            sampled_level_i = jax.lax.cond(
+                requested_level_i < 0,
+                lambda key: jax.random.randint(key, shape=(), minval=0, maxval=len(self._compiled_levels), dtype=jnp.int32),
+                lambda _key: requested_level_i,
+                level_rng,
+            )
+            lvl = jax.lax.cond(
+                requested_level_i < 0,
+                lambda idx: jax.lax.switch(
+                    idx,
+                    tuple(lambda _, level=level: level for level in self._compiled_levels),
+                    None,
+                ),
+                lambda _idx: params.level,
+                sampled_level_i,
+            )
+            level_height = self._level_heights[sampled_level_i]
+            level_width = self._level_widths[sampled_level_i]
+            valid_mask = self._make_valid_mask(level_height, level_width)
+            lvl = jnp.where(valid_mask[None], lvl, False)
+        else:
+            lvl = params.level
+            level_height = None
+            level_width = None
+            valid_mask = None
         self.tick_fn = self.gen_tick_fn(lvl.shape[1:])
         again = False
         win, score, init_heuristic = self.check_win(lvl)
@@ -1212,7 +1261,6 @@ class PuzzleJaxEnv:
             jax.debug.print('heuristic: {heuristic}, score: {score}, win: {win}', heuristic=init_heuristic, score=score, win=win)
         state = PJState(
             multihot_level=lvl,
-            level_i=sampled_level_i,
             win=jnp.array(False),
             score=jnp.array(0, dtype=jnp.int32),
             heuristic=init_heuristic,
@@ -1223,6 +1271,14 @@ class PuzzleJaxEnv:
             rng=rng,
             view_bounds=self._get_default_view_bounds(lvl.shape[1:]),
         )
+        if self._is_multi_level:
+            state = PJStateMultiLevel(
+                **state,
+                level_i=sampled_level_i,
+                level_height=level_height,
+                level_width=level_width,
+                valid_mask=valid_mask,
+            )
         if self.tree.prelude.run_rules_on_level_start:
             lvl = self.apply_player_force(-1, state)
             lvl, _, _, _, _, _, rng = self.tick_fn(rng, lvl)
@@ -1248,7 +1304,7 @@ class PuzzleJaxEnv:
         def place_force(force_map, action):
             # This is a map-shape array of the obj-indices corresponding to the player objects active on these respective cells.
             # The `+ 1` here moves us past the dummy collision layer.
-            player_int_mask = (self.player_idxs[...,None,None] + 1) * multihot_level[self.player_idxs].astype(int)
+            player_int_mask = (self.player_idxs_jnp[..., None, None] + 1) * multihot_level[self.player_idxs].astype(int)
 
             # Turn the int mask into coords, by flattening it, and appending it with xy coords
             xy_coords = np.indices(force_map.shape[1:])
@@ -1256,11 +1312,8 @@ class PuzzleJaxEnv:
 
             # Create a new dictionary mapping objects to force channels, which adds a dummy collision layer at the front
             # Also, ignore the indices corresponding to object channels since we're dealing directly with the force map.
-            obj_idxs_to_force_idxs = np.concat((np.array([0]), self.obj_idxs_to_force_idxs + N_FORCES - self.n_objs))
-            obj_idxs_to_force_idxs = jnp.array(obj_idxs_to_force_idxs)
-
             # This is a map-shaped array of the force-indices (and xy indices) that should be applied, given the player objects at these cells.
-            player_force_mask = obj_idxs_to_force_idxs[player_int_mask] + action
+            player_force_mask = self.player_force_obj_idxs_jnp[player_int_mask] + action
 
             player_force_mask = jnp.concatenate((player_force_mask[None], xy_coords), axis=0)
             player_coords = player_force_mask.reshape(3, -1).T
@@ -1295,7 +1348,10 @@ class PuzzleJaxEnv:
         # remove the dummy collision layer
         force_map = force_map[N_FORCES:]
 
-        lvl = jnp.concatenate((multihot_level, force_map), axis=0)
+        if self._is_multi_level:
+            lvl = jnp.concatenate((multihot_level, force_map, state.valid_mask[None]), axis=0)
+        else:
+            lvl = jnp.concatenate((multihot_level, force_map), axis=0)
 
         return lvl
 
@@ -1309,7 +1365,8 @@ class PuzzleJaxEnv:
     ) -> Tuple[chex.Array, PJState, float, bool, dict]:
         """Performs step transitions in the environment."""
         key, key_reset = jax.random.split(key)
-        prev_level_i = state.level_i
+        if self._is_multi_level:
+            prev_level_i = state.level_i
         if self.jit:
             obs_st, state_st, reward, done, info = self.step_env(
                 key, state, action, params
@@ -1327,8 +1384,9 @@ class PuzzleJaxEnv:
             obs, state, reward, done, info = self.step_env(key, state, action, params)
             if done:
                 obs, state = self.reset(key_reset, params)
-        info["level_i"] = prev_level_i
-        info["next_level_i"] = state.level_i
+        if self._is_multi_level:
+            info["level_i"] = prev_level_i
+            info["next_level_i"] = state.level_i
         return obs, state, reward, done, info
 
 
@@ -1380,11 +1438,13 @@ class PuzzleJaxEnv:
             "won": win,
             "score": score,
             "steps": state.step_i + 1,
-            "level_i": state.level_i,
         }
-        state = PJState(
+        if self._is_multi_level:
+            info.update({
+                "level_i": state.level_i,
+            })
+        new_state = PJState(
             multihot_level=multihot_level,
-            level_i=state.level_i,
             win=win,
             score=score,
             heuristic=heuristic,
@@ -1395,6 +1455,16 @@ class PuzzleJaxEnv:
             rng=rng,
             view_bounds=self._compute_view_bounds(multihot_level, state.view_bounds),
         )
+        if self._is_multi_level:
+            state: PJStateMultiLevel
+            new_state = PJStateMultiLevel(
+                **new_state,
+                level_i=state.level_i,
+                level_height=state.level_height,
+                level_width=state.level_width,
+                valid_mask=state.valid_mask,
+            )
+        state = new_state
         obs = self.get_obs(state)
         if DEBUG:
             jax.debug.print('episode done: {done}', done=done)
@@ -1406,7 +1476,10 @@ class PuzzleJaxEnv:
         return obs, state, reward, done, info
 
     def get_level(self, level_idx):
-        return self._compiled_levels[level_idx]
+        level = self.char_level_to_multihot(self.levels[level_idx][0])
+        if level.shape[1] <= self._board_height and level.shape[2] <= self._board_width:
+            return jnp.array(self.pad_level_to_board_shape(level))
+        return jnp.array(level)
 
     def gen_subrules_meta(self, rule: Rule, rule_name: str, lvl_shape: Tuple[int, int],):
         has_right_pattern = len(rule.right_kernels) > 0
@@ -1414,7 +1487,7 @@ class PuzzleJaxEnv:
         def is_meta_subobj_forceless(obj_idx, m_cell):
             """ `obj_idx` is dynamic."""
             return jnp.sum(jax.lax.dynamic_slice(
-                m_cell, (jnp.array(self.obj_idxs_to_force_idxs)[obj_idx],), (N_FORCES,))) == 0
+                m_cell, (self.obj_idxs_to_force_idxs_jnp[obj_idx],), (N_FORCES,))) == 0
 
         def is_obj_forceless(obj_idx, m_cell):
             """ `obj_idx` is static."""
@@ -1489,7 +1562,7 @@ class PuzzleJaxEnv:
             """Given a multi-hot vector indicating a set of objects, return the index of the object contained in this cell."""
             # m_cell_forceless_objs = jax.vmap(is_obj_forceless, in_axes = (0, None))(jnp.arange(n_objs), m_cell)
             # m_cell_forceless = m_cell.at[:n_objs].set(m_cell_forceless_objs * m_cell[:n_objs])
-            obj_idx = jnp.argwhere(objs_vec[:self.n_objs] * m_cell[:self.n_objs] > 0, size=1, fill_value=-1)[0, 0]
+            obj_idx = _first_true_idx_large(objs_vec[:self.n_objs] * m_cell[:self.n_objs] > 0)
             detected = jnp.zeros(m_cell.shape, bool)
 
             def mark_obj_as_detected():
@@ -1536,7 +1609,7 @@ class PuzzleJaxEnv:
 
             def force_obj_vec_fn(obj_idx):
                 force_obj_vec = dummy_force_obj_vec.at[obj_idx].set(True)
-                force_obj_vec = force_obj_vec.at[jnp.array(self.obj_idxs_to_force_idxs)[obj_idx] + force_idx].set(True)
+                force_obj_vec = force_obj_vec.at[self.obj_idxs_to_force_idxs_jnp[obj_idx] + force_idx].set(True)
                 return force_obj_vec
             
             force_obj_vecs = jax.vmap(force_obj_vec_fn)(obj_idxs)
@@ -1552,7 +1625,7 @@ class PuzzleJaxEnv:
             )
             is_detected = jnp.zeros(m_cell.shape, dtype=bool)
             is_detected = is_detected.at[obj_idx].set(True)
-            is_detected = is_detected.at[jnp.array(self.obj_idxs_to_force_idxs)[obj_idx] + force_idx].set(True)
+            is_detected = is_detected.at[self.obj_idxs_to_force_idxs_jnp[obj_idx] + force_idx].set(True)
             detected = jax.lax.cond(
                 active,
                 lambda: is_detected,
@@ -1663,18 +1736,15 @@ class PuzzleJaxEnv:
             for obj_idx in obj_idxs:
 
                 obj_is_present = m_cell[obj_idx] == 1
-                obj_forces = jax.lax.dynamic_slice(m_cell, (jnp.array(self.obj_idxs_to_force_idxs)[obj_idx],), (N_FORCES,))
+                obj_forces = jax.lax.dynamic_slice(m_cell, (self.obj_idxs_to_force_idxs_jnp[obj_idx],), (N_FORCES,))
                 # obj_force_mask = self.obj_force_masks[obj_idx]
                 # obj_forces = m_cell[obj_force_mask]
                 if vertical:
-                    vertical_mask = np.array([0, 1, 0, 1, 0], dtype=bool)
-                    obj_forces = jnp.logical_and(obj_forces, vertical_mask)
+                    obj_forces = jnp.logical_and(obj_forces, self.vertical_force_mask_jnp)
                 elif horizontal:
-                    horizontal_mask = np.array([1, 0, 1, 0, 0], dtype=bool)
-                    obj_forces = jnp.logical_and(obj_forces, horizontal_mask)
+                    obj_forces = jnp.logical_and(obj_forces, self.horizontal_force_mask_jnp)
                 elif orthogonal:
-                    orthogonal_mask = np.array([1, 1, 1, 1, 0], dtype=bool)
-                    obj_forces = jnp.logical_and(obj_forces, orthogonal_mask)
+                    obj_forces = jnp.logical_and(obj_forces, self.orthogonal_force_mask_jnp)
                 force_idx = jnp.argwhere(obj_forces, size=1, fill_value=-1)[0, 0]
                 obj_active = obj_is_present & (force_idx != -1)
 
@@ -1719,14 +1789,11 @@ class PuzzleJaxEnv:
             # obj_force_mask = self.obj_force_masks[obj_idx]
             # obj_forces = m_cell[obj_force_mask]
             if vertical:
-                vertical_mask = np.array([0, 1, 0, 1, 0], dtype=bool)
-                obj_forces = jnp.logical_and(obj_forces, vertical_mask)
+                obj_forces = jnp.logical_and(obj_forces, self.vertical_force_mask_jnp)
             elif horizontal:
-                horizontal_mask = np.array([1, 0, 1, 0, 0], dtype=bool)
-                obj_forces = jnp.logical_and(obj_forces, horizontal_mask)
+                obj_forces = jnp.logical_and(obj_forces, self.horizontal_force_mask_jnp)
             elif orthogonal:
-                orthogonal_mask = np.array([1, 1, 1, 1, 0], dtype=bool)
-                obj_forces = jnp.logical_and(obj_forces, orthogonal_mask)
+                obj_forces = jnp.logical_and(obj_forces, self.orthogonal_force_mask_jnp)
             force_idx = jnp.argwhere(obj_forces, size=1, fill_value=-1)[0, 0]
             obj_active = obj_is_present & (force_idx != -1)
 
@@ -2524,6 +2591,10 @@ class PuzzleJaxEnv:
                     patch = jax.lax.dynamic_slice(
                         lvl, (0, 0, xy[0], xy[1]), (1, n_chan, ph, pw)
                     )[0]  # (C, ph, pw)
+                    patch_valid = jnp.array(True)
+                    if self._is_multi_level:
+                        valid_patch = patch[-1]
+                        patch_valid = jnp.all(valid_patch)
                     cell_outs = []
                     patch_active = True
                     for ci, cell_fn in enumerate(_cell_detection_fns):
@@ -2550,7 +2621,7 @@ class PuzzleJaxEnv:
                         detected_meta_objs=det_meta,
                         detected_moving_idx=det_mov,
                     )
-                    return patch_active, cell_outs, k_out
+                    return patch_active & patch_valid, cell_outs, k_out
 
                 def project_at_xy(rng, lvl, xy, cell_detect_outs_pt, kernel_detect_out_pt, pattern_detect_out_pt):
                     out_cell_idxs = np.indices(_in_patch_shape).transpose(1, 2, 0)
@@ -3244,7 +3315,10 @@ class PuzzleJaxEnv:
                 turn_applied = jnp.any(lvl[:, :self.n_objs] != init_lvl[:, :self.n_objs])
                 win_turn, score, heuristic = self.check_win(lvl[0])
                 win = win | win_turn
-                lvl = lvl.at[:, self.n_objs:].set(False)  # Remove leftover forces
+                if self._is_multi_level:
+                    lvl = lvl.at[:, self.n_objs:-1].set(False)  # Remove leftover forces, keep valid-mask channel
+                else:
+                    lvl = lvl.at[:, self.n_objs:].set(False)  # Remove leftover forces
 
                 new_carry = (lvl, turn_applied, turn_app_i, cancelled, restart, block_again, win, rng)
                 # If cancelled, revert to the previous carry (pre-iteration).
@@ -3292,6 +3366,8 @@ class PuzzleJaxEnv:
         """
             subkernel_detection_fns: List of functions that detect the subkernels in the line kernel. These need to be detected in sequence, along some line.
         """
+        if self._is_multi_level:
+            valid_mask = lvl[0, -1]
         subkernel_activations = []
         cell_activations = []
         subkernel_cell_detect_outs = []
@@ -3395,6 +3471,8 @@ class PuzzleJaxEnv:
 
         kernel_activations = per_line_subkernel_activations.any(axis=(0,1))
         cell_activations = per_line_cell_activations.any(axis=(0,1))
+        if self._is_multi_level:
+            cell_activations = cell_activations & valid_mask
 
         # Don't register meta-objects where the kernel is not detected.
         # FIXME: Won't this break if the kernel is not 1x1 shape and we detect something in a cell beyond the first?
@@ -3451,6 +3529,8 @@ class PuzzleJaxEnv:
 
     def detect_kernel(self, lvl, cell_detection_fns, lp_is_vertical, lp_is_horizontal, lp_is_single, in_patch_shape, lp,
                       rule_name: str):
+        if self._is_multi_level:
+            valid_mask = lvl[0, -1]
         n_chan = lvl.shape[1]
         # @jax.jit
         def detect_cells(in_patch: chex.Array):
@@ -3474,6 +3554,9 @@ class PuzzleJaxEnv:
         patches = patches[0]
         # patches = rearrange(patches, "c h w -> h w c")
         patches = patches.transpose(1, 2, 0)
+        if self._is_multi_level:
+            valid_patches = _extract_bool_patches(valid_mask[None, None], in_patch_shape)[0]
+            valid_kernel_positions = jnp.all(valid_patches, axis=0)
 
         if self.jit and self.vmap:
             kernel_activations, cell_detect_outs = jax.vmap(jax.vmap(detect_cells))(patches)
@@ -3489,6 +3572,9 @@ class PuzzleJaxEnv:
                     kernel_activations = kernel_activations.at[i, j].set(patch_active)
                     cell_detect_outs[j][i] = cell_out
             cell_detect_outs = stack_leaves(stack_leaves(cell_detect_outs))
+
+        if self._is_multi_level:
+            kernel_activations = kernel_activations & valid_kernel_positions
 
         # eliminate all but one activation
         kernel_detected = kernel_activations.sum() > 0
@@ -3536,6 +3622,8 @@ class PuzzleJaxEnv:
         )
         
         cell_activations = flood_kernel_activations_to_cells(cell_activations, in_patch_shape)
+        if self._is_multi_level:
+            cell_activations = cell_activations & valid_mask
         assert cell_activations.shape == lvl.shape[2:], (cell_activations.shape, lvl.shape[2:])
 
         return kernel_activations, cell_activations, cell_detect_outs, kernel_detect_out
@@ -3652,7 +3740,10 @@ class PuzzleJaxEnv:
         # Upper bound on the number of forces that might exist in the level at any given time.
         n_layers = len(self.collision_layers)
         max_possible_forces = n_layers * lvl.shape[2] * lvl.shape[3]
-        force_arr = lvl[0, n_objs:-1]
+        if self._is_multi_level:
+            force_arr = lvl[0, n_objs:-1]
+        else:
+            force_arr = lvl[0, n_objs:]
         # Mask out all forces corresponding to ACTION.
         force_mask = np.ones((force_arr.shape[0],), dtype=bool)
         force_mask[ACTION::N_FORCES] = 0
@@ -3669,9 +3760,7 @@ class PuzzleJaxEnv:
             y, x, c = coords[i]
             coll_layer_idx = c // (N_FORCES - 1)
             layer_obj_mask = jnp.array(self.layer_masks)[coll_layer_idx]
-            obj_idx = jnp.argwhere(
-                jnp.where(layer_obj_mask, lvl[0, :self.n_objs, x, y], False), size=1, fill_value=-1
-            )[0,0]
+            obj_idx = _first_true_idx_large(jnp.where(layer_obj_mask, lvl[0, :self.n_objs, x, y], False))
             obj_exists = obj_idx != -1
             new_lvl = jax.lax.dynamic_update_slice(
                 lvl,
@@ -3704,9 +3793,7 @@ class PuzzleJaxEnv:
             n_prior_objs = jnp.array(self.n_objs_prior_to_layer)[coll_layer_idx]
             layer_obj_mask = jnp.array(self.layer_masks)[coll_layer_idx]
             # obj_idx = n_prior_objs + jnp.argwhere(lvl[0, n_prior_objs: n_prior_objs + n_layer_objs, x, y])
-            obj_idx = jnp.argwhere(
-                jnp.where(layer_obj_mask, lvl[0, :self.n_objs, x, y], False), size=1, fill_value=-1
-            )[0,0]
+            obj_idx = _first_true_idx_large(jnp.where(layer_obj_mask, lvl[0, :self.n_objs, x, y], False))
             obj_exists = obj_idx != -1
             # Determine where the object would move and whether such a move would be legal.
             forces_to_deltas = jnp.array([[0, -1], [1, 0], [0, 1], [-1, 0]])
@@ -3714,10 +3801,14 @@ class PuzzleJaxEnv:
             x_1, y_1 = x + delta[0], y + delta[1]
             would_collide = jnp.any(lvl[0, :n_objs, x_1, y_1] & coll_mat[obj_idx])
             out_of_bounds = (x_1 < 0) | (x_1 >= lvl.shape[2]) | (y_1 < 0) | (y_1 >= lvl.shape[3])
-            can_move = obj_exists & is_force_present & ~would_collide & ~out_of_bounds
+            if self._is_multi_level:
+                target_valid = lvl[0, -1, x_1, y_1]
+            else:
+                target_valid = True
+            can_move = obj_exists & is_force_present & ~would_collide & ~out_of_bounds & target_valid
             # Now, in the new level, move the object in the direction of the force.
             new_lvl = lvl.at[0, obj_idx, x, y].set(False)
-            new_lvl = new_lvl.at[0, obj_idx,  x_1, y_1].set(True)
+            new_lvl = new_lvl.at[0, obj_idx, x_1, y_1].set(True)
 
             # And remove any forces that were applied to the object before it moved.
             new_lvl = jax.lax.dynamic_update_slice(
@@ -4332,7 +4423,6 @@ def is_line_detector_in_kernel(kernel):
 def generate_index_sequences(N, M, rot):
     # assert N <= M, f"N ({N}) must be less than or equal to M ({M})"
     
-    valid_indices = list(range(N))
     result = []
 
     # Probably a faster way to do this from "within" this combination-generating function.
@@ -4347,13 +4437,10 @@ def generate_index_sequences(N, M, rot):
 
     # Step 1: Choose positions in the M-length vector to place the N valid indices
     for positions in positions_lst:
-        # Step 2: Generate increasing permutations of valid indices (fixed order)
-        for values in itertools.permutations(valid_indices,):
-            if list(values) != sorted(values):
-                continue  # skip non-increasing permutations
-            arr = np.full(M, -1, dtype=int)
-            arr[list(positions)] = values
-            result.append(arr)
+        # There is only one increasing assignment of indices 0..N-1.
+        arr = np.full(M, -1, dtype=int)
+        arr[list(positions)] = np.arange(N, dtype=int)
+        result.append(arr)
     
     return np.array(result)
 
