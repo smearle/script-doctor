@@ -1,6 +1,8 @@
 #pragma once
 #include <cstdint>
+#include <optional>
 #include <string>
+#include <array>
 #include <vector>
 
 /**
@@ -27,6 +29,12 @@ public:
     /// Load sprite data from JSON string (from serializeSpriteDataJSON).
     bool loadSpriteData(const std::string& json_str);
 
+    /// Load render config from compiled game JSON (player mask, screen metadata).
+    bool loadRenderConfig(const std::string& json_str);
+
+    /// Reset cached viewport state for a newly loaded level.
+    void resetViewport(int level_width, int level_height);
+
     /// Is sprite data loaded?
     bool ready() const { return !sprites_.empty(); }
 
@@ -51,12 +59,23 @@ public:
     std::vector<uint8_t> renderFromObs(
         const uint8_t* obs, int n_objs, int height, int width) const;
 
+    std::pair<int, int> getRenderGridSize(
+        const int32_t* objects, int width, int height, int n_objs) const;
+
 private:
     std::vector<SpriteInfo> sprites_;
     uint8_t bgcolor_[3] = {0, 0, 0};
     int cell_w_ = 5;
     int cell_h_ = 5;
+    std::vector<int32_t> player_mask_words_;
+    bool player_mask_aggregate_ = false;
+    std::optional<std::pair<int, int>> flickscreen_;
+    std::optional<std::pair<int, int>> zoomscreen_;
+    mutable std::array<int, 4> old_bounds_ = {0, 0, 0, 0};
+    mutable bool has_old_bounds_ = false;
 
     static uint8_t hexCharVal(char c);
     static bool hexToRGB(const std::string& hex, uint8_t out[3]);
+    std::array<int, 4> getVisibleBounds(
+        const int32_t* objects, int width, int height, int n_objs) const;
 };

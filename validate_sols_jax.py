@@ -183,9 +183,8 @@ def main(cfg: JaxValidationConfig, games: Optional[List[str]] = None):
     backend = NodeJSPuzzleScriptBackend()
     engine = backend.engine
     solver = backend.solver
-    if cfg.slurm:
-        os.environ["CUDA_VISIBLE_DEVICES"] = ""
-        os.environ["JAX_PLATFORMS"] = "cpu"
+    os.environ["CUDA_VISIBLE_DEVICES"] = ""
+    os.environ["JAX_PLATFORMS"] = "cpu"
     # Initialize the Lark parser with the PuzzleScript grammar
     with open(LARK_SYNTAX_PATH, "r", encoding='utf-8') as file:
         puzzlescript_grammar = file.read()
@@ -628,7 +627,7 @@ def main(cfg: JaxValidationConfig, games: Optional[List[str]] = None):
                         level_i=level_i,
                         actions=level_sol,
                         gif_path=js_gif_path,
-                        frame_duration_s=1.0,
+                        frame_duration_s=0.3,
                     )
                 except Exception:
                     print(f"Failed to generate JS gif for level {level_i}")

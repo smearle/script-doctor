@@ -347,7 +347,7 @@ def main():
                                  'deepseek-r1', 'llama',
                                  'vllm', 'vllm-qwen3', 'vllm-qwen3-4b', 'vllm-qwen3-30b', 'vllm-qwen3-32b',
                                  'vllm-llama3', 'vllm-llama3-70b', 'vllm-mistral',
-                                 'vllm-deepseek', 'vllm-deepseek-r1'])
+                                 'vllm-deepseek', 'vllm-deepseek-r1', 'vllm-qwen3.5-27b-fp8'])
     parser.add_argument('--max_steps', type=int, default=100)
     parser.add_argument('--num_runs', type=int, default=10)
     parser.add_argument('--reverse', action='store_true')

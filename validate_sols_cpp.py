@@ -18,6 +18,7 @@ from lark import Lark
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from conf.config import CppValidationConfig
+from backends import NodeJSPuzzleScriptBackend
 from puzzlescript_jax.globals import CPP_VALIDATED_JS_SOLS_DIR, DATA_DIR, JS_SOLS_DIR, LARK_SYNTAX_PATH
 from puzzlescript_jax.preprocessing import SIMPLIFIED_GAMES_DIR, get_tree_from_txt
 from puzzlescript_jax.utils import get_list_of_games_for_testing
@@ -31,20 +32,13 @@ def _dedupe_preserve_order(items, key_fn=None):
     return list(seen.values())
 
 
-def _make_renderer(js_engine):
+def _make_renderer(js_engine, compiled_json):
     from puzzlescript_cpp import Renderer
 
     renderer = Renderer()
     renderer.load_sprite_data(str(js_engine.serializeSpriteDataJSON()))
+    renderer.load_render_config(compiled_json)
     return renderer
-
-
-def _js_render_objects(js_engine, objects_flat, grid_w, grid_h):
-    result = js_engine.renderFrameFromObjects(objects_flat, grid_w, grid_h)
-    width = int(result["width"])
-    height = int(result["height"])
-    data = list(result["data"])
-    return np.array(data, dtype=np.uint8).reshape((height, width, 3))
 
 
 def _make_side_by_side_frames(left_frames, right_frames, separator_w=2):
@@ -104,8 +98,8 @@ def replay_actions_js(js_engine, actions, game_text, level_i):
     js_winning = []
     max_again = 50
 
-    level = js_engine.getLevel()
-    js_states.append(list(level["objects"]))
+    level = js_engine.backupLevel()
+    js_states.append(list(level["dat"]))
     js_winning.append(bool(js_engine.getWinning()))
 
     for action in actions:
@@ -113,9 +107,9 @@ def replay_actions_js(js_engine, actions, game_text, level_i):
         again_steps = 0
         while bool(js_engine.getAgaining()) and again_steps < max_again:
             js_engine.processInput(-1)
-            again_steps += 1
-        level = js_engine.getLevel()
-        js_states.append(list(level["objects"]))
+        again_steps += 1
+        level = js_engine.backupLevel()
+        js_states.append(list(level["dat"]))
         js_winning.append(bool(js_engine.getWinning()))
 
     return js_states, js_winning
@@ -241,15 +235,13 @@ def main_launch(cfg: CppValidationConfig):
 
 
 def main(cfg: CppValidationConfig, games: Optional[List[str]] = None):
-    from javascript import require
     import puzzlescript_cpp._puzzlescript_cpp as ps
 
     if cfg.slurm:
         os.environ["CUDA_VISIBLE_DEVICES"] = ""
 
-    root_dir = os.path.dirname(os.path.abspath(__file__))
-    engine_path = os.path.join(root_dir, "puzzlescript_nodejs", "puzzlescript", "engine.js")
-    js_engine = require(engine_path)
+    backend = NodeJSPuzzleScriptBackend()
+    js_engine = backend.engine
     cpp_engine = ps.Engine()
 
     with open(LARK_SYNTAX_PATH, "r", encoding="utf-8") as f:
@@ -354,7 +346,7 @@ def main(cfg: CppValidationConfig, games: Optional[List[str]] = None):
             n_objs = None
             if cfg.render:
                 try:
-                    cpp_renderer = _make_renderer(js_engine)
+                    cpp_renderer = _make_renderer(js_engine, serialized_json)
                     cpp_engine.load_from_json(serialized_json)
                     cpp_engine.load_level(0)
                     n_objs = cpp_engine.get_object_count()
@@ -511,16 +503,29 @@ def main(cfg: CppValidationConfig, games: Optional[List[str]] = None):
                     cpp_engine.load_level(level_i)
                     width = cpp_engine.get_width()
                     height = cpp_engine.get_height()
-                    js_frames = [_js_render_objects(js_engine, state, width, height) for state in js_states]
+                    cpp_renderer.reset_viewport(width, height)
+                    print(f"Rendering level {level_i} with grid size {width}x{height} and {n_objs} objects in JS engine.")
+                    backend.render_gif(
+                        game_text=game_text,
+                        level_i=level_i,
+                        actions=actions,
+                        gif_path=js_gif_path,
+                        frame_duration_s=0.3,
+                        scale=1,
+                    )
+                    js_frames = [
+                        np.asarray(frame, dtype=np.uint8)[..., :3]
+                        for frame in imageio.mimread(js_gif_path)
+                    ]
+                    print(f"Rendering in C++ engine.")
                     cpp_frames = [
                         cpp_renderer.render_objects(np.array(state, dtype=np.int32), width, height, n_objs)
                         for state in cpp_states
                     ]
                     compare_frames = _make_side_by_side_frames(js_frames, cpp_frames)
-                    make_gif(js_frames, js_gif_path, scale=cfg.render_scale, duration=0.5)
-                    make_gif(cpp_frames, cpp_gif_path, scale=cfg.render_scale, duration=0.5)
+                    make_gif(cpp_frames, cpp_gif_path, scale=1, duration=0.5)
                     if compare_frames:
-                        make_gif(compare_frames, compare_gif_path, scale=cfg.render_scale, duration=0.5)
+                        make_gif(compare_frames, compare_gif_path, scale=1, duration=0.5)
                     print(f"Rendered level {level_i} GIFs to {cpp_sol_dir}")
 
             except KeyboardInterrupt:

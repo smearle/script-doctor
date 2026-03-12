@@ -207,6 +207,12 @@ PYBIND11_MODULE(_puzzlescript_cpp, m) {
         .def("load_sprite_data", &Renderer::loadSpriteData,
              py::arg("json_str"),
              "Load sprite data from JSON produced by serializeSpriteDataJSON()")
+        .def("load_render_config", &Renderer::loadRenderConfig,
+             py::arg("json_str"),
+             "Load player mask and screen metadata from compiled game JSON")
+        .def("reset_viewport", &Renderer::resetViewport,
+             py::arg("level_width"), py::arg("level_height"),
+             "Reset cached viewport state for a newly loaded level")
         .def("ready", &Renderer::ready,
              "Whether sprite data has been loaded")
         .def_property_readonly("cell_width", &Renderer::cellWidth)
@@ -217,9 +223,10 @@ PYBIND11_MODULE(_puzzlescript_cpp, m) {
             int w = e.getWidth();
             int h = e.getHeight();
             int n_objs = e.getObjectCount();
+            auto [grid_w, grid_h] = r.getRenderGridSize(objs.data(), w, h, n_objs);
             auto frame = r.renderFromObjects(objs.data(), w, h, n_objs);
-            int fh = h * r.cellHeight();
-            int fw = w * r.cellWidth();
+            int fh = grid_h * r.cellHeight();
+            int fw = grid_w * r.cellWidth();
             return py::array_t<uint8_t>(
                 {static_cast<py::ssize_t>(fh),
                  static_cast<py::ssize_t>(fw),
@@ -249,9 +256,10 @@ PYBIND11_MODULE(_puzzlescript_cpp, m) {
                                   int width, int height, int n_objs) {
             auto buf = objects.request();
             const int32_t* ptr = static_cast<const int32_t*>(buf.ptr);
+            auto [grid_w, grid_h] = r.getRenderGridSize(ptr, width, height, n_objs);
             auto frame = r.renderFromObjects(ptr, width, height, n_objs);
-            int fh = height * r.cellHeight();
-            int fw = width  * r.cellWidth();
+            int fh = grid_h * r.cellHeight();
+            int fw = grid_w * r.cellWidth();
             return py::array_t<uint8_t>(
                 {static_cast<py::ssize_t>(fh),
                  static_cast<py::ssize_t>(fw),

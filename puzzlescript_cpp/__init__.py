@@ -176,6 +176,7 @@ class CppPuzzleScriptBackend:
         self.cpp_engine.load_from_json(json_str)
         renderer = self._ensure_renderer()
         renderer.load_sprite_data(str(self._js_engine.serializeSpriteDataJSON()))
+        renderer.load_render_config(json_str)
         return game_text
 
     def compile_and_serialize(self, parser: Any, game: str) -> str:
@@ -188,10 +189,14 @@ class CppPuzzleScriptBackend:
     def load_from_json(self, json_str: str) -> None:
         """Load a pre-compiled game state from JSON."""
         self.cpp_engine.load_from_json(json_str)
+        renderer = self._ensure_renderer()
+        renderer.load_render_config(json_str)
 
     def load_level(self, game_text: str, level_i: int) -> None:
         """Load a level. Note: game must already be compiled."""
         self.cpp_engine.load_level(level_i)
+        renderer = self._ensure_renderer()
+        renderer.reset_viewport(self.cpp_engine.width, self.cpp_engine.height)
 
     def unload_game(self) -> None:
         self.cpp_engine = CppPuzzleScriptEngine()

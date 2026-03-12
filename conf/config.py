@@ -38,7 +38,7 @@ class CppValidationConfig(PSConfig):
     random_order: bool = False
     include_test_games: bool = True
     render: bool = True
-    render_scale: int = 4
+    render_scale: int = 1
     render_mismatches_only: bool = False
     output_dir: str = "data/cpp_validated_js_sols"
     

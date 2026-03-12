@@ -182,6 +182,43 @@ def _strip_thinking_block(text: str) -> str:
     return re.sub(r"<think>.*?</think>", "", text, flags=re.DOTALL).strip()
 
 
+def _discover_vllm_models(server_url: str, headers: dict, timeout: int) -> list[str]:
+    """Return model ids exposed by the vLLM OpenAI-compatible server."""
+    import requests as _requests
+
+    try:
+        resp = _requests.get(f"{server_url}/models", headers=headers, timeout=timeout)
+        if resp.status_code != 200:
+            print(f"vLLM model discovery failed (status {resp.status_code}): {resp.text[:500]}")
+            return []
+        data = resp.json()
+        models = data.get("data", [])
+        model_ids = [m.get("id") for m in models if isinstance(m, dict) and m.get("id")]
+        if model_ids:
+            print(f"vLLM server exposes models: {', '.join(model_ids)}")
+        return model_ids
+    except _requests.exceptions.RequestException as e:
+        print(f"vLLM model discovery request failed: {e}")
+        return []
+
+
+def _choose_vllm_model(server_url: str, headers: dict, timeout: int,
+                       requested_model: str | None) -> str | None:
+    """Choose a served model name, preferring the requested one when available."""
+    available_models = _discover_vllm_models(server_url, headers, timeout)
+    if not available_models:
+        return requested_model
+    if requested_model in available_models:
+        return requested_model
+    fallback_model = available_models[0]
+    if requested_model:
+        print(
+            f"Requested model '{requested_model}' is unavailable; "
+            f"using served model '{fallback_model}'."
+        )
+    return fallback_model
+
+
 def _vllm_text_query(system_prompt, prompt, model_name, base_url=None, max_retries=5,
                      timeout=300, temperature=0.7, max_tokens=4096,
                      enable_thinking=None, strip_thinking=True):
@@ -218,7 +255,11 @@ def _vllm_text_query(system_prompt, prompt, model_name, base_url=None, max_retri
 
     server_url = base_url or os.environ.get("VLLM_BASE_URL", "http://localhost:8000/v1")
     server_url = server_url.rstrip("/")
-    resolved_model = model_name or os.environ.get("VLLM_MODEL", "")
+    resolved_model = (
+        model_name
+        or os.environ.get("VLLM_SERVED_MODEL_NAME", "")
+        or os.environ.get("VLLM_MODEL", "")
+    )
     if not resolved_model:
         raise ValueError(
             "No model name provided for vLLM backend. Set VLLM_MODEL or pass a "
@@ -246,6 +287,12 @@ def _vllm_text_query(system_prompt, prompt, model_name, base_url=None, max_retri
         "Authorization": f"Bearer {api_key}",
     }
 
+    # Single-model local vLLM servers are common in this repo. Probe `/models`
+    # once up front so alias defaults do not fail when the server was started
+    # with a different served model name than the CLI alias implies.
+    resolved_model = _choose_vllm_model(server_url, req_headers, timeout, resolved_model)
+    payload["model"] = resolved_model
+
     base_wait = 5
     for attempt in range(max_retries):
         try:
@@ -263,6 +310,12 @@ def _vllm_text_query(system_prompt, prompt, model_name, base_url=None, max_retri
                     text = _strip_thinking_block(text)
                 print("vLLM query completed successfully.")
                 return text
+            if resp.status_code == 404:
+                fallback_model = _choose_vllm_model(server_url, req_headers, timeout, resolved_model)
+                if fallback_model and fallback_model != resolved_model:
+                    resolved_model = fallback_model
+                    payload["model"] = resolved_model
+                    continue
             # Log and fall through to retry
             print(f"vLLM request failed (status {resp.status_code}): {resp.text[:500]}")
         except _requests.exceptions.Timeout:
@@ -290,6 +343,7 @@ _VLLM_MODEL_ALIASES = {
     "vllm_qwen3-8b": "Qwen/Qwen3-8B",
     "vllm-qwen3-30b": "Qwen/Qwen3-30B-A3B",
     "vllm-qwen3-32b": "Qwen/Qwen3-32B",
+    "vllm-qwen3.5-27b-fp8": "Qwen/Qwen3.5-27B-FP8",
     # Llama models
     "vllm-llama3": "meta-llama/Llama-3.1-8B-Instruct",
     "vllm-llama3-70b": "meta-llama/Llama-3.1-70B-Instruct",
@@ -308,7 +362,7 @@ def resolve_vllm_model(alias: str) -> str:
     if name is not None:
         return name
     # For the bare 'vllm' alias or unknown sub-aliases, defer to env.
-    return os.environ.get("VLLM_MODEL", alias)
+    return os.environ.get("VLLM_SERVED_MODEL_NAME") or os.environ.get("VLLM_MODEL", alias)
 
 
 def llm_text_query(system_prompt, prompt, model, api_key=None, base_url=None,

@@ -1,6 +1,7 @@
 #include "renderer.h"
 #include "json.hpp"
 
+#include <algorithm>
 #include <cstring>
 #include <stdexcept>
 
@@ -125,14 +126,154 @@ bool Renderer::loadSpriteData(const std::string& json_str) {
     return true;
 }
 
+bool Renderer::loadRenderConfig(const std::string& json_str) {
+    json j;
+    try {
+        j = json::parse(json_str);
+    } catch (...) {
+        return false;
+    }
+
+    player_mask_words_.clear();
+    player_mask_aggregate_ = false;
+    flickscreen_.reset();
+    zoomscreen_.reset();
+    has_old_bounds_ = false;
+
+    if (j.contains("playerMask") && j["playerMask"].is_array() && j["playerMask"].size() == 2) {
+        player_mask_aggregate_ = j["playerMask"][0].get<bool>();
+        if (j["playerMask"][1].is_array()) {
+            for (const auto& word : j["playerMask"][1]) {
+                player_mask_words_.push_back(word.get<int32_t>());
+            }
+        }
+    }
+
+    if (j.contains("metadata") && j["metadata"].is_object()) {
+        const auto& metadata = j["metadata"];
+        if (metadata.contains("flickscreen") && metadata["flickscreen"].is_array() && metadata["flickscreen"].size() == 2) {
+            flickscreen_ = std::make_pair(metadata["flickscreen"][0].get<int>(), metadata["flickscreen"][1].get<int>());
+        }
+        if (metadata.contains("zoomscreen") && metadata["zoomscreen"].is_array() && metadata["zoomscreen"].size() == 2) {
+            zoomscreen_ = std::make_pair(metadata["zoomscreen"][0].get<int>(), metadata["zoomscreen"][1].get<int>());
+        }
+    }
+
+    return true;
+}
+
+void Renderer::resetViewport(int level_width, int level_height) {
+    if (flickscreen_.has_value()) {
+        old_bounds_ = {
+            0,
+            0,
+            std::min(flickscreen_->first, level_width),
+            std::min(flickscreen_->second, level_height),
+        };
+        has_old_bounds_ = true;
+        return;
+    }
+    if (zoomscreen_.has_value()) {
+        old_bounds_ = {
+            0,
+            0,
+            std::min(zoomscreen_->first, level_width),
+            std::min(zoomscreen_->second, level_height),
+        };
+        has_old_bounds_ = true;
+        return;
+    }
+    old_bounds_ = {0, 0, level_width, level_height};
+    has_old_bounds_ = false;
+}
+
+std::array<int, 4> Renderer::getVisibleBounds(
+    const int32_t* objects, int width, int height, int n_objs) const
+{
+    if (!flickscreen_.has_value() && !zoomscreen_.has_value()) {
+        return {0, 0, width, height};
+    }
+
+    const int stride_obj = (n_objs + 31) / 32;
+    int player_position = -1;
+    for (int x = 0; x < width && player_position < 0; ++x) {
+        for (int y = 0; y < height; ++y) {
+            const int flat_idx = (x * height + y) * stride_obj;
+            bool matches = player_mask_aggregate_;
+            if (player_mask_aggregate_) {
+                for (int word = 0; word < static_cast<int>(player_mask_words_.size()); ++word) {
+                    if ((player_mask_words_[word] & objects[flat_idx + word]) != player_mask_words_[word]) {
+                        matches = false;
+                        break;
+                    }
+                }
+            } else {
+                matches = false;
+                for (int word = 0; word < static_cast<int>(player_mask_words_.size()); ++word) {
+                    if (player_mask_words_[word] & objects[flat_idx + word]) {
+                        matches = true;
+                        break;
+                    }
+                }
+            }
+            if (matches) {
+                player_position = y + x * height;
+                break;
+            }
+        }
+    }
+
+    if (player_position >= 0) {
+        const int px = player_position / height;
+        const int py = player_position % height;
+        if (flickscreen_.has_value()) {
+            const int screen_width = flickscreen_->first;
+            const int screen_height = flickscreen_->second;
+            const int mini = (px / screen_width) * screen_width;
+            const int minj = (py / screen_height) * screen_height;
+            old_bounds_ = {
+                mini,
+                minj,
+                std::min(mini + screen_width, width),
+                std::min(minj + screen_height, height),
+            };
+        } else {
+            const int screen_width = zoomscreen_->first;
+            const int screen_height = zoomscreen_->second;
+            const int mini = std::max(std::min(px - screen_width / 2, width - screen_width), 0);
+            const int minj = std::max(std::min(py - screen_height / 2, height - screen_height), 0);
+            old_bounds_ = {
+                mini,
+                minj,
+                std::min(mini + screen_width, width),
+                std::min(minj + screen_height, height),
+            };
+        }
+        has_old_bounds_ = true;
+        return old_bounds_;
+    }
+
+    if (has_old_bounds_) {
+        return old_bounds_;
+    }
+    return {0, 0, width, height};
+}
+
 // ============================================================
 // renderFromObjects  (raw column-major objects array from Engine)
 // ============================================================
 std::vector<uint8_t> Renderer::renderFromObjects(
     const int32_t* objects, int width, int height, int n_objs) const
 {
-    int frame_h = height * cell_h_;
-    int frame_w = width  * cell_w_;
+    const auto bounds = getVisibleBounds(objects, width, height, n_objs);
+    const int mini = bounds[0];
+    const int minj = bounds[1];
+    const int maxi = bounds[2];
+    const int maxj = bounds[3];
+    const int view_w = std::max(maxi - mini, 0);
+    const int view_h = std::max(maxj - minj, 0);
+    int frame_h = view_h * cell_h_;
+    int frame_w = view_w * cell_w_;
     std::vector<uint8_t> frame(frame_h * frame_w * 3);
 
     // Fill with bgcolor
@@ -144,8 +285,8 @@ std::vector<uint8_t> Renderer::renderFromObjects(
 
     int stride_obj = (n_objs + 31) / 32;
 
-    for (int x = 0; x < width; ++x) {
-        for (int y = 0; y < height; ++y) {
+    for (int x = mini; x < maxi; ++x) {
+        for (int y = minj; y < maxj; ++y) {
             int flat_idx = (x * height + y) * stride_obj;
 
             // Gather which objects are present at this cell
@@ -156,8 +297,8 @@ std::vector<uint8_t> Renderer::renderFromObjects(
                 if (!(objects[flat_idx + word] & (1 << bit))) continue;
 
                 const SpriteInfo& spr = sprites_[obj_id];
-                int px = x * cell_w_;
-                int py = y * cell_h_;
+                int px = (x - mini) * cell_w_;
+                int py = (y - minj) * cell_h_;
 
                 for (int sr = 0; sr < spr.cell_h && (py + sr) < frame_h; ++sr) {
                     for (int sc = 0; sc < spr.cell_w && (px + sc) < frame_w; ++sc) {
@@ -219,4 +360,14 @@ std::vector<uint8_t> Renderer::renderFromObs(
     }
 
     return frame;
+}
+
+std::pair<int, int> Renderer::getRenderGridSize(
+    const int32_t* objects, int width, int height, int n_objs) const
+{
+    const auto bounds = getVisibleBounds(objects, width, height, n_objs);
+    return {
+        std::max(bounds[2] - bounds[0], 0),
+        std::max(bounds[3] - bounds[1], 0),
+    };
 }

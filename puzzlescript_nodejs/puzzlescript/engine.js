@@ -302,6 +302,8 @@ function serializeCompiledState() {
             const v = s.metadata[k_meta];
             if (typeof v === 'string' || typeof v === 'number' || typeof v === 'boolean') {
                 result.metadata[k_meta] = v;
+            } else if (Array.isArray(v) && v.every(item => typeof item === 'number')) {
+                result.metadata[k_meta] = Array.from(v);
             }
         }
     }
@@ -319,6 +321,81 @@ function serializeLevel(levelIndex) {
         layerCount: lv.layerCount,
         objects: Array.from(lv.objects),
     };
+}
+
+function _playerMatchesCell(cellWords) {
+    const playerMask = state.playerMask[1];
+    if (state.playerMask[0]) {
+        for (let i = 0; i < playerMask.data.length; i++) {
+            if ((playerMask.data[i] & cellWords[i]) !== playerMask.data[i]) {
+                return false;
+            }
+        }
+        return true;
+    }
+    for (let i = 0; i < playerMask.data.length; i++) {
+        if (playerMask.data[i] & cellWords[i]) {
+            return true;
+        }
+    }
+    return false;
+}
+
+function _getVisibleBounds(lv, objArr) {
+    let mini = 0;
+    let minj = 0;
+    let maxi = lv.width;
+    let maxj = lv.height;
+    const metadata = state.metadata || {};
+    const flickscreen = metadata.flickscreen;
+    const zoomscreen = metadata.zoomscreen;
+
+    if (flickscreen === undefined && zoomscreen === undefined) {
+        return { mini, minj, maxi, maxj };
+    }
+
+    const rawBounds = Array.isArray(lv.oldflickscreendat) ? lv.oldflickscreendat : [];
+    const prevBounds = rawBounds.length === 4 ? rawBounds.map(v => v | 0) : null;
+
+    let playerPosition = -1;
+    const cellWords = new Array(STRIDE_OBJ);
+    for (let x = 0; x < lv.width && playerPosition < 0; x++) {
+        for (let y = 0; y < lv.height; y++) {
+            const posIndex = y + x * lv.height;
+            const baseIdx = posIndex * STRIDE_OBJ;
+            for (let word = 0; word < STRIDE_OBJ; word++) {
+                cellWords[word] = objArr[baseIdx + word];
+            }
+            if (_playerMatchesCell(cellWords)) {
+                playerPosition = posIndex;
+                break;
+            }
+        }
+    }
+
+    if (playerPosition >= 0) {
+        const px = (playerPosition / lv.height) | 0;
+        const py = playerPosition % lv.height;
+        if (flickscreen !== undefined) {
+            const screenWidth = flickscreen[0] | 0;
+            const screenHeight = flickscreen[1] | 0;
+            mini = (((px / screenWidth) | 0) * screenWidth);
+            minj = (((py / screenHeight) | 0) * screenHeight);
+            maxi = Math.min(mini + screenWidth, lv.width);
+            maxj = Math.min(minj + screenHeight, lv.height);
+        } else {
+            const screenWidth = zoomscreen[0] | 0;
+            const screenHeight = zoomscreen[1] | 0;
+            mini = Math.max(Math.min(px - ((screenWidth / 2) | 0), lv.width - screenWidth), 0);
+            minj = Math.max(Math.min(py - ((screenHeight / 2) | 0), lv.height - screenHeight), 0);
+            maxi = Math.min(mini + screenWidth, lv.width);
+            maxj = Math.min(minj + screenHeight, lv.height);
+        }
+    } else if (prevBounds !== null) {
+        [mini, minj, maxi, maxj] = prevBounds;
+    }
+
+    return { mini, minj, maxi, maxj };
 }
 
 globalThis.__PS_NODE_API__ = {
@@ -379,6 +456,9 @@ globalThis.__PS_NODE_API__ = {
         const w = lv.width;
         const h = lv.height;
         const objectCount = state.objectCount;
+        const { mini, minj, maxi, maxj } = _getVisibleBounds(lv, objArr);
+        const viewW = Math.max(maxi - mini, 0);
+        const viewH = Math.max(maxj - minj, 0);
 
         // Parse hex color to [r,g,b]
         function hexToRGB(hex) {
@@ -433,8 +513,8 @@ globalThis.__PS_NODE_API__ = {
         const cellH = spriteData.length > 0 ? spriteData[0].ch : 5;
 
         // Allocate output frame
-        const frameW = w * cellW;
-        const frameH = h * cellH;
+        const frameW = viewW * cellW;
+        const frameH = viewH * cellH;
         const data = new Uint8Array(frameH * frameW * 3);
 
         // Fill background
@@ -449,8 +529,8 @@ globalThis.__PS_NODE_API__ = {
         //   for i (x/col) in [0, width), for j (y/row) in [0, height)
         //     posIndex = j + i * height  (column-major)
         //     for each object k, if bit set, composite sprite
-        for (let i = 0; i < w; i++) {
-            for (let j = 0; j < h; j++) {
+        for (let i = mini; i < maxi; i++) {
+            for (let j = minj; j < maxj; j++) {
                 const posIndex = j + i * h;
                 const baseIdx = posIndex * STRIDE_OBJ;
                 // Check if any bits are set (skip empty cells)
@@ -460,8 +540,8 @@ globalThis.__PS_NODE_API__ = {
                 }
                 if (!anySet) continue;
 
-                const px = i * cellW;
-                const py = j * cellH;
+                const px = (i - mini) * cellW;
+                const py = (j - minj) * cellH;
                 for (let k = 0; k < objectCount; k++) {
                     const word = k >> 5;    // k / 32
                     const bit = k & 31;     // k % 32
@@ -490,8 +570,9 @@ globalThis.__PS_NODE_API__ = {
             height: frameH,
             cellWidth: cellW,
             cellHeight: cellH,
-            gridWidth: w,
-            gridHeight: h,
+            gridWidth: viewW,
+            gridHeight: viewH,
+            visibleBounds: [mini, minj, maxi, maxj],
             data: Array.from(data),
         };
     },
