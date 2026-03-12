@@ -254,7 +254,7 @@ function serializeCompiledState() {
                 objects: Array.from(lv.objects),
             });
         } else {
-            levels.push({type: 'message', index: i});
+            levels.push({type: 'message', index: i, message: lv.message || ''});
         }
     }
 
@@ -404,6 +404,8 @@ globalThis.__PS_NODE_API__ = {
     restoreLevel,
     processInput,
     addUndoState,
+    DoUndo,
+    DoRestart,
     getWinning: () => winning,
     setWinning: (value) => { winning = value; },
     getLevel: () => level,
@@ -418,6 +420,10 @@ globalThis.__PS_NODE_API__ = {
     setHasUsedCheckpoint: (value) => { hasUsedCheckpoint = value; },
     get_o10: () => _o10,
     getNumLevels: () => state.levels.length,
+    getLevelInfo: () => state.levels.map((lv, i) => {
+        if (lv.objects) return { type: 'level', index: i };
+        return { type: 'message', index: i, message: lv.message || '' };
+    }),
     unloadGame,
     clearBackups: () => { backups = []; },
     serializeCompiledState,

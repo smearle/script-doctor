@@ -1,5 +1,6 @@
 from typing import Iterable, List, Dict, Optional, Tuple
-from ascii_prompting import build_game_action_prompt
+import re
+from ascii_prompting import build_game_action_prompt, build_human_like_prompt
 from puzzlescript_jax.utils import llm_text_query
 
 class LLMGameAgent:
@@ -60,7 +61,6 @@ class LLMGameAgent:
             return action_space[0]
 
         # Extract the first integer in the response as the action id
-        import re
         # Accept any valid action id from action_space
         action_pattern = r"\b(" + "|".join(str(a) for a in action_space) + r")\b"
         if not think_aloud:
@@ -73,3 +73,80 @@ class LLMGameAgent:
         # Fallback: pick the first action if LLM output is not as expected
         print(f"LLM response did not contain a valid action. Response: '{response}'. Falling back to the first action.")
         return action_space[0]
+
+    def choose_action_human(
+        self,
+        *,
+        title: str,
+        author: str,
+        legend_text: str,
+        ascii_map: str,
+        action_space: List[int],
+        action_meanings: Dict[int, str],
+        state_history: List,
+        history_limit: int,
+        scratchpad: str,
+        messages: Optional[List[str]] = None,
+        level_number: Optional[int] = None,
+        log_file: Optional[str] = None,
+    ) -> Tuple[int, str]:
+        """Human-like agent: no rules shown, uses scratchpad for reasoning.
+
+        Returns (action_id, updated_scratchpad).
+        """
+        system_prompt = (
+            "You are playing a puzzle game. You are not told the rules — you must "
+            "figure them out by experimenting and observing what happens. Use your "
+            "scratchpad to keep notes about what you've learned.\n"
+            "You MUST end your response with `ACTION: <id>` where <id> is one of "
+            "the available action ids."
+        )
+
+        prompt = build_human_like_prompt(
+            title=title,
+            author=author,
+            legend_text=legend_text,
+            ascii_map=ascii_map,
+            action_space=action_space,
+            action_meanings=action_meanings,
+            state_history=state_history,
+            history_limit=history_limit,
+            scratchpad=scratchpad,
+            messages=messages,
+            level_number=level_number,
+        )
+
+        response = llm_text_query(
+            system_prompt,
+            prompt,
+            model=self.model_name,
+            enable_thinking=self.enable_thinking,
+        )
+
+        if log_file is not None:
+            with open(log_file, "w", encoding="utf-8") as f:
+                f.write("System Prompt:\n")
+                f.write(system_prompt + "\n\n")
+                f.write("User Prompt:\n")
+                f.write(prompt + "\n\n")
+                f.write("LLM Response:\n")
+                f.write(response if response is not None else "No response (LLM query failed)\n")
+
+        if response is None:
+            print("LLM query failed after multiple retries. Falling back to the first action.")
+            return action_space[0], scratchpad
+
+        # Extract scratchpad update
+        new_scratchpad = scratchpad
+        sp_match = re.search(r"SCRATCHPAD:\s*(.*?)(?=\nACTION:|\Z)", response, re.DOTALL | re.IGNORECASE)
+        if sp_match:
+            new_scratchpad = sp_match.group(1).strip()
+
+        # Extract action
+        action_pattern = "|".join(str(a) for a in action_space)
+        match = re.search(r"ACTION:\s*(" + action_pattern + r")\b", response, re.IGNORECASE)
+        if match:
+            return int(match.group(1)), new_scratchpad
+
+        print(f"LLM response did not contain a valid action. Falling back to first action.")
+        return action_space[0], new_scratchpad

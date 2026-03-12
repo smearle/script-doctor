@@ -430,9 +430,17 @@ function getState(engine) {
 
 function takeAction(engine, action) {
   // precalcDistances(engine);
-  var changed = engine.processInput(action);
-  while (engine.getAgaining()) {
-    changed = engine.processInput(-1) || changed;
+  if (action === 5) {
+    // Undo
+    engine.DoUndo(false, true);
+  } else if (action === 6) {
+    // Restart
+    engine.DoRestart();
+  } else {
+    var changed = engine.processInput(action);
+    while (engine.getAgaining()) {
+      changed = engine.processInput(-1) || changed;
+    }
   }
   score = getScore(engine);
   level = engine.backupLevel();
@@ -1054,8 +1062,7 @@ class MCTSNode{
   simulate(engine, max_length, score_fn, win_bonus){
     let changes = 0;
     for(let i=0; i<max_length; i++){
-      // let changed = engine.processInput(Math.min(5, Math.floor(Math.random() * 6)));
-      let changed = processInputSearch(engine, Math.min(5, Math.floor(Math.random() * 6)));
+      let changed = processInputSearch(engine, Math.floor(Math.random() * 5));
       if(changed){
         changes += 1;
       }

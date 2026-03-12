@@ -104,6 +104,24 @@ class ASCIIStateFormatter:
 
         return "LEGEND:\n" + "\n".join(legend_lines) + "\n\nMAP:\n" + "\n".join(rows)
 
+    def render_map_only(self, name_grid):
+        """Render just the map lines (no legend header). Registers any new combos."""
+        rows = []
+        for row in name_grid:
+            row_chars = []
+            for combo in row:
+                char = self.char_for_combo(combo)
+                row_chars.append(char)
+            rows.append("".join(row_chars))
+        return "\n".join(rows)
+
+    def get_legend_text(self):
+        """Return the full legend string for all combos seen so far."""
+        legend_lines = []
+        for combo, char in self.combo_to_char.items():
+            legend_lines.append(f"{char}: {', '.join(combo)}")
+        return "LEGEND:\n" + "\n".join(legend_lines)
+
 
 def build_game_action_prompt(
     ascii_map,
@@ -140,5 +158,71 @@ def build_game_action_prompt(
         prompt_parts.append(
             "You may first reason about the problem, then output `ACTION: ID`, where `ID` is an integer from action_space."
         )
+
+    return "\n\n".join(prompt_parts)
+
+
+def build_human_like_prompt(
+    *,
+    title,
+    author,
+    legend_text,
+    ascii_map,
+    action_space,
+    action_meanings,
+    state_history,
+    history_limit,
+    scratchpad,
+    messages=None,
+    level_number=None,
+):
+    """Build a human-like game prompt: no rules, just title/author/legend/map/history/scratchpad."""
+    action_space_str = ", ".join(str(a) for a in action_space)
+    action_map_str = ", ".join(f"{k}={v}" for k, v in action_meanings.items())
+
+    prompt_parts = []
+
+    # Game identity
+    header = f"Game: {title}"
+    if author:
+        header += f"\nAuthor: {author}"
+    if level_number is not None:
+        header += f"\nLevel: {level_number}"
+    prompt_parts.append(header)
+
+    # Messages (shown between levels)
+    if messages:
+        prompt_parts.append("Messages:\n" + "\n".join(messages))
+
+    # Legend (consistent across all turns)
+    prompt_parts.append(legend_text)
+
+    # History of recent turns
+    if state_history:
+        recent = state_history[-history_limit:]
+        history_lines = [f"Recent history (last {len(recent)} turns):"]
+        for turn_i, (prev_map, prev_action_id) in enumerate(recent, start=1):
+            turn_label = f"Turn -{len(recent) - turn_i + 1}"
+            history_lines.append(f"{turn_label} map:\n{prev_map}")
+            history_lines.append(f"{turn_label} action: {prev_action_id} ({action_meanings.get(prev_action_id, '?')})")
+            history_lines.append("")
+        prompt_parts.append("\n".join(history_lines).rstrip())
+
+    # Current state
+    prompt_parts.append(f"Current map:\n{ascii_map}")
+
+    # Scratchpad
+    prompt_parts.append(f"Your scratchpad (you may update this):\n{scratchpad if scratchpad else '(empty)'}")
+
+    # Action selection
+    prompt_parts.append(
+        f"Available actions: {action_space_str}\nAction mapping: {action_map_str}\n\n"
+        "First reason about the game. You can observe the effects of your actions by "
+        "comparing the current map to the history. Figure out the game mechanics and "
+        "how to win by experimentation.\n"
+        "Then, optionally update your scratchpad by writing `SCRATCHPAD: <your notes>` "
+        "(everything after SCRATCHPAD: until the next section is saved).\n"
+        "Finally, select your action by writing `ACTION: <id>`."
+    )
 
     return "\n\n".join(prompt_parts)

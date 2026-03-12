@@ -462,7 +462,7 @@ def llm_text_query(system_prompt, prompt, model, api_key=None, base_url=None,
             max_retries = 5
             base_wait = 60
 
-        while use_portkey or (retry_count < max_retries):
+        while True:
             try:
                 if model == "deepseek" or model == "deepseek-r1" or model == "qwen":
                     response = requests.post(url, headers=headers, json=payload, timeout=60)
@@ -512,17 +512,11 @@ def llm_text_query(system_prompt, prompt, model, api_key=None, base_url=None,
 
             except Exception as e:
                 wait_time = min(base_wait * (2 ** min(retry_count, 6)), max_wait)
-                print(f"Portkey exception: {e}")
-                if use_portkey:
-                    print(f"Retrying in {wait_time}s (attempt {retry_count+1}, infinite retries enabled)")
-                else:
-                    print(f"Retrying in {wait_time}s ({retry_count+1}/{max_retries})")
+                print(f"Exception: {e}")
+                print(f"Retrying in {wait_time}s (attempt {retry_count+1}, infinite retries enabled)")
                 time.sleep(wait_time)
 
             retry_count += 1
-
-        print("Max retries reached. Returning None.")
-        return None
 
 
     except ImportError:
