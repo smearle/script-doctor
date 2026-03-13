@@ -159,7 +159,7 @@ class CppPuzzleScriptBackend:
     def _ensure_js_engine(self):
         if self._js_engine is None:
             from javascript import require
-            self._js_engine = require(self._ENGINE_JS_PATH)
+            self._js_engine = require(self._ENGINE_JS_PATH).createFreshApi()
 
     def _ensure_renderer(self):
         if self._renderer is None:

@@ -33,7 +33,11 @@ class NodeJSPuzzleScriptBackend(PuzzleScriptSearchBackend):
     _GIF_PATH = str(_ROOT_DIR / "puzzlescript_nodejs" / "puzzlescript" / "gif.js")
 
     def __init__(self) -> None:
-        self.engine = require(self._ENGINE_PATH)
+        # createFreshApi() creates an isolated VM sandbox so that multiple
+        # NodeJSPuzzleScriptBackend (or CppPuzzleScriptBackend) instances don't
+        # share a single compiled-game state through the Node require() cache.
+        _mod = require(self._ENGINE_PATH)
+        self.engine = _mod.createFreshApi()
         self.solver = require(self._SOLVER_PATH)
         self.gif = require(self._GIF_PATH)
 

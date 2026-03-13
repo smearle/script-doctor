@@ -59,7 +59,7 @@ class Config:
     level: int = 0
     port: int = 5000
     host: str = "0.0.0.0"
-    backend: str = "jax"   # "jax" | "nodejs" | "cpp"
+    backend: str = "nodejs"   # "jax" | "nodejs" | "cpp"
 
 
 cs = ConfigStore.instance()
@@ -365,6 +365,9 @@ class NodeJSPlayerBackend(PlayerBackend):
         self._level_i   = level_i
         self._title     = game
         self._backend.load_level(self._game_text, level_i)
+        # Flush all pending lazy rule-function generation now so that
+        # processInput never trips over an empty cellRowMatches array.
+        self._backend.engine.drainLazyGeneration()
         self.game_text = self._game_text
 
     def render_frame(self) -> np.ndarray:
@@ -553,8 +556,12 @@ class GameSession:
         self.lock        = threading.Lock()
         self._hist: list = []
         self._loading    = False
-        # Cache of initialized backends — each keeps its own game state.
+        # Cache of initialized backends — instances are kept alive for the
+        # lifetime of the session so the JS bridge's require() is only ever
+        # called on the main thread (at startup).  Backends that haven't loaded
+        # the current game yet are recorded in _stale_backends.
         self._backends: dict[str, PlayerBackend] = {}
+        self._stale_backends: set[str] = set()
 
         be = _make_backend(backend_name, jit=jit, debug=debug, profile=profile)
         self._backends[backend_name] = be
@@ -570,23 +577,33 @@ class GameSession:
         self._loading = False
 
     def switch_backend(self, new_backend: str) -> dict:
-        """Switch to a different backend, initializing it only the first time."""
+        """Switch to a different backend, initializing it only the first time.
+
+        Backend instances are never discarded once created so that the JS
+        bridge's require() is only called on the main thread at startup.
+        Backends whose game state is out-of-date are reloaded here.
+        """
         with self.lock:
             self._loading = True
             socketio.emit("backend_status",
                           {"loading": True, "backend": new_backend},
                           to=None)
             try:
-                if new_backend in self._backends:
-                    # Already initialized — just swap; preserve that backend's state.
+                if new_backend in self._backends and new_backend not in self._stale_backends:
+                    # Already initialized and up-to-date — instant swap.
                     self.backend      = self._backends[new_backend]
                     self.backend_name = new_backend
                     self._hist        = [self.backend.backup()]
                 else:
-                    new_be = _make_backend(new_backend, jit=self._jit,
-                                           debug=self._debug,
-                                           profile=self._profile)
+                    if new_backend not in self._backends:
+                        new_be = _make_backend(new_backend, jit=self._jit,
+                                               debug=self._debug,
+                                               profile=self._profile)
+                        self._backends[new_backend] = new_be
+                    else:
+                        new_be = self._backends[new_backend]
                     new_be.load_game(self.game, self.level_i)
+                    self._stale_backends.discard(new_backend)
                     self._backends[new_backend] = new_be
                     self.backend      = new_be
                     self.backend_name = new_backend
@@ -672,6 +689,24 @@ class GameSession:
 
             return self._frame_payload()
 
+    def load_new_game(self, game: str, level_i: int = 0) -> dict:
+        """Load a different game on the active backend; mark others as stale."""
+        with self.lock:
+            self._loading = True
+            try:
+                self.game    = game
+                self.level_i = level_i
+                self.backend.load_game(game, level_i)
+                self._hist = [self.backend.backup()]
+                # Keep backend instances alive (no new require() calls needed),
+                # but mark them stale so they reload on next switch_backend.
+                for name in self._backends:
+                    if name != self.backend_name:
+                        self._stale_backends.add(name)
+            finally:
+                self._loading = False
+            return self._frame_payload()
+
 
 # ---------------------------------------------------------------------------
 # HTML client
@@ -695,6 +730,20 @@ _HTML = r"""
           justify-content:center; }
   #status { font-size:.85rem; color:#aef; }
   #hint   { font-size:.72rem; color:#666; text-align:center; }
+  /* game selector */
+  #game-selector { display:flex; gap:.4rem; align-items:center; }
+  #game-input {
+    background: #1a1a1a; border: 1px solid #444; border-radius: 4px;
+    color: #eee; font: inherit; font-size: .8rem; padding: .25rem .5rem;
+    width: 18rem;
+  }
+  #game-input:focus { outline: none; border-color: #2a5; }
+  #game-load-btn {
+    padding: .25rem .6rem; border-radius: 4px; border: 1px solid #555;
+    background: #222; color: #aaa; cursor: pointer; font: inherit;
+    font-size: .8rem;
+  }
+  #game-load-btn:hover { background: #333; color: #eee; }
   /* backend toggle */
   .be-btn {
     padding: .25rem .6rem; border-radius: 4px; border: 1px solid #555;
@@ -732,10 +781,18 @@ _HTML = r"""
 <h1 id="title">{{ title }}</h1>
 
 <div id="meta">
+  <div id="game-selector">
+    <input id="game-input" type="text" list="game-list"
+           placeholder="game name…" autocomplete="off" spellcheck="false"/>
+    <datalist id="game-list">
+      {% for g in games %}<option value="{{ g }}">{% endfor %}
+    </datalist>
+    <button id="game-load-btn">Load</button>
+  </div>
   <div id="backend-btns">
-    <button class="be-btn" data-be="jax">JAX</button>
     <button class="be-btn" data-be="nodejs">NodeJS</button>
     <button class="be-btn" data-be="cpp">CPP</button>
+    <button class="be-btn" data-be="jax">JAX</button>
   </div>
   <div id="status">Connecting…</div>
 </div>
@@ -834,10 +891,25 @@ const KEY_MAP = {
 };
 
 document.addEventListener('keydown', e => {
+  // Don't steal keypresses while the game input is focused
+  if (document.activeElement === document.getElementById('game-input')) return;
   const action = KEY_MAP[e.key];
   if (!action) return;
   e.preventDefault();
   socket.emit('keypress', { key: action });
+});
+
+// ── game selector ──────────────────────────────────────────────────────────
+function loadGame() {
+  const name = document.getElementById('game-input').value.trim();
+  if (!name) return;
+  document.getElementById('game-input').blur();
+  status.textContent = `Loading "${name}"…`;
+  socket.emit('load_game', { game: name, level: 0 });
+}
+document.getElementById('game-load-btn').addEventListener('click', loadGame);
+document.getElementById('game-input').addEventListener('keydown', e => {
+  if (e.key === 'Enter') { e.preventDefault(); loadGame(); }
 });
 </script>
 </body>
@@ -849,14 +921,16 @@ document.addEventListener('keydown', e => {
 # ---------------------------------------------------------------------------
 
 _session: Optional[GameSession] = None   # set before socketio.run()
-_init_backend: str = "jax"
+_init_backend: str = "nodejs"
+_game_list: list[str] = []              # populated in serve_game()
 
 
 @app.route("/")
 def index():
     title   = _session.backend.title if _session else "PuzzleScript"
     backend = _session.backend_name  if _session else _init_backend
-    return render_template_string(_HTML, title=title, backend=backend)
+    return render_template_string(_HTML, title=title, backend=backend,
+                                  games=_game_list)
 
 
 @socketio.on("connect")
@@ -882,6 +956,26 @@ def on_keypress(data):
         threading.Thread(target=socketio.stop, daemon=True).start()
     else:
         emit("frame", payload)
+
+
+@socketio.on("load_game")
+def on_load_game(data):
+    if _session is None:
+        return
+    game    = data.get("game", "").strip()
+    level_i = int(data.get("level", 0))
+    if not game:
+        return
+
+    def _do_load():
+        try:
+            payload = _session.load_new_game(game, level_i)
+            socketio.emit("frame", payload, to=None)
+        except Exception as exc:
+            print(f"[server] load_game failed: {exc}", file=sys.__stderr__)
+            socketio.emit("frame", _session._frame_payload(), to=None)
+
+    threading.Thread(target=_do_load, daemon=True).start()
 
 
 @socketio.on("switch_backend")
@@ -916,12 +1010,18 @@ def on_switch_backend(data):
 
 def serve_game(game: str, level: int = 0, jit: bool = False,
                profile: bool = False, debug: bool = False,
-               backend: str = "jax", host: str = "0.0.0.0",
+               backend: str = "nodejs", host: str = "0.0.0.0",
                port: int = 5000):
-    global _session, _init_backend
+    global _session, _init_backend, _game_list
 
     _install_log_capture()
     _init_backend = backend
+
+    from puzzlescript_jax.globals import GAMES_DIR
+    _game_list = sorted(
+        os.path.splitext(os.path.basename(p))[0]
+        for p in glob.glob(os.path.join(GAMES_DIR, "*.txt"))
+    )
 
     print(f"Starting session: game={game!r}, level={level}, backend={backend}")
     _session = GameSession(game, level, backend,
@@ -952,5 +1052,6 @@ def main(cfg: Config):
 
 if __name__ == "__main__":
     import jax
+    os.environ["JAX_PLATFORM_NAME"] = "cpu"
     jax.config.update("jax_platform_name", "cpu")
     main()

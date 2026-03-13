@@ -1004,6 +1004,16 @@ class PuzzleJaxEnv:
                 im_s.save(sprite_path)
 
             sprite_stack.append(im)
+        # Normalize all sprites to the same (max_h, max_w) size
+        max_h = max(im.shape[0] for im in sprite_stack)
+        max_w = max(im.shape[1] for im in sprite_stack)
+        if any(im.shape[0] != max_h or im.shape[1] != max_w for im in sprite_stack):
+            resized = []
+            for im in sprite_stack:
+                if im.shape[0] != max_h or im.shape[1] != max_w:
+                    im = np.array(PIL.Image.fromarray(im).resize((max_w, max_h), PIL.Image.NEAREST))
+                resized.append(im)
+            sprite_stack = resized
         self.sprite_stack = np.array(sprite_stack)
         char_legend = {v: k for k, v in obj_to_char.items()}
         # Generate vectors to detect atomic objects
@@ -2667,14 +2677,24 @@ class PuzzleJaxEnv:
             kernel_detection_fns, kernel_projection_fns, kernel_detection_at_fns, kernel_projection_at_fns = zip(*kernel_fns)
             has_point_fns = all(fn is not None for fn in kernel_detection_at_fns)
 
-            def is_col_major_kernel(kernel):
+            def is_col_major_kernel(kernel, rot):
                 k = np.array(kernel)
                 if k.ndim != 2:
                     return False
                 h, w = k.shape
-                return (h > 1) and (w == 1)
+                if (h > 1) and (w == 1):
+                    return True   # explicit vertical kernel
+                if h == 1 and w == 1:
+                    # Single-cell independent pattern: scan order follows rule direction.
+                    # JS scans column-major for vertical (down/up) rules and row-major
+                    # for horizontal (right/left) rules.  Non-directional single-cell rules
+                    # use rot=0 (down), so they also get column-major order here.
+                    # rot=0 (down) and rot=2 (up)   → vertical -> column-major
+                    # rot=1 (right) and rot=3 (left) -> horizontal -> row-major
+                    return rot % 2 == 0
+                return False  # explicit horizontal kernel
 
-            kernel_order_is_col = [is_col_major_kernel(lp) for lp in lps]
+            kernel_order_is_col = [is_col_major_kernel(lp, rot) for lp in lps]
 
             def detect_pattern(lvl):
                 kernel_activations: List[chex.Array] = []
