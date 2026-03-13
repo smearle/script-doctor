@@ -427,6 +427,7 @@ globalThis.__PS_NODE_API__ = {
     }),
     unloadGame,
     clearBackups: () => { backups = []; },
+    drainLazyGeneration: () => { tick_lazy_function_generation(false); },
     serializeCompiledState,
     serializeCompiledStateJSON: () => JSON.stringify(serializeCompiledState()),
     serializeLevel,
@@ -612,4 +613,17 @@ function loadApi() {
     return cachedApi;
 }
 
-module.exports = loadApi();
+// Creates an isolated VM sandbox with its own compiled-game state.
+// Use this instead of the shared loadApi() singleton when multiple independent
+// engine instances are needed (e.g. NodeJS + CPP backends running concurrently).
+function createFreshApi() {
+    const freshContext = createSandbox();
+    vm.runInContext(buildSourceBundle(), freshContext, {
+        filename: 'standalone_puzzlescript_sources.js',
+    });
+    return freshContext.__PS_NODE_API__;
+}
+
+const _sharedApi = loadApi();
+_sharedApi.createFreshApi = createFreshApi;
+module.exports = _sharedApi;
