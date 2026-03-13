@@ -554,38 +554,37 @@ def main(cfg: JaxValidationConfig, games: Optional[List[str]] = None):
                 game_success = False
                 continue
 
-            # Otherwise, let's initialize the environment (if on level 0) and run the solution.
-            if env is None:
-                tree, success, err_msg = get_tree_from_txt(parser, game, test_env_init=False, timeout=60*20)
-                if success == PJParseErrors.SUCCESS:
-                    try:
-                        env = PuzzleJaxEnv(tree, debug=False, print_score=False)
-                    except KeyboardInterrupt as e:
-                        raise e
-                    except bdb.BdbQuit as e:
-                        raise e
-                    except Exception as e:
-                        err_msg = traceback.format_exc()
-                        success = PJParseErrors.ENV_ERROR
-                if success != PJParseErrors.SUCCESS:
-                    if success == PJParseErrors.TIMEOUT and not err_msg:
-                        err_msg = "timeout"
-                    with open(compile_log_path, 'w') as f:
-                        f.write(err_msg)
-                    print(f"Error creating env: {og_path}\n{err_msg}")
-                    # results['compile_error'].append({'game': game, 'n_rules': n_rules, 'log': err_log})
-                    if 'Rigid prefix not implemented' in err_msg:
-                        n_rigid_prefix_error += 1
-                    elif success == PJParseErrors.TIMEOUT:
-                        if cfg.aggregate:
-                            results['timeout'].append({'game': game, 'n_rules': n_rules, 'log': err_msg})
-                        n_timeout_error += 1
-                    else:
-                        n_compile_error += 1
-                    n_levels += 1
-                    game_success = False
-                    game_compile_error = True
-                    continue
+            # Otherwise, let's initialize the environment (in single-level mode on the given level) and run the solution.
+            tree, success, err_msg = get_tree_from_txt(parser, game, test_env_init=False, timeout=60*20)
+            if success == PJParseErrors.SUCCESS:
+                try:
+                    env = PuzzleJaxEnv(tree, debug=False, print_score=False, level_i=level_i)
+                except KeyboardInterrupt as e:
+                    raise e
+                except bdb.BdbQuit as e:
+                    raise e
+                except Exception as e:
+                    err_msg = traceback.format_exc()
+                    success = PJParseErrors.ENV_ERROR
+            if success != PJParseErrors.SUCCESS:
+                if success == PJParseErrors.TIMEOUT and not err_msg:
+                    err_msg = "timeout"
+                with open(compile_log_path, 'w') as f:
+                    f.write(err_msg)
+                print(f"Error creating env: {og_path}\n{err_msg}")
+                # results['compile_error'].append({'game': game, 'n_rules': n_rules, 'log': err_log})
+                if 'Rigid prefix not implemented' in err_msg:
+                    n_rigid_prefix_error += 1
+                elif success == PJParseErrors.TIMEOUT:
+                    if cfg.aggregate:
+                        results['timeout'].append({'game': game, 'n_rules': n_rules, 'log': err_msg})
+                    n_timeout_error += 1
+                else:
+                    n_compile_error += 1
+                n_levels += 1
+                game_success = False
+                game_compile_error = True
+                continue
 
             level_sol_path = os.path.join(sol_dir, level_sol_path)
             with open(level_sol_path, 'r') as f:
@@ -664,7 +663,7 @@ def main(cfg: JaxValidationConfig, games: Optional[List[str]] = None):
                         n_solution_error += 1
                     game_success = False
                     print(f"Level {level_i} solution failed (won in JS, did not win in jax)")
-                elif np.any(multihot_level_js != state.multihot_level):
+                elif (multihot_level_js.shape != state.multihot_level.shape) or np.any(multihot_level_js != state.multihot_level):
                     js_state = state.replace(multihot_level=multihot_level_js)
                     js_frame = backend.render_frame(js_states[-1])
                     imageio.imsave(os.path.join(jax_sol_dir, f'level-{level_i}_state_js.png'), js_frame)

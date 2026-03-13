@@ -43,13 +43,14 @@ def get_available_render_chars():
 class ASCIIStateFormatter:
     def __init__(self, legend_mapping=None):
         self.combo_to_char = {}
+        self.char_to_combo = {}
         self.available_chars = get_available_render_chars()
         if legend_mapping:
             self.seed_from_legend_mapping(legend_mapping)
 
     @staticmethod
     def normalize_combo(objs):
-        combo = tuple(obj for obj in objs if str(obj).lower() != "background")
+        combo = tuple(sorted({str(obj) for obj in objs if str(obj).lower() != "background"}, key=str.lower))
         if not combo:
             combo = ("background",)
         return combo
@@ -67,10 +68,15 @@ class ASCIIStateFormatter:
             self.assign_char(self.normalize_combo(objs), char)
 
     def assign_char(self, combo, char):
+        combo = self.normalize_combo(combo)
         existing = self.combo_to_char.get(combo)
         if existing is not None:
             return existing
+        existing_combo = self.char_to_combo.get(char)
+        if existing_combo is not None and existing_combo != combo:
+            return None
         self.combo_to_char[combo] = char
+        self.char_to_combo[char] = combo
         self.available_chars.discard(char)
         return char
 
@@ -79,7 +85,9 @@ class ASCIIStateFormatter:
         if combo not in self.combo_to_char:
             if not self.available_chars:
                 raise ValueError("Not enough characters to represent all object combinations.")
-            self.combo_to_char[combo] = self.available_chars.pop()
+            char = self.available_chars.pop()
+            self.combo_to_char[combo] = char
+            self.char_to_combo[char] = combo
         return self.combo_to_char[combo]
 
     def render_from_name_grid(self, name_grid):
@@ -99,7 +107,7 @@ class ASCIIStateFormatter:
 
         legend_lines = []
         for char in used_chars:
-            combo = next(combo for combo, combo_char in self.combo_to_char.items() if combo_char == char)
+            combo = self.char_to_combo[char]
             legend_lines.append(f"{char}: {', '.join(combo)}")
 
         return "LEGEND:\n" + "\n".join(legend_lines) + "\n\nMAP:\n" + "\n".join(rows)
@@ -115,10 +123,25 @@ class ASCIIStateFormatter:
             rows.append("".join(row_chars))
         return "\n".join(rows)
 
-    def get_legend_text(self):
-        """Return the full legend string for all combos seen so far."""
+    def _ordered_visible_chars(self, visible_maps):
+        ordered_chars = []
+        seen_chars = set()
+        for ascii_map in visible_maps:
+            for char in ascii_map:
+                if char.isspace() or char in seen_chars or char not in self.char_to_combo:
+                    continue
+                seen_chars.add(char)
+                ordered_chars.append(char)
+        return ordered_chars
+
+    def get_legend_text(self, visible_maps=None):
+        """Return the legend string, optionally filtered to the chars visible in specific maps."""
         legend_lines = []
-        for combo, char in self.combo_to_char.items():
+        chars = list(self.char_to_combo)
+        if visible_maps is not None:
+            chars = self._ordered_visible_chars(visible_maps)
+        for char in chars:
+            combo = self.char_to_combo[char]
             legend_lines.append(f"{char}: {', '.join(combo)}")
         return "LEGEND:\n" + "\n".join(legend_lines)
 
@@ -173,6 +196,7 @@ def build_human_like_prompt(
     state_history,
     history_limit,
     scratchpad,
+    include_scratchpad=True,
     messages=None,
     level_number=None,
 ):
@@ -182,7 +206,6 @@ def build_human_like_prompt(
 
     prompt_parts = []
 
-    # Game identity
     header = f"Game: {title}"
     if author:
         header += f"\nAuthor: {author}"
@@ -190,15 +213,12 @@ def build_human_like_prompt(
         header += f"\nLevel: {level_number}"
     prompt_parts.append(header)
 
-    # Messages (shown between levels)
     if messages:
         prompt_parts.append("Messages:\n" + "\n".join(messages))
 
-    # Legend (consistent across all turns)
     prompt_parts.append(legend_text)
 
-    # History of recent turns
-    if state_history:
+    if history_limit > 0 and state_history:
         recent = state_history[-history_limit:]
         history_lines = [f"Recent history (last {len(recent)} turns):"]
         for turn_i, (prev_map, prev_action_id) in enumerate(recent, start=1):
@@ -208,21 +228,18 @@ def build_human_like_prompt(
             history_lines.append("")
         prompt_parts.append("\n".join(history_lines).rstrip())
 
-    # Current state
     prompt_parts.append(f"Current map:\n{ascii_map}")
 
-    # Scratchpad
-    prompt_parts.append(f"Your scratchpad (you may update this):\n{scratchpad if scratchpad else '(empty)'}")
+    if include_scratchpad:
+        prompt_parts.append(f"Your scratchpad (you may update this):\n{scratchpad if scratchpad else '(empty)'}")
 
-    # Action selection
-    prompt_parts.append(
-        f"Available actions: {action_space_str}\nAction mapping: {action_map_str}\n\n"
-        "First reason about the game. You can observe the effects of your actions by "
-        "comparing the current map to the history. Figure out the game mechanics and "
-        "how to win by experimentation.\n"
-        "Then, optionally update your scratchpad by writing `SCRATCHPAD: <your notes>` "
-        "(everything after SCRATCHPAD: until the next section is saved).\n"
-        "Finally, select your action by writing `ACTION: <id>`."
-    )
+    action_prompt = f"Available actions: {action_space_str}\nAction mapping: {action_map_str}\n\n"
+    if include_scratchpad:
+        action_prompt += (
+            "Optionally update your scratchpad by writing `SCRATCHPAD: <your notes>` "
+            "(everything after SCRATCHPAD: until the next section is saved).\n"
+        )
+    action_prompt += "Finally, select your action by writing `ACTION: <id>`."
+    prompt_parts.append(action_prompt)
 
     return "\n\n".join(prompt_parts)

@@ -4,21 +4,16 @@ import os
 import json
 from dataclasses import dataclass, field
 
-from lark import Lark
-
 from LLM_agent import LLMGameAgent
 from ascii_prompting import ASCIIStateFormatter
-from llm_agent_loop import (
+from llm_agent_loop_jax import (
     CUSTOM_GAMES_DIR,
     STATE_FILE_BASENAME,
     claim_next_job,
-    get_run_file_path,
-    get_run_logs_dir,
-    parse_legend,
     release_job,
 )
 from backends.nodejs import NodeJSPuzzleScriptBackend
-from puzzlescript_jax.globals import LARK_SYNTAX_PATH, PRIORITY_GAMES
+from puzzlescript_jax.globals import PRIORITY_GAMES
 from puzzlescript_jax.utils import level_to_int_arr
 
 
@@ -28,21 +23,42 @@ ACTION_MEANINGS = {0: "left", 1: "down", 2: "right", 3: "up", 4: "action", 5: "u
 
 @dataclass
 class NodeJSAsciiRenderer:
-    legend_mapping: dict[str, list[str]]
+    char_mapping: dict[str, list[str]]
     formatter: ASCIIStateFormatter = field(init=False)
 
     def __post_init__(self):
-        self.formatter = ASCIIStateFormatter(self.legend_mapping)
+        self.formatter = ASCIIStateFormatter(self.char_mapping)
+
+    @staticmethod
+    def _display_name_map(backend: NodeJSPuzzleScriptBackend, objs: list[str]) -> dict[str, str]:
+        original_case_names = getattr(backend.engine.getState(), "original_case_names", None)
+        display_name_map = {}
+        for obj_name in objs:
+            display_name = obj_name
+            if original_case_names is not None:
+                try:
+                    original_name = original_case_names[obj_name]
+                except Exception:
+                    original_name = None
+                if original_name:
+                    display_name = str(original_name)
+            display_name_map[obj_name] = display_name
+        return display_name_map
 
     def _build_name_grid(self, backend: NodeJSPuzzleScriptBackend, level, objs: list[str]):
         level_arr = level_to_int_arr(level, len(objs))
         mini, minj, maxi, maxj = backend._get_visible_bounds(level)
+        display_name_map = self._display_name_map(backend, objs)
         name_grid = []
         for y in range(minj, maxj):
             row = []
             for x in range(mini, maxi):
                 cell_bits = int(level_arr[x, y])
-                names = [objs[obj_i] for obj_i in range(len(objs)) if ((cell_bits >> obj_i) & 1) == 1]
+                names = [
+                    display_name_map[objs[obj_i]]
+                    for obj_i in range(len(objs))
+                    if ((cell_bits >> obj_i) & 1) == 1
+                ]
                 row.append(tuple(names))
             name_grid.append(row)
         return name_grid
@@ -55,9 +71,45 @@ class NodeJSAsciiRenderer:
         """Return only the map string (no legend header). Registers new combos."""
         return self.formatter.render_map_only(self._build_name_grid(backend, level, objs))
 
-    def get_legend_text(self) -> str:
-        """Return the full legend for all combos encountered so far."""
-        return self.formatter.get_legend_text()
+    def get_legend_text(self, visible_maps: list[str] | None = None) -> str:
+        """Return the legend for chars visible in the current prompt window."""
+        return self.formatter.get_legend_text(visible_maps=visible_maps)
+
+
+def _extract_char_mapping_from_state(state) -> dict[str, list[str]]:
+    char_mapping = {}
+    original_case_names = getattr(state, "original_case_names", None)
+    obj_names = list(state.idDict)
+    for glyph_name in list(state.glyphDict):
+        if len(glyph_name) != 1 or glyph_name.isspace():
+            continue
+        glyph = state.glyphDict[glyph_name]
+        combo = []
+        for obj_id in list(glyph):
+            obj_id = int(obj_id)
+            if obj_id < 0:
+                continue
+            obj_name = obj_names[obj_id]
+            if original_case_names is not None:
+                try:
+                    original_name = original_case_names[obj_name]
+                except Exception:
+                    original_name = None
+                if original_name:
+                    obj_name = str(original_name)
+            combo.append(obj_name)
+        char_mapping[glyph_name] = list(ASCIIStateFormatter.normalize_combo(combo))
+    return char_mapping
+
+
+def _get_level_message(lv_info) -> str:
+    try:
+        message = lv_info["message"]
+    except Exception:
+        message = getattr(lv_info, "message", "")
+    if message is None:
+        return ""
+    return str(message)
 
 
 def collect_game_info(game_name):
@@ -66,21 +118,18 @@ def collect_game_info(game_name):
         print(f"Error: Game file not found at {game_path}. Skipping game.")
         return None
 
-    legend_lines = _extract_section(game_path, "LEGEND")
-    legend_mapping = parse_legend(legend_lines)
-
     try:
-        with open(LARK_SYNTAX_PATH, "r", encoding="utf-8") as f:
-            puzzlescript_grammar = f.read()
-        grammar_parser = Lark(puzzlescript_grammar, start="ps_game", maybe_placeholders=False)
         backend = NodeJSPuzzleScriptBackend()
-        game_text = backend.compile_game(grammar_parser, game_name)
+        with open(game_path, "r", encoding="utf-8") as f:
+            game_text = f.read()
+        backend.engine.compile(["restart"], game_text)
         num_levels = backend.get_num_levels()
 
         metadata = backend.engine.getState().metadata
         title = str(getattr(metadata, "title", game_name))
         author = str(getattr(metadata, "author", ""))
 
+        char_mapping = _extract_char_mapping_from_state(backend.engine.getState())
         level_info = list(backend.engine.getLevelInfo())
         backend.unload_game()
     except Exception as e:
@@ -95,7 +144,7 @@ def collect_game_info(game_name):
         "game_name": game_name,
         "game_path": game_path,
         "game_text": game_text,
-        "legend_mapping": legend_mapping,
+        "char_mapping": char_mapping,
         "title": title,
         "author": author,
         "num_levels": num_levels,
@@ -103,30 +152,8 @@ def collect_game_info(game_name):
     }
 
 
-def _extract_section(filepath, section):
-    """Extract a section from a PuzzleScript game file."""
-    import re as _re
-    with open(filepath, "r", encoding="utf-8") as f:
-        lines = f.readlines()
-    section_lines = []
-    in_section = False
-    for line in lines:
-        if not in_section and _re.match(r"=*\s*%s\s*=*" % section, line.strip(), _re.IGNORECASE):
-            in_section = True
-            continue
-        if in_section:
-            if _re.match(r"=+\s*[A-Z_]+\s*=+", line.strip()) or (line.strip().isupper() and len(line.strip()) > 3):
-                break
-            section_lines.append(line.rstrip())
-    while section_lines and not section_lines[0].strip():
-        section_lines.pop(0)
-    while section_lines and not section_lines[-1].strip():
-        section_lines.pop()
-    return section_lines
-
-
 def process_full_game(agent, game_info, run_id, save_dir, model,
-                      max_steps_per_level, history_limit, no_render=False, force=False):
+                      max_steps_per_level, history_limit, action_only=False, no_render=False, force=False):
     """Play through the entire game: messages are shown, playable levels are played sequentially."""
     game_name = game_info["game_name"]
     game_text = game_info["game_text"]
@@ -153,7 +180,7 @@ def process_full_game(agent, game_info, run_id, save_dir, model,
 
     try:
         backend = NodeJSPuzzleScriptBackend()
-        renderer = NodeJSAsciiRenderer(game_info["legend_mapping"])
+        renderer = NodeJSAsciiRenderer(game_info["char_mapping"])
 
         scratchpad = ""
         state_history = []  # list of (map_str, action_id) across the whole game
@@ -175,7 +202,7 @@ def process_full_game(agent, game_info, run_id, save_dir, model,
             lv_type = str(lv_info["type"])
 
             if lv_type == "message":
-                msg_text = str(lv_info.get("message", ""))
+                msg_text = _get_level_message(lv_info)
                 pending_messages.append(msg_text)
                 result["levels"].append({
                     "level_index": lvl_idx,
@@ -198,7 +225,6 @@ def process_full_game(agent, game_info, run_id, save_dir, model,
             score = float(backend.solver.getScore(backend.engine))
             won = bool(backend.engine.getWinning())
             ascii_map = renderer.render_map(backend, level, objs)
-            legend_text = renderer.get_legend_text()
 
             level_result = {
                 "level_index": lvl_idx,
@@ -224,6 +250,9 @@ def process_full_game(agent, game_info, run_id, save_dir, model,
                 log_file = os.path.join(
                     logs_dir, f"level_{lvl_idx}_step_{step+1}.txt"
                 )
+                recent_history = state_history[-history_limit:] if history_limit > 0 else []
+                visible_history_maps = [prev_map for prev_map, _ in recent_history]
+                legend_text = renderer.get_legend_text(visible_history_maps + [ascii_map])
 
                 action_id, scratchpad = agent.choose_action_human(
                     title=title,
@@ -235,6 +264,7 @@ def process_full_game(agent, game_info, run_id, save_dir, model,
                     state_history=state_history,
                     history_limit=history_limit,
                     scratchpad=scratchpad,
+                    action_only=action_only,
                     messages=messages_for_prompt,
                     level_number=playable_level_number,
                     log_file=log_file,
@@ -258,7 +288,6 @@ def process_full_game(agent, game_info, run_id, save_dir, model,
                 won = bool(backend.engine.getWinning())
                 objs = list(objs)
                 ascii_map = renderer.render_map(backend, level, objs)
-                legend_text = renderer.get_legend_text()
 
                 level_result["heuristic_sequence"].append(float(score))
                 print(f"Score: {score} | Win: {won}")
@@ -350,6 +379,7 @@ def worker_loop(args, all_jobs, game_info_map, save_dir_main):
             model=args.model,
             max_steps_per_level=args.max_steps,
             history_limit=args.history_limit,
+            action_only=args.action_only,
             no_render=args.no_render,
             force=args.force,
         )
@@ -374,6 +404,8 @@ def main():
     parser.add_argument('--run_id_start', type=int, default=1)
     parser.add_argument('--history_limit', type=int, default=10,
                         help='Number of recent (map, action) pairs shown to agent')
+    parser.add_argument('--action_only', action='store_true',
+                        help='Force action-only responses and skip scratchpad prompting')
     parser.add_argument('--save_dir', type=str, default="llm_agent_results_nodejs")
     parser.add_argument('--game', type=str, default='')
     parser.add_argument('--worker_id', type=str, default='')
@@ -407,7 +439,8 @@ def main():
     else:
         print(f"Processing games in order, starting with: {game_names[0]}")
 
-    print(f"\n=== Running human-like NodeJS LLM agent with model: {args.model}, "
+    mode = "action-only" if args.action_only else "human-like"
+    print(f"\n=== Running {mode} NodeJS LLM agent with model: {args.model}, "
           f"for {len(game_names)} games, up to {args.num_runs} runs each ===")
 
     save_dir_main = os.path.join(args.save_dir, args.model)
