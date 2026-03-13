@@ -273,7 +273,11 @@ def collect_profile_records(results_dir: str, backend_name: str):
                 else:
                     continue
             else:
-                _n_envs, execution_mode, _num_threads = parsed_key
+                _n_envs, execution_mode, num_threads = parsed_key
+                if backend_name == "C++" and execution_mode == "cpp_batched" and num_threads is None:
+                    raise ValueError(
+                        f"C++ batched profiling result is missing thread count in key: {stats_key}"
+                    )
             if backend_name == "NodeJS":
                 if execution_mode not in INCLUDED_NODEJS_RUN_TYPES:
                     continue

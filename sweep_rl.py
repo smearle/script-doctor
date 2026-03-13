@@ -14,6 +14,7 @@ from hydra.core.hydra_config import HydraConfig
 from matplotlib import pyplot as plt
 import numpy as np
 from omegaconf import ListConfig, OmegaConf
+from omegaconf import open_dict
 import pandas as pd
 import submitit
 
@@ -44,9 +45,14 @@ SWEEP_META_FIELDS = {
     "sweep_axes",
 }
 
-BACKEND_DEFAULT_N_ENVS = {
-    "nodejs": 16,
-    "cpp": 256,
+BACKEND_RUN_DEFAULTS = {
+    "nodejs": {
+        "n_envs": 16,
+    },
+    "cpp": {
+        "n_envs": 128,
+        "cpp_num_threads": 32,
+    },
 }
 
 BACKEND_SLURM_DEFAULTS = {
@@ -55,10 +61,11 @@ BACKEND_SLURM_DEFAULTS = {
         "slurm_gres": "gpu:1",
     },
     "nodejs": {
-        "cpus_per_task": 16,
+        "cpus_per_task": 32,
     },
     "cpp": {
-        "cpus_per_task": 4,
+        "cpus_per_task": 32,
+        "slurm_gres": "gpu:1",
     },
 }
 
@@ -423,8 +430,17 @@ def _apply_backend_defaults(
 ) -> SweepRLConfig:
     resolved_cfg = copy.deepcopy(sweep_cfg)
 
-    if "n_envs" not in overridden_root_keys and backend in BACKEND_DEFAULT_N_ENVS:
-        resolved_cfg.n_envs = BACKEND_DEFAULT_N_ENVS[backend]
+    if OmegaConf.is_config(resolved_cfg):
+        with open_dict(resolved_cfg):
+            for field_name, field_value in BACKEND_RUN_DEFAULTS.get(backend, {}).items():
+                if field_name in overridden_root_keys:
+                    continue
+                setattr(resolved_cfg, field_name, field_value)
+    else:
+        for field_name, field_value in BACKEND_RUN_DEFAULTS.get(backend, {}).items():
+            if field_name in overridden_root_keys:
+                continue
+            setattr(resolved_cfg, field_name, field_value)
 
     return resolved_cfg
 
@@ -479,9 +495,11 @@ def main(sweep_cfg: SweepRLConfig):
                 for field in varying_fields
             }
             n_envs = level_cfgs[0].n_envs
+            cpp_threads = getattr(level_cfgs[0], "cpp_num_threads", None)
+            cpp_suffix = f", cpp_num_threads={cpp_threads}" if backend == "cpp" else ""
             print(
                 f"Launching {len(level_cfgs)} jobs for {game} level {level}: "
-                f"sweep={sweep_summary}, n_envs={n_envs}."
+                f"sweep={sweep_summary}, n_envs={n_envs}{cpp_suffix}."
             )
 
             level_cfgs = [OmegaConf.create(c) for c in level_cfgs]

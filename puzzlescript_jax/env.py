@@ -1291,7 +1291,7 @@ class PuzzleJaxEnv:
             )
         if self.tree.prelude.run_rules_on_level_start:
             lvl = self.apply_player_force(-1, state)
-            lvl, _, _, _, _, _, rng = self.tick_fn(rng, lvl)
+            lvl, _, _, _, _, _, rng = self.tick_fn(rng, lvl, jnp.array(False))
             lvl = lvl[:self.n_objs]
             state = state.replace(multihot_level=lvl, rng=rng)
         state = state.replace(view_bounds=self._compute_view_bounds(state.multihot_level, state.view_bounds))
@@ -1409,7 +1409,9 @@ class PuzzleJaxEnv:
         # Actually, just apply the rule function once
         cancelled = False
         restart = False
-        final_lvl, tick_applied, turn_app_i, cancelled, restart, tick_win, rng = self.tick_fn(rng, lvl)
+        final_lvl, tick_applied, turn_app_i, cancelled, restart, tick_win, rng = self.tick_fn(
+            rng, lvl, jnp.array(True)
+        )
 
         accept_lvl_change = (
             (not self.require_player_movement) or player_has_moved(
@@ -2282,7 +2284,7 @@ class PuzzleJaxEnv:
             if obj in self.objs_to_idxs:
                 obj_idx = self.objs_to_idxs[obj]
                 force_idx = self.obj_idxs_to_force_idxs[obj_idx]
-                m_cell = m_cell.at[force_idx: (force_idx + 1) * N_FORCES].set(False)
+                m_cell = m_cell.at[force_idx: force_idx + N_FORCES].set(False)
             else:
                 obj_idx = disambiguate_meta(obj, meta_objs, kernel_meta_objs, pattern_meta_objs, self.objs_to_idxs)
                 m_cell = jax.lax.dynamic_update_slice(
@@ -3263,7 +3265,7 @@ class PuzzleJaxEnv:
         n_grps_per_block_arr = jnp.array(n_grps_per_block_arr)
         blocks_are_looping_lst = jnp.array([looping for looping, _ in rule_blocks])
 
-        def tick_fn(rng, lvl):
+        def tick_fn(rng, lvl, do_again):
             lvl_changed = False
             cancelled = False
             restart = False
@@ -3357,16 +3359,25 @@ class PuzzleJaxEnv:
             win = False
 
             carry = (lvl, turn_applied, turn_app_i, cancelled, restart, turn_again, win, rng)
+            carry = apply_turn(carry)
+
             if not self.jit:
-                while (turn_again and turn_applied and not win
-                       and not cancelled and not restart):
-                    carry = apply_turn(carry)
+                if do_again:
                     lvl, turn_applied, turn_app_i, cancelled, restart, turn_again, win, rng = carry
+                    while (turn_again and turn_applied and not win
+                           and not cancelled and not restart):
+                        carry = apply_turn(carry)
+                        lvl, turn_applied, turn_app_i, cancelled, restart, turn_again, win, rng = carry
             else:
-                carry = jax.lax.while_loop(
-                    cond_fun=lambda x: ~x[3] & ~x[4] & (x[5] & x[1]) & (~x[6]),
-                    body_fun=apply_turn,
-                    init_val=carry,
+                carry = jax.lax.cond(
+                    do_again,
+                    lambda carry: jax.lax.while_loop(
+                        cond_fun=lambda x: ~x[3] & ~x[4] & (x[5] & x[1]) & (~x[6]),
+                        body_fun=apply_turn,
+                        init_val=carry,
+                    ),
+                    lambda carry: carry,
+                    carry,
                 )
             lvl, turn_applied, turn_app_i, cancelled, restart, turn_again, win, rng = carry
 

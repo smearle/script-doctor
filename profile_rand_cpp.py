@@ -62,7 +62,11 @@ def get_stats_key(n_envs: int, execution_mode: str, num_threads: int | None = No
     return f"{n_envs}-{execution_mode}"
 
 
-def _get_cpp_batched_thread_counts(n_envs: int, cfg: ProfileRandCppConfig) -> list[int]:
+def _get_cpp_batched_thread_counts(
+    n_envs: int,
+    cfg: ProfileRandCppConfig,
+    active_thread_counts: set[int] | None = None,
+) -> list[int]:
     candidates = {1}
     for num_threads in cfg.cpp_batched_thread_candidates:
         num_threads = int(num_threads)
@@ -70,6 +74,8 @@ def _get_cpp_batched_thread_counts(n_envs: int, cfg: ProfileRandCppConfig) -> li
             continue
         if num_threads <= n_envs:
             candidates.add(num_threads)
+    if active_thread_counts is not None:
+        candidates = {num_threads for num_threads in candidates if num_threads in active_thread_counts}
     return sorted(candidates)
 
 
@@ -566,12 +572,31 @@ def main(cfg: ProfileRandCppConfig, games: Optional[List[str]] = None):
 
             if "cpp_batched" in INCLUDED_CPP_SWEEP_EXECUTION_MODES:
                 prev_batched_best_fps = None
+                active_thread_counts = {
+                    max(1, int(num_threads))
+                    for num_threads in cfg.cpp_batched_thread_candidates
+                    if int(num_threads) > 0
+                }
+                active_thread_counts.add(1)
+                prev_best_fps_by_threads: dict[int, float] = {}
                 n_envs = 1
                 while True:
                     execution_mode = "cpp_batched"
                     print(f"\nGame: {game}, n_envs: {n_envs}, mode: {execution_mode}.")
                     stats_entries_for_n_env = []
-                    thread_counts = _get_cpp_batched_thread_counts(n_envs, cfg)
+                    thread_counts = _get_cpp_batched_thread_counts(
+                        n_envs,
+                        cfg,
+                        active_thread_counts=active_thread_counts,
+                    )
+                    if not thread_counts:
+                        print(
+                            f"Stopping cpp_batched sweep for {game} level {level_i}: "
+                            "no active thread-count candidates remain."
+                        )
+                        break
+
+                    current_best_fps_by_threads: dict[int, float] = {}
                     for num_threads in thread_counts:
                         stats_key = get_stats_key(n_envs, execution_mode, num_threads)
                         print(
@@ -649,6 +674,10 @@ def main(cfg: ProfileRandCppConfig, games: Optional[List[str]] = None):
                             n_envs_to_stats[stats_key] = stats_entry
 
                         stats_entries_for_n_env.append(stats_entry)
+                        if "error_type" in stats_entry:
+                            active_thread_counts.discard(num_threads)
+                            continue
+                        current_best_fps_by_threads[num_threads] = _best_fps(stats_entry)
                         save_results(n_envs_to_stats, results_path)
 
                     valid_stats_entries = [
@@ -660,6 +689,18 @@ def main(cfg: ProfileRandCppConfig, games: Optional[List[str]] = None):
                         break
 
                     current_batched_best_fps = max(_best_fps(stats_entry) for stats_entry in valid_stats_entries)
+                    pruned_thread_counts = []
+                    for num_threads, current_best_fps in current_best_fps_by_threads.items():
+                        prev_best_fps = prev_best_fps_by_threads.get(num_threads)
+                        if prev_best_fps is not None and current_best_fps < prev_best_fps:
+                            active_thread_counts.discard(num_threads)
+                            pruned_thread_counts.append(num_threads)
+                        prev_best_fps_by_threads[num_threads] = current_best_fps
+                    if pruned_thread_counts:
+                        print(
+                            f"  Pruning thread counts for future n_envs after FPS drop: "
+                            f"{sorted(pruned_thread_counts)}."
+                        )
                     if (
                         prev_batched_best_fps is not None
                         and current_batched_best_fps < prev_batched_best_fps

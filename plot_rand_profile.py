@@ -141,15 +141,11 @@ def _parse_profile_stats_key(stats_key: str) -> tuple[int, str, int | None] | No
     return n_envs, execution_mode, (None if num_threads is None else int(num_threads))
 
 
-def _get_cpp_batched_thread_marker(num_threads: int | None) -> str:
-    if num_threads is None:
-        return CPP_RUN_STYLES["cpp_batched"]["marker"]
+def _get_cpp_batched_thread_marker(num_threads: int) -> str:
     return CPP_BATCHED_THREAD_MARKERS.get(num_threads, "H")
 
 
-def _format_cpp_batched_thread_label(base_label: str, num_threads: int | None) -> str:
-    if num_threads is None:
-        return f"{base_label} (legacy)"
+def _format_cpp_batched_thread_label(base_label: str, num_threads: int) -> str:
     suffix = f", {num_threads} thread{'s' if num_threads != 1 else ''}"
     if base_label.endswith(")"):
         return f"{base_label[:-1]}{suffix})"
@@ -330,7 +326,7 @@ def _collect_cpp_series(rollout_len_str: str) -> dict[str, list[dict]]:
             mode_to_points = {
                 run_type: [] for run_type in INCLUDED_CPP_RUN_TYPES if run_type != "cpp_batched"
             }
-            cpp_batched_thread_points: dict[int | None, list[dict]] = {}
+            cpp_batched_thread_points: dict[int, list[dict]] = {}
             cpp_batched_envelope_candidates: list[dict] = []
             for stats_key, stats in stats_by_key.items():
                 if not _has_valid_fps(stats):
@@ -342,18 +338,25 @@ def _collect_cpp_series(rollout_len_str: str) -> dict[str, list[dict]]:
                 if execution_mode not in INCLUDED_CPP_RUN_TYPES:
                     continue
                 best_fps = _get_best_fps(stats)
-                point = {
-                    "x": n_envs,
-                    "y": best_fps,
-                    "best_fps": best_fps,
-                    "num_threads": stats.get("num_threads", num_threads),
-                }
                 if execution_mode == "cpp_batched":
-                    resolved_threads = point["num_threads"]
-                    cpp_batched_thread_points.setdefault(resolved_threads, []).append(point)
+                    if num_threads is None:
+                        raise ValueError(
+                            f"C++ batched profiling result is missing thread count in key: {stats_key}"
+                        )
+                    point = {
+                        "x": n_envs,
+                        "y": best_fps,
+                        "best_fps": best_fps,
+                        "num_threads": num_threads,
+                    }
+                    cpp_batched_thread_points.setdefault(num_threads, []).append(point)
                     cpp_batched_envelope_candidates.append(point)
                 else:
-                    mode_to_points[execution_mode].append(point)
+                    mode_to_points[execution_mode].append({
+                        "x": n_envs,
+                        "y": best_fps,
+                        "best_fps": best_fps,
+                    })
 
             for execution_mode, points in mode_to_points.items():
                 if not points:
@@ -389,7 +392,7 @@ def _collect_cpp_series(rollout_len_str: str) -> dict[str, list[dict]]:
 
                 for num_threads, points in sorted(
                     cpp_batched_thread_points.items(),
-                    key=lambda item: (-1 if item[0] is None else item[0]),
+                    key=lambda item: item[0],
                 ):
                     points = sorted(points, key=lambda point: point["x"])
                     thread_label = _format_cpp_batched_thread_label(style["label"], num_threads)
