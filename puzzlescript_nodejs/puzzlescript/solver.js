@@ -849,6 +849,8 @@ function solveAStar(engine, maxIters=100_000) {
 					winning = false;
 					engine.setHasUsedCheckpoint(false);
 					var solution = MakeSolution(engine.getLevel().objects);
+          var terminalScore = getScore(engine);
+          var terminalState = getState(engine);
 					// var chunks = chunkString(solution, 5).join(" ");
 					// var totalTime = (performance.now() - startTime) / 1000;
 					// console.log("solution found:\n" + chunks + "\nin " + totalIters + " steps");
@@ -856,8 +858,8 @@ function solveAStar(engine, maxIters=100_000) {
 					engine.setDeltaTime(oldDT);
 					DoRestartSearch(engine);
 					// redraw();
-					return [true, solution, totalIters, ((Date.now() - start_time) / 1000), bestScore, bestState, false, engine.getState().idDict];
-				}
+					return [true, solution, totalIters, ((Date.now() - start_time) / 1000), terminalScore, terminalState, false, engine.getState().idDict];
+					}
 				size++;
 				queue.add([score + numSteps + 1, engine.getLevel().objects.slice(0), numSteps + 1]);
 			}
@@ -977,9 +979,11 @@ function solveGBFS(engine, maxIters=100_000) {
 					winning = false;
 					engine.setHasUsedCheckpoint(false);
 					var solution = MakeSolution(engine.getLevel().objects);
+          var terminalScore = getScore(engine);
+          var terminalState = getState(engine);
 					engine.setDeltaTime(oldDT);
 					DoRestartSearch(engine);
-					return [true, solution, totalIters, ((Date.now() - start_time) / 1000), bestScore, bestState, false, engine.getState().idDict];
+					return [true, solution, totalIters, ((Date.now() - start_time) / 1000), terminalScore, terminalState, false, engine.getState().idDict];
 				}
 				size++;
 				// Greedy best-first: priority = h(n) only, no path cost
@@ -1188,9 +1192,11 @@ function solveMCTS(engine, options = {}) {
 
       if(engine.getWinning()){
         let sol = currentNode.get_actions();
+        let terminalScore = score;
+        let terminalState = getState(engine);
         // console.log(`Winning! Solution:, ${sol}\n Iterations: ${i}\n Tree size: ${rootNode.tree_size()}`);
-        return [true, sol, i, ((Date.now() - start_time) / 1000), bestScore,
-          bestState, false, engine.getState().idDict
+        return [true, sol, i, ((Date.now() - start_time) / 1000), terminalScore,
+          terminalState, false, engine.getState().idDict
         ];
       }
       if(!options.explore_deadends && !changed){
@@ -1211,10 +1217,12 @@ function solveMCTS(engine, options = {}) {
       changed = processInputSearch(engine, currentNode.action);
       if(engine.getWinning()){
         let sol = currentNode.get_actions();
+        let terminalScore = getScore(engine);
+        let terminalState = getState(engine);
         // console.log(`Winning! Solution:, ${sol}\n Iterations: ${i}`);
         // console.log('FPS:', (i / (Date.now() - start_time) * 1000).toFixed(2));
-        return [true, sol, i, ((Date.now() - start_time) / 1000), bestScore,
-          bestState, false, engine.getState().idDict];
+        return [true, sol, i, ((Date.now() - start_time) / 1000), terminalScore,
+          terminalState, false, engine.getState().idDict];
       }
       // if node is deadend, punish it
       if(!options.explore_deadends && !changed){

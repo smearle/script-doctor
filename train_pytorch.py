@@ -84,14 +84,13 @@ cs.store(name="train_cpp_config", node=TrainPytorchConfig)
 
 
 def get_exp_dir(cfg: TrainPytorchConfig) -> str:
-    root = "rl_logs_cpp" if cfg.backend == "cpp" else "rl_logs_pytorch"
     if cfg.backend == "cpp":
         thread_slug = f"cpp-threads-{cfg.cpp_num_threads if cfg.cpp_num_threads > 0 else 'auto'}"
-        backend_slug = thread_slug
+        backend_slug = os.path.join("backend-cpp", thread_slug)
     else:
         backend_slug = f"backend-{cfg.backend}"
     return os.path.join(
-        root,
+        "rl_logs_pytorch",
         *(part for part in [backend_slug, cfg.game, f"level-{cfg.level}"] if part),
         f"n-envs-{cfg.n_envs}_{cfg.model}-{'-'.join(str(h) for h in cfg.hidden_dims)}_seed-{cfg.seed}",
     )
@@ -441,7 +440,7 @@ def train(cfg: TrainPytorchConfig) -> None:
         csv_path = os.path.join(exp_dir, "progress.csv")
         if start_update == 1:
             with open(csv_path, "w") as f:
-                f.write("global_step,ep_return_mean,ep_return_max,ep_length_mean,fps\n")
+                f.write("global_step,ep_return_mean,ep_return_max,ep_length_mean,fps,win\n")
 
         for update in range(start_update, num_updates + 1):
             if cfg.anneal_lr:
@@ -515,10 +514,11 @@ def train(cfg: TrainPytorchConfig) -> None:
                     f"ep_return mean={mean_ret:.3f} max={max_ret:.3f}, "
                     f"ep_length={mean_len:.1f}, FPS={fps:,.0f}"
                 )
+                any_win = int(finished_wins.any())
                 wandb.log(wandb_payload, step=global_step)
 
                 with open(csv_path, "a") as f:
-                    f.write(f"{global_step},{mean_ret},{max_ret},{mean_len},{fps}\n")
+                    f.write(f"{global_step},{mean_ret},{max_ret},{mean_len},{fps},{any_win}\n")
 
             with torch.no_grad():
                 next_value = agent.get_value(next_obs).cpu()

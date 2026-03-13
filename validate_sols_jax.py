@@ -20,7 +20,6 @@ import jax.numpy as jnp
 from lark import Lark
 import numpy as np
 import pandas as pd
-from skimage.transform import resize
 import submitit
 
 from conf.config import JaxValidationConfig
@@ -91,7 +90,7 @@ def make_side_by_side_frames(left_frames, right_frames, separator_w=2):
 
 
 def get_trace_js_gif_path(level_sol_json_path: str) -> str:
-    return os.path.splitext(level_sol_json_path)[0] + '_sol.gif'
+    return os.path.splitext(level_sol_json_path)[0] + '.gif'
 
 
 def resolve_js_gif_path(level_sol_json_path: str, sol_dir: str, level_i: int) -> str:
@@ -616,7 +615,7 @@ def main(cfg: JaxValidationConfig, games: Optional[List[str]] = None):
             params = params.replace(level=level)
             print(f"Level {level_i} solution: {actions}")
             js_scores, js_states = replay_actions_js(engine, solver, level_sol, game_text, level_i)
-            multihot_level_js = multihot_level_from_js_state(
+            replayed_multihot_level_js = multihot_level_from_js_state(
                 js_states[-1],
                 obj_list,
                 target_obj_names=env.atomic_obj_names,
@@ -626,11 +625,12 @@ def main(cfg: JaxValidationConfig, games: Optional[List[str]] = None):
                 obj_list,
                 target_obj_names=env.atomic_obj_names,
             )
-            if not np.array_equal(saved_multihot_level_js, multihot_level_js):
+            if not np.array_equal(saved_multihot_level_js, replayed_multihot_level_js):
                 print(
                     f"Warning: saved solver state differs from replayed JS terminal state for "
                     f"{game_name} level {level_i}; using replayed JS state for validation."
                 )
+            multihot_level_js = replayed_multihot_level_js
             if not os.path.isfile(js_gif_path):
                 print(f"Generating missing JS gif for level {level_i}")
                 try:

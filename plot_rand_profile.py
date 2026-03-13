@@ -448,6 +448,92 @@ def _plot_peak_reference_line(ax, series: dict) -> None:
     )
 
 
+def _collect_jax_compile_times(rollout_len_str: str) -> dict[str, dict[str, float]]:
+    """Returns {device: {game: avg_compile_time_seconds}} averaged over batch sizes."""
+    result = {}
+    if not os.path.isdir(JAX_PROFILING_RESULTS_DIR):
+        return result
+
+    for device in os.listdir(JAX_PROFILING_RESULTS_DIR):
+        rollout_dir = os.path.join(JAX_PROFILING_RESULTS_DIR, device, rollout_len_str)
+        if not os.path.isdir(rollout_dir):
+            continue
+
+        for profile_variant in os.listdir(rollout_dir):
+            variant_dir = os.path.join(rollout_dir, profile_variant)
+            if not os.path.isdir(variant_dir):
+                continue
+
+            for game in os.listdir(variant_dir):
+                game_dir = os.path.join(variant_dir, game)
+                if not os.path.isdir(game_dir):
+                    continue
+
+                for level_path in os.listdir(game_dir):
+                    if not level_path.endswith(".json"):
+                        continue
+                    if get_level_int(level_path[:-5]) != 0:
+                        continue
+
+                    with open(os.path.join(game_dir, level_path), "r") as f:
+                        n_envs_to_stats = json.load(f)
+
+                    compile_times = [
+                        stats["compile_time"]
+                        for stats in n_envs_to_stats.values()
+                        if isinstance(stats.get("compile_time"), (int, float))
+                    ]
+                    if not compile_times:
+                        continue
+
+                    result.setdefault(device, {})[game] = sum(compile_times) / len(compile_times)
+
+    return result
+
+
+def _plot_compile_time_vs_n_rules(
+    rollout_len_str: str,
+    compile_times_by_device: dict[str, dict[str, float]],
+    games_to_n_rules: dict,
+) -> None:
+    if not compile_times_by_device:
+        return
+
+    fig, ax = plt.subplots(figsize=(8, 6))
+    include_device_in_label = len(compile_times_by_device) > 1
+
+    for device_i, (device, game_to_compile_time) in enumerate(sorted(compile_times_by_device.items())):
+        xs, ys, game_labels = [], [], []
+        for game, avg_ct in game_to_compile_time.items():
+            n_rules, _ = _get_game_metadata(game, games_to_n_rules)
+            xs.append(n_rules)
+            ys.append(avg_ct)
+            game_labels.append(game)
+
+        color = f"C{device_i}"
+        series_label = _normalize_device_label(device) if include_device_in_label else "PuzzleJAX"
+        ax.scatter(xs, ys, label=series_label, color=color, zorder=3)
+        for x, y, name in zip(xs, ys, game_labels):
+            ax.annotate(name, (x, y), textcoords="offset points", xytext=(4, 4), fontsize=7)
+
+    ax.set_xlabel("number of rules")
+    ax.set_ylabel("compile time (s)")
+    ax.set_title(
+        f"JAX compile time vs. number of rules\n({get_step_int(rollout_len_str)}-step random rollout)"
+    )
+    ax.grid(True)
+    if include_device_in_label:
+        ax.legend()
+
+    fig.tight_layout()
+    plot_path = os.path.join(PLOTS_DIR, f"jax_compile_time_vs_n_rules_{rollout_len_str}.png").replace(
+        " ", "_"
+    )
+    print(f"Saving compile time plot to {plot_path}")
+    fig.savefig(plot_path)
+    plt.close(fig)
+
+
 def _set_log_axes(ax, all_series: list[dict]) -> None:
     positive_x = [x for series in all_series for x in series["x"] if x > 0]
     positive_y = [y for series in all_series for y in series["y"] if y > 0]
@@ -475,6 +561,8 @@ def main(cfg: PlotRandProfileConfig):
         jax_series = _collect_jax_series(rollout_len_str)
         nodejs_series = _collect_nodejs_series(rollout_len_str)
         cpp_series = _collect_cpp_series(rollout_len_str)
+        jax_compile_times = _collect_jax_compile_times(rollout_len_str)
+        _plot_compile_time_vs_n_rules(rollout_len_str, jax_compile_times, games_to_n_rules)
         games = _get_games_to_plot(cfg, jax_series, nodejs_series, cpp_series)
 
         if not games:

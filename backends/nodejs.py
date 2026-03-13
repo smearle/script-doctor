@@ -120,34 +120,16 @@ class NodeJSPuzzleScriptBackend(PuzzleScriptSearchBackend):
         gif_dir = os.path.dirname(gif_path)
         if gif_dir:
             os.makedirs(gif_dir, exist_ok=True)
-        try:
-            return self.gif.renderSolutionGif(
-                {
-                    "gameText": game_text,
-                    "levelIndex": int(level_i),
-                    "actions": [int(action) for action in actions],
-                    "gifPath": gif_path,
-                    "frameDurationMs": int(round(frame_duration_s * 1000)),
-                    "scale": int(scale),
-                }
-            )
-        except Exception:
-            # Fallback preserves existing behavior if the JS-native path breaks.
-            self.load_level(game_text, level_i)
-            self.solver.precalcDistances(self.engine)
-            frames = [self.render_frame(self.engine.backupLevel())]
-            for action in actions:
-                _, _, _, _, _, level, _, _ = self.solver.takeAction(self.engine, action)
-                frames.append(self.render_frame(level))
-
-            if scale > 1:
-                frames = [
-                    np.repeat(np.repeat(frame, scale, axis=0), scale, axis=1)
-                    for frame in frames
-                ]
-
-            imageio.mimsave(gif_path, frames, duration=frame_duration_s, loop=0)
-            return gif_path
+        return self.gif.renderSolutionGif(
+            {
+                "gameText": game_text,
+                "levelIndex": int(level_i),
+                "actions": [int(action) for action in actions],
+                "gifPath": gif_path,
+                "frameDurationMs": int(round(frame_duration_s * 1000)),
+                "scale": int(scale),
+            }
+        )
 
     def run_search(
         self,

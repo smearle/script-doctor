@@ -160,10 +160,16 @@ def log_callback(metric, steps_prev_complete, config: RLConfig, train_start_time
             f"max: {ep_return_max:,.2f}, min: {ep_return_min:,.2f}, episode length: {ep_length:,.2f}, " + \
             f"FPS: {fps:,.2f}")
 
-        # Add a row to csv with ep_return
+        # Compute any_win before CSV write
+        done_mask = np.asarray(metric["returned_episode"])
+        any_win = 0
+        if win_flags is not None:
+            any_win = int(np.asarray(win_flags)[done_mask].any())
+
+        # Add a row to csv with ep_return, fps, win
         with open(os.path.join(get_exp_dir(config),
                                 "progress.csv"), "a") as f:
-            f.write(f"{t},{ep_return_mean}\n")
+            f.write(f"{t},{ep_return_mean},{fps},{any_win}\n")
 
         # writer.add_scalar("ep_return", ep_return_mean, t)
         # writer.add_scalar("ep_return_max", ep_return_max, t)
@@ -182,7 +188,6 @@ def log_callback(metric, steps_prev_complete, config: RLConfig, train_start_time
         )
 
         if level_ids is not None and win_flags is not None:
-            done_mask = np.asarray(metric["returned_episode"])
             finished_levels = np.asarray(level_ids)[done_mask]
             finished_returns = np.asarray(return_values)
             finished_wins = np.asarray(win_flags)[done_mask]
@@ -747,7 +752,7 @@ def main(config: TrainConfig):
                 "from. Overwriting it.")
         # Create csv for logging progress
         with open(os.path.join(exp_dir, "progress.csv"), "w") as f:
-            f.write("timestep,ep_return\n")
+            f.write("timestep,ep_return,fps,win\n")
 
     if config.timestep_chunk_size != -1:
         n_chunks = config.total_timesteps // config.timestep_chunk_size

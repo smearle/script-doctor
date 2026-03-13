@@ -75,7 +75,8 @@ function addRenderedFrame(encoder, levelObj, scale) {
         throw new Error('renderFrame returned null while encoding GIF');
     }
 
-    const scaled = scaleRgbFrame(frame.data, frame.width, frame.height, scale);
+    const rgbData = new Uint8Array(Buffer.from(frame.dataBase64, 'base64'));
+    const scaled = scaleRgbFrame(rgbData, frame.width, frame.height, scale);
     encoder.setSize(scaled.width, scaled.height);
     encoder.addFrame(rgbToRgba(scaled.data), true);
 }

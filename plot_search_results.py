@@ -21,6 +21,46 @@ ALL_RESULTS_PATH = os.path.join('data', 'all_search_results.json')
 EXIT_RESULTS_PATH = os.path.join('data', 'exit_results.json')
 EXIT_TRAINING_DIR = os.path.join('data', 'exit_training')
 
+def _per_level_results_path_for_algo(algo: str) -> str:
+    return os.path.join('data', f'{algo}_per_level_results.json')
+
+
+def _format_game_label(game: str) -> str:
+    label = game_names_remap.get(game, game)
+    label = label.replace('_', ' ')
+    return label.title()
+
+
+def _build_expanded_heatmap_columns(
+    ordered_games: list[str], levels_by_game: dict[str, list[int]]
+) -> tuple[list[tuple[str, int]], list[tuple[str, int, int]]]:
+    columns = []
+    game_spans = []
+    for game in ordered_games:
+        levels = levels_by_game.get(game, [])
+        if not levels:
+            continue
+        start = len(columns)
+        for level in levels:
+            columns.append((game, level))
+        end = len(columns)
+        game_spans.append((game, start, end))
+    return columns, game_spans
+
+
+def _draw_game_dividers(ax, game_spans: list[tuple[str, int, int]], n_rows: int) -> None:
+    for _, _, end in game_spans[:-1]:
+        ax.vlines(end, ymin=0, ymax=n_rows, colors='black', linewidth=2.0)
+    for game, start, end in game_spans:
+        center = (start + end) / 2
+        ax.text(
+            center, 1.005,
+            _format_game_label(game),
+            ha='center', va='bottom', fontsize=9,
+            transform=ax.get_xaxis_transform(),
+        )
+
+
 ALGO_SOLVER_NAMES = {
     'astar': 'solveAStar',
     'bfs': 'solveBFS',
@@ -159,14 +199,18 @@ def _format_level_ranges(levels: list[int]) -> str:
     return ', '.join(ranges)
 
 
-def _collect_results_for_algo(games: list[str], solver_name: str) -> dict[int, dict]:
+def _collect_results_for_algo(
+    games: list[str], solver_name: str
+) -> tuple[dict[int, dict], dict[int, dict[str, dict[int, float]]]]:
     results_by_depth = {}
+    per_level_by_depth: dict[int, dict[str, dict[int, float]]] = {}
     for game in games:
         if game.startswith('test_'):
             continue
         game_dir = os.path.join(JS_SOLS_DIR, game)
         sol_jsons = glob.glob(f"{game_dir}/*.json")
         per_depth_stats = {}
+        per_level_stats: dict[int, dict[int, dict]] = {}
         expected_levels = set()
         levels_seen_by_depth = {}
         for sol_json in sol_jsons:
@@ -201,9 +245,15 @@ def _collect_results_for_algo(games: list[str], solver_name: str) -> dict[int, d
             stats = per_depth_stats[n_steps]
             solved = sol_dict['won']
             actions = sol_dict.get('actions')
+            if n_steps not in per_level_stats:
+                per_level_stats[n_steps] = {}
+            if level_id not in per_level_stats[n_steps]:
+                per_level_stats[n_steps][level_id] = {'n_solved': 0, 'n_runs': 0}
+            per_level_stats[n_steps][level_id]['n_runs'] += 1
             if solved:
                 stats['n_solved'] += 1
                 stats['solution_lengths'].append(len(actions) if actions is not None else 0)
+                per_level_stats[n_steps][level_id]['n_solved'] += 1
             stats['n_levels'] += 1
             clipped_steps = min(n_steps, sol_dict['iterations'])
             stats['n_stepss'].append(clipped_steps)
@@ -234,7 +284,15 @@ def _collect_results_for_algo(games: list[str], solver_name: str) -> dict[int, d
                 'mean_sol_len': mean_solution_length
             }
 
-    return results_by_depth
+        for depth, level_stats in per_level_stats.items():
+            if depth not in per_level_by_depth:
+                per_level_by_depth[depth] = {}
+            per_level_by_depth[depth][game] = {
+                level_id: lvl['n_solved'] / lvl['n_runs']
+                for level_id, lvl in level_stats.items()
+            }
+
+    return results_by_depth, per_level_by_depth
 
 
 def _depth_order_for_results(results_by_depth: dict[int, dict]) -> list[int]:
@@ -275,22 +333,33 @@ def aggregate_results(cfg: PlotSearch):
         raise ValueError(f'Unknown algo: {cfg.algo}')
 
     aggregated_results = {}
+    aggregated_per_level = {}
     for algo in algos:
         solver_name = ALGO_SOLVER_NAMES[algo]
-        results_by_depth = _collect_results_for_algo(games, solver_name)
+        results_by_depth, per_level_by_depth = _collect_results_for_algo(games, solver_name)
         results_path = _results_path_for_algo(algo)
         with open(results_path, 'w') as f:
             json.dump({str(k): v for k, v in results_by_depth.items()}, f, indent=4)
         print(f'Saved aggregated results to {results_path}')
+        per_level_path = _per_level_results_path_for_algo(algo)
+        with open(per_level_path, 'w') as f:
+            json.dump(
+                {str(depth): {game: {str(level): wr for level, wr in levels.items()}
+                               for game, levels in game_data.items()}
+                 for depth, game_data in per_level_by_depth.items()},
+                f, indent=4,
+            )
+        print(f'Saved per-level results to {per_level_path}')
         aggregated_results[algo] = results_by_depth
+        aggregated_per_level[algo] = per_level_by_depth
 
     if cfg.algo == 'all':
         with open(ALL_RESULTS_PATH, 'w') as f:
             json.dump({algo: {str(k): v for k, v in depths.items()} for algo, depths in aggregated_results.items()}, f, indent=4)
         print(f'Saved combined aggregated results to {ALL_RESULTS_PATH}')
-        plot(cfg, aggregated_results)
+        plot(cfg, aggregated_results, aggregated_per_level)
     else:
-        plot(cfg, aggregated_results[cfg.algo])
+        plot(cfg, aggregated_results[cfg.algo], aggregated_per_level[cfg.algo])
 
 
 def _format_steps_label(n_steps: int) -> str:
@@ -315,11 +384,26 @@ def _normalize_results_by_depth(results, default_depth: int):
     return normalized
 
 
-def plot(cfg: PlotSearch, results=None):
+def _load_per_level_by_depth(algo: str) -> dict[int, dict[str, dict[int, float]]]:
+    per_level_path = _per_level_results_path_for_algo(algo)
+    if not os.path.exists(per_level_path):
+        return {}
+    with open(per_level_path, 'r') as f:
+        raw = json.load(f)
+    return {
+        int(depth): {
+            game: {int(level): wr for level, wr in levels.items()}
+            for game, levels in game_data.items()
+        }
+        for depth, game_data in raw.items()
+    }
+
+
+def plot(cfg: PlotSearch, results=None, per_level_by_depth=None):
     M = 40  # max number of games per table
 
     if cfg.algo == 'all':
-        plot_all_algos(cfg, results)
+        plot_all_algos(cfg, results, per_level_by_depth)
         return
 
     if cfg.algo == 'exit':
@@ -340,6 +424,9 @@ def plot(cfg: PlotSearch, results=None):
         else:
             with open(BFS_RESULTS_PATH, 'r') as f:
                 results = json.load(f)
+
+    if per_level_by_depth is None:
+        per_level_by_depth = _load_per_level_by_depth(cfg.algo)
 
     results_by_depth = _normalize_results_by_depth(results, cfg.n_steps)
     depth_order = _depth_order_for_results(results_by_depth)
@@ -382,7 +469,7 @@ def plot(cfg: PlotSearch, results=None):
         depth_df.index = depth_df.index.str.title()
         heatmap_source_dfs[depth] = depth_df
 
-    generate_heatmaps(heatmap_source_dfs, depth_order, algo_label, algo_slug)
+    generate_heatmaps(heatmap_source_dfs, depth_order, algo_label, algo_slug, per_level_by_depth)
 
     latex_df = df.copy()
 
@@ -501,7 +588,7 @@ def plot_exit_heatmap(results: dict) -> None:
         plt.close()
 
 
-def plot_all_algos(cfg: PlotSearch, results_by_algo=None):
+def plot_all_algos(cfg: PlotSearch, results_by_algo=None, per_level_by_algo=None):
     if results_by_algo is None:
         results_by_algo = {}
         for algo in ALGO_SOLVER_NAMES:
@@ -511,6 +598,9 @@ def plot_all_algos(cfg: PlotSearch, results_by_algo=None):
             with open(results_path, 'r') as f:
                 loaded = json.load(f)
             results_by_algo[algo] = _normalize_results_by_depth(loaded, cfg.n_steps)
+
+    if per_level_by_algo is None:
+        per_level_by_algo = {algo: _load_per_level_by_depth(algo) for algo in results_by_algo}
 
     normalized_by_algo = {}
     for algo, algo_results in results_by_algo.items():
@@ -524,8 +614,10 @@ def plot_all_algos(cfg: PlotSearch, results_by_algo=None):
 
     summary_rows = []
     heatmap_source_dfs = {}
+    per_level_by_algo_depth: dict[tuple[str, int], dict[str, dict[int, float]]] = {}
     for algo, depths in normalized_by_algo.items():
         depth_order = _depth_order_for_results(depths)
+        algo_per_level = per_level_by_algo.get(algo, {})
         for depth in depth_order:
             depth_results = depths.get(depth, {})
             if not depth_results:
@@ -556,6 +648,9 @@ def plot_all_algos(cfg: PlotSearch, results_by_algo=None):
             remapped_df.index = remapped_df.index.str.title()
             heatmap_source_dfs[(algo, depth)] = remapped_df
 
+            if depth in algo_per_level:
+                per_level_by_algo_depth[(algo, depth)] = algo_per_level[depth]
+
     if summary_rows:
         summary_df = pd.DataFrame(summary_rows)
         summary_df.sort_values(by=['algo', 'depth', 'game'], ascending=[True, False, True], inplace=True)
@@ -563,10 +658,13 @@ def plot_all_algos(cfg: PlotSearch, results_by_algo=None):
         summary_df.to_csv(summary_csv_path, index=False, float_format='%.4f')
         print(f'Saved results to {summary_csv_path}')
 
-    generate_all_heatmaps(heatmap_source_dfs)
+    generate_all_heatmaps(heatmap_source_dfs, per_level_by_algo_depth)
 
 
-def generate_all_heatmaps(dfs_by_algo_depth: dict) -> None:
+def generate_all_heatmaps(
+    dfs_by_algo_depth: dict,
+    per_level_by_algo_depth: dict[tuple[str, int], dict[str, dict[int, float]]] | None = None,
+) -> None:
     if not dfs_by_algo_depth:
         print('No data available for all-algorithm heatmap generation.')
         return
@@ -694,7 +792,89 @@ def generate_all_heatmaps(dfs_by_algo_depth: dict) -> None:
         finally:
             plt.close()
 
-def generate_heatmaps(dfs_by_depth: dict, depth_order: list[int], algo_label: str, algo_slug: str) -> None:
+    if per_level_by_algo_depth:
+        generate_all_expanded_heatmap(per_level_by_algo_depth, ordered_keys, row_labels)
+
+
+def generate_all_expanded_heatmap(
+    per_level_by_algo_depth: dict[tuple[str, int], dict[str, dict[int, float]]],
+    ordered_keys: list[tuple[str, int]],
+    row_labels: list[str],
+) -> None:
+    levels_by_game: dict[str, set[int]] = {}
+    for key in ordered_keys:
+        for game, level_data in per_level_by_algo_depth.get(key, {}).items():
+            levels_by_game.setdefault(game, set()).update(level_data.keys())
+
+    ordered_games = sorted(levels_by_game.keys())
+    sorted_levels_by_game = {game: sorted(levels) for game, levels in levels_by_game.items()}
+    columns, game_spans = _build_expanded_heatmap_columns(ordered_games, sorted_levels_by_game)
+    if not columns:
+        return
+
+    column_keys = [f'{game}::level-{level}' for game, level in columns]
+    heatmap_df = pd.DataFrame(index=row_labels, columns=column_keys, dtype=float)
+    for key, row_label in zip(ordered_keys, row_labels):
+        data = per_level_by_algo_depth.get(key, {})
+        for game, level in columns:
+            win_rate = data.get(game, {}).get(level)
+            if win_rate is not None:
+                heatmap_df.at[row_label, f'{game}::level-{level}'] = win_rate
+
+    stacked = heatmap_df.stack(future_stack=True).dropna()
+    if stacked.empty:
+        return
+
+    annot_data = None
+    if len(columns) <= 80:
+        annot_data = [
+            [f'{val:.0%}' if pd.notnull(val) else '' for val in row]
+            for row in heatmap_df.to_numpy(dtype=float)
+        ]
+
+    num_cols = len(columns)
+    num_rows = len(row_labels)
+    fig_w = max(num_cols * 0.35 + 3.0, 12.0)
+    fig_h = max(num_rows * 0.8 + 2.5, 3.0)
+
+    plt.figure(figsize=(fig_w, fig_h))
+    ax = sns.heatmap(
+        heatmap_df,
+        annot=annot_data if annot_data is not None else False,
+        fmt='',
+        cmap='RdYlGn',
+        vmin=0.0,
+        vmax=1.0,
+        cbar_kws={'label': 'Win Rate', 'shrink': 0.8, 'pad': 0.01},
+        annot_kws={'size': 7},
+        linewidths=0.25,
+        linecolor='white',
+    )
+    _draw_game_dividers(ax, game_spans, num_rows)
+    ax.set_title('All Search Types: Win Rate per Level', pad=32)
+    plt.xlabel('Level', labelpad=10)
+    plt.ylabel('Algorithm · Search depth', labelpad=10)
+    plt.yticks(rotation=0)
+    ax.set_xticklabels([str(level) for _, level in columns], rotation=0, fontsize=7)
+    plt.tight_layout(rect=[0, 0, 1, 0.9])
+
+    output_path = os.path.join(PLOTS_DIR, 'all_search_win_rate_expanded_heatmap.png')
+    try:
+        plt.savefig(output_path, dpi=300)
+        print(f'Saved expanded heatmap to {output_path}')
+    except Exception as e:
+        print(f'Error saving all-algos expanded heatmap: {e}')
+    finally:
+        plt.close()
+
+
+def generate_heatmaps(
+    dfs_by_depth: dict,
+    depth_order: list[int],
+    algo_label: str,
+    algo_slug: str,
+    per_level_by_depth: dict[int, dict[str, dict[int, float]]] | None = None,
+) -> None:
     if not dfs_by_depth:
         print('No data available for heatmap generation.')
         return
@@ -819,6 +999,83 @@ def generate_heatmaps(dfs_by_depth: dict, depth_order: list[int], algo_label: st
             print(f"Error saving heatmap {config['output']}: {e}")
         finally:
             plt.close()
+
+    if per_level_by_depth:
+        generate_expanded_heatmap(per_level_by_depth, ordered_depths, algo_label, algo_slug)
+
+
+def generate_expanded_heatmap(
+    per_level_by_depth: dict[int, dict[str, dict[int, float]]],
+    ordered_depths: list[int],
+    algo_label: str,
+    algo_slug: str,
+) -> None:
+    depth_labels = [_format_steps_label(depth) for depth in ordered_depths]
+    levels_by_game: dict[str, set[int]] = {}
+    for depth in ordered_depths:
+        for game, level_data in per_level_by_depth.get(depth, {}).items():
+            levels_by_game.setdefault(game, set()).update(level_data.keys())
+
+    ordered_games = sorted(levels_by_game.keys())
+    sorted_levels_by_game = {game: sorted(levels) for game, levels in levels_by_game.items()}
+    columns, game_spans = _build_expanded_heatmap_columns(ordered_games, sorted_levels_by_game)
+    if not columns:
+        return
+
+    column_keys = [f'{game}::level-{level}' for game, level in columns]
+    heatmap_df = pd.DataFrame(index=depth_labels, columns=column_keys, dtype=float)
+    for depth, depth_label in zip(ordered_depths, depth_labels):
+        data = per_level_by_depth.get(depth, {})
+        for game, level in columns:
+            win_rate = data.get(game, {}).get(level)
+            if win_rate is not None:
+                heatmap_df.at[depth_label, f'{game}::level-{level}'] = win_rate
+
+    stacked = heatmap_df.stack(future_stack=True).dropna()
+    if stacked.empty:
+        return
+
+    annot_data = None
+    if len(columns) <= 80:
+        annot_data = [
+            [f'{val:.0%}' if pd.notnull(val) else '' for val in row]
+            for row in heatmap_df.to_numpy(dtype=float)
+        ]
+
+    num_cols = len(columns)
+    num_rows = len(depth_labels)
+    fig_w = max(num_cols * 0.35 + 3.0, 12.0)
+    fig_h = max(num_rows * 0.8 + 2.5, 3.0)
+
+    plt.figure(figsize=(fig_w, fig_h))
+    ax = sns.heatmap(
+        heatmap_df,
+        annot=annot_data if annot_data is not None else False,
+        fmt='',
+        cmap='RdYlGn',
+        vmin=0.0,
+        vmax=1.0,
+        cbar_kws={'label': 'Win Rate', 'shrink': 0.8, 'pad': 0.01},
+        annot_kws={'size': 7},
+        linewidths=0.25,
+        linecolor='white',
+    )
+    _draw_game_dividers(ax, game_spans, num_rows)
+    ax.set_title(f'{algo_label} Win Rate per Level', pad=32)
+    plt.xlabel('Level', labelpad=10)
+    plt.ylabel('Search depth', labelpad=10)
+    plt.yticks(rotation=0)
+    ax.set_xticklabels([str(level) for _, level in columns], rotation=0, fontsize=7)
+    plt.tight_layout(rect=[0, 0, 1, 0.9])
+
+    output_path = os.path.join(PLOTS_DIR, f'{algo_slug}_win_rate_expanded_heatmap.png')
+    try:
+        plt.savefig(output_path, dpi=300)
+        print(f'Saved expanded heatmap to {output_path}')
+    except Exception as e:
+        print(f'Error saving expanded heatmap: {e}')
+    finally:
+        plt.close()
 
 
 @hydra.main(version_base="1.3", config_path="conf", config_name="plot_standalone_bfs_config")

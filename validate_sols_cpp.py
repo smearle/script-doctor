@@ -22,6 +22,7 @@ from backends import NodeJSPuzzleScriptBackend
 from puzzlescript_jax.globals import CPP_VALIDATED_JS_SOLS_DIR, DATA_DIR, JS_SOLS_DIR, LARK_SYNTAX_PATH
 from puzzlescript_jax.preprocessing import SIMPLIFIED_GAMES_DIR, get_tree_from_txt
 from puzzlescript_jax.utils import get_list_of_games_for_testing
+from puzzlescript_nodejs.utils import replay_actions_js
 
 
 def _dedupe_preserve_order(items, key_fn=None):
@@ -90,29 +91,6 @@ def compile_game_for_cpp(js_engine, parser, game):
     js_engine.compile(["restart"], game_text)
     json_str = str(js_engine.serializeCompiledStateJSON())
     return game_text, json_str
-
-
-def replay_actions_js(js_engine, actions, game_text, level_i):
-    js_engine.compile(["loadLevel", level_i], game_text)
-    js_states = []
-    js_winning = []
-    max_again = 50
-
-    level = js_engine.backupLevel()
-    js_states.append(list(level["dat"]))
-    js_winning.append(bool(js_engine.getWinning()))
-
-    for action in actions:
-        js_engine.processInput(action)
-        again_steps = 0
-        while bool(js_engine.getAgaining()) and again_steps < max_again:
-            js_engine.processInput(-1)
-        again_steps += 1
-        level = js_engine.backupLevel()
-        js_states.append(list(level["dat"]))
-        js_winning.append(bool(js_engine.getWinning()))
-
-    return js_states, js_winning
 
 
 def replay_actions_cpp(cpp_engine, serialized_json, actions, level_i):
@@ -454,7 +432,16 @@ def main(cfg: CppValidationConfig, games: Optional[List[str]] = None):
                 if isinstance(actions, dict):
                     actions = actions.get("actions", [])
 
-                js_states, js_winning = replay_actions_js(js_engine, actions, game_text, level_i)
+                _, replayed_js_states, js_winning = replay_actions_js(
+                    js_engine,
+                    backend.solver,
+                    actions,
+                    game_text,
+                    level_i,
+                    stop_on_win=False,
+                    return_winning=True,
+                )
+                js_states = [list(level["dat"]) for level in replayed_js_states]
                 cpp_states, cpp_winning = replay_actions_cpp(cpp_engine, serialized_json, actions, level_i)
 
                 mismatch_step = None
