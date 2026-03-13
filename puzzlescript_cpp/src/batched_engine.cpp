@@ -1,6 +1,9 @@
 #include "batched_engine.h"
 #include <stdexcept>
 #include <cstring>
+#ifdef _OPENMP
+#include <omp.h>
+#endif
 
 // ============================================================
 // Construction
@@ -40,6 +43,29 @@ void BatchedEngine::setLevels(const std::vector<int>& level_indices) {
     level_indices_ = level_indices;
 }
 
+void BatchedEngine::setObsShape(int height, int width) {
+    if (height < 0 || width < 0) {
+        throw std::runtime_error("obs shape must be non-negative");
+    }
+    height_ = height;
+    width_ = width;
+}
+
+void BatchedEngine::setNumThreads(int num_threads) {
+    num_threads_ = num_threads;
+}
+
+int BatchedEngine::numThreads() const {
+#ifdef _OPENMP
+    if (num_threads_ > 0) {
+        return num_threads_;
+    }
+    return omp_get_max_threads();
+#else
+    return 1;
+#endif
+}
+
 // ============================================================
 // Reset
 // ============================================================
@@ -52,16 +78,13 @@ void BatchedEngine::resetEnv(int env_idx) {
 }
 
 void BatchedEngine::resetAll() {
+#ifdef _OPENMP
+#pragma omp parallel for schedule(static) if (batch_size_ > 1) num_threads(numThreads())
+#endif
     for (int i = 0; i < batch_size_; ++i) {
         resetEnv(i);
     }
-    // Cache geometry from first engine (after a level is loaded)
-    width_  = engines_[0].getWidth();
-    height_ = engines_[0].getHeight();
-    stride_obj_ = (n_objs_ + 31) / 32;
-
-    // Allocate obs buffer
-    obs_.resize(batch_size_ * n_objs_ * height_ * width_);
+    refreshObsGeometry();
     fillObsAll();
 }
 
@@ -70,12 +93,33 @@ void BatchedEngine::reset(const std::vector<int>& env_indices) {
         resetAll();
         return;
     }
-    for (int idx : env_indices) {
+    const int num_indices = static_cast<int>(env_indices.size());
+    for (int i = 0; i < num_indices; ++i) {
+        const int idx = env_indices[i];
         if (idx < 0 || idx >= batch_size_) {
             throw std::runtime_error("env index out of range");
         }
-        resetEnv(idx);
-        fillObs(idx);
+    }
+
+#ifdef _OPENMP
+#pragma omp parallel for schedule(static) if (num_indices > 1) num_threads(numThreads())
+#endif
+    for (int i = 0; i < num_indices; ++i) {
+        resetEnv(env_indices[i]);
+    }
+
+    // Resetting selected environments can change the required padding size
+    // when level assignments vary across the batch.
+    if (refreshObsGeometry()) {
+        fillObsAll();
+        return;
+    }
+
+    #ifdef _OPENMP
+#pragma omp parallel for schedule(static) if (num_indices > 1) num_threads(numThreads())
+    #endif
+    for (int i = 0; i < num_indices; ++i) {
+        fillObs(env_indices[i]);
     }
 }
 
@@ -89,6 +133,9 @@ void BatchedEngine::step(const std::vector<int>& actions) {
         throw std::runtime_error("actions size must equal batch_size");
     }
 
+#ifdef _OPENMP
+#pragma omp parallel for schedule(static) if (batch_size_ > 1) num_threads(numThreads())
+#endif
     for (int i = 0; i < batch_size_; ++i) {
         Engine& eng = engines_[i];
         eng.processInput(actions[i]);
@@ -160,9 +207,31 @@ void BatchedEngine::fillObs(int env_idx) {
 }
 
 void BatchedEngine::fillObsAll() {
+#ifdef _OPENMP
+#pragma omp parallel for schedule(static) if (batch_size_ > 1) num_threads(numThreads())
+#endif
     for (int i = 0; i < batch_size_; ++i) {
         fillObs(i);
     }
+}
+
+bool BatchedEngine::refreshObsGeometry() {
+    int max_width = width_;
+    int max_height = height_;
+    for (const auto& eng : engines_) {
+        max_width = std::max(max_width, eng.getWidth());
+        max_height = std::max(max_height, eng.getHeight());
+    }
+
+    stride_obj_ = (n_objs_ + 31) / 32;
+    const size_t new_size = static_cast<size_t>(batch_size_) * n_objs_ * max_height * max_width;
+    const bool shape_changed = (max_width != width_) || (max_height != height_) || (obs_.size() != new_size);
+    width_ = max_width;
+    height_ = max_height;
+    if (shape_changed) {
+        obs_.assign(new_size, 0);
+    }
+    return shape_changed;
 }
 
 // ============================================================

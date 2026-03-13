@@ -1,5 +1,6 @@
 import json
 import os
+import re
 
 import hydra
 from matplotlib import pyplot as plt
@@ -74,6 +75,16 @@ LEGEND_LABEL_ORDER = [
     "C++ (native)",
     "C++ (native multiprocess)",
 ]
+PROFILE_STATS_KEY_RE = re.compile(r"(?P<n_envs>\d+)-(?P<execution_mode>[a-z_]+)(?:-threads-(?P<num_threads>\d+))?$")
+CPP_BATCHED_THREAD_MARKERS = {
+    1: "o",
+    2: "s",
+    4: "^",
+    8: "v",
+    16: "D",
+    24: "P",
+    32: "X",
+}
 
 
 def _get_best_fps(stats: dict) -> float:
@@ -118,6 +129,31 @@ def _get_game_metadata(game: str, games_to_n_rules: dict) -> tuple[int, bool]:
 
 def _normalize_device_label(device: str) -> str:
     return device.replace("_", " ")
+
+
+def _parse_profile_stats_key(stats_key: str) -> tuple[int, str, int | None] | None:
+    match = PROFILE_STATS_KEY_RE.fullmatch(stats_key)
+    if match is None:
+        return None
+    n_envs = int(match.group("n_envs"))
+    execution_mode = match.group("execution_mode")
+    num_threads = match.group("num_threads")
+    return n_envs, execution_mode, (None if num_threads is None else int(num_threads))
+
+
+def _get_cpp_batched_thread_marker(num_threads: int | None) -> str:
+    if num_threads is None:
+        return CPP_RUN_STYLES["cpp_batched"]["marker"]
+    return CPP_BATCHED_THREAD_MARKERS.get(num_threads, "H")
+
+
+def _format_cpp_batched_thread_label(base_label: str, num_threads: int | None) -> str:
+    if num_threads is None:
+        return f"{base_label} (legacy)"
+    suffix = f", {num_threads} thread{'s' if num_threads != 1 else ''}"
+    if base_label.endswith(")"):
+        return f"{base_label[:-1]}{suffix})"
+    return f"{base_label}{suffix}"
 
 
 def _discover_rollout_lengths() -> list[str]:
@@ -233,13 +269,14 @@ def _collect_nodejs_series(rollout_len_str: str) -> dict[str, list[dict]]:
             for stats_key, stats in stats_by_key.items():
                 if not _has_valid_fps(stats):
                     continue
-                if "-" not in stats_key:
+                parsed_key = _parse_profile_stats_key(stats_key)
+                if parsed_key is None:
                     continue
-                n_envs_str, execution_mode = stats_key.split("-", 1)
+                n_envs, execution_mode, _num_threads = parsed_key
                 if execution_mode not in mode_to_points:
                     continue
                 mode_to_points[execution_mode].append({
-                    "x": int(n_envs_str),
+                    "x": n_envs,
                     "y": stats["fps"][-1],
                     "best_fps": _get_best_fps(stats),
                 })
@@ -290,20 +327,33 @@ def _collect_cpp_series(rollout_len_str: str) -> dict[str, list[dict]]:
             with open(level_results_path, "r") as f:
                 stats_by_key = json.load(f)
 
-            mode_to_points = {run_type: [] for run_type in INCLUDED_CPP_RUN_TYPES}
+            mode_to_points = {
+                run_type: [] for run_type in INCLUDED_CPP_RUN_TYPES if run_type != "cpp_batched"
+            }
+            cpp_batched_thread_points: dict[int | None, list[dict]] = {}
+            cpp_batched_envelope_candidates: list[dict] = []
             for stats_key, stats in stats_by_key.items():
                 if not _has_valid_fps(stats):
                     continue
-                if "-" not in stats_key:
+                parsed_key = _parse_profile_stats_key(stats_key)
+                if parsed_key is None:
                     continue
-                n_envs_str, execution_mode = stats_key.split("-", 1)
-                if execution_mode not in mode_to_points:
+                n_envs, execution_mode, num_threads = parsed_key
+                if execution_mode not in INCLUDED_CPP_RUN_TYPES:
                     continue
-                mode_to_points[execution_mode].append({
-                    "x": int(n_envs_str),
-                    "y": stats["fps"][-1],
-                    "best_fps": _get_best_fps(stats),
-                })
+                best_fps = _get_best_fps(stats)
+                point = {
+                    "x": n_envs,
+                    "y": best_fps,
+                    "best_fps": best_fps,
+                    "num_threads": stats.get("num_threads", num_threads),
+                }
+                if execution_mode == "cpp_batched":
+                    resolved_threads = point["num_threads"]
+                    cpp_batched_thread_points.setdefault(resolved_threads, []).append(point)
+                    cpp_batched_envelope_candidates.append(point)
+                else:
+                    mode_to_points[execution_mode].append(point)
 
             for execution_mode, points in mode_to_points.items():
                 if not points:
@@ -321,6 +371,49 @@ def _collect_cpp_series(rollout_len_str: str) -> dict[str, list[dict]]:
                     "color": style["color"],
                     "linestyle": style["linestyle"],
                     "marker": style["marker"],
+                })
+
+            if "cpp_batched" in INCLUDED_CPP_RUN_TYPES and cpp_batched_envelope_candidates:
+                envelope_by_n_env = {}
+                for point in cpp_batched_envelope_candidates:
+                    prev = envelope_by_n_env.get(point["x"])
+                    if prev is None or point["y"] > prev["y"]:
+                        envelope_by_n_env[point["x"]] = point
+
+                envelope_points = sorted(envelope_by_n_env.values(), key=lambda point: point["x"])
+                envelope_points = _truncate_series_on_first_best_fps_drop(envelope_points)
+                style = CPP_RUN_STYLES["cpp_batched"]
+                base_label = style["label"]
+                if include_device_in_label:
+                    base_label = f"{base_label} [{_normalize_device_label(device)}]"
+
+                for num_threads, points in sorted(
+                    cpp_batched_thread_points.items(),
+                    key=lambda item: (-1 if item[0] is None else item[0]),
+                ):
+                    points = sorted(points, key=lambda point: point["x"])
+                    thread_label = _format_cpp_batched_thread_label(style["label"], num_threads)
+                    if include_device_in_label:
+                        thread_label = f"{thread_label} [{_normalize_device_label(device)}]"
+                    series_by_game.setdefault(game, []).append({
+                        "label": thread_label,
+                        "x": [point["x"] for point in points],
+                        "y": [point["y"] for point in points],
+                        "color": style["color"],
+                        "linestyle": "None",
+                        "marker": _get_cpp_batched_thread_marker(num_threads),
+                        "alpha": 0.6,
+                    })
+
+                series_by_game.setdefault(game, []).append({
+                    "label": base_label,
+                    "x": [point["x"] for point in envelope_points],
+                    "y": [point["y"] for point in envelope_points],
+                    "color": style["color"],
+                    "linestyle": style["linestyle"],
+                    "marker": style["marker"],
+                    "linewidth": 1.5,
+                    "zorder": 3,
                 })
 
     return series_by_game
@@ -417,6 +510,9 @@ def main(cfg: PlotRandProfileConfig):
                     markersize=5,
                     linestyle=series["linestyle"],
                     color=series["color"],
+                    alpha=series.get("alpha", 1.0),
+                    linewidth=series.get("linewidth", 1.0),
+                    zorder=series.get("zorder", 2),
                 )
                 # _plot_peak_reference_line(ax, series)
 

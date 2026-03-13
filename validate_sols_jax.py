@@ -636,6 +636,7 @@ def main(cfg: JaxValidationConfig, games: Optional[List[str]] = None):
                 obs, state, reward, done, info = env.step_env(key, state, action, params)
                 return state, (state, reward)
 
+            print("Replaying solution in JAX.")
             try:
                 obs, init_state = env.reset(key, params)
                 if not game_randomness_updated:

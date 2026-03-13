@@ -36,7 +36,7 @@ BATCH_SIZES = [
 ]
 INCLUDED_CPP_FIXED_EXECUTION_MODES = [
     # "cpp_native",
-    "cpp_native_multiprocess",
+    # "cpp_native_multiprocess",
 ]
 INCLUDED_CPP_SWEEP_EXECUTION_MODES = [
     "cpp_batched",
@@ -56,8 +56,21 @@ def get_level_str(level_i: int) -> str:
     return f"level-{level_i}"
 
 
-def get_stats_key(n_envs: int, execution_mode: str) -> str:
+def get_stats_key(n_envs: int, execution_mode: str, num_threads: int | None = None) -> str:
+    if num_threads is not None:
+        return f"{n_envs}-{execution_mode}-threads-{num_threads}"
     return f"{n_envs}-{execution_mode}"
+
+
+def _get_cpp_batched_thread_counts(n_envs: int, cfg: ProfileRandCppConfig) -> list[int]:
+    candidates = {1}
+    for num_threads in cfg.cpp_batched_thread_candidates:
+        num_threads = int(num_threads)
+        if num_threads <= 0:
+            continue
+        if num_threads <= n_envs:
+            candidates.add(num_threads)
+    return sorted(candidates)
 
 
 def _get_fixed_run_specs() -> list[tuple[int, str]]:
@@ -398,6 +411,7 @@ def _profile_batched_rollout(
         "had_worker_failures": False,
         "sample_worker_error": None,
         "execution_mode": "cpp_batched",
+        "num_threads": env.num_threads,
     }
 
 
@@ -425,7 +439,7 @@ def main_launch(cfg: ProfileRandCppConfig):
             slurm_job_name="profile_rand_cpp",
             mem_gb=30,
             tasks_per_node=1,
-            cpus_per_task=1,
+            cpus_per_task=max((int(t) for t in cfg.cpp_batched_thread_candidates if int(t) > 0), default=1),
             timeout_min=180,
             slurm_array_parallelism=n_jobs,
             slurm_account=os.environ.get("SLURM_ACCOUNT"),
@@ -555,22 +569,32 @@ def main(cfg: ProfileRandCppConfig, games: Optional[List[str]] = None):
                 n_envs = 1
                 while True:
                     execution_mode = "cpp_batched"
-                    stats_key = get_stats_key(n_envs, execution_mode)
                     print(f"\nGame: {game}, n_envs: {n_envs}, mode: {execution_mode}.")
-
-                    if not cfg.overwrite and stats_key in n_envs_to_stats:
+                    stats_entries_for_n_env = []
+                    thread_counts = _get_cpp_batched_thread_counts(n_envs, cfg)
+                    for num_threads in thread_counts:
+                        stats_key = get_stats_key(n_envs, execution_mode, num_threads)
                         print(
-                            f"Skipping {game} level {level_i} with n_envs={n_envs} mode={execution_mode} "
-                            f"as results already exist."
+                            f"  Threads: {num_threads}. "
+                            f"Key: {stats_key}."
                         )
-                        stats_entry = n_envs_to_stats[stats_key]
-                    else:
+
+                        if not cfg.overwrite and stats_key in n_envs_to_stats:
+                            print(
+                                f"  Skipping {game} level {level_i} with n_envs={n_envs} "
+                                f"mode={execution_mode} threads={num_threads} as results already exist."
+                            )
+                            stats_entry = n_envs_to_stats[stats_key]
+                            stats_entries_for_n_env.append(stats_entry)
+                            continue
+
                         try:
                             batched_env = CppBatchedPuzzleScriptEnv(
                                 serialized_json,
                                 batch_size=n_envs,
                                 level_indices=[level_i] * n_envs,
-                                max_episode_steps=max(cfg.n_steps, 1),
+                                max_episode_steps=max(cfg.n_steps + 1, 2),
+                                num_threads=num_threads,
                             )
                             iterations = []
                             fpss = []
@@ -585,8 +609,9 @@ def main(cfg: ProfileRandCppConfig, games: Optional[List[str]] = None):
                                 fpss.append(stats["fps"])
                                 last_stats = stats
                                 print(
-                                    f"Loop {run_i} ran {stats['total_iterations']} steps in "
-                                    f"{stats['wall_time']:.3f} seconds. FPS: {stats['fps']:,.2f}"
+                                    f"  Loop {run_i} ran {stats['total_iterations']} steps in "
+                                    f"{stats['wall_time']:.3f} seconds. FPS: {stats['fps']:,.2f} "
+                                    f"(threads={stats['num_threads']})"
                                 )
 
                             stats_entry = {
@@ -605,28 +630,36 @@ def main(cfg: ProfileRandCppConfig, games: Optional[List[str]] = None):
                                 "had_worker_failures": last_stats["had_worker_failures"],
                                 "sample_worker_error": last_stats["sample_worker_error"],
                                 "execution_mode": last_stats["execution_mode"],
+                                "num_threads": last_stats["num_threads"],
                             }
                             n_envs_to_stats[stats_key] = stats_entry
                         except Exception as exc:
                             err_msg = traceback.format_exc()
                             print(
                                 f"Error profiling {game} level {level_i} with n_envs={n_envs} "
-                                f"mode={execution_mode}: {err_msg}"
+                                f"mode={execution_mode} threads={num_threads}: {err_msg}"
                             )
                             stats_entry = {
                                 "error_type": type(exc).__name__,
                                 "error": str(exc),
                                 "error_traceback": err_msg,
                                 "execution_mode": execution_mode,
+                                "num_threads": num_threads,
                             }
                             n_envs_to_stats[stats_key] = stats_entry
 
+                        stats_entries_for_n_env.append(stats_entry)
                         save_results(n_envs_to_stats, results_path)
 
-                    if "error_type" in stats_entry:
+                    valid_stats_entries = [
+                        stats_entry
+                        for stats_entry in stats_entries_for_n_env
+                        if "error_type" not in stats_entry and _best_fps(stats_entry) > 0
+                    ]
+                    if not valid_stats_entries:
                         break
 
-                    current_batched_best_fps = _best_fps(stats_entry)
+                    current_batched_best_fps = max(_best_fps(stats_entry) for stats_entry in valid_stats_entries)
                     if (
                         prev_batched_best_fps is not None
                         and current_batched_best_fps < prev_batched_best_fps

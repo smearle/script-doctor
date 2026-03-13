@@ -102,7 +102,7 @@ class ProfileRandNodeJSConfig(NodeJSConfig):
 
 @dataclass
 class ProfileRandCppConfig(NodeJSConfig):
-    pass
+    cpp_batched_thread_candidates: Tuple[int, ...] = (1, 2, 4, 8, 16, 24, 32)
 
 
 @dataclass

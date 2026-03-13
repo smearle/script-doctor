@@ -104,11 +104,21 @@ PYBIND11_MODULE(_puzzlescript_cpp, m) {
         .def("set_levels", &BatchedEngine::setLevels,
              py::arg("level_indices"),
              "Assign level index per environment")
-        .def("reset", &BatchedEngine::reset,
-             py::arg("env_indices"),
-             "Reset specific environments (empty list = reset all)")
-        .def("reset_all", &BatchedEngine::resetAll,
-             "Reset all environments")
+        .def("set_obs_shape", &BatchedEngine::setObsShape,
+             py::arg("height"), py::arg("width"),
+             "Configure a fixed padded observation shape")
+        .def("set_num_threads", &BatchedEngine::setNumThreads,
+             py::arg("num_threads"),
+             "Configure the number of CPU threads used for batched work")
+        .def("reset", [](BatchedEngine& be, const std::vector<int>& env_indices) {
+            py::gil_scoped_release release;
+            be.reset(env_indices);
+        }, py::arg("env_indices"),
+           "Reset specific environments (empty list = reset all)")
+        .def("reset_all", [](BatchedEngine& be) {
+            py::gil_scoped_release release;
+            be.resetAll();
+        }, "Reset all environments")
         .def("set_auto_reset", &BatchedEngine::setAutoReset,
              py::arg("auto_reset"),
              "Enable or disable automatic reset when an environment reaches a terminal state")
@@ -120,6 +130,7 @@ PYBIND11_MODULE(_puzzlescript_cpp, m) {
             std::vector<int> acts(be.batchSize());
             const int32_t* ptr = static_cast<const int32_t*>(buf.ptr);
             for (int i = 0; i < be.batchSize(); ++i) acts[i] = ptr[i];
+            py::gil_scoped_release release;
             be.step(acts);
         }, py::arg("actions"),
            "Step all envs. actions: int32 array of shape (batch,)")
@@ -176,6 +187,7 @@ PYBIND11_MODULE(_puzzlescript_cpp, m) {
         .def_property_readonly("level_width", &BatchedEngine::levelWidth)
         .def_property_readonly("level_height", &BatchedEngine::levelHeight)
         .def_property_readonly("num_levels", &BatchedEngine::numLevels)
+        .def_property_readonly("num_threads", &BatchedEngine::numThreads)
         .def_property_readonly("auto_reset", &BatchedEngine::autoReset)
         .def("get_objects", [](const BatchedEngine& be, int env_idx) {
             const auto& objs = be.getObjects(env_idx);

@@ -44,6 +44,24 @@ SWEEP_META_FIELDS = {
     "sweep_axes",
 }
 
+BACKEND_DEFAULT_N_ENVS = {
+    "nodejs": 16,
+    "cpp": 256,
+}
+
+BACKEND_SLURM_DEFAULTS = {
+    "jax": {
+        "cpus_per_task": 1,
+        "slurm_gres": "gpu:1",
+    },
+    "nodejs": {
+        "cpus_per_task": 16,
+    },
+    "cpp": {
+        "cpus_per_task": 4,
+    },
+}
+
 
 def replay_solution(parser, game, level_i, actions):
     actions = [JS_TO_JAX_ACTIONS[a] for a in actions]
@@ -146,6 +164,21 @@ def _coerce_to_field_type(cfg_obj: Any, field_name: str, value: Any) -> Any:
             return tuple(value)
         return (value,)
     return value
+
+
+def _get_hydra_override_root_keys() -> set[str]:
+    try:
+        overrides = HydraConfig.get().overrides.task
+    except Exception:
+        return set()
+
+    overridden_root_keys = set()
+    for override in overrides:
+        if "=" not in override:
+            continue
+        key = override.split("=", 1)[0].lstrip("+")
+        overridden_root_keys.add(key.split(".", 1)[0])
+    return overridden_root_keys
 
 
 def plot_rl_runs_reward(grid_cfgs: List[SweepRLConfig]):
@@ -382,10 +415,30 @@ def _apply_named_sweep(sweep_cfg: SweepRLConfig) -> SweepRLConfig:
     return resolved_cfg
 
 
+def _apply_backend_defaults(
+    sweep_cfg: SweepRLConfig,
+    *,
+    backend: str,
+    overridden_root_keys: set[str],
+) -> SweepRLConfig:
+    resolved_cfg = copy.deepcopy(sweep_cfg)
+
+    if "n_envs" not in overridden_root_keys and backend in BACKEND_DEFAULT_N_ENVS:
+        resolved_cfg.n_envs = BACKEND_DEFAULT_N_ENVS[backend]
+
+    return resolved_cfg
+
+
 @hydra.main(version_base="1.3", config_path="conf", config_name="sweep_rl_config")
 def main(sweep_cfg: SweepRLConfig):
     sweep_cfg = _apply_named_sweep(sweep_cfg)
     backend = str(getattr(sweep_cfg, "backend", "jax")).lower()
+    overridden_root_keys = _get_hydra_override_root_keys()
+    sweep_cfg = _apply_backend_defaults(
+        sweep_cfg,
+        backend=backend,
+        overridden_root_keys=overridden_root_keys,
+    )
 
     if backend == "jax":
         if sweep_cfg.mode == 'train':
@@ -443,17 +496,18 @@ def main(sweep_cfg: SweepRLConfig):
         [main_fn(cfg) for cfg in all_cfgs]
     else:
         executor = submitit.AutoExecutor(folder=os.path.join("submitit_logs", "rl"))
-        executor.update_parameters(
+        slurm_params = dict(BACKEND_SLURM_DEFAULTS.get(backend, {}))
+        executor_params = {
             # slurm_job_name=f"{game}-{level}",
-            slurm_job_name=f"puzzlejax-ppo",
-            mem_gb=30,
-            tasks_per_node=1,
-            cpus_per_task=1,
-            timeout_min=60*24,
-            slurm_gres='gpu:1',
-            slurm_array_parallelism=1_000,
-            slurm_account=os.environ.get("SLURM_ACCOUNT")
-        )
+            "slurm_job_name": "puzzlejax-ppo",
+            "mem_gb": 30,
+            "tasks_per_node": 1,
+            "timeout_min": 60 * 24,
+            "slurm_array_parallelism": 1_000,
+            "slurm_account": os.environ.get("SLURM_ACCOUNT"),
+            **slurm_params,
+        }
+        executor.update_parameters(**executor_params)
         executor.map_array(
             main_fn,
             all_cfgs,

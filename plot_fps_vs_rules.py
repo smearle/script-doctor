@@ -21,7 +21,7 @@ from puzzlescript_jax.globals import (
 
 SEARCH_RESULT_FILENAME_RE = re.compile(r"([a-z_]+)_(\d+)-steps_level-(\d+)\.json$")
 PROFILE_LEVEL_RE = re.compile(r"level-(\d+)(?:-vmap-(True|False))?\.json$")
-PROFILE_STATS_KEY_RE = re.compile(r"(\d+)-(.+)")
+PROFILE_STATS_KEY_RE = re.compile(r"(?P<n_envs>\d+)-(?P<execution_mode>[a-z_]+)(?:-threads-(?P<num_threads>\d+))?$")
 SEARCH_RUN_STYLES = {
     "NodeJS": {"label": "NodeJS", "color": "C2", "marker": "o"},
     "C++": {"label": "C++", "color": "C0", "marker": "s"},
@@ -125,6 +125,13 @@ def parse_profile_level_filename(filename: str):
         raise ValueError(f"Could not parse profile result filename: {filename}")
     level_i, vmap_flag = match.groups()
     return int(level_i), None if vmap_flag is None else (vmap_flag == "True")
+
+
+def parse_profile_stats_key(stats_key: str):
+    match = PROFILE_STATS_KEY_RE.fullmatch(stats_key)
+    if match is None:
+        return None
+    return int(match.group("n_envs")), match.group("execution_mode"), match.group("num_threads")
 
 
 def collect_search_records(results_dir: str, backend_name: str):
@@ -259,14 +266,14 @@ def collect_profile_records(results_dir: str, backend_name: str):
             level_result = json.load(f)
 
         for stats_key, stats in level_result.items():
-            match = PROFILE_STATS_KEY_RE.fullmatch(stats_key)
-            if match is None:
+            parsed_key = parse_profile_stats_key(stats_key)
+            if parsed_key is None:
                 if backend_name == "NodeJS" and stats_key.isdigit() and "multiprocess" in INCLUDED_NODEJS_RUN_TYPES:
                     execution_mode = "multiprocess"
                 else:
                     continue
             else:
-                _n_envs, execution_mode = match.groups()
+                _n_envs, execution_mode, _num_threads = parsed_key
             if backend_name == "NodeJS":
                 if execution_mode not in INCLUDED_NODEJS_RUN_TYPES:
                     continue

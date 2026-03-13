@@ -468,7 +468,8 @@ class CppBatchedPuzzleScriptEnv:
     def __init__(self, json_str: str, batch_size: int,
                  level_indices: list[int] | None = None,
                  max_episode_steps: int = 200,
-                 auto_reset: bool = True):
+                 auto_reset: bool = True,
+                 num_threads: int = 0):
         self._be = _BatchedEngine(batch_size)
         if not self._be.load_from_json(json_str):
             raise RuntimeError("Failed to load compiled game JSON")
@@ -485,6 +486,10 @@ class CppBatchedPuzzleScriptEnv:
         self._active_level_indices = self._base_level_indices.copy()
         self._steps = np.zeros(batch_size, dtype=np.int32)
         self._be.set_levels(self._active_level_indices.tolist())
+        if hasattr(self._be, "set_obs_shape"):
+            self._be.set_obs_shape(self._max_height, self._max_width)
+        if hasattr(self._be, "set_num_threads"):
+            self._be.set_num_threads(int(num_threads))
         if hasattr(self._be, "set_auto_reset"):
             self._be.set_auto_reset(False)
 
@@ -509,14 +514,24 @@ class CppBatchedPuzzleScriptEnv:
         return 5
 
     @property
+    def num_threads(self) -> int:
+        return getattr(self._be, "num_threads", 1)
+
+    @property
     def num_levels(self) -> int:
         return self._be.num_levels
+
+    def set_num_threads(self, num_threads: int) -> None:
+        if hasattr(self._be, "set_num_threads"):
+            self._be.set_num_threads(int(num_threads))
 
     def set_levels(self, level_indices: list[int]) -> None:
         self._base_level_indices = np.asarray(level_indices, dtype=np.int32)
         self._active_level_indices = self._base_level_indices.copy()
         self._max_height, self._max_width = self._compute_max_level_shape(level_indices)
         self._be.set_levels(self._active_level_indices.tolist())
+        if hasattr(self._be, "set_obs_shape"):
+            self._be.set_obs_shape(self._max_height, self._max_width)
 
     def _compute_max_level_shape(self, level_indices: list[int] | None = None) -> tuple[int, int]:
         if level_indices is None or any(level_i < 0 for level_i in level_indices):
@@ -551,6 +566,10 @@ class CppBatchedPuzzleScriptEnv:
         return obs
 
     def _get_obs_batch(self) -> np.ndarray:
+        if hasattr(self._be, "get_obs"):
+            obs = np.array(self._be.get_obs(), dtype=np.uint8, copy=True)
+            if obs.shape == self.observation_shape:
+                return obs
         return np.stack([self._get_obs_for_env(i) for i in range(self.batch_size)], axis=0)
 
     def _sample_level_indices(self) -> np.ndarray:

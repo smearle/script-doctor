@@ -434,11 +434,10 @@ def preprocess_ps(txt):
     # Truncate lines ending with "message"
     # txt = re.sub(r'message.*\n', '\n', txt, flags=re.MULTILINE | re.IGNORECASE)
 
-    # If a line ends with "message ...", and is preceded somewhere by a `]`, remove the `message ...` part
-    # (This is to avoid removing the closing parenthesis of the `(endgame message)` comment in `cute train`)
-    # Also check to make sure the entire rule and message is not enclosed in a comment, by (hackishly) checking
-    # that the line does not start with a `(`.
-    txt = re.sub(r'^((?!\().*\]\s*)message .*\n', r'\1\n', txt, flags=re.MULTILINE | re.IGNORECASE)
+    # If a rule line contains a trailing "message ...", strip only the message text.
+    # This needs to handle forms like "] Message ..." and also "] Sfx1 Message ...".
+    # Keep the guard against lines that are actually comments, e.g. "(endgame message)".
+    txt = re.sub(r'^((?!\().*\].*?)\s+message .*\n', r'\1\n', txt, flags=re.MULTILINE | re.IGNORECASE)
 
     ## Strip any comments
     txt = strip_comments(txt)

@@ -27,6 +27,14 @@ public:
     /// Assign level indices per environment. Length must equal batch_size.
     void setLevels(const std::vector<int>& level_indices);
 
+    /// Configure a fixed padded observation shape used by getObs().
+    void setObsShape(int height, int width);
+
+    /// Configure the number of CPU threads to use for batched work.
+    /// Values <= 0 mean "auto" when supported.
+    void setNumThreads(int num_threads);
+    int numThreads() const;
+
     // ---- Gym interface -----------------------------------------------
 
     /// Reset specific environments (by index) to their assigned levels.
@@ -103,8 +111,10 @@ private:
     std::vector<bool> prev_winning_;
     std::vector<float> prev_scores_;
     bool auto_reset_ = true;
+    int num_threads_ = 0;
 
     void fillObs(int env_idx);
     void fillObsAll();
     void resetEnv(int env_idx);
+    bool refreshObsGeometry();
 };

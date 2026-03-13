@@ -39,6 +39,7 @@ class TrainPytorchConfig:
     game: str = "sokoban_basic"
     level: int = 0
     max_episode_steps: int = 200
+    cpp_num_threads: int = 0
 
     # PPO hyperparams
     lr: float = 2.5e-4
@@ -84,7 +85,11 @@ cs.store(name="train_cpp_config", node=TrainPytorchConfig)
 
 def get_exp_dir(cfg: TrainPytorchConfig) -> str:
     root = "rl_logs_cpp" if cfg.backend == "cpp" else "rl_logs_pytorch"
-    backend_slug = "" if cfg.backend == "cpp" else f"backend-{cfg.backend}"
+    if cfg.backend == "cpp":
+        thread_slug = f"cpp-threads-{cfg.cpp_num_threads if cfg.cpp_num_threads > 0 else 'auto'}"
+        backend_slug = thread_slug
+    else:
+        backend_slug = f"backend-{cfg.backend}"
     return os.path.join(
         root,
         *(part for part in [backend_slug, cfg.game, f"level-{cfg.level}"] if part),
@@ -285,6 +290,7 @@ def create_batched_env(cfg: TrainPytorchConfig):
             batch_size=cfg.n_envs,
             level_indices=[cfg.level] * cfg.n_envs,
             max_episode_steps=cfg.max_episode_steps,
+            num_threads=cfg.cpp_num_threads,
         )
         return env, {"json_str": json_str, "sprite_json": sprite_json}
 
@@ -369,6 +375,8 @@ def train(cfg: TrainPytorchConfig) -> None:
         width = obs_shape[3]
         n_actions = env.num_actions
         print(f"Obs shape: {obs_shape}, n_actions: {n_actions}")
+        if cfg.backend == "cpp" and hasattr(env, "num_threads"):
+            print(f"C++ batched env threads: {env.num_threads}")
 
         batch_size = cfg.n_envs * cfg.num_steps
         minibatch_size = batch_size // cfg.num_minibatches

@@ -1,6 +1,7 @@
 from setuptools import setup, Extension
 from setuptools.command.build_ext import build_ext
 import pybind11
+import os
 import sys
 
 
@@ -10,6 +11,12 @@ class BuildExt(build_ext):
             for ext in self.extensions:
                 ext.extra_compile_args.append('-mmacosx-version-min=10.14')
                 ext.extra_link_args.append('-mmacosx-version-min=10.14')
+        if sys.platform.startswith('linux'):
+            use_openmp = os.environ.get('PUZZLESCRIPT_CPP_OPENMP', '1') != '0'
+            if use_openmp:
+                for ext in self.extensions:
+                    ext.extra_compile_args.append('-fopenmp')
+                    ext.extra_link_args.append('-fopenmp')
         build_ext.build_extensions(self)
 
 
