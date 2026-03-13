@@ -357,15 +357,23 @@ def compute_manhattan_dists_from_channels(src_channel, trg_channel):
     return dists
 
 def compute_sum_of_manhattan_dists_from_channels(src_channel, trg_channel):
+    max_dist = src_channel.shape[0] + src_channel.shape[1]
+    n_cells = np.prod(src_channel.shape)
+    # Identify real (non-filler) source rows from argwhere
+    src_coords = jnp.argwhere(src_channel, size=n_cells, fill_value=-1)
+    is_real_src = ~jnp.all(src_coords == -1, axis=-1)
     dists = compute_manhattan_dists_from_channels(src_channel, trg_channel)
-    # Get minimum of each source to any target
+    # Get minimum of each source to any target.
+    # Real sources with no target get max_dist; filler argwhere rows get 0.
     dists = jnp.nanmin(dists, axis=1)
-    dists = jnp.where(jnp.isnan(dists), 0, dists)
+    dists = jnp.where(jnp.isnan(dists), jnp.where(is_real_src, max_dist, 0), dists)
     return jnp.sum(dists, axis=0).astype(np.int32)
 
 def compute_min_manhattan_dist_from_channels(src_channel, trg_channel):
+    max_dist = src_channel.shape[0] + src_channel.shape[1]
     dists = compute_manhattan_dists_from_channels(src_channel, trg_channel)
-    dists = jnp.where(jnp.isnan(dists), jnp.iinfo(np.int32).max, dists)
+    # Cap fallback at max_dist (not INT_MAX) to avoid reward magnitude explosion
+    dists = jnp.where(jnp.isnan(dists), max_dist, dists)
     return jnp.min(dists).astype(np.int32)
 
 def check_all(lvl, src, trg, src_all=False, trg_all=False):
@@ -1440,7 +1448,8 @@ class PuzzleJaxEnv:
             jax.debug.print('heuristic: {heuristic}, score: {score}, win: {win}', heuristic=heuristic, score=score, win=win)
 
         # reward = (heuristic - state.init_heuristic) / jnp.abs(state.init_heuristic)
-        reward = heuristic - state.prev_heuristic
+        max_dist = multihot_level.shape[1] + multihot_level.shape[2]
+        reward = (heuristic - state.prev_heuristic) / max_dist
         # reward += 10 if win else 0
         reward = jax.lax.select(win, reward + 1, reward)
         reward = reward.astype(float) - 0.01

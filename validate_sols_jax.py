@@ -33,7 +33,7 @@ from puzzlescript_jax.globals import (
 from puzzlescript_jax.preprocessing import PJParseErrors, get_tree_from_txt
 from puzzlescript_jax.env_utils import multihot_to_desc
 from puzzlescript_nodejs.utils import replay_actions_js
-from puzzlescript_jax.utils import get_list_of_games_for_testing, to_binary_vectors
+from puzzlescript_jax.utils import get_list_of_games_for_testing, level_to_int_arr, to_binary_vectors
 from utils_rl import get_env_params_from_config
 
 
@@ -100,7 +100,10 @@ def resolve_js_gif_path(level_sol_json_path: str, sol_dir: str, level_i: int) ->
 
 
 def multihot_level_from_js_state(level_state, obj_list, target_obj_names=None):
-    level_state = np.array(level_state).T
+    if isinstance(level_state, (list, tuple, np.ndarray)):
+        level_state = np.array(level_state).T
+    else:
+        level_state = level_to_int_arr(level_state, len(obj_list)).T
     multihot_level_js = to_binary_vectors(level_state, len(obj_list))
     multihot_level_js = rearrange(multihot_level_js, 'h w c -> c h w')[::-1]
 
@@ -383,9 +386,9 @@ def main(cfg: JaxValidationConfig, games: Optional[List[str]] = None):
         level_ints = []
         for level_i, sols in level_ints_to_sols.items():
             # Filter by algorithm priority
-            bfs_sols = [s for s in sols if 'solveBFS' in s]
-            astar_sols = [s for s in sols if 'solveAStar' in s]
-            mcts_sols = [s for s in sols if 'solveMCTS' in s]
+            bfs_sols = [s for s in sols if 'bfs' in s]
+            astar_sols = [s for s in sols if 'astar' in s]
+            mcts_sols = [s for s in sols if 'mcts' in s]
 
             if bfs_sols:
                 sols_to_consider = bfs_sols
@@ -598,11 +601,6 @@ def main(cfg: JaxValidationConfig, games: Optional[List[str]] = None):
             level_score = sol_dict['score']
             level_state = sol_dict['state']
             obj_list = sol_dict['objs']
-            multihot_level_js = multihot_level_from_js_state(
-                level_state,
-                obj_list,
-                target_obj_names=env.atomic_obj_names,
-            )
             actions = level_sol
             # print(f"Level {level_i} solution: {actions}")
             actions = [JS_TO_JAX_ACTIONS[a] for a in actions]
@@ -618,6 +616,21 @@ def main(cfg: JaxValidationConfig, games: Optional[List[str]] = None):
             params = params.replace(level=level)
             print(f"Level {level_i} solution: {actions}")
             js_scores, js_states = replay_actions_js(engine, solver, level_sol, game_text, level_i)
+            multihot_level_js = multihot_level_from_js_state(
+                js_states[-1],
+                obj_list,
+                target_obj_names=env.atomic_obj_names,
+            )
+            saved_multihot_level_js = multihot_level_from_js_state(
+                level_state,
+                obj_list,
+                target_obj_names=env.atomic_obj_names,
+            )
+            if not np.array_equal(saved_multihot_level_js, multihot_level_js):
+                print(
+                    f"Warning: saved solver state differs from replayed JS terminal state for "
+                    f"{game_name} level {level_i}; using replayed JS state for validation."
+                )
             if not os.path.isfile(js_gif_path):
                 print(f"Generating missing JS gif for level {level_i}")
                 try:
