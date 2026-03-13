@@ -21,6 +21,7 @@ from conf.config import SweepRLConfig, TrainConfig, EnjoyConfig
 from puzzlescript_jax.env import PJParams
 from puzzlescript_jax.preprocessing import get_env_from_ps_file
 from train_jax import main as main_train
+from train_pytorch import train as pytorch_train, TrainPytorchConfig
 from eval_rl import main_enjoy
 from sweep_rl_configs import _NAMED_SWEEPS
 from puzzlescript_jax.utils import get_list_of_games_for_testing, get_n_levels_per_game, init_ps_lark_parser
@@ -328,7 +329,7 @@ def gen_grid_cfgs(sweep_cfg: SweepRLConfig, base_cfg: TrainConfig):
                 cfg_i.level = level
                 if "n_envs" not in updates:
                     cfg_i.n_envs = game_default_n_envs
-                cfg_i.total_timesteps = int(TOTAL_TIMESTEPS)
+                cfg_i.total_timesteps = int(sweep_cfg.total_timesteps)
                 exp_cfgs.append(cfg_i)
             grid_cfgs[game][level] = exp_cfgs
     return grid_cfgs
@@ -384,18 +385,26 @@ def _apply_named_sweep(sweep_cfg: SweepRLConfig) -> SweepRLConfig:
 @hydra.main(version_base="1.3", config_path="conf", config_name="sweep_rl_config")
 def main(sweep_cfg: SweepRLConfig):
     sweep_cfg = _apply_named_sweep(sweep_cfg)
-    if sweep_cfg.mode == 'train':
-        main_fn = main_train
-        CfgCls = TrainConfig
-    elif sweep_cfg.mode == 'enjoy':
-        main_fn = main_enjoy
-        CfgCls = EnjoyConfig
-    elif sweep_cfg.mode == 'plot':
-        main_fn = None
-        CfgCls = TrainConfig
-        sweep_cfg.plot = True
+    backend = str(getattr(sweep_cfg, "backend", "jax")).lower()
+
+    if backend == "jax":
+        if sweep_cfg.mode == 'train':
+            main_fn = main_train
+            CfgCls = TrainConfig
+        elif sweep_cfg.mode == 'enjoy':
+            main_fn = main_enjoy
+            CfgCls = EnjoyConfig
+        elif sweep_cfg.mode == 'plot':
+            main_fn = None
+            CfgCls = TrainConfig
+            sweep_cfg.plot = True
+        else:
+            raise ValueError(f"Unsupported sweep mode: {sweep_cfg.mode!r}. Expected one of: 'train', 'enjoy', 'plot'.")
     else:
-        raise ValueError(f"Unsupported sweep mode: {sweep_cfg.mode!r}. Expected one of: 'train', 'enjoy', 'plot'.")
+        if sweep_cfg.mode != 'train':
+            raise ValueError(f"mode={sweep_cfg.mode!r} is not supported for backend={backend!r}. Only 'train' is supported.")
+        main_fn = pytorch_train
+        CfgCls = TrainPytorchConfig
     base_cfg = CfgCls()
 
     grid_cfgs = gen_grid_cfgs(sweep_cfg, base_cfg)

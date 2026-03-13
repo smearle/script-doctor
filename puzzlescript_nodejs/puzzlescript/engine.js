@@ -43,6 +43,7 @@ function createSandbox() {
         Float32Array,
         Float64Array,
         ArrayBuffer,
+        Buffer,
         Math,
         Date,
         JSON,
@@ -579,7 +580,7 @@ globalThis.__PS_NODE_API__ = {
             gridWidth: viewW,
             gridHeight: viewH,
             visibleBounds: [mini, minj, maxi, maxj],
-            data: Array.from(data),
+            dataBase64: Buffer.from(data.buffer, data.byteOffset, data.byteLength).toString('base64'),
         };
     },
 

@@ -167,7 +167,9 @@ def main(cfg: SearchNodeJSConfig, games: Optional[List[str]] = None):
             game_js_sols_dir = os.path.join(JS_SOLS_DIR, game)
             os.makedirs(game_js_sols_dir, exist_ok=True)
 
-            for level_i in range(n_levels):
+            levels_to_test = range(n_levels) if cfg.level is None else [cfg.level]
+
+            for level_i in levels_to_test:
                 algo_prefix = f'{algo}_'
                 level_js_sol_path = os.path.join(
                     game_js_sols_dir, f'{algo_prefix}{cfg.n_steps}-steps_level-{level_i}.json')
@@ -227,12 +229,12 @@ def main(cfg: SearchNodeJSConfig, games: Optional[List[str]] = None):
                     if cfg.render:
                         gif_path = os.path.join(
                             game_js_sols_dir, f'{algo_prefix}{cfg.n_steps}-steps_level-{level_i}.gif')
-                        backend.render_solution_gif(
+                        backend.render_gif(
                             game_text=game_text,
                             level_i=level_i,
                             actions=result['actions'],
                             gif_path=gif_path,
-                            frame_duration_s=0.5,
+                            frame_duration_s=0.2,
                             scale=1,
                         )
 

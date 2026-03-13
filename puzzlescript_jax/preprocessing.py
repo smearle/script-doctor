@@ -587,14 +587,15 @@ def get_tree_from_txt(parser, game, log_dir: str = None, overwrite: bool = True,
     if log_dir:
         log_filename = os.path.join(log_dir, game + '.log')
 
-    # This timeout functionality only works on Unix
+    # This timeout functionality only works on Unix main thread.
     print(f"Parsing {simp_filepath}")
-    if os.name != 'nt':
+    import threading as _threading
+    if os.name != 'nt' and _threading.current_thread() is _threading.main_thread():
         def parse_attempt_fn():
             with timeout_handler(timeout):
                 return parser.parse(content)
-    # FIXME: On windows, this will hang indefinitely on nasty games :(
     else:
+        # Non-main thread (or Windows): skip SIGALRM timeout and parse directly.
         def parse_attempt_fn():
             return parser.parse(content)
 

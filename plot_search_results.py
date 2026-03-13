@@ -9,9 +9,9 @@ import numpy as np
 import pandas as pd
 import seaborn as sns
 
-from puzzlescript_jax.conf.config import PlotSearch
+from conf.config import PlotSearch
 from puzzlescript_jax.globals import PLOTS_DIR, STANDALONE_NODEJS_RESULTS_PATH, JS_SOLS_DIR
-from profile_nodejs import get_algo_name, get_standalone_run_params_from_name
+from search_nodejs import get_standalone_run_params_from_name
 from puzzlescript_jax.utils import get_list_of_games_for_testing, game_names_remap
 
 
@@ -131,10 +131,11 @@ def _collect_exit_results(games: list[str]) -> dict:
 
 
 def _parse_solver_run_name(filename: str):
-    match = re.match(r'^(solve[A-Za-z0-9]+)_(\d+)-steps_level-(\d+)\.json$', filename)
+    match = re.match(r'^(astar|bfs|gbfs|mcts)_(\d+)-steps_level-(\d+)\.json$', filename)
     if match is None:
         return None, None, None
-    return match.group(1), int(match.group(2)), int(match.group(3))
+    solver_name = ALGO_SOLVER_NAMES[match.group(1)]
+    return solver_name, int(match.group(2)), int(match.group(3))
 
 
 def _format_level_ranges(levels: list[int]) -> str:
@@ -245,7 +246,7 @@ def _depth_order_for_results(results_by_depth: dict[int, dict]) -> list[int]:
     return preferred_depth_order + fallback_depth_order
 
 
-@hydra.main(version_base="1.3", config_path="puzzlejax/conf", config_name="plot_standalone_bfs_config")
+@hydra.main(version_base="1.3", config_path="conf", config_name="plot_standalone_bfs_config")
 def main(cfg: PlotSearch):
     if cfg.aggregate:
         aggregate_results(cfg)

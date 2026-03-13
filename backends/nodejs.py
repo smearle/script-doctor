@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import base64
 import os
 import random
 from pathlib import Path
@@ -48,22 +49,29 @@ class NodeJSPuzzleScriptBackend(PuzzleScriptSearchBackend):
     def unload_game(self) -> None:
         self.engine.unloadGame()
 
+    @staticmethod
+    def _decode_frame(result) -> np.ndarray:
+        """Decode a JS renderFrame result into an (H, W, 3) uint8 numpy array.
+
+        The JS side returns ``dataBase64`` (a base64-encoded RGB byte string),
+        so we need only one bridge crossing to transfer all pixel data instead
+        of one crossing per pixel.
+        """
+        width  = int(result["width"])
+        height = int(result["height"])
+        raw = base64.b64decode(str(result["dataBase64"]))
+        return np.frombuffer(raw, dtype=np.uint8).reshape((height, width, 3)).copy()
+
     def render_frame(self, level=None) -> np.ndarray:
         """Render current (or given) level state using the JS-native renderer.
 
         ``level`` can be a JS level object (from backupLevel / takeAction) or
         ``None`` to render the current engine level.
         """
-        if level is not None:
-            result = self.engine.renderFrame(level)
-        else:
-            result = self.engine.renderFrame()
+        result = self.engine.renderFrame(level) if level is not None else self.engine.renderFrame()
         if result is None:
             raise RuntimeError("JS renderFrame returned null -- is a game compiled?")
-        width = int(result["width"])
-        height = int(result["height"])
-        data = list(result["data"])
-        return np.array(data, dtype=np.uint8).reshape((height, width, 3))
+        return self._decode_frame(result)
 
     def render_frame_from_objects(
         self, objects: list[int], grid_w: int, grid_h: int,
@@ -72,10 +80,7 @@ class NodeJSPuzzleScriptBackend(PuzzleScriptSearchBackend):
         result = self.engine.renderFrameFromObjects(objects, grid_w, grid_h)
         if result is None:
             raise RuntimeError("JS renderFrameFromObjects returned null")
-        width = int(result["width"])
-        height = int(result["height"])
-        data = list(result["data"])
-        return np.array(data, dtype=np.uint8).reshape((height, width, 3))
+        return self._decode_frame(result)
 
     def render_frame_from_multihot_obs(self, obs: np.ndarray) -> np.ndarray:
         """Render a frame from a ``(C, H, W)`` multihot observation."""

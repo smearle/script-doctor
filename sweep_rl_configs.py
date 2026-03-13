@@ -57,8 +57,21 @@ class LearningRateSweep(SweepConfig):
     })
 
 
+@dataclass
+class SmokeTestSweep(SweepConfig):
+    """Single-seed smoke test — run with all_games=False total_timesteps=5000.
+
+    JAX:     python sweep_rl.py sweep_name=smoke_test backend=jax all_games=False total_timesteps=5000 slurm=False
+    PyTorch: python sweep_rl.py sweep_name=smoke_test backend=cpp all_games=False total_timesteps=5000 slurm=False
+    """
+    sweep_axes: dict = field(default_factory=lambda: {
+        "seed": (100,),
+    })
+
+
 _NAMED_SWEEPS: Dict[str, Type[SweepConfig]] = {
     "sweep": SweepBasePreset,
     "learning_rate": LearningRateSweep,
     "max_episode_steps": MaxEpisodeStepsSweep,
+    "smoke_test": SmokeTestSweep,
 }

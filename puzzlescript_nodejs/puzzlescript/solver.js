@@ -437,6 +437,7 @@ function takeAction(engine, action) {
     // Restart
     engine.DoRestart();
   } else {
+    resetSearchTransientState(engine);
     var changed = engine.processInput(action);
     while (engine.getAgaining()) {
       changed = engine.processInput(-1) || changed;
@@ -475,10 +476,7 @@ function randomRolloutRaw(engine, maxIters=100_000, timeoutMS=-1) {
     }
 
     const action = actions[Math.floor(Math.random() * actions.length)];
-    engine.processInput(action);
-    while (engine.getAgaining()) {
-      engine.processInput(-1);
-    }
+    processInputSearch(engine, action);
 
     if (engine.getWinning()) {
       DoRestartSearch(engine);
@@ -538,11 +536,17 @@ function randomRollout(engine, maxIters=100_000) {
 }
 
 function processInputSearch(engine, action){
+  resetSearchTransientState(engine);
   var changedSomething = engine.processInput(action);
   while (engine.getAgaining()) {
     changedSomething = engine.processInput(-1) || changedSomething;
   }
  return changedSomething;
+}
+
+function resetSearchTransientState(engine) {
+  engine.setWinning(false);
+  engine.setHasUsedCheckpoint(false);
 }
 
 function solveRandom(engine, maxLength=100, maxIters=100_000) {
@@ -645,10 +649,7 @@ function solveBFS(engine, maxIters, timeoutJS) {
       new_action_seq = action_seq.slice();
       new_action_seq.push(move);
       engine.clearBackups();
-      var changed = engine.processInput(move);
-      while (engine.getAgaining()) {
-        changed = engine.processInput(-1) || changed;
-      }
+      var changed = processInputSearch(engine, move);
       // try {
       //   changed = processInputSearch(engine, move);
       // } catch (e) {
@@ -817,6 +818,7 @@ function solveAStar(engine, maxIters=100_000) {
 			for (var k = 0, len2 = parentState.length; k < len2; k++) {
 				engine.getLevel().objects[k] = parentState[k];
 			}
+      resetSearchTransientState(engine);
 			var changedSomething = engine.processInput(actions[i]);
 			while (engine.getAgaining()) {
 				changedSomething = engine.processInput(-1) || changedSomething;
@@ -949,6 +951,7 @@ function solveGBFS(engine, maxIters=100_000) {
 			for (var k = 0, len2 = parentState.length; k < len2; k++) {
 				engine.getLevel().objects[k] = parentState[k];
 			}
+      resetSearchTransientState(engine);
 			var changedSomething = engine.processInput(actions[i]);
 			while (engine.getAgaining()) {
 				changedSomething = engine.processInput(-1) || changedSomething;

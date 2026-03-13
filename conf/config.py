@@ -252,6 +252,7 @@ class SweepRLConfig(TrainConfig):
     mode: str = 'train'
     render_ims: bool = False
     sweep_name: str = "learning_rate"
+    backend: str = "jax"  # "jax" → train_jax.py; "cpp" / "nodejs" → train_pytorch.py
     sweep_axes: dict = field(default_factory=lambda: {
         "seed": (0, 1, 2, 3, 4),
         "lr": (1.0e-4,),
