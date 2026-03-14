@@ -22,7 +22,7 @@ from conf.config import SweepRLConfig, TrainConfig, EnjoyConfig
 from puzzlescript_jax.env import PJParams
 from puzzlescript_jax.preprocessing import get_env_from_ps_file
 from train_jax import main as main_train
-from train_pytorch import train as pytorch_train, TrainPytorchConfig
+from train_pytorch import train as pytorch_train, TrainPytorchConfig, get_exp_dir as pytorch_get_exp_dir
 from eval_rl import main_enjoy
 from sweep_rl_configs import _NAMED_SWEEPS
 from puzzlescript_jax.utils import get_list_of_games_for_testing, get_n_levels_per_game, init_ps_lark_parser
@@ -116,7 +116,11 @@ def _infer_varying_fields(cfgs: Sequence[TrainConfig], candidate_fields: Sequenc
     if not cfgs:
         return []
     if candidate_fields is None:
-        candidate_fields = sorted(_run_field_names(type(cfgs[0])))
+        first = cfgs[0]
+        if OmegaConf.is_config(first):
+            candidate_fields = sorted(k for k in first.keys() if not str(k).startswith('_'))
+        else:
+            candidate_fields = sorted(_run_field_names(type(first)))
     varying = []
     for field_name in candidate_fields:
         vals = {_canonical_value(getattr(cfg, field_name)) for cfg in cfgs}
@@ -188,7 +192,13 @@ def _get_hydra_override_root_keys() -> set[str]:
     return overridden_root_keys
 
 
-def plot_rl_runs_reward(grid_cfgs: List[SweepRLConfig]):
+def _get_cfg_exp_dir(cfg, backend: str) -> str:
+    if backend == "jax":
+        return init_config(cfg)._exp_dir
+    return pytorch_get_exp_dir(cfg)
+
+
+def plot_rl_runs_reward(grid_cfgs: List[SweepRLConfig], backend: str = "jax"):
     # wandb_api = wandb.Api()
     # Group configs by game
     if os.path.isfile(SOLUTION_REWARDS_PATH):
@@ -209,8 +219,8 @@ def plot_rl_runs_reward(grid_cfgs: List[SweepRLConfig]):
             level_cfgs = game_cfgs[level]
             available_cfgs = []
             available_dfs = []
-            for cfg in [init_config(cfg) for cfg in level_cfgs]:
-                exp_dir = cfg._exp_dir
+            for cfg in level_cfgs:
+                exp_dir = _get_cfg_exp_dir(cfg, backend)
                 progress_csv = os.path.join(exp_dir, "progress.csv")
                 if not os.path.isfile(progress_csv):
                     print(f"{progress_csv} does not exist, skipping.")
@@ -470,15 +480,20 @@ def main(sweep_cfg: SweepRLConfig):
         else:
             raise ValueError(f"Unsupported sweep mode: {sweep_cfg.mode!r}. Expected one of: 'train', 'enjoy', 'plot'.")
     else:
-        if sweep_cfg.mode != 'train':
-            raise ValueError(f"mode={sweep_cfg.mode!r} is not supported for backend={backend!r}. Only 'train' is supported.")
-        main_fn = pytorch_train
-        CfgCls = TrainPytorchConfig
+        if sweep_cfg.mode == 'train':
+            main_fn = pytorch_train
+            CfgCls = TrainPytorchConfig
+        elif sweep_cfg.mode == 'plot':
+            main_fn = None
+            CfgCls = TrainPytorchConfig
+            sweep_cfg.plot = True
+        else:
+            raise ValueError(f"mode={sweep_cfg.mode!r} is not supported for backend={backend!r}. Expected 'train' or 'plot'.")
     base_cfg = CfgCls()
 
     grid_cfgs = gen_grid_cfgs(sweep_cfg, base_cfg)
     if sweep_cfg.plot:
-        return plot_rl_runs_reward(grid_cfgs)
+        return plot_rl_runs_reward(grid_cfgs, backend=backend)
 
     all_cfgs = []
 

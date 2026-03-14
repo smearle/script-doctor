@@ -370,6 +370,55 @@ class CppPuzzleScriptBackend:
 MAX_AGAIN = 50
 
 
+def _parse_viewport(compiled: dict) -> tuple[tuple[int, int] | None, str | None]:
+    """Return ((view_w, view_h), mode) or (None, None) if no viewport setting."""
+    metadata = compiled.get("metadata", {})
+    fs = metadata.get("flickscreen")
+    zs = metadata.get("zoomscreen")
+    if fs and len(fs) >= 2:
+        return (int(fs[0]), int(fs[1])), "flickscreen"
+    if zs and len(zs) >= 2:
+        return (int(zs[0]), int(zs[1])), "zoomscreen"
+    return None, None
+
+
+def _apply_viewport(
+    obs: np.ndarray,
+    level_h: int,
+    level_w: int,
+    view_h: int,
+    view_w: int,
+    viewport_mode: str,
+    player_channel_idxs: list[int],
+) -> np.ndarray:
+    """Crop obs (n_objs, level_h, level_w) to viewport (n_objs, view_h, view_w).
+
+    Mirrors the flickscreen/zoomscreen logic in renderer.cpp.
+    """
+    n_objs = obs.shape[0]
+    # Locate player
+    player_y, player_x = 0, 0
+    for ci in player_channel_idxs:
+        positions = np.argwhere(obs[ci])
+        if len(positions) > 0:
+            player_y, player_x = int(positions[0][0]), int(positions[0][1])
+            break
+
+    if viewport_mode == "flickscreen":
+        # Snap to viewport-aligned screen tile containing the player (matches renderer.cpp)
+        ox = (player_x // view_w) * view_w
+        oy = (player_y // view_h) * view_h
+    else:  # zoomscreen: center on player
+        ox = max(0, min(player_x - view_w // 2, level_w - view_w))
+        oy = max(0, min(player_y - view_h // 2, level_h - view_h))
+
+    result = np.zeros((n_objs, view_h, view_w), dtype=np.uint8)
+    sy0, sy1 = oy, min(oy + view_h, level_h)
+    sx0, sx1 = ox, min(ox + view_w, level_w)
+    result[:, :sy1 - sy0, :sx1 - sx0] = obs[:, sy0:sy1, sx0:sx1]
+    return result
+
+
 def _build_dedup_maps(id_dict: list[str]) -> tuple[list[str], dict[int, int]]:
     """Return (canonical_ids, raw_to_canonical) for an id_dict that may contain duplicates.
 
@@ -408,7 +457,8 @@ class CppPuzzleScriptEnv:
         self._level_i = level_i
         self._max_steps = max_episode_steps
         self._steps = 0
-        self._max_height, self._max_width = self._compute_max_level_shape([level_i])
+        full_h, full_w = self._compute_max_level_shape([level_i])
+        self._full_h, self._full_w = full_h, full_w
 
         # Load level once to get geometry
         probe_level_i = level_i if level_i >= 0 else 0
@@ -417,10 +467,23 @@ class CppPuzzleScriptEnv:
         self._canonical_ids, self._raw_to_canonical = _build_dedup_maps(id_dict)
         self._raw_n_objs = self._engine.get_object_count()
         self._n_objs = len(self._canonical_ids)
-        self._width = self._max_width
-        self._height = self._max_height
         self._stride_obj = (self._raw_n_objs + 31) // 32
         self._prev_score = float(self._engine.get_score())
+
+        # Viewport (flickscreen / zoomscreen)
+        self._viewport, self._viewport_mode = _parse_viewport(self._compiled)
+        if self._viewport is not None:
+            vw, vh = self._viewport
+            self._max_height = min(vh, full_h)
+            self._max_width = min(vw, full_w)
+        else:
+            self._max_height = full_h
+            self._max_width = full_w
+        self._width = self._max_width
+        self._height = self._max_height
+        self._player_channel_idxs = [
+            c for c, name in enumerate(self._canonical_ids) if "player" in name.lower()
+        ]
 
     def _compute_max_level_shape(self, level_indices: list[int] | None = None) -> tuple[int, int]:
         if level_indices is None or any(level_i < 0 for level_i in level_indices):
@@ -489,7 +552,7 @@ class CppPuzzleScriptEnv:
         width = self._engine.get_width()
         height = self._engine.get_height()
         stride_obj = len(objects) // (width * height)
-        obs = np.zeros((self._n_objs, self._height, self._width), dtype=np.uint8)
+        obs = np.zeros((self._n_objs, height, width), dtype=np.uint8)
         for x in range(width):
             for y in range(height):
                 flat_idx = (x * height + y) * stride_obj
@@ -498,7 +561,10 @@ class CppPuzzleScriptEnv:
                     bit = raw_obj % 32
                     if word < stride_obj and (int(objects[flat_idx + word]) & (1 << bit)):
                         obs[self._raw_to_canonical[raw_obj], y, x] = 1
-        return obs
+        if self._viewport is not None:
+            return _apply_viewport(obs, height, width, self._max_height, self._max_width,
+                                   self._viewport_mode, self._player_channel_idxs)
+        return obs[:, :self._height, :self._width]
 
 
 class CppBatchedPuzzleScriptEnv:
@@ -530,18 +596,44 @@ class CppBatchedPuzzleScriptEnv:
         self._auto_reset = bool(auto_reset)
         if level_indices is None:
             level_indices = [0] * batch_size
-        self._max_height, self._max_width = self._compute_max_level_shape(level_indices)
+        full_h, full_w = self._compute_max_level_shape(level_indices)
+        self._full_h, self._full_w = full_h, full_w
         id_dict = self._compiled.get("idDict", [])
         self._canonical_ids, self._raw_to_canonical = _build_dedup_maps(id_dict)
         self._raw_n_objs = int(self._compiled["objectCount"])
         self._n_objs = len(self._canonical_ids)
         self._stride_obj = (self._raw_n_objs + 31) // 32
+
+        # Viewport (flickscreen / zoomscreen)
+        self._viewport, self._viewport_mode = _parse_viewport(self._compiled)
+        if self._viewport is not None:
+            vw, vh = self._viewport
+            self._max_height = min(vh, full_h)
+            self._max_width = min(vw, full_w)
+        else:
+            self._max_height = full_h
+            self._max_width = full_w
+        self._player_channel_idxs = [
+            c for c, name in enumerate(self._canonical_ids) if "player" in name.lower()
+        ]
+
         self._base_level_indices = np.asarray(level_indices, dtype=np.int32)
         self._active_level_indices = self._base_level_indices.copy()
         self._steps = np.zeros(batch_size, dtype=np.int32)
         self._be.set_levels(self._active_level_indices.tolist())
         if hasattr(self._be, "set_obs_shape"):
-            self._be.set_obs_shape(self._max_height, self._max_width)
+            # Use full board dims so C++ returns the entire level; C++ crops to viewport
+            self._be.set_obs_shape(self._full_h, self._full_w)
+
+        # Push dedup map and viewport config to C++ so observations are
+        # returned in final (n_canonical, view_h, view_w) shape directly.
+        self._cpp_dedup_viewport = False
+        if hasattr(self._be, "set_dedup_map") and hasattr(self._be, "load_viewport_config"):
+            dedup_list = [self._raw_to_canonical[i] for i in range(self._raw_n_objs)]
+            self._be.set_dedup_map(dedup_list, self._n_objs)
+            self._be.load_viewport_config(json_str)
+            self._cpp_dedup_viewport = True
+
         if hasattr(self._be, "set_num_threads"):
             self._be.set_num_threads(int(num_threads))
         if hasattr(self._be, "set_auto_reset"):
@@ -582,10 +674,18 @@ class CppBatchedPuzzleScriptEnv:
     def set_levels(self, level_indices: list[int]) -> None:
         self._base_level_indices = np.asarray(level_indices, dtype=np.int32)
         self._active_level_indices = self._base_level_indices.copy()
-        self._max_height, self._max_width = self._compute_max_level_shape(level_indices)
+        full_h, full_w = self._compute_max_level_shape(level_indices)
+        self._full_h, self._full_w = full_h, full_w
+        if self._viewport is not None:
+            vw, vh = self._viewport
+            self._max_height = min(vh, full_h)
+            self._max_width = min(vw, full_w)
+        else:
+            self._max_height = full_h
+            self._max_width = full_w
         self._be.set_levels(self._active_level_indices.tolist())
         if hasattr(self._be, "set_obs_shape"):
-            self._be.set_obs_shape(self._max_height, self._max_width)
+            self._be.set_obs_shape(self._full_h, self._full_w)
 
     def _compute_max_level_shape(self, level_indices: list[int] | None = None) -> tuple[int, int]:
         if level_indices is None or any(level_i < 0 for level_i in level_indices):
@@ -608,7 +708,7 @@ class CppBatchedPuzzleScriptEnv:
         width = int(self._be.get_width(env_idx))
         height = int(self._be.get_height(env_idx))
         stride_obj = len(objects) // (width * height)
-        obs = np.zeros((self._n_objs, self._max_height, self._max_width), dtype=np.uint8)
+        obs = np.zeros((self._n_objs, height, width), dtype=np.uint8)
         for x in range(width):
             for y in range(height):
                 flat_idx = (x * height + y) * stride_obj
@@ -617,19 +717,32 @@ class CppBatchedPuzzleScriptEnv:
                     bit = raw_obj % 32
                     if word < stride_obj and (int(objects[flat_idx + word]) & (1 << bit)):
                         obs[self._raw_to_canonical[raw_obj], y, x] = 1
-        return obs
+        if self._viewport is not None:
+            return _apply_viewport(obs, height, width, self._max_height, self._max_width,
+                                   self._viewport_mode, self._player_channel_idxs)
+        return obs[:, :self._max_height, :self._max_width]
 
     def _get_obs_batch(self) -> np.ndarray:
         if hasattr(self._be, "get_obs"):
             raw_obs = np.array(self._be.get_obs(), dtype=np.uint8, copy=True)
-            raw_shape = (self.batch_size, self._raw_n_objs, self._max_height, self._max_width)
-            if raw_obs.shape == raw_shape:
-                obs = np.zeros((self.batch_size, self._n_objs, self._max_height, self._max_width), dtype=np.uint8)
-                for raw_idx, canon_idx in self._raw_to_canonical.items():
-                    obs[:, canon_idx, :, :] |= raw_obs[:, raw_idx, :, :]
-                return obs
+            # When C++ handles dedup + viewport, obs is already in final shape
             if raw_obs.shape == self.observation_shape:
                 return raw_obs
+            # Fallback: C++ returned raw shape, do dedup + viewport in Python
+            raw_shape = (self.batch_size, self._raw_n_objs, self._full_h, self._full_w)
+            if raw_obs.shape == raw_shape:
+                obs = np.zeros((self.batch_size, self._n_objs, self._full_h, self._full_w), dtype=np.uint8)
+                for raw_idx, canon_idx in self._raw_to_canonical.items():
+                    obs[:, canon_idx, :, :] |= raw_obs[:, raw_idx, :, :]
+                if self._viewport is not None:
+                    result = np.zeros(self.observation_shape, dtype=np.uint8)
+                    for i in range(self.batch_size):
+                        h_i = int(self._be.get_height(i))
+                        w_i = int(self._be.get_width(i))
+                        result[i] = _apply_viewport(obs[i], h_i, w_i, self._max_height, self._max_width,
+                                                    self._viewport_mode, self._player_channel_idxs)
+                    return result
+                return obs
         return np.stack([self._get_obs_for_env(i) for i in range(self.batch_size)], axis=0)
 
     def _sample_level_indices(self) -> np.ndarray:

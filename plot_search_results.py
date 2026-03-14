@@ -271,6 +271,7 @@ def _collect_results_for_algo(
                     'n_oom': 0,
                     'n_stepss': [],
                     'solution_lengths': [],
+                    'solved_iterss': [],
                 }
 
             stats = per_depth_stats[n_steps]
@@ -287,6 +288,7 @@ def _collect_results_for_algo(
             if solved:
                 stats['n_solved'] += 1
                 stats['solution_lengths'].append(len(actions) if actions is not None else 0)
+                stats['solved_iterss'].append(sol_dict['iterations'])
                 per_level_stats[n_steps][level_id]['n_solved'] += 1
             stats['n_levels'] += 1
             clipped_steps = min(n_steps, sol_dict['iterations'])
@@ -311,11 +313,13 @@ def _collect_results_for_algo(
             mean_solution_length = float(np.mean(stats['solution_lengths'])) if stats['solution_lengths'] else float('nan')
             if depth not in results_by_depth:
                 results_by_depth[depth] = {}
+            mean_solved_iters = float(np.mean(stats['solved_iterss'])) if stats['solved_iterss'] else float('nan')
             results_by_depth[depth][game] = {
                 'pct_solved': pct_solved,
                 'n_levels': stats['n_levels'],
                 'n_iters': n_steps_mean,
                 'mean_sol_len': mean_solution_length,
+                'mean_solved_iters': mean_solved_iters,
                 'has_oom': stats['n_oom'] > 0,
             }
 
@@ -674,6 +678,7 @@ def plot_all_algos(cfg: PlotSearch, results_by_algo=None, per_level_by_algo=None
                     'n_levels': row.get('n_levels', np.nan),
                     'n_iters': row.get('n_iters', np.nan),
                     'mean_sol_len': row.get('mean_sol_len', np.nan),
+                    'mean_solved_iters': row.get('mean_solved_iters', np.nan),
                 })
 
             remapped_df = depth_df.copy()
@@ -861,6 +866,86 @@ def generate_rules_vs_difficulty(summary_df: pd.DataFrame) -> None:
     plt.close(fig)
     print(f'Saved depth curve plot to {path}')
 
+    # --- 4. Search effort (iterations to solve) vs n_rules ---
+    # For each (algo, game), use the deepest available depth where pct_solved > 0
+    if 'mean_solved_iters' not in df.columns:
+        return
+
+    solved_df = df[df['pct_solved'] > 0].dropna(subset=['mean_solved_iters'])
+    if solved_df.empty:
+        return
+
+    # Keep deepest depth per (algo, game)
+    idx = solved_df.groupby(['algo', 'game'])['depth'].idxmax()
+    best_df = solved_df.loc[idx]
+
+    # Scatter: one subplot per algo
+    n_cols = min(n_algos, 3)
+    n_rows = (n_algos + n_cols - 1) // n_cols
+    fig, axes = plt.subplots(n_rows, n_cols, figsize=(n_cols * 5, n_rows * 4), squeeze=False)
+
+    for ax_i, algo in enumerate(algos):
+        ax = axes[ax_i // n_cols][ax_i % n_cols]
+        sub = best_df[best_df['algo'] == algo]
+        ax.scatter(
+            sub['n_rules'], sub['mean_solved_iters'],
+            alpha=0.5, s=20, color=algo_colors[algo], edgecolors='none',
+        )
+        ax.set_title(_algo_label(algo))
+        ax.set_xlabel('Number of rules')
+        ax.set_ylabel('Mean iterations to solve')
+        ax.set_yscale('log')
+        ax.grid(True, alpha=0.3)
+
+    for ax in axes.flat[n_algos:]:
+        ax.axis('off')
+
+    fig.suptitle('Search Effort to Solve vs. Game Complexity', fontsize=14)
+    fig.tight_layout()
+    path = os.path.join(PLOTS_DIR, 'rules_vs_search_effort_scatter.png')
+    fig.savefig(path, dpi=300)
+    plt.close(fig)
+    print(f'Saved search effort scatter to {path}')
+
+    # Binned curves: all algos on one plot
+    fig, ax = plt.subplots(figsize=(8, 5))
+
+    for algo in algos:
+        sub = best_df[best_df['algo'] == algo]
+        bin_means = []
+        bin_centers = []
+        bin_counts = []
+        for lo, hi in zip(bin_edges[:-1], bin_edges[1:]):
+            mask = (sub['n_rules'] >= lo) & (sub['n_rules'] < hi)
+            bucket = sub.loc[mask, 'mean_solved_iters']
+            if len(bucket) >= 1:
+                bin_means.append(bucket.mean())
+                bin_centers.append((lo + hi) / 2)
+                bin_counts.append(len(bucket))
+
+        if bin_centers:
+            ax.plot(
+                bin_centers, bin_means,
+                marker='o', markersize=5, label=_algo_label(algo),
+                color=algo_colors[algo], alpha=0.8,
+            )
+            for x, y, n in zip(bin_centers, bin_means, bin_counts):
+                ax.annotate(str(n), (x, y), textcoords='offset points',
+                            xytext=(0, 6), ha='center', fontsize=6, color=algo_colors[algo])
+
+    ax.set_xlabel('Number of rules')
+    ax.set_ylabel('Mean iterations to solve')
+    ax.set_xscale('log')
+    ax.set_yscale('log')
+    ax.set_title('Search Effort to Solve vs. Game Complexity (by rule count)')
+    ax.legend()
+    ax.grid(True, alpha=0.3)
+    fig.tight_layout()
+    path = os.path.join(PLOTS_DIR, 'rules_vs_search_effort_curves.png')
+    fig.savefig(path, dpi=300)
+    plt.close(fig)
+    print(f'Saved search effort curves to {path}')
+
 
 def generate_all_heatmaps(
     dfs_by_algo_depth: dict,
@@ -892,6 +977,39 @@ def generate_all_heatmaps(
         print(f'Skipping all-algo heatmaps: {len(all_games)} games exceeds limit of {MAX_GAMES_FOR_HEATMAPS}.')
         return
 
+    # --- Build best-depth-per-algo data for solved-only metrics ---
+    # For each algo, find the deepest depth available and take solved-only values.
+    algos_seen = []
+    for algo, _depth in ordered_keys:
+        if algo not in algos_seen:
+            algos_seen.append(algo)
+
+    best_algo_dfs = {}
+    best_algo_oom = {}
+    for algo in algos_seen:
+        # Keys for this algo sorted by depth descending
+        algo_keys = sorted([k for k in ordered_keys if k[0] == algo], key=lambda k: -k[1])
+        merged = pd.DataFrame(columns=['mean_solved_iters', 'mean_sol_len', 'has_oom'])
+        for game in all_games:
+            for key in algo_keys:
+                key_df = dfs_by_algo_depth[key]
+                if game not in key_df.index:
+                    continue
+                row = key_df.loc[game]
+                pct = row.get('pct_solved', 0)
+                if isinstance(pct, pd.Series):
+                    pct = pct.iloc[0]
+                if pct > 0:
+                    merged.at[game, 'mean_solved_iters'] = row.get('mean_solved_iters', np.nan)
+                    merged.at[game, 'mean_sol_len'] = row.get('mean_sol_len', np.nan)
+                    merged.at[game, 'has_oom'] = bool(row.get('has_oom', False))
+                    break
+        best_algo_dfs[algo] = merged
+        algo_label_str = _algo_label(algo)
+        best_algo_oom[algo_label_str] = merged.get('has_oom', pd.Series(dtype=bool))
+
+    algo_row_labels = [_algo_label(a) for a in algos_seen]
+
     heatmap_configs = [
         {
             'column': 'pct_solved',
@@ -902,26 +1020,29 @@ def generate_all_heatmaps(
             'colorbar_label': 'Average Win Rate',
             'formatter': lambda v: f"{v:.0%}",
             'output': 'all_search_pct_solved_heatmap.png',
+            'per_depth': True,
         },
         {
-            'column': 'n_iters',
-            'title': 'All Search Types: Mean Search Iterations per Game',
+            'column': 'mean_solved_iters',
+            'title': 'All Search Types: Mean Iterations to Solve per Game (best depth, solved only)',
             'cmap': 'Blues',
             'vmin': 0.0,
             'vmax': None,
-            'colorbar_label': 'Mean Search Iterations',
+            'colorbar_label': 'Mean Iterations to Solve',
             'formatter': lambda v: f"{v:.0f}",
             'output': 'all_search_mean_iterations_heatmap.png',
+            'per_depth': False,
         },
         {
             'column': 'mean_sol_len',
-            'title': 'All Search Types: Mean Solution Length per Game',
+            'title': 'All Search Types: Mean Solution Length per Game (best depth, solved only)',
             'cmap': 'Purples',
             'vmin': 0.0,
             'vmax': None,
             'colorbar_label': 'Mean Sol. Length',
             'formatter': lambda v: f"{v:.0f}",
             'output': 'all_search_mean_solution_length_heatmap.png',
+            'per_depth': False,
         },
     ]
 
@@ -934,21 +1055,42 @@ def generate_all_heatmaps(
 
     for config in heatmap_configs:
         column = config['column']
-        if not any(column in df.columns for df in dfs_by_algo_depth.values()):
-            continue
+        per_depth = config['per_depth']
 
-        heatmap_data = pd.DataFrame(index=row_labels, columns=all_games, dtype=float)
-        oom_mask = pd.DataFrame(False, index=row_labels, columns=all_games)
-        for key, row_label in zip(ordered_keys, row_labels):
-            key_df = dfs_by_algo_depth[key]
-            if column not in key_df.columns:
+        if per_depth:
+            # Multi-row: algo × depth
+            if not any(column in df.columns for df in dfs_by_algo_depth.values()):
                 continue
-            for game, value in key_df[column].items():
-                heatmap_data.at[row_label, game] = value
-            if 'has_oom' in key_df.columns:
-                for game, value in key_df['has_oom'].items():
-                    if value:
-                        oom_mask.at[row_label, game] = True
+
+            cur_row_labels = row_labels
+            heatmap_data = pd.DataFrame(index=cur_row_labels, columns=all_games, dtype=float)
+            oom_mask = pd.DataFrame(False, index=cur_row_labels, columns=all_games)
+            for key, row_label in zip(ordered_keys, cur_row_labels):
+                key_df = dfs_by_algo_depth[key]
+                if column not in key_df.columns:
+                    continue
+                for game, value in key_df[column].items():
+                    heatmap_data.at[row_label, game] = value
+                if 'has_oom' in key_df.columns:
+                    for game, value in key_df['has_oom'].items():
+                        if value:
+                            oom_mask.at[row_label, game] = True
+            ylabel = 'Algorithm · Search depth'
+        else:
+            # Single row per algo: best depth, solved only
+            cur_row_labels = algo_row_labels
+            heatmap_data = pd.DataFrame(index=cur_row_labels, columns=all_games, dtype=float)
+            oom_mask = pd.DataFrame(False, index=cur_row_labels, columns=all_games)
+            for algo, algo_lbl in zip(algos_seen, cur_row_labels):
+                adf = best_algo_dfs[algo]
+                if column not in adf.columns:
+                    continue
+                for game in all_games:
+                    if game in adf.index and pd.notnull(adf.at[game, column]):
+                        heatmap_data.at[algo_lbl, game] = float(adf.at[game, column])
+                    if game in adf.index and adf.get('has_oom', pd.Series(dtype=bool)).get(game, False):
+                        oom_mask.at[algo_lbl, game] = True
+            ylabel = 'Algorithm'
 
         stacked_values = heatmap_data.stack(future_stack=True).dropna()
         if stacked_values.empty:
@@ -991,7 +1133,7 @@ def generate_all_heatmaps(
             _overlay_oom_cells(ax, heatmap_data, oom_mask)
         plt.title(config['title'])
         plt.xlabel('Game', labelpad=10)
-        plt.ylabel('Algorithm · Search depth', labelpad=10)
+        plt.ylabel(ylabel, labelpad=10)
         plt.yticks(rotation=0)
         plt.xticks(rotation=45, ha='right')
         plt.tight_layout()
@@ -1121,6 +1263,23 @@ def generate_heatmaps(
         print(f'Skipping {algo_label} heatmaps: {len(all_games)} games exceeds limit of {MAX_GAMES_FOR_HEATMAPS}.')
         return
 
+    # Build best-depth data for solved-only metrics (single row)
+    best_depth_df = pd.DataFrame(columns=['mean_solved_iters', 'mean_sol_len', 'has_oom'])
+    for game in all_games:
+        for depth in reversed(ordered_depths):
+            depth_df = dfs_by_depth[depth]
+            if game not in depth_df.index:
+                continue
+            row = depth_df.loc[game]
+            pct = row.get('pct_solved', 0)
+            if isinstance(pct, pd.Series):
+                pct = pct.iloc[0]
+            if pct > 0:
+                best_depth_df.at[game, 'mean_solved_iters'] = row.get('mean_solved_iters', np.nan)
+                best_depth_df.at[game, 'mean_sol_len'] = row.get('mean_sol_len', np.nan)
+                best_depth_df.at[game, 'has_oom'] = bool(row.get('has_oom', False))
+                break
+
     heatmap_configs = [
         {
             'column': 'pct_solved',
@@ -1131,26 +1290,29 @@ def generate_heatmaps(
             'colorbar_label': 'Average Win Rate',
             'formatter': lambda v: f"{v:.0%}",
             'output': f'{algo_slug}_pct_solved_heatmap.png',
+            'per_depth': True,
         },
         {
-            'column': 'n_iters',
-            'title': f'{algo_label} Mean Search Iterations per Game',
+            'column': 'mean_solved_iters',
+            'title': f'{algo_label} Mean Iterations to Solve per Game (best depth, solved only)',
             'cmap': 'Blues',
             'vmin': 0.0,
             'vmax': None,
-            'colorbar_label': 'Mean Search Iterations',
+            'colorbar_label': 'Mean Iterations to Solve',
             'formatter': lambda v: f"{v:.0f}",
             'output': f'{algo_slug}_mean_iterations_heatmap.png',
+            'per_depth': False,
         },
         {
             'column': 'mean_sol_len',
-            'title': f'{algo_label} Mean Solution Length per Game',
+            'title': f'{algo_label} Mean Solution Length per Game (best depth, solved only)',
             'cmap': 'Purples',
             'vmin': 0.0,
             'vmax': None,
             'colorbar_label': 'Mean Sol. Length',
             'formatter': lambda v: f"{v:.0f}",
             'output': f'{algo_slug}_mean_solution_length_heatmap.png',
+            'per_depth': False,
         },
     ]
 
@@ -1163,23 +1325,38 @@ def generate_heatmaps(
 
     for config in heatmap_configs:
         column = config['column']
-        if not any(column in df.columns for df in dfs_by_depth.values()):
-            continue
+        per_depth = config['per_depth']
 
-        depth_labels = [_format_steps_label(depth) for depth in ordered_depths]
-        heatmap_data = pd.DataFrame(index=depth_labels, columns=all_games, dtype=float)
-        oom_mask = pd.DataFrame(False, index=depth_labels, columns=all_games)
-
-        for depth, depth_label in zip(ordered_depths, depth_labels):
-            depth_df = dfs_by_depth[depth]
-            if column not in depth_df.columns:
+        if per_depth:
+            if not any(column in df.columns for df in dfs_by_depth.values()):
                 continue
-            for game, value in depth_df[column].items():
-                heatmap_data.at[depth_label, game] = value
-            if 'has_oom' in depth_df.columns:
-                for game, value in depth_df['has_oom'].items():
-                    if value:
-                        oom_mask.at[depth_label, game] = True
+
+            depth_labels = [_format_steps_label(depth) for depth in ordered_depths]
+            heatmap_data = pd.DataFrame(index=depth_labels, columns=all_games, dtype=float)
+            oom_mask = pd.DataFrame(False, index=depth_labels, columns=all_games)
+
+            for depth, depth_label in zip(ordered_depths, depth_labels):
+                depth_df = dfs_by_depth[depth]
+                if column not in depth_df.columns:
+                    continue
+                for game, value in depth_df[column].items():
+                    heatmap_data.at[depth_label, game] = value
+                if 'has_oom' in depth_df.columns:
+                    for game, value in depth_df['has_oom'].items():
+                        if value:
+                            oom_mask.at[depth_label, game] = True
+            ylabel = 'Search depth'
+        else:
+            if column not in best_depth_df.columns:
+                continue
+            heatmap_data = pd.DataFrame(index=[algo_label], columns=all_games, dtype=float)
+            oom_mask = pd.DataFrame(False, index=[algo_label], columns=all_games)
+            for game in all_games:
+                if game in best_depth_df.index and pd.notnull(best_depth_df.at[game, column]):
+                    heatmap_data.at[algo_label, game] = float(best_depth_df.at[game, column])
+                if game in best_depth_df.index and best_depth_df.get('has_oom', pd.Series(dtype=bool)).get(game, False):
+                    oom_mask.at[algo_label, game] = True
+            ylabel = 'Algorithm'
 
         stacked_values = heatmap_data.stack(future_stack=True).dropna()
         if stacked_values.empty:
@@ -1223,7 +1400,7 @@ def generate_heatmaps(
             _overlay_oom_cells(ax, heatmap_data, oom_mask)
         plt.title(config['title'])
         plt.xlabel('Game', labelpad=10)
-        plt.ylabel('Search depth', labelpad=10)
+        plt.ylabel(ylabel, labelpad=10)
         plt.yticks(rotation=0)
         plt.xticks(rotation=45, ha='right')
         plt.tight_layout()

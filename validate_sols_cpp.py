@@ -233,11 +233,6 @@ def main(cfg: CppValidationConfig, games: Optional[List[str]] = None):
     else:
         games = [cfg.game]
 
-    current_game_names = {
-        os.path.splitext(game_file)[0]
-        for game_file in os.listdir(os.path.join(DATA_DIR, "scraped_games"))
-    }
-    games = [game for game in games if game in current_game_names]
     games = _dedupe_preserve_order(games)
     if not cfg.include_test_games:
         games = [game for game in games if not game.startswith("test_")]

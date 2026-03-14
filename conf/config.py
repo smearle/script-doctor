@@ -211,6 +211,7 @@ class PlotSearch(SearchNodeJSConfig):
 
 @dataclass
 class RLConfig(PSConfig):
+    level: int = -1
     max_episode_steps: int = 200
     lr: float = 1.0e-4
     n_envs: int = 500

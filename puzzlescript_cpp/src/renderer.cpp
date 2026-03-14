@@ -1,4 +1,5 @@
 #include "renderer.h"
+#include "viewport.h"
 #include "json.hpp"
 
 #include <algorithm>
@@ -194,61 +195,12 @@ std::array<int, 4> Renderer::getVisibleBounds(
         return {0, 0, width, height};
     }
 
-    const int stride_obj = (n_objs + 31) / 32;
-    int player_position = -1;
-    for (int x = 0; x < width && player_position < 0; ++x) {
-        for (int y = 0; y < height; ++y) {
-            const int flat_idx = (x * height + y) * stride_obj;
-            bool matches = player_mask_aggregate_;
-            if (player_mask_aggregate_) {
-                for (int word = 0; word < static_cast<int>(player_mask_words_.size()); ++word) {
-                    if ((player_mask_words_[word] & objects[flat_idx + word]) != player_mask_words_[word]) {
-                        matches = false;
-                        break;
-                    }
-                }
-            } else {
-                matches = false;
-                for (int word = 0; word < static_cast<int>(player_mask_words_.size()); ++word) {
-                    if (player_mask_words_[word] & objects[flat_idx + word]) {
-                        matches = true;
-                        break;
-                    }
-                }
-            }
-            if (matches) {
-                player_position = y + x * height;
-                break;
-            }
-        }
-    }
+    auto [px, py] = findPlayerInObjects(
+        objects, width, height, n_objs,
+        player_mask_words_, player_mask_aggregate_);
 
-    if (player_position >= 0) {
-        const int px = player_position / height;
-        const int py = player_position % height;
-        if (flickscreen_.has_value()) {
-            const int screen_width = flickscreen_->first;
-            const int screen_height = flickscreen_->second;
-            const int mini = (px / screen_width) * screen_width;
-            const int minj = (py / screen_height) * screen_height;
-            old_bounds_ = {
-                mini,
-                minj,
-                std::min(mini + screen_width, width),
-                std::min(minj + screen_height, height),
-            };
-        } else {
-            const int screen_width = zoomscreen_->first;
-            const int screen_height = zoomscreen_->second;
-            const int mini = std::max(std::min(px - screen_width / 2, width - screen_width), 0);
-            const int minj = std::max(std::min(py - screen_height / 2, height - screen_height), 0);
-            old_bounds_ = {
-                mini,
-                minj,
-                std::min(mini + screen_width, width),
-                std::min(minj + screen_height, height),
-            };
-        }
+    if (px >= 0) {
+        old_bounds_ = computeScreenBounds(px, py, width, height, flickscreen_, zoomscreen_);
         has_old_bounds_ = true;
         return old_bounds_;
     }

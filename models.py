@@ -85,6 +85,9 @@ class ConvForward2(nn.Module):
         flat_action_dim = self.action_dim * math.prod(self.act_shape)
         h1, h2 = self.hidden_dims
 
+        # obs is stored CHW; Flax Conv expects NHWC → transpose
+        map_x = jnp.transpose(map_x, (0, 2, 3, 1))
+
         map_x = nn.Conv(
             features=h1, kernel_size=(7, 7), strides=(2, 2), padding=(3, 3)
         )(map_x)

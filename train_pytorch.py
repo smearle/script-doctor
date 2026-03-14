@@ -39,7 +39,7 @@ ENGINE_JS_PATH = os.path.join(ROOT_DIR, "puzzlescript_nodejs", "puzzlescript", "
 class TrainPytorchConfig:
     backend: str = "cpp"
     game: str = "sokoban_basic"
-    level: int = 0
+    level: int = -1
     max_episode_steps: int = 200
     cpp_num_threads: int = 0
 
@@ -426,10 +426,13 @@ def train(cfg: TrainPytorchConfig) -> None:
         next_obs = torch.from_numpy(obs_np).to(device)
         next_done = torch.zeros(cfg.n_envs, device=device)
 
+        n_levels = env.num_levels
         csv_path = os.path.join(exp_dir, "progress.csv")
         if start_update == 1:
+            win_cols = ",".join(f"level-{i}-win" for i in range(n_levels))
+            sol_cols = ",".join(f"level-{i}-min_sol_len" for i in range(n_levels))
             with open(csv_path, "w") as f:
-                f.write("global_step,ep_return_mean,ep_return_max,ep_length_mean,fps,win\n")
+                f.write(f"timestep,ep_return,ep_return_max,ep_length,fps,{win_cols},{sol_cols}\n")
 
         pbar = tqdm(range(start_update, num_updates + 1), initial=start_update - 1,
                     total=num_updates, desc="Training", unit="update", dynamic_ncols=True, position=0)
@@ -505,11 +508,21 @@ def train(cfg: TrainPytorchConfig) -> None:
                     f"  step={global_step:,} ret={mean_ret:.2f}/{max_ret:.2f} "
                     f"len={mean_len:.0f} FPS={fps:,.0f}"
                 )
-                any_win = int(finished_wins.any())
                 wandb.log(wandb_payload, step=global_step)
 
+                level_wins = np.zeros(n_levels, dtype=np.int32)
+                level_sol_lens = np.full(n_levels, np.nan)
+                for level_i in np.unique(finished_levels):
+                    lmask = finished_levels == level_i
+                    won_mask = lmask & finished_wins.astype(bool)
+                    if won_mask.any():
+                        level_wins[int(level_i)] = 1
+                        level_sol_lens[int(level_i)] = float(finished_lengths[won_mask].min())
+                sol_len_strs = ["" if np.isnan(v) else str(int(round(v))) for v in level_sol_lens]
                 with open(csv_path, "a") as f:
-                    f.write(f"{global_step},{mean_ret},{max_ret},{mean_len},{fps},{any_win}\n")
+                    f.write(f"{global_step},{mean_ret},{max_ret},{mean_len},{fps},"
+                            + ",".join(str(w) for w in level_wins) + ","
+                            + ",".join(sol_len_strs) + "\n")
 
             with torch.no_grad():
                 next_value = agent.get_value(next_obs).cpu()

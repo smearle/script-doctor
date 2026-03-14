@@ -115,6 +115,12 @@ PYBIND11_MODULE(_puzzlescript_cpp, m) {
         .def("set_obs_shape", &BatchedEngine::setObsShape,
              py::arg("height"), py::arg("width"),
              "Configure a fixed padded observation shape")
+        .def("set_dedup_map", &BatchedEngine::setDedupMap,
+             py::arg("raw_to_canonical"), py::arg("n_canonical"),
+             "Set object dedup mapping (raw index -> canonical index)")
+        .def("load_viewport_config", &BatchedEngine::loadViewportConfig,
+             py::arg("json_str"),
+             "Load viewport config (flickscreen/zoomscreen, player mask) from compiled game JSON")
         .def("set_num_threads", &BatchedEngine::setNumThreads,
              py::arg("num_threads"),
              "Configure the number of CPU threads used for batched work")

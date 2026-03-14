@@ -200,13 +200,7 @@ def main(cfg: JaxValidationConfig, games: Optional[List[str]] = None):
         games = get_list_of_games_for_testing(dataset=cfg.dataset, random_order=cfg.random_order)
     else:
         games = [cfg.game]
-    current_game_names = {os.path.splitext(game_file)[0] for game_file in os.listdir(os.path.join(DATA_DIR, 'scraped_games'))}
-    games = [game for game in games if game in current_game_names]
     games = _dedupe_preserve_order(games)
-    games_to_n_rules = {
-        game_key: game_val for game_key, game_val in games_to_n_rules.items()
-        if os.path.splitext(os.path.basename(game_key))[0] in current_game_names
-    }
     if cfg.aggregate:
         results = {
             'stats': {},

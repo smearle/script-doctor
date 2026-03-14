@@ -139,11 +139,13 @@ def _render_frames_io(frames, i, metric, steps_prev_complete, env, config: RLCon
     _render_frames(frames, i, metric, steps_prev_complete, env, config)
     return np.int32(0)
 
-def log_callback(metric, steps_prev_complete, config: RLConfig, train_start_time, pbar: tqdm, stats_bar: tqdm):
+def log_callback(metric, steps_prev_complete, config: RLConfig, train_start_time, pbar: tqdm, stats_bar: tqdm,
+                 n_levels: int, csv_path: str):
     timesteps = metric["timestep"][metric["returned_episode"]] * config.n_envs
     return_values = metric["returned_episode_returns"][metric["returned_episode"]]
     level_ids = metric.get("level_i")
     win_flags = metric.get("won")
+    done_mask = np.asarray(metric["returned_episode"])
 
     pbar.update(1)
 
@@ -159,17 +161,6 @@ def log_callback(metric, steps_prev_complete, config: RLConfig, train_start_time
             f"  step={t:,} ret={ep_return_mean:.2f}/{ep_return_max:.2f} "
             f"len={ep_length:.0f} FPS={fps:,.0f}"
         )
-
-        # Compute any_win before CSV write
-        done_mask = np.asarray(metric["returned_episode"])
-        any_win = 0
-        if win_flags is not None:
-            any_win = int(np.asarray(win_flags)[done_mask].any())
-
-        # Add a row to csv with ep_return, fps, win
-        with open(os.path.join(get_exp_dir(config),
-                                "progress.csv"), "a") as f:
-            f.write(f"{t},{ep_return_mean},{fps},{any_win}\n")
 
         # writer.add_scalar("ep_return", ep_return_mean, t)
         # writer.add_scalar("ep_return_max", ep_return_max, t)
@@ -187,18 +178,36 @@ def log_callback(metric, steps_prev_complete, config: RLConfig, train_start_time
             step=t,
         )
 
+        level_wins = np.zeros(n_levels, dtype=np.int32)
+        level_sol_lens = np.full(n_levels, np.nan)
+        finished_lengths = np.asarray(metric["returned_episode_lengths"])[done_mask]
         if level_ids is not None and win_flags is not None:
             finished_levels = np.asarray(level_ids)[done_mask]
             finished_returns = np.asarray(return_values)
-            finished_wins = np.asarray(win_flags)[done_mask]
+            finished_wins = np.asarray(win_flags)[done_mask].astype(bool)
             if finished_levels.size > 0:
                 level_payload = {}
                 for level_i in np.unique(finished_levels):
                     level_mask = finished_levels == level_i
+                    won_mask = level_mask & finished_wins
                     level_payload[f"level/{int(level_i)}/ep_return"] = float(finished_returns[level_mask].mean())
                     level_payload[f"level/{int(level_i)}/win_rate"] = float(finished_wins[level_mask].mean())
+                    if won_mask.any():
+                        level_wins[int(level_i)] = 1
+                        level_sol_lens[int(level_i)] = float(finished_lengths[won_mask].min())
                 if level_payload:
                     wandb.log(level_payload, step=t)
+        elif win_flags is not None and config.level >= 0:
+            won_mask = np.asarray(win_flags)[done_mask].astype(bool)
+            if won_mask.any():
+                level_wins[config.level] = 1
+                level_sol_lens[config.level] = float(finished_lengths[won_mask].min())
+
+        sol_len_strs = ["" if np.isnan(v) else str(int(round(v))) for v in level_sol_lens]
+        with open(csv_path, "a") as f:
+            f.write(f"{t},{ep_return_mean},{ep_return_max},{ep_length},{fps},"
+                    + ",".join(str(w) for w in level_wins) + ","
+                    + ",".join(sol_len_strs) + "\n")
 
         # for k, v in zip(env.prob.metric_names, env.prob.stats):
         #     writer.add_scalar(k, v, t)
@@ -318,7 +327,9 @@ def make_train(config: TrainConfig, restored_ckpt, checkpoint_manager):
         _log_callback = partial(log_callback, config=config,
                                train_start_time=train_start_time,
                                steps_prev_complete=steps_prev_complete,
-                               pbar=pbar, stats_bar=stats_bar)
+                               pbar=pbar, stats_bar=stats_bar,
+                               n_levels=len(env_r.levels),
+                               csv_path=os.path.join(config._exp_dir, "progress.csv"))
 
 
         def save_checkpoint(runner_state, info, steps_prev_complete):
@@ -703,13 +714,12 @@ def main(config: TrainConfig):
         f.write(wandb_run_id)
 
     if restored_ckpt is None:
-        progress_csv_path = os.path.join(exp_dir, "progress.csv")
-        if os.path.exists(progress_csv_path):
-            print("Progress csv already exists, but have no checkpoint to restore " +\
-                "from. Overwriting it.")
-        # Create csv for logging progress
+        _env_info = init_ps_env(config, verbose=False)
+        n_levels = len(_env_info.levels)
+        win_cols = ",".join(f"level-{i}-win" for i in range(n_levels))
+        sol_cols = ",".join(f"level-{i}-min_sol_len" for i in range(n_levels))
         with open(os.path.join(exp_dir, "progress.csv"), "w") as f:
-            f.write("timestep,ep_return,fps,win\n")
+            f.write(f"timestep,ep_return,ep_return_max,ep_length,fps,{win_cols},{sol_cols}\n")
 
     train_jit = jax.jit(make_train(config, restored_ckpt, checkpoint_manager))
     out = train_jit(rng)

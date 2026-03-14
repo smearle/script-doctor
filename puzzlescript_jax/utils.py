@@ -19,7 +19,7 @@ import tiktoken
 
 from puzzlescript_jax.globals import (
     CUSTOM_GAMES_DIR, GAMES_TO_N_RULES_PATH, GAMES_N_RULES_SORTED_PATH, PRIORITY_GAMES, GAMES_N_LEVELS_PATH, LARK_SYNTAX_PATH,
-    GAMES_DIR, TREES_DIR, GALLERY_GAMES_DIR, INCREPARE_GAMES_DIR, UNIQUE_INCREPARE_GAMES_PATH,
+    GAMES_DIR, TREES_DIR, GALLERY_GAMES_DIR, INCREPARE_GAMES_DIR, UNIQUE_GAMES_PER_DATASET_PATH,
 )
 from puzzlescript_jax.env import PuzzleJaxEnv
 from puzzlescript_jax.gen_tree import GenPSTree
@@ -620,14 +620,17 @@ def _list_dir_games(directory):
     return sorted(_strip_txt(f) for f in os.listdir(directory) if f.endswith('.txt'))
 
 
-def _load_unique_games_json(path):
-    """Load a precomputed list of unique game names from a JSON file."""
-    if not os.path.isfile(path):
+def _load_unique_games_per_dataset():
+    """Load the precomputed per-dataset unique game lists.
+
+    Returns a dict: {"gallery": [...], "pedro": [...], "increpare": [...]}.
+    """
+    if not os.path.isfile(UNIQUE_GAMES_PER_DATASET_PATH):
         raise FileNotFoundError(
-            f"Unique games list not found at {path}. "
+            f"Unique games list not found at {UNIQUE_GAMES_PER_DATASET_PATH}. "
             f"Run dedup_games.py first to generate it."
         )
-    with open(path, 'r') as f:
+    with open(UNIQUE_GAMES_PER_DATASET_PATH, 'r') as f:
         return json.load(f)
 
 
@@ -654,6 +657,9 @@ def get_list_of_games_for_testing(dataset="pedro", include_random=False, random_
     if dataset not in VALID_DATASETS:
         raise ValueError(f"Invalid dataset: {dataset!r}. Must be one of {VALID_DATASETS}")
 
+    # Load the precomputed deduped game lists (gallery, pedro, increpare)
+    unique_per_dataset = _load_unique_games_per_dataset()
+
     # --- Build the ordered game list by tier ---
     # Start with priority games (always first)
     games = list(PRIORITY_GAMES)
@@ -664,9 +670,8 @@ def get_list_of_games_for_testing(dataset="pedro", include_random=False, random_
             random.shuffle(games)
         return games
 
-    # Gallery tier
-    gallery_game_names = _list_dir_games(GALLERY_GAMES_DIR)
-    for g in gallery_game_names:
+    # Gallery tier: deduped against custom_games and within itself
+    for g in unique_per_dataset.get("gallery", []):
         if g not in seen:
             games.append(g)
             seen.add(g)
@@ -676,8 +681,9 @@ def get_list_of_games_for_testing(dataset="pedro", include_random=False, random_
             random.shuffle(games)
         return games
 
-    # Pedro tier: use complexity ordering from games_n_rules where available
-    pedro_game_names = set(_list_dir_games(GAMES_DIR))
+    # Pedro tier: use complexity ordering from games_n_rules where available,
+    # but only include games that passed dedup
+    pedro_unique = set(unique_per_dataset.get("pedro", []))
     if os.path.isfile(GAMES_N_RULES_SORTED_PATH):
         with open(GAMES_N_RULES_SORTED_PATH, 'r') as f:
             games_n_rules = json.load(f)
@@ -685,11 +691,12 @@ def get_list_of_games_for_testing(dataset="pedro", include_random=False, random_
         for game, n_rules, has_randomness in sorted(games_n_rules, key=lambda x: x[1]):
             if (has_randomness and not include_random):
                 continue
-            if game not in seen:
-                games.append(_strip_txt(game))
-                seen.add(_strip_txt(game))
-    # Append any remaining pedro games not in games_n_rules
-    for g in sorted(pedro_game_names):
+            game = _strip_txt(game)
+            if game in pedro_unique and game not in seen:
+                games.append(game)
+                seen.add(game)
+    # Append any remaining deduped pedro games not in games_n_rules
+    for g in sorted(pedro_unique):
         if g not in seen:
             games.append(g)
             seen.add(g)
@@ -699,9 +706,8 @@ def get_list_of_games_for_testing(dataset="pedro", include_random=False, random_
             random.shuffle(games)
         return games
 
-    # Increpare tier: only the unique (deduplicated) games
-    unique_increpare = _load_unique_games_json(UNIQUE_INCREPARE_GAMES_PATH)
-    for g in unique_increpare:
+    # Increpare tier: deduped against all preceding tiers and within itself
+    for g in unique_per_dataset.get("increpare", []):
         if g not in seen:
             games.append(g)
             seen.add(g)
@@ -795,9 +801,9 @@ def level_to_int_arr(level: dict, n_objs: int):
                 val |= chunk << (32 * j)
             level_arr[x].append(val)
     if n_objs <= 32:
-        dtype = np.int32
+        dtype = np.uint32
     elif n_objs <= 64:
-        dtype = np.int64
+        dtype = np.uint64
     else:
         # TODO: Get more clever in order to handle this (if we must)
         raise ValueError(f"Number of objects {n_objs} exceeds 64, cannot convert to int array.")

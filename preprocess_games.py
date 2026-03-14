@@ -6,6 +6,7 @@ from collections import OrderedDict
 
 import hydra
 from lark import Lark
+from tqdm import tqdm
 
 from puzzlescript_jax.preprocessing import count_rules, get_env_from_ps_file
 from conf.config import PreprocessConfig
@@ -97,6 +98,18 @@ def _filter_parse_results(parse_results, allowed_games):
     return parse_results
 
 
+def _save_all(parse_results, parse_results_path, games_n_rules_sorted, games_to_n_rules, total_games):
+    """Save all progress to disk (parse_results + games_n_rules)."""
+    _update_parse_stats(parse_results, total_games)
+    with open(parse_results_path, "w", encoding='utf-8') as f:
+        json.dump(parse_results, f, indent=4)
+    sorted_rules = sorted(games_n_rules_sorted, key=lambda x: x[1])
+    with open(GAMES_N_RULES_SORTED_PATH, 'w', encoding='utf-8') as f:
+        json.dump(sorted_rules, f, indent=4)
+    with open(GAMES_TO_N_RULES_PATH, 'w', encoding='utf-8') as f:
+        json.dump(games_to_n_rules, f, indent=4)
+
+
 @hydra.main(version_base="1.3", config_path="conf", config_name="preprocess_config")
 def main(cfg: PreprocessConfig):
 
@@ -105,9 +118,6 @@ def main(cfg: PreprocessConfig):
 
     # Initialize the Lark parser with the PuzzleScript grammar
     parser = Lark(puzzlescript_grammar, start="ps_game", maybe_placeholders=False)
-    # min_parser = Lark(min_puzzlescript_grammar, start="ps_game")
-
-    # games_dir = os.path.join('script-doctor','games')
 
     os.makedirs(TREES_DIR, exist_ok=True)
     os.makedirs(PRETTY_TREES_DIR, exist_ok=True)
@@ -126,14 +136,6 @@ def main(cfg: PreprocessConfig):
     if os.path.exists(parse_results_path):
         shutil.copyfile(parse_results_path, parse_results_path[:-5] + "_bkp" + ".json")
 
-    # min_grammar = os.path.join('syntax_generate.lark')
-    # if args.overwrite or not os.path.exists(parsed_games_filename):
-    #     with open(parsed_games_filename, "w") as file:
-    #         file.write("")
-    # with open(parsed_games_filename, "r", encoding='utf-8') as file:
-    #     # Get the set of all lines from this text file
-    #     parsed_games = set(file.read().splitlines())
-    # for i, filename in enumerate(['blank.txt'] + os.listdir(demo_games_dir)):
     if cfg.game is not None:
         game_files = [cfg.game + '.txt']
     else:
@@ -169,15 +171,18 @@ def main(cfg: PreprocessConfig):
     env_error_games = _error_group_names(parse_results['env_error'])
     preprocess_error_games = _error_group_names(parse_results['preprocess_error'])
 
-    for i, filename in enumerate(game_files):
+    n_skipped = 0
+    n_processed = 0
+    pbar = tqdm(game_files, desc="Preprocessing", unit="game")
+    for filename in pbar:
         game_name = os.path.basename(filename)
         if not cfg.overwrite and game_name in games_to_n_rules:
-            # We can assume we initialized the environment successfully then
-            print(f"Skipping {game_name}: already in the list")
+            n_skipped += 1
             continue
 
-        og_game_path = os.path.join(GAMES_DIR, filename)
-        print(f"Parsing {filename} ({i+1}/{len(game_files)})")
+        n_processed += 1
+        pbar.set_postfix(game=game_name[:30], ok=len(success_games), skip=n_skipped)
+
         env, ps_tree, success, err_msg = get_env_from_ps_file(parser, filename[:-4], log_dir=scrape_log_dir, overwrite=cfg.overwrite)
 
         if success == PJParseErrors.SUCCESS:
@@ -215,7 +220,6 @@ def main(cfg: PreprocessConfig):
             games_n_rules_sorted.append((game_name, n_rules, has_randomness))
             games_to_n_rules[game_name] = (n_rules, has_randomness)
         elif success == PJParseErrors.SKIPPED:
-            print(f"Skipping {game_name} because it has been marked for skipping in `GAMES_TO_SKIP`")
             continue
         elif success == PJParseErrors.PREPROCESSING_ERROR:
             if err_msg not in parse_results['preprocess_error']:
@@ -226,31 +230,19 @@ def main(cfg: PreprocessConfig):
         else:
             raise Exception(f"Unknown error while parsing game: {success}")
 
-        _update_parse_stats(parse_results, len(game_files))
+        # Save all progress after every game so nothing is lost on interruption
+        _save_all(parse_results, parse_results_path, games_n_rules_sorted, games_to_n_rules, len(game_files))
 
-        with open(parse_results_path, "w", encoding='utf-8') as file:
-            json.dump(parse_results, file, indent=4)
+    # Final save
+    _save_all(parse_results, parse_results_path, games_n_rules_sorted, games_to_n_rules, len(game_files))
 
-    # Save the sorted list to a json
-    games_n_rules_sorted = sorted(games_n_rules_sorted, key=lambda x: x[1])
-    with open(GAMES_N_RULES_SORTED_PATH, 'w', encoding='utf-8') as f:
-        json.dump(games_n_rules_sorted, f, indent=4)
-    with open(GAMES_TO_N_RULES_PATH, 'w', encoding='utf-8') as f:
-        json.dump(games_to_n_rules, f, indent=4) 
-
-    _update_parse_stats(parse_results, len(game_files))
-    n_success = parse_results['stats']['success']
-    n_env_errors = parse_results['stats']['env_error']
-    n_tree_errors = parse_results['stats']['tree_error']
-    n_parse_errors = parse_results['stats']['parse_error']
-
-    print(f"Attempted to parse and initialize {len(game_files)} games.")
-    print(f"Initialized {n_success} games successfully as jax envs")
-    print(f"Env errors {n_env_errors}.")
-    print(f"Tree transformation errors: {n_tree_errors}")
-    print(f"Lark parse errors: {n_parse_errors}")
-    print(f"Timeouts: {parse_results['stats']['parse_timeout']}")
-
+    stats = parse_results['stats']
+    print(f"\nPreprocessing complete ({len(game_files)} games, {n_skipped} skipped, {n_processed} processed):")
+    print(f"  Success:      {stats.get('success', 0)}")
+    print(f"  Env errors:   {stats.get('env_error', 0)}")
+    print(f"  Tree errors:  {stats.get('tree_error', 0)}")
+    print(f"  Parse errors: {stats.get('parse_error', 0)}")
+    print(f"  Timeouts:     {stats.get('parse_timeout', 0)}")
 
 
 if __name__ == "__main__":

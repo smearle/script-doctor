@@ -20,6 +20,7 @@ node_modules/
 __pycache__
 
 data/*
+gallery_games/*
 # !data/scraped_games
 scrape_logs
 example_games.json

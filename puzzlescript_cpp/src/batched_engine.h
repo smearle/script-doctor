@@ -2,7 +2,9 @@
 #include "engine.h"
 #include <vector>
 #include <cstdint>
+#include <optional>
 #include <string>
+#include <utility>
 
 /**
  * BatchedEngine: manages N independent Engine instances for vectorized
@@ -29,6 +31,15 @@ public:
 
     /// Configure a fixed padded observation shape used by getObs().
     void setObsShape(int height, int width);
+
+    /// Set dedup mapping: raw object index → canonical index.
+    /// Length must equal the raw object count. n_canonical is the number
+    /// of unique canonical indices.
+    void setDedupMap(const std::vector<int>& raw_to_canonical, int n_canonical);
+
+    /// Load viewport config (flickscreen/zoomscreen, player mask) from
+    /// the compiled game JSON.  Must be called after loadFromJSON().
+    void loadViewportConfig(const std::string& json_str);
 
     /// Configure the number of CPU threads to use for batched work.
     /// Values <= 0 mean "auto" when supported.
@@ -112,6 +123,22 @@ private:
     std::vector<float> prev_scores_;
     bool auto_reset_ = true;
     int num_threads_ = 0;
+
+    // Dedup map: raw object index → canonical index
+    bool use_dedup_ = false;
+    std::vector<int> dedup_map_;
+    int n_canonical_ = 0;
+
+    // Viewport config
+    std::vector<int32_t> player_mask_words_;
+    bool player_mask_aggregate_ = false;
+    std::optional<std::pair<int, int>> flickscreen_;
+    std::optional<std::pair<int, int>> zoomscreen_;
+
+    // Output observation dimensions (may differ from level dims)
+    int out_n_objs_ = 0;
+    int out_height_ = 0;
+    int out_width_  = 0;
 
     void fillObs(int env_idx);
     void fillObsAll();
