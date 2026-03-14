@@ -2073,13 +2073,21 @@ class PuzzleJaxEnv:
             if not self.jit:
                 if obj_idx == -1:
                     raise RuntimeError(f'Object `{obj}` not found in cell {cell_i}.')
+            # PuzzleScript preserves movement bits when an object is replaced by
+            # another object on the same collision layer. After project_cell's
+            # `m_cell & ~detected`, unmatched objects remain in `m_cell` while
+            # matched objects remain visible through `detected`.
+            layer_idx = (self.obj_idxs_to_force_idxs_jnp[obj_idx] - self.n_objs) // N_FORCES
+            layer_mask = self.layer_masks_jnp[layer_idx]
+            was_at_cell = jnp.any((cell_detect_out.detected[:self.n_objs] | m_cell[:self.n_objs]) & layer_mask)
+
             m_cell = m_cell.at[obj_idx].set(True)
 
-            # If this object was NOT detected on the LHS of this cell, it is being
-            # newly placed by the RHS and should have no movement force.  If it WAS
-            # detected, its existing forces are preserved (standard PuzzleScript
-            # semantics for objects that appear on both sides of a rule cell).
-            was_detected = cell_detect_out.detected[obj_idx]
+            # In JS PuzzleScript, movements are per-cell bitmasks. When an object
+            # is placed at a cell where it didn't previously exist, there are no
+            # movement bits for it (effectively zero force). When an object was
+            # already at the cell, its existing movements are preserved (unless
+            # an explicit force modifier is used, handled by project_force_obj).
             if obj in self.objs_to_idxs and not random:
                 force_start = self.obj_idxs_to_force_idxs[obj_idx]
                 m_cell_cleared = m_cell.at[force_start: force_start + N_FORCES].set(False)
@@ -2088,7 +2096,7 @@ class PuzzleJaxEnv:
                     m_cell, jnp.zeros(N_FORCES, dtype=bool),
                     (jnp.array(self.obj_idxs_to_force_idxs)[obj_idx],),
                 )
-            m_cell = jnp.where(was_detected, m_cell, m_cell_cleared)
+            m_cell = jnp.where(was_at_cell, m_cell, m_cell_cleared)
 
             m_cell = remove_colliding_objs(m_cell, obj_idx, self.coll_mat)
             return rng, m_cell

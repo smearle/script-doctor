@@ -475,8 +475,10 @@ def evolve(
     seed: int,
     fitness_mode: str,
     preserve_players: bool,
+    depth_increase_threshold: float = 0.95,
 ):
     """Run the (1+λ) evolution loop.  Automatically resumes from checkpoint."""
+    initial_max_nodes = max_nodes
     rng = np.random.default_rng(seed)
 
     # ---- Initialise environment & puzzle wrapper ----
@@ -659,6 +661,21 @@ def evolve(
             champion_fitness, champion_gen, history, rng,
         )
 
+        # ---- Adaptive depth increase ----
+        if (depth_increase_threshold > 0
+                and champion_result.get("solved")
+                and champion_result["generated_states"] >= depth_increase_threshold * max_nodes):
+            max_nodes += initial_max_nodes
+            effective_max_nodes = (max_nodes // batch_size) * batch_size or batch_size
+            search_fn = astar_builder(
+                puzzle, heuristic,
+                batch_size=batch_size,
+                max_nodes=effective_max_nodes,
+                cost_weight=cost_weight,
+            )
+            print(f"  >> Depth increased: max_nodes now {max_nodes:,} "
+                  f"(+{initial_max_nodes:,})")
+
     print("\n" + "=" * 60)
     print(f"Evolution complete.  Best fitness: {champion_fitness:.0f}")
     print(f"  Champion from gen {champion_gen}")
@@ -759,6 +776,7 @@ def main(cfg: EvolveLevelConfig):
         seed=cfg.seed,
         fitness_mode=cfg.fitness,
         preserve_players=not cfg.allow_player_change,
+        depth_increase_threshold=cfg.depth_increase_threshold,
     )
 
 

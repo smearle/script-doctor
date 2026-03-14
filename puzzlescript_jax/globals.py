@@ -33,6 +33,9 @@ PRIORITY_GAMES = [
     'sokodig',
     'atlas shrank',
     'MicroChip',
+    'Pants,_Shirt,_Cap',
+    'Sokoboros',
+    'pipe_pend',
 ]
 
 par_dir = os.path.dirname(os.path.abspath(__file__))

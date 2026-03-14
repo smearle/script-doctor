@@ -344,7 +344,9 @@ def evolve(
     render_gif: bool,
     gif_frame_duration: float,
     gif_scale: int,
+    depth_increase_threshold: float = 0.95,
 ) -> None:
+    initial_max_steps = max_steps
     rng = np.random.default_rng(seed)
     backend = NodeJSPuzzleScriptBackend()
     game_text = load_simplified_game_text(game)
@@ -491,6 +493,14 @@ def evolve(
             champion_fitness, champion_game_text, history, rng,
         )
 
+        # ---- Adaptive depth increase ----
+        if (depth_increase_threshold > 0
+                and champion_result.get("solved")
+                and champion_result["generated_states"] >= depth_increase_threshold * max_steps):
+            max_steps += initial_max_steps
+            print(f"  >> Depth increased: max_steps now {max_steps:,} "
+                  f"(+{initial_max_steps:,})")
+
     print(f"Finished. Best fitness: {champion_fitness:.0f}")
     print(f"Results in {out_dir}")
 
@@ -518,6 +528,7 @@ def main(cfg: EvolveLevelNodeJSConfig) -> None:
         render_gif=cfg.render_gif,
         gif_frame_duration=cfg.gif_frame_duration,
         gif_scale=cfg.gif_scale,
+        depth_increase_threshold=cfg.depth_increase_threshold,
     )
 
 

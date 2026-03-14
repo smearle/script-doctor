@@ -447,9 +447,11 @@ void Engine::loadLevel(int levelIndex) {
     againing_ = false;
     curLevel_ = levelIndex;
 
-    // Match JS behavior: run rules once on level start if metadata flag is set
+    // Match JS behavior: run rules once on level start if metadata flag is set.
+    // JS calls processInput(-1, dontDoWin=true) here, suppressing win detection.
     if (metadata_.count("run_rules_on_level_start")) {
         processInput(-1);
+        winning_ = false;
         againing_ = false;
     }
 }
@@ -468,6 +470,8 @@ LevelBackup Engine::backupLevel() const {
 void Engine::restoreLevel(const LevelBackup& bak) {
     level_.objects = bak.dat;
     level_.calculateRowColMasks();
+    winning_ = false;
+    againing_ = false;
 }
 
 void Engine::restart() {
@@ -1296,8 +1300,8 @@ bool Engine::checkWin() {
         if (!conditionMet) { won = false; break; }
     }
 
-    if (won && !winconditions_.empty()) {
-        winning_ = true;
+    if (!winconditions_.empty()) {
+        winning_ = won;
     }
     return winning_;
 }
@@ -1447,8 +1451,17 @@ bool Engine::processInput(int dir) {
         }
     }
 
-    // Check win
-    checkWin();
+    // Skip win check when a "message" command is present (mirrors JS textMode behavior)
+    bool hasMessage = false;
+    for (const auto& cmd : level_.commandQueue) {
+        if (cmd == "message") {
+            hasMessage = true;
+            break;
+        }
+    }
+    if (!hasMessage) {
+        checkWin();
+    }
 
     if (winning_) againing_ = false;
 

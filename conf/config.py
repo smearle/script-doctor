@@ -116,10 +116,11 @@ class EvolveLevelConfig:
     max_nodes: int = 1_000_000
     batch_size: int = 10_000
     cost_weight: float = 0.6
-    render_gif: bool = False
+    render_gif: bool = True
     seed: int = 42
     fitness: str = "states"
     allow_player_change: bool = False
+    depth_increase_threshold: float = 0.95
 
 
 @dataclass
@@ -139,6 +140,28 @@ class EvolveLevelNodeJSConfig:
     render_gif: bool = True
     gif_frame_duration: float = 0.05
     gif_scale: int = 10
+    depth_increase_threshold: float = 0.95
+
+
+@dataclass
+class EvolveLevelCppConfig:
+    game: Optional[str] = None
+    level: int = 0
+    gens: int = 10_000
+    pop: int = 6
+    n_mutations_min: int = 1
+    n_mutations_max: int = 3
+    max_steps: int = 1_000_000
+    timeout: int = -1
+    algo: str = "astar"
+    seed: int = 42
+    fitness: str = "states"
+    allow_player_change: bool = False
+    render_gif: bool = True
+    gif_frame_duration: float = 0.05
+    gif_scale: int = 1
+    n_workers: int = 4
+    depth_increase_threshold: float = 0.95
 
 
 @dataclass
@@ -274,6 +297,7 @@ cs.store(name="profile_rand_nodejs_config", node=ProfileRandNodeJSConfig)
 cs.store(name="profile_rand_cpp_config", node=ProfileRandCppConfig)
 cs.store(name="evolve_level_config", node=EvolveLevelConfig)
 cs.store(name="evolve_level_nodejs_config", node=EvolveLevelNodeJSConfig)
+cs.store(name="evolve_level_cpp_config", node=EvolveLevelCppConfig)
 cs.store(name="train_config", node=TrainConfig)
 cs.store(name="eval_config", node=EvalConfig)
 cs.store(name="enjoy_config", node=EnjoyConfig)

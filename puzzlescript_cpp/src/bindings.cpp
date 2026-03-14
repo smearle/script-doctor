@@ -91,9 +91,17 @@ PYBIND11_MODULE(_puzzlescript_cpp, m) {
              "Restore level from a backup");
 
     py::class_<LevelBackup>(m, "LevelBackup")
-        .def_readonly("dat", &LevelBackup::dat)
-        .def_readonly("width", &LevelBackup::width)
-        .def_readonly("height", &LevelBackup::height);
+        .def(py::init<>())
+        .def(py::init([](const std::vector<int32_t>& dat, int w, int h) {
+            LevelBackup bak;
+            bak.dat = dat;
+            bak.width = w;
+            bak.height = h;
+            return bak;
+        }), py::arg("dat"), py::arg("width"), py::arg("height"))
+        .def_readwrite("dat", &LevelBackup::dat)
+        .def_readwrite("width", &LevelBackup::width)
+        .def_readwrite("height", &LevelBackup::height);
 
     // ---- BatchedEngine (vectorized gym-style interface) ---------------
     py::class_<BatchedEngine>(m, "BatchedEngine")
@@ -200,18 +208,30 @@ PYBIND11_MODULE(_puzzlescript_cpp, m) {
         .def("get_width", &BatchedEngine::getWidth, py::arg("env_idx"))
         .def("get_height", &BatchedEngine::getHeight, py::arg("env_idx"));
 
-    m.def("random_rollout_raw", &randomRolloutRaw,
-          py::arg("engine"), py::arg("max_iters") = 100000, py::arg("timeout_ms") = -1);
-    m.def("solve_random", &solveRandom,
-          py::arg("engine"), py::arg("max_length") = 100, py::arg("max_iters") = 100000, py::arg("timeout_ms") = 60000);
-    m.def("solve_bfs", &solveBFS,
-          py::arg("engine"), py::arg("max_iters") = 100000, py::arg("timeout_ms") = -1);
-    m.def("solve_astar", &solveAStar,
-          py::arg("engine"), py::arg("max_iters") = 100000, py::arg("timeout_ms") = -1);
-    m.def("solve_gbfs", &solveGBFS,
-          py::arg("engine"), py::arg("max_iters") = 100000, py::arg("timeout_ms") = -1);
-    m.def("solve_mcts", &solveMCTS,
-          py::arg("engine"), py::arg("options") = MCTSOptions());
+    m.def("random_rollout_raw", [](Engine& engine, int maxIters, int timeoutMs) {
+        py::gil_scoped_release release;
+        return randomRolloutRaw(engine, maxIters, timeoutMs);
+    }, py::arg("engine"), py::arg("max_iters") = 100000, py::arg("timeout_ms") = -1);
+    m.def("solve_random", [](Engine& engine, int maxLength, int maxIters, int timeoutMs) {
+        py::gil_scoped_release release;
+        return solveRandom(engine, maxLength, maxIters, timeoutMs);
+    }, py::arg("engine"), py::arg("max_length") = 100, py::arg("max_iters") = 100000, py::arg("timeout_ms") = 60000);
+    m.def("solve_bfs", [](Engine& engine, int maxIters, int timeoutMs) {
+        py::gil_scoped_release release;
+        return solveBFS(engine, maxIters, timeoutMs);
+    }, py::arg("engine"), py::arg("max_iters") = 100000, py::arg("timeout_ms") = -1);
+    m.def("solve_astar", [](Engine& engine, int maxIters, int timeoutMs) {
+        py::gil_scoped_release release;
+        return solveAStar(engine, maxIters, timeoutMs);
+    }, py::arg("engine"), py::arg("max_iters") = 100000, py::arg("timeout_ms") = -1);
+    m.def("solve_gbfs", [](Engine& engine, int maxIters, int timeoutMs) {
+        py::gil_scoped_release release;
+        return solveGBFS(engine, maxIters, timeoutMs);
+    }, py::arg("engine"), py::arg("max_iters") = 100000, py::arg("timeout_ms") = -1);
+    m.def("solve_mcts", [](Engine& engine, const MCTSOptions& options) {
+        py::gil_scoped_release release;
+        return solveMCTS(engine, options);
+    }, py::arg("engine"), py::arg("options") = MCTSOptions());
 
     // ---- Renderer (sprite-based frame rendering) ---------------------
     py::class_<Renderer>(m, "Renderer")
