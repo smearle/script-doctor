@@ -2075,34 +2075,20 @@ class PuzzleJaxEnv:
                     raise RuntimeError(f'Object `{obj}` not found in cell {cell_i}.')
             m_cell = m_cell.at[obj_idx].set(True)
 
-            # Actually, forces of transformed objects are just left there, on the relevant collision layer, I think.
-            # def transfer_force(m_cell, obj_idx, detected_obj_idx):
-            #     # Reassign any forces belonging to the detected object to the new object
-            #     # First, identify the forces of the detected object.
-            #     detected_forces = jax.lax.dynamic_slice(
-            #         m_cell, (jnp.array(self.obj_idxs_to_force_idxs)[detected_obj_idx],), (N_FORCES,)
-            #     )
-                
-            #     # obj_force_mask = self.obj_force_masks[detected_obj_idx]
-            #     # detected_forces = m_cell[obj_force_mask]
-            #     # Then remove them from the detected object.
-            #     m_cell = jax.lax.dynamic_update_slice(
-            #         m_cell, jnp.zeros(N_FORCES, dtype=bool), (jnp.array(self.obj_idxs_to_force_idxs)[detected_obj_idx],),
-            #     )
-            #     # m_cell = m_cell.at[obj_force_mask].set(0)
-            #     # Then copy them to the new object.
-            #     m_cell = jax.lax.dynamic_update_slice(
-            #         m_cell, detected_forces, (jnp.array(self.obj_idxs_to_force_idxs)[obj_idx],),
-            #     )
-            #     # m_cell = jnp.where(obj_force_mask, detected_forces, m_cell)
-            #     return m_cell
-
-            # m_cell = jax.lax.cond(
-            #     detected_obj_idx != -1,
-            #     transfer_force,
-            #     lambda m_cell, _, __: m_cell,
-            #     m_cell, obj_idx, detected_obj_idx
-            # )
+            # If this object was NOT detected on the LHS of this cell, it is being
+            # newly placed by the RHS and should have no movement force.  If it WAS
+            # detected, its existing forces are preserved (standard PuzzleScript
+            # semantics for objects that appear on both sides of a rule cell).
+            was_detected = cell_detect_out.detected[obj_idx]
+            if obj in self.objs_to_idxs and not random:
+                force_start = self.obj_idxs_to_force_idxs[obj_idx]
+                m_cell_cleared = m_cell.at[force_start: force_start + N_FORCES].set(False)
+            else:
+                m_cell_cleared = jax.lax.dynamic_update_slice(
+                    m_cell, jnp.zeros(N_FORCES, dtype=bool),
+                    (jnp.array(self.obj_idxs_to_force_idxs)[obj_idx],),
+                )
+            m_cell = jnp.where(was_detected, m_cell, m_cell_cleared)
 
             m_cell = remove_colliding_objs(m_cell, obj_idx, self.coll_mat)
             return rng, m_cell
