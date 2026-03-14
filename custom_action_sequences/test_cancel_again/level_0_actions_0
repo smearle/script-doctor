@@ -1,0 +1,4 @@
+# Test cancel during again.
+# Blob slides right via again, should be cancelled when landing on Trap.
+# Just need any input to start the process (player goes right).
+right

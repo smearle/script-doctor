@@ -1,0 +1,6 @@
+# test_secrets level 0 — minimal key pickup repro
+# JS: overlap the key, then on the next move become PlayerWithKey and move off it.
+# JAX previously transformed in place and dropped the movement for that turn.
+down
+right
+down

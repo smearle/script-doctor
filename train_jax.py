@@ -88,16 +88,21 @@ def _render_frames(frames, i, metric, steps_prev_complete, env, config: RLConfig
         t = int(timesteps[-1])
     else:
         t = 0
-    if t <= steps_prev_complete or config.render_freq <= 0:
+    if config.render_freq <= 0:
         return
 
-    # Gate rendering by global env step distance rather than update index.
-    # This is robust across checkpoint resume and different episode lengths.
-    render_every_steps = config.render_freq * config.num_steps * config.n_envs
-    if render_every_steps <= 0:
-        return
-    if ((t - steps_prev_complete) % render_every_steps) != 0:
-        return
+    first_update = (i == 0)
+    if not first_update:
+        if t <= steps_prev_complete:
+            return
+
+        # Gate rendering by global env step distance rather than update index.
+        # This is robust across checkpoint resume and different episode lengths.
+        render_every_steps = config.render_freq * config.num_steps * config.n_envs
+        if render_every_steps <= 0:
+            return
+        if ((t - steps_prev_complete) % render_every_steps) != 0:
+            return
 
     # if jnp.all(frames == 0):
     print(f"Rendering episode gifs at update {i} to directory {config._exp_dir}")

@@ -1,0 +1,6 @@
+# Test RIGHT push: Player goes left of crate, then pushes right.
+# Step 1: up (Player to 3,3 - blocked by crate, player stays at 4,3)
+# So first reposition: left to (4,2), up to (3,2), right to push crate RIGHT.
+left
+up
+right

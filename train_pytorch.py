@@ -618,7 +618,7 @@ def train(cfg: TrainPytorchConfig) -> None:
                 )
                 print(f"Saved checkpoint: {ckpt_path}")
 
-            if cfg.render_freq > 0 and (update % cfg.render_freq == 0 or update == num_updates):
+            if cfg.render_freq > 0 and (update == start_update or update % cfg.render_freq == 0 or update == num_updates):
                 agent.eval()
                 render_eval(cfg, agent, exp_dir, update, global_step, render_ctx, device)
                 agent.train()

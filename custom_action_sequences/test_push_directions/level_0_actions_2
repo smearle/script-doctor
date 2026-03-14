@@ -1,0 +1,7 @@
+# Test DOWN push: Player goes above crate, then pushes down.
+# Reposition: left to (4,2), up to (3,2), up to (2,2), right to (2,3), down to push crate DOWN.
+left
+up
+up
+right
+down

@@ -1,0 +1,67 @@
+title Test Push Directions
+author Test
+
+========
+OBJECTS
+========
+
+Background
+lightgreen
+
+Wall
+brown
+
+Player
+blue
+
+Crate
+orange
+
+Target
+red
+
+=======
+LEGEND
+=======
+
+. = Background
+# = Wall
+P = Player
+* = Crate
+O = Target
+
+=========
+SOUNDS
+=========
+
+================
+COLLISIONLAYERS
+================
+
+Background
+Target
+Player, Wall, Crate
+
+======
+RULES
+======
+
+[ > Player | Crate ] -> [ > Player | > Crate ]
+
+==============
+WINCONDITIONS
+==============
+
+all Target on Crate
+
+=======
+LEVELS
+=======
+
+#######
+#..O..#
+#.....#
+#..*..#
+#..P..#
+#.....#
+#######

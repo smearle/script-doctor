@@ -1,0 +1,3 @@
+# Test UP push: Player at (4,3), crate at (3,3). Push up.
+# Expected: Player to (3,3), crate to (2,3).
+up

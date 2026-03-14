@@ -1291,7 +1291,7 @@ class PuzzleJaxEnv:
         )
         if self._is_multi_level:
             state = PJStateMultiLevel(
-                **state,
+                **vars(state),
                 level_i=sampled_level_i,
                 level_height=level_height,
                 level_width=level_width,
@@ -1479,7 +1479,7 @@ class PuzzleJaxEnv:
         if self._is_multi_level:
             state: PJStateMultiLevel
             new_state = PJStateMultiLevel(
-                **new_state,
+                **vars(new_state),
                 level_i=state.level_i,
                 level_height=state.level_height,
                 level_width=state.level_width,
@@ -2073,13 +2073,13 @@ class PuzzleJaxEnv:
             if not self.jit:
                 if obj_idx == -1:
                     raise RuntimeError(f'Object `{obj}` not found in cell {cell_i}.')
-            # PuzzleScript preserves movement bits when an object is replaced by
-            # another object on the same collision layer. After project_cell's
-            # `m_cell & ~detected`, unmatched objects remain in `m_cell` while
-            # matched objects remain visible through `detected`.
+            # PuzzleScript preserves movement bits when a matched object from
+            # the same collision layer is replaced in-place. Unmatched
+            # occupants already present at the destination cell must not donate
+            # their movement bits to the newly projected object.
             layer_idx = (self.obj_idxs_to_force_idxs_jnp[obj_idx] - self.n_objs) // N_FORCES
             layer_mask = self.layer_masks_jnp[layer_idx]
-            was_at_cell = jnp.any((cell_detect_out.detected[:self.n_objs] | m_cell[:self.n_objs]) & layer_mask)
+            was_at_cell = jnp.any(cell_detect_out.detected[:self.n_objs] & layer_mask)
 
             m_cell = m_cell.at[obj_idx].set(True)
 

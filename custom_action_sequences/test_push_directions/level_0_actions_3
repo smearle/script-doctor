@@ -1,0 +1,5 @@
+# Test LEFT push: Player goes right of crate, then pushes left.
+# Reposition: right to (4,4), up to (3,4), left to push crate LEFT.
+right
+up
+left

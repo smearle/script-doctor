@@ -1,0 +1,4 @@
+# Minimal portal repro for test_gdd301_lab level 0.
+# Two right moves should leave the incoming player on PortalEnd, matching JS.
+right
+right

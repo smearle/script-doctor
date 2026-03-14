@@ -1,0 +1,19 @@
+# Full GDD301_Lab_010_ level 6 replay from the old portal regression test.
+# The mismatch begins when a player enters Portal1 while another player is already on the paired PortalEnd.
+left
+down
+down
+up
+left
+left
+left
+down
+down
+down
+down
+down
+down
+right
+right
+up
+up

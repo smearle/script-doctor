@@ -1,0 +1,9 @@
+# NAND_Circuit_Simulator level 1 regression from the old terminal-state replay test.
+# This sequence is intentionally unsolved; it still checks JS/JAX state parity after a mixed interaction trace.
+up
+action
+down
+down
+right
+right
+right

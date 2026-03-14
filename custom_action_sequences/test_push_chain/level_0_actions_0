@@ -1,0 +1,10 @@
+# Level layout:
+# ########
+# #......#
+# #.P**..#   P=(2,2), *=(2,3), *=(2,4)
+# #......#
+# ########
+#
+# Test RIGHT push chain: Push two crates right.
+# Expected: Player to (2,3), crate1 to (2,4), crate2 to (2,5).
+right

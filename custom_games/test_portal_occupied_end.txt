@@ -1,0 +1,92 @@
+title Portal Occupied End Repro
+========
+OBJECTS
+========
+
+Background
+black
+
+Wall
+gray
+00000
+01110
+00000
+01110
+00000
+
+Player
+white
+00000
+01010
+00000
+02220
+00000
+
+Portal1
+purple
+0.0.0
+.000.
+00.00
+.000.
+0.0.0
+
+PortalEnd
+yellow
+00000
+0...0
+0.0.0
+0...0
+00000
+
+Goal
+green
+00000
+0.0.0
+0.0.0
+0.0.0
+00000
+
+=======
+LEGEND
+=======
+
+. = Background
+P = Player
+W = Wall
+I = Portal1
+O = PortalEnd
+G = Goal
+
+=======
+SOUNDS
+=======
+
+================
+COLLISIONLAYERS
+================
+
+Background
+Player, Wall
+Player, Wall
+Player, Wall
+Portal1
+PortalEnd
+Goal
+
+======
+RULES
+======
+
+[Player Portal1|...|PortalEnd] -> [Portal1|...|Player PortalEnd]
+
+==============
+WINCONDITIONS
+==============
+
+All Player on Goal
+
+=======
+LEVELS
+=======
+
+.PI..PO..G

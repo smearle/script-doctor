@@ -1,0 +1,55 @@
+title Padding Mask
+author Codex
+run_rules_on_level_start
+
+========
+OBJECTS
+========
+
+Background
+black
+
+Player
+white
+11111
+10001
+10101
+10001
+11111
+
+=======
+LEGEND
+=======
+
+. = Background
+P = Player
+
+=======
+SOUNDS
+=======
+
+================
+COLLISIONLAYERS
+================
+
+Background
+Player
+
+======
+RULES
+======
+
+late [ no player ] -> [ player ]
+
+==============
+WINCONDITIONS
+==============
+
+=======
+LEVELS
+=======
+
+P
+
+P.
+..

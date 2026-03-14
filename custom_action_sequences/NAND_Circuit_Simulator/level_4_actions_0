@@ -1,0 +1,3 @@
+# NAND_Circuit_Simulator level 4 regression from the old terminal-state replay test.
+# Single action toggle that should still produce the same final state in JS and JAX.
+action

@@ -1,0 +1,14 @@
+# Test DOWN push on level 0.
+# ####..
+# #.O#..
+# #..###
+# #@P..#   P=(3,2)
+# #..*.#   *=(4,3)
+# #..###
+# ####..
+#
+# P moves right to (3,3), then down to push * at (4,3) DOWN to (5,3).
+# (5,3) is wall (#). So crate should not move, player should not move.
+# This tests that blocked pushes are handled correctly.
+right
+down

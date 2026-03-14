@@ -1,0 +1,7 @@
+# Slidings level 0 regression from the old replay-based terminal-state test.
+# Keep this as a readable action list so pytest can validate JS and JAX in lockstep.
+action
+right
+action
+right
+down

@@ -3,23 +3,26 @@
 
 Quick-start for creating test cases:
     1. Create a file: custom_action_sequences/GAME_NAME/level_N_actions_M
-    2. Put one action per line: left, right, up, down, action (or 0-4)
+    2. Put one action per line: up, left, down, right, action (or 0-4)
     3. Run: python validate_actions.py
     4. Or for one game: python validate_actions.py --game GAME_NAME
 
 File format (one action per line, # comments allowed):
-    right
+    up
     right
     down
     action
 
-Or equivalently with integers (JS action indices):
-    1
-    1
+Or equivalently with JS engine action indices:
+    0
     3
+    2
     4
 
-Numeric mapping: 0=left, 1=right, 2=up, 3=down, 4=action, 5=undo, 6=restart
+Numeric mapping: 0=up, 1=left, 2=down, 3=right, 4=action, 5=undo, 6=restart
+
+Comment directives:
+    # xfail: expected mismatch reason
 """
 
 import argparse
@@ -46,10 +49,10 @@ ACTION_SEQUENCES_DIR = "custom_action_sequences"
 VALIDATED_ACTION_SEQUENCES_DIR = os.path.join("data", "jax_validated_action_sequences")
 
 JS_ACTION_NAMES = {
-    "left": 0,
-    "right": 1,
-    "up": 2,
-    "down": 3,
+    "up": 0,
+    "left": 1,
+    "down": 2,
+    "right": 3,
     "action": 4,
     "undo": 5,
     "restart": 6,
@@ -58,23 +61,57 @@ JS_ACTION_NAMES = {
 JS_ACTION_ID_TO_NAME = {v: k for k, v in JS_ACTION_NAMES.items()}
 
 
+def get_action_file_metadata(path):
+    """Return extracted metadata from an action file."""
+    with open(path, "r", encoding="utf-8") as f:
+        comments = []
+        xfail_reason = None
+        for raw_line in f:
+            line = raw_line.strip()
+            if line.startswith("#"):
+                comment = line[1:].strip()
+                comments.append(comment)
+                if xfail_reason is None and comment.lower().startswith("xfail:"):
+                    xfail_reason = comment.split(":", 1)[1].strip() or "expected mismatch"
+        return {
+            "comments": comments,
+            "xfail_reason": xfail_reason,
+        }
+
+
+def get_action_file_comments(path):
+    """Return cleaned comment lines from an action file."""
+    return get_action_file_metadata(path)["comments"]
+
+
+def get_action_file_xfail_reason(path):
+    """Return expected-failure reason, if declared in comments."""
+    return get_action_file_metadata(path)["xfail_reason"]
+
+
 def parse_action_file(path):
     """Parse an action file. One action per line: integer (0-6) or name.
 
     Returns a list of JS action indices (ints).
     """
-    with open(path, "r") as f:
-        text = f.read().strip()
+    with open(path, "r", encoding="utf-8") as f:
+        raw_lines = f.readlines()
+
+    content_lines = []
+    for raw_line in raw_lines:
+        line = raw_line.strip()
+        if not line or line.startswith("#"):
+            continue
+        content_lines.append(line)
+
+    text = "\n".join(content_lines).strip()
 
     # Support JSON format: [0, 1, 2, 3]
     if text.startswith("["):
         return json.loads(text)
 
     actions = []
-    for line in text.splitlines():
-        line = line.strip()
-        if not line or line.startswith("#"):
-            continue
+    for line in content_lines:
         token = line.lower()
         if token in JS_ACTION_NAMES:
             actions.append(JS_ACTION_NAMES[token])
@@ -318,7 +355,7 @@ def main():
             print(f"  (filtered to game={args.game})")
         print(f"\nTo create a test case, add a file like:")
         print(f"  {args.dir}/Sokoban_Basic/level_0_actions_0")
-        print(f"with one action per line (left/right/up/down/action or 0-4).")
+        print(f"with one action per line (up/left/down/right/action or 0-4).")
         sys.exit(0)
 
     # Initialize backends once.
@@ -331,6 +368,8 @@ def main():
     n_pass = 0
     n_fail = 0
     n_error = 0
+    n_xfail = 0
+    n_xpass = 0
     failures = []
     case_results = []
 
@@ -344,6 +383,9 @@ def main():
             "seq_id": seq_id,
             "source_path": fpath,
         }
+        xfail_reason = get_action_file_xfail_reason(fpath)
+        if xfail_reason:
+            case_result["xfail_reason"] = xfail_reason
         try:
             js_actions = parse_action_file(fpath)
             case_result["actions"] = js_actions
@@ -370,10 +412,20 @@ def main():
             ok = False
             msg = f"unexpected error:\n{traceback.format_exc()}"
 
-        if ok:
+        if ok and not xfail_reason:
             print(f"  PASS {label}: {msg}")
             n_pass += 1
             case_result["status"] = "pass"
+        elif ok and xfail_reason:
+            print(f"  XPASS {label}: {xfail_reason}")
+            n_xpass += 1
+            n_fail += 1
+            failures.append(label)
+            case_result["status"] = "xpass"
+        elif xfail_reason:
+            print(f"  XFAIL {label}: {xfail_reason}")
+            n_xfail += 1
+            case_result["status"] = "xfail"
         else:
             print(f"  FAIL {label}: {msg}")
             n_fail += 1
@@ -387,7 +439,7 @@ def main():
             break
 
     print(f"\n{'='*60}")
-    print(f"Results: {n_pass} passed, {n_fail} failed, {n_error} errors")
+    print(f"Results: {n_pass} passed, {n_fail} failed, {n_error} errors, {n_xfail} xfailed, {n_xpass} xpassed")
     summary = {
         "output_dir": args.output_dir,
         "source_dir": args.dir,
@@ -396,6 +448,8 @@ def main():
             "passed": n_pass,
             "failed": n_fail,
             "errors": n_error,
+            "xfailed": n_xfail,
+            "xpassed": n_xpass,
             "total": len(case_results),
         },
         "failures": failures,
