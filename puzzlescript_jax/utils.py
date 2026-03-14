@@ -680,7 +680,8 @@ def level_to_int_arr(level: dict, n_objs: int):
             flat_idx = (x * level['height'] + y) * stride_obj
             for j in range(stride_obj):
                 idx = flat_idx + j
-                val += level['dat'][str(idx)]
+                chunk = int(level['dat'][str(idx)]) & 0xFFFFFFFF
+                val |= chunk << (32 * j)
             level_arr[x].append(val)
     if n_objs <= 32:
         dtype = np.int32

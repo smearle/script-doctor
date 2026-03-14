@@ -64,7 +64,7 @@ class TrainPytorchConfig:
     seed: int = 1
 
     # Logging
-    wandb_mode: str = "disabled"
+    wandb_mode: str = "online"
     wandb_project: str = "puzzlescript_ppo_pytorch"
     wandb_entity: str = ""
     log_freq: int = 1
@@ -119,9 +119,10 @@ def find_latest_checkpoint(exp_dir: str) -> Optional[str]:
     return ckpts[-1]
 
 
-def make_renderer(sprite_json: str) -> Renderer:
+def make_renderer(sprite_json: str, json_str: str) -> Renderer:
     renderer = Renderer()
     renderer.load_sprite_data(sprite_json)
+    renderer.load_render_config(json_str)
     return renderer
 
 
@@ -142,7 +143,8 @@ def render_eval_episodes_cpp(
         if level_i < 0:
             env.set_level(int(np.random.randint(env.num_levels)))
         obs, _info = env.reset()
-        frames = [renderer.render_obs(obs, n_objs, h, w)]
+        renderer.reset_viewport(env._engine.get_width(), env._engine.get_height())
+        frames = [renderer.render_engine(env._engine)]
         done = False
         truncated = False
         while not done and not truncated:
@@ -150,7 +152,7 @@ def render_eval_episodes_cpp(
             logits, _ = agent(obs_t)
             action = logits.argmax(dim=-1).item()
             obs, _reward, done, truncated, _info = env.step(action)
-            frames.append(renderer.render_obs(obs, n_objs, h, w))
+            frames.append(renderer.render_engine(env._engine))
         all_frames.extend(frames)
     return all_frames
 
@@ -366,7 +368,7 @@ def train(cfg: TrainPytorchConfig) -> None:
     try:
         env, render_ctx = create_batched_env(cfg)
         if cfg.backend in {"cpp", "nodejs"}:
-            render_ctx["renderer"] = make_renderer(render_ctx["sprite_json"])
+            render_ctx["renderer"] = make_renderer(render_ctx["sprite_json"], render_ctx["json_str"])
 
         obs_shape = env.observation_shape
         n_objs = obs_shape[1]

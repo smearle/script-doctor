@@ -842,6 +842,7 @@ class PuzzleJaxEnv:
         self.levels = tree.levels
         self.level_i = level_i
         self._is_multi_level = level_i < 0
+        self._player_effect_idx = None  # Set after collision_layers is populated
         self.flickscreen = tree.prelude.flickscreen
         self.zoomscreen = tree.prelude.zoomscreen
         self.require_player_movement = tree.prelude.require_player_movement
@@ -914,6 +915,10 @@ class PuzzleJaxEnv:
                     self.objs_to_idxs[alt_name] = self.objs_to_idxs[obj_key]
 
         self.obj_force_masks = gen_obj_force_masks(self.n_objs, self.obj_idxs_to_force_idxs, len(self.collision_layers))
+        self._player_effect_idx = self.n_objs + len(self.collision_layers) * N_FORCES
+        if self._is_multi_level:
+            # Pad with an extra False column for the valid_mask channel appended to lvl
+            self.obj_force_masks = jnp.pad(self.obj_force_masks, ((0, 0), (0, 1)), constant_values=False)
         
         for obj, sub_objs in meta_objs.items():
             # Meta-objects that are actually just alternate names.
@@ -1626,7 +1631,10 @@ class PuzzleJaxEnv:
 
         # @partial(jax.jit, static_argnames=())
         def detect_force_on_meta(m_cell: chex.Array, obj_idxs, force_idx):
-            dummy_force_obj_vec = jnp.zeros(self.n_objs + len(self.collision_layers) * N_FORCES + 1, dtype=bool)
+            n_channels = self.n_objs + len(self.collision_layers) * N_FORCES + 1
+            if self._is_multi_level:
+                n_channels += 1  # valid_mask channel
+            dummy_force_obj_vec = jnp.zeros(n_channels, dtype=bool)
 
             def force_obj_vec_fn(obj_idx):
                 force_obj_vec = dummy_force_obj_vec.at[obj_idx].set(True)
@@ -1912,7 +1920,10 @@ class PuzzleJaxEnv:
                             raise InvalidObjectError(f"Name {so}, referred to in a rule, does not exist.")
                         obj_idxs.append(self.objs_to_idxs[so_key])
                     obj_idxs = np.array(obj_idxs)
-                    obj_vec = np.zeros((self.n_objs + len(self.collision_layers) * N_FORCES + 1), dtype=bool)
+                    n_channels = self.n_objs + len(self.collision_layers) * N_FORCES + 1
+                    if self._is_multi_level:
+                        n_channels += 1  # valid_mask channel
+                    obj_vec = np.zeros(n_channels, dtype=bool)
                     obj_vec[obj_idxs] = 1
                     if obj in self.char_to_obj:
                         obj = self.char_to_obj[obj]
@@ -2162,7 +2173,7 @@ class PuzzleJaxEnv:
             m_cell = jnp.where(force_mask, False, m_cell)
             m_cell = m_cell.at[self.obj_idxs_to_force_idxs[obj_idx] + force_idx].set(True)
             # Also remove player action mask if it exists.
-            m_cell = m_cell.at[-1].set(False)
+            m_cell = m_cell.at[self._player_effect_idx].set(False)
 
             m_cell = remove_colliding_objs(m_cell, obj_idx, self.coll_mat)
 
@@ -2211,7 +2222,7 @@ class PuzzleJaxEnv:
                 m_cell, force_arr, (jnp.array(self.obj_idxs_to_force_idxs)[obj_idx],),
             )
             # Also remove player action mask
-            m_cell = m_cell.at[-1].set(False)
+            m_cell = m_cell.at[self._player_effect_idx].set(False)
 
             m_cell = remove_colliding_objs(m_cell, obj_idx, self.coll_mat)
 
