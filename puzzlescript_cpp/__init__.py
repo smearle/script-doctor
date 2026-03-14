@@ -8,29 +8,60 @@ This module provides:
 """
 from __future__ import annotations
 
+import importlib
 import json
 import os
 from pathlib import Path
+import sys
 from typing import Any
 
 import imageio
 import numpy as np
 
 from backends.base import SearchResult
-from puzzlescript_cpp._puzzlescript_cpp import Engine as _CppEngine, LevelBackup
-from puzzlescript_cpp._puzzlescript_cpp import BatchedEngine as _BatchedEngine
-from puzzlescript_cpp._puzzlescript_cpp import Renderer
-from puzzlescript_cpp._puzzlescript_cpp import (
-    MCTSOptions,
-    RandomRolloutResult,
-    SolverResult,
-    random_rollout_raw as _random_rollout_raw,
-    solve_astar as _solve_astar,
-    solve_bfs as _solve_bfs,
-    solve_gbfs as _solve_gbfs,
-    solve_mcts as _solve_mcts,
-    solve_random as _solve_random,
-)
+
+
+def _load_cpp_module():
+    try:
+        return importlib.import_module("puzzlescript_cpp._puzzlescript_cpp")
+    except ModuleNotFoundError as exc:
+        if exc.name != "puzzlescript_cpp._puzzlescript_cpp":
+            raise
+
+        pkg_dir = Path(__file__).resolve().parent
+        built_exts = sorted(pkg_dir.glob("_puzzlescript_cpp*.so")) + sorted(pkg_dir.glob("_puzzlescript_cpp*.pyd"))
+        current_py = f"{sys.version_info.major}.{sys.version_info.minor}"
+
+        if built_exts:
+            built_list = ", ".join(path.name for path in built_exts)
+            detail = (
+                f"Found compiled extension(s): {built_list}. "
+                f"None matches the active interpreter ({current_py} at {sys.executable})."
+            )
+        else:
+            detail = f"No compiled extension was found in {pkg_dir}."
+
+        raise ModuleNotFoundError(
+            "Unable to import puzzlescript_cpp._puzzlescript_cpp. "
+            f"{detail} Rebuild it with `{sys.executable} setup_cpp.py build_ext --inplace`."
+        ) from exc
+
+
+_cpp = _load_cpp_module()
+
+_CppEngine = _cpp.Engine
+LevelBackup = _cpp.LevelBackup
+_BatchedEngine = _cpp.BatchedEngine
+Renderer = _cpp.Renderer
+MCTSOptions = _cpp.MCTSOptions
+RandomRolloutResult = _cpp.RandomRolloutResult
+SolverResult = _cpp.SolverResult
+_random_rollout_raw = _cpp.random_rollout_raw
+_solve_astar = _cpp.solve_astar
+_solve_bfs = _cpp.solve_bfs
+_solve_gbfs = _cpp.solve_gbfs
+_solve_mcts = _cpp.solve_mcts
+_solve_random = _cpp.solve_random
 
 
 class CppPuzzleScriptEngine:
@@ -339,6 +370,23 @@ class CppPuzzleScriptBackend:
 MAX_AGAIN = 50
 
 
+def _build_dedup_maps(id_dict: list[str]) -> tuple[list[str], dict[int, int]]:
+    """Return (canonical_ids, raw_to_canonical) for an id_dict that may contain duplicates.
+
+    canonical_ids: unique object names in first-appearance order.
+    raw_to_canonical: maps every raw object index → its canonical index.
+    """
+    seen: dict[str, int] = {}
+    canonical_ids: list[str] = []
+    raw_to_canonical: dict[int, int] = {}
+    for i, name in enumerate(id_dict):
+        if name not in seen:
+            seen[name] = len(canonical_ids)
+            canonical_ids.append(name)
+        raw_to_canonical[i] = seen[name]
+    return canonical_ids, raw_to_canonical
+
+
 class CppPuzzleScriptEnv:
     """Single-environment gym-style wrapper around the C++ engine.
 
@@ -365,10 +413,13 @@ class CppPuzzleScriptEnv:
         # Load level once to get geometry
         probe_level_i = level_i if level_i >= 0 else 0
         self._engine.load_level(probe_level_i)
-        self._n_objs = self._engine.get_object_count()
+        id_dict = self._engine.get_id_dict()
+        self._canonical_ids, self._raw_to_canonical = _build_dedup_maps(id_dict)
+        self._raw_n_objs = self._engine.get_object_count()
+        self._n_objs = len(self._canonical_ids)
         self._width = self._max_width
         self._height = self._max_height
-        self._stride_obj = (self._n_objs + 31) // 32
+        self._stride_obj = (self._raw_n_objs + 31) // 32
         self._prev_score = float(self._engine.get_score())
 
     def _compute_max_level_shape(self, level_indices: list[int] | None = None) -> tuple[int, int]:
@@ -442,11 +493,11 @@ class CppPuzzleScriptEnv:
         for x in range(width):
             for y in range(height):
                 flat_idx = (x * height + y) * stride_obj
-                for obj in range(self._n_objs):
-                    word = obj // 32
-                    bit = obj % 32
+                for raw_obj in range(self._raw_n_objs):
+                    word = raw_obj // 32
+                    bit = raw_obj % 32
                     if word < stride_obj and (int(objects[flat_idx + word]) & (1 << bit)):
-                        obs[obj, y, x] = 1
+                        obs[self._raw_to_canonical[raw_obj], y, x] = 1
         return obs
 
 
@@ -480,8 +531,11 @@ class CppBatchedPuzzleScriptEnv:
         if level_indices is None:
             level_indices = [0] * batch_size
         self._max_height, self._max_width = self._compute_max_level_shape(level_indices)
-        self._n_objs = int(self._compiled["objectCount"])
-        self._stride_obj = (self._n_objs + 31) // 32
+        id_dict = self._compiled.get("idDict", [])
+        self._canonical_ids, self._raw_to_canonical = _build_dedup_maps(id_dict)
+        self._raw_n_objs = int(self._compiled["objectCount"])
+        self._n_objs = len(self._canonical_ids)
+        self._stride_obj = (self._raw_n_objs + 31) // 32
         self._base_level_indices = np.asarray(level_indices, dtype=np.int32)
         self._active_level_indices = self._base_level_indices.copy()
         self._steps = np.zeros(batch_size, dtype=np.int32)
@@ -558,18 +612,24 @@ class CppBatchedPuzzleScriptEnv:
         for x in range(width):
             for y in range(height):
                 flat_idx = (x * height + y) * stride_obj
-                for obj in range(self._n_objs):
-                    word = obj // 32
-                    bit = obj % 32
+                for raw_obj in range(self._raw_n_objs):
+                    word = raw_obj // 32
+                    bit = raw_obj % 32
                     if word < stride_obj and (int(objects[flat_idx + word]) & (1 << bit)):
-                        obs[obj, y, x] = 1
+                        obs[self._raw_to_canonical[raw_obj], y, x] = 1
         return obs
 
     def _get_obs_batch(self) -> np.ndarray:
         if hasattr(self._be, "get_obs"):
-            obs = np.array(self._be.get_obs(), dtype=np.uint8, copy=True)
-            if obs.shape == self.observation_shape:
+            raw_obs = np.array(self._be.get_obs(), dtype=np.uint8, copy=True)
+            raw_shape = (self.batch_size, self._raw_n_objs, self._max_height, self._max_width)
+            if raw_obs.shape == raw_shape:
+                obs = np.zeros((self.batch_size, self._n_objs, self._max_height, self._max_width), dtype=np.uint8)
+                for raw_idx, canon_idx in self._raw_to_canonical.items():
+                    obs[:, canon_idx, :, :] |= raw_obs[:, raw_idx, :, :]
                 return obs
+            if raw_obs.shape == self.observation_shape:
+                return raw_obs
         return np.stack([self._get_obs_for_env(i) for i in range(self.batch_size)], axis=0)
 
     def _sample_level_indices(self) -> np.ndarray:

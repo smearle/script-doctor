@@ -498,7 +498,7 @@ def main_launch(cfg: ProfileRandNodeJSConfig):
     if cfg.slurm:
         if cfg.game is None:
             games = get_list_of_games_for_testing(
-                all_games=cfg.all_games,
+                dataset=cfg.dataset,
                 include_random=cfg.include_randomness,
                 random_order=cfg.random_order,
             )
@@ -537,7 +537,7 @@ def main(cfg: ProfileRandNodeJSConfig, games: Optional[List[str]] = None):
         games = list(games)
     elif cfg.game is None:
         games = get_list_of_games_for_testing(
-            all_games=cfg.all_games,
+            dataset=cfg.dataset,
             include_random=cfg.include_randomness,
             random_order=cfg.random_order,
         )

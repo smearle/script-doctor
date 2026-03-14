@@ -21,7 +21,7 @@ dotenv.load_dotenv()
 @hydra.main(version_base="1.3", config_path='conf', config_name='search_nodejs_config')
 def main_launch(cfg: SearchNodeJSConfig):
     if cfg.slurm:
-        games = get_list_of_games_for_testing(all_games=cfg.all_games, random_order=cfg.random_order)
+        games = get_list_of_games_for_testing(dataset=cfg.dataset, random_order=cfg.random_order)
         # Get sub-lists of games to distribute across nodes.
         n_jobs = math.ceil(len(games) / cfg.n_games_per_job)
         game_sublists = [games[i::n_jobs] for i in range(n_jobs)]
@@ -55,11 +55,11 @@ def main(
     if games is not None:
         game_sols_dirs = [os.path.join(JS_SOLS_DIR, game) for game in games]
     elif cfg.game is None:
-        if cfg.all_games:
+        if cfg.dataset != "priority":
             game_sols_dirs = glob.glob(f"{JS_SOLS_DIR}/*")
         else:
             game_sols_dirs = get_list_of_games_for_testing(
-                all_games=cfg.all_games, random_order=cfg.random_order
+                dataset=cfg.dataset, random_order=cfg.random_order
             )
             game_sols_dirs = [os.path.join(JS_SOLS_DIR, game) for game in game_sols_dirs]
     else:

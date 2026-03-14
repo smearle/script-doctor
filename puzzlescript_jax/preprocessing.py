@@ -22,7 +22,7 @@ from puzzlescript_jax.gen_tree import GenPSTree
 from puzzlescript_jax.globals import (
     GAMES_N_RULES_SORTED_PATH, GAMES_TO_N_RULES_PATH, GAMES_TO_SKIP, LARK_SYNTAX_PATH, TEST_GAMES,
     TREES_DIR, SIMPLIFIED_GAMES_DIR, MIN_GAMES_DIR, PRETTY_TREES_DIR, CUSTOM_GAMES_DIR,
-    GAMES_DIR,
+    GAMES_DIR, INCREPARE_GAMES_DIR, GALLERY_GAMES_DIR,
 )
 from puzzlescript_jax.ps_game import PSGameTree
 
@@ -552,6 +552,10 @@ def get_tree_from_txt(parser, game, log_dir: str = None, overwrite: bool = True,
     filepath = os.path.join(CUSTOM_GAMES_DIR, game + '.txt')
     if not os.path.exists(filepath):
         filepath = os.path.join(GAMES_DIR, game + '.txt')
+    if not os.path.exists(filepath):
+        filepath = os.path.join(GALLERY_GAMES_DIR, game + '.txt')
+    if not os.path.exists(filepath):
+        filepath = os.path.join(INCREPARE_GAMES_DIR, game + '.txt')
     print(f"Parsing {filepath}")
     with open(filepath, 'r', encoding='utf-8') as f:
         ps_text = f.read()

@@ -5,21 +5,28 @@ from hydra.core.config_store import ConfigStore
 
 from puzzlescript_jax.config import PSConfig
 
+# ``dataset`` selects a logical tier of games. Each tier is a strict superset
+# of the previous one (priority ⊂ gallery ⊂ pedro ⊂ increpare). These are NOT
+# directory names — a tier may include games from any on-disk source directory
+# (custom_games/, gallery_games/, data/scraped_games/, etc.). See
+# puzzlescript_jax/utils.py:get_list_of_games_for_testing for details.
+
 
 @dataclass
 class PreprocessConfig:
     game: Optional[str] = None
+    dataset: str = "pedro"  # priority, gallery, pedro, increpare
     overwrite: bool = False
 
-    
+
 @dataclass
 class PlotRandProfileConfig:
-    all_games: bool = True  # Plot as many games as we have (partial) results for
+    dataset: str = "pedro"  # priority, gallery, pedro, increpare
 
 
 @dataclass
 class JaxValidationConfig(PSConfig):
-    all_games: bool = True
+    dataset: str = "pedro"  # priority, gallery, pedro, increpare
     slurm: bool = False
     n_games_per_job: int = 1
     game: Optional[str] = None
@@ -30,7 +37,7 @@ class JaxValidationConfig(PSConfig):
 
 @dataclass
 class CppValidationConfig(PSConfig):
-    all_games: bool = True
+    dataset: str = "pedro"  # priority, gallery, pedro, increpare
     slurm: bool = False
     n_games_per_job: int = 1
     game: Optional[str] = None
@@ -41,7 +48,7 @@ class CppValidationConfig(PSConfig):
     render_scale: int = 1
     render_mismatches_only: bool = False
     output_dir: str = "data/cpp_validated_js_sols"
-    
+
 @dataclass
 class BFSConfig(PSConfig):
     game: Optional[str] = None
@@ -49,13 +56,13 @@ class BFSConfig(PSConfig):
     n_best_to_keep: int = 1
     render_gif: bool = True
     render_live: bool = False
-    all_games: bool = True
+    dataset: str = "pedro"  # priority, gallery, pedro, increpare
 
 
 @dataclass
 class ProfileJaxRandConfig(PSConfig):
     game: Optional[str] = None
-    all_games: bool = False
+    dataset: str = "priority"  # priority, gallery, pedro, increpare
     random_order: bool = False
     # max_episode_steps: int = 100
     n_steps: int = 5_000
@@ -66,12 +73,12 @@ class ProfileJaxRandConfig(PSConfig):
     n_games_per_job: int = 1
 
 
-    
+
 @dataclass
 class NodeJSConfig(PSConfig):
     game: Optional[str] = None
     level: Optional[int] = None
-    all_games: bool = False
+    dataset: str = "priority"  # priority, gallery, pedro, increpare
     random_order: bool = False
     n_steps: int = 5_000
     overwrite: bool = False
@@ -168,7 +175,7 @@ class EvolveLevelCppConfig:
 class ExitTrainConfig:
     game: Optional[str] = None
     level: Optional[int] = None
-    all_games: bool = False
+    dataset: str = "priority"  # priority, gallery, pedro, increpare
     random_order: bool = False
     iterations: int = 200
     max_nodes: int = 100_000
@@ -278,7 +285,7 @@ class EvalConfig(TrainConfig):
     eval_randomize_map_shape: Optional[bool] = None
     eval_seed: int = 0
 
-    # Which eval metric to keep in our generated table if sweeping over eval hyperparams (in which case we want to 
+    # Which eval metric to keep in our generated table if sweeping over eval hyperparams (in which case we want to
     # save space). Only applied when running `cross_eval.py`
     metrics_to_keep: Tuple[str] = ('mean_ep_reward',)
     # metrics_to_keep: Tuple[str] = ('mean_fps',)
@@ -299,7 +306,7 @@ class EnjoyConfig(EvalConfig):
 @dataclass
 class SweepRLConfig(TrainConfig):
     game: Optional[str] = None
-    all_games: bool = False
+    dataset: str = "priority"  # priority, gallery, pedro, increpare
     plot: bool = False
     success_heatmap: bool = False
     slurm: bool = True

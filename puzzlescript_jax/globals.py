@@ -35,7 +35,8 @@ PRIORITY_GAMES = [
     'MicroChip',
     'Pants,_Shirt,_Cap',
     'Sokoboros',
-    'pipe_pend',
+    'pipe_bend',
+    'pretender_to_the_crown',
 ]
 
 par_dir = os.path.dirname(os.path.abspath(__file__))
@@ -61,6 +62,9 @@ JS_SOLS_DIR = os.path.join(DATA_DIR, 'js_sols')
 CPP_SOLS_DIR = os.path.join(DATA_DIR, 'cpp_sols')
 LARK_SYNTAX_PATH = os.path.join(par_dir, 'syntax.lark')
 GAMES_DIR = os.path.join(DATA_DIR, 'scraped_games')
+INCREPARE_GAMES_DIR = os.path.join(DATA_DIR, 'scraped_games_increpare')
+UNIQUE_INCREPARE_GAMES_PATH = os.path.join(DATA_DIR, 'unique_increpare_games.json')
+GALLERY_GAMES_DIR = os.path.join(grand_par_dir, 'gallery_games')
 MIN_GAMES_DIR = os.path.join(DATA_DIR, 'min_games')
 SIMPLIFIED_GAMES_DIR = os.path.join(DATA_DIR, 'simplified_games')
 TEST_GAMES = ["sokoban_basic", "blockfaker", "notsnake", "sokoban_match3"]

@@ -35,7 +35,7 @@ dotenv.load_dotenv()
 
 SWEEP_META_FIELDS = {
     "game",
-    "all_games",
+    "dataset",
     "plot",
     "success_heatmap",
     "slurm",
@@ -326,7 +326,7 @@ def gen_grid_cfgs(sweep_cfg: SweepRLConfig, base_cfg: TrainConfig):
         games = [str(g) for g in sweep_axes["game"]]
         explicit_games = True
     elif sweep_cfg.game is None:
-        games = get_list_of_games_for_testing(all_games=sweep_cfg.all_games)
+        games = get_list_of_games_for_testing(dataset=sweep_cfg.dataset)
         explicit_games = False
     else:
         games = [sweep_cfg.game]

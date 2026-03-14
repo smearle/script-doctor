@@ -88,7 +88,7 @@ def should_skip_existing_level_result(path: str) -> bool:
 def main_launch(cfg: SearchNodeJSConfig):
     if cfg.slurm:
         games = get_list_of_games_for_testing(
-            all_games=cfg.all_games, include_random=cfg.include_randomness, random_order=cfg.random_order)
+            dataset=cfg.dataset, include_random=cfg.include_randomness, random_order=cfg.random_order)
         # Get sub-lists of batches of games to distribute across nodes.
         n_jobs = math.ceil(len(games) / cfg.n_games_per_job)
         game_sublists = [games[i::n_jobs] for i in range(n_jobs)]
@@ -114,6 +114,7 @@ def main(cfg: SearchNodeJSConfig, games: Optional[List[str]] = None):
     timeout_ms = cfg.timeout * 1_000 if cfg.timeout > 0 else -1
     parser = init_ps_lark_parser()
     print(f'Timeout: {timeout_ms} ms')
+    print(f'Max node budget: {cfg.n_steps}')
 
     if cfg.algo == 'bfs':
         algos = ['bfs']
@@ -133,7 +134,7 @@ def main(cfg: SearchNodeJSConfig, games: Optional[List[str]] = None):
         games_to_test = games
     elif cfg.game is None:
         games_to_test = get_list_of_games_for_testing(
-            all_games=cfg.all_games, include_random=cfg.include_randomness, random_order=cfg.random_order)
+            dataset=cfg.dataset, include_random=cfg.include_randomness, random_order=cfg.random_order)
     else:
         games_to_test = [cfg.game]
     results = {algo: {} for algo in algos}

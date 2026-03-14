@@ -235,7 +235,11 @@ class NodeJSPuzzleScriptBackend(PuzzleScriptSearchBackend):
     @staticmethod
     def _normalize_result(raw_result) -> SearchResult:
         n_objs = len(list(raw_result[7]))
-        end_level_state = level_to_int_arr(raw_result[5], n_objs).tolist()
+        try:
+            end_level_state = level_to_int_arr(raw_result[5], n_objs).tolist()
+        except ValueError:
+            # Too many objects to pack into int64; store empty state.
+            end_level_state = []
         return SearchResult(
             solved=raw_result[0],
             actions=tuple(raw_result[1]),

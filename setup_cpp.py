@@ -1,8 +1,39 @@
-from setuptools import setup, Extension
-from setuptools.command.build_ext import build_ext
-import pybind11
 import os
 import sys
+from pathlib import Path
+
+from setuptools import Extension, setup
+from setuptools.command.build_ext import build_ext
+
+try:
+    import pybind11
+except ModuleNotFoundError:
+    pybind11 = None
+
+
+def _get_pybind11_include() -> str:
+    include_override = os.environ.get('PYBIND11_INCLUDE_DIR')
+    if include_override:
+        include_path = Path(include_override).expanduser()
+        if include_path.is_dir():
+            return str(include_path)
+        raise FileNotFoundError(
+            f"PYBIND11_INCLUDE_DIR points to a missing directory: {include_path}"
+        )
+
+    if pybind11 is not None:
+        return pybind11.get_include()
+
+    repo_root = Path(__file__).resolve().parent
+    for venv_name in ('.venv', '.venv-jaxtar', '.venv-py312'):
+        for include_path in (repo_root / venv_name).glob('lib/python*/site-packages/pybind11/include'):
+            if include_path.is_dir():
+                return str(include_path)
+
+    raise ModuleNotFoundError(
+        "pybind11 headers were not found. Install pybind11 in the active environment "
+        "or set PYBIND11_INCLUDE_DIR to a pybind11/include directory."
+    )
 
 
 class BuildExt(build_ext):
@@ -32,7 +63,7 @@ ext_modules = [
             'puzzlescript_cpp/src/bindings.cpp',
         ],
         include_dirs=[
-            pybind11.get_include(),
+            _get_pybind11_include(),
             'puzzlescript_cpp/src',
         ],
         language='c++',

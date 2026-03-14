@@ -556,7 +556,7 @@ def list_scraped_games():
     # random.shuffle(game_files)
     # test_game_files = [f"{test_game}.txt" for test_game in TEST_GAMES]
     # game_files = test_game_files + game_files
-    game_names = get_list_of_games_for_testing(all_games=True, include_random=False)
+    game_names = get_list_of_games_for_testing(dataset="pedro", include_random=False)
     for filename in game_names:
         if filename.startswith('rigid_'):
             print(f"Skipping {filename} because it seems to be a pesky rigid body game")

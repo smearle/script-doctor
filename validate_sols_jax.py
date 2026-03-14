@@ -159,7 +159,7 @@ def format_state_for_log(state, env):
 @hydra.main(version_base="1.3", config_path='conf', config_name='jax_validation_config')
 def main_launch(cfg: JaxValidationConfig):
     if cfg.slurm:
-        games = get_list_of_games_for_testing(all_games=cfg.all_games)
+        games = get_list_of_games_for_testing(dataset=cfg.dataset)
         # Get sub-lists of games to distribute across nodes.
         n_jobs = math.ceil(len(games) / cfg.n_games_per_job)
         game_sublists = [games[i::n_jobs] for i in range(n_jobs)]
@@ -197,7 +197,7 @@ def main(cfg: JaxValidationConfig, games: Optional[List[str]] = None):
     if games is not None:
         games = games
     elif cfg.game is None:
-        games = get_list_of_games_for_testing(all_games=cfg.all_games, random_order=cfg.random_order)
+        games = get_list_of_games_for_testing(dataset=cfg.dataset, random_order=cfg.random_order)
     else:
         games = [cfg.game]
     current_game_names = {os.path.splitext(game_file)[0] for game_file in os.listdir(os.path.join(DATA_DIR, 'scraped_games'))}
@@ -620,16 +620,17 @@ def main(cfg: JaxValidationConfig, games: Optional[List[str]] = None):
                 obj_list,
                 target_obj_names=env.atomic_obj_names,
             )
-            saved_multihot_level_js = multihot_level_from_js_state(
-                level_state,
-                obj_list,
-                target_obj_names=env.atomic_obj_names,
-            )
-            if not np.array_equal(saved_multihot_level_js, replayed_multihot_level_js):
-                print(
-                    f"Warning: saved solver state differs from replayed JS terminal state for "
-                    f"{game_name} level {level_i}; using replayed JS state for validation."
+            if level_state:
+                saved_multihot_level_js = multihot_level_from_js_state(
+                    level_state,
+                    obj_list,
+                    target_obj_names=env.atomic_obj_names,
                 )
+                if not np.array_equal(saved_multihot_level_js, replayed_multihot_level_js):
+                    print(
+                        f"Warning: saved solver state differs from replayed JS terminal state for "
+                        f"{game_name} level {level_i}; using replayed JS state for validation."
+                    )
             multihot_level_js = replayed_multihot_level_js
             if not os.path.isfile(js_gif_path):
                 print(f"Generating missing JS gif for level {level_i}")
@@ -797,7 +798,29 @@ def main(cfg: JaxValidationConfig, games: Optional[List[str]] = None):
     if cfg.aggregate:
         results['stats']['valid_games'] = len(results['valid_games'])
         results['stats']['partial_valid_games'] = len(results['partial_valid_games'])
-        
+
+        # Sort all error/success categories by n_rules for readability
+        def _n_rules_sort_key(entry):
+            """Extract numeric n_rules for sorting, handling various formats."""
+            nr = entry.get('n_rules')
+            if isinstance(nr, (list, tuple)):
+                nr = nr[0]
+            return nr if isinstance(nr, (int, float)) and nr is not None else float('inf')
+
+        # List-based categories (each entry is a dict with 'n_rules')
+        for key in ('compile_error', 'rigid_prefix_error', 'timeout', 'valid_games', 'partial_valid_games'):
+            if isinstance(results.get(key), list):
+                results[key] = sorted(results[key], key=_n_rules_sort_key)
+
+        # Dict-based categories (keyed by game name, values are lists with 'n_rules')
+        for key in ('state_error', 'solution_error', 'runtime_error',
+                     'random_solution_error', 'random_state_error', 'score_error', 'success'):
+            if isinstance(results.get(key), dict):
+                results[key] = dict(sorted(
+                    results[key].items(),
+                    key=lambda item: _n_rules_sort_key(item[1][0]) if item[1] else float('inf')
+                ))
+
         save_stats(results, n_levels, n_success, n_compile_error, n_rigid_prefix_error, n_timeout_error,
                n_runtime_error, n_solution_error, n_state_error, n_score_error, n_unvalidated_levels,
                n_random_solution_error, n_random_state_error)

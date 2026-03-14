@@ -11,7 +11,7 @@ Usage examples:
     python profile_jaxtar.py
 
     # All games with custom search budget
-    python profile_jaxtar.py --all_games -m 500000 -b 5000
+    python profile_jaxtar.py --dataset pedro -m 500000 -b 5000
 
     # Beam search instead of A*
     python profile_jaxtar.py --game blocks --algo beam -m 1000000
@@ -313,8 +313,9 @@ def main():
                         help="Single game name to solve. If omitted, runs priority games.")
     parser.add_argument("--level", type=int, default=None,
                         help="Single level index. If omitted, runs all levels of each game.")
-    parser.add_argument("--all_games", action="store_true",
-                        help="Run on all available games (not just priority list).")
+    parser.add_argument("--dataset", type=str, default="priority",
+                        choices=["priority", "gallery", "pedro", "increpare"],
+                        help="Which dataset of games to run on (default: priority).")
     parser.add_argument("--algo", type=str, default="astar", choices=["astar", "beam"],
                         help="Search algorithm (default: astar).")
     parser.add_argument("-m", "--max_nodes", type=int, default=1_000_000,
@@ -341,7 +342,7 @@ def main():
         games = [args.game]
     else:
         games = get_list_of_games_for_testing(
-            all_games=args.all_games,
+            dataset=args.dataset,
             include_random=args.include_randomness,
             random_order=args.random_order,
         )

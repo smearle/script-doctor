@@ -19,9 +19,8 @@ import tiktoken
 
 from puzzlescript_jax.globals import (
     CUSTOM_GAMES_DIR, GAMES_TO_N_RULES_PATH, GAMES_N_RULES_SORTED_PATH, PRIORITY_GAMES, GAMES_N_LEVELS_PATH, LARK_SYNTAX_PATH,
-    GAMES_DIR, TREES_DIR
+    GAMES_DIR, TREES_DIR, GALLERY_GAMES_DIR, INCREPARE_GAMES_DIR, UNIQUE_INCREPARE_GAMES_PATH,
 )
-GALLERY_GAMES_DIR = "gallery_games"
 from puzzlescript_jax.env import PuzzleJaxEnv
 from puzzlescript_jax.gen_tree import GenPSTree
 from puzzlescript_jax.preprocessing import get_tree_from_txt
@@ -607,30 +606,108 @@ def load_games_n_rules_sorted():
     return games_n_rules
 
 
-def get_list_of_games_for_testing(all_games=True, include_random=False, random_order=False):
-    all_game_files = [game[:-4] for game in os.listdir(GAMES_DIR)]
-    gallery_games = glob.glob(os.path.join(GALLERY_GAMES_DIR, '*.txt'))
-    gallery_games = [os.path.basename(g)[:-4] for g in gallery_games]
-    if all_games:
+VALID_DATASETS = ("priority", "gallery", "pedro", "increpare")
+
+
+def _strip_txt(name):
+    return name[:-4] if name.endswith('.txt') else name
+
+
+def _list_dir_games(directory):
+    """Return sorted list of game names (no .txt) from a directory."""
+    if not os.path.isdir(directory):
+        return []
+    return sorted(_strip_txt(f) for f in os.listdir(directory) if f.endswith('.txt'))
+
+
+def _load_unique_games_json(path):
+    """Load a precomputed list of unique game names from a JSON file."""
+    if not os.path.isfile(path):
+        raise FileNotFoundError(
+            f"Unique games list not found at {path}. "
+            f"Run dedup_games.py first to generate it."
+        )
+    with open(path, 'r') as f:
+        return json.load(f)
+
+
+def get_list_of_games_for_testing(dataset="pedro", include_random=False, random_order=False):
+    """Return an ordered list of game names for the given dataset tier.
+
+    Each tier is a strict superset of the previous one:
+
+        priority  ⊂  gallery  ⊂  pedro  ⊂  increpare
+
+    Note: these are *logical* tiers, not directory names. A tier's games may
+    come from any on-disk directory (custom_games/, gallery_games/,
+    data/scraped_games/, data/scraped_games_increpare/). For example,
+    PRIORITY_GAMES (defined in globals.py) can reference files that live in
+    any of these directories.
+
+    Tiers:
+        priority  - PRIORITY_GAMES only (a hand-picked list in globals.py)
+        gallery   - priority + games from the gallery_games/ directory
+        pedro     - gallery + games from data/scraped_games/ (default)
+        increpare - pedro + unique (deduplicated) games from
+                    data/scraped_games_increpare/
+    """
+    if dataset not in VALID_DATASETS:
+        raise ValueError(f"Invalid dataset: {dataset!r}. Must be one of {VALID_DATASETS}")
+
+    # --- Build the ordered game list by tier ---
+    # Start with priority games (always first)
+    games = list(PRIORITY_GAMES)
+    seen = set(games)
+
+    if dataset == "priority":
+        if random_order:
+            random.shuffle(games)
+        return games
+
+    # Gallery tier
+    gallery_game_names = _list_dir_games(GALLERY_GAMES_DIR)
+    for g in gallery_game_names:
+        if g not in seen:
+            games.append(g)
+            seen.add(g)
+
+    if dataset == "gallery":
+        if random_order:
+            random.shuffle(games)
+        return games
+
+    # Pedro tier: use complexity ordering from games_n_rules where available
+    pedro_game_names = set(_list_dir_games(GAMES_DIR))
+    if os.path.isfile(GAMES_N_RULES_SORTED_PATH):
         with open(GAMES_N_RULES_SORTED_PATH, 'r') as f:
             games_n_rules = json.load(f)
-        # Sort so that at the front of the list, we have games from our priority list, then the gallery then the rest of
-        # our dataset, with each subset in order of increasing complexity.
-        games_in_gallery_n_rules = [(game, game in PRIORITY_GAMES, game in gallery_games, n_rules) 
-                                    for game, n_rules, has_randomness in games_n_rules if not has_randomness or include_random]
-        games = sorted(games_in_gallery_n_rules, key=lambda x: (not x[1], not x[2], x[3]))
-        # Add the additional scraped game files (we haven't preprocessed these successfully so we can't be sure about
-        # n_rules etc.)
-        games = [g[0] for g in games]
-        games = [game[:-4] if game.endswith('.txt') else game for game in games]
-        all_games = games + [g for g in all_game_files if g not in games]
-        games = all_games
-    else:
-        games = PRIORITY_GAMES
+        # Insert complexity-sorted pedro games (respecting randomness filter)
+        for game, n_rules, has_randomness in sorted(games_n_rules, key=lambda x: x[1]):
+            if (has_randomness and not include_random):
+                continue
+            if game not in seen:
+                games.append(_strip_txt(game))
+                seen.add(_strip_txt(game))
+    # Append any remaining pedro games not in games_n_rules
+    for g in sorted(pedro_game_names):
+        if g not in seen:
+            games.append(g)
+            seen.add(g)
+
+    if dataset == "pedro":
+        if random_order:
+            random.shuffle(games)
+        return games
+
+    # Increpare tier: only the unique (deduplicated) games
+    unique_increpare = _load_unique_games_json(UNIQUE_INCREPARE_GAMES_PATH)
+    for g in unique_increpare:
+        if g not in seen:
+            games.append(g)
+            seen.add(g)
+
     if random_order:
         random.shuffle(games)
-    # HACK why is this happening??
-    games = [game[:-4] if game.endswith('.txt') else game for game in games]
     return games
 
 
@@ -748,7 +825,7 @@ def get_n_levels_per_game(games: list[str] | None = None, *, skip_failures: bool
             return cached
 
     if games is None:
-        games = get_list_of_games_for_testing(all_games=True)
+        games = get_list_of_games_for_testing(dataset="pedro")
 
     # Determine which requested games are missing from cache.
     missing = [g for g in games if g not in cached]

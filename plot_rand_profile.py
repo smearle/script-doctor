@@ -429,7 +429,7 @@ def _get_games_to_plot(
     cpp_series: dict,
 ) -> list[str]:
     available_games = sorted(set(jax_series) | set(nodejs_series) | set(cpp_series))
-    if cfg.all_games:
+    if cfg.dataset != "priority":
         return available_games
     return [game for game in GAMES_TO_PLOT if game in available_games]
 
@@ -639,7 +639,7 @@ def main(cfg: PlotRandProfileConfig):
         fig.tight_layout()
         plot_path = os.path.join(
             PLOTS_DIR,
-            f"random_rollout_profile_{rollout_len_str}{('_select' if not cfg.all_games else '')}.png",
+            f"random_rollout_profile_{rollout_len_str}{('_select' if cfg.dataset == 'priority' else '')}.png",
         )
         plot_path = plot_path.replace(" ", "_")
         print(f"Saving plot to {plot_path}")

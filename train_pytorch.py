@@ -22,6 +22,7 @@ from hydra.core.config_store import ConfigStore
 from javascript import require
 from omegaconf import OmegaConf
 
+from torchinfo import summary as torch_summary
 from tqdm import tqdm
 import wandb
 from puzzlescript_jax.utils import init_ps_lark_parser
@@ -375,7 +376,7 @@ def train(cfg: TrainPytorchConfig) -> None:
             agent = ConvAgent(n_objs, height, width, n_actions, cfg.hidden_dims).to(device)
         else:
             agent = MLPAgent(n_objs, height, width, n_actions, cfg.hidden_dims).to(device)
-        print(f"Agent parameters: {sum(p.numel() for p in agent.parameters()):,}")
+        torch_summary(agent, input_size=(1, n_objs, height, width), dtypes=[torch.float32])
 
         optimizer = optim.Adam(agent.parameters(), lr=cfg.lr, eps=1e-5)
 
@@ -431,7 +432,8 @@ def train(cfg: TrainPytorchConfig) -> None:
                 f.write("global_step,ep_return_mean,ep_return_max,ep_length_mean,fps,win\n")
 
         pbar = tqdm(range(start_update, num_updates + 1), initial=start_update - 1,
-                    total=num_updates, desc="Training", unit="update")
+                    total=num_updates, desc="Training", unit="update", dynamic_ncols=True, position=0)
+        stats_bar = tqdm(total=0, bar_format="{desc}", position=1, leave=True)
         for update in pbar:
             if cfg.anneal_lr:
                 frac = 1.0 - (update - 1) / num_updates
@@ -499,8 +501,8 @@ def train(cfg: TrainPytorchConfig) -> None:
                         level_wins = finished_wins[level_mask]
                         wandb_payload[f"level/{int(level_i)}/ep_return"] = float(level_returns.mean())
                         wandb_payload[f"level/{int(level_i)}/win_rate"] = float(level_wins.mean())
-                pbar.set_postfix_str(
-                    f"step={global_step:,} ret={mean_ret:.2f}/{max_ret:.2f} "
+                stats_bar.set_description_str(
+                    f"  step={global_step:,} ret={mean_ret:.2f}/{max_ret:.2f} "
                     f"len={mean_len:.0f} FPS={fps:,.0f}"
                 )
                 any_win = int(finished_wins.any())

@@ -59,10 +59,10 @@ class LearningRateSweep(SweepConfig):
 
 @dataclass
 class SmokeTestSweep(SweepConfig):
-    """Single-seed smoke test — run with all_games=False total_timesteps=5000.
+    """Single-seed smoke test — run with dataset=priority total_timesteps=5000.
 
-    JAX:     python sweep_rl.py sweep_name=smoke_test backend=jax all_games=False total_timesteps=5000 slurm=False
-    PyTorch: python sweep_rl.py sweep_name=smoke_test backend=cpp all_games=False total_timesteps=5000 slurm=False
+    JAX:     python sweep_rl.py sweep_name=smoke_test backend=jax dataset=priority total_timesteps=5000 slurm=False
+    PyTorch: python sweep_rl.py sweep_name=smoke_test backend=cpp dataset=priority total_timesteps=5000 slurm=False
 
     Backend defaults applied by `sweep_rl.py`:
     - `backend=cpp`: `n_envs=128`, `cpp_num_threads=32`, Slurm requests `cpus_per_task=32`, `gpu:1`

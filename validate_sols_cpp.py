@@ -194,7 +194,7 @@ def save_stats(results, val_results_path, games, n_levels, n_success, n_compile_
 @hydra.main(version_base="1.3", config_path="conf", config_name="cpp_validation_config")
 def main_launch(cfg: CppValidationConfig):
     if cfg.slurm:
-        games = get_list_of_games_for_testing(all_games=cfg.all_games)
+        games = get_list_of_games_for_testing(dataset=cfg.dataset)
         n_jobs = math.ceil(len(games) / cfg.n_games_per_job)
         game_sublists = [games[i::n_jobs] for i in range(n_jobs)]
         executor = submitit.AutoExecutor(folder=os.path.join("submitit_logs", "validate_sols_cpp"))
@@ -229,7 +229,7 @@ def main(cfg: CppValidationConfig, games: Optional[List[str]] = None):
     if games is not None:
         games = games
     elif cfg.game is None:
-        games = get_list_of_games_for_testing(all_games=cfg.all_games, random_order=cfg.random_order)
+        games = get_list_of_games_for_testing(dataset=cfg.dataset, random_order=cfg.random_order)
     else:
         games = [cfg.game]
 

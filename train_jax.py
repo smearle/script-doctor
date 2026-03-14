@@ -139,7 +139,7 @@ def _render_frames_io(frames, i, metric, steps_prev_complete, env, config: RLCon
     _render_frames(frames, i, metric, steps_prev_complete, env, config)
     return np.int32(0)
 
-def log_callback(metric, steps_prev_complete, config: RLConfig, train_start_time, pbar: tqdm):
+def log_callback(metric, steps_prev_complete, config: RLConfig, train_start_time, pbar: tqdm, stats_bar: tqdm):
     timesteps = metric["timestep"][metric["returned_episode"]] * config.n_envs
     return_values = metric["returned_episode_returns"][metric["returned_episode"]]
     level_ids = metric.get("level_i")
@@ -155,8 +155,8 @@ def log_callback(metric, steps_prev_complete, config: RLConfig, train_start_time
         ep_length = (metric["returned_episode_lengths"]
                         [metric["returned_episode"]].mean())
         fps = (t - steps_prev_complete) / (timer() - train_start_time)
-        pbar.set_postfix_str(
-            f"step={t:,} ret={ep_return_mean:.2f}/{ep_return_max:.2f} "
+        stats_bar.set_description_str(
+            f"  step={t:,} ret={ep_return_mean:.2f}/{ep_return_max:.2f} "
             f"len={ep_length:.0f} FPS={fps:,.0f}"
         )
 
@@ -312,11 +312,13 @@ def make_train(config: TrainConfig, restored_ckpt, checkpoint_manager):
 
             # TODO: Overwrite certain config values
 
-        pbar = tqdm(total=config._num_updates, desc="Training", unit="update")
+        pbar = tqdm(total=config._num_updates, desc="Training", unit="update",
+                    dynamic_ncols=True, position=0)
+        stats_bar = tqdm(total=0, bar_format="{desc}", position=1, leave=True)
         _log_callback = partial(log_callback, config=config,
                                train_start_time=train_start_time,
                                steps_prev_complete=steps_prev_complete,
-                               pbar=pbar)
+                               pbar=pbar, stats_bar=stats_bar)
 
 
         def save_checkpoint(runner_state, info, steps_prev_complete):

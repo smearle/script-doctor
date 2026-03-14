@@ -24,10 +24,10 @@ def main(cfg: SearchNodeJSConfig):
     engine = require('./puzzlescript_nodejs/puzzlescript/engine.js')
     solver = require('./puzzlescript_nodejs/puzzlescript/solver.js')
     if cfg.game is None:
-        if cfg.all_games:
+        if cfg.dataset != "priority":
             game_sols_dirs = glob.glob(f"{JS_SOLS_DIR}/*")
         else:
-            game_sols_dirs = get_list_of_games_for_testing(all_games=cfg.all_games)
+            game_sols_dirs = get_list_of_games_for_testing(dataset=cfg.dataset)
             game_sols_dirs = [os.path.join(JS_SOLS_DIR, game) for game in game_sols_dirs]
     else:
         game_sols_dirs = [os.path.join(JS_SOLS_DIR, cfg.game)]

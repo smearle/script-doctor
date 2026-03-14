@@ -15,6 +15,7 @@ from puzzlescript_jax.globals import (
     TREES_DIR, SIMPLIFIED_GAMES_DIR, MIN_GAMES_DIR, PRETTY_TREES_DIR, CUSTOM_GAMES_DIR,
     GAMES_DIR,
 )
+from puzzlescript_jax.utils import get_list_of_games_for_testing
 from puzzlescript_jax.preprocessing import PJParseErrors
 
 logger = logging.getLogger(__name__)
@@ -133,12 +134,11 @@ def main(cfg: PreprocessConfig):
     #     # Get the set of all lines from this text file
     #     parsed_games = set(file.read().splitlines())
     # for i, filename in enumerate(['blank.txt'] + os.listdir(demo_games_dir)):
-    if cfg.game is None:
-        game_files = os.listdir(GAMES_DIR)
-    else:
+    if cfg.game is not None:
         game_files = [cfg.game + '.txt']
-    # sort them alphabetically
-    game_files.sort()
+    else:
+        game_names = get_list_of_games_for_testing(dataset=cfg.dataset)
+        game_files = [f"{g}.txt" for g in game_names]
     test_game_files = [f"{test_game}.txt" for test_game in TEST_GAMES]
     game_files = list(OrderedDict.fromkeys(test_game_files + game_files))
     current_game_set = set(game_files)
@@ -152,7 +152,6 @@ def main(cfg: PreprocessConfig):
         if os.path.exists(GAMES_N_RULES_SORTED_PATH):
             with open(GAMES_N_RULES_SORTED_PATH, 'r') as f:
                 games_n_rules_sorted = json.load(f)
-            games_n_rules_sorted = [row for row in games_n_rules_sorted if row[0] in current_game_set]
             games_to_n_rules = {game: (n_rules, has_randomness) for game, n_rules, has_randomness in games_n_rules_sorted}
             print(f"Loaded {len(games_n_rules_sorted)} games from {GAMES_N_RULES_SORTED_PATH}")
         if os.path.exists(parse_results_path):

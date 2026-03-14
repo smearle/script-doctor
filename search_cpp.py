@@ -35,7 +35,7 @@ def get_standalone_run_params_from_name(run_name: str):
 def main_launch(cfg: SearchCppConfig):
     if cfg.slurm:
         games = get_list_of_games_for_testing(
-            all_games=cfg.all_games, include_random=cfg.include_randomness, random_order=cfg.random_order)
+            dataset=cfg.dataset, include_random=cfg.include_randomness, random_order=cfg.random_order)
         n_jobs = math.ceil(len(games) / cfg.n_games_per_job)
         game_sublists = [games[i::n_jobs] for i in range(n_jobs)]
         assert np.sum([len(g) for g in game_sublists]) == len(games), "Not all games are assigned to a job."
@@ -79,7 +79,7 @@ def main(cfg: SearchCppConfig, games: Optional[List[str]] = None):
         games_to_test = games
     elif cfg.game is None:
         games_to_test = get_list_of_games_for_testing(
-            all_games=cfg.all_games, include_random=cfg.include_randomness, random_order=cfg.random_order)
+            dataset=cfg.dataset, include_random=cfg.include_randomness, random_order=cfg.random_order)
     else:
         games_to_test = [cfg.game]
 

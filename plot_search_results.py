@@ -10,13 +10,14 @@ import pandas as pd
 import seaborn as sns
 
 from conf.config import PlotSearch
-from puzzlescript_jax.globals import PLOTS_DIR, STANDALONE_NODEJS_RESULTS_PATH, JS_SOLS_DIR
+from puzzlescript_jax.globals import PLOTS_DIR, STANDALONE_NODEJS_RESULTS_PATH, JS_SOLS_DIR, GAMES_TO_N_RULES_PATH
 from search_nodejs import get_standalone_run_params_from_name
 from puzzlescript_jax.utils import get_list_of_games_for_testing, game_names_remap
 
 
 OOM_SENTINEL = -1.0
 OOM_COLOR = '#FF8C00'  # dark orange
+MAX_GAMES_FOR_HEATMAPS = 100  # skip per-game heatmaps when there are more games than this
 
 BFS_RESULTS_PATH = os.path.join('data', 'bfs_results.json')
 HEATMAP_SEARCH_DEPTHS = [1_000_000, 100_000]
@@ -85,7 +86,10 @@ def _sort_games_by_mean_pct_solved(
         for df in dfs.values():
             if game in df.index and column in df.columns:
                 val = df.at[game, column]
-                if pd.notnull(val):
+                # df.at can return a Series if the index has duplicates
+                if isinstance(val, pd.Series):
+                    values.extend(v for v in val if pd.notnull(v))
+                elif pd.notnull(val):
                     values.append(float(val))
         game_scores[game] = np.mean(values) if values else -1.0
     return sorted(all_games, key=lambda g: game_scores[g], reverse=True)
@@ -347,7 +351,7 @@ def aggregate_results(cfg: PlotSearch):
     if cfg.game is not None:
         games = [cfg.game]
     else:
-        games = get_list_of_games_for_testing(cfg.all_games)
+        games = get_list_of_games_for_testing(cfg.dataset)
     print(games)
     if cfg.algo == 'all':
         algos = list(ALGO_NAMES)
@@ -690,6 +694,173 @@ def plot_all_algos(cfg: PlotSearch, results_by_algo=None, per_level_by_algo=None
 
     generate_all_heatmaps(heatmap_source_dfs, per_level_by_algo_depth)
 
+    if summary_rows:
+        generate_rules_vs_difficulty(summary_df)
+
+
+def _load_game_n_rules() -> dict[str, int]:
+    """Load {game_name: n_rules} mapping, stripping .txt suffix."""
+    with open(GAMES_TO_N_RULES_PATH, 'r') as f:
+        raw = json.load(f)
+    return {name.removesuffix('.txt'): meta[0] for name, meta in raw.items()}
+
+
+def _normalize_game_name(name: str) -> str:
+    return re.sub(r'[\s_]+', '', name).lower()
+
+
+def generate_rules_vs_difficulty(summary_df: pd.DataFrame) -> None:
+    """Generate n_rules vs difficulty plots from the summary DataFrame."""
+    game_n_rules = _load_game_n_rules()
+    # Build a case-insensitive lookup
+    rules_lookup = {_normalize_game_name(g): n for g, n in game_n_rules.items()}
+
+    df = summary_df.copy()
+    df['n_rules'] = df['game'].apply(lambda g: rules_lookup.get(_normalize_game_name(g)))
+    df = df.dropna(subset=['n_rules', 'pct_solved'])
+    df['n_rules'] = df['n_rules'].astype(int)
+
+    if df.empty:
+        print('No games matched for rules-vs-difficulty plots.')
+        return
+
+    # Use only the maximum depth per algo for scatter plots
+    max_depth_df = df.loc[df.groupby('algo')['depth'].idxmax()]
+    # Actually we want per-game max depth: keep the row with max depth for each (algo, game)
+    idx = df.groupby(['algo', 'game'])['depth'].idxmax()
+    max_depth_df = df.loc[idx]
+
+    algos = sorted(max_depth_df['algo'].unique())
+    algo_colors = {a: f'C{i}' for i, a in enumerate(algos)}
+
+    # --- 1. Per-algo scatterplots ---
+    n_algos = len(algos)
+    n_cols = min(n_algos, 3)
+    n_rows = (n_algos + n_cols - 1) // n_cols
+    fig, axes = plt.subplots(n_rows, n_cols, figsize=(n_cols * 5, n_rows * 4), squeeze=False)
+
+    for ax_i, algo in enumerate(algos):
+        ax = axes[ax_i // n_cols][ax_i % n_cols]
+        algo_df = max_depth_df[max_depth_df['algo'] == algo]
+        ax.scatter(
+            algo_df['n_rules'], algo_df['pct_solved'],
+            alpha=0.5, s=20, color=algo_colors[algo], edgecolors='none',
+        )
+        ax.set_title(f'{_algo_label(algo)}')
+        ax.set_xlabel('Number of rules')
+        ax.set_ylabel('% levels solved')
+        ax.set_ylim(-0.05, 1.05)
+        ax.grid(True, alpha=0.3)
+
+    for ax in axes.flat[n_algos:]:
+        ax.axis('off')
+
+    fig.suptitle('Game Difficulty vs. Number of Rules (max search depth)', fontsize=14)
+    fig.tight_layout()
+    path = os.path.join(PLOTS_DIR, 'rules_vs_difficulty_scatter.png')
+    fig.savefig(path, dpi=300)
+    plt.close(fig)
+    print(f'Saved scatter plot to {path}')
+
+    # --- 2. Binned curve plot: mean difficulty vs n_rules for each algo ---
+    # Use log-spaced bins since rule counts span a wide range
+    all_n_rules = df['n_rules'].values
+    min_rules = max(1, int(all_n_rules.min()))
+    max_rules = int(all_n_rules.max())
+    bin_edges = np.unique(np.geomspace(min_rules, max_rules + 1, num=15).astype(int))
+    if len(bin_edges) < 2:
+        return
+
+    fig, ax = plt.subplots(figsize=(8, 5))
+
+    for algo in algos:
+        algo_df = max_depth_df[max_depth_df['algo'] == algo]
+        bin_means = []
+        bin_centers = []
+        bin_counts = []
+        for lo, hi in zip(bin_edges[:-1], bin_edges[1:]):
+            mask = (algo_df['n_rules'] >= lo) & (algo_df['n_rules'] < hi)
+            bucket = algo_df.loc[mask, 'pct_solved']
+            if len(bucket) >= 1:
+                bin_means.append(bucket.mean())
+                bin_centers.append((lo + hi) / 2)
+                bin_counts.append(len(bucket))
+
+        if bin_centers:
+            ax.plot(
+                bin_centers, bin_means,
+                marker='o', markersize=5, label=_algo_label(algo),
+                color=algo_colors[algo], alpha=0.8,
+            )
+            # Annotate counts
+            for x, y, n in zip(bin_centers, bin_means, bin_counts):
+                ax.annotate(str(n), (x, y), textcoords='offset points',
+                            xytext=(0, 6), ha='center', fontsize=6, color=algo_colors[algo])
+
+    ax.set_xlabel('Number of rules')
+    ax.set_ylabel('Mean % levels solved')
+    ax.set_xscale('log')
+    ax.set_ylim(-0.05, 1.05)
+    ax.set_title('Mean Solve Rate vs. Game Complexity (by rule count)')
+    ax.legend()
+    ax.grid(True, alpha=0.3)
+    fig.tight_layout()
+    path = os.path.join(PLOTS_DIR, 'rules_vs_difficulty_curves.png')
+    fig.savefig(path, dpi=300)
+    plt.close(fig)
+    print(f'Saved curve plot to {path}')
+
+    # --- 3. Per-algo subplots: curves by search depth ---
+    depths = sorted(df['depth'].unique())
+    depth_cmap = plt.cm.viridis
+    depth_norm = plt.Normalize(vmin=0, vmax=max(len(depths) - 1, 1))
+
+    n_cols = min(n_algos, 3)
+    n_rows = (n_algos + n_cols - 1) // n_cols
+    fig, axes = plt.subplots(n_rows, n_cols, figsize=(n_cols * 5.5, n_rows * 4.5), squeeze=False)
+
+    for ax_i, algo in enumerate(algos):
+        ax = axes[ax_i // n_cols][ax_i % n_cols]
+        algo_df = df[df['algo'] == algo]
+        algo_depths = sorted(algo_df['depth'].unique())
+
+        for di, depth in enumerate(algo_depths):
+            sub = algo_df[algo_df['depth'] == depth]
+            bin_means = []
+            bin_centers = []
+            for lo, hi in zip(bin_edges[:-1], bin_edges[1:]):
+                mask = (sub['n_rules'] >= lo) & (sub['n_rules'] < hi)
+                bucket = sub.loc[mask, 'pct_solved']
+                if len(bucket) >= 1:
+                    bin_means.append(bucket.mean())
+                    bin_centers.append((lo + hi) / 2)
+
+            if bin_centers:
+                color = depth_cmap(depth_norm(di))
+                ax.plot(
+                    bin_centers, bin_means,
+                    marker='o', markersize=4, alpha=0.8,
+                    color=color, label=_format_steps_label(depth),
+                )
+
+        ax.set_title(_algo_label(algo))
+        ax.set_xlabel('Number of rules')
+        ax.set_ylabel('Mean % levels solved')
+        ax.set_xscale('log')
+        ax.set_ylim(-0.05, 1.05)
+        ax.grid(True, alpha=0.3)
+        ax.legend(fontsize=7, title='Search depth', title_fontsize=7)
+
+    for ax in axes.flat[n_algos:]:
+        ax.axis('off')
+
+    fig.suptitle('Mean Solve Rate vs. Rule Count by Search Depth', fontsize=14)
+    fig.tight_layout()
+    path = os.path.join(PLOTS_DIR, 'rules_vs_difficulty_by_depth.png')
+    fig.savefig(path, dpi=300)
+    plt.close(fig)
+    print(f'Saved depth curve plot to {path}')
+
 
 def generate_all_heatmaps(
     dfs_by_algo_depth: dict,
@@ -716,6 +887,10 @@ def generate_all_heatmaps(
             if game not in all_games:
                 all_games.append(game)
     all_games = _sort_games_by_mean_pct_solved(all_games, dfs_by_algo_depth)
+
+    if len(all_games) > MAX_GAMES_FOR_HEATMAPS:
+        print(f'Skipping all-algo heatmaps: {len(all_games)} games exceeds limit of {MAX_GAMES_FOR_HEATMAPS}.')
+        return
 
     heatmap_configs = [
         {
@@ -942,6 +1117,10 @@ def generate_heatmaps(
                 all_games.append(game)
     all_games = _sort_games_by_mean_pct_solved(all_games, dfs_by_depth)
 
+    if len(all_games) > MAX_GAMES_FOR_HEATMAPS:
+        print(f'Skipping {algo_label} heatmaps: {len(all_games)} games exceeds limit of {MAX_GAMES_FOR_HEATMAPS}.')
+        return
+
     heatmap_configs = [
         {
             'column': 'pct_solved',
@@ -1156,7 +1335,7 @@ def old_plot(cfg: PlotSearch):
     # Create a directory for the plots if necessary
     os.makedirs(PLOTS_DIR, exist_ok=True)
 
-    sorted_games = get_list_of_games_for_testing(cfg.all_games) 
+    sorted_games = get_list_of_games_for_testing(cfg.dataset)
     # Build a sorting key for each index based on the sorted_games list
     game_order = {game: i for i, game in enumerate(sorted_games)}
 

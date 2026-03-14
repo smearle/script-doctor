@@ -398,8 +398,9 @@ def check_some_exist(lvl, src, src_all=False):
     src_channel = get_channel(lvl, src, src_all)
     win = jnp.any(src_channel)
     score = win.astype(np.int32)
-    heuristic = score.astype(np.int32)
-    return win, score, heuristic
+    max_dist = src_channel.shape[0] + src_channel.shape[1]
+    heuristic = jnp.where(win, 0, max_dist).astype(np.int32)
+    return win, score, -heuristic
 
 def check_none(lvl, src, src_all=False):
     src_channel = get_channel(lvl, src, src_all)
@@ -1464,11 +1465,22 @@ class PuzzleJaxEnv:
             rng, lvl, jnp.array(True)
         )
 
-        accept_lvl_change = (
-            (not self.require_player_movement) or player_has_moved(
-                self.player_idxs, init_lvl, final_lvl, self.objs_to_idxs, 
-                self.meta_objs, self.char_to_obj)
-        ) 
+        if len(self.player_idxs) == 0:
+            player_present = jnp.array(False)
+        else:
+            player_present = jnp.any(jnp.stack([
+                jnp.any(init_lvl[player_idx]) for player_idx in self.player_idxs
+            ]))
+        accept_lvl_change = jnp.logical_or(
+            jnp.logical_or(
+                jnp.asarray(not self.require_player_movement),
+                jnp.logical_not(player_present),
+            ),
+            player_has_moved(
+                self.player_idxs, init_lvl, final_lvl, self.objs_to_idxs,
+                self.meta_objs, self.char_to_obj,
+            ),
+        )
         # if DEBUG:
         #     jax.debug.print('accept level change: {accept_lvl_change}', accept_lvl_change=accept_lvl_change) 
 
@@ -3224,13 +3236,14 @@ class PuzzleJaxEnv:
 
     def gen_tick_fn(self, lvl_shape):
         rule_blocks = []
-        late_rule_grps = []
+        late_rule_blocks = []
         for rule_block in self.tree.rules:
 
             # FIXME: what's with this unnecessary list?
 
             looping = rule_block.looping
             rule_grps = []
+            late_rule_grps = []
             last_subrule_fns_were_late = None
             for rule in rule_block.rules:
                 try:
@@ -3289,13 +3302,15 @@ class PuzzleJaxEnv:
                 else:
                     rule_grps.append((sub_rule_fns, is_random_group))
                     last_subrule_fns_were_late = False
-            rule_blocks.append((looping, rule_grps))
+            if rule_grps:
+                rule_blocks.append((looping, rule_grps))
+            if late_rule_grps:
+                late_rule_blocks.append((looping, late_rule_grps))
 
         _move_rule_fn = partial(self.apply_movement, coll_mat=self.coll_mat,
                                 n_objs=self.n_objs, obj_force_masks=self.obj_force_masks, jit=self.jit)
         rule_blocks.append((False, [([_move_rule_fn], False)]))
-        # Can we have loops in late rules? I hope not.
-        rule_blocks.append((False, late_rule_grps))
+        rule_blocks.extend(late_rule_blocks)
 
         all_rule_fns = [rule_fn for looping, rule_grps in rule_blocks for rule_grp, _ in rule_grps for rule_fn in rule_grp]
         n_rules_counted = 0

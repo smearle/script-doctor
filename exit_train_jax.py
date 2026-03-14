@@ -18,7 +18,7 @@ The loop:
 Usage:
     python exit_train_jax.py game=blocks level=0 iterations=50
     python exit_train_jax.py game=sokoban_basic level=0 iterations=100 max_nodes=100000 batch_size=1000
-    python exit_train_jax.py slurm=true all_games=true   # sweep all games on SLURM
+    python exit_train_jax.py slurm=true dataset=pedro   # sweep all games on SLURM
 """
 
 import json
@@ -1019,7 +1019,7 @@ def _build_jobs(cfg: ExitTrainConfig) -> list[tuple[str, int]]:
         games_to_run = [cfg.game]
     else:
         games_to_run = get_list_of_games_for_testing(
-            all_games=cfg.all_games, random_order=cfg.random_order)
+            dataset=cfg.dataset, random_order=cfg.random_order)
 
     levels_per_game = get_n_levels_per_game(games_to_run, skip_failures=True)
 
