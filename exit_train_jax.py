@@ -16,20 +16,22 @@ The loop:
     4. Repeat — improved heuristic → better search → better training data
 
 Usage:
-    python exit_train.py --game blocks --level 0 --iterations 50
-    python exit_train.py --game sokoban_basic --level 0 --iterations 100 -m 100000 -b 1000
+    python exit_train_jax.py game=blocks level=0 iterations=50
+    python exit_train_jax.py game=sokoban_basic level=0 iterations=100 max_nodes=100000 batch_size=1000
+    python exit_train_jax.py slurm=true all_games=true   # sweep all games on SLURM
 """
 
-import argparse
 import json
+import math
 import os
 import pickle
 import sys
 import time
 from collections import deque
 from functools import partial
-from typing import Any, Optional
+from typing import Any, List, Optional
 
+import hydra
 import jax
 import jax.numpy as jnp
 import numpy as np
@@ -43,6 +45,7 @@ JAXTAR_DIR = os.path.join(SCRIPT_DIR, "JAXtar")
 if JAXTAR_DIR not in sys.path:
     sys.path.insert(0, JAXTAR_DIR)
 
+from conf.config import ExitTrainConfig
 from puzzlescript_jax.wrappers import PuzzleJaxPuxleEnv, PuzzleJaxHeuristic
 from puzzlescript_jax.utils import get_list_of_games_for_testing, get_n_levels_per_game
 from JAxtar.stars.astar import astar_builder
@@ -1011,11 +1014,12 @@ def _get_completed_iterations(save_dir: str) -> int:
     return 0
 
 
-def _build_jobs(args: argparse.Namespace) -> list[tuple[str, int]]:
-    if args.game is not None:
-        games_to_run = [args.game]
+def _build_jobs(cfg: ExitTrainConfig) -> list[tuple[str, int]]:
+    if cfg.game is not None:
+        games_to_run = [cfg.game]
     else:
-        games_to_run = get_list_of_games_for_testing(all_games=args.all_games)
+        games_to_run = get_list_of_games_for_testing(
+            all_games=cfg.all_games, random_order=cfg.random_order)
 
     levels_per_game = get_n_levels_per_game(games_to_run, skip_failures=True)
 
@@ -1026,12 +1030,12 @@ def _build_jobs(args: argparse.Namespace) -> list[tuple[str, int]]:
             continue
 
         n_levels = int(levels_per_game[game])
-        if args.level is None:
+        if cfg.level is None:
             level_indices = range(n_levels)
-        elif 0 <= args.level < n_levels:
-            level_indices = [args.level]
+        elif 0 <= cfg.level < n_levels:
+            level_indices = [cfg.level]
         else:
-            print(f"Skipping {game}: level {args.level} is out of range [0, {n_levels - 1}].")
+            print(f"Skipping {game}: level {cfg.level} is out of range [0, {n_levels - 1}].")
             continue
 
         for level_i in level_indices:
@@ -1040,150 +1044,107 @@ def _build_jobs(args: argparse.Namespace) -> list[tuple[str, int]]:
     return jobs
 
 
-def _job_root_dir_for_args(game: str, level_i: int, args: argparse.Namespace, multi_run: bool) -> str:
-    job_root_dir = args.save_dir
-    if multi_run and args.save_dir is not None:
-        job_root_dir = os.path.join(args.save_dir, f"{game}_level{level_i}")
+def _job_root_dir_for_cfg(game: str, level_i: int, cfg: ExitTrainConfig, multi_run: bool) -> str:
+    job_root_dir = cfg.save_dir
+    if multi_run and cfg.save_dir is not None:
+        job_root_dir = os.path.join(cfg.save_dir, f"{game}_level{level_i}")
     return _job_root_dir(game, level_i, save_dir=job_root_dir)
 
 
-def _run_exit_job(job: tuple[str, int], args_dict: dict[str, Any], multi_run: bool) -> None:
-    args = argparse.Namespace(**args_dict)
-    game, level_i = job
-    job_root_dir = _job_root_dir_for_args(game, level_i, args, multi_run=multi_run)
+def _run_exit_job(cfg: ExitTrainConfig, jobs: List[tuple[str, int]], multi_run: bool) -> None:
+    for game, level_i in jobs:
+        job_root_dir = _job_root_dir_for_cfg(game, level_i, cfg, multi_run=multi_run)
 
-    run_config = build_run_config(
-        game=game,
-        level_i=level_i,
-        n_iterations=args.iterations,
-        max_nodes=args.max_nodes,
-        batch_size=args.batch_size,
-        cost_weight=args.cost_weight,
-        train_steps_per_iter=args.train_steps_per_iter,
-        train_batch_size=args.train_batch_size,
-        lr=args.lr,
-        blend_alpha=args.blend_alpha,
-        replay_max_size=args.replay_max_size,
-        initial_dim=args.initial_dim,
-        hidden_dim=args.hidden_dim,
-        res_n=args.res_n,
-    )
-
-    job_save_dir = _resolve_run_dir(job_root_dir, run_config)
-    completed_iterations = _get_completed_iterations(job_save_dir)
-    if completed_iterations >= args.iterations:
-        print(
-            f"\n=== Skipping ExIt job: game={game} level={level_i} "
-            f"(completed {completed_iterations}/{args.iterations} iterations) ==="
+        run_config = build_run_config(
+            game=game,
+            level_i=level_i,
+            n_iterations=cfg.iterations,
+            max_nodes=cfg.max_nodes,
+            batch_size=cfg.batch_size,
+            cost_weight=cfg.cost_weight,
+            train_steps_per_iter=cfg.train_steps_per_iter,
+            train_batch_size=cfg.train_batch_size,
+            lr=cfg.lr,
+            blend_alpha=cfg.blend_alpha,
+            replay_max_size=cfg.replay_max_size,
+            initial_dim=cfg.initial_dim,
+            hidden_dim=cfg.hidden_dim,
+            res_n=cfg.res_n,
         )
-        return
 
-    print(f"\n=== ExIt job: game={game} level={level_i} ===")
-    run_exit_training(
-        game=game,
-        level_i=level_i,
-        n_iterations=args.iterations,
-        max_nodes=args.max_nodes,
-        batch_size=args.batch_size,
-        cost_weight=args.cost_weight,
-        train_steps_per_iter=args.train_steps_per_iter,
-        train_batch_size=args.train_batch_size,
-        lr=args.lr,
-        blend_alpha=args.blend_alpha,
-        replay_max_size=args.replay_max_size,
-        save_dir=job_root_dir,
-        resume=args.resume,
-        initial_dim=args.initial_dim,
-        hidden_dim=args.hidden_dim,
-        res_n=args.res_n,
-    )
+        job_save_dir = _resolve_run_dir(job_root_dir, run_config)
+        completed_iterations = _get_completed_iterations(job_save_dir)
+        if completed_iterations >= cfg.iterations:
+            print(
+                f"\n=== Skipping ExIt job: game={game} level={level_i} "
+                f"(completed {completed_iterations}/{cfg.iterations} iterations) ==="
+            )
+            continue
+
+        print(f"\n=== ExIt job: game={game} level={level_i} ===")
+        try:
+            run_exit_training(
+                game=game,
+                level_i=level_i,
+                n_iterations=cfg.iterations,
+                max_nodes=cfg.max_nodes,
+                batch_size=cfg.batch_size,
+                cost_weight=cfg.cost_weight,
+                train_steps_per_iter=cfg.train_steps_per_iter,
+                train_batch_size=cfg.train_batch_size,
+                lr=cfg.lr,
+                blend_alpha=cfg.blend_alpha,
+                replay_max_size=cfg.replay_max_size,
+                save_dir=job_root_dir,
+                resume=cfg.resume,
+                initial_dim=cfg.initial_dim,
+                hidden_dim=cfg.hidden_dim,
+                res_n=cfg.res_n,
+            )
+        except Exception as exc:
+            print(f"Job failed for game={game} level={level_i}: {exc}")
 
 
 # ---------------------------------------------------------------------------
-# CLI
+# CLI (Hydra)
 # ---------------------------------------------------------------------------
 
-def main():
-    parser = argparse.ArgumentParser(
-        description="ExIt training for PuzzleScript games (neural heuristic + A* search)",
-        formatter_class=argparse.RawDescriptionHelpFormatter,
-    )
-    parser.add_argument("--game", type=str, default=None,
-                        help="PuzzleScript game name (default: run a game set)")
-    parser.add_argument("--level", type=int, default=None,
-                        help="Level index (default: run all levels)")
-    parser.add_argument("--all_games", action="store_true",
-                        help="If set, use all games; otherwise default to PRIORITY_GAMES")
-    parser.add_argument("--iterations", type=int, default=200, help="Number of ExIt iterations")
-    parser.add_argument("-m", "--max_nodes", type=int, default=100_000, help="Max A* search nodes")
-    parser.add_argument("-b", "--batch_size", type=int, default=1000, help="A* batch size")
-    parser.add_argument("-w", "--cost_weight", type=float, default=0.6, help="A* cost weight")
-    parser.add_argument("--train_steps_per_iter", type=int, default=200,
-                        help="Gradient steps per ExIt iteration")
-    parser.add_argument("--train_batch_size", type=int, default=256, help="Training minibatch size")
-    parser.add_argument("--lr", type=float, default=1e-3, help="Learning rate")
-    parser.add_argument("--blend_alpha", type=float, default=0.5,
-                        help="Initial blend weight (0=rule only, 1=neural only)")
-    parser.add_argument("--replay_max_size", type=int, default=200_000, help="Replay buffer capacity")
-    parser.add_argument("--resume", dest="resume", action="store_true", default=True,
-                        help="Resume from checkpoint (default: enabled)")
-    parser.add_argument("--no-resume", dest="resume", action="store_false",
-                        help="Disable resume and start fresh for selected jobs")
-    parser.add_argument("--save_dir", type=str, default=None, help="Override save directory")
-    parser.add_argument("--slurm", action="store_true",
-                        help="Submit ExIt jobs to SLURM via submitit instead of running locally")
-    parser.add_argument("--slurm_job_name", type=str, default="puzzlejax-exit",
-                        help="SLURM job name used when --slurm is set")
-    parser.add_argument("--slurm_mem_gb", type=int, default=30,
-                        help="Memory per SLURM task in GB")
-    parser.add_argument("--slurm_cpus_per_task", type=int, default=1,
-                        help="CPUs per SLURM task")
-    parser.add_argument("--slurm_timeout_min", type=int, default=60 * 24,
-                        help="SLURM timeout in minutes")
-    parser.add_argument("--slurm_gres", type=str, default="gpu:1",
-                        help="SLURM gres string, e.g. gpu:1")
-    parser.add_argument("--slurm_array_parallelism", type=int, default=1000,
-                        help="Maximum number of concurrent SLURM array tasks")
-    # Architecture
-    parser.add_argument("--initial_dim", type=int, default=512, help="Neural net initial dim")
-    parser.add_argument("--hidden_dim", type=int, default=256, help="Neural net hidden dim")
-    parser.add_argument("--res_n", type=int, default=2, help="Number of residual blocks")
-
-    args = parser.parse_args()
-    jobs = _build_jobs(args)
+@hydra.main(version_base="1.3", config_path="./", config_name="exit_train_jax_config")
+def main(cfg: ExitTrainConfig):
+    jobs = _build_jobs(cfg)
     if not jobs:
         raise RuntimeError("No valid (game, level) jobs to run.")
 
     multi_run = len(jobs) > 1
     print(f"Running ExIt on {len(jobs)} job(s).")
-    if not args.slurm:
-        for job in jobs:
-            game, level_i = job
-            try:
-                _run_exit_job(job, vars(args), multi_run=multi_run)
-            except Exception as exc:
-                print(f"Job failed for game={game} level={level_i}: {exc}")
+
+    if not cfg.slurm:
+        _run_exit_job(cfg, jobs, multi_run=multi_run)
         return
+
+    # Distribute jobs across SLURM array tasks, grouped by n_games_per_job.
+    n_jobs = math.ceil(len(jobs) / cfg.n_games_per_job)
+    job_sublists = [jobs[i::n_jobs] for i in range(n_jobs)]
+    assert sum(len(s) for s in job_sublists) == len(jobs), "Not all jobs assigned."
 
     executor = submitit.AutoExecutor(folder=os.path.join("submitit_logs", "exit"))
     executor.update_parameters(
-        slurm_job_name=args.slurm_job_name,
-        mem_gb=args.slurm_mem_gb,
+        slurm_job_name=cfg.slurm_job_name,
+        mem_gb=cfg.slurm_mem_gb,
         tasks_per_node=1,
-        cpus_per_task=args.slurm_cpus_per_task,
-        timeout_min=args.slurm_timeout_min,
-        slurm_gres=args.slurm_gres,
-        slurm_array_parallelism=args.slurm_array_parallelism,
+        cpus_per_task=cfg.slurm_cpus_per_task,
+        timeout_min=cfg.slurm_timeout_min,
+        slurm_gres=cfg.slurm_gres,
+        slurm_array_parallelism=cfg.slurm_array_parallelism,
         slurm_account=os.environ.get("SLURM_ACCOUNT"),
     )
-    jobs = sorted(jobs, key=str)
     executor.map_array(
         _run_exit_job,
-        jobs,
-        [vars(args)] * len(jobs),
-        [multi_run] * len(jobs),
+        [cfg] * n_jobs,
+        job_sublists,
+        [multi_run] * n_jobs,
     )
-    print(f"Submitted {len(jobs)} ExIt job(s) to SLURM.")
+    print(f"Submitted {n_jobs} ExIt SLURM array task(s) covering {len(jobs)} job(s).")
 
 
 if __name__ == "__main__":

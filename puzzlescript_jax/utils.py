@@ -18,7 +18,7 @@ from openai import AzureOpenAI
 import tiktoken
 
 from puzzlescript_jax.globals import (
-    GAMES_TO_N_RULES_PATH, GAMES_N_RULES_SORTED_PATH, PRIORITY_GAMES, GAMES_N_LEVELS_PATH, LARK_SYNTAX_PATH,
+    CUSTOM_GAMES_DIR, GAMES_TO_N_RULES_PATH, GAMES_N_RULES_SORTED_PATH, PRIORITY_GAMES, GAMES_N_LEVELS_PATH, LARK_SYNTAX_PATH,
     GAMES_DIR, TREES_DIR
 )
 GALLERY_GAMES_DIR = "gallery_games"
@@ -662,6 +662,40 @@ def init_ps_env(game, level_i, max_episode_steps, vmap: bool = True):
     return env
 
     
+def init_ps_env_from_js(game, level_i, max_episode_steps, vmap: bool = True):
+    """Initialize a PuzzleJaxEnv using the JS compiler as the parser.
+
+    This requires the ``javascript`` package and Node.js to be available.
+    The JS engine is used only for parsing/compilation; the resulting env
+    runs purely in JAX.
+    """
+    import json
+    from pathlib import Path
+
+    start_time = timer()
+
+    # Locate the game file
+    game_path = os.path.join(CUSTOM_GAMES_DIR, game + '.txt')
+    if not os.path.exists(game_path):
+        game_path = os.path.join(GAMES_DIR, game + '.txt')
+    with open(game_path, 'r', encoding='utf-8') as f:
+        game_text = f.read()
+
+    # Compile via JS
+    from javascript import require
+    engine_js_path = str(Path(__file__).resolve().parents[1] / "puzzlescript_nodejs" / "puzzlescript" / "engine.js")
+    js_engine = require(engine_js_path).createFreshApi()
+    js_engine.compile(['restart'], game_text)
+    parsed_json = json.loads(str(js_engine.serializeParsedStateJSON()))
+    parse_time = timer()
+
+    env = PuzzleJaxEnv.from_js_parsed_state(
+        parsed_json, jit=True, level_i=level_i,
+        max_steps=max_episode_steps, print_score=False, debug=False, vmap=vmap,
+    )
+    return env
+
+
 def init_ps_lark_parser():
     with open(LARK_SYNTAX_PATH, "r", encoding='utf-8') as file:
         puzzlescript_grammar = file.read()

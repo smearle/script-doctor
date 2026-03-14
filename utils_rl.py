@@ -35,7 +35,7 @@ def get_exp_dir(config: TrainConfig):
         lr_slug = f"_lr-{lr_value:.8g}"
 
     exp_dir = os.path.join(
-        "rl_logs", 
+        "rl_logs_jax",
         f"{config.game}",
         f"level-{config.level}",
         (

@@ -165,6 +165,38 @@ class EvolveLevelCppConfig:
 
 
 @dataclass
+class ExitTrainConfig:
+    game: Optional[str] = None
+    level: Optional[int] = None
+    all_games: bool = False
+    random_order: bool = False
+    iterations: int = 200
+    max_nodes: int = 100_000
+    batch_size: int = 1000
+    cost_weight: float = 0.6
+    train_steps_per_iter: int = 200
+    train_batch_size: int = 256
+    lr: float = 1e-3
+    blend_alpha: float = 0.5
+    replay_max_size: int = 200_000
+    resume: bool = True
+    save_dir: Optional[str] = None
+    # Architecture
+    initial_dim: int = 512
+    hidden_dim: int = 256
+    res_n: int = 2
+    # SLURM
+    slurm: bool = False
+    slurm_job_name: str = "puzzlejax-exit"
+    slurm_mem_gb: int = 30
+    slurm_cpus_per_task: int = 1
+    slurm_timeout_min: int = 60 * 24
+    slurm_gres: str = "gpu:1"
+    slurm_array_parallelism: int = 1000
+    n_games_per_job: int = 1
+
+
+@dataclass
 class PlotSearch(SearchNodeJSConfig):
     algo: str = "all"  # 'all', 'bfs', 'astar', 'mcts'
     aggregate: bool = True  # (Re-)collect all the solution JSONs to compile a results dict for plotting
@@ -174,11 +206,10 @@ class PlotSearch(SearchNodeJSConfig):
 class RLConfig(PSConfig):
     max_episode_steps: int = 200
     lr: float = 1.0e-4
-    n_envs: int = 1_000
+    n_envs: int = 500
     # How many steps do I take in all of my batched environments before doing a gradient update
     num_steps: int = 128
     total_timesteps: int = int(5e7)
-    timestep_chunk_size: int = -1
     update_epochs: int = 10
     NUM_MINIBATCHES: int = 4
     GAMMA: float = 0.99
@@ -302,3 +333,4 @@ cs.store(name="train_config", node=TrainConfig)
 cs.store(name="eval_config", node=EvalConfig)
 cs.store(name="enjoy_config", node=EnjoyConfig)
 cs.store(name="sweep_rl_config", node=SweepRLConfig)
+cs.store(name="exit_train_jax_config", node=ExitTrainConfig)

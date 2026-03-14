@@ -15,6 +15,9 @@ from search_nodejs import get_standalone_run_params_from_name
 from puzzlescript_jax.utils import get_list_of_games_for_testing, game_names_remap
 
 
+OOM_SENTINEL = -1.0
+OOM_COLOR = '#FF8C00'  # dark orange
+
 BFS_RESULTS_PATH = os.path.join('data', 'bfs_results.json')
 HEATMAP_SEARCH_DEPTHS = [1_000_000, 100_000]
 ALL_RESULTS_PATH = os.path.join('data', 'all_search_results.json')
@@ -61,12 +64,34 @@ def _draw_game_dividers(ax, game_spans: list[tuple[str, int, int]], n_rows: int)
         )
 
 
-ALGO_SOLVER_NAMES = {
-    'astar': 'solveAStar',
-    'bfs': 'solveBFS',
-    'gbfs': 'solveGBFS',
-    'mcts': 'solveMCTS',
-}
+def _overlay_oom_cells(ax, data: pd.DataFrame, oom_mask: pd.DataFrame) -> None:
+    """Paint orange rectangles over cells where oom_mask is True."""
+    from matplotlib.patches import Rectangle
+    for i in range(oom_mask.shape[0]):
+        for j in range(oom_mask.shape[1]):
+            if oom_mask.iloc[i, j]:
+                ax.add_patch(Rectangle((j, i), 1, 1, fill=True, color=OOM_COLOR, zorder=2))
+                ax.text(j + 0.5, i + 0.5, 'OOM', ha='center', va='center',
+                        fontsize=8, fontweight='bold', color='white', zorder=3)
+
+
+def _sort_games_by_mean_pct_solved(
+    all_games: list[str], dfs: dict, column: str = 'pct_solved'
+) -> list[str]:
+    """Sort games by their mean pct_solved across all provided dataframes (descending)."""
+    game_scores = {}
+    for game in all_games:
+        values = []
+        for df in dfs.values():
+            if game in df.index and column in df.columns:
+                val = df.at[game, column]
+                if pd.notnull(val):
+                    values.append(float(val))
+        game_scores[game] = np.mean(values) if values else -1.0
+    return sorted(all_games, key=lambda g: game_scores[g], reverse=True)
+
+
+ALGO_NAMES = ['astar', 'bfs', 'gbfs', 'mcts']
 
 
 def _results_path_for_algo(algo: str) -> str:
@@ -174,8 +199,7 @@ def _parse_solver_run_name(filename: str):
     match = re.match(r'^(astar|bfs|gbfs|mcts)_(\d+)-steps_level-(\d+)\.json$', filename)
     if match is None:
         return None, None, None
-    solver_name = ALGO_SOLVER_NAMES[match.group(1)]
-    return solver_name, int(match.group(2)), int(match.group(3))
+    return match.group(1), int(match.group(2)), int(match.group(3))
 
 
 def _format_level_ranges(levels: list[int]) -> str:
@@ -200,7 +224,7 @@ def _format_level_ranges(levels: list[int]) -> str:
 
 
 def _collect_results_for_algo(
-    games: list[str], solver_name: str
+    games: list[str], algo: str
 ) -> tuple[dict[int, dict], dict[int, dict[str, dict[int, float]]]]:
     results_by_depth = {}
     per_level_by_depth: dict[int, dict[str, dict[int, float]]] = {}
@@ -221,7 +245,7 @@ def _collect_results_for_algo(
 
             expected_levels.add(level_id)
 
-            if sol_algo_name != solver_name:
+            if sol_algo_name != algo:
                 continue
 
             if n_steps not in levels_seen_by_depth:
@@ -234,10 +258,13 @@ def _collect_results_for_algo(
                 print(f"Skipping {sol_json} because it doesn't have 'iterations' or 'won'")
                 continue
 
+            is_oom = sol_dict.get('error') == 'oom'
+
             if n_steps not in per_depth_stats:
                 per_depth_stats[n_steps] = {
                     'n_levels': 0,
                     'n_solved': 0,
+                    'n_oom': 0,
                     'n_stepss': [],
                     'solution_lengths': [],
                 }
@@ -248,8 +275,11 @@ def _collect_results_for_algo(
             if n_steps not in per_level_stats:
                 per_level_stats[n_steps] = {}
             if level_id not in per_level_stats[n_steps]:
-                per_level_stats[n_steps][level_id] = {'n_solved': 0, 'n_runs': 0}
+                per_level_stats[n_steps][level_id] = {'n_solved': 0, 'n_runs': 0, 'n_oom': 0}
             per_level_stats[n_steps][level_id]['n_runs'] += 1
+            if is_oom:
+                stats['n_oom'] += 1
+                per_level_stats[n_steps][level_id]['n_oom'] += 1
             if solved:
                 stats['n_solved'] += 1
                 stats['solution_lengths'].append(len(actions) if actions is not None else 0)
@@ -265,7 +295,7 @@ def _collect_results_for_algo(
                 missing_levels_summary = _format_level_ranges(missing_levels)
                 expected_levels_summary = _format_level_ranges(list(expected_levels))
                 print(
-                    f"Warning: missing search results for algorithm '{solver_name}', game '{game}', depth {depth_label} "
+                    f"Warning: missing search results for algorithm '{algo}', game '{game}', depth {depth_label} "
                     f"on levels {missing_levels_summary} (expected levels: {expected_levels_summary})."
                 )
 
@@ -281,14 +311,15 @@ def _collect_results_for_algo(
                 'pct_solved': pct_solved,
                 'n_levels': stats['n_levels'],
                 'n_iters': n_steps_mean,
-                'mean_sol_len': mean_solution_length
+                'mean_sol_len': mean_solution_length,
+                'has_oom': stats['n_oom'] > 0,
             }
 
         for depth, level_stats in per_level_stats.items():
             if depth not in per_level_by_depth:
                 per_level_by_depth[depth] = {}
             per_level_by_depth[depth][game] = {
-                level_id: lvl['n_solved'] / lvl['n_runs']
+                level_id: OOM_SENTINEL if lvl['n_oom'] == lvl['n_runs'] else lvl['n_solved'] / lvl['n_runs']
                 for level_id, lvl in level_stats.items()
             }
 
@@ -319,7 +350,7 @@ def aggregate_results(cfg: PlotSearch):
         games = get_list_of_games_for_testing(cfg.all_games)
     print(games)
     if cfg.algo == 'all':
-        algos = list(ALGO_SOLVER_NAMES.keys())
+        algos = list(ALGO_NAMES)
     elif cfg.algo == 'exit':
         exit_results = _collect_exit_results(games)
         with open(EXIT_RESULTS_PATH, 'w') as f:
@@ -327,7 +358,7 @@ def aggregate_results(cfg: PlotSearch):
         print(f'Saved aggregated ExIt results to {EXIT_RESULTS_PATH}')
         plot(cfg, exit_results)
         return
-    elif cfg.algo in ALGO_SOLVER_NAMES:
+    elif cfg.algo in ALGO_NAMES:
         algos = [cfg.algo]
     else:
         raise ValueError(f'Unknown algo: {cfg.algo}')
@@ -335,8 +366,7 @@ def aggregate_results(cfg: PlotSearch):
     aggregated_results = {}
     aggregated_per_level = {}
     for algo in algos:
-        solver_name = ALGO_SOLVER_NAMES[algo]
-        results_by_depth, per_level_by_depth = _collect_results_for_algo(games, solver_name)
+        results_by_depth, per_level_by_depth = _collect_results_for_algo(games, algo)
         results_path = _results_path_for_algo(algo)
         with open(results_path, 'w') as f:
             json.dump({str(k): v for k, v in results_by_depth.items()}, f, indent=4)
@@ -591,7 +621,7 @@ def plot_exit_heatmap(results: dict) -> None:
 def plot_all_algos(cfg: PlotSearch, results_by_algo=None, per_level_by_algo=None):
     if results_by_algo is None:
         results_by_algo = {}
-        for algo in ALGO_SOLVER_NAMES:
+        for algo in ALGO_NAMES:
             results_path = _results_path_for_algo(algo)
             if not os.path.exists(results_path):
                 continue
@@ -673,7 +703,7 @@ def generate_all_heatmaps(
     ordered_keys = sorted(
         dfs_by_algo_depth.keys(),
         key=lambda key: (
-            list(ALGO_SOLVER_NAMES.keys()).index(key[0]) if key[0] in ALGO_SOLVER_NAMES else 999,
+            ALGO_NAMES.index(key[0]) if key[0] in ALGO_NAMES else 999,
             preferred_depths.index(key[1]) if key[1] in preferred_depths else len(preferred_depths),
             -key[1],
         ),
@@ -685,6 +715,7 @@ def generate_all_heatmaps(
         for game in dfs_by_algo_depth[key].index:
             if game not in all_games:
                 all_games.append(game)
+    all_games = _sort_games_by_mean_pct_solved(all_games, dfs_by_algo_depth)
 
     heatmap_configs = [
         {
@@ -732,12 +763,17 @@ def generate_all_heatmaps(
             continue
 
         heatmap_data = pd.DataFrame(index=row_labels, columns=all_games, dtype=float)
+        oom_mask = pd.DataFrame(False, index=row_labels, columns=all_games)
         for key, row_label in zip(ordered_keys, row_labels):
             key_df = dfs_by_algo_depth[key]
             if column not in key_df.columns:
                 continue
             for game, value in key_df[column].items():
                 heatmap_data.at[row_label, game] = value
+            if 'has_oom' in key_df.columns:
+                for game, value in key_df['has_oom'].items():
+                    if value:
+                        oom_mask.at[row_label, game] = True
 
         stacked_values = heatmap_data.stack(future_stack=True).dropna()
         if stacked_values.empty:
@@ -764,7 +800,7 @@ def generate_all_heatmaps(
         fig_w = max(num_cols * target_cell_width + h_padding, min_total_figure_width)
 
         plt.figure(figsize=(fig_w, fig_h))
-        sns.heatmap(
+        ax = sns.heatmap(
             heatmap_data,
             annot=annot_data,
             fmt="",
@@ -776,6 +812,8 @@ def generate_all_heatmaps(
             linewidths=0.5,
             linecolor='white'
         )
+        if oom_mask.any().any():
+            _overlay_oom_cells(ax, heatmap_data, oom_mask)
         plt.title(config['title'])
         plt.xlabel('Game', labelpad=10)
         plt.ylabel('Algorithm · Search depth', labelpad=10)
@@ -806,7 +844,14 @@ def generate_all_expanded_heatmap(
         for game, level_data in per_level_by_algo_depth.get(key, {}).items():
             levels_by_game.setdefault(game, set()).update(level_data.keys())
 
-    ordered_games = sorted(levels_by_game.keys())
+    # Build per-game solve-rate DFs to sort games by mean pct_solved
+    _game_pct_dfs = {}
+    for key in ordered_keys:
+        data = per_level_by_algo_depth.get(key, {})
+        if data:
+            game_means = {game: np.mean(list(lvls.values())) for game, lvls in data.items() if lvls}
+            _game_pct_dfs[key] = pd.DataFrame.from_dict(game_means, orient='index', columns=['pct_solved'])
+    ordered_games = _sort_games_by_mean_pct_solved(sorted(levels_by_game.keys()), _game_pct_dfs)
     sorted_levels_by_game = {game: sorted(levels) for game, levels in levels_by_game.items()}
     columns, game_spans = _build_expanded_heatmap_columns(ordered_games, sorted_levels_by_game)
     if not columns:
@@ -821,15 +866,19 @@ def generate_all_expanded_heatmap(
             if win_rate is not None:
                 heatmap_df.at[row_label, f'{game}::level-{level}'] = win_rate
 
+    oom_mask = heatmap_df == OOM_SENTINEL
+    heatmap_df = heatmap_df.where(~oom_mask, other=float('nan'))
+
     stacked = heatmap_df.stack(future_stack=True).dropna()
-    if stacked.empty:
+    if stacked.empty and not oom_mask.any().any():
         return
 
     annot_data = None
     if len(columns) <= 80:
         annot_data = [
-            [f'{val:.0%}' if pd.notnull(val) else '' for val in row]
-            for row in heatmap_df.to_numpy(dtype=float)
+            ['OOM' if oom_mask.iloc[i, j] else (f'{val:.0%}' if pd.notnull(val) else '')
+             for j, val in enumerate(row)]
+            for i, row in enumerate(heatmap_df.to_numpy(dtype=float))
         ]
 
     num_cols = len(columns)
@@ -850,6 +899,8 @@ def generate_all_expanded_heatmap(
         linewidths=0.25,
         linecolor='white',
     )
+    if oom_mask.any().any():
+        _overlay_oom_cells(ax, heatmap_df, oom_mask)
     _draw_game_dividers(ax, game_spans, num_rows)
     ax.set_title('All Search Types: Win Rate per Level', pad=32)
     plt.xlabel('Level', labelpad=10)
@@ -889,6 +940,7 @@ def generate_heatmaps(
         for game in dfs_by_depth[depth].index:
             if game not in all_games:
                 all_games.append(game)
+    all_games = _sort_games_by_mean_pct_solved(all_games, dfs_by_depth)
 
     heatmap_configs = [
         {
@@ -937,6 +989,7 @@ def generate_heatmaps(
 
         depth_labels = [_format_steps_label(depth) for depth in ordered_depths]
         heatmap_data = pd.DataFrame(index=depth_labels, columns=all_games, dtype=float)
+        oom_mask = pd.DataFrame(False, index=depth_labels, columns=all_games)
 
         for depth, depth_label in zip(ordered_depths, depth_labels):
             depth_df = dfs_by_depth[depth]
@@ -944,6 +997,10 @@ def generate_heatmaps(
                 continue
             for game, value in depth_df[column].items():
                 heatmap_data.at[depth_label, game] = value
+            if 'has_oom' in depth_df.columns:
+                for game, value in depth_df['has_oom'].items():
+                    if value:
+                        oom_mask.at[depth_label, game] = True
 
         stacked_values = heatmap_data.stack(future_stack=True).dropna()
         if stacked_values.empty:
@@ -971,7 +1028,7 @@ def generate_heatmaps(
         fig_w = max(num_cols * target_cell_width + h_padding, min_total_figure_width)
 
         plt.figure(figsize=(fig_w, fig_h))
-        sns.heatmap(
+        ax = sns.heatmap(
             heatmap_data,
             annot=annot_data,
             fmt="",
@@ -983,12 +1040,13 @@ def generate_heatmaps(
             linewidths=0.5,
             linecolor='white'
         )
+        if oom_mask.any().any():
+            _overlay_oom_cells(ax, heatmap_data, oom_mask)
         plt.title(config['title'])
         plt.xlabel('Game', labelpad=10)
         plt.ylabel('Search depth', labelpad=10)
         plt.yticks(rotation=0)
         plt.xticks(rotation=45, ha='right')
-        # plt.tight_layout(pad=1.2, rect=[0, 0, 0.92, 1])
         plt.tight_layout()
 
         output_path = os.path.join(PLOTS_DIR, config['output'])
@@ -1016,7 +1074,13 @@ def generate_expanded_heatmap(
         for game, level_data in per_level_by_depth.get(depth, {}).items():
             levels_by_game.setdefault(game, set()).update(level_data.keys())
 
-    ordered_games = sorted(levels_by_game.keys())
+    _game_pct_dfs = {}
+    for depth in ordered_depths:
+        data = per_level_by_depth.get(depth, {})
+        if data:
+            game_means = {game: np.mean(list(lvls.values())) for game, lvls in data.items() if lvls}
+            _game_pct_dfs[depth] = pd.DataFrame.from_dict(game_means, orient='index', columns=['pct_solved'])
+    ordered_games = _sort_games_by_mean_pct_solved(sorted(levels_by_game.keys()), _game_pct_dfs)
     sorted_levels_by_game = {game: sorted(levels) for game, levels in levels_by_game.items()}
     columns, game_spans = _build_expanded_heatmap_columns(ordered_games, sorted_levels_by_game)
     if not columns:
@@ -1031,15 +1095,19 @@ def generate_expanded_heatmap(
             if win_rate is not None:
                 heatmap_df.at[depth_label, f'{game}::level-{level}'] = win_rate
 
+    oom_mask = heatmap_df == OOM_SENTINEL
+    heatmap_df = heatmap_df.where(~oom_mask, other=float('nan'))
+
     stacked = heatmap_df.stack(future_stack=True).dropna()
-    if stacked.empty:
+    if stacked.empty and not oom_mask.any().any():
         return
 
     annot_data = None
     if len(columns) <= 80:
         annot_data = [
-            [f'{val:.0%}' if pd.notnull(val) else '' for val in row]
-            for row in heatmap_df.to_numpy(dtype=float)
+            ['OOM' if oom_mask.iloc[i, j] else (f'{val:.0%}' if pd.notnull(val) else '')
+             for j, val in enumerate(row)]
+            for i, row in enumerate(heatmap_df.to_numpy(dtype=float))
         ]
 
     num_cols = len(columns)
@@ -1060,6 +1128,8 @@ def generate_expanded_heatmap(
         linewidths=0.25,
         linecolor='white',
     )
+    if oom_mask.any().any():
+        _overlay_oom_cells(ax, heatmap_df, oom_mask)
     _draw_game_dividers(ax, game_spans, num_rows)
     ax.set_title(f'{algo_label} Win Rate per Level', pad=32)
     plt.xlabel('Level', labelpad=10)

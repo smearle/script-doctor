@@ -1093,6 +1093,28 @@ class PuzzleJaxEnv:
 
         self.action_space = Discrete(5)
 
+    @classmethod
+    def from_js_parsed_state(cls, parsed_state: dict, **kwargs) -> 'PuzzleJaxEnv':
+        """Create a PuzzleJaxEnv from a JS serializeParsedState() dict.
+
+        This uses the JS parser/compiler as the source of truth for parsing,
+        while still running the JAX rule compilation pipeline.
+
+        ``parsed_state`` is a plain dict (the JSON output of
+        ``serializeParsedState()``).  This method does NOT require NodeJS
+        at call time — the JS engine is only needed to produce the dict.
+
+        Usage::
+
+            import json
+            engine.compile(['restart'], game_text)
+            parsed = json.loads(str(engine.serializeParsedStateJSON()))
+            env = PuzzleJaxEnv.from_js_parsed_state(parsed, level_i=0)
+        """
+        from puzzlescript_jax.js_bridge import parsed_state_to_tree
+        tree = parsed_state_to_tree(parsed_state)
+        return cls(tree, **kwargs)
+
     def has_randomness(self):
         return self._has_randomness
 
@@ -1278,35 +1300,51 @@ class PuzzleJaxEnv:
             level_width = None
             valid_mask = None
         self.tick_fn = self.gen_tick_fn(lvl.shape[1:])
-        again = False
-        win, score, init_heuristic = self.check_win(lvl)
-        if PRINT_SCORE:
-            jax.debug.print('heuristic: {heuristic}, score: {score}, win: {win}', heuristic=init_heuristic, score=score, win=win)
-        state = PJState(
-            multihot_level=lvl,
-            win=jnp.array(False),
-            score=jnp.array(0, dtype=jnp.int32),
-            heuristic=init_heuristic,
-            restart=jnp.array(False),
-            step_i=jnp.array(0, dtype=jnp.int32),
-            init_heuristic=init_heuristic,
-            prev_heuristic=init_heuristic,
-            rng=rng,
-            view_bounds=self._get_default_view_bounds(lvl.shape[1:]),
-        )
+        view_bounds = self._get_default_view_bounds(lvl.shape[1:])
         if self._is_multi_level:
-            state = PJStateMultiLevel(
-                **vars(state),
+            state_cls = PJStateMultiLevel
+            state_kwargs = dict(
                 level_i=sampled_level_i,
                 level_height=level_height,
                 level_width=level_width,
                 valid_mask=valid_mask,
             )
+        else:
+            state_cls = PJState
+            state_kwargs = {}
         if self.tree.prelude.run_rules_on_level_start:
-            lvl = self.apply_player_force(-1, state)
+            startup_state = state_cls(
+                multihot_level=lvl,
+                win=jnp.array(False),
+                score=jnp.array(0, dtype=jnp.int32),
+                heuristic=jnp.array(0, dtype=jnp.int32),
+                restart=jnp.array(False),
+                step_i=jnp.array(0, dtype=jnp.int32),
+                init_heuristic=jnp.array(0, dtype=jnp.int32),
+                prev_heuristic=jnp.array(0, dtype=jnp.int32),
+                rng=rng,
+                view_bounds=view_bounds,
+                **state_kwargs,
+            )
+            lvl = self.apply_player_force(-1, startup_state)
             lvl, _, _, _, _, _, rng = self.tick_fn(rng, lvl, jnp.array(False))
             lvl = lvl[:self.n_objs]
-            state = state.replace(multihot_level=lvl, rng=rng)
+        win, score, heuristic = self.check_win(lvl)
+        if PRINT_SCORE:
+            jax.debug.print('heuristic: {heuristic}, score: {score}, win: {win}', heuristic=heuristic, score=score, win=win)
+        state = state_cls(
+            multihot_level=lvl,
+            win=win,
+            score=score,
+            heuristic=heuristic,
+            restart=jnp.array(False),
+            step_i=jnp.array(0, dtype=jnp.int32),
+            init_heuristic=heuristic,
+            prev_heuristic=heuristic,
+            rng=rng,
+            view_bounds=view_bounds,
+            **state_kwargs,
+        )
         state = state.replace(view_bounds=self._compute_view_bounds(state.multihot_level, state.view_bounds))
         obs = self.get_obs(state)
         return obs, state

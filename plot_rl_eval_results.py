@@ -454,7 +454,7 @@ def parse_args(argv: Iterable[str] = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description='Plot RL evaluation win rates per game.')
     parser.add_argument(
         '--rl-logs-dir',
-        default='rl_logs',
+        default='rl_logs_jax',
         help='Path to the root directory containing RL experiment logs.',
     )
     return parser.parse_args(argv)

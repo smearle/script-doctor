@@ -16,6 +16,7 @@ from flax.training.train_state import TrainState
 from flax.training import orbax_utils
 import numpy as np
 import orbax.checkpoint as ocp
+from tqdm import tqdm
 import wandb
 # from tensorboardX import SummaryWriter
 
@@ -45,7 +46,13 @@ class Transition(NamedTuple):
     # rng_act: jnp.ndarray
 
 
-def _render_episodes(network_params, network, env_r, rng_r, obsv_r, env_state_r, n_render_eps, env_params):
+def _render_episodes(network_params, rng_r, network, env_r, n_render_eps, env_params):
+    # Re-reset render envs each call so multi-level gets fresh level samples
+    rng_r, _rng_r = jax.random.split(rng_r)
+    reset_rng_r = jax.random.split(_rng_r, n_render_eps)
+    vmap_reset_fn = jax.vmap(env_r.reset, in_axes=(0, None))
+    obsv_r, env_state_r = vmap_reset_fn(reset_rng_r, env_params)
+
     _step_env_render = partial(
         step_env_render, network=network, env_r=env_r, n_render_eps=n_render_eps
     )
@@ -109,30 +116,19 @@ def _render_frames(frames, i, metric, steps_prev_complete, env, config: RLConfig
     assert len(frames) == config.n_render_eps * 1 * env.max_steps,\
         "Not enough frames collected"
 
-    # Save gifs.
-    all_frames = []
-    for ep_is in range(config.n_render_eps):
-        ep_frames = frames[ep_is*env.max_steps:(ep_is+1)*env.max_steps]
-        all_frames.extend(ep_frames)
-
-        # new_frames = []
-        # for i, frame in enumerate(frames):
-        #     state_i = jax.tree_util.tree_map(lambda x: x[i], env_states)
-        #     frame = render_stats(env_r, state_i, frame)
-        #     new_frames.append(frame)
-        # frames = new_frames
-
-    gif_name = f"{config._exp_dir}/update-{i}_step-{t}.gif"
-
+    # Save per-episode gifs.
     try:
-        imageio.v3.imwrite(
-            gif_name,
-            np.array(all_frames),
-            duration=config.gif_frame_duration,
-            loop=0,
-        )
-        wandb.log({'video': wandb.Video(gif_name, format='gif')}, step=t)
-        print(f"Done rendering episode gifs at update {i}")
+        for ep_i in range(config.n_render_eps):
+            ep_frames = frames[ep_i*env.max_steps:(ep_i+1)*env.max_steps]
+            gif_name = f"{config._exp_dir}/update-{i}_step-{t}_ep-{ep_i}.gif"
+            imageio.v3.imwrite(
+                gif_name,
+                np.array(ep_frames),
+                duration=config.gif_frame_duration,
+                loop=0,
+            )
+            wandb.log({f'video/ep_{ep_i}': wandb.Video(gif_name, format='gif')}, step=t)
+            print(f"  Saved render gif: {gif_name}")
 
     except jax.errors.TracerArrayConversionError:
         print("Failed to save gif. Skipping...")
@@ -143,15 +139,13 @@ def _render_frames_io(frames, i, metric, steps_prev_complete, env, config: RLCon
     _render_frames(frames, i, metric, steps_prev_complete, env, config)
     return np.int32(0)
 
-def log_callback(metric, steps_prev_complete, config: RLConfig, train_start_time):
+def log_callback(metric, steps_prev_complete, config: RLConfig, train_start_time, pbar: tqdm):
     timesteps = metric["timestep"][metric["returned_episode"]] * config.n_envs
     return_values = metric["returned_episode_returns"][metric["returned_episode"]]
     level_ids = metric.get("level_i")
     win_flags = metric.get("won")
 
-    # for t in range(len(timesteps)):
-    #     print(
-    #         f"global step={timesteps[t]}, episodic return={return_values[t]}")
+    pbar.update(1)
 
     if len(timesteps) > 0:
         t = timesteps[-1].item()
@@ -161,9 +155,10 @@ def log_callback(metric, steps_prev_complete, config: RLConfig, train_start_time
         ep_length = (metric["returned_episode_lengths"]
                         [metric["returned_episode"]].mean())
         fps = (t - steps_prev_complete) / (timer() - train_start_time)
-        print(f"global step={t:,}; episodic return mean: {ep_return_mean:,.2f} " + \
-            f"max: {ep_return_max:,.2f}, min: {ep_return_min:,.2f}, episode length: {ep_length:,.2f}, " + \
-            f"FPS: {fps:,.2f}")
+        pbar.set_postfix_str(
+            f"step={t:,} ret={ep_return_mean:.2f}/{ep_return_max:.2f} "
+            f"len={ep_length:.0f} FPS={fps:,.0f}"
+        )
 
         # Compute any_win before CSV write
         done_mask = np.asarray(metric["returned_episode"])
@@ -286,19 +281,10 @@ def make_train(config: TrainConfig, restored_ckpt, checkpoint_manager):
         # pmap_reset_fn = jax.pmap(vmap_reset_fn, in_axes=(0, None))
         obsv, env_state = vmap_reset_fn(reset_rng, env_params)
 
-        # INIT ENV FOR RENDER
-        rng_r, _rng_r = jax.random.split(rng)
-        reset_rng_r = jax.random.split(_rng_r, config.n_render_eps)
-
-        # Apply pmap
-        # reset_rng_r = reset_rng_r.reshape((config.n_gpus, -1) + reset_rng_r.shape[1:])
-        vmap_reset_fn = jax.vmap(env_r.reset, in_axes=(0, None))
-        # pmap_reset_fn = jax.pmap(vmap_reset_fn, in_axes=(0, None))
-        obsv_r, env_state_r = vmap_reset_fn(reset_rng_r, env_params)
-
+        # INIT RENDER (env reset happens inside _render_episodes each call)
         render_episodes = partial(
             _render_episodes, env_r=env_r, network=network, n_render_eps=config.n_render_eps,
-            rng_r=rng_r, obsv_r=obsv_r, env_state_r=env_state_r, env_params=env_params)
+            env_params=env_params)
         render_frames = partial(
             _render_frames, env=env_r, config=config)
         render_frames_io = partial(
@@ -326,9 +312,11 @@ def make_train(config: TrainConfig, restored_ckpt, checkpoint_manager):
 
             # TODO: Overwrite certain config values
 
+        pbar = tqdm(total=config._num_updates, desc="Training", unit="update")
         _log_callback = partial(log_callback, config=config,
                                train_start_time=train_start_time,
-                               steps_prev_complete=steps_prev_complete)
+                               steps_prev_complete=steps_prev_complete,
+                               pbar=pbar)
 
 
         def save_checkpoint(runner_state, info, steps_prev_complete):
@@ -529,39 +517,28 @@ def make_train(config: TrainConfig, restored_ckpt, checkpoint_manager):
             jax.debug.callback(save_checkpoint, runner_state,
                                metric, steps_prev_complete)
 
-            # FIXME: shouldn't assume size of render map.
-            # frames_shape = (config.n_render_eps * 1 * env.max_steps, 
-            #                 env.tile_size * (env.map_shape[0] + 2),
-            #                 env.tile_size * (env.map_shape[1] + 2), 4)
-
-            # FIXME: Inside vmap, both conditions are likely to get executed. Any way around this?
-            # Currently not vmapping the train loop though, so it's ok.
-            # start_time = timer()
-            # should_render = (runner_state.update_i % config.render_freq) == 0
-            # jax.debug.print(
-            #     "Rendering episode gifs at update {update_i}: {should_render}",
-            #     update_i=runner_state.update_i, should_render=should_render
-            # )
-            # frames, states = jax.lax.cond(
-            #     should_render,
-            #     lambda: render_episodes(train_state.params),
-            #     lambda: old_render_results,)
-            new_frames, _ = render_episodes(train_state.params)
-            # jax.lax.cond(
-            #     should_render,
-            #     partial(jax.debug.callback, render_frames),
-            #     lambda _, __, ___: None,
-            #     frames, runner_state.update_i, metric
-            # )
-            render_token = jax.experimental.io_callback(
-                callback=render_frames_io,
-                result_shape_dtypes=jax.ShapeDtypeStruct((), jnp.int32),
-                frames=new_frames,
-                i=runner_state.update_i,
-                metric=metric,
-                steps_prev_complete=steps_prev_complete,
+            should_render = (
+                (config.render_freq > 0) &
+                (runner_state.update_i % config.render_freq == 0)
             )
-            # jax.debug.print(f'Rendering episode gifs took {timer() - start_time} seconds')
+
+            def _do_render():
+                render_rng = jax.random.fold_in(runner_state.rng, runner_state.update_i)
+                new_frames, _ = render_episodes(train_state.params, render_rng)
+                return jax.experimental.io_callback(
+                    callback=render_frames_io,
+                    result_shape_dtypes=jax.ShapeDtypeStruct((), jnp.int32),
+                    frames=new_frames,
+                    i=runner_state.update_i,
+                    metric=metric,
+                    steps_prev_complete=steps_prev_complete,
+                )
+
+            render_token = jax.lax.cond(
+                should_render,
+                _do_render,
+                lambda: jnp.int32(0),
+            )
 
             jax.debug.callback(_log_callback, metric)
 
@@ -569,19 +546,13 @@ def make_train(config: TrainConfig, restored_ckpt, checkpoint_manager):
                 train_state, env_state, last_obs, rng,
                 update_i=runner_state.update_i + 1 + (render_token * 0))
 
-            return runner_state, metric
+            return runner_state, None
 
-        runner_state, metric = jax.lax.scan(
+        runner_state, _ = jax.lax.scan(
             _update_step, runner_state, None, config._num_updates
         )
 
-        # One final logging/checkpointing call to ensure things finish off
-        # neatly.
-        jax.debug.callback(_log_callback, metric)
-        jax.debug.callback(save_checkpoint, runner_state, metric,
-                           steps_prev_complete)
-
-        return {"runner_state": runner_state, "metrics": metric}
+        return {"runner_state": runner_state}
 
     return lambda rng: train(rng, config)
 
@@ -697,19 +668,6 @@ def init_checkpointer(config: RLConfig) -> Tuple[Any, dict]:
     return checkpoint_manager, restored_ckpt, wandb_run_id
 
     
-def main_chunk(config, rng, restored_ckpt=None, checkpoint_manager=None):
-    """When jax jits the training loop, it pre-allocates an array with size equal to number of training steps. So, when training for a very long time, we sometimes need to break training up into multiple
-    chunks to save on VRAM.
-    """
-
-    train_jit = jax.jit(make_train(config, restored_ckpt, checkpoint_manager))
-    out = train_jit(rng)
-
-    jax.block_until_ready(out)
-
-    return out
-
-    
 @hydra.main(version_base="1.3", config_path='conf', config_name='train')
 def main(config: TrainConfig):
     logging.getLogger().setLevel(logging.WARNING)
@@ -726,16 +684,12 @@ def main(config: TrainConfig):
         shutil.rmtree(exp_dir)
 
     checkpoint_manager, restored_ckpt, wandb_run_id = init_checkpointer(config)
-    if restored_ckpt is not None:
-        steps_prev_complete = restored_ckpt['steps_prev_complete']
-    else:
-        steps_prev_complete = 0
 
     os.makedirs(exp_dir, exist_ok=True)
 
     # Initialize wandb run
     run = wandb.init(
-        project=getattr(config, "wandb_project", "pcgrl-jax"),
+        project=getattr(config, "wandb_project", "puzzlejax_ppo"),
         config=OmegaConf.to_container(config),
         mode=getattr(config, "wandb_mode", "online"),
         dir=exp_dir,
@@ -746,10 +700,6 @@ def main(config: TrainConfig):
     with open(os.path.join(exp_dir, "wandb_run_id.txt"), "w") as f:
         f.write(wandb_run_id)
 
-    # if restored_ckpt is not None:
-    #     ep_returns = restored_ckpt['runner_state'].ep_returns
-    #     plot_ep_returns(ep_returns, config)
-    # else:
     if restored_ckpt is None:
         progress_csv_path = os.path.join(exp_dir, "progress.csv")
         if os.path.exists(progress_csv_path):
@@ -759,24 +709,9 @@ def main(config: TrainConfig):
         with open(os.path.join(exp_dir, "progress.csv"), "w") as f:
             f.write("timestep,ep_return,fps,win\n")
 
-    if config.timestep_chunk_size != -1:
-        n_chunks = config.total_timesteps // config.timestep_chunk_size
-        n_chunks_complete = steps_prev_complete // config.timestep_chunk_size
-        for i in range(n_chunks_complete, n_chunks):
-            if i > 0:
-                # In case we called the overall function with `overwrite=True`, we need to make sure we don't mess things up moving forward.
-                # (In particular, not doing this will cause the step index to go back to 0 at the beginning of each new chunk... and overwrite the checkpoints?)
-                # (Ultimately we should make this chunk function less lazy in its approach. Move more initialization outside of it. But for now, anyway.)
-                config.overwrite = False
-            config.total_timesteps = config.timestep_chunk_size + (i * config.timestep_chunk_size)
-            print(f"Running chunk {i+1}/{n_chunks}")
-            out = main_chunk(config, rng, restored_ckpt, checkpoint_manager)
-            runer_state = out["runner_state"]
-            steps_prev_complete = (i + 1) * config.timestep_chunk_size
-            # A bit of a hack
-            restored_ckpt = {'runner_state': runer_state, 'steps_prev_complete': steps_prev_complete}
-    else:
-        out = main_chunk(config, rng, restored_ckpt, checkpoint_manager)
+    train_jit = jax.jit(make_train(config, restored_ckpt, checkpoint_manager))
+    out = train_jit(rng)
+    jax.block_until_ready(out)
 
 
 if __name__ == "__main__":

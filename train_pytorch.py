@@ -22,6 +22,7 @@ from hydra.core.config_store import ConfigStore
 from javascript import require
 from omegaconf import OmegaConf
 
+from tqdm import tqdm
 import wandb
 from puzzlescript_jax.utils import init_ps_lark_parser
 from puzzlescript_cpp import CppBatchedPuzzleScriptEnv, CppPuzzleScriptEnv, Renderer
@@ -65,7 +66,7 @@ class TrainPytorchConfig:
 
     # Logging
     wandb_mode: str = "online"
-    wandb_project: str = "puzzlescript_ppo_pytorch"
+    wandb_project: str = "puzzlejax_ppo"
     wandb_entity: str = ""
     log_freq: int = 1
     save_freq: int = 50
@@ -135,10 +136,11 @@ def render_eval_episodes_cpp(
     n_eps: int,
     renderer: Renderer,
     device: torch.device,
-) -> list[np.ndarray]:
+) -> list[list[np.ndarray]]:
+    """Returns a list of episodes, each a list of frames."""
     env = CppPuzzleScriptEnv(json_str, level_i=level_i, max_episode_steps=max_episode_steps)
     n_objs, h, w = env.observation_shape
-    all_frames = []
+    episodes = []
     for _ in range(n_eps):
         if level_i < 0:
             env.set_level(int(np.random.randint(env.num_levels)))
@@ -153,21 +155,22 @@ def render_eval_episodes_cpp(
             action = logits.argmax(dim=-1).item()
             obs, _reward, done, truncated, _info = env.step(action)
             frames.append(renderer.render_engine(env._engine))
-        all_frames.extend(frames)
-    return all_frames
+        episodes.append(frames)
+    return episodes
 
 
 def save_and_log_gif(
-    frames: list[np.ndarray],
+    episodes: list[list[np.ndarray]],
     exp_dir: str,
     update: int,
     global_step: int,
     duration: float,
 ) -> None:
-    gif_path = os.path.join(exp_dir, f"update-{update}_step-{global_step}.gif")
-    imageio.mimsave(gif_path, frames, duration=duration, loop=0)
-    wandb.log({"video": wandb.Video(gif_path, format="gif")}, step=global_step)
-    print(f"Saved render gif: {gif_path}")
+    for ep_i, frames in enumerate(episodes):
+        gif_path = os.path.join(exp_dir, f"update-{update}_step-{global_step}_ep-{ep_i}.gif")
+        imageio.mimsave(gif_path, frames, duration=duration, loop=0)
+        wandb.log({f"video/ep_{ep_i}": wandb.Video(gif_path, format="gif")}, step=global_step)
+        print(f"  Saved render gif: {gif_path}")
 
 
 def layer_init(layer, std=np.sqrt(2), bias_const=0.0):
@@ -315,8 +318,8 @@ def render_eval(
     render_ctx: dict[str, object],
     device: torch.device,
 ) -> None:
-    if cfg.backend == "cpp":
-        frames = render_eval_episodes_cpp(
+    if cfg.backend in {"cpp", "nodejs"}:
+        episodes = render_eval_episodes_cpp(
             agent,
             render_ctx["json_str"],
             cfg.level,
@@ -325,24 +328,8 @@ def render_eval(
             render_ctx["renderer"],
             device,
         )
-        if frames:
-            save_and_log_gif(frames, exp_dir, update, global_step, cfg.gif_frame_duration)
-        return
-
-    if cfg.backend == "nodejs":
-        # Rendering with the NodeJS engine is much slower than C++ on the same
-        # compiled game, so use the C++ single-env path for eval gifs.
-        frames = render_eval_episodes_cpp(
-            agent,
-            render_ctx["json_str"],
-            cfg.level,
-            cfg.max_episode_steps,
-            cfg.n_render_eps,
-            render_ctx["renderer"],
-            device,
-        )
-        if frames:
-            save_and_log_gif(frames, exp_dir, update, global_step, cfg.gif_frame_duration)
+        if episodes:
+            save_and_log_gif(episodes, exp_dir, update, global_step, cfg.gif_frame_duration)
         return
 
     raise ValueError(f"Unsupported backend: {cfg.backend}")
@@ -417,7 +404,6 @@ def train(cfg: TrainPytorchConfig) -> None:
             config=OmegaConf.to_container(cfg, resolve=True),
             mode=cfg.wandb_mode,
             dir=exp_dir,
-            name=f"{cfg.backend}_{cfg.game}_l{cfg.level}_s{cfg.seed}",
             id=wandb_run_id,
             resume="allow" if wandb_run_id else None,
         )
@@ -444,7 +430,9 @@ def train(cfg: TrainPytorchConfig) -> None:
             with open(csv_path, "w") as f:
                 f.write("global_step,ep_return_mean,ep_return_max,ep_length_mean,fps,win\n")
 
-        for update in range(start_update, num_updates + 1):
+        pbar = tqdm(range(start_update, num_updates + 1), initial=start_update - 1,
+                    total=num_updates, desc="Training", unit="update")
+        for update in pbar:
             if cfg.anneal_lr:
                 frac = 1.0 - (update - 1) / num_updates
                 lr_now = frac * cfg.lr
@@ -511,10 +499,9 @@ def train(cfg: TrainPytorchConfig) -> None:
                         level_wins = finished_wins[level_mask]
                         wandb_payload[f"level/{int(level_i)}/ep_return"] = float(level_returns.mean())
                         wandb_payload[f"level/{int(level_i)}/win_rate"] = float(level_wins.mean())
-                print(
-                    f"update={update}, global_step={global_step:,}, "
-                    f"ep_return mean={mean_ret:.3f} max={max_ret:.3f}, "
-                    f"ep_length={mean_len:.1f}, FPS={fps:,.0f}"
+                pbar.set_postfix_str(
+                    f"step={global_step:,} ret={mean_ret:.2f}/{max_ret:.2f} "
+                    f"len={mean_len:.0f} FPS={fps:,.0f}"
                 )
                 any_win = int(finished_wins.any())
                 wandb.log(wandb_payload, step=global_step)

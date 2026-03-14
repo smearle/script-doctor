@@ -696,31 +696,25 @@ def main(cfg: JaxValidationConfig, games: Optional[List[str]] = None):
                     
                     print(f"Level {level_i} solution failed (state mismatch)")
                     # game_success = False
-                # FIXME: There is a discrepancy between the way we compute scores in js (I actually don't understand
-                # how we're getting that number) and the way we compute scores in jax, so this will always fail.
-                # elif not level_win and (state.heuristic != level_score):
-                elif (state.heuristic != -level_score):
+                elif int(state.heuristic) != -int(level_score):
                     with open(score_log_path, 'w') as f:
                         f.write(f"Level {level_i} solution score mismatch\n")
                         f.write(f"Actions: {actions}\n")
-                        f.write(f"Jax score: {state.heuristic}\n")
-                        f.write(f"JS score: {level_score}\n")
-                        # if game_name not in results['score_error']:
-                        #     results['score_error'][game_name] = []
-                        # results['score_error'][game_name].append({'n_rules': n_rules, 'level': level_i})
+                        f.write(f"Jax heuristic: {state.heuristic}\n")
+                        f.write(f"JS solver score: {level_score}\n")
+                        f.write(f"Jax win score: {state.score}\n")
                         n_score_error += 1
                     print(f"Level {level_i} solution score mismatch.")
-                    # We'll be a bit generous and not count this for now. TODO: fix the score mismatch.
-                    # game_success = False
                 
-                elif not np.all(-np.array(js_scores) == np.array(state_v.heuristic)):
-                    print(f"Warning: intermediary JS and JAX heuristics do not match for game {game_name} level {level_i}")
+                elif not np.array_equal(-np.array(js_scores), np.array(state_v.heuristic)):
+                    print(f"Warning: intermediary JS and JAX scores do not match for game {game_name} level {level_i}")
                     # Log this to disk
                     with open(intermediary_scores_log_path, 'w') as f:
                         f.write(f"Level {level_i} solution score mismatch\n")
                         f.write(f"Actions: {actions}\n")
-                        f.write(f"Jax score: {state_v.heuristic}\n")
-                        f.write(f"JS score: {js_scores}\n")
+                        f.write(f"Jax heuristic: {state_v.heuristic}\n")
+                        f.write(f"JS solver score: {js_scores}\n")
+                        f.write(f"Jax win score: {state_v.score}\n")
                         n_score_error += 1
                 else:
                     # if game_name not in results['success']:

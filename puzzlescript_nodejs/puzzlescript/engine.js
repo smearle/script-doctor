@@ -166,6 +166,78 @@ var require = undefined;
     }
 
     allCode += `
+// ---- Monkey-patch to capture pre-compilation state ----
+var _parsedSnapshot = null;
+var _origLevelsToArray = levelsToArray;
+levelsToArray = function(st) {
+    // Snapshot rules, winconditions, and levels before destructive transforms.
+    // At this point generateExtraMembers and generateMasks have run,
+    // so state.objects, legend_*, collisionLayers, idDict are populated.
+    try {
+        _parsedSnapshot = {
+            rules: JSON.parse(JSON.stringify(st.rules)),
+            winconditions: JSON.parse(JSON.stringify(st.winconditions)),
+            levels: JSON.parse(JSON.stringify(st.levels)),
+            loops: st.loops ? JSON.parse(JSON.stringify(st.loops)) : [],
+        };
+    } catch(e) {
+        _parsedSnapshot = null;
+    }
+    return _origLevelsToArray(st);
+};
+
+function serializeParsedState() {
+    if (!state || !_parsedSnapshot) return null;
+    var s = state;
+
+    var objects = {};
+    for (var name in s.objects) {
+        var obj = s.objects[name];
+        objects[name] = {
+            colors: obj.colors.map(function(c) { return String(c); }),
+            spritematrix: obj.spritematrix.map(function(row) {
+                return Array.isArray(row) ? Array.from(row) : String(row);
+            }),
+        };
+    }
+
+    // legend entries: pass through as-is (no line numbers to strip)
+    var legend_synonyms = s.legend_synonyms.map(function(e) { return Array.from(e); });
+    var legend_aggregates = s.legend_aggregates.map(function(e) { return Array.from(e); });
+    var legend_properties = s.legend_properties.map(function(e) { return Array.from(e); });
+
+    var collisionLayers = s.collisionLayers.map(function(layer) {
+        return layer.map(function(o) { return String(o); });
+    });
+
+    var metadata = {};
+    if (s.metadata) {
+        for (var k in s.metadata) {
+            var v = s.metadata[k];
+            if (typeof v === 'string' || typeof v === 'number' || typeof v === 'boolean') {
+                metadata[k] = v;
+            } else if (Array.isArray(v) && v.every(function(x) { return typeof x === 'number'; })) {
+                metadata[k] = Array.from(v);
+            }
+        }
+    }
+
+    return {
+        objects: objects,
+        idDict: s.idDict.map(function(n) { return String(n); }),
+        legend_synonyms: legend_synonyms,
+        legend_aggregates: legend_aggregates,
+        legend_properties: legend_properties,
+        collisionLayers: collisionLayers,
+        rules: _parsedSnapshot.rules,
+        winconditions: _parsedSnapshot.winconditions,
+        levels: _parsedSnapshot.levels,
+        loops: _parsedSnapshot.loops,
+        metadata: metadata,
+        original_case_names: s.original_case_names || {},
+    };
+}
+
 function _bvToArr(bv) {
     if (!bv || !bv.data) return [];
     return Array.from(bv.data);
@@ -430,6 +502,8 @@ globalThis.__PS_NODE_API__ = {
     drainLazyGeneration: () => { tick_lazy_function_generation(false); },
     serializeCompiledState,
     serializeCompiledStateJSON: () => JSON.stringify(serializeCompiledState()),
+    serializeParsedState,
+    serializeParsedStateJSON: () => JSON.stringify(serializeParsedState()),
     serializeLevel,
     serializeSpriteDataJSON: () => {
         if (!state) return '{}';
