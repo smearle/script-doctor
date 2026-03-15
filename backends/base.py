@@ -52,6 +52,25 @@ class PuzzleScriptSearchBackend(ABC):
         raise NotImplementedError
 
     @abstractmethod
+    def get_initial_score(self, game_text: str, level_i: int) -> float:
+        """Return the heuristic score of a level's initial state."""
+        raise NotImplementedError
+
+    @abstractmethod
+    def replay_score_trajectory(
+        self,
+        game_text: str,
+        level_i: int,
+        actions: list[int] | tuple[int, ...],
+    ) -> list[float]:
+        """Replay *actions* on a level and return heuristic score after each step.
+
+        Returns a list of length ``len(actions) + 1``: the initial score
+        followed by the score after each action.
+        """
+        raise NotImplementedError
+
+    @abstractmethod
     def run_search(
         self,
         algo: str,

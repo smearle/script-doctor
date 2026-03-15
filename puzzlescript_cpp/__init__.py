@@ -303,6 +303,27 @@ class CppPuzzleScriptBackend:
     def get_id_dict(self) -> list[str]:
         return self.cpp_engine.id_dict
 
+    def get_initial_score(self, game_text: str, level_i: int) -> float:
+        self.load_level(game_text, level_i)
+        return float(self.cpp_engine.get_score())
+
+    def replay_score_trajectory(
+        self,
+        game_text: str,
+        level_i: int,
+        actions: list[int] | tuple[int, ...],
+    ) -> list[float]:
+        self.load_level(game_text, level_i)
+        scores = [float(self.cpp_engine.get_score())]
+        for action in actions:
+            self.cpp_engine.process_input(int(action))
+            again_steps = 0
+            while self.cpp_engine.againing and again_steps < MAX_AGAIN:
+                self.cpp_engine.process_input(-1)
+                again_steps += 1
+            scores.append(float(self.cpp_engine.get_score()))
+        return scores
+
     def run_search(
         self,
         algo: str,

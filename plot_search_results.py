@@ -10,11 +10,12 @@ import pandas as pd
 import seaborn as sns
 
 from conf.config import PlotSearch
-from puzzlescript_jax.globals import PLOTS_DIR, STANDALONE_NODEJS_RESULTS_PATH, JS_SOLS_DIR, GAMES_TO_N_RULES_PATH, GAMES_METADATA_PATH
+from puzzlescript_jax.globals import PLOTS_DIR, STANDALONE_NODEJS_RESULTS_PATH, JS_SOLS_DIR, CPP_SOLS_DIR, GAMES_TO_N_RULES_PATH, GAMES_METADATA_PATH
 from search_nodejs import get_standalone_run_params_from_name
 from puzzlescript_jax.utils import get_list_of_games_for_testing, game_names_remap
 
 
+SEARCH_PLOTS_DIR = os.path.join(PLOTS_DIR, 'search')
 OOM_SENTINEL = -1.0
 OOM_COLOR = '#FF8C00'  # dark orange
 MAX_GAMES_FOR_HEATMAPS = 100  # skip per-game heatmaps when there are more games than this
@@ -284,6 +285,7 @@ def _collect_results_for_algo(
                     'n_stepss': [],
                     'solution_lengths': [],
                     'solved_iterss': [],
+                    'score_progresses': [],
                 }
 
             stats = per_depth_stats[n_steps]
@@ -308,6 +310,20 @@ def _collect_results_for_algo(
             stats['n_levels'] += 1
             clipped_steps = min(n_steps, sol_dict['iterations'])
             stats['n_stepss'].append(clipped_steps)
+            raw_score = sol_dict.get('score')
+            score_initial = sol_dict.get('score_initial')
+            if raw_score is not None and score_initial is not None and not is_oom:
+                try:
+                    s = float(raw_score)
+                    s0 = float(score_initial)
+                    if s0 > 0:
+                        # 1.0 = fully solved, 0.0 = no progress from initial state
+                        stats['score_progresses'].append(1.0 - s / s0)
+                    elif s == 0:
+                        # initial score was 0 and final is 0 — already at goal
+                        stats['score_progresses'].append(1.0)
+                except (TypeError, ValueError):
+                    pass
 
         for depth, seen_levels in sorted(levels_seen_by_depth.items()):
             missing_levels = sorted(expected_levels - seen_levels)
@@ -329,6 +345,7 @@ def _collect_results_for_algo(
             if depth not in results_by_depth:
                 results_by_depth[depth] = {}
             mean_solved_iters = float(np.mean(stats['solved_iterss'])) if stats['solved_iterss'] else float('nan')
+            mean_score_progress = float(np.mean(stats['score_progresses'])) if stats['score_progresses'] else float('nan')
             results_by_depth[depth][game] = {
                 'pct_solved': pct_solved,
                 'n_levels': stats['n_levels'],
@@ -337,6 +354,7 @@ def _collect_results_for_algo(
                 'mean_solved_iters': mean_solved_iters,
                 'has_oom': stats['n_oom'] > 0,
                 'has_timeout': stats['n_timeout'] > 0,
+                'mean_score_progress': mean_score_progress,
             }
 
         for depth, level_stats in per_level_stats.items():
@@ -429,6 +447,10 @@ def aggregate_results(cfg: PlotSearch):
         aggregated_results[algo] = results_by_depth
         aggregated_per_level[algo] = per_level_by_depth
 
+    # Heuristic quality analysis (needs per-level BFS+A* data)
+    if cfg.algo == 'all' or cfg.algo in ('bfs', 'astar'):
+        generate_heuristic_quality_report(games)
+
     if cfg.algo == 'all':
         with open(ALL_RESULTS_PATH, 'w') as f:
             json.dump({algo: {str(k): v for k, v in depths.items()} for algo, depths in aggregated_results.items()}, f, indent=4)
@@ -518,11 +540,11 @@ def plot(cfg: PlotSearch, results=None, per_level_by_depth=None):
         df.rename(columns={'sol_len': 'mean_sol_len'}, inplace=True)
     # df = df.sort_values(by=['pct_solved', 'n_iters'], ascending=[False, True])
 
-    os.makedirs(PLOTS_DIR, exist_ok=True)
+    os.makedirs(SEARCH_PLOTS_DIR, exist_ok=True)
     algo_slug = cfg.algo.lower()
     algo_label = _algo_label(cfg.algo)
 
-    csv_file_path = os.path.join(PLOTS_DIR, f'standalone_{algo_slug}_results.csv')
+    csv_file_path = os.path.join(SEARCH_PLOTS_DIR,f'standalone_{algo_slug}_results.csv')
     df.to_csv(csv_file_path, index=True, float_format="%.2f")
     print(f'Saved results to {csv_file_path}')
 
@@ -587,7 +609,7 @@ def plot(cfg: PlotSearch, results=None, per_level_by_depth=None):
         if column in latex_df.columns:
             latex_df[column] = latex_df[column].apply(lambda value: _format_with_commas(value, decimals))
 
-    latex_file_path = os.path.join(PLOTS_DIR, f'{algo_slug}_results.tex')
+    latex_file_path = os.path.join(SEARCH_PLOTS_DIR,f'{algo_slug}_results.tex')
     caption_steps = _format_steps_label(selected_depth)
     with open(latex_file_path, 'w') as f:
         f.write(latex_df.to_latex(index=True, float_format="%.2f", escape=False, caption=f"Results of {algo_label} on full dataset of games, with max {caption_steps} and a timeout of 1 minute.",
@@ -605,8 +627,8 @@ def plot_exit_heatmap(results: dict) -> None:
         print('No ExIt solve-rate data found to plot.')
         return
 
-    os.makedirs(PLOTS_DIR, exist_ok=True)
-    csv_file_path = os.path.join(PLOTS_DIR, 'exit_results.csv')
+    os.makedirs(SEARCH_PLOTS_DIR, exist_ok=True)
+    csv_file_path = os.path.join(SEARCH_PLOTS_DIR,'exit_results.csv')
     df.to_csv(csv_file_path, index=True, float_format='%.4f')
     print(f'Saved results to {csv_file_path}')
 
@@ -654,7 +676,7 @@ def plot_exit_heatmap(results: dict) -> None:
     plt.xticks(rotation=45, ha='right')
     plt.tight_layout()
 
-    output_path = os.path.join(PLOTS_DIR, 'exit_pct_solved_heatmap.png')
+    output_path = os.path.join(SEARCH_PLOTS_DIR,'exit_pct_solved_heatmap.png')
     try:
         plt.savefig(output_path, dpi=300)
         print(f'Saved heatmap to {output_path}')
@@ -686,7 +708,7 @@ def plot_all_algos(cfg: PlotSearch, results_by_algo=None, per_level_by_algo=None
         print('No search results found to plot.')
         return
 
-    os.makedirs(PLOTS_DIR, exist_ok=True)
+    os.makedirs(SEARCH_PLOTS_DIR, exist_ok=True)
 
     summary_rows = []
     heatmap_source_dfs = {}
@@ -717,6 +739,7 @@ def plot_all_algos(cfg: PlotSearch, results_by_algo=None, per_level_by_algo=None
                     'n_iters': row.get('n_iters', np.nan),
                     'mean_sol_len': row.get('mean_sol_len', np.nan),
                     'mean_solved_iters': row.get('mean_solved_iters', np.nan),
+                    'mean_score_progress': row.get('mean_score_progress', np.nan),
                 })
 
             remapped_df = depth_df.copy()
@@ -731,7 +754,7 @@ def plot_all_algos(cfg: PlotSearch, results_by_algo=None, per_level_by_algo=None
     if summary_rows:
         summary_df = pd.DataFrame(summary_rows)
         summary_df.sort_values(by=['algo', 'depth', 'game'], ascending=[True, False, True], inplace=True)
-        summary_csv_path = os.path.join(PLOTS_DIR, 'standalone_all_search_results.csv')
+        summary_csv_path = os.path.join(SEARCH_PLOTS_DIR,'standalone_all_search_results.csv')
         summary_df.to_csv(summary_csv_path, index=False, float_format='%.4f')
         print(f'Saved results to {summary_csv_path}')
 
@@ -863,7 +886,7 @@ def generate_rules_vs_difficulty(summary_df: pd.DataFrame) -> None:
 
         fig.suptitle(f'Game Difficulty vs. {feat_label} (max search depth)', fontsize=14)
         fig.tight_layout()
-        path = os.path.join(PLOTS_DIR, f'{feat_slug}_vs_difficulty_scatter.png')
+        path = os.path.join(SEARCH_PLOTS_DIR,f'{feat_slug}_vs_difficulty_scatter.png')
         fig.savefig(path, dpi=300)
         plt.close(fig)
         print(f'Saved scatter plot to {path}')
@@ -908,7 +931,7 @@ def generate_rules_vs_difficulty(summary_df: pd.DataFrame) -> None:
         ax.legend()
         ax.grid(True, alpha=0.3)
         fig.tight_layout()
-        path = os.path.join(PLOTS_DIR, f'{feat_slug}_vs_difficulty_curves.png')
+        path = os.path.join(SEARCH_PLOTS_DIR,f'{feat_slug}_vs_difficulty_curves.png')
         fig.savefig(path, dpi=300)
         plt.close(fig)
         print(f'Saved curve plot to {path}')
@@ -960,7 +983,7 @@ def generate_rules_vs_difficulty(summary_df: pd.DataFrame) -> None:
 
         fig.suptitle(f'Mean Solve Rate vs. {feat_label} by Search Depth', fontsize=14)
         fig.tight_layout()
-        path = os.path.join(PLOTS_DIR, f'{feat_slug}_vs_difficulty_by_depth.png')
+        path = os.path.join(SEARCH_PLOTS_DIR,f'{feat_slug}_vs_difficulty_by_depth.png')
         fig.savefig(path, dpi=300)
         plt.close(fig)
         print(f'Saved depth curve plot to {path}')
@@ -1010,7 +1033,7 @@ def generate_rules_vs_difficulty(summary_df: pd.DataFrame) -> None:
 
         fig.suptitle(f'Search Effort to Solve vs. {feat_label}', fontsize=14)
         fig.tight_layout()
-        path = os.path.join(PLOTS_DIR, f'{feat_slug}_vs_search_effort_scatter.png')
+        path = os.path.join(SEARCH_PLOTS_DIR,f'{feat_slug}_vs_search_effort_scatter.png')
         fig.savefig(path, dpi=300)
         plt.close(fig)
         print(f'Saved search effort scatter to {path}')
@@ -1055,10 +1078,68 @@ def generate_rules_vs_difficulty(summary_df: pd.DataFrame) -> None:
         ax.legend()
         ax.grid(True, alpha=0.3)
         fig.tight_layout()
-        path = os.path.join(PLOTS_DIR, f'{feat_slug}_vs_search_effort_curves.png')
+        path = os.path.join(SEARCH_PLOTS_DIR,f'{feat_slug}_vs_search_effort_curves.png')
         fig.savefig(path, dpi=300)
         plt.close(fig)
         print(f'Saved search effort curves to {path}')
+
+    # --- 5. Heuristic score vs each feature ---
+    if 'mean_score_progress' not in max_depth_df.columns:
+        return
+    score_df = max_depth_df.dropna(subset=['mean_score_progress']).copy()
+    if score_df.empty:
+        return
+
+    for feat_key, feat_label, use_log in features_to_plot:
+        feat_score_df = score_df.dropna(subset=[feat_key]).copy()
+        feat_score_df[feat_key] = feat_score_df[feat_key].astype(float)
+        if feat_score_df.empty:
+            continue
+
+        # Binned curves: feature vs mean_score_progress for each algo
+        all_feat_vals = feat_score_df[feat_key].values
+        bin_edges = _make_bin_edges(all_feat_vals, use_log)
+        if len(bin_edges) < 2:
+            continue
+
+        fig, ax = plt.subplots(figsize=(8, 5))
+
+        for algo in algos:
+            sub = feat_score_df[feat_score_df['algo'] == algo]
+            bin_means = []
+            bin_centers = []
+            bin_counts = []
+            for lo, hi in zip(bin_edges[:-1], bin_edges[1:]):
+                mask = (sub[feat_key] >= lo) & (sub[feat_key] < hi)
+                bucket = sub.loc[mask, 'mean_score_progress']
+                if len(bucket) >= 1:
+                    bin_means.append(bucket.mean())
+                    bin_centers.append((lo + hi) / 2)
+                    bin_counts.append(len(bucket))
+
+            if bin_centers:
+                ax.plot(
+                    bin_centers, bin_means,
+                    marker='o', markersize=5, label=_algo_label(algo),
+                    color=algo_colors[algo], alpha=0.8,
+                )
+                for x, y, n in zip(bin_centers, bin_means, bin_counts):
+                    ax.annotate(str(n), (x, y), textcoords='offset points',
+                                xytext=(0, 6), ha='center', fontsize=6, color=algo_colors[algo])
+
+        ax.set_xlabel(feat_label)
+        ax.set_ylabel('Mean Score Progress')
+        ax.set_ylim(-0.05, 1.05)
+        if use_log:
+            ax.set_xscale('log')
+        ax.set_title(f'Mean Score Progress vs. {feat_label}')
+        ax.legend()
+        ax.grid(True, alpha=0.3)
+        fig.tight_layout()
+        path = os.path.join(SEARCH_PLOTS_DIR,f'{feat_key}_vs_score_progress_curves.png')
+        fig.savefig(path, dpi=300)
+        plt.close(fig)
+        print(f'Saved score progress curve plot to {path}')
 
 
 def generate_correlation_report(summary_df: pd.DataFrame) -> None:
@@ -1089,6 +1170,7 @@ def generate_correlation_report(summary_df: pd.DataFrame) -> None:
     outcome_metrics = [
         ('pct_solved', '% Solved'),
         ('mean_solved_iters', 'Iterations to Solve'),
+        ('mean_score_progress', 'Score Progress'),
     ]
 
     rows = []
@@ -1116,8 +1198,8 @@ def generate_correlation_report(summary_df: pd.DataFrame) -> None:
     corr_df = pd.DataFrame(rows)
     corr_df.sort_values('p_value', inplace=True)
 
-    os.makedirs(PLOTS_DIR, exist_ok=True)
-    csv_path = os.path.join(PLOTS_DIR, 'feature_correlations.csv')
+    os.makedirs(SEARCH_PLOTS_DIR, exist_ok=True)
+    csv_path = os.path.join(SEARCH_PLOTS_DIR,'feature_correlations.csv')
     corr_df.to_csv(csv_path, index=False, float_format='%.4f')
     print(f'Saved correlation report to {csv_path}')
 
@@ -1173,10 +1255,132 @@ def generate_correlation_report(summary_df: pd.DataFrame) -> None:
     plt.xlabel('Algorithm')
     plt.ylabel('Game Feature')
     plt.tight_layout()
-    path = os.path.join(PLOTS_DIR, 'feature_correlation_heatmap.png')
+    path = os.path.join(SEARCH_PLOTS_DIR,'feature_correlation_heatmap.png')
     plt.savefig(path, dpi=300)
     plt.close()
     print(f'Saved correlation heatmap to {path}')
+
+
+def generate_heuristic_quality_report(games: list[str]) -> None:
+    """Measure heuristic quality per game via A*/BFS iteration ratio and h₀–d* correlation.
+
+    For each game+level solved by both A* and BFS at the same depth budget:
+      - Iteration ratio: iterations_A* / iterations_BFS  (< 1 means heuristic helps)
+      - h₀ vs d* correlation: Spearman ρ(initial_score, BFS_solution_length)
+
+    Results are saved as a CSV and printed.
+    """
+    from scipy import stats as scipy_stats
+
+    # Collect per-level results for BFS and A* from both JS and CPP sols
+    per_level: dict[str, dict[str, dict[int, dict]]] = {}  # {game: {algo: {level: data}}}
+    for game in games:
+        if game.startswith('test_'):
+            continue
+        sol_jsons = []
+        for sols_dir in (JS_SOLS_DIR, CPP_SOLS_DIR):
+            game_dir = os.path.join(sols_dir, game)
+            if os.path.isdir(game_dir):
+                sol_jsons.extend(glob.glob(f"{game_dir}/*.json"))
+        for sol_json in sol_jsons:
+            filename = os.path.basename(sol_json)
+            algo, n_steps, level_id = _parse_solver_run_name(filename)
+            if algo not in ('bfs', 'astar'):
+                continue
+            with open(sol_json, 'r') as f:
+                data = json.load(f)
+            if data.get('error') or 'iterations' not in data or 'won' not in data:
+                continue
+            per_level.setdefault(game, {}).setdefault(algo, {})[level_id] = data
+
+    rows = []
+    for game, algo_data in per_level.items():
+        bfs_levels = algo_data.get('bfs', {})
+        astar_levels = algo_data.get('astar', {})
+
+        # Shared levels solved by both
+        shared_solved = []
+        for lvl in set(bfs_levels) & set(astar_levels):
+            b, a = bfs_levels[lvl], astar_levels[lvl]
+            if b.get('won') and a.get('won') and b['iterations'] > 0:
+                shared_solved.append((lvl, b, a))
+
+        if not shared_solved:
+            continue
+
+        # Iteration ratio
+        ratios = [a['iterations'] / b['iterations'] for _, b, a in shared_solved]
+        median_ratio = float(np.median(ratios))
+
+        # h₀ vs d* (BFS solution length) across all BFS-solved levels
+        h0s, dstars = [], []
+        for lvl, b_data in bfs_levels.items():
+            if b_data.get('won') and b_data.get('score_initial') is not None:
+                actions = b_data.get('actions', [])
+                if actions:
+                    h0s.append(float(b_data['score_initial']))
+                    dstars.append(len(actions))
+
+        h0_dstar_rho, h0_dstar_p = (float('nan'), float('nan'))
+        if len(h0s) >= 5:
+            h0_dstar_rho, h0_dstar_p = scipy_stats.spearmanr(h0s, dstars)
+
+        rows.append({
+            'game': game,
+            'n_shared_solved': len(shared_solved),
+            'median_iter_ratio': median_ratio,
+            'n_bfs_solved': len(h0s),
+            'h0_dstar_rho': h0_dstar_rho,
+            'h0_dstar_p': h0_dstar_p,
+        })
+
+    if not rows:
+        print('No overlapping BFS/A* results for heuristic quality analysis.')
+        return
+
+    hq_df = pd.DataFrame(rows).sort_values('median_iter_ratio')
+    os.makedirs(SEARCH_PLOTS_DIR, exist_ok=True)
+    csv_path = os.path.join(SEARCH_PLOTS_DIR, 'heuristic_quality.csv')
+    hq_df.to_csv(csv_path, index=False, float_format='%.4f')
+    print(f'\nSaved heuristic quality report to {csv_path}')
+
+    valid = hq_df.dropna(subset=['median_iter_ratio'])
+    print(f'\nHeuristic quality summary ({len(valid)} games with shared BFS/A* solves):')
+    print(f'  Median A*/BFS iteration ratio: {valid["median_iter_ratio"].median():.3f}')
+    print(f'  Mean A*/BFS iteration ratio:   {valid["median_iter_ratio"].mean():.3f}')
+
+    h0_valid = hq_df.dropna(subset=['h0_dstar_rho'])
+    if not h0_valid.empty:
+        print(f'  Median h₀–d* ρ:               {h0_valid["h0_dstar_rho"].median():.3f}')
+        n_sig = (h0_valid['h0_dstar_p'] < 0.05).sum()
+        print(f'  Games with significant h₀–d*:  {n_sig}/{len(h0_valid)}')
+
+    # Best and worst games by iteration ratio
+    print(f'\n  Top 5 games (heuristic helps most):')
+    for _, r in valid.head(5).iterrows():
+        print(f'    {r["game"]:40s}  ratio={r["median_iter_ratio"]:.3f}  '
+              f'h₀–d* ρ={r["h0_dstar_rho"]:+.3f}  (n={r["n_shared_solved"]})')
+    print(f'\n  Bottom 5 games (heuristic helps least):')
+    for _, r in valid.tail(5).iterrows():
+        print(f'    {r["game"]:40s}  ratio={r["median_iter_ratio"]:.3f}  '
+              f'h₀–d* ρ={r["h0_dstar_rho"]:+.3f}  (n={r["n_shared_solved"]})')
+
+    # Correlate heuristic quality with game metadata features
+    game_metadata = _load_game_metadata()
+    if game_metadata:
+        meta_lookup = {_normalize_game_name(g): meta for g, meta in game_metadata.items()}
+        for feat_key, feat_label, _ in ANALYSIS_FEATURES:
+            hq_df[feat_key] = hq_df['game'].apply(
+                lambda g: (meta_lookup.get(_normalize_game_name(g)) or {}).get(feat_key))
+
+        print(f'\n  Correlations of heuristic quality (iter ratio) with game features:')
+        for feat_key, feat_label, _ in ANALYSIS_FEATURES:
+            sub = hq_df.dropna(subset=[feat_key, 'median_iter_ratio'])
+            if len(sub) < 5:
+                continue
+            rho, p = scipy_stats.spearmanr(sub[feat_key], sub['median_iter_ratio'])
+            sig = '*' if p < 0.05 else ''
+            print(f'    {feat_label:35s}  ρ={rho:+.3f}  p={p:.3e}{sig}')
 
 
 def generate_all_heatmaps(
@@ -1221,7 +1425,7 @@ def generate_all_heatmaps(
     for algo in algos_seen:
         # Keys for this algo sorted by depth descending
         algo_keys = sorted([k for k in ordered_keys if k[0] == algo], key=lambda k: -k[1])
-        merged = pd.DataFrame(columns=['mean_solved_iters', 'mean_sol_len', 'has_oom'])
+        merged = pd.DataFrame(columns=['mean_solved_iters', 'mean_sol_len', 'has_oom', 'mean_score_progress'])
         for game in all_games:
             for key in algo_keys:
                 key_df = dfs_by_algo_depth[key]
@@ -1235,6 +1439,7 @@ def generate_all_heatmaps(
                     merged.at[game, 'mean_solved_iters'] = row.get('mean_solved_iters', np.nan)
                     merged.at[game, 'mean_sol_len'] = row.get('mean_sol_len', np.nan)
                     merged.at[game, 'has_oom'] = bool(row.get('has_oom', False))
+                    merged.at[game, 'mean_score_progress'] = row.get('mean_score_progress', np.nan)
                     break
         best_algo_dfs[algo] = merged
         algo_label_str = _algo_label(algo)
@@ -1275,6 +1480,17 @@ def generate_all_heatmaps(
             'formatter': lambda v: f"{v:.0f}",
             'output': 'all_search_mean_solution_length_heatmap.png',
             'per_depth': False,
+        },
+        {
+            'column': 'mean_score_progress',
+            'title': 'All Search Types: Mean Score Progress per Game',
+            'cmap': 'RdYlGn',
+            'vmin': 0.0,
+            'vmax': 1.0,
+            'colorbar_label': 'Score Progress (0=none, 1=solved)',
+            'formatter': lambda v: f"{v:.2f}",
+            'output': 'all_search_score_progress_heatmap.png',
+            'per_depth': True,
         },
     ]
 
@@ -1370,7 +1586,7 @@ def generate_all_heatmaps(
         plt.xticks(rotation=45, ha='right')
         plt.tight_layout()
 
-        output_path = os.path.join(PLOTS_DIR, config['output'])
+        output_path = os.path.join(SEARCH_PLOTS_DIR,config['output'])
         try:
             plt.savefig(output_path, dpi=300)
             print(f"Saved heatmap to {output_path}")
@@ -1458,7 +1674,7 @@ def generate_all_expanded_heatmap(
     ax.set_xticklabels([str(level) for _, level in columns], rotation=0, fontsize=7)
     plt.tight_layout(rect=[0, 0, 1, 0.9])
 
-    output_path = os.path.join(PLOTS_DIR, 'all_search_win_rate_expanded_heatmap.png')
+    output_path = os.path.join(SEARCH_PLOTS_DIR,'all_search_win_rate_expanded_heatmap.png')
     try:
         plt.savefig(output_path, dpi=300)
         print(f'Saved expanded heatmap to {output_path}')
@@ -1637,7 +1853,7 @@ def generate_heatmaps(
         plt.xticks(rotation=45, ha='right')
         plt.tight_layout()
 
-        output_path = os.path.join(PLOTS_DIR, config['output'])
+        output_path = os.path.join(SEARCH_PLOTS_DIR,config['output'])
         try:
             plt.savefig(output_path, dpi=300)
             print(f"Saved heatmap to {output_path}")
@@ -1726,7 +1942,7 @@ def generate_expanded_heatmap(
     ax.set_xticklabels([str(level) for _, level in columns], rotation=0, fontsize=7)
     plt.tight_layout(rect=[0, 0, 1, 0.9])
 
-    output_path = os.path.join(PLOTS_DIR, f'{algo_slug}_win_rate_expanded_heatmap.png')
+    output_path = os.path.join(SEARCH_PLOTS_DIR,f'{algo_slug}_win_rate_expanded_heatmap.png')
     try:
         plt.savefig(output_path, dpi=300)
         print(f'Saved expanded heatmap to {output_path}')
@@ -1742,7 +1958,7 @@ def old_plot(cfg: PlotSearch):
         results = json.load(f)
 
     # Create a directory for the plots if necessary
-    os.makedirs(PLOTS_DIR, exist_ok=True)
+    os.makedirs(SEARCH_PLOTS_DIR, exist_ok=True)
 
     sorted_games = get_list_of_games_for_testing(cfg.dataset)
     # Build a sorting key for each index based on the sorted_games list
@@ -1815,14 +2031,14 @@ def old_plot(cfg: PlotSearch):
 
         # Save the dataframe to a CSV file
         csv_file_name = f'{run_name}.csv'
-        csv_file_path = os.path.join(PLOTS_DIR, csv_file_name)
+        csv_file_path = os.path.join(SEARCH_PLOTS_DIR,csv_file_name)
 
         # Remove underscores from game names
         df.index = df.index.set_levels([df.index.levels[0].str.replace('_', ' '), df.index.levels[1]])
         
         # Save to a latex table
         latex_file_name = f'{concise_run_name}.tex'
-        latex_file_path = os.path.join(PLOTS_DIR, latex_file_name)
+        latex_file_path = os.path.join(SEARCH_PLOTS_DIR,latex_file_name)
         # df.to_latex(latex_file_path, index=True, float_format="%.2f", escape=False)
         # print(f'Saved latex table to {latex_file_path}')
 
@@ -1846,7 +2062,7 @@ def old_plot(cfg: PlotSearch):
         """
 
         latex_file_name = f'{concise_run_name}_split.tex'
-        latex_file_path = os.path.join(PLOTS_DIR, latex_file_name)
+        latex_file_path = os.path.join(SEARCH_PLOTS_DIR,latex_file_name)
         with open(latex_file_path, 'w') as f:
             f.write(latex_output)
 

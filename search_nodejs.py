@@ -204,6 +204,7 @@ def main(cfg: SearchNodeJSConfig, games: Optional[List[str]] = None):
                 if not cfg.overwrite and should_skip_existing_level_result(level_js_sol_path):
                     print(f'Already solved {game} level {level_i}.')
                     continue
+                score_initial = backend.get_initial_score(game_text, level_i)
                 try:
                     result = backend.run_search(
                         algo,
@@ -239,11 +240,23 @@ def main(cfg: SearchNodeJSConfig, games: Optional[List[str]] = None):
                     solution_exists = False
                 
                 if cfg.overwrite or not solution_exists or result['solved'] > best_solve or result['score'] > best_score:
+                    # Replay solution to get per-step heuristic trajectory
+                    score_trajectory = None
+                    if result['actions']:
+                        try:
+                            score_trajectory = backend.replay_score_trajectory(
+                                game_text, level_i, result['actions'],
+                            )
+                        except Exception:
+                            pass
+
                     result_dict = {
                         'won': result['solved'],
                         'actions': result['actions'],
                         'score': result['score'],
-                        'timeout': result['timeout'],  # TODO
+                        'score_initial': score_initial,
+                        'score_trajectory': score_trajectory,
+                        'timeout': result['timeout'],
                         'iterations': result['iterations'],
                         'FPS': result['FPS'],
                         'time': result['time'],

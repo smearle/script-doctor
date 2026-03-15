@@ -45,7 +45,7 @@ class NodeJSPuzzleEnv:
         # Allow callers with an already compiled runtime to skip reparsing.
         self.game_text = game_text if game_text is not None else self.backend.compile_game(self.parser, game)
         self.action_space = spaces.Discrete(self.backend.MAX_ACTION_ID + 1)
-        self.num_levels = int(self.backend.get_num_levels())
+        self.num_levels = 0  # updated by _infer_obs_shape after load
         self._obs_shape = self._infer_obs_shape()
 
     def _get_max_level_shape(self) -> tuple[int, int]:
@@ -65,6 +65,7 @@ class NodeJSPuzzleEnv:
     def _infer_obs_shape(self) -> tuple[int, int, int]:
         probe_level_i = self.level_i if self.level_i >= 0 else 0
         self.backend.load_level(self.game_text, probe_level_i)
+        self.num_levels = int(self.backend.get_num_levels())
         level = self.backend.engine.backupLevel()
         objs = list(self.backend.engine.getState().idDict)
         max_height, max_width = self._get_max_level_shape()

@@ -70,15 +70,26 @@ def _make_side_by_side_frames(left_frames, right_frames, separator_w=2):
 
 
 def make_gif(frames, gif_path, scale=1, duration=0.5):
+    if not frames:
+        return
     if scale > 1:
         frames = [
             np.repeat(np.repeat(frame, scale, axis=0), scale, axis=1)
             for frame in frames
         ]
+    # Pad all frames to the maximum dimensions (handles viewport size changes)
+    frames = [np.asarray(f, dtype=np.uint8) for f in frames]
+    max_h = max(f.shape[0] for f in frames)
+    max_w = max(f.shape[1] for f in frames)
+    padded = []
+    for f in frames:
+        if f.shape[0] < max_h or f.shape[1] < max_w:
+            f = np.pad(f, ((0, max_h - f.shape[0]), (0, max_w - f.shape[1]), (0, 0)))
+        padded.append(f)
     gif_dir = os.path.dirname(gif_path)
     if gif_dir:
         os.makedirs(gif_dir, exist_ok=True)
-    imageio.mimsave(gif_path, frames, duration=duration, loop=0)
+    imageio.mimsave(gif_path, padded, duration=duration, loop=0)
 
 
 def compile_game_for_cpp(js_engine, parser, game):

@@ -131,6 +131,25 @@ class NodeJSPuzzleScriptBackend(PuzzleScriptSearchBackend):
             }
         )
 
+    def get_initial_score(self, game_text: str, level_i: int) -> float:
+        self.load_level(game_text, level_i)
+        self.solver.precalcDistances(self.engine)
+        return float(self.solver.getScore(self.engine))
+
+    def replay_score_trajectory(
+        self,
+        game_text: str,
+        level_i: int,
+        actions: list[int] | tuple[int, ...],
+    ) -> list[float]:
+        self.load_level(game_text, level_i)
+        self.solver.precalcDistances(self.engine)
+        scores = [float(self.solver.getScore(self.engine))]
+        for action in actions:
+            self.solver.takeAction(self.engine, int(action))
+            scores.append(float(self.solver.getScore(self.engine)))
+        return scores
+
     def run_search(
         self,
         algo: str,

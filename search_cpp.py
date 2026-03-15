@@ -129,6 +129,7 @@ def main(cfg: SearchCppConfig, games: Optional[List[str]] = None):
                     results[run_name][game][level_i] = result
 
                 else:
+                    score_initial = backend.get_initial_score(game_text, level_i)
                     try:
                         result = backend.run_search(
                             algo,
@@ -152,10 +153,22 @@ def main(cfg: SearchCppConfig, games: Optional[List[str]] = None):
                         results[run_name][game][level_i] = result
                         continue
 
+                    # Replay solution to get per-step heuristic trajectory
+                    score_trajectory = None
+                    if result['actions']:
+                        try:
+                            score_trajectory = backend.replay_score_trajectory(
+                                game_text, level_i, result['actions'],
+                            )
+                        except Exception:
+                            pass
+
                     result_dict = {
                         'won': result['solved'],
                         'actions': result['actions'],
                         'score': result['score'],
+                        'score_initial': score_initial,
+                        'score_trajectory': score_trajectory,
                         'timeout': result['timeout'],
                         'iterations': result['iterations'],
                         'FPS': result['FPS'],

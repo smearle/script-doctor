@@ -159,6 +159,9 @@ class _MockBackend:
     def get_num_levels(self):
         return self._n_levels
 
+    def get_initial_score(self, game_text, level_i):
+        return 10.0
+
     def run_search(self, algo, *, game_text, level_i, n_steps, timeout_ms, warmup=False):
         if level_i in self._error_schedule:
             raise self._error_schedule[level_i]
