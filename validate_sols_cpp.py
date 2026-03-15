@@ -93,9 +93,12 @@ def compile_game_for_cpp(js_engine, parser, game):
     return game_text, json_str
 
 
+VALIDATION_SEED = "cpp_validation_fixed_seed"
+
+
 def replay_actions_cpp(cpp_engine, serialized_json, actions, level_i):
     cpp_engine.load_from_json(serialized_json)
-    cpp_engine.load_level(level_i)
+    cpp_engine.load_level(level_i, VALIDATION_SEED)
     cpp_states = []
     cpp_winning = []
     max_again = 50
@@ -435,6 +438,7 @@ def main(cfg: CppValidationConfig, games: Optional[List[str]] = None):
                     level_i,
                     stop_on_win=False,
                     return_winning=True,
+                    random_seed=VALIDATION_SEED,
                 )
                 js_states = [list(level["dat"]) for level in replayed_js_states]
                 cpp_states, cpp_winning = replay_actions_cpp(cpp_engine, serialized_json, actions, level_i)

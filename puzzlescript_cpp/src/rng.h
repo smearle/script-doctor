@@ -22,8 +22,7 @@ struct RC4 {
             s[k] = s[j_mix];
             s[j_mix] = tmp;
         }
-        // Advance past initial bytes (same as JS implementation)
-        for (int k = 0; k < 256; ++k) next();
+        // JS PuzzleScript's RC4 does NOT advance after mixing.
     }
 
     uint8_t next() {
@@ -56,15 +55,15 @@ struct RNG {
     }
 
     // Returns a double in [0, 1) matching JS RNG.uniform()
-    // Uses 7 bytes to produce a 56-bit mantissa (same as JS)
+    // Uses 7 bytes to produce a 56-bit value (same as JS)
     double uniform() {
         double x = 0.0;
-        double denom = 1.0;
         for (int k = 0; k < 7; ++k) {
-            x = x * 256.0 + rc4.next();
-            denom *= 256.0;
+            x *= 256.0;
+            x += rc4.next();
         }
-        return x / denom;
+        // JS divides by (2^56 - 1), not 2^56
+        return x / (std::pow(2.0, 56.0) - 1.0);
     }
 
     int random_int(int n) {

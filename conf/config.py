@@ -17,6 +17,8 @@ class PreprocessConfig:
     game: Optional[str] = None
     dataset: str = "pedro"  # priority, gallery, pedro, increpare
     overwrite: bool = False
+    slurm: bool = False
+    n_games_per_job: int = 1
 
 
 @dataclass
@@ -83,10 +85,11 @@ class NodeJSConfig(PSConfig):
     n_steps: int = 5_000
     overwrite: bool = False
     include_randomness: bool = True
-    timeout: int = -1
+    timeout: int = -1  # per-level search timeout in seconds (-1 = no timeout)
     render: bool = False
     slurm: bool = False
     n_games_per_job: int = 1
+    slurm_timeout_min: int = 180  # SLURM job wall-time in minutes
 
 
 @dataclass

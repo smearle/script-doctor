@@ -29,6 +29,13 @@ OOM_ERROR_PATTERNS = (
     "memory limit",
 )
 
+TIMEOUT_ERROR_PATTERNS = (
+    "timed out",
+    "timeout",
+    "time out",
+    "deadline exceeded",
+)
+
 
 def get_standalone_run_name(cfg: SearchNodeJSConfig, algo_name, cpu_name):
     return f'algo-{algo_name}_{cfg.n_steps}-steps_{cpu_name}'
@@ -41,9 +48,12 @@ def get_standalone_run_params_from_name(run_name: str):
     return algo_name, n_steps, device_name
 
 
-def is_oom_error(exc: BaseException) -> bool:
+def _classify_error(exc: BaseException) -> str:
+    """Classify an exception as 'oom', 'timeout', or 'unknown'."""
     if isinstance(exc, MemoryError):
-        return True
+        return 'oom'
+    if isinstance(exc, TimeoutError):
+        return 'timeout'
     error_text = " ".join(
         part for part in (
             str(exc),
@@ -51,7 +61,15 @@ def is_oom_error(exc: BaseException) -> bool:
             traceback.format_exc(),
         ) if part
     ).lower()
-    return any(pattern in error_text for pattern in OOM_ERROR_PATTERNS)
+    if any(pattern in error_text for pattern in OOM_ERROR_PATTERNS):
+        return 'oom'
+    if any(pattern in error_text for pattern in TIMEOUT_ERROR_PATTERNS):
+        return 'timeout'
+    return 'unknown'
+
+
+def is_oom_error(exc: BaseException) -> bool:
+    return _classify_error(exc) == 'oom'
 
 
 def write_level_error_log(path: str, error_type: str, error_message: str) -> dict:
@@ -98,7 +116,7 @@ def main_launch(cfg: SearchNodeJSConfig):
             mem_gb=30,
             tasks_per_node=1,
             cpus_per_task=1,
-            timeout_min=180,
+            timeout_min=cfg.slurm_timeout_min,
             slurm_array_parallelism=n_jobs,
             slurm_account=os.environ.get("SLURM_ACCOUNT")
         )
@@ -110,7 +128,16 @@ def main_launch(cfg: SearchNodeJSConfig):
 def main(cfg: SearchNodeJSConfig, games: Optional[List[str]] = None):
 
     backend = NodeJSPuzzleScriptBackend()
-    timeout_ms = cfg.timeout * 1_000 if cfg.timeout > 0 else -1
+    if cfg.timeout > 0:
+        timeout_ms = cfg.timeout * 1_000
+    elif cfg.slurm:
+        # Reserve 2 minutes for startup/teardown; use 90% of remaining time as
+        # per-level timeout so results get written before SLURM kills the job.
+        safe_seconds = max(int((cfg.slurm_timeout_min - 2) * 60 * 0.9), 60)
+        timeout_ms = safe_seconds * 1_000
+        print(f'Derived per-level timeout from SLURM wall-time: {safe_seconds}s')
+    else:
+        timeout_ms = -1
     parser = init_ps_lark_parser()
     print(f'Timeout: {timeout_ms} ms')
     print(f'Max node budget: {cfg.n_steps}')
@@ -187,13 +214,14 @@ def main(cfg: SearchNodeJSConfig, games: Optional[List[str]] = None):
                         warmup=False,
                     ).to_dict()
                 except Exception as e:
-                    if not is_oom_error(e):
+                    error_type = _classify_error(e)
+                    if error_type == 'unknown':
                         raise
                     error_message = str(e) or repr(e)
-                    print(f'OOM during {game} level {level_i} with {algo}: {error_message}')
+                    print(f'{error_type.upper()} during {game} level {level_i} with {algo}: {error_message}')
                     result = write_level_error_log(
                         level_js_sol_path,
-                        error_type='oom',
+                        error_type=error_type,
                         error_message=error_message,
                     )
                     results[run_name][game][level_i] = result

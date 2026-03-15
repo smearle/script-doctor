@@ -556,7 +556,7 @@ def get_tree_from_txt(parser, game, log_dir: str = None, overwrite: bool = True,
         filepath = os.path.join(GALLERY_GAMES_DIR, game + '.txt')
     if not os.path.exists(filepath):
         filepath = os.path.join(INCREPARE_GAMES_DIR, game + '.txt')
-    print(f"Parsing {filepath}")
+    logger.debug(f"Parsing {filepath}")
     with open(filepath, 'r', encoding='utf-8') as f:
         ps_text = f.read()
     simp_filename = game + '_simplified.txt' 
@@ -591,7 +591,7 @@ def get_tree_from_txt(parser, game, log_dir: str = None, overwrite: bool = True,
         log_filename = os.path.join(log_dir, game + '.log')
 
     # This timeout functionality only works on Unix main thread.
-    print(f"Parsing {simp_filepath}")
+    logger.debug(f"Parsing {simp_filepath}")
     import threading as _threading
     if os.name != 'nt' and _threading.current_thread() is _threading.main_thread():
         def parse_attempt_fn():

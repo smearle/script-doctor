@@ -421,6 +421,10 @@ bool Engine::loadFromJSON(const std::string& json_str) {
 // Level loading
 // ============================================================
 void Engine::loadLevel(int levelIndex) {
+    loadLevel(levelIndex, "");
+}
+
+void Engine::loadLevel(int levelIndex, const std::string& randomSeed) {
     // Find the actual level (skipping messages)
     int actualIdx = -1;
     int countPlayable = 0;
@@ -447,6 +451,12 @@ void Engine::loadLevel(int levelIndex) {
     againing_ = false;
     curLevel_ = levelIndex;
 
+    // Seed the RNG for this level load (matches JS behavior).
+    // JS seeds with (Math.random() + Date.now()).toString() on each level load.
+    if (!randomSeed.empty()) {
+        seedRNG(randomSeed);
+    }
+
     // Match JS behavior: run rules once on level start if metadata flag is set.
     // JS calls processInput(-1, dontDoWin=true) here, suppressing win detection.
     if (metadata_.count("run_rules_on_level_start")) {
@@ -454,6 +464,10 @@ void Engine::loadLevel(int levelIndex) {
         winning_ = false;
         againing_ = false;
     }
+}
+
+void Engine::seedRNG(const std::string& seed) {
+    rng_.seed(seed);
 }
 
 // ============================================================

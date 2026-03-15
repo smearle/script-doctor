@@ -10,7 +10,7 @@ import pandas as pd
 import seaborn as sns
 
 from conf.config import PlotSearch
-from puzzlescript_jax.globals import PLOTS_DIR, STANDALONE_NODEJS_RESULTS_PATH, JS_SOLS_DIR, GAMES_TO_N_RULES_PATH
+from puzzlescript_jax.globals import PLOTS_DIR, STANDALONE_NODEJS_RESULTS_PATH, JS_SOLS_DIR, GAMES_TO_N_RULES_PATH, GAMES_METADATA_PATH
 from search_nodejs import get_standalone_run_params_from_name
 from puzzlescript_jax.utils import get_list_of_games_for_testing, game_names_remap
 
@@ -196,6 +196,15 @@ def _collect_exit_results(games: list[str]) -> dict:
             'n_levels': n_levels,
             'n_iters': float(np.mean(stats['iter_counts'])) if stats['iter_counts'] else float('nan'),
         }
+
+    total_levels = sum(r['n_levels'] for r in results.values())
+    total_solved = sum(int(r['pct_solved'] * r['n_levels']) for r in results.values())
+    print(
+        f"  ExIt: {len(results)} games, {total_levels} levels, "
+        f"{total_solved} solved ({total_solved/total_levels:.0%})" if total_levels > 0
+        else f"  ExIt: {len(results)} games, 0 levels"
+    )
+
     return results
 
 
@@ -262,13 +271,16 @@ def _collect_results_for_algo(
                 print(f"Skipping {sol_json} because it doesn't have 'iterations' or 'won'")
                 continue
 
-            is_oom = sol_dict.get('error') == 'oom'
+            error_type = sol_dict.get('error')
+            is_oom = error_type == 'oom'
+            is_timeout = error_type == 'timeout'
 
             if n_steps not in per_depth_stats:
                 per_depth_stats[n_steps] = {
                     'n_levels': 0,
                     'n_solved': 0,
                     'n_oom': 0,
+                    'n_timeout': 0,
                     'n_stepss': [],
                     'solution_lengths': [],
                     'solved_iterss': [],
@@ -280,11 +292,14 @@ def _collect_results_for_algo(
             if n_steps not in per_level_stats:
                 per_level_stats[n_steps] = {}
             if level_id not in per_level_stats[n_steps]:
-                per_level_stats[n_steps][level_id] = {'n_solved': 0, 'n_runs': 0, 'n_oom': 0}
+                per_level_stats[n_steps][level_id] = {'n_solved': 0, 'n_runs': 0, 'n_oom': 0, 'n_timeout': 0}
             per_level_stats[n_steps][level_id]['n_runs'] += 1
             if is_oom:
                 stats['n_oom'] += 1
                 per_level_stats[n_steps][level_id]['n_oom'] += 1
+            if is_timeout:
+                stats['n_timeout'] += 1
+                per_level_stats[n_steps][level_id]['n_timeout'] += 1
             if solved:
                 stats['n_solved'] += 1
                 stats['solution_lengths'].append(len(actions) if actions is not None else 0)
@@ -321,6 +336,7 @@ def _collect_results_for_algo(
                 'mean_sol_len': mean_solution_length,
                 'mean_solved_iters': mean_solved_iters,
                 'has_oom': stats['n_oom'] > 0,
+                'has_timeout': stats['n_timeout'] > 0,
             }
 
         for depth, level_stats in per_level_stats.items():
@@ -330,6 +346,28 @@ def _collect_results_for_algo(
                 level_id: OOM_SENTINEL if lvl['n_oom'] == lvl['n_runs'] else lvl['n_solved'] / lvl['n_runs']
                 for level_id, lvl in level_stats.items()
             }
+
+    for depth in sorted(results_by_depth.keys(), reverse=True):
+        depth_results = results_by_depth[depth]
+        n_games = len(depth_results)
+        total_levels = sum(g.get('n_levels', 0) for g in depth_results.values())
+        total_solved = sum(
+            int(g.get('pct_solved', 0) * g.get('n_levels', 0))
+            for g in depth_results.values()
+        )
+        n_oom = sum(1 for g in depth_results.values() if g.get('has_oom'))
+        n_timeout = sum(1 for g in depth_results.values() if g.get('has_timeout'))
+        suffix = ""
+        if n_oom:
+            suffix += f", {n_oom} games with OOM"
+        if n_timeout:
+            suffix += f", {n_timeout} games with timeout"
+        print(
+            f"  {algo} @ {_format_steps_label(depth)}: "
+            f"{n_games} games, {total_levels} levels, "
+            f"{total_solved} solved ({total_solved/total_levels:.0%})"
+            + suffix
+        )
 
     return results_by_depth, per_level_by_depth
 
@@ -701,6 +739,7 @@ def plot_all_algos(cfg: PlotSearch, results_by_algo=None, per_level_by_algo=None
 
     if summary_rows:
         generate_rules_vs_difficulty(summary_df)
+        generate_correlation_report(summary_df)
 
 
 def _load_game_n_rules() -> dict[str, int]:
@@ -714,160 +753,219 @@ def _normalize_game_name(name: str) -> str:
     return re.sub(r'[\s_]+', '', name).lower()
 
 
+def _load_game_metadata() -> dict[str, dict]:
+    """Load full game metadata, stripping .txt suffix from keys."""
+    if not os.path.exists(GAMES_METADATA_PATH):
+        return {}
+    with open(GAMES_METADATA_PATH, 'r') as f:
+        raw = json.load(f)
+    return {name.removesuffix('.txt'): meta for name, meta in raw.items()}
+
+
+# Features to analyze: (metadata_key, display_label, use_log_scale)
+ANALYSIS_FEATURES = [
+    ('n_rules', 'Number of Rules', True),
+    ('n_objects', 'Number of Objects', True),
+    ('n_collision_layers', 'Number of Collision Layers', False),
+    ('n_win_conditions', 'Number of Win Conditions', False),
+    ('n_levels', 'Number of Levels', True),
+    ('mean_level_area', 'Mean Level Area (cells)', True),
+    ('max_level_area', 'Max Level Area (cells)', True),
+]
+
+
+def _make_bin_edges(values: np.ndarray, use_log: bool, n_bins: int | None = None) -> np.ndarray:
+    """Create bin edges for the given values, optionally log-spaced.
+
+    When *n_bins* is None the number of bins scales with the data size so that
+    each bin contains ~5 data points on average (clamped to [10, 80]).
+    """
+    min_val = max(1, int(values.min()))
+    max_val = int(values.max())
+    if min_val >= max_val:
+        return np.array([min_val, max_val + 1])
+    if n_bins is None:
+        n_bins = int(np.clip(len(values) / 5, 10, 80))
+    if use_log:
+        return np.unique(np.geomspace(min_val, max_val + 1, num=n_bins).astype(int))
+    else:
+        return np.unique(np.linspace(min_val, max_val + 1, num=n_bins).astype(int))
+
+
 def generate_rules_vs_difficulty(summary_df: pd.DataFrame) -> None:
-    """Generate n_rules vs difficulty plots from the summary DataFrame."""
-    game_n_rules = _load_game_n_rules()
-    # Build a case-insensitive lookup
-    rules_lookup = {_normalize_game_name(g): n for g, n in game_n_rules.items()}
+    """Generate feature-vs-difficulty plots from the summary DataFrame.
+
+    Uses games_metadata.json when available (rich features), otherwise falls
+    back to games_to_n_rules.json (n_rules only).
+    """
+    game_metadata = _load_game_metadata()
+    if game_metadata:
+        meta_lookup = {_normalize_game_name(g): meta for g, meta in game_metadata.items()}
+        features_to_plot = ANALYSIS_FEATURES
+    else:
+        game_n_rules = _load_game_n_rules()
+        meta_lookup = {_normalize_game_name(g): {'n_rules': n} for g, n in game_n_rules.items()}
+        features_to_plot = [ANALYSIS_FEATURES[0]]  # n_rules only
 
     df = summary_df.copy()
-    df['n_rules'] = df['game'].apply(lambda g: rules_lookup.get(_normalize_game_name(g)))
-    df = df.dropna(subset=['n_rules', 'pct_solved'])
-    df['n_rules'] = df['n_rules'].astype(int)
 
+    # Attach all metadata features to the dataframe
+    for feat_key, _, _ in features_to_plot:
+        df[feat_key] = df['game'].apply(
+            lambda g: (meta_lookup.get(_normalize_game_name(g)) or {}).get(feat_key))
+
+    df = df.dropna(subset=['n_rules', 'pct_solved'])
     if df.empty:
-        print('No games matched for rules-vs-difficulty plots.')
+        print('No games matched for feature-vs-difficulty plots.')
         return
 
-    # Use only the maximum depth per algo for scatter plots
-    max_depth_df = df.loc[df.groupby('algo')['depth'].idxmax()]
-    # Actually we want per-game max depth: keep the row with max depth for each (algo, game)
+    # Per-game max depth for each algo
     idx = df.groupby(['algo', 'game'])['depth'].idxmax()
     max_depth_df = df.loc[idx]
 
     algos = sorted(max_depth_df['algo'].unique())
     algo_colors = {a: f'C{i}' for i, a in enumerate(algos)}
-
-    # --- 1. Per-algo scatterplots ---
     n_algos = len(algos)
-    n_cols = min(n_algos, 3)
-    n_rows = (n_algos + n_cols - 1) // n_cols
-    fig, axes = plt.subplots(n_rows, n_cols, figsize=(n_cols * 5, n_rows * 4), squeeze=False)
 
-    for ax_i, algo in enumerate(algos):
-        ax = axes[ax_i // n_cols][ax_i % n_cols]
-        algo_df = max_depth_df[max_depth_df['algo'] == algo]
-        ax.scatter(
-            algo_df['n_rules'], algo_df['pct_solved'],
-            alpha=0.5, s=20, color=algo_colors[algo], edgecolors='none',
-        )
-        ax.set_title(f'{_algo_label(algo)}')
-        ax.set_xlabel('Number of rules')
-        ax.set_ylabel('% levels solved')
-        ax.set_ylim(-0.05, 1.05)
-        ax.grid(True, alpha=0.3)
+    for feat_key, feat_label, use_log in features_to_plot:
+        feat_df = df.dropna(subset=[feat_key]).copy()
+        feat_df[feat_key] = feat_df[feat_key].astype(float)
+        feat_max_depth = max_depth_df.dropna(subset=[feat_key]).copy()
+        feat_max_depth[feat_key] = feat_max_depth[feat_key].astype(float)
 
-    for ax in axes.flat[n_algos:]:
-        ax.axis('off')
+        if feat_df.empty or feat_max_depth.empty:
+            continue
 
-    fig.suptitle('Game Difficulty vs. Number of Rules (max search depth)', fontsize=14)
-    fig.tight_layout()
-    path = os.path.join(PLOTS_DIR, 'rules_vs_difficulty_scatter.png')
-    fig.savefig(path, dpi=300)
-    plt.close(fig)
-    print(f'Saved scatter plot to {path}')
+        feat_slug = feat_key
 
-    # --- 2. Binned curve plot: mean difficulty vs n_rules for each algo ---
-    # Use log-spaced bins since rule counts span a wide range
-    all_n_rules = df['n_rules'].values
-    min_rules = max(1, int(all_n_rules.min()))
-    max_rules = int(all_n_rules.max())
-    bin_edges = np.unique(np.geomspace(min_rules, max_rules + 1, num=15).astype(int))
-    if len(bin_edges) < 2:
-        return
+        # --- 1. Per-algo scatterplots ---
+        n_cols = min(n_algos, 3)
+        n_rows_fig = (n_algos + n_cols - 1) // n_cols
+        fig, axes = plt.subplots(n_rows_fig, n_cols, figsize=(n_cols * 5, n_rows_fig * 4), squeeze=False)
 
-    fig, ax = plt.subplots(figsize=(8, 5))
-
-    for algo in algos:
-        algo_df = max_depth_df[max_depth_df['algo'] == algo]
-        bin_means = []
-        bin_centers = []
-        bin_counts = []
-        for lo, hi in zip(bin_edges[:-1], bin_edges[1:]):
-            mask = (algo_df['n_rules'] >= lo) & (algo_df['n_rules'] < hi)
-            bucket = algo_df.loc[mask, 'pct_solved']
-            if len(bucket) >= 1:
-                bin_means.append(bucket.mean())
-                bin_centers.append((lo + hi) / 2)
-                bin_counts.append(len(bucket))
-
-        if bin_centers:
-            ax.plot(
-                bin_centers, bin_means,
-                marker='o', markersize=5, label=_algo_label(algo),
-                color=algo_colors[algo], alpha=0.8,
+        for ax_i, algo in enumerate(algos):
+            ax = axes[ax_i // n_cols][ax_i % n_cols]
+            algo_sub = feat_max_depth[feat_max_depth['algo'] == algo]
+            ax.scatter(
+                algo_sub[feat_key], algo_sub['pct_solved'],
+                alpha=0.5, s=20, color=algo_colors[algo], edgecolors='none',
             )
-            # Annotate counts
-            for x, y, n in zip(bin_centers, bin_means, bin_counts):
-                ax.annotate(str(n), (x, y), textcoords='offset points',
-                            xytext=(0, 6), ha='center', fontsize=6, color=algo_colors[algo])
+            ax.set_title(f'{_algo_label(algo)}')
+            ax.set_xlabel(feat_label)
+            ax.set_ylabel('% levels solved')
+            ax.set_ylim(-0.05, 1.05)
+            if use_log:
+                ax.set_xscale('log')
+            ax.grid(True, alpha=0.3)
 
-    ax.set_xlabel('Number of rules')
-    ax.set_ylabel('Mean % levels solved')
-    ax.set_xscale('log')
-    ax.set_ylim(-0.05, 1.05)
-    ax.set_title('Mean Solve Rate vs. Game Complexity (by rule count)')
-    ax.legend()
-    ax.grid(True, alpha=0.3)
-    fig.tight_layout()
-    path = os.path.join(PLOTS_DIR, 'rules_vs_difficulty_curves.png')
-    fig.savefig(path, dpi=300)
-    plt.close(fig)
-    print(f'Saved curve plot to {path}')
+        for ax in axes.flat[n_algos:]:
+            ax.axis('off')
 
-    # --- 3. Per-algo subplots: curves by search depth ---
-    depths = sorted(df['depth'].unique())
-    depth_cmap = plt.cm.viridis
-    depth_norm = plt.Normalize(vmin=0, vmax=max(len(depths) - 1, 1))
+        fig.suptitle(f'Game Difficulty vs. {feat_label} (max search depth)', fontsize=14)
+        fig.tight_layout()
+        path = os.path.join(PLOTS_DIR, f'{feat_slug}_vs_difficulty_scatter.png')
+        fig.savefig(path, dpi=300)
+        plt.close(fig)
+        print(f'Saved scatter plot to {path}')
 
-    n_cols = min(n_algos, 3)
-    n_rows = (n_algos + n_cols - 1) // n_cols
-    fig, axes = plt.subplots(n_rows, n_cols, figsize=(n_cols * 5.5, n_rows * 4.5), squeeze=False)
+        # --- 2. Binned curve plot ---
+        all_feat_vals = feat_df[feat_key].values
+        bin_edges = _make_bin_edges(all_feat_vals, use_log)
+        if len(bin_edges) < 2:
+            continue
 
-    for ax_i, algo in enumerate(algos):
-        ax = axes[ax_i // n_cols][ax_i % n_cols]
-        algo_df = df[df['algo'] == algo]
-        algo_depths = sorted(algo_df['depth'].unique())
+        fig, ax = plt.subplots(figsize=(8, 5))
 
-        for di, depth in enumerate(algo_depths):
-            sub = algo_df[algo_df['depth'] == depth]
+        for algo in algos:
+            algo_sub = feat_max_depth[feat_max_depth['algo'] == algo]
             bin_means = []
             bin_centers = []
+            bin_counts = []
             for lo, hi in zip(bin_edges[:-1], bin_edges[1:]):
-                mask = (sub['n_rules'] >= lo) & (sub['n_rules'] < hi)
-                bucket = sub.loc[mask, 'pct_solved']
+                mask = (algo_sub[feat_key] >= lo) & (algo_sub[feat_key] < hi)
+                bucket = algo_sub.loc[mask, 'pct_solved']
                 if len(bucket) >= 1:
                     bin_means.append(bucket.mean())
                     bin_centers.append((lo + hi) / 2)
+                    bin_counts.append(len(bucket))
 
             if bin_centers:
-                color = depth_cmap(depth_norm(di))
                 ax.plot(
                     bin_centers, bin_means,
-                    marker='o', markersize=4, alpha=0.8,
-                    color=color, label=_format_steps_label(depth),
+                    marker='o', markersize=5, label=_algo_label(algo),
+                    color=algo_colors[algo], alpha=0.8,
                 )
+                for x, y, n in zip(bin_centers, bin_means, bin_counts):
+                    ax.annotate(str(n), (x, y), textcoords='offset points',
+                                xytext=(0, 6), ha='center', fontsize=6, color=algo_colors[algo])
 
-        ax.set_title(_algo_label(algo))
-        ax.set_xlabel('Number of rules')
+        ax.set_xlabel(feat_label)
         ax.set_ylabel('Mean % levels solved')
-        ax.set_xscale('log')
+        if use_log:
+            ax.set_xscale('log')
         ax.set_ylim(-0.05, 1.05)
+        ax.set_title(f'Mean Solve Rate vs. {feat_label}')
+        ax.legend()
         ax.grid(True, alpha=0.3)
-        ax.legend(fontsize=7, title='Search depth', title_fontsize=7)
+        fig.tight_layout()
+        path = os.path.join(PLOTS_DIR, f'{feat_slug}_vs_difficulty_curves.png')
+        fig.savefig(path, dpi=300)
+        plt.close(fig)
+        print(f'Saved curve plot to {path}')
 
-    for ax in axes.flat[n_algos:]:
-        ax.axis('off')
+        # --- 3. Per-algo subplots: curves by search depth ---
+        depths = sorted(feat_df['depth'].unique())
+        depth_cmap = plt.cm.viridis
+        depth_norm = plt.Normalize(vmin=0, vmax=max(len(depths) - 1, 1))
 
-    fig.suptitle('Mean Solve Rate vs. Rule Count by Search Depth', fontsize=14)
-    fig.tight_layout()
-    path = os.path.join(PLOTS_DIR, 'rules_vs_difficulty_by_depth.png')
-    fig.savefig(path, dpi=300)
-    plt.close(fig)
-    print(f'Saved depth curve plot to {path}')
+        n_cols = min(n_algos, 3)
+        n_rows_fig = (n_algos + n_cols - 1) // n_cols
+        fig, axes = plt.subplots(n_rows_fig, n_cols, figsize=(n_cols * 5.5, n_rows_fig * 4.5), squeeze=False)
 
-    # --- 4. Search effort (iterations to solve) vs n_rules ---
-    # For each (algo, game), use the deepest available depth where pct_solved > 0
+        for ax_i, algo in enumerate(algos):
+            ax = axes[ax_i // n_cols][ax_i % n_cols]
+            algo_sub = feat_df[feat_df['algo'] == algo]
+            algo_depths = sorted(algo_sub['depth'].unique())
+
+            for di, depth in enumerate(algo_depths):
+                sub = algo_sub[algo_sub['depth'] == depth]
+                bin_means = []
+                bin_centers = []
+                for lo, hi in zip(bin_edges[:-1], bin_edges[1:]):
+                    mask = (sub[feat_key] >= lo) & (sub[feat_key] < hi)
+                    bucket = sub.loc[mask, 'pct_solved']
+                    if len(bucket) >= 1:
+                        bin_means.append(bucket.mean())
+                        bin_centers.append((lo + hi) / 2)
+
+                if bin_centers:
+                    color = depth_cmap(depth_norm(di))
+                    ax.plot(
+                        bin_centers, bin_means,
+                        marker='o', markersize=4, alpha=0.8,
+                        color=color, label=_format_steps_label(depth),
+                    )
+
+            ax.set_title(_algo_label(algo))
+            ax.set_xlabel(feat_label)
+            ax.set_ylabel('Mean % levels solved')
+            if use_log:
+                ax.set_xscale('log')
+            ax.set_ylim(-0.05, 1.05)
+            ax.grid(True, alpha=0.3)
+            ax.legend(fontsize=7, title='Search depth', title_fontsize=7)
+
+        for ax in axes.flat[n_algos:]:
+            ax.axis('off')
+
+        fig.suptitle(f'Mean Solve Rate vs. {feat_label} by Search Depth', fontsize=14)
+        fig.tight_layout()
+        path = os.path.join(PLOTS_DIR, f'{feat_slug}_vs_difficulty_by_depth.png')
+        fig.savefig(path, dpi=300)
+        plt.close(fig)
+        print(f'Saved depth curve plot to {path}')
+
+    # --- 4. Search effort (iterations to solve) vs each feature ---
     if 'mean_solved_iters' not in df.columns:
         return
 
@@ -879,72 +977,206 @@ def generate_rules_vs_difficulty(summary_df: pd.DataFrame) -> None:
     idx = solved_df.groupby(['algo', 'game'])['depth'].idxmax()
     best_df = solved_df.loc[idx]
 
-    # Scatter: one subplot per algo
-    n_cols = min(n_algos, 3)
-    n_rows = (n_algos + n_cols - 1) // n_cols
-    fig, axes = plt.subplots(n_rows, n_cols, figsize=(n_cols * 5, n_rows * 4), squeeze=False)
+    for feat_key, feat_label, use_log in features_to_plot:
+        effort_df = best_df.dropna(subset=[feat_key]).copy()
+        effort_df[feat_key] = effort_df[feat_key].astype(float)
+        if effort_df.empty:
+            continue
 
-    for ax_i, algo in enumerate(algos):
-        ax = axes[ax_i // n_cols][ax_i % n_cols]
-        sub = best_df[best_df['algo'] == algo]
-        ax.scatter(
-            sub['n_rules'], sub['mean_solved_iters'],
-            alpha=0.5, s=20, color=algo_colors[algo], edgecolors='none',
-        )
-        ax.set_title(_algo_label(algo))
-        ax.set_xlabel('Number of rules')
-        ax.set_ylabel('Mean iterations to solve')
-        ax.set_yscale('log')
-        ax.grid(True, alpha=0.3)
+        feat_slug = feat_key
 
-    for ax in axes.flat[n_algos:]:
-        ax.axis('off')
+        # Scatter: one subplot per algo
+        n_cols = min(n_algos, 3)
+        n_rows_fig = (n_algos + n_cols - 1) // n_cols
+        fig, axes = plt.subplots(n_rows_fig, n_cols, figsize=(n_cols * 5, n_rows_fig * 4), squeeze=False)
 
-    fig.suptitle('Search Effort to Solve vs. Game Complexity', fontsize=14)
-    fig.tight_layout()
-    path = os.path.join(PLOTS_DIR, 'rules_vs_search_effort_scatter.png')
-    fig.savefig(path, dpi=300)
-    plt.close(fig)
-    print(f'Saved search effort scatter to {path}')
-
-    # Binned curves: all algos on one plot
-    fig, ax = plt.subplots(figsize=(8, 5))
-
-    for algo in algos:
-        sub = best_df[best_df['algo'] == algo]
-        bin_means = []
-        bin_centers = []
-        bin_counts = []
-        for lo, hi in zip(bin_edges[:-1], bin_edges[1:]):
-            mask = (sub['n_rules'] >= lo) & (sub['n_rules'] < hi)
-            bucket = sub.loc[mask, 'mean_solved_iters']
-            if len(bucket) >= 1:
-                bin_means.append(bucket.mean())
-                bin_centers.append((lo + hi) / 2)
-                bin_counts.append(len(bucket))
-
-        if bin_centers:
-            ax.plot(
-                bin_centers, bin_means,
-                marker='o', markersize=5, label=_algo_label(algo),
-                color=algo_colors[algo], alpha=0.8,
+        for ax_i, algo in enumerate(algos):
+            ax = axes[ax_i // n_cols][ax_i % n_cols]
+            sub = effort_df[effort_df['algo'] == algo]
+            ax.scatter(
+                sub[feat_key], sub['mean_solved_iters'],
+                alpha=0.5, s=20, color=algo_colors[algo], edgecolors='none',
             )
-            for x, y, n in zip(bin_centers, bin_means, bin_counts):
-                ax.annotate(str(n), (x, y), textcoords='offset points',
-                            xytext=(0, 6), ha='center', fontsize=6, color=algo_colors[algo])
+            ax.set_title(_algo_label(algo))
+            ax.set_xlabel(feat_label)
+            ax.set_ylabel('Mean iterations to solve')
+            if use_log:
+                ax.set_xscale('log')
+            ax.set_yscale('log')
+            ax.grid(True, alpha=0.3)
 
-    ax.set_xlabel('Number of rules')
-    ax.set_ylabel('Mean iterations to solve')
-    ax.set_xscale('log')
-    ax.set_yscale('log')
-    ax.set_title('Search Effort to Solve vs. Game Complexity (by rule count)')
-    ax.legend()
-    ax.grid(True, alpha=0.3)
-    fig.tight_layout()
-    path = os.path.join(PLOTS_DIR, 'rules_vs_search_effort_curves.png')
-    fig.savefig(path, dpi=300)
-    plt.close(fig)
-    print(f'Saved search effort curves to {path}')
+        for ax in axes.flat[n_algos:]:
+            ax.axis('off')
+
+        fig.suptitle(f'Search Effort to Solve vs. {feat_label}', fontsize=14)
+        fig.tight_layout()
+        path = os.path.join(PLOTS_DIR, f'{feat_slug}_vs_search_effort_scatter.png')
+        fig.savefig(path, dpi=300)
+        plt.close(fig)
+        print(f'Saved search effort scatter to {path}')
+
+        # Binned curves
+        all_feat_vals = effort_df[feat_key].values
+        bin_edges = _make_bin_edges(all_feat_vals, use_log)
+        if len(bin_edges) < 2:
+            continue
+
+        fig, ax = plt.subplots(figsize=(8, 5))
+
+        for algo in algos:
+            sub = effort_df[effort_df['algo'] == algo]
+            bin_means = []
+            bin_centers = []
+            bin_counts = []
+            for lo, hi in zip(bin_edges[:-1], bin_edges[1:]):
+                mask = (sub[feat_key] >= lo) & (sub[feat_key] < hi)
+                bucket = sub.loc[mask, 'mean_solved_iters']
+                if len(bucket) >= 1:
+                    bin_means.append(bucket.mean())
+                    bin_centers.append((lo + hi) / 2)
+                    bin_counts.append(len(bucket))
+
+            if bin_centers:
+                ax.plot(
+                    bin_centers, bin_means,
+                    marker='o', markersize=5, label=_algo_label(algo),
+                    color=algo_colors[algo], alpha=0.8,
+                )
+                for x, y, n in zip(bin_centers, bin_means, bin_counts):
+                    ax.annotate(str(n), (x, y), textcoords='offset points',
+                                xytext=(0, 6), ha='center', fontsize=6, color=algo_colors[algo])
+
+        ax.set_xlabel(feat_label)
+        ax.set_ylabel('Mean iterations to solve')
+        if use_log:
+            ax.set_xscale('log')
+        ax.set_yscale('log')
+        ax.set_title(f'Search Effort to Solve vs. {feat_label}')
+        ax.legend()
+        ax.grid(True, alpha=0.3)
+        fig.tight_layout()
+        path = os.path.join(PLOTS_DIR, f'{feat_slug}_vs_search_effort_curves.png')
+        fig.savefig(path, dpi=300)
+        plt.close(fig)
+        print(f'Saved search effort curves to {path}')
+
+
+def generate_correlation_report(summary_df: pd.DataFrame) -> None:
+    """Compute Spearman correlations between game metadata features and search outcomes.
+
+    Prints a table and saves a CSV + heatmap of significant correlations.
+    """
+    from scipy import stats as scipy_stats
+
+    game_metadata = _load_game_metadata()
+    if not game_metadata:
+        game_n_rules = _load_game_n_rules()
+        meta_lookup = {_normalize_game_name(g): {'n_rules': n} for g, n in game_n_rules.items()}
+        features_to_test = [ANALYSIS_FEATURES[0]]
+    else:
+        meta_lookup = {_normalize_game_name(g): meta for g, meta in game_metadata.items()}
+        features_to_test = ANALYSIS_FEATURES
+
+    df = summary_df.copy()
+    for feat_key, _, _ in features_to_test:
+        df[feat_key] = df['game'].apply(
+            lambda g: (meta_lookup.get(_normalize_game_name(g)) or {}).get(feat_key))
+
+    # Use max depth per (algo, game)
+    idx = df.groupby(['algo', 'game'])['depth'].idxmax()
+    df = df.loc[idx]
+
+    outcome_metrics = [
+        ('pct_solved', '% Solved'),
+        ('mean_solved_iters', 'Iterations to Solve'),
+    ]
+
+    rows = []
+    for feat_key, feat_label, _ in features_to_test:
+        for outcome_key, outcome_label in outcome_metrics:
+            for algo in sorted(df['algo'].unique()):
+                sub = df[(df['algo'] == algo)].dropna(subset=[feat_key, outcome_key])
+                if len(sub) < 5:
+                    continue
+                rho, p_value = scipy_stats.spearmanr(sub[feat_key], sub[outcome_key])
+                rows.append({
+                    'feature': feat_label,
+                    'outcome': outcome_label,
+                    'algo': _algo_label(algo),
+                    'rho': rho,
+                    'p_value': p_value,
+                    'n': len(sub),
+                    'significant': p_value < 0.05,
+                })
+
+    if not rows:
+        print('No correlation data to report.')
+        return
+
+    corr_df = pd.DataFrame(rows)
+    corr_df.sort_values('p_value', inplace=True)
+
+    os.makedirs(PLOTS_DIR, exist_ok=True)
+    csv_path = os.path.join(PLOTS_DIR, 'feature_correlations.csv')
+    corr_df.to_csv(csv_path, index=False, float_format='%.4f')
+    print(f'Saved correlation report to {csv_path}')
+
+    # Print significant correlations
+    sig = corr_df[corr_df['significant']]
+    if sig.empty:
+        print('No statistically significant correlations found (p < 0.05).')
+    else:
+        print(f'\nSignificant correlations (p < 0.05):')
+        for _, row in sig.iterrows():
+            direction = 'positive' if row['rho'] > 0 else 'negative'
+            print(
+                f"  {row['algo']:5s} | {row['feature']:30s} vs {row['outcome']:20s} | "
+                f"rho={row['rho']:+.3f} p={row['p_value']:.1e} n={row['n']:4d} ({direction})"
+            )
+
+    # Heatmap of rho values for pct_solved
+    solved_corr = corr_df[corr_df['outcome'] == '% Solved']
+    if solved_corr.empty:
+        return
+
+    pivot = solved_corr.pivot(index='feature', columns='algo', values='rho')
+    p_pivot = solved_corr.pivot(index='feature', columns='algo', values='p_value')
+
+    # Annotate with significance stars
+    annot = pivot.copy().astype(str)
+    for feat in pivot.index:
+        for algo in pivot.columns:
+            rho_val = pivot.at[feat, algo]
+            p_val = p_pivot.at[feat, algo]
+            if pd.isna(rho_val):
+                annot.at[feat, algo] = ''
+            else:
+                stars = '***' if p_val < 0.001 else '**' if p_val < 0.01 else '*' if p_val < 0.05 else ''
+                annot.at[feat, algo] = f'{rho_val:.2f}{stars}'
+
+    fig_h = max(len(pivot.index) * 0.6 + 2, 4)
+    fig_w = max(len(pivot.columns) * 1.5 + 3, 6)
+    plt.figure(figsize=(fig_w, fig_h))
+    sns.heatmap(
+        pivot.astype(float),
+        annot=annot.values,
+        fmt='',
+        cmap='RdBu_r',
+        center=0,
+        vmin=-1,
+        vmax=1,
+        cbar_kws={'label': 'Spearman rho'},
+        linewidths=0.5,
+        linecolor='white',
+    )
+    plt.title('Feature vs. Solve Rate Correlations (Spearman)')
+    plt.xlabel('Algorithm')
+    plt.ylabel('Game Feature')
+    plt.tight_layout()
+    path = os.path.join(PLOTS_DIR, 'feature_correlation_heatmap.png')
+    plt.savefig(path, dpi=300)
+    plt.close()
+    print(f'Saved correlation heatmap to {path}')
 
 
 def generate_all_heatmaps(

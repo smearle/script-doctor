@@ -94,8 +94,12 @@ public:
     // Load from serialized JSON (as produced by JS serializeCompiledState)
     bool loadFromJSON(const std::string& json_str);
 
-    // Load a specific level
+    // Load a specific level (optionally with a random seed for deterministic behavior)
     void loadLevel(int levelIndex);
+    void loadLevel(int levelIndex, const std::string& randomSeed);
+
+    // Seed the RNG (matches JS PuzzleScript's RC4-based seeding)
+    void seedRNG(const std::string& seed);
 
     // Process a single input. dir: 0=up, 1=left, 2=down, 3=right, 4=action, -1=tick
     // Returns true if anything changed.

@@ -717,7 +717,7 @@ def get_list_of_games_for_testing(dataset="pedro", include_random=False, random_
     return games
 
 
-MAX_SLURM_JOBS = 10_000
+MAX_SLURM_JOBS = 1_000
 
 
 def distribute_slurm_jobs(items: list, n_items_per_job: int = 1,

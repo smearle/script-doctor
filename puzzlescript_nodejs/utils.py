@@ -27,6 +27,7 @@ def replay_actions_js(
     stop_on_win: bool = True,
     max_again: int = 50,
     return_winning: bool = False,
+    random_seed: str = None,
 ):
     """Faithfully replay gameplay actions against the JS engine.
 
@@ -34,7 +35,10 @@ def replay_actions_js(
     and auto-restarts the engine after a win. For validation and regression
     tests we want direct gameplay semantics from ``engine.processInput()``.
     """
-    engine.compile(['loadLevel', level_i], game_text)
+    if random_seed is not None:
+        engine.compile(['loadLevel', level_i], game_text, random_seed)
+    else:
+        engine.compile(['loadLevel', level_i], game_text)
     solver.precalcDistances(engine)
     scores = [solver.getScore(engine)]
     states = [engine.backupLevel()]

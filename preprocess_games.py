@@ -3,20 +3,24 @@ import logging
 import os
 import shutil
 from collections import OrderedDict
+from typing import List, Optional
 
 import hydra
+import numpy as np
 from lark import Lark
 from tqdm import tqdm
+import submitit
 
 from puzzlescript_jax.preprocessing import count_rules, get_env_from_ps_file
 from conf.config import PreprocessConfig
 from puzzlescript_jax.detect_randomness import tree_has_randomness
 from puzzlescript_jax.globals import (
-    GAMES_N_RULES_SORTED_PATH, GAMES_TO_N_RULES_PATH, GAMES_TO_SKIP, LARK_SYNTAX_PATH, TEST_GAMES,
+    GAMES_N_RULES_SORTED_PATH, GAMES_TO_N_RULES_PATH, GAMES_METADATA_PATH,
+    GAMES_TO_SKIP, LARK_SYNTAX_PATH, TEST_GAMES,
     TREES_DIR, SIMPLIFIED_GAMES_DIR, MIN_GAMES_DIR, PRETTY_TREES_DIR, CUSTOM_GAMES_DIR,
     GAMES_DIR,
 )
-from puzzlescript_jax.utils import get_list_of_games_for_testing
+from puzzlescript_jax.utils import get_list_of_games_for_testing, distribute_slurm_jobs
 from puzzlescript_jax.preprocessing import PJParseErrors
 
 logger = logging.getLogger(__name__)
@@ -98,8 +102,9 @@ def _filter_parse_results(parse_results, allowed_games):
     return parse_results
 
 
-def _save_all(parse_results, parse_results_path, games_n_rules_sorted, games_to_n_rules, total_games):
-    """Save all progress to disk (parse_results + games_n_rules)."""
+def _save_all(parse_results, parse_results_path, games_n_rules_sorted, games_to_n_rules, total_games,
+              games_metadata=None):
+    """Save all progress to disk (parse_results + games_n_rules + metadata)."""
     _update_parse_stats(parse_results, total_games)
     with open(parse_results_path, "w", encoding='utf-8') as f:
         json.dump(parse_results, f, indent=4)
@@ -108,10 +113,84 @@ def _save_all(parse_results, parse_results_path, games_n_rules_sorted, games_to_
         json.dump(sorted_rules, f, indent=4)
     with open(GAMES_TO_N_RULES_PATH, 'w', encoding='utf-8') as f:
         json.dump(games_to_n_rules, f, indent=4)
+    if games_metadata is not None:
+        with open(GAMES_METADATA_PATH, 'w', encoding='utf-8') as f:
+            json.dump(games_metadata, f, indent=4)
+
+
+def extract_game_metadata(ps_tree) -> dict:
+    """Extract rich metadata from a parsed PSGameTree."""
+    n_rules = count_rules(ps_tree)
+    has_randomness = tree_has_randomness(ps_tree)
+    n_objects = len(ps_tree.objects)
+    n_collision_layers = len(ps_tree.collision_layers)
+    n_legend_entries = len(ps_tree.legend)
+    n_win_conditions = len(ps_tree.win_conditions)
+    n_levels = len(ps_tree.levels)
+
+    level_dims = []
+    for level in ps_tree.levels:
+        if len(level) > 0 and len(level[0]) > 0:
+            h = len(level)
+            w = len(level[0])
+            level_dims.append([w, h])
+
+    mean_level_area = float(np.mean([w * h for w, h in level_dims])) if level_dims else 0.0
+    max_level_area = max((w * h for w, h in level_dims), default=0)
+
+    meta = {
+        'n_rules': n_rules,
+        'has_randomness': has_randomness,
+        'n_objects': n_objects,
+        'n_collision_layers': n_collision_layers,
+        'n_legend_entries': n_legend_entries,
+        'n_win_conditions': n_win_conditions,
+        'n_levels': n_levels,
+        'mean_level_area': mean_level_area,
+        'max_level_area': max_level_area,
+    }
+
+    prelude = ps_tree.prelude
+    if prelude.flickscreen is not None:
+        meta['flickscreen'] = list(prelude.flickscreen)
+    if prelude.zoomscreen is not None:
+        meta['zoomscreen'] = list(prelude.zoomscreen)
+    if prelude.run_rules_on_level_start:
+        meta['run_rules_on_level_start'] = True
+    if prelude.require_player_movement:
+        meta['require_player_movement'] = True
+    if prelude.noaction:
+        meta['noaction'] = True
+
+    return meta
 
 
 @hydra.main(version_base="1.3", config_path="conf", config_name="preprocess_config")
-def main(cfg: PreprocessConfig):
+def main_launch(cfg: PreprocessConfig):
+    if cfg.slurm:
+        if cfg.game is not None:
+            games = [cfg.game]
+        else:
+            games = get_list_of_games_for_testing(dataset=cfg.dataset)
+
+        game_sublists = distribute_slurm_jobs(games, cfg.n_games_per_job)
+        n_jobs = len(game_sublists)
+        executor = submitit.AutoExecutor(folder=os.path.join("submitit_logs", "preprocess"))
+        executor.update_parameters(
+            slurm_job_name="preprocess_games",
+            mem_gb=16,
+            tasks_per_node=1,
+            cpus_per_task=1,
+            timeout_min=120,
+            slurm_array_parallelism=n_jobs,
+            slurm_account=os.environ.get("SLURM_ACCOUNT"),
+        )
+        executor.map_array(main, [cfg] * n_jobs, game_sublists)
+    else:
+        main(cfg)
+
+
+def main(cfg: PreprocessConfig, games: Optional[List[str]] = None):
 
     with open(LARK_SYNTAX_PATH, "r", encoding='utf-8') as file:
         puzzlescript_grammar = file.read()
@@ -136,7 +215,9 @@ def main(cfg: PreprocessConfig):
     if os.path.exists(parse_results_path):
         shutil.copyfile(parse_results_path, parse_results_path[:-5] + "_bkp" + ".json")
 
-    if cfg.game is not None:
+    if games is not None:
+        game_files = [f"{g}.txt" for g in games]
+    elif cfg.game is not None:
         game_files = [cfg.game + '.txt']
     else:
         game_names = get_list_of_games_for_testing(dataset=cfg.dataset)
@@ -150,12 +231,17 @@ def main(cfg: PreprocessConfig):
     os.makedirs(scrape_log_dir, exist_ok=True)
     games_n_rules_sorted = []
     games_to_n_rules = {}
+    games_metadata = {}
     if not cfg.overwrite:
         if os.path.exists(GAMES_N_RULES_SORTED_PATH):
             with open(GAMES_N_RULES_SORTED_PATH, 'r') as f:
                 games_n_rules_sorted = json.load(f)
             games_to_n_rules = {game: (n_rules, has_randomness) for game, n_rules, has_randomness in games_n_rules_sorted}
             print(f"Loaded {len(games_n_rules_sorted)} games from {GAMES_N_RULES_SORTED_PATH}")
+        if os.path.exists(GAMES_METADATA_PATH):
+            with open(GAMES_METADATA_PATH, 'r') as f:
+                games_metadata = json.load(f)
+            print(f"Loaded metadata for {len(games_metadata)} games from {GAMES_METADATA_PATH}")
         if os.path.exists(parse_results_path):
             with open(parse_results_path, 'r') as f:
                 parse_results = json.load(f)
@@ -176,7 +262,7 @@ def main(cfg: PreprocessConfig):
     pbar = tqdm(game_files, desc="Preprocessing", unit="game")
     for filename in pbar:
         game_name = os.path.basename(filename)
-        if not cfg.overwrite and game_name in games_to_n_rules:
+        if not cfg.overwrite and game_name in games_to_n_rules and game_name in games_metadata:
             n_skipped += 1
             continue
 
@@ -189,10 +275,10 @@ def main(cfg: PreprocessConfig):
             if game_name not in success_games:
                 parse_results['success'].append(game_name)
                 success_games.add(game_name)
-            n_rules = count_rules(ps_tree)
-            has_randomness = tree_has_randomness(ps_tree)
-            games_n_rules_sorted.append((game_name, n_rules, has_randomness))
-            games_to_n_rules[game_name] = (n_rules, has_randomness)
+            meta = extract_game_metadata(ps_tree)
+            games_n_rules_sorted.append((game_name, meta['n_rules'], meta['has_randomness']))
+            games_to_n_rules[game_name] = (meta['n_rules'], meta['has_randomness'])
+            games_metadata[game_name] = meta
         elif success == PJParseErrors.PARSE_ERROR:
             if err_msg not in parse_results['parse_error']:
                 parse_results['parse_error'][err_msg] = []
@@ -212,13 +298,13 @@ def main(cfg: PreprocessConfig):
         elif success == PJParseErrors.ENV_ERROR:
             if err_msg not in parse_results['env_error']:
                 parse_results['env_error'][err_msg] = []
-            n_rules = count_rules(ps_tree)
-            has_randomness = tree_has_randomness(ps_tree)
+            meta = extract_game_metadata(ps_tree)
             if game_name not in env_error_games:
-                parse_results['env_error'][err_msg].append((game_name, n_rules))
+                parse_results['env_error'][err_msg].append((game_name, meta['n_rules']))
                 env_error_games.add(game_name)
-            games_n_rules_sorted.append((game_name, n_rules, has_randomness))
-            games_to_n_rules[game_name] = (n_rules, has_randomness)
+            games_n_rules_sorted.append((game_name, meta['n_rules'], meta['has_randomness']))
+            games_to_n_rules[game_name] = (meta['n_rules'], meta['has_randomness'])
+            games_metadata[game_name] = meta
         elif success == PJParseErrors.SKIPPED:
             continue
         elif success == PJParseErrors.PREPROCESSING_ERROR:
@@ -231,10 +317,12 @@ def main(cfg: PreprocessConfig):
             raise Exception(f"Unknown error while parsing game: {success}")
 
         # Save all progress after every game so nothing is lost on interruption
-        _save_all(parse_results, parse_results_path, games_n_rules_sorted, games_to_n_rules, len(game_files))
+        _save_all(parse_results, parse_results_path, games_n_rules_sorted, games_to_n_rules, len(game_files),
+                  games_metadata)
 
     # Final save
-    _save_all(parse_results, parse_results_path, games_n_rules_sorted, games_to_n_rules, len(game_files))
+    _save_all(parse_results, parse_results_path, games_n_rules_sorted, games_to_n_rules, len(game_files),
+              games_metadata)
 
     stats = parse_results['stats']
     print(f"\nPreprocessing complete ({len(game_files)} games, {n_skipped} skipped, {n_processed} processed):")
@@ -243,7 +331,8 @@ def main(cfg: PreprocessConfig):
     print(f"  Tree errors:  {stats.get('tree_error', 0)}")
     print(f"  Parse errors: {stats.get('parse_error', 0)}")
     print(f"  Timeouts:     {stats.get('parse_timeout', 0)}")
+    print(f"  Metadata:     {len(games_metadata)} games")
 
 
 if __name__ == "__main__":
-    main()
+    main_launch()

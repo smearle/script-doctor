@@ -48,6 +48,7 @@ GAMES_TO_SKIP = set({})
 PLOTS_DIR = 'plots'
 GAMES_N_RULES_SORTED_PATH = os.path.join(DATA_DIR, 'games_n_rules.json')
 GAMES_TO_N_RULES_PATH = os.path.join(DATA_DIR, 'games_to_n_rules.json')
+GAMES_METADATA_PATH = os.path.join(DATA_DIR, 'games_metadata.json')
 STANDALONE_NODEJS_RESULTS_PATH = os.path.join(DATA_DIR, 'standalone_nodejs_results.json')
 STANDALONE_CPP_RESULTS_PATH = os.path.join(DATA_DIR, 'standalone_cpp_results.json')
 GAMES_N_LEVELS_PATH = os.path.join(DATA_DIR, 'games_n_levels.json')

@@ -27,7 +27,7 @@ from tqdm import tqdm
 import wandb
 from puzzlescript_jax.utils import init_ps_lark_parser
 from puzzlescript_cpp import CppBatchedPuzzleScriptEnv, CppPuzzleScriptEnv, Renderer
-from puzzlescript_nodejs.rl_env import NodeJSBatchedPuzzleEnv
+from puzzlescript_nodejs.rl_env import NodeJSBatchedPuzzleEnv, NodeJSPuzzleEnv
 from puzzlescript_nodejs.utils import compile_game
 
 
@@ -158,6 +158,55 @@ def render_eval_episodes_cpp(
             frames.append(renderer.render_engine(env._engine))
         episodes.append(frames)
     return episodes
+
+
+@torch.no_grad()
+def render_eval_episodes_nodejs(
+    agent: nn.Module,
+    game: str,
+    game_text: str,
+    level_i: int,
+    max_episode_steps: int,
+    n_eps: int,
+    device: torch.device,
+    exp_dir: str,
+    update: int,
+    global_step: int,
+    gif_frame_duration: float,
+) -> None:
+    """Run eval episodes using NodeJS env, then render GIFs by replaying actions."""
+    env = NodeJSPuzzleEnv(
+        game=game,
+        level_i=level_i,
+        max_episode_steps=max_episode_steps,
+        game_text=game_text,
+    )
+    for ep_i in range(n_eps):
+        obs, state = env.reset()
+        obs_np = np.asarray(obs.multihot_level)  # (n_objs, h, w)
+        ep_level_i = state.level_i
+        actions = []
+        done = False
+        while not done:
+            obs_t = torch.from_numpy(obs_np).unsqueeze(0).to(device)
+            logits, _ = agent(obs_t)
+            action = logits.argmax(dim=-1).item()
+            actions.append(action)
+            obs, state, _reward, done, _info = env.step(state, action)
+            obs_np = np.asarray(obs.multihot_level)
+        gif_path = os.path.join(exp_dir, f"update-{update}_step-{global_step}_ep-{ep_i}.gif")
+        # Render GIF by replaying on the same level
+        saved_level_i = env.level_i
+        env.level_i = ep_level_i
+        env.render_gif(
+            actions=actions,
+            gif_path=gif_path,
+            frame_duration_s=gif_frame_duration,
+            scale=1,
+        )
+        env.level_i = saved_level_i
+        wandb.log({f"video/ep_{ep_i}": wandb.Video(gif_path, format="gif")}, step=global_step)
+        print(f"  Saved render gif: {gif_path}")
 
 
 def save_and_log_gif(
@@ -307,7 +356,7 @@ def create_batched_env(cfg: TrainPytorchConfig):
             max_episode_steps=cfg.max_episode_steps,
         )
         json_str, sprite_json = compile_game_json(cfg.game)
-        return env, {"json_str": json_str, "sprite_json": sprite_json}
+        return env, {"json_str": json_str, "sprite_json": sprite_json, "game_text": env.game_text}
 
 
 def render_eval(
@@ -319,7 +368,23 @@ def render_eval(
     render_ctx: dict[str, object],
     device: torch.device,
 ) -> None:
-    if cfg.backend in {"cpp", "nodejs"}:
+    if cfg.backend == "nodejs":
+        render_eval_episodes_nodejs(
+            agent,
+            cfg.game,
+            render_ctx["game_text"],
+            cfg.level,
+            cfg.max_episode_steps,
+            cfg.n_render_eps,
+            device,
+            exp_dir,
+            update,
+            global_step,
+            cfg.gif_frame_duration,
+        )
+        return
+
+    if cfg.backend == "cpp":
         episodes = render_eval_episodes_cpp(
             agent,
             render_ctx["json_str"],

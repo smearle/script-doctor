@@ -42,9 +42,15 @@ PYBIND11_MODULE(_puzzlescript_cpp, m) {
         .def("load_from_json", &Engine::loadFromJSON,
              py::arg("json_str"),
              "Load a compiled game state from JSON string")
-        .def("load_level", &Engine::loadLevel,
+        .def("load_level", static_cast<void (Engine::*)(int)>(&Engine::loadLevel),
              py::arg("level_index"),
              "Load a specific level by index (0-based, skipping message levels)")
+        .def("load_level", static_cast<void (Engine::*)(int, const std::string&)>(&Engine::loadLevel),
+             py::arg("level_index"), py::arg("random_seed"),
+             "Load a specific level with a fixed random seed for deterministic behavior")
+        .def("seed_rng", &Engine::seedRNG,
+             py::arg("seed"),
+             "Seed the RNG (RC4-based, matching JS PuzzleScript)")
         .def("process_input", &Engine::processInput,
              py::arg("direction"),
              "Process input. dir: 0=up, 1=left, 2=down, 3=right, 4=action, -1=tick. Returns True if anything changed.")

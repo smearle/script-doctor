@@ -16,6 +16,7 @@ from conf.config import SearchCppConfig
 from puzzlescript_jax.globals import CPP_SOLS_DIR, STANDALONE_CPP_RESULTS_PATH
 from puzzlescript_jax.utils import get_list_of_games_for_testing, init_ps_lark_parser, distribute_slurm_jobs
 from puzzlescript_cpp import CppPuzzleScriptBackend
+from search_nodejs import _classify_error, write_level_error_log
 
 
 dotenv.load_dotenv()
@@ -44,7 +45,7 @@ def main_launch(cfg: SearchCppConfig):
             mem_gb=30,
             tasks_per_node=1,
             cpus_per_task=1,
-            timeout_min=180,
+            timeout_min=cfg.slurm_timeout_min,
             slurm_array_parallelism=n_jobs,
             slurm_account=os.environ.get("SLURM_ACCOUNT"),
             slurm_setup=["export JAX_PLATFORMS=cpu"],
@@ -56,7 +57,14 @@ def main_launch(cfg: SearchCppConfig):
 
 def main(cfg: SearchCppConfig, games: Optional[List[str]] = None):
     backend = CppPuzzleScriptBackend()
-    timeout_ms = cfg.timeout * 1_000 if cfg.timeout > 0 else -1
+    if cfg.timeout > 0:
+        timeout_ms = cfg.timeout * 1_000
+    elif cfg.slurm:
+        safe_seconds = max(int((cfg.slurm_timeout_min - 2) * 60 * 0.9), 60)
+        timeout_ms = safe_seconds * 1_000
+        print(f'Derived per-level timeout from SLURM wall-time: {safe_seconds}s')
+    else:
+        timeout_ms = -1
     parser = init_ps_lark_parser()
     print(f'Timeout: {timeout_ms} ms')
 
@@ -121,14 +129,28 @@ def main(cfg: SearchCppConfig, games: Optional[List[str]] = None):
                     results[run_name][game][level_i] = result
 
                 else:
-                    result = backend.run_search(
-                        algo,
-                        game_text=game_text,
-                        level_i=level_i,
-                        n_steps=cfg.n_steps,
-                        timeout_ms=timeout_ms,
-                        warmup=False,
-                    ).to_dict()
+                    try:
+                        result = backend.run_search(
+                            algo,
+                            game_text=game_text,
+                            level_i=level_i,
+                            n_steps=cfg.n_steps,
+                            timeout_ms=timeout_ms,
+                            warmup=False,
+                        ).to_dict()
+                    except Exception as e:
+                        error_type = _classify_error(e)
+                        if error_type == 'unknown':
+                            raise
+                        error_message = str(e) or repr(e)
+                        print(f'{error_type.upper()} during {game} level {level_i} with {algo}: {error_message}')
+                        result = write_level_error_log(
+                            level_cpp_sol_path,
+                            error_type=error_type,
+                            error_message=error_message,
+                        )
+                        results[run_name][game][level_i] = result
+                        continue
 
                     result_dict = {
                         'won': result['solved'],
