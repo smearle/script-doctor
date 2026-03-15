@@ -22,7 +22,9 @@ from conf.config import SweepRLConfig, TrainConfig, EnjoyConfig
 from puzzlescript_jax.env import PJParams
 from puzzlescript_jax.preprocessing import get_env_from_ps_file
 from train_jax import main as main_train
-from train_pytorch import train as pytorch_train, TrainPytorchConfig, get_exp_dir as pytorch_get_exp_dir
+def _lazy_pytorch_imports():
+    from train_pytorch import train as pytorch_train, TrainPytorchConfig, get_exp_dir as pytorch_get_exp_dir
+    return pytorch_train, TrainPytorchConfig, pytorch_get_exp_dir
 from eval_rl import main_enjoy
 from sweep_rl_configs import _NAMED_SWEEPS
 from puzzlescript_jax.utils import get_list_of_games_for_testing, get_n_levels_per_game, init_ps_lark_parser
@@ -195,6 +197,7 @@ def _get_hydra_override_root_keys() -> set[str]:
 def _get_cfg_exp_dir(cfg, backend: str) -> str:
     if backend == "jax":
         return init_config(cfg)._exp_dir
+    _, _, pytorch_get_exp_dir = _lazy_pytorch_imports()
     return pytorch_get_exp_dir(cfg)
 
 
@@ -489,6 +492,7 @@ def main(sweep_cfg: SweepRLConfig):
         else:
             raise ValueError(f"Unsupported sweep mode: {sweep_cfg.mode!r}. Expected one of: 'train', 'enjoy', 'plot'.")
     else:
+        pytorch_train, TrainPytorchConfig, _ = _lazy_pytorch_imports()
         if sweep_cfg.mode == 'train':
             main_fn = pytorch_train
             CfgCls = TrainPytorchConfig

@@ -1170,6 +1170,7 @@ def generate_correlation_report(summary_df: pd.DataFrame) -> None:
     outcome_metrics = [
         ('pct_solved', '% Solved'),
         ('mean_solved_iters', 'Iterations to Solve'),
+        ('mean_sol_len', 'Solution Length'),
         ('mean_score_progress', 'Score Progress'),
     ]
 
@@ -1216,49 +1217,51 @@ def generate_correlation_report(summary_df: pd.DataFrame) -> None:
                 f"rho={row['rho']:+.3f} p={row['p_value']:.1e} n={row['n']:4d} ({direction})"
             )
 
-    # Heatmap of rho values for pct_solved
-    solved_corr = corr_df[corr_df['outcome'] == '% Solved']
-    if solved_corr.empty:
-        return
+    # Heatmap per outcome metric
+    for outcome_key, outcome_label in outcome_metrics:
+        outcome_corr = corr_df[corr_df['outcome'] == outcome_label]
+        if outcome_corr.empty:
+            continue
 
-    pivot = solved_corr.pivot(index='feature', columns='algo', values='rho')
-    p_pivot = solved_corr.pivot(index='feature', columns='algo', values='p_value')
+        pivot = outcome_corr.pivot(index='feature', columns='algo', values='rho')
+        p_pivot = outcome_corr.pivot(index='feature', columns='algo', values='p_value')
 
-    # Annotate with significance stars
-    annot = pivot.copy().astype(str)
-    for feat in pivot.index:
-        for algo in pivot.columns:
-            rho_val = pivot.at[feat, algo]
-            p_val = p_pivot.at[feat, algo]
-            if pd.isna(rho_val):
-                annot.at[feat, algo] = ''
-            else:
-                stars = '***' if p_val < 0.001 else '**' if p_val < 0.01 else '*' if p_val < 0.05 else ''
-                annot.at[feat, algo] = f'{rho_val:.2f}{stars}'
+        # Annotate with significance stars
+        annot = pivot.copy().astype(str)
+        for feat in pivot.index:
+            for algo in pivot.columns:
+                rho_val = pivot.at[feat, algo]
+                p_val = p_pivot.at[feat, algo]
+                if pd.isna(rho_val):
+                    annot.at[feat, algo] = ''
+                else:
+                    stars = '***' if p_val < 0.001 else '**' if p_val < 0.01 else '*' if p_val < 0.05 else ''
+                    annot.at[feat, algo] = f'{rho_val:.2f}{stars}'
 
-    fig_h = max(len(pivot.index) * 0.6 + 2, 4)
-    fig_w = max(len(pivot.columns) * 1.5 + 3, 6)
-    plt.figure(figsize=(fig_w, fig_h))
-    sns.heatmap(
-        pivot.astype(float),
-        annot=annot.values,
-        fmt='',
-        cmap='RdBu_r',
-        center=0,
-        vmin=-1,
-        vmax=1,
-        cbar_kws={'label': 'Spearman rho'},
-        linewidths=0.5,
-        linecolor='white',
-    )
-    plt.title('Feature vs. Solve Rate Correlations (Spearman)')
-    plt.xlabel('Algorithm')
-    plt.ylabel('Game Feature')
-    plt.tight_layout()
-    path = os.path.join(SEARCH_PLOTS_DIR,'feature_correlation_heatmap.png')
-    plt.savefig(path, dpi=300)
-    plt.close()
-    print(f'Saved correlation heatmap to {path}')
+        fig_h = max(len(pivot.index) * 0.6 + 2, 4)
+        fig_w = max(len(pivot.columns) * 1.5 + 3, 6)
+        plt.figure(figsize=(fig_w, fig_h))
+        sns.heatmap(
+            pivot.astype(float),
+            annot=annot.values,
+            fmt='',
+            cmap='RdBu_r',
+            center=0,
+            vmin=-1,
+            vmax=1,
+            cbar_kws={'label': 'Spearman rho'},
+            linewidths=0.5,
+            linecolor='white',
+        )
+        outcome_slug = outcome_key.replace(' ', '_').lower()
+        plt.title(f'Feature vs. {outcome_label} Correlations (Spearman)')
+        plt.xlabel('Algorithm')
+        plt.ylabel('Game Feature')
+        plt.tight_layout()
+        path = os.path.join(SEARCH_PLOTS_DIR, f'feature_correlation_{outcome_slug}_heatmap.png')
+        plt.savefig(path, dpi=300)
+        plt.close()
+        print(f'Saved correlation heatmap to {path}')
 
 
 def generate_heuristic_quality_report(games: list[str]) -> None:

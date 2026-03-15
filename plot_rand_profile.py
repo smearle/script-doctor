@@ -76,16 +76,6 @@ LEGEND_LABEL_ORDER = [
     "C++ (native multiprocess)",
 ]
 PROFILE_STATS_KEY_RE = re.compile(r"(?P<n_envs>\d+)-(?P<execution_mode>[a-z_]+)(?:-threads-(?P<num_threads>\d+))?$")
-CPP_BATCHED_THREAD_MARKERS = {
-    1: "o",
-    2: "s",
-    4: "^",
-    8: "v",
-    16: "D",
-    24: "P",
-    32: "X",
-}
-
 
 def _get_best_fps(stats: dict) -> float:
     fpss = stats.get("fps", ())
@@ -140,16 +130,6 @@ def _parse_profile_stats_key(stats_key: str) -> tuple[int, str, int | None] | No
     num_threads = match.group("num_threads")
     return n_envs, execution_mode, (None if num_threads is None else int(num_threads))
 
-
-def _get_cpp_batched_thread_marker(num_threads: int) -> str:
-    return CPP_BATCHED_THREAD_MARKERS.get(num_threads, "H")
-
-
-def _format_cpp_batched_thread_label(base_label: str, num_threads: int) -> str:
-    suffix = f", {num_threads} thread{'s' if num_threads != 1 else ''}"
-    if base_label.endswith(")"):
-        return f"{base_label[:-1]}{suffix})"
-    return f"{base_label}{suffix}"
 
 
 def _discover_rollout_lengths() -> list[str]:
@@ -326,7 +306,6 @@ def _collect_cpp_series(rollout_len_str: str) -> dict[str, list[dict]]:
             mode_to_points = {
                 run_type: [] for run_type in INCLUDED_CPP_RUN_TYPES if run_type != "cpp_batched"
             }
-            cpp_batched_thread_points: dict[int, list[dict]] = {}
             cpp_batched_envelope_candidates: list[dict] = []
             for stats_key, stats in stats_by_key.items():
                 if not _has_valid_fps(stats):
@@ -349,7 +328,6 @@ def _collect_cpp_series(rollout_len_str: str) -> dict[str, list[dict]]:
                         "best_fps": best_fps,
                         "num_threads": num_threads,
                     }
-                    cpp_batched_thread_points.setdefault(num_threads, []).append(point)
                     cpp_batched_envelope_candidates.append(point)
                 else:
                     mode_to_points[execution_mode].append({
@@ -389,24 +367,6 @@ def _collect_cpp_series(rollout_len_str: str) -> dict[str, list[dict]]:
                 base_label = style["label"]
                 if include_device_in_label:
                     base_label = f"{base_label} [{_normalize_device_label(device)}]"
-
-                for num_threads, points in sorted(
-                    cpp_batched_thread_points.items(),
-                    key=lambda item: item[0],
-                ):
-                    points = sorted(points, key=lambda point: point["x"])
-                    thread_label = _format_cpp_batched_thread_label(style["label"], num_threads)
-                    if include_device_in_label:
-                        thread_label = f"{thread_label} [{_normalize_device_label(device)}]"
-                    series_by_game.setdefault(game, []).append({
-                        "label": thread_label,
-                        "x": [point["x"] for point in points],
-                        "y": [point["y"] for point in points],
-                        "color": style["color"],
-                        "linestyle": "None",
-                        "marker": _get_cpp_batched_thread_marker(num_threads),
-                        "alpha": 0.6,
-                    })
 
                 series_by_game.setdefault(game, []).append({
                     "label": base_label,
