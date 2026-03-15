@@ -362,7 +362,15 @@ def gen_grid_cfgs(sweep_cfg: SweepRLConfig, base_cfg: TrainConfig):
         else:
             game_default_n_envs = sweep_cfg.n_envs
         n_levels = games_to_n_levels[game]
-        for level in range(n_levels):
+        # level=-1 means "train on all levels at once" (randomly sampled).
+        # If level is a sweep axis, use those values; otherwise check sweep_cfg.level.
+        if "level" in sweep_axis_names:
+            levels_to_run = [int(l) for l in sweep_axes["level"]]
+        elif sweep_cfg.level == -1:
+            levels_to_run = [-1]
+        else:
+            levels_to_run = list(range(n_levels))
+        for level in levels_to_run:
             exp_cfgs = []
             for updates in sweep_updates:
                 cfg_i = copy.deepcopy(base_cfg)
@@ -376,7 +384,8 @@ def gen_grid_cfgs(sweep_cfg: SweepRLConfig, base_cfg: TrainConfig):
                 for k, v in updates.items():
                     setattr(cfg_i, k, _coerce_to_field_type(cfg_i, k, v))
                 cfg_i.game = game
-                cfg_i.level = level
+                if "level" not in updates:
+                    cfg_i.level = level
                 if "n_envs" not in updates:
                     cfg_i.n_envs = game_default_n_envs
                 cfg_i.total_timesteps = int(sweep_cfg.total_timesteps)
