@@ -14,7 +14,7 @@ import submitit
 
 from conf.config import SearchCppConfig
 from puzzlescript_jax.globals import CPP_SOLS_DIR, STANDALONE_CPP_RESULTS_PATH
-from puzzlescript_jax.utils import get_list_of_games_for_testing, init_ps_lark_parser
+from puzzlescript_jax.utils import get_list_of_games_for_testing, init_ps_lark_parser, distribute_slurm_jobs
 from puzzlescript_cpp import CppPuzzleScriptBackend
 
 
@@ -36,9 +36,8 @@ def main_launch(cfg: SearchCppConfig):
     if cfg.slurm:
         games = get_list_of_games_for_testing(
             dataset=cfg.dataset, include_random=cfg.include_randomness, random_order=cfg.random_order)
-        n_jobs = math.ceil(len(games) / cfg.n_games_per_job)
-        game_sublists = [games[i::n_jobs] for i in range(n_jobs)]
-        assert np.sum([len(g) for g in game_sublists]) == len(games), "Not all games are assigned to a job."
+        game_sublists = distribute_slurm_jobs(games, cfg.n_games_per_job)
+        n_jobs = len(game_sublists)
         executor = submitit.AutoExecutor(folder=os.path.join("submitit_logs", "search_cpp"))
         executor.update_parameters(
             slurm_job_name="search_cpp",

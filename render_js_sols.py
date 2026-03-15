@@ -12,7 +12,7 @@ import submitit
 from conf.config import SearchNodeJSConfig
 from backends import NodeJSPuzzleScriptBackend
 from puzzlescript_jax.globals import JS_SOLS_DIR
-from puzzlescript_jax.utils import get_list_of_games_for_testing, init_ps_lark_parser
+from puzzlescript_jax.utils import get_list_of_games_for_testing, init_ps_lark_parser, distribute_slurm_jobs
 
 
 dotenv.load_dotenv()
@@ -23,9 +23,8 @@ def main_launch(cfg: SearchNodeJSConfig):
     if cfg.slurm:
         games = get_list_of_games_for_testing(dataset=cfg.dataset, random_order=cfg.random_order)
         # Get sub-lists of games to distribute across nodes.
-        n_jobs = math.ceil(len(games) / cfg.n_games_per_job)
-        game_sublists = [games[i::n_jobs] for i in range(n_jobs)]
-        assert sum(len(g) for g in game_sublists) == len(games), "Not all games are assigned to a job."
+        game_sublists = distribute_slurm_jobs(games, cfg.n_games_per_job)
+        n_jobs = len(game_sublists)
         executor = submitit.AutoExecutor(folder=os.path.join("submitit_logs", "render_js_sols"))
         executor.update_parameters(
             slurm_job_name="render_js_sols",

@@ -22,7 +22,7 @@ from conf.config import ProfileJaxRandConfig
 from puzzlescript_jax.env import PJState
 from puzzlescript_jax.env_switch import PuzzleJaxEnvSwitch
 from puzzlescript_jax.globals import JAX_PROFILING_RESULTS_DIR
-from puzzlescript_jax.utils import get_list_of_games_for_testing, load_games_n_rules_sorted, init_ps_lark_parser, get_tree_from_txt
+from puzzlescript_jax.utils import get_list_of_games_for_testing, load_games_n_rules_sorted, init_ps_lark_parser, get_tree_from_txt, distribute_slurm_jobs
 from utils_rl import get_env_params_from_config, init_ps_env
 
 
@@ -104,11 +104,8 @@ def main_launch(cfg: ProfileJaxRandConfig):
         if not games:
             return
 
-        n_jobs = math.ceil(len(games) / cfg.n_games_per_job)
-        game_sublists = [games[i::n_jobs] for i in range(n_jobs)]
-        assert sum(len(game_list) for game_list in game_sublists) == len(games), (
-            "Not all games are assigned to a job."
-        )
+        game_sublists = distribute_slurm_jobs(games, cfg.n_games_per_job)
+        n_jobs = len(game_sublists)
         executor = submitit.AutoExecutor(folder=os.path.join("submitit_logs", "profile_rand_jax"))
         executor.update_parameters(
             slurm_job_name="profile_rand_jax",

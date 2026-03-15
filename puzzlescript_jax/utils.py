@@ -717,6 +717,27 @@ def get_list_of_games_for_testing(dataset="pedro", include_random=False, random_
     return games
 
 
+MAX_SLURM_JOBS = 10_000
+
+
+def distribute_slurm_jobs(items: list, n_items_per_job: int = 1,
+                          max_jobs: int = MAX_SLURM_JOBS) -> list[list]:
+    """Split *items* into sub-lists for SLURM array distribution.
+
+    The number of jobs is capped at *max_jobs* (default 10 000) so that large
+    datasets don't exceed SLURM array limits.  When the cap kicks in,
+    ``n_items_per_job`` is effectively increased so that every item is still
+    covered.
+
+    Returns a list of sub-lists (one per SLURM array task).
+    """
+    n_jobs = math.ceil(len(items) / n_items_per_job)
+    n_jobs = min(n_jobs, max_jobs)
+    sublists = [items[i::n_jobs] for i in range(n_jobs)]
+    assert sum(len(s) for s in sublists) == len(items), "Not all items assigned to a job."
+    return sublists
+
+
 import subprocess
 
 def get_current_commit_hash():

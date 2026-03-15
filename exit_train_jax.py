@@ -47,7 +47,7 @@ if JAXTAR_DIR not in sys.path:
 
 from conf.config import ExitTrainConfig
 from puzzlescript_jax.wrappers import PuzzleJaxPuxleEnv, PuzzleJaxHeuristic
-from puzzlescript_jax.utils import get_list_of_games_for_testing, get_n_levels_per_game
+from puzzlescript_jax.utils import get_list_of_games_for_testing, get_n_levels_per_game, distribute_slurm_jobs
 from JAxtar.stars.astar import astar_builder
 from JAxtar.stars.search_base import SearchResult
 from heuristic.heuristic_base import Heuristic
@@ -1123,9 +1123,8 @@ def main(cfg: ExitTrainConfig):
         return
 
     # Distribute jobs across SLURM array tasks, grouped by n_games_per_job.
-    n_jobs = math.ceil(len(jobs) / cfg.n_games_per_job)
-    job_sublists = [jobs[i::n_jobs] for i in range(n_jobs)]
-    assert sum(len(s) for s in job_sublists) == len(jobs), "Not all jobs assigned."
+    job_sublists = distribute_slurm_jobs(jobs, cfg.n_games_per_job)
+    n_jobs = len(job_sublists)
 
     executor = submitit.AutoExecutor(folder=os.path.join("submitit_logs", "exit"))
     executor.update_parameters(

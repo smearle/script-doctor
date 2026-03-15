@@ -18,7 +18,7 @@ from javascript import require
 
 from conf.config import ProfileRandCppConfig
 from puzzlescript_jax.globals import CPP_PROFILING_RESULTS_DIR
-from puzzlescript_jax.utils import get_list_of_games_for_testing, init_ps_lark_parser
+from puzzlescript_jax.utils import get_list_of_games_for_testing, init_ps_lark_parser, distribute_slurm_jobs
 from puzzlescript_cpp import CppBatchedPuzzleScriptEnv, CppPuzzleScriptEngine
 from puzzlescript_nodejs.utils import compile_game
 
@@ -435,11 +435,8 @@ def main_launch(cfg: ProfileRandCppConfig):
         if not games:
             return
 
-        n_jobs = math.ceil(len(games) / cfg.n_games_per_job)
-        game_sublists = [games[i::n_jobs] for i in range(n_jobs)]
-        assert sum(len(game_list) for game_list in game_sublists) == len(games), (
-            "Not all games are assigned to a job."
-        )
+        game_sublists = distribute_slurm_jobs(games, cfg.n_games_per_job)
+        n_jobs = len(game_sublists)
         executor = submitit.AutoExecutor(folder=os.path.join("submitit_logs", "profile_rand_cpp"))
         executor.update_parameters(
             slurm_job_name="profile_rand_cpp",

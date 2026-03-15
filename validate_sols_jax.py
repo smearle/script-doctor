@@ -32,7 +32,7 @@ from puzzlescript_jax.globals import (
 from puzzlescript_jax.preprocessing import PJParseErrors, get_tree_from_txt
 from puzzlescript_jax.env_utils import multihot_to_desc
 from puzzlescript_nodejs.utils import replay_actions_js
-from puzzlescript_jax.utils import get_list_of_games_for_testing, level_to_int_arr, to_binary_vectors
+from puzzlescript_jax.utils import get_list_of_games_for_testing, level_to_int_arr, to_binary_vectors, distribute_slurm_jobs
 from utils_rl import get_env_params_from_config
 
 
@@ -161,9 +161,8 @@ def main_launch(cfg: JaxValidationConfig):
     if cfg.slurm:
         games = get_list_of_games_for_testing(dataset=cfg.dataset)
         # Get sub-lists of games to distribute across nodes.
-        n_jobs = math.ceil(len(games) / cfg.n_games_per_job)
-        game_sublists = [games[i::n_jobs] for i in range(n_jobs)]
-        assert np.sum([len(g) for g in game_sublists]) == len(games), "Not all games are assigned to a job."
+        game_sublists = distribute_slurm_jobs(games, cfg.n_games_per_job)
+        n_jobs = len(game_sublists)
         executor = submitit.AutoExecutor(folder=os.path.join("submitit_logs", "validate_sols"))
         executor.update_parameters(
             slurm_job_name=f"validate_sols",

@@ -19,7 +19,7 @@ import submitit
 from conf.config import ProfileRandNodeJSConfig
 from backends import NodeJSPuzzleScriptBackend
 from puzzlescript_jax.globals import GAMES_DIR, NODEJS_PROFILING_RESULTS_DIR, SIMPLIFIED_GAMES_DIR
-from puzzlescript_jax.utils import get_list_of_games_for_testing
+from puzzlescript_jax.utils import get_list_of_games_for_testing, distribute_slurm_jobs
 from puzzlescript_nodejs.rl_env import NodeJSBatchedPuzzleEnv
 
 
@@ -507,11 +507,8 @@ def main_launch(cfg: ProfileRandNodeJSConfig):
         if not games:
             return
 
-        n_jobs = math.ceil(len(games) / cfg.n_games_per_job)
-        game_sublists = [games[i::n_jobs] for i in range(n_jobs)]
-        assert sum(len(game_list) for game_list in game_sublists) == len(games), (
-            "Not all games are assigned to a job."
-        )
+        game_sublists = distribute_slurm_jobs(games, cfg.n_games_per_job)
+        n_jobs = len(game_sublists)
         executor = submitit.AutoExecutor(folder=os.path.join("submitit_logs", "profile_rand_nodejs"))
         executor.update_parameters(
             slurm_job_name="profile_rand_nodejs",
