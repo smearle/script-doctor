@@ -129,6 +129,33 @@ def get_placeable_chars(env: PuzzleJaxEnv) -> List[str]:
     return list(env.chars_to_idxs.keys())
 
 
+def extract_level_tile_columns(env: PuzzleJaxEnv,
+                               level_indices: Optional[List[int]] = None,
+                               ) -> np.ndarray:
+    """Extract unique tile columns (multihot profiles) from levels.
+
+    Returns array of shape [N, n_objs] where each row is a unique tile column
+    that appears in the specified levels.
+
+    Args:
+        env: Initialised PuzzleJaxEnv.
+        level_indices: Which levels to scan.  None means all.
+    """
+    if level_indices is None:
+        level_indices = list(range(len(env.levels)))
+    columns = set()
+    for li in level_indices:
+        multihot = np.array(env.get_level(li))  # [n_objs+, H, W]
+        n_objs = env.n_objs
+        mh = multihot[:n_objs]  # [n_objs, H, W]
+        H, W = mh.shape[1], mh.shape[2]
+        for h in range(H):
+            for w in range(W):
+                col = tuple(mh[:, h, w].astype(int))
+                columns.add(col)
+    return np.array(sorted(columns), dtype=multihot.dtype)  # [N, n_objs]
+
+
 def get_layer_for_obj(env: PuzzleJaxEnv, obj_idx: int) -> int:
     """Return the collision layer index for an atomic object index."""
     for layer_i, mask in enumerate(env.layer_masks):
@@ -164,22 +191,31 @@ def mutate_swap(env: PuzzleJaxEnv, multihot: np.ndarray, rng: np.random.Generato
     return m
 
 
-def mutate_place(env: PuzzleJaxEnv, multihot: np.ndarray, rng: np.random.Generator) -> np.ndarray:
-    """Place a random non-background object at a random cell (respecting collision layers)."""
+def mutate_place(env: PuzzleJaxEnv, multihot: np.ndarray, rng: np.random.Generator,
+                 allowed_tile_columns: Optional[np.ndarray] = None) -> np.ndarray:
+    """Stamp a random allowed tile column at a random cell.
+
+    If *allowed_tile_columns* is provided (shape [N, n_objs]), one of these
+    known-good tile profiles is placed.  Otherwise falls back to placing a
+    random non-background atomic object (legacy behaviour).
+    """
     n_objs = env.n_objs
     H, W = multihot.shape[1], multihot.shape[2]
-    bg_idx = env.objs_to_idxs.get("background", 0)
+    h, w = rng.integers(H), rng.integers(W)
+    m = multihot.copy()
 
-    # Pick a random atomic non-background object
+    if allowed_tile_columns is not None and len(allowed_tile_columns) > 0:
+        col = allowed_tile_columns[rng.integers(len(allowed_tile_columns))]
+        m[:n_objs, h, w] = col
+        return m
+
+    # Legacy fallback: place a single random non-bg object
+    bg_idx = env.objs_to_idxs.get("background", 0)
     candidates = [i for i in range(n_objs) if i != bg_idx]
     if not candidates:
         return multihot
     obj_idx = rng.choice(candidates)
     layer_i = get_layer_for_obj(env, obj_idx)
-
-    h, w = rng.integers(H), rng.integers(W)
-    m = multihot.copy()
-    # Clear other objects on the same collision layer at this cell
     if layer_i >= 0:
         layer_mask = env.layer_masks[layer_i]
         for oi in range(n_objs):
@@ -253,7 +289,8 @@ MUTATIONS = [mutate_swap, mutate_place, mutate_remove, mutate_move]
 
 
 def mutate(env: PuzzleJaxEnv, multihot: np.ndarray, rng: np.random.Generator,
-           n_mutations: int = 1, required_player_count: Optional[int] = None) -> np.ndarray:
+           n_mutations: int = 1, required_player_count: Optional[int] = None,
+           allowed_tile_columns: Optional[np.ndarray] = None) -> np.ndarray:
     """Apply *n_mutations* random mutations to a multihot level.
 
     Ensures at least one player tile remains after mutation.  When
@@ -263,7 +300,10 @@ def mutate(env: PuzzleJaxEnv, multihot: np.ndarray, rng: np.random.Generator,
     m = multihot.copy()
     for _ in range(n_mutations):
         fn = rng.choice(MUTATIONS)
-        candidate = fn(env, m, rng)
+        if fn is mutate_place:
+            candidate = fn(env, m, rng, allowed_tile_columns=allowed_tile_columns)
+        else:
+            candidate = fn(env, m, rng)
         # Safety: reject mutations that remove all players
         n_players = _count_players(env, candidate)
         if n_players < 1:
@@ -476,6 +516,7 @@ def evolve(
     fitness_mode: str,
     preserve_players: bool,
     depth_increase_threshold: float = 0.95,
+    tile_chars_from_all_levels: bool = True,
 ):
     """Run the (1+λ) evolution loop.  Automatically resumes from checkpoint."""
     initial_max_nodes = max_nodes
@@ -494,6 +535,14 @@ def evolve(
     required_player_count = original_player_count if preserve_players else None
     print(f"  Original player count: {original_player_count}"
           f"  (enforced={preserve_players})")
+
+    # ---- Extract allowed tile columns from levels ----
+    if tile_chars_from_all_levels:
+        allowed_tile_columns = extract_level_tile_columns(env)
+    else:
+        allowed_tile_columns = extract_level_tile_columns(env, level_indices=[level_i])
+    print(f"  Allowed tile patterns: {len(allowed_tile_columns)} "
+          f"(from {'all levels' if tile_chars_from_all_levels else f'level {level_i} only'})")
 
     # Output directory – includes hyperparam signature
     run_name = _make_run_dir_name(
@@ -606,6 +655,7 @@ def evolve(
             child_multihot = mutate(
                 env, champion_multihot, rng, n_mutations=n_mut,
                 required_player_count=required_player_count,
+                allowed_tile_columns=allowed_tile_columns,
             )
 
             # Evaluate
@@ -777,6 +827,7 @@ def main(cfg: EvolveLevelConfig):
         fitness_mode=cfg.fitness,
         preserve_players=not cfg.allow_player_change,
         depth_increase_threshold=cfg.depth_increase_threshold,
+        tile_chars_from_all_levels=cfg.tile_chars_from_all_levels,
     )
 
 

@@ -131,6 +131,7 @@ class EvolveLevelConfig:
     fitness: str = "states"
     allow_player_change: bool = False
     depth_increase_threshold: float = 0.95
+    tile_chars_from_all_levels: bool = False
 
 
 @dataclass
@@ -151,6 +152,7 @@ class EvolveLevelNodeJSConfig:
     gif_frame_duration: float = 0.05
     gif_scale: int = 10
     depth_increase_threshold: float = 0.95
+    tile_chars_from_all_levels: bool = False
 
 
 @dataclass
@@ -172,6 +174,7 @@ class EvolveLevelCppConfig:
     gif_scale: int = 1
     n_workers: int = 4
     depth_increase_threshold: float = 0.95
+    tile_chars_from_all_levels: bool = False
 
 
 @dataclass

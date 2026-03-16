@@ -8,6 +8,7 @@ import pickle
 import random
 import re
 import shutil
+import time
 import traceback
 from collections import OrderedDict
 from typing import List, Optional
@@ -135,12 +136,16 @@ def multihot_level_from_js_state(level_state, obj_list, target_obj_names=None):
 
 
 def format_state_for_log(state, env):
-    multihot_desc = multihot_to_desc(
-        np.asarray(state.multihot_level),
-        env.objs_to_idxs,
-        env.n_objs,
-        env.obj_idxs_to_force_idxs,
-    )
+    ml = np.asarray(state.multihot_level)
+    if ml.ndim == 3:
+        multihot_desc = multihot_to_desc(
+            ml,
+            env.objs_to_idxs,
+            env.n_objs,
+            env.obj_idxs_to_force_idxs,
+        )
+    else:
+        multihot_desc = f"<multihot_level has unexpected shape {ml.shape}>"
     return (
         "PJState(\n"
         f"  multihot_level=\n{multihot_desc}\n"
@@ -244,7 +249,13 @@ def main(cfg: JaxValidationConfig, games: Optional[List[str]] = None):
     #         solution_rewards_dict = json.load(f)    
     # else:
     solution_rewards_dict = {}
-    
+
+    compile_times_path = os.path.join('data', 'compile_times.json')
+    if os.path.isfile(compile_times_path) and not cfg.overwrite:
+        with open(compile_times_path, 'r') as f:
+            compile_times = json.load(f)
+    else:
+        compile_times = {}
 
     def save_stats(results, n_levels, n_success, n_compile_error, n_rigid_prefix_error, n_timeout_error,
                    n_runtime_error, n_solution_error, n_state_error, n_score_error, n_unvalidated_levels,
@@ -268,6 +279,9 @@ def main(cfg: JaxValidationConfig, games: Optional[List[str]] = None):
 
         with open(SOLUTION_REWARDS_PATH, 'w') as f:
             json.dump(solution_rewards_dict, f, indent=4)
+
+        with open(compile_times_path, 'w') as f:
+            json.dump(compile_times, f, indent=4)
 
 
     def is_runtime_timeout_log(log: str) -> bool:
@@ -550,15 +564,20 @@ def main(cfg: JaxValidationConfig, games: Optional[List[str]] = None):
                 continue
 
             # Otherwise, let's initialize the environment (in single-level mode on the given level) and run the solution.
+            t_parse_start = time.monotonic()
             tree, success, err_msg = get_tree_from_txt(parser, game, test_env_init=False, timeout=60*20)
+            t_parse_end = time.monotonic()
             if success == PJParseErrors.SUCCESS:
                 try:
+                    t_env_start = time.monotonic()
                     env = PuzzleJaxEnv(tree, debug=False, print_score=False, level_i=level_i)
+                    t_env_end = time.monotonic()
                 except KeyboardInterrupt as e:
                     raise e
                 except bdb.BdbQuit as e:
                     raise e
                 except Exception as e:
+                    t_env_end = time.monotonic()
                     err_msg = traceback.format_exc()
                     success = PJParseErrors.ENV_ERROR
             if success != PJParseErrors.SUCCESS:
@@ -650,16 +669,37 @@ def main(cfg: JaxValidationConfig, games: Optional[List[str]] = None):
                     n_rules = update_game_randomness(n_rules_key, n_rules, env.has_randomness())
                     game_randomness_updated = True
                 if len(actions) > 0:
+                    t_jit_start = time.monotonic()
                     state, (state_v, reward_v) = jax.lax.scan(step_env, init_state, actions)
+                    state.win.block_until_ready()
+                    t_jit_end = time.monotonic()
                     reward = float(reward_v.sum().item())
                     # Use jax tree map to add the initial state
                     state_v = jax.tree.map(lambda x, y: jnp.concatenate([x[None], y]), init_state, state_v)
                 else:
+                    t_jit_start = t_jit_end = time.monotonic()
                     reward = 0.0
                     state_v = jax.tree.map(lambda x: x[None], init_state)
                     state = init_state
                 if level_i not in solution_rewards_dict or cfg.overwrite:
                     solution_rewards_dict[game][level_i] = reward
+
+                # Record compile times for this game/level.
+                # Game metadata (n_rules, n_objs, level dims, etc.) lives in
+                # data/games_metadata.json (written by preprocess_games.py) and
+                # can be joined on game name for analysis.
+                if game_name not in compile_times or cfg.overwrite:
+                    compile_times[game_name] = {
+                        'level_i': level_i,
+                        'parse_time_s': round(t_parse_end - t_parse_start, 3),
+                        'env_init_time_s': round(t_env_end - t_env_start, 3),
+                        'jit_time_s': round(t_jit_end - t_jit_start, 3),
+                        'total_compile_time_s': round(
+                            (t_parse_end - t_parse_start) +
+                            (t_env_end - t_env_start) +
+                            (t_jit_end - t_jit_start), 3
+                        ),
+                    }
                 if level_win and not state.win:
                 # if not done:
                     sol_log = f"Level {level_i} solution failed\nActions: {actions}\n"

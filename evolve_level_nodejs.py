@@ -67,10 +67,20 @@ def parse_legend_single_char_entries(game_text: str) -> dict[str, str]:
     return entries
 
 
-def get_placeable_chars(game_text: str, level: np.ndarray) -> list[str]:
-    legend_entries = parse_legend_single_char_entries(game_text)
-    level_chars = {char.lower() for char in level.flatten()}
-    chars = set(legend_entries.keys()) | level_chars
+def get_placeable_chars(game_text: str, level: np.ndarray,
+                        all_levels: Optional[list[np.ndarray]] = None) -> list[str]:
+    """Return characters that may be placed during mutation.
+
+    By default, only characters that already appear in *all_levels* (or just
+    *level* when *all_levels* is None) are considered placeable.  This avoids
+    introducing mid-animation sprites or objects absent from the game's levels.
+    """
+    if all_levels is not None:
+        chars = set()
+        for lv in all_levels:
+            chars |= {char.lower() for char in lv.flatten()}
+    else:
+        chars = {char.lower() for char in level.flatten()}
     return sorted(chars)
 
 
@@ -345,6 +355,7 @@ def evolve(
     gif_frame_duration: float,
     gif_scale: int,
     depth_increase_threshold: float = 0.95,
+    tile_chars_from_all_levels: bool = True,
 ) -> None:
     initial_max_steps = max_steps
     rng = np.random.default_rng(seed)
@@ -353,7 +364,10 @@ def evolve(
     game_prefix, levels = split_game_levels(game_text)
     original_level = levels[level_i].copy()
 
-    placeable_chars = get_placeable_chars(game_text, original_level)
+    placeable_chars = get_placeable_chars(
+        game_text, original_level,
+        all_levels=levels if tile_chars_from_all_levels else None,
+    )
     player_chars = get_player_chars(game_text, original_level)
     background_char = infer_background_char(original_level, player_chars)
     original_player_count = count_players(original_level, player_chars)
@@ -529,6 +543,7 @@ def main(cfg: EvolveLevelNodeJSConfig) -> None:
         gif_frame_duration=cfg.gif_frame_duration,
         gif_scale=cfg.gif_scale,
         depth_increase_threshold=cfg.depth_increase_threshold,
+        tile_chars_from_all_levels=cfg.tile_chars_from_all_levels,
     )
 
 

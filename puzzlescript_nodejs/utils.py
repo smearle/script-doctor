@@ -36,10 +36,10 @@ def replay_actions_js(
     tests we want direct gameplay semantics from ``engine.processInput()``.
     """
     if random_seed is not None:
-        engine.compile(['loadLevel', level_i], game_text, random_seed)
+        engine.compile(['loadLevel', level_i], game_text, random_seed, timeout=120)
     else:
-        engine.compile(['loadLevel', level_i], game_text)
-    solver.precalcDistances(engine)
+        engine.compile(['loadLevel', level_i], game_text, timeout=120)
+    solver.precalcDistances(engine, timeout=120)
     scores = [solver.getScore(engine)]
     states = [engine.backupLevel()]
     winning = [bool(engine.getWinning())]

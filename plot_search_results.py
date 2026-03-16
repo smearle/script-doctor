@@ -15,13 +15,23 @@ from search_nodejs import get_standalone_run_params_from_name
 from puzzlescript_jax.utils import get_list_of_games_for_testing, game_names_remap
 
 
-SEARCH_PLOTS_DIR = os.path.join(PLOTS_DIR, 'search')
+def _search_out_dir(dataset: str) -> str:
+    return os.path.join(PLOTS_DIR, 'search', dataset)
+
+def _heatmaps_dir(dataset: str) -> str:
+    return os.path.join(_search_out_dir(dataset), 'heatmaps')
+
+def _features_dir(dataset: str) -> str:
+    return os.path.join(_search_out_dir(dataset), 'features')
+
+def _correlations_dir(dataset: str) -> str:
+    return os.path.join(_search_out_dir(dataset), 'correlations')
 OOM_SENTINEL = -1.0
 OOM_COLOR = '#FF8C00'  # dark orange
 MAX_GAMES_FOR_HEATMAPS = 100  # skip per-game heatmaps when there are more games than this
 
 BFS_RESULTS_PATH = os.path.join('data', 'bfs_results.json')
-HEATMAP_SEARCH_DEPTHS = [1_000_000, 100_000]
+HEATMAP_SEARCH_DEPTHS = [1_000_000]
 ALL_RESULTS_PATH = os.path.join('data', 'all_search_results.json')
 EXIT_RESULTS_PATH = os.path.join('data', 'exit_results.json')
 EXIT_TRAINING_DIR = os.path.join('data', 'exit_training')
@@ -449,7 +459,7 @@ def aggregate_results(cfg: PlotSearch):
 
     # Heuristic quality analysis (needs per-level BFS+A* data)
     if cfg.algo == 'all' or cfg.algo in ('bfs', 'astar'):
-        generate_heuristic_quality_report(games)
+        generate_heuristic_quality_report(games, cfg.dataset)
 
     if cfg.algo == 'all':
         with open(ALL_RESULTS_PATH, 'w') as f:
@@ -511,7 +521,7 @@ def plot(cfg: PlotSearch, results=None, per_level_by_depth=None):
                     results = json.load(f)
             else:
                 results = {}
-        plot_exit_heatmap(results)
+        plot_exit_heatmap(results, cfg.dataset)
         return
 
     if results is None:
@@ -540,11 +550,12 @@ def plot(cfg: PlotSearch, results=None, per_level_by_depth=None):
         df.rename(columns={'sol_len': 'mean_sol_len'}, inplace=True)
     # df = df.sort_values(by=['pct_solved', 'n_iters'], ascending=[False, True])
 
-    os.makedirs(SEARCH_PLOTS_DIR, exist_ok=True)
+    out_dir = _search_out_dir(cfg.dataset)
+    os.makedirs(out_dir, exist_ok=True)
     algo_slug = cfg.algo.lower()
     algo_label = _algo_label(cfg.algo)
 
-    csv_file_path = os.path.join(SEARCH_PLOTS_DIR,f'standalone_{algo_slug}_results.csv')
+    csv_file_path = os.path.join(out_dir, f'standalone_{algo_slug}_results.csv')
     df.to_csv(csv_file_path, index=True, float_format="%.2f")
     print(f'Saved results to {csv_file_path}')
 
@@ -567,7 +578,7 @@ def plot(cfg: PlotSearch, results=None, per_level_by_depth=None):
         depth_df.index = depth_df.index.str.title()
         heatmap_source_dfs[depth] = depth_df
 
-    generate_heatmaps(heatmap_source_dfs, depth_order, algo_label, algo_slug, per_level_by_depth)
+    generate_heatmaps(heatmap_source_dfs, depth_order, algo_label, algo_slug, per_level_by_depth, cfg.dataset)
 
     latex_df = df.copy()
 
@@ -609,7 +620,7 @@ def plot(cfg: PlotSearch, results=None, per_level_by_depth=None):
         if column in latex_df.columns:
             latex_df[column] = latex_df[column].apply(lambda value: _format_with_commas(value, decimals))
 
-    latex_file_path = os.path.join(SEARCH_PLOTS_DIR,f'{algo_slug}_results.tex')
+    latex_file_path = os.path.join(out_dir, f'{algo_slug}_results.tex')
     caption_steps = _format_steps_label(selected_depth)
     with open(latex_file_path, 'w') as f:
         f.write(latex_df.to_latex(index=True, float_format="%.2f", escape=False, caption=f"Results of {algo_label} on full dataset of games, with max {caption_steps} and a timeout of 1 minute.",
@@ -617,7 +628,7 @@ def plot(cfg: PlotSearch, results=None, per_level_by_depth=None):
     print(f'Saved latex table to {latex_file_path}')
 
 
-def plot_exit_heatmap(results: dict) -> None:
+def plot_exit_heatmap(results: dict, dataset: str = 'priority') -> None:
     if not results:
         print('No ExIt results found to plot.')
         return
@@ -627,8 +638,11 @@ def plot_exit_heatmap(results: dict) -> None:
         print('No ExIt solve-rate data found to plot.')
         return
 
-    os.makedirs(SEARCH_PLOTS_DIR, exist_ok=True)
-    csv_file_path = os.path.join(SEARCH_PLOTS_DIR,'exit_results.csv')
+    heatmaps_dir = _heatmaps_dir(dataset)
+    out_dir = _search_out_dir(dataset)
+    os.makedirs(out_dir, exist_ok=True)
+    os.makedirs(heatmaps_dir, exist_ok=True)
+    csv_file_path = os.path.join(out_dir, 'exit_results.csv')
     df.to_csv(csv_file_path, index=True, float_format='%.4f')
     print(f'Saved results to {csv_file_path}')
 
@@ -676,7 +690,7 @@ def plot_exit_heatmap(results: dict) -> None:
     plt.xticks(rotation=45, ha='right')
     plt.tight_layout()
 
-    output_path = os.path.join(SEARCH_PLOTS_DIR,'exit_pct_solved_heatmap.png')
+    output_path = os.path.join(heatmaps_dir, 'exit_pct_solved_heatmap.png')
     try:
         plt.savefig(output_path, dpi=300)
         print(f'Saved heatmap to {output_path}')
@@ -708,7 +722,8 @@ def plot_all_algos(cfg: PlotSearch, results_by_algo=None, per_level_by_algo=None
         print('No search results found to plot.')
         return
 
-    os.makedirs(SEARCH_PLOTS_DIR, exist_ok=True)
+    out_dir = _search_out_dir(cfg.dataset)
+    os.makedirs(out_dir, exist_ok=True)
 
     summary_rows = []
     heatmap_source_dfs = {}
@@ -754,15 +769,15 @@ def plot_all_algos(cfg: PlotSearch, results_by_algo=None, per_level_by_algo=None
     if summary_rows:
         summary_df = pd.DataFrame(summary_rows)
         summary_df.sort_values(by=['algo', 'depth', 'game'], ascending=[True, False, True], inplace=True)
-        summary_csv_path = os.path.join(SEARCH_PLOTS_DIR,'standalone_all_search_results.csv')
+        summary_csv_path = os.path.join(out_dir, 'standalone_all_search_results.csv')
         summary_df.to_csv(summary_csv_path, index=False, float_format='%.4f')
         print(f'Saved results to {summary_csv_path}')
 
-    generate_all_heatmaps(heatmap_source_dfs, per_level_by_algo_depth)
+    generate_all_heatmaps(heatmap_source_dfs, per_level_by_algo_depth, cfg.dataset)
 
     if summary_rows:
-        generate_rules_vs_difficulty(summary_df)
-        generate_correlation_report(summary_df)
+        generate_rules_vs_difficulty(summary_df, cfg.dataset)
+        generate_correlation_report(summary_df, cfg.dataset)
 
 
 def _load_game_n_rules() -> dict[str, int]:
@@ -815,7 +830,7 @@ def _make_bin_edges(values: np.ndarray, use_log: bool, n_bins: int | None = None
         return np.unique(np.linspace(min_val, max_val + 1, num=n_bins).astype(int))
 
 
-def generate_rules_vs_difficulty(summary_df: pd.DataFrame) -> None:
+def generate_rules_vs_difficulty(summary_df: pd.DataFrame, dataset: str = 'priority') -> None:
     """Generate feature-vs-difficulty plots from the summary DataFrame.
 
     Uses games_metadata.json when available (rich features), otherwise falls
@@ -841,6 +856,9 @@ def generate_rules_vs_difficulty(summary_df: pd.DataFrame) -> None:
     if df.empty:
         print('No games matched for feature-vs-difficulty plots.')
         return
+
+    features_dir = _features_dir(dataset)
+    os.makedirs(features_dir, exist_ok=True)
 
     # Per-game max depth for each algo
     idx = df.groupby(['algo', 'game'])['depth'].idxmax()
@@ -886,7 +904,7 @@ def generate_rules_vs_difficulty(summary_df: pd.DataFrame) -> None:
 
         fig.suptitle(f'Game Difficulty vs. {feat_label} (max search depth)', fontsize=14)
         fig.tight_layout()
-        path = os.path.join(SEARCH_PLOTS_DIR,f'{feat_slug}_vs_difficulty_scatter.png')
+        path = os.path.join(features_dir, f'{feat_slug}_vs_difficulty_scatter.png')
         fig.savefig(path, dpi=300)
         plt.close(fig)
         print(f'Saved scatter plot to {path}')
@@ -931,7 +949,7 @@ def generate_rules_vs_difficulty(summary_df: pd.DataFrame) -> None:
         ax.legend()
         ax.grid(True, alpha=0.3)
         fig.tight_layout()
-        path = os.path.join(SEARCH_PLOTS_DIR,f'{feat_slug}_vs_difficulty_curves.png')
+        path = os.path.join(features_dir, f'{feat_slug}_vs_difficulty_curves.png')
         fig.savefig(path, dpi=300)
         plt.close(fig)
         print(f'Saved curve plot to {path}')
@@ -983,7 +1001,7 @@ def generate_rules_vs_difficulty(summary_df: pd.DataFrame) -> None:
 
         fig.suptitle(f'Mean Solve Rate vs. {feat_label} by Search Depth', fontsize=14)
         fig.tight_layout()
-        path = os.path.join(SEARCH_PLOTS_DIR,f'{feat_slug}_vs_difficulty_by_depth.png')
+        path = os.path.join(features_dir, f'{feat_slug}_vs_difficulty_by_depth.png')
         fig.savefig(path, dpi=300)
         plt.close(fig)
         print(f'Saved depth curve plot to {path}')
@@ -1033,7 +1051,7 @@ def generate_rules_vs_difficulty(summary_df: pd.DataFrame) -> None:
 
         fig.suptitle(f'Search Effort to Solve vs. {feat_label}', fontsize=14)
         fig.tight_layout()
-        path = os.path.join(SEARCH_PLOTS_DIR,f'{feat_slug}_vs_search_effort_scatter.png')
+        path = os.path.join(features_dir, f'{feat_slug}_vs_search_effort_scatter.png')
         fig.savefig(path, dpi=300)
         plt.close(fig)
         print(f'Saved search effort scatter to {path}')
@@ -1078,7 +1096,7 @@ def generate_rules_vs_difficulty(summary_df: pd.DataFrame) -> None:
         ax.legend()
         ax.grid(True, alpha=0.3)
         fig.tight_layout()
-        path = os.path.join(SEARCH_PLOTS_DIR,f'{feat_slug}_vs_search_effort_curves.png')
+        path = os.path.join(features_dir, f'{feat_slug}_vs_search_effort_curves.png')
         fig.savefig(path, dpi=300)
         plt.close(fig)
         print(f'Saved search effort curves to {path}')
@@ -1136,13 +1154,13 @@ def generate_rules_vs_difficulty(summary_df: pd.DataFrame) -> None:
         ax.legend()
         ax.grid(True, alpha=0.3)
         fig.tight_layout()
-        path = os.path.join(SEARCH_PLOTS_DIR,f'{feat_key}_vs_score_progress_curves.png')
+        path = os.path.join(features_dir, f'{feat_key}_vs_score_progress_curves.png')
         fig.savefig(path, dpi=300)
         plt.close(fig)
         print(f'Saved score progress curve plot to {path}')
 
 
-def generate_correlation_report(summary_df: pd.DataFrame) -> None:
+def generate_correlation_report(summary_df: pd.DataFrame, dataset: str = 'priority') -> None:
     """Compute Spearman correlations between game metadata features and search outcomes.
 
     Prints a table and saves a CSV + heatmap of significant correlations.
@@ -1199,8 +1217,9 @@ def generate_correlation_report(summary_df: pd.DataFrame) -> None:
     corr_df = pd.DataFrame(rows)
     corr_df.sort_values('p_value', inplace=True)
 
-    os.makedirs(SEARCH_PLOTS_DIR, exist_ok=True)
-    csv_path = os.path.join(SEARCH_PLOTS_DIR,'feature_correlations.csv')
+    correlations_dir = _correlations_dir(dataset)
+    os.makedirs(correlations_dir, exist_ok=True)
+    csv_path = os.path.join(correlations_dir, 'feature_correlations.csv')
     corr_df.to_csv(csv_path, index=False, float_format='%.4f')
     print(f'Saved correlation report to {csv_path}')
 
@@ -1258,13 +1277,13 @@ def generate_correlation_report(summary_df: pd.DataFrame) -> None:
         plt.xlabel('Algorithm')
         plt.ylabel('Game Feature')
         plt.tight_layout()
-        path = os.path.join(SEARCH_PLOTS_DIR, f'feature_correlation_{outcome_slug}_heatmap.png')
+        path = os.path.join(correlations_dir, f'feature_correlation_{outcome_slug}_heatmap.png')
         plt.savefig(path, dpi=300)
         plt.close()
         print(f'Saved correlation heatmap to {path}')
 
 
-def generate_heuristic_quality_report(games: list[str]) -> None:
+def generate_heuristic_quality_report(games: list[str], dataset: str = 'priority') -> None:
     """Measure heuristic quality per game via A*/BFS iteration ratio and h₀–d* correlation.
 
     For each game+level solved by both A* and BFS at the same depth budget:
@@ -1342,8 +1361,9 @@ def generate_heuristic_quality_report(games: list[str]) -> None:
         return
 
     hq_df = pd.DataFrame(rows).sort_values('median_iter_ratio')
-    os.makedirs(SEARCH_PLOTS_DIR, exist_ok=True)
-    csv_path = os.path.join(SEARCH_PLOTS_DIR, 'heuristic_quality.csv')
+    out_dir = _search_out_dir(dataset)
+    os.makedirs(out_dir, exist_ok=True)
+    csv_path = os.path.join(out_dir, 'heuristic_quality.csv')
     hq_df.to_csv(csv_path, index=False, float_format='%.4f')
     print(f'\nSaved heuristic quality report to {csv_path}')
 
@@ -1389,17 +1409,21 @@ def generate_heuristic_quality_report(games: list[str]) -> None:
 def generate_all_heatmaps(
     dfs_by_algo_depth: dict,
     per_level_by_algo_depth: dict[tuple[str, int], dict[str, dict[int, float]]] | None = None,
+    dataset: str = 'priority',
 ) -> None:
     if not dfs_by_algo_depth:
         print('No data available for all-algorithm heatmap generation.')
         return
 
-    preferred_depths = HEATMAP_SEARCH_DEPTHS
+    preferred_depths = set(HEATMAP_SEARCH_DEPTHS)
+    # Default to only showing preferred depths (100k, 1M); fall back to all if none match
+    heatmap_keys = [k for k in dfs_by_algo_depth if k[1] in preferred_depths]
+    if not heatmap_keys:
+        heatmap_keys = list(dfs_by_algo_depth.keys())
     ordered_keys = sorted(
-        dfs_by_algo_depth.keys(),
+        heatmap_keys,
         key=lambda key: (
             ALGO_NAMES.index(key[0]) if key[0] in ALGO_NAMES else 999,
-            preferred_depths.index(key[1]) if key[1] in preferred_depths else len(preferred_depths),
             -key[1],
         ),
     )
@@ -1589,9 +1613,11 @@ def generate_all_heatmaps(
         plt.xticks(rotation=45, ha='right')
         plt.tight_layout()
 
-        output_path = os.path.join(SEARCH_PLOTS_DIR,config['output'])
+        heatmaps_dir = _heatmaps_dir(dataset)
+        os.makedirs(heatmaps_dir, exist_ok=True)
+        output_path = os.path.join(heatmaps_dir, config['output'])
         try:
-            plt.savefig(output_path, dpi=300)
+            plt.savefig(output_path, dpi=300, bbox_inches='tight')
             print(f"Saved heatmap to {output_path}")
         except Exception as e:
             print(f"Error saving heatmap {config['output']}: {e}")
@@ -1599,13 +1625,14 @@ def generate_all_heatmaps(
             plt.close()
 
     if per_level_by_algo_depth:
-        generate_all_expanded_heatmap(per_level_by_algo_depth, ordered_keys, row_labels)
+        generate_all_expanded_heatmap(per_level_by_algo_depth, ordered_keys, row_labels, dataset)
 
 
 def generate_all_expanded_heatmap(
     per_level_by_algo_depth: dict[tuple[str, int], dict[str, dict[int, float]]],
     ordered_keys: list[tuple[str, int]],
     row_labels: list[str],
+    dataset: str = 'priority',
 ) -> None:
     levels_by_game: dict[str, set[int]] = {}
     for key in ordered_keys:
@@ -1677,9 +1704,11 @@ def generate_all_expanded_heatmap(
     ax.set_xticklabels([str(level) for _, level in columns], rotation=0, fontsize=7)
     plt.tight_layout(rect=[0, 0, 1, 0.9])
 
-    output_path = os.path.join(SEARCH_PLOTS_DIR,'all_search_win_rate_expanded_heatmap.png')
+    heatmaps_dir = _heatmaps_dir(dataset)
+    os.makedirs(heatmaps_dir, exist_ok=True)
+    output_path = os.path.join(heatmaps_dir, 'all_search_win_rate_expanded_heatmap.png')
     try:
-        plt.savefig(output_path, dpi=300)
+        plt.savefig(output_path, dpi=300, bbox_inches='tight')
         print(f'Saved expanded heatmap to {output_path}')
     except Exception as e:
         print(f'Error saving all-algos expanded heatmap: {e}')
@@ -1693,12 +1722,15 @@ def generate_heatmaps(
     algo_label: str,
     algo_slug: str,
     per_level_by_depth: dict[int, dict[str, dict[int, float]]] | None = None,
+    dataset: str = 'priority',
 ) -> None:
     if not dfs_by_depth:
         print('No data available for heatmap generation.')
         return
 
-    ordered_depths = [depth for depth in depth_order if depth in dfs_by_depth]
+    # Default to preferred depths only; fall back to all if none match
+    preferred = [d for d in HEATMAP_SEARCH_DEPTHS if d in dfs_by_depth]
+    ordered_depths = preferred if preferred else [d for d in depth_order if d in dfs_by_depth]
     if not ordered_depths:
         print('No depth-specific data available for heatmap generation.')
         return
@@ -1856,7 +1888,9 @@ def generate_heatmaps(
         plt.xticks(rotation=45, ha='right')
         plt.tight_layout()
 
-        output_path = os.path.join(SEARCH_PLOTS_DIR,config['output'])
+        heatmaps_dir = _heatmaps_dir(dataset)
+        os.makedirs(heatmaps_dir, exist_ok=True)
+        output_path = os.path.join(heatmaps_dir, config['output'])
         try:
             plt.savefig(output_path, dpi=300)
             print(f"Saved heatmap to {output_path}")
@@ -1866,7 +1900,7 @@ def generate_heatmaps(
             plt.close()
 
     if per_level_by_depth:
-        generate_expanded_heatmap(per_level_by_depth, ordered_depths, algo_label, algo_slug)
+        generate_expanded_heatmap(per_level_by_depth, ordered_depths, algo_label, algo_slug, dataset)
 
 
 def generate_expanded_heatmap(
@@ -1874,6 +1908,7 @@ def generate_expanded_heatmap(
     ordered_depths: list[int],
     algo_label: str,
     algo_slug: str,
+    dataset: str = 'priority',
 ) -> None:
     depth_labels = [_format_steps_label(depth) for depth in ordered_depths]
     levels_by_game: dict[str, set[int]] = {}
@@ -1945,7 +1980,9 @@ def generate_expanded_heatmap(
     ax.set_xticklabels([str(level) for _, level in columns], rotation=0, fontsize=7)
     plt.tight_layout(rect=[0, 0, 1, 0.9])
 
-    output_path = os.path.join(SEARCH_PLOTS_DIR,f'{algo_slug}_win_rate_expanded_heatmap.png')
+    heatmaps_dir = _heatmaps_dir(dataset)
+    os.makedirs(heatmaps_dir, exist_ok=True)
+    output_path = os.path.join(heatmaps_dir, f'{algo_slug}_win_rate_expanded_heatmap.png')
     try:
         plt.savefig(output_path, dpi=300)
         print(f'Saved expanded heatmap to {output_path}')
@@ -1961,7 +1998,8 @@ def old_plot(cfg: PlotSearch):
         results = json.load(f)
 
     # Create a directory for the plots if necessary
-    os.makedirs(SEARCH_PLOTS_DIR, exist_ok=True)
+    out_dir = _search_out_dir(cfg.dataset)
+    os.makedirs(out_dir, exist_ok=True)
 
     sorted_games = get_list_of_games_for_testing(cfg.dataset)
     # Build a sorting key for each index based on the sorted_games list
@@ -2034,14 +2072,14 @@ def old_plot(cfg: PlotSearch):
 
         # Save the dataframe to a CSV file
         csv_file_name = f'{run_name}.csv'
-        csv_file_path = os.path.join(SEARCH_PLOTS_DIR,csv_file_name)
+        csv_file_path = os.path.join(out_dir, csv_file_name)
 
         # Remove underscores from game names
         df.index = df.index.set_levels([df.index.levels[0].str.replace('_', ' '), df.index.levels[1]])
         
         # Save to a latex table
         latex_file_name = f'{concise_run_name}.tex'
-        latex_file_path = os.path.join(SEARCH_PLOTS_DIR,latex_file_name)
+        latex_file_path = os.path.join(out_dir, latex_file_name)
         # df.to_latex(latex_file_path, index=True, float_format="%.2f", escape=False)
         # print(f'Saved latex table to {latex_file_path}')
 
@@ -2065,7 +2103,7 @@ def old_plot(cfg: PlotSearch):
         """
 
         latex_file_name = f'{concise_run_name}_split.tex'
-        latex_file_path = os.path.join(SEARCH_PLOTS_DIR,latex_file_name)
+        latex_file_path = os.path.join(out_dir, latex_file_name)
         with open(latex_file_path, 'w') as f:
             f.write(latex_output)
 

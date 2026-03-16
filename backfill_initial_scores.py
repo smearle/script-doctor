@@ -39,7 +39,7 @@ class BackfillConfig:
     dataset: str = "pedro"
     backend: str = "js"  # "js" or "cpp"
     overwrite: bool = False
-    trajectories: bool = False  # also backfill score_trajectory
+    trajectories: bool = True  # also backfill score_trajectory
     slurm: bool = False
     n_games_per_job: int = 1
     slurm_timeout_min: int = 120

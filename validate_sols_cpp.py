@@ -33,15 +33,37 @@ def _restart_js_backend():
     fresh one so that compilation can continue for the remaining games.
     """
     import javascript
-    from javascript.events import connection
     import signal, time
 
+    # First try the clean terminate path
     try:
+        from javascript.events import connection
         os.kill(connection.proc.pid, signal.SIGKILL)
     except Exception:
         pass
-    time.sleep(0.5)
+
+    # Also kill any orphaned node processes spawned by the bridge
+    try:
+        import subprocess
+        subprocess.run(
+            ["pkill", "-f", "bridge.js"],
+            capture_output=True, timeout=5,
+        )
+    except Exception:
+        pass
+
+    time.sleep(1)
+
+    # Tear down the event loop so init() will create a fresh one
+    if javascript.config.event_loop is not None:
+        try:
+            javascript.config.event_loop.on_exit()
+        except Exception:
+            pass
     javascript.config.event_loop = None
+    javascript.config.event_thread = None
+    javascript.config.executor = None
+
     javascript.init()
     backend = NodeJSPuzzleScriptBackend()
     return backend, backend.engine
@@ -121,8 +143,8 @@ def compile_game_for_cpp(js_engine, parser, game):
     simplified_path = f"{game_path[:-4]}_simplified.txt"
     with open(simplified_path, "r") as f:
         game_text = f.read()
-    js_engine.compile(["restart"], game_text)
-    json_str = str(js_engine.serializeCompiledStateJSON())
+    js_engine.compile(["restart"], game_text, timeout=120)
+    json_str = str(js_engine.serializeCompiledStateJSON(timeout=60))
     return game_text, json_str
 
 

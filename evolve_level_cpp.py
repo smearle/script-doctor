@@ -48,10 +48,45 @@ CHECKPOINT_FILE = "checkpoint.pkl"
 # Level metadata extracted from compiled JSON
 # ============================================================================
 
+def _to_i32(val: int) -> int:
+    """Wrap an arbitrary Python int to signed 32-bit range."""
+    val &= 0xFFFFFFFF
+    if val >= 0x80000000:
+        val -= 0x100000000
+    return val
+
+
+def extract_tile_patterns(json_state: dict, level_indices: Optional[list] = None) -> list:
+    """Extract unique tile patterns (as tuples of int32 words) from compiled levels.
+
+    Args:
+        json_state: The compiled game JSON dict.
+        level_indices: If given, only extract from these levels.
+            If None, extract from all levels.
+    """
+    stride = json_state["STRIDE_OBJ"]
+    levels = json_state["levels"]
+    if level_indices is not None:
+        levels = [levels[i] for i in level_indices if i < len(levels)]
+
+    patterns = set()
+    for lev in levels:
+        if not isinstance(lev, dict) or lev.get("type") != "level":
+            continue
+        dat = lev["objects"]
+        n_tiles = lev["width"] * lev["height"]
+        for tile in range(n_tiles):
+            base = tile * stride
+            pattern = tuple(dat[base:base + stride])
+            patterns.add(pattern)
+    return sorted(patterns)
+
+
 class LevelMutator:
     """Encapsulates game metadata and provides bitfield-level mutations."""
 
-    def __init__(self, json_state: dict, width: int, height: int):
+    def __init__(self, json_state: dict, width: int, height: int,
+                 allowed_tile_patterns: Optional[list] = None):
         self.n_objs = json_state["objectCount"]
         self.stride = json_state["STRIDE_OBJ"]
         self.width = width
@@ -81,8 +116,8 @@ class LevelMutator:
                         if obj_idx < self.n_objs:
                             self.obj_to_layer[obj_idx] = layer_i
 
-        # Mutable objects (non-background)
-        self.mutable_objs = [i for i in range(self.n_objs) if i != self.bg_idx]
+        # Allowed tile patterns for mutate_place (whole-tile stamps)
+        self.allowed_tile_patterns = allowed_tile_patterns
 
     def has_obj(self, dat: list, tile: int, obj_idx: int) -> bool:
         word_i, bit = divmod(obj_idx, 32)
@@ -90,11 +125,11 @@ class LevelMutator:
 
     def set_obj(self, dat: list, tile: int, obj_idx: int):
         word_i, bit = divmod(obj_idx, 32)
-        dat[tile * self.stride + word_i] |= (1 << bit)
+        dat[tile * self.stride + word_i] = _to_i32(dat[tile * self.stride + word_i] | (1 << bit))
 
     def clear_obj(self, dat: list, tile: int, obj_idx: int):
         word_i, bit = divmod(obj_idx, 32)
-        dat[tile * self.stride + word_i] &= ~(1 << bit)
+        dat[tile * self.stride + word_i] = _to_i32(dat[tile * self.stride + word_i] & ~(1 << bit))
 
     def clear_layer_at_tile(self, dat: list, tile: int, layer_idx: int):
         """Clear all objects on a collision layer at a tile."""
@@ -102,7 +137,7 @@ class LevelMutator:
         base = tile * self.stride
         for i, mask_word in enumerate(mask_words):
             if mask_word:
-                dat[base + i] &= ~mask_word
+                dat[base + i] = _to_i32(dat[base + i] & ~mask_word)
 
     def get_tile_words(self, dat: list, tile: int) -> list:
         base = tile * self.stride
@@ -149,16 +184,13 @@ class LevelMutator:
         return out
 
     def mutate_place(self, dat: list, rng: np.random.Generator) -> list:
-        """Place a random non-background object at a random tile."""
-        if not self.mutable_objs:
+        """Stamp a random allowed tile pattern at a random tile."""
+        if not self.allowed_tile_patterns:
             return dat
-        obj_idx = int(rng.choice(self.mutable_objs))
+        pattern = self.allowed_tile_patterns[int(rng.integers(len(self.allowed_tile_patterns)))]
         tile = int(rng.integers(self.n_tiles))
-        layer_i = self.obj_to_layer.get(obj_idx, -1)
         out = list(dat)
-        if layer_i >= 0:
-            self.clear_layer_at_tile(out, tile, layer_i)
-        self.set_obj(out, tile, obj_idx)
+        self.set_tile_words(out, tile, list(pattern))
         return out
 
     def mutate_remove(self, dat: list, rng: np.random.Generator) -> list:
@@ -480,6 +512,7 @@ def evolve(
     gif_scale: int,
     n_workers: int,
     depth_increase_threshold: float = 0.95,
+    tile_chars_from_all_levels: bool = True,
 ) -> None:
     initial_max_steps = max_steps
     rng = np.random.default_rng(seed)
@@ -503,8 +536,17 @@ def evolve(
     print(f"  Level {level_i}: {width}x{height}, "
           f"{len(template_dat)} words (stride={json_str['STRIDE_OBJ']})")
 
+    # ---- Extract allowed tile patterns from levels ----
+    if tile_chars_from_all_levels:
+        tile_patterns = extract_tile_patterns(json_str)
+    else:
+        tile_patterns = extract_tile_patterns(json_str, level_indices=[level_i])
+    print(f"  Allowed tile patterns: {len(tile_patterns)} "
+          f"(from {'all levels' if tile_chars_from_all_levels else f'level {level_i} only'})")
+
     # ---- Build mutator ----
-    mutator = LevelMutator(json_str, width, height)
+    mutator = LevelMutator(json_str, width, height,
+                           allowed_tile_patterns=tile_patterns)
     original_player_count = mutator.count_players(template_dat)
     required_player_count = original_player_count if preserve_players else None
     print(f"  Objects: {mutator.n_objs}, Players: {original_player_count} "
@@ -690,6 +732,7 @@ def main(cfg: EvolveLevelCppConfig) -> None:
         gif_scale=cfg.gif_scale,
         n_workers=cfg.n_workers,
         depth_increase_threshold=cfg.depth_increase_threshold,
+        tile_chars_from_all_levels=cfg.tile_chars_from_all_levels,
     )
 
 
