@@ -1,0 +1,37 @@
+# HyperMaze level 0 regression from the JS BFS solution.
+# This guards the long jump/back transfer path that previously showed up in validation.
+up
+up
+up
+left
+left
+left
+down
+down
+down
+left
+left
+left
+up
+up
+up
+right
+right
+right
+down
+down
+down
+right
+right
+left
+left
+up
+up
+up
+right
+right
+left
+left
+down
+down
+down

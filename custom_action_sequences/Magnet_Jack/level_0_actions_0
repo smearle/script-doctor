@@ -1,0 +1,6 @@
+# Magnet_Jack level 0 regression from the JS BFS solution.
+# This specifically guards the JS-state decoding path for games with more than 32 objects.
+right
+action
+right
+right

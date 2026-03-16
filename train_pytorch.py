@@ -26,9 +26,14 @@ from torchinfo import summary as torch_summary
 from tqdm import tqdm
 import wandb
 from puzzlescript_jax.utils import init_ps_lark_parser
-from puzzlescript_cpp import CppBatchedPuzzleScriptEnv, CppPuzzleScriptEnv, Renderer
-from puzzlescript_nodejs.rl_env import NodeJSBatchedPuzzleEnv, NodeJSPuzzleEnv
-from puzzlescript_nodejs.utils import compile_game
+def _import_cpp():
+    from puzzlescript_cpp import CppBatchedPuzzleScriptEnv, CppPuzzleScriptEnv, Renderer
+    return CppBatchedPuzzleScriptEnv, CppPuzzleScriptEnv, Renderer
+
+def _import_nodejs():
+    from puzzlescript_nodejs.rl_env import NodeJSBatchedPuzzleEnv, NodeJSPuzzleEnv
+    from puzzlescript_nodejs.utils import compile_game
+    return NodeJSBatchedPuzzleEnv, NodeJSPuzzleEnv, compile_game
 
 
 ROOT_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -101,10 +106,16 @@ def get_exp_dir(cfg: TrainPytorchConfig) -> str:
 def compile_game_json(game: str) -> tuple[str, str]:
     parser = init_ps_lark_parser()
     js_engine = require(ENGINE_JS_PATH)
+    _, _, compile_game = _import_nodejs()
     compile_game(parser, js_engine, game, 0)
     compiled_json = str(js_engine.serializeCompiledStateJSON())
     sprite_json = str(js_engine.serializeSpriteDataJSON())
     return compiled_json, sprite_json
+
+
+def _step(path: str) -> int:
+    base = os.path.basename(path)
+    return int(base.replace("agent_step", "").replace(".pt", ""))
 
 
 def find_latest_checkpoint(exp_dir: str) -> Optional[str]:
@@ -112,16 +123,12 @@ def find_latest_checkpoint(exp_dir: str) -> Optional[str]:
     ckpts = glob.glob(pattern)
     if not ckpts:
         return None
-
-    def _step(path: str) -> int:
-        base = os.path.basename(path)
-        return int(base.replace("agent_step", "").replace(".pt", ""))
-
     ckpts.sort(key=_step)
     return ckpts[-1]
 
 
-def make_renderer(sprite_json: str, json_str: str) -> Renderer:
+def make_renderer(sprite_json: str, json_str: str):
+    _, _, Renderer = _import_cpp()
     renderer = Renderer()
     renderer.load_sprite_data(sprite_json)
     renderer.load_render_config(json_str)
@@ -135,10 +142,11 @@ def render_eval_episodes_cpp(
     level_i: int,
     max_episode_steps: int,
     n_eps: int,
-    renderer: Renderer,
+    renderer,
     device: torch.device,
 ) -> list[list[np.ndarray]]:
     """Returns a list of episodes, each a list of frames."""
+    _, CppPuzzleScriptEnv, _ = _import_cpp()
     env = CppPuzzleScriptEnv(json_str, level_i=level_i, max_episode_steps=max_episode_steps)
     n_objs, h, w = env.observation_shape
     episodes = []
@@ -175,6 +183,7 @@ def render_eval_episodes_nodejs(
     gif_frame_duration: float,
 ) -> None:
     """Run eval episodes using NodeJS env, then render GIFs by replaying actions."""
+    _, NodeJSPuzzleEnv, _ = _import_nodejs()
     env = NodeJSPuzzleEnv(
         game=game,
         level_i=level_i,
@@ -338,6 +347,7 @@ def create_batched_env(cfg: TrainPytorchConfig):
         raise ValueError(f"Unsupported backend: {cfg.backend}. Expected one of: cpp, nodejs")
 
     if cfg.backend == "cpp":
+        CppBatchedPuzzleScriptEnv, _, _ = _import_cpp()
         json_str, sprite_json = compile_game_json(cfg.game)
         env = CppBatchedPuzzleScriptEnv(
             json_str=json_str,
@@ -349,6 +359,7 @@ def create_batched_env(cfg: TrainPytorchConfig):
         return env, {"json_str": json_str, "sprite_json": sprite_json}
 
     if cfg.backend == "nodejs":
+        NodeJSBatchedPuzzleEnv, _, _ = _import_nodejs()
         env = NodeJSBatchedPuzzleEnv(
             game=cfg.game,
             level_i=cfg.level,
@@ -420,7 +431,7 @@ def train(cfg: TrainPytorchConfig) -> None:
     env = None
     try:
         env, render_ctx = create_batched_env(cfg)
-        if cfg.backend in {"cpp", "nodejs"}:
+        if cfg.backend == "cpp":
             render_ctx["renderer"] = make_renderer(render_ctx["sprite_json"], render_ctx["json_str"])
 
         obs_shape = env.observation_shape
@@ -686,6 +697,10 @@ def train(cfg: TrainPytorchConfig) -> None:
                     ckpt_path,
                 )
                 print(f"Saved checkpoint: {ckpt_path}")
+                # Keep only the 2 most recent checkpoints
+                all_ckpts = sorted(glob.glob(os.path.join(exp_dir, "agent_step*.pt")), key=_step)
+                for old_ckpt in all_ckpts[:-2]:
+                    os.remove(old_ckpt)
 
             if cfg.render_freq > 0 and (update == start_update or update % cfg.render_freq == 0 or update == num_updates):
                 agent.eval()

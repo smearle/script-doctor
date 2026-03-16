@@ -399,8 +399,10 @@ bool Engine::loadFromJSON(const std::string& json_str) {
     }
     groupNumber_to_RigidGroupIndex_.clear();
     if (j.contains("groupNumber_to_RigidGroupIndex")) {
-        for (auto& [key, val] : j["groupNumber_to_RigidGroupIndex"].items())
-            groupNumber_to_RigidGroupIndex_[std::stoi(key)] = val.get<int>();
+        for (auto& [key, val] : j["groupNumber_to_RigidGroupIndex"].items()) {
+            if (!val.is_null())
+                groupNumber_to_RigidGroupIndex_[std::stoi(key)] = val.get<int>();
+        }
     }
 
     // Metadata
