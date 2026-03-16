@@ -25,6 +25,28 @@ from puzzlescript_jax.utils import get_list_of_games_for_testing, distribute_slu
 from puzzlescript_nodejs.utils import replay_actions_js
 
 
+def _restart_js_backend():
+    """Kill the Node.js process and reinitialize the JS bridge.
+
+    After a timeout the Node.js process is stuck and all subsequent IPC calls
+    will also timeout.  This helper force-kills the child process and boots a
+    fresh one so that compilation can continue for the remaining games.
+    """
+    import javascript
+    from javascript.events import connection
+    import signal, time
+
+    try:
+        os.kill(connection.proc.pid, signal.SIGKILL)
+    except Exception:
+        pass
+    time.sleep(0.5)
+    javascript.config.event_loop = None
+    javascript.init()
+    backend = NodeJSPuzzleScriptBackend()
+    return backend, backend.engine
+
+
 def _dedupe_preserve_order(items, key_fn=None):
     seen = OrderedDict()
     for item in items:
@@ -322,6 +344,10 @@ def main(cfg: CppValidationConfig, games: Optional[List[str]] = None):
                     f.write(compile_log)
                 if is_runtime_timeout_log(compile_log):
                     n_timeout_error += 1
+                    # Restart the JS backend — a timeout likely left the
+                    # Node.js process in a broken state (stuck IPC).
+                    print(f"Timeout for {game_name}, restarting JS backend")
+                    backend, js_engine = _restart_js_backend()
                 else:
                     n_compile_error += 1
                 game_success = False
@@ -533,6 +559,10 @@ def main(cfg: CppValidationConfig, games: Optional[List[str]] = None):
                     f.write(err_log)
                 if is_runtime_timeout_log(err_log):
                     n_timeout_error += 1
+                    # Restart the JS backend after a timeout to avoid
+                    # poisoning all subsequent games.
+                    print(f"Timeout for {game_name} level {level_i}, restarting JS backend")
+                    backend, js_engine = _restart_js_backend()
                 else:
                     n_runtime_error += 1
                 game_success = False

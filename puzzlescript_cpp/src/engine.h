@@ -167,6 +167,7 @@ private:
     Level level_;
     bool winning_ = false;
     bool againing_ = false;
+    bool textMode_ = false;  // Persistent flag: set when a "message" command fires, suppresses checkWin
     RNG rng_;
     int curLevel_ = 0;
 

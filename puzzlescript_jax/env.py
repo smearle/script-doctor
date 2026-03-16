@@ -1333,9 +1333,12 @@ class PuzzleJaxEnv:
         win, score, heuristic = self.check_win(lvl)
         if PRINT_SCORE:
             jax.debug.print('heuristic: {heuristic}, score: {score}, win: {win}', heuristic=heuristic, score=score, win=win)
+        # PuzzleScript does not check win conditions at level start (only after
+        # player actions), so always initialise win=False.  The heuristic/score
+        # are still useful for RL reward shaping.
         state = state_cls(
             multihot_level=lvl,
-            win=win,
+            win=jnp.array(False),
             score=score,
             heuristic=heuristic,
             restart=jnp.array(False),

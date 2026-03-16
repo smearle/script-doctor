@@ -84,6 +84,7 @@ Engine::Engine(Engine&& other) noexcept
       level_(std::move(other.level_)),
       winning_(other.winning_),
       againing_(other.againing_),
+      textMode_(other.textMode_),
       rng_(other.rng_),
       curLevel_(other.curLevel_),
       _o1(std::move(other._o1)), _o2(std::move(other._o2)),
@@ -133,6 +134,7 @@ Engine& Engine::operator=(Engine&& other) noexcept {
         level_ = std::move(other.level_);
         winning_ = other.winning_;
         againing_ = other.againing_;
+        textMode_ = other.textMode_;
         rng_ = other.rng_;
         curLevel_ = other.curLevel_;
         _o1 = std::move(other._o1); _o2 = std::move(other._o2);
@@ -451,6 +453,7 @@ void Engine::loadLevel(int levelIndex, const std::string& randomSeed) {
 
     winning_ = false;
     againing_ = false;
+    textMode_ = false;
     curLevel_ = levelIndex;
 
     // Seed the RNG for this level load (matches JS behavior).
@@ -1467,15 +1470,15 @@ bool Engine::processInput(int dir) {
         }
     }
 
-    // Skip win check when a "message" command is present (mirrors JS textMode behavior)
-    bool hasMessage = false;
+    // Mirror JS textMode: once a "message" command fires, textMode_ stays true
+    // and suppresses checkWin until explicitly cleared (e.g. by level load).
     for (const auto& cmd : level_.commandQueue) {
         if (cmd == "message") {
-            hasMessage = true;
+            textMode_ = true;
             break;
         }
     }
-    if (!hasMessage) {
+    if (!textMode_) {
         checkWin();
     }
 

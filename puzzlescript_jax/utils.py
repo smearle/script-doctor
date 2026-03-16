@@ -66,7 +66,9 @@ def extract_ps_code(text):
 
 def to_binary_vectors(arr_2d, num_bits):
     arr_2d = np.asarray(arr_2d)
-    return ((arr_2d[..., None] & (1 << np.arange(num_bits)[::-1])) > 0).astype(int)
+    # Match the bit-mask dtype to the input so bitwise AND works for uint64.
+    one = arr_2d.dtype.type(1) if np.issubdtype(arr_2d.dtype, np.integer) else 1
+    return ((arr_2d[..., None] & (one << np.arange(num_bits, dtype=arr_2d.dtype)[::-1])) > 0).astype(int)
 
 
 GPT4V_ENDPOINT = "https://aoai-physics.openai.azure.com/openai/deployments/gpt4o/chat/completions?api-version=2024-02-15-preview"
