@@ -3,6 +3,11 @@
 
 This repository contains the code for *PuzzleJAX*, a GPU-accelerated implementation of PuzzleScript (https://www.puzzlescript.net)
 
+<figure>
+  <img src="imgs/aggregate_winrate_heatmap.png" alt="Description of the image">
+  <figcaption>Performance of various player AI algorithms on a select set of PuzzleScript games.</figcaption>
+</figure>
+
 PuzzleScript is a concise and expressive game description language that has been used by designers to create a plethora of grid-based puzzle games.
 At its core are *local pattern rewrite rules*. We take advantage of the convolutional nature of these rewrite rules to implement the engine in JAX, allowing AI practitioners to e.g. efficiently train Reinforcement Learning agents to play arbitrary PuzzleScript games.
 
