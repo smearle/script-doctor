@@ -1,0 +1,76 @@
+\documentclass[10pt]{article}
+\usepackage[margin=1in]{geometry}
+\usepackage{algorithm}
+\usepackage{algpseudocode}
+
+\algnewcommand\algorithmicforeach{\textbf{for each}}
+\algdef{S}[FOR]{ForEach}[1]{\algorithmicforeach\ #1\ \algorithmicdo}
+
+\title{PuzzleScript Rule Control Flow}
+\date{}
+
+\begin{document}
+\maketitle
+
+\begin{algorithm}[H]
+\caption{\textsc{Tick}(input direction)}
+\begin{algorithmic}[1]
+\State Set movement forces on player objects according to input
+\State \Call{ApplyRuleBlocks}{\textit{earlyRules}}
+\State Resolve all movement forces (iterate until quiescence)
+\State \Call{ApplyRuleBlocks}{\textit{lateRules}}
+\State Process command queue (cancel, restart, win, again, \ldots)
+\end{algorithmic}
+\end{algorithm}
+
+\begin{algorithm}[H]
+\caption{\textsc{ApplyRuleBlocks}(blocks)}
+\begin{algorithmic}[1]
+\ForEach{block $B$ in blocks}
+    \Repeat
+        \State $\textit{changed} \gets \textbf{false}$
+        \ForEach{group $G$ in $B$}
+            \State $\textit{changed} \gets \Call{ApplyGroup}{G} \;\mathbf{or}\; \textit{changed}$
+        \EndFor
+    \Until{$\lnot\,\textit{changed}$ \textbf{or} $B$ is not a loop block}
+\end{algorithmic}
+\end{algorithm}
+
+\begin{algorithm}[H]
+\caption{\textsc{ApplyGroup}(group $G$)}
+\begin{algorithmic}[1]
+\If{$G$ is random}
+    \State Collect all matches from all rules in $G$
+    \State Apply one match chosen uniformly at random
+    \State \Return whether state changed
+\EndIf
+\Statex
+\State $\textit{groupChanged} \gets \textbf{false}$
+\Repeat
+    \State $\textit{anyRuleApplied} \gets \textbf{false}$
+    \ForEach{rule $R$ in $G$}
+        \If{\Call{ApplyRule}{R}}
+            \State $\textit{anyRuleApplied} \gets \textbf{true}$;\;
+                   $\textit{groupChanged} \gets \textbf{true}$
+        \EndIf
+    \EndFor
+\Until{$\lnot\,\textit{anyRuleApplied}$}
+    \Comment{reconverge: loop until no rule fires}
+\State \Return $\textit{groupChanged}$
+\end{algorithmic}
+\end{algorithm}
+
+\begin{algorithm}[H]
+\caption{\textsc{ApplyRule}(rule $R$)}
+\begin{algorithmic}[1]
+\State Find all positions where $R$'s pattern matches the level
+\If{no matches} \Return \textbf{false} \EndIf
+\ForEach{match position}
+    \State Write $R$'s replacement into the level at that position
+\EndFor
+\State Queue any commands attached to $R$
+\State \Return whether any cell was actually modified
+\end{algorithmic}
+\end{algorithm}
+
+\end{document}

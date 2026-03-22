@@ -344,6 +344,7 @@ _VLLM_MODEL_ALIASES = {
     "vllm_qwen3-8b": "Qwen/Qwen3-8B",
     "vllm-qwen3-30b": "Qwen/Qwen3-30B-A3B",
     "vllm-qwen3-32b": "Qwen/Qwen3-32B",
+    "vllm-qwen3.5-9b": "Qwen/Qwen3.5-9B",
     "vllm-qwen3.5-27b-fp8": "Qwen/Qwen3.5-27B-FP8",
     # Llama models
     "vllm-llama3": "meta-llama/Llama-3.1-8B-Instruct",
@@ -357,13 +358,32 @@ _VLLM_MODEL_ALIASES = {
 
 
 def resolve_vllm_model(alias: str) -> str:
-    """Return the HF model name for a vllm-* alias, falling back to VLLM_MODEL env."""
+    """Return the HF model name for a vllm-* alias.
+
+    The bare ``"vllm"`` alias defers to ``VLLM_SERVED_MODEL_NAME`` /
+    ``VLLM_MODEL`` env vars.  Any other unrecognised alias raises
+    ``ValueError`` so typos are caught early.
+    """
     normalized_alias = alias.strip().lower()
     name = _VLLM_MODEL_ALIASES.get(normalized_alias)
     if name is not None:
         return name
-    # For the bare 'vllm' alias or unknown sub-aliases, defer to env.
-    return os.environ.get("VLLM_SERVED_MODEL_NAME") or os.environ.get("VLLM_MODEL", alias)
+    # The bare 'vllm' alias (mapped to None) is handled above.  Anything
+    # else that isn't in the dict is an unknown alias — fail loudly.
+    if normalized_alias == "vllm":
+        env_name = os.environ.get("VLLM_SERVED_MODEL_NAME") or os.environ.get("VLLM_MODEL")
+        if env_name:
+            return env_name
+        raise ValueError(
+            "The bare 'vllm' alias requires VLLM_SERVED_MODEL_NAME or VLLM_MODEL "
+            "to be set in the environment."
+        )
+    known = sorted(k for k in _VLLM_MODEL_ALIASES if k != "vllm")
+    raise ValueError(
+        f"Unknown vLLM model alias: {alias!r}. "
+        f"Known aliases: {', '.join(known)}. "
+        f"Use the bare 'vllm' alias with VLLM_MODEL env var for custom models."
+    )
 
 
 def llm_text_query(system_prompt, prompt, model, api_key=None, base_url=None,

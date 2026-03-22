@@ -106,7 +106,7 @@ def _sort_games_by_mean_pct_solved(
     return sorted(all_games, key=lambda g: game_scores[g], reverse=True)
 
 
-ALGO_NAMES = ['astar', 'bfs', 'gbfs', 'mcts']
+ALGO_NAMES = ['astar', 'gbfs', 'bfs', 'mcts']
 
 
 def _results_path_for_algo(algo: str) -> str:
@@ -159,22 +159,89 @@ def _load_exit_history(job_dir: str):
     return None
 
 
+def _load_exit_run_config(job_dir: str) -> dict | None:
+    """Load run_config.json, falling back to checkpoint metadata."""
+    rc_path = os.path.join(job_dir, 'run_config.json')
+    if os.path.exists(rc_path):
+        try:
+            with open(rc_path, 'r') as f:
+                return json.load(f)
+        except Exception:
+            pass
+    ckpt_path = os.path.join(job_dir, 'checkpoint.json')
+    if os.path.exists(ckpt_path):
+        try:
+            with open(ckpt_path, 'r') as f:
+                return json.load(f).get('run_config')
+        except Exception:
+            pass
+    return None
+
+
+# Readable short names for ExIt hyperparams.
+_EXIT_PARAM_LABELS = {
+    'n_iterations': ('iters', str),
+    'max_nodes': ('nodes', lambda v: _format_nodes_label(int(v))),
+    'batch_size': ('batch', lambda v: _format_nodes_label(int(v))),
+    'cost_weight': ('cw', str),
+    'train_steps_per_iter': ('tsteps', str),
+    'train_batch_size': ('tbatch', str),
+    'lr': ('lr', str),
+    'blend_alpha': ('alpha', str),
+    'replay_max_size': ('replay', lambda v: _format_nodes_label(int(v))),
+    'initial_dim': ('dim', str),
+    'hidden_dim': ('hdim', str),
+    'res_n': ('res', str),
+}
+
+
+def _format_nodes_label(n: int) -> str:
+    if n >= 1_000_000 and n % 1_000_000 == 0:
+        return f'{n // 1_000_000}M'
+    if n >= 1_000 and n % 1_000 == 0:
+        return f'{n // 1_000}k'
+    return f'{n:,}'
+
+
+def _build_exit_config_label(rc: dict, varying_keys: list[str]) -> str:
+    """Build a readable label for an ExIt config, showing only varying params."""
+    if not varying_keys:
+        return 'ExIt'
+    parts = []
+    for key in varying_keys:
+        short, fmt = _EXIT_PARAM_LABELS.get(key, (key, str))
+        val = rc.get(key)
+        if val is not None:
+            parts.append(f'{fmt(val)} {short}')
+    return 'ExIt · ' + ', '.join(parts) if parts else 'ExIt'
+
+
 def _collect_exit_results(games: list[str]) -> dict:
+    """Collect ExIt results per config.
+
+    Returns {config_label: {game: {pct_solved, n_levels, n_iters}}}.
+    When only a single config exists, the label is just 'ExIt'.
+    """
     if not os.path.exists(EXIT_TRAINING_DIR):
         return {}
 
     game_filter = set(games) if games is not None else None
 
     candidate_dirs = set()
-    checkpoint_paths = glob.glob(os.path.join(EXIT_TRAINING_DIR, '**', 'checkpoint.json'), recursive=True)
-    history_paths = glob.glob(os.path.join(EXIT_TRAINING_DIR, '**', 'history.json'), recursive=True)
-    for path in checkpoint_paths + history_paths:
+    for path in (
+        glob.glob(os.path.join(EXIT_TRAINING_DIR, '**', 'checkpoint.json'), recursive=True) +
+        glob.glob(os.path.join(EXIT_TRAINING_DIR, '**', 'history.json'), recursive=True)
+    ):
         candidate_dirs.add(os.path.dirname(path))
 
-    per_game = {}
+    # config_subdir → {game → [(level, solved, n_iters)]}
+    config_game_data: dict[str, dict[str, list[tuple[int, bool, int]]]] = {}
+    config_params: dict[str, dict] = {}
+
     for job_dir in sorted(candidate_dirs):
-        dirname = os.path.basename(job_dir)
-        game, level = _parse_exit_job_dirname(dirname)
+        config_subdir = os.path.basename(job_dir)
+        game_level_dir = os.path.basename(os.path.dirname(job_dir))
+        game, level = _parse_exit_job_dirname(game_level_dir)
         if game is None:
             continue
         if game_filter is not None and game not in game_filter:
@@ -184,37 +251,60 @@ def _collect_exit_results(games: list[str]) -> dict:
         if not history:
             continue
 
-        solved_any = any(bool(record.get('solved', False)) for record in history if isinstance(record, dict))
+        solved = any(bool(rec.get('solved', False)) for rec in history if isinstance(rec, dict))
+        config_game_data.setdefault(config_subdir, {}).setdefault(game, []).append(
+            (level, solved, len(history))
+        )
 
-        if game not in per_game:
+        if config_subdir not in config_params:
+            rc = _load_exit_run_config(job_dir)
+            if rc is not None:
+                config_params[config_subdir] = rc
+
+    if not config_game_data:
+        return {}
+
+    # Detect varying hyperparams.
+    all_rc = list(config_params.values())
+    varying_keys: list[str] = []
+    if len(all_rc) > 1:
+        for key in _EXIT_PARAM_LABELS:
+            vals = set(rc.get(key) for rc in all_rc)
+            if len(vals) > 1:
+                varying_keys.append(key)
+
+    # Build labelled results.
+    results: dict[str, dict] = {}
+    for config_subdir, game_data in config_game_data.items():
+        rc = config_params.get(config_subdir, {})
+        label = _build_exit_config_label(rc, varying_keys)
+
+        per_game = {}
+        for game, entries in game_data.items():
+            n = len(entries)
+            solved = sum(1 for _, s, _ in entries if s)
+            avg_iters = float(np.mean([ni for _, _, ni in entries])) if entries else float('nan')
             per_game[game] = {
-                'solved_levels': 0,
-                'n_levels': 0,
-                'iter_counts': [],
+                'pct_solved': solved / n if n > 0 else 0.0,
+                'n_levels': n,
+                'n_iters': avg_iters,
             }
 
-        per_game[game]['n_levels'] += 1
-        per_game[game]['solved_levels'] += int(solved_any)
-        per_game[game]['iter_counts'].append(len(history))
+        results[label] = per_game
 
-    results = {}
-    for game, stats in per_game.items():
-        n_levels = stats['n_levels']
-        if n_levels <= 0:
-            continue
-        results[game] = {
-            'pct_solved': stats['solved_levels'] / n_levels,
-            'n_levels': n_levels,
-            'n_iters': float(np.mean(stats['iter_counts'])) if stats['iter_counts'] else float('nan'),
-        }
-
-    total_levels = sum(r['n_levels'] for r in results.values())
-    total_solved = sum(int(r['pct_solved'] * r['n_levels']) for r in results.values())
-    print(
-        f"  ExIt: {len(results)} games, {total_levels} levels, "
-        f"{total_solved} solved ({total_solved/total_levels:.0%})" if total_levels > 0
-        else f"  ExIt: {len(results)} games, 0 levels"
-    )
+    # Summary.
+    for label, per_game in results.items():
+        total_levels = sum(r['n_levels'] for r in per_game.values())
+        total_solved = sum(int(r['pct_solved'] * r['n_levels']) for r in per_game.values())
+        print(
+            f"  {label}: {len(per_game)} games, {total_levels} levels, "
+            f"{total_solved} solved ({total_solved/total_levels:.0%})" if total_levels > 0
+            else f"  {label}: {len(per_game)} games, 0 levels"
+        )
+        for game in sorted(per_game):
+            r = per_game[game]
+            solved = int(r['pct_solved'] * r['n_levels'])
+            print(f"    {game}: {solved}/{r['n_levels']} levels solved, {r['n_iters']:.0f} avg iters")
 
     return results
 
@@ -629,50 +719,74 @@ def plot(cfg: PlotSearch, results=None, per_level_by_depth=None):
 
 
 def plot_exit_heatmap(results: dict, dataset: str = 'priority') -> None:
+    """Plot ExIt heatmap.
+
+    *results* is ``{config_label: {game: {pct_solved, ...}}}`` (multi-config)
+    or the legacy ``{game: {pct_solved, ...}}`` (single flat dict).
+    """
     if not results:
         print('No ExIt results found to plot.')
         return
 
-    df = pd.DataFrame.from_dict(results, orient='index')
-    if df.empty or 'pct_solved' not in df.columns:
-        print('No ExIt solve-rate data found to plot.')
-        return
+    # Detect legacy (flat) format and wrap it.
+    sample = next(iter(results.values()))
+    if isinstance(sample, dict) and 'pct_solved' in sample:
+        results = {'ExIt': results}
 
     heatmaps_dir = _heatmaps_dir(dataset)
     out_dir = _search_out_dir(dataset)
     os.makedirs(out_dir, exist_ok=True)
     os.makedirs(heatmaps_dir, exist_ok=True)
-    csv_file_path = os.path.join(out_dir, 'exit_results.csv')
-    df.to_csv(csv_file_path, index=True, float_format='%.4f')
-    print(f'Saved results to {csv_file_path}')
 
-    pretty_index = df.index.to_series().replace(game_names_remap)
-    pretty_index = pretty_index.str.replace('_', ' ')
-    pretty_index = pretty_index.str.title()
+    # Collect all games across configs and sort by mean pct_solved.
+    all_games: set[str] = set()
+    for per_game in results.values():
+        all_games.update(per_game.keys())
 
-    solved_row = pd.DataFrame(
-        [df['pct_solved'].to_numpy(dtype=float)],
-        index=['ExIt (any solved during training)'],
-        columns=pretty_index,
-    )
+    def _game_mean(game):
+        vals = [pg[game]['pct_solved'] for pg in results.values() if game in pg]
+        return np.mean(vals) if vals else 0.0
 
-    annot_data = [[f"{value:.0%}" if pd.notnull(value) else '' for value in solved_row.iloc[0]]]
+    game_order = sorted(all_games, key=_game_mean, reverse=True)
+    pretty_games = [_format_game_label(g) for g in game_order]
+
+    # Sort configs descending by node count (extracted from label).
+    def _extract_nodes(label: str) -> int:
+        m = re.search(r'(\d+(?:\.\d+)?)\s*([kKmM])?\s*nodes', label)
+        if not m:
+            return 0
+        val = float(m.group(1))
+        suffix = (m.group(2) or '').lower()
+        if suffix == 'k':
+            val *= 1_000
+        elif suffix == 'm':
+            val *= 1_000_000
+        return int(val)
+
+    config_order = sorted(results.keys(), key=_extract_nodes, reverse=True)
+
+    # Build heatmap matrix.
+    heatmap = pd.DataFrame(np.nan, index=config_order, columns=pretty_games)
+    for label in config_order:
+        for game, stats in results[label].items():
+            heatmap.at[label, _format_game_label(game)] = stats['pct_solved']
+
+    annot_data = [[f"{v:.0%}" if pd.notnull(v) else '' for v in row]
+                  for row in heatmap.to_numpy(dtype=float)]
 
     target_cell_height = 1.0
     target_cell_width = 1.0
     min_total_figure_width = 8.0
     min_total_figure_height = 3.0
-    h_padding = 3.0
-    v_padding = 1.5
 
-    num_cols = len(solved_row.columns)
-    num_rows = len(solved_row.index)
-    fig_h = max(num_rows * target_cell_height + v_padding, min_total_figure_height)
-    fig_w = max(num_cols * target_cell_width + h_padding, min_total_figure_width)
+    num_cols = len(heatmap.columns)
+    num_rows = len(heatmap.index)
+    fig_h = max(num_rows * target_cell_height + 1.5, min_total_figure_height)
+    fig_w = max(num_cols * target_cell_width + 3.0, min_total_figure_width)
 
     plt.figure(figsize=(fig_w, fig_h))
     sns.heatmap(
-        solved_row,
+        heatmap,
         annot=annot_data,
         fmt='',
         cmap='RdYlGn',
@@ -1482,7 +1596,7 @@ def generate_all_heatmaps(
             'vmin': 0.0,
             'vmax': 1.0,
             'colorbar_label': 'Average Win Rate',
-            'formatter': lambda v: f"{v:.0%}",
+            'formatter': lambda v: f"{v*100:.0f}",
             'output': 'all_search_pct_solved_heatmap.png',
             'per_depth': True,
         },
@@ -1521,12 +1635,13 @@ def generate_all_heatmaps(
         },
     ]
 
-    target_cell_height = 1.0
-    target_cell_width = 1.0
-    min_total_figure_width = 8.0
-    min_total_figure_height = 3.0
-    h_padding = 3.0
-    v_padding = 1.5
+    # Sizing for single-column (two-column A4 article, ~3.5 in column width)
+    COL_WIDTH = 3.5  # inches
+    CELL_H = 0.28    # per row
+    ANNOT_SIZE = 5.5
+    TICK_SIZE = 6
+    CBAR_LABEL_SIZE = 6
+    CBAR_TICK_SIZE = 5
 
     for config in heatmap_configs:
         column = config['column']
@@ -1550,7 +1665,6 @@ def generate_all_heatmaps(
                     for game, value in key_df['has_oom'].items():
                         if value:
                             oom_mask.at[row_label, game] = True
-            ylabel = 'Algorithm · Search depth'
         else:
             # Single row per algo: best depth, solved only
             cur_row_labels = algo_row_labels
@@ -1565,7 +1679,6 @@ def generate_all_heatmaps(
                         heatmap_data.at[algo_lbl, game] = float(adf.at[game, column])
                     if game in adf.index and adf.get('has_oom', pd.Series(dtype=bool)).get(game, False):
                         oom_mask.at[algo_lbl, game] = True
-            ylabel = 'Algorithm'
 
         stacked_values = heatmap_data.stack(future_stack=True).dropna()
         if stacked_values.empty:
@@ -1588,41 +1701,50 @@ def generate_all_heatmaps(
 
         num_cols = len(heatmap_data.columns)
         num_rows = len(heatmap_data.index)
-        fig_h = max(num_rows * target_cell_height + v_padding, min_total_figure_height)
-        fig_w = max(num_cols * target_cell_width + h_padding, min_total_figure_width)
+        fig_h = max(num_rows * CELL_H + 1.2, 1.5)  # +1.2 for x-tick labels
+        fig_w = COL_WIDTH
 
-        plt.figure(figsize=(fig_w, fig_h))
-        ax = sns.heatmap(
+        fig, ax = plt.subplots(figsize=(fig_w, fig_h))
+        sns.heatmap(
             heatmap_data,
             annot=annot_data,
             fmt="",
             cmap=config['cmap'],
             vmin=vmin,
             vmax=vmax,
-            cbar_kws={'label': config['colorbar_label'], 'shrink': 0.8, 'pad': 0.01},
-            annot_kws={"size": 9},
-            linewidths=0.5,
-            linecolor='white'
+            cbar_kws={'shrink': 0.6, 'pad': 0.02, 'aspect': 15},
+            annot_kws={"size": ANNOT_SIZE},
+            linewidths=0.4,
+            linecolor='white',
+            ax=ax,
         )
+        # Style the colorbar
+        cbar = ax.collections[0].colorbar
+        cbar.ax.tick_params(labelsize=CBAR_TICK_SIZE)
+        cbar.set_label(config['colorbar_label'], size=CBAR_LABEL_SIZE)
+
         if oom_mask.any().any():
             _overlay_oom_cells(ax, heatmap_data, oom_mask)
-        plt.title(config['title'])
-        plt.xlabel('Game', labelpad=10)
-        plt.ylabel(ylabel, labelpad=10)
-        plt.yticks(rotation=0)
-        plt.xticks(rotation=45, ha='right')
-        plt.tight_layout()
+        ax.set_xlabel('')
+        ax.set_ylabel('')
+        ax.set_title('')
+        ax.tick_params(axis='y', rotation=0, labelsize=TICK_SIZE)
+        ax.tick_params(axis='x', rotation=45, labelsize=TICK_SIZE)
+        for label in ax.get_xticklabels():
+            label.set_ha('right')
+            label.set_fontstyle('italic')
+        fig.tight_layout()
 
         heatmaps_dir = _heatmaps_dir(dataset)
         os.makedirs(heatmaps_dir, exist_ok=True)
         output_path = os.path.join(heatmaps_dir, config['output'])
         try:
-            plt.savefig(output_path, dpi=300, bbox_inches='tight')
+            fig.savefig(output_path, dpi=300, bbox_inches='tight')
             print(f"Saved heatmap to {output_path}")
         except Exception as e:
             print(f"Error saving heatmap {config['output']}: {e}")
         finally:
-            plt.close()
+            plt.close(fig)
 
     if per_level_by_algo_depth:
         generate_all_expanded_heatmap(per_level_by_algo_depth, ordered_keys, row_labels, dataset)

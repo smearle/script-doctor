@@ -33,7 +33,7 @@ ROW_GAP = 0.4  # gap between outer boxes
 FONT_LABEL = 12
 FONT_SUB = FONT_LABEL
 FONT_ROW = 15
-RIGHT_MARGIN = 10.3
+RIGHT_MARGIN = 9.7
 CONTENT_W = 12.5
 
 
@@ -75,21 +75,17 @@ def straight_arrow(ax, x0, y0, x1, y1, color='#888', lw=1.2):
 # Outer box height is the same for all rows
 OUTER_H = NODE_H + 2 * OUTER_PAD
 
-# ===== LEGEND (top) =====
-ly = 8.95
-ax.plot([5.5, 6.1], [ly, ly], color=C_JAX, lw=1.3, ls=(0, (5, 3)))
-ax.text(6.3, ly, 'JIT outer loop (JAX)', fontsize=FONT_LABEL, va='center',
-        color='#666', family='sans-serif', fontweight='bold')
+# Legend will be drawn at the bottom after all rows are laid out
 
 # ===== ALGORITHM ROW =====
-total_5 = 5 * NODE_W + 4 * NODE_GAP
-margin_5 = (CONTENT_W - total_5) / 2
-algo_xs = [margin_5 + i * (NODE_W + NODE_GAP) for i in range(5)]
+total_4 = 4 * NODE_W + 3 * NODE_GAP
+margin_4 = (CONTENT_W - total_4) / 2
+algo_xs = [margin_4 + i * (NODE_W + NODE_GAP) for i in range(4)]
 content_cx = CONTENT_W / 2
 
 algo_y = 7.8
 algo_outer_x = algo_xs[0] - OUTER_PAD
-algo_outer_w = total_5 + 2 * OUTER_PAD
+algo_outer_w = total_4 + 2 * OUTER_PAD
 
 algo_bg = FancyBboxPatch((algo_outer_x, algo_y - OUTER_PAD),
                           algo_outer_w, OUTER_H,
@@ -97,23 +93,21 @@ algo_bg = FancyBboxPatch((algo_outer_x, algo_y - OUTER_PAD),
                           facecolor='none', edgecolor='none', linewidth=0)
 ax.add_patch(algo_bg)
 
-# New order: RL, Search, ExIt, LLM, Evolution
+# New order: RL, Search, ExIt, LLM
 consumers = [
     (algo_xs[0], algo_y, C_RL,     'RL', 'PPO'),
     (algo_xs[1], algo_y, C_RL,     'Search',                  'A* · MCTS'),
     (algo_xs[2], algo_y, C_RL,     'ExIt',        'BC · Q*'),
     (algo_xs[3], algo_y, C_RL,     'LLMs',              'vLLM, APIs'),
-    (algo_xs[4], algo_y, C_SEARCH, 'Evolution',               '(1+λ) ES'),
 ]
 for x, y, c, label, sub in consumers:
     rounded_box(ax, x, y, NODE_W, NODE_H, c, label, sub)
 
-# JIT dashed boxes: RL(0), Search(1), ExIt(2), Evolution(4)
+# JIT dashed boxes: RL(0), Search(1), ExIt(2)
 jit_items = [
     (0, 'purejaxrl'),
     (1, 'JAXtar'),
     (2, 'JAXtar'),
-    (4, None),
 ]
 for i, label in jit_items:
     x0 = algo_xs[i] - 0.08
@@ -131,7 +125,7 @@ for i, label in jit_items:
 
 algo_bot = algo_y - OUTER_PAD
 
-ax.text(RIGHT_MARGIN, algo_y + NODE_H / 2, 'Players and\nGenerators',
+ax.text(RIGHT_MARGIN, algo_y + NODE_H / 2, 'Player\nAlgorithms',
         ha='left', va='center', fontsize=FONT_ROW, style='italic',
         fontweight='bold', color='black', family='sans-serif')
 
@@ -222,10 +216,10 @@ ds_gists_h = NODE_H  # same height as inner nodes
 
 # Nested proportions (width scales, height = full)
 ds_info = [
-    ('gists',                  1.0,  0.15),
+    ('Gists',                  1.0,  0.15),
     ("Archive",        0.72, 0.10),
     ('Gallery',  0.48, 0.10),
-    ('Priority',           0.28, 0.05),
+    ('Select',             0.28, 0.05),
 ]
 
 ds_top = ds_base_y + ds_gists_h
@@ -238,7 +232,7 @@ for name, frac, alpha in ds_info:
                          edgecolor=C_DATA, linewidth=1.2)
     ax.add_patch(box)
     # Label right-aligned, vertically centered in its node
-    label_x = ds_base_x + w - 0.15 if name != 'gists' else ds_base_x + w - 0.6
+    label_x = ds_base_x + w - 0.15 if name != 'Gists' else ds_base_x + w - 0.6
     ax.text(label_x, ds_base_y + h / 2, name,
             ha='right', va='center', fontsize=11,
             fontweight='bold', color='black', family='sans-serif')
@@ -257,19 +251,28 @@ ds_right = ds_base_x + ds_gists_w
 
 # Single arrow: dataset upper-right up to backends box
 # Arrow from gists to NodeJS backend
-curved_arrow(ax, ds_right, ds_top, be_xs[2] + NODE_W, be_bot, C_DATA, lw=1.5, rad=0.15)
-ax.text(ds_right - 0.75, (ds_top + be_bot) / 2 + 0.2, 'Games',
+curved_arrow(ax, ds_right, ds_top, be_xs[2] + NODE_W, be_bot, C_DATA, lw=1.5, rad=0.35)
+ax.text(be_xs[2] + NODE_W + 0.1, (ds_top + be_bot) / 2 - 0.1, 'Games',
         fontsize=FONT_LABEL, color=C_DATA, family='sans-serif', style='italic', fontweight='bold')
 
 ax.text(RIGHT_MARGIN, ds_base_y + ds_gists_h / 2, 'Datasets',
         ha='left', va='center', fontsize=FONT_ROW, style='italic',
         fontweight='bold', color='black', family='sans-serif')
 
+# ===== LEGEND (bottom, centered) =====
+ly = ds_base_y - 0.45
+line_len = 0.6
+legend_text = 'JIT outer loop (JAX)'
+lcx = content_cx
+ax.plot([lcx - 1.8, lcx - 1.8 + line_len], [ly, ly], color=C_JAX, lw=1.3, ls=(0, (5, 3)))
+ax.text(lcx - 1.8 + line_len, ly, legend_text, fontsize=FONT_LABEL, va='center',
+        ha='left', color='#666', family='sans-serif', fontweight='bold')
+
 plt.tight_layout()
-plt.savefig('codebase_architecture.png', dpi=300, bbox_inches='tight',
+plt.savefig('codebase_architecture_simple.png', dpi=300, bbox_inches='tight',
             pad_inches=0.05, facecolor='white', edgecolor='none')
-plt.savefig('codebase_architecture.pdf', bbox_inches='tight',
+plt.savefig('codebase_architecture_simple.pdf', bbox_inches='tight',
             pad_inches=0.05, facecolor='white', edgecolor='none')
-plt.savefig('codebase_architecture.svg', bbox_inches='tight',
+plt.savefig('codebase_architecture_simple.svg', bbox_inches='tight',
             pad_inches=0.05, facecolor='white', edgecolor='none')
-print("Saved codebase_architecture.png, .pdf, and .svg")
+print("Saved codebase_architecture_simple.png, .pdf, and .svg")

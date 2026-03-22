@@ -18,6 +18,7 @@ EXIT_TRAINING_CONFIG_FIELDS = (
     "initial_dim",
     "hidden_dim",
     "res_n",
+    "seed",
 )
 
 EXIT_TRAINING_SUBDIR_FIELDS = (
@@ -33,6 +34,7 @@ EXIT_TRAINING_SUBDIR_FIELDS = (
     ("initial_dim", "id"),
     ("hidden_dim", "hd"),
     ("res_n", "rn"),
+    ("seed", "s"),
 )
 EXIT_TRAINING_LABEL_FIELDS = tuple(field for field, _ in EXIT_TRAINING_SUBDIR_FIELDS)
 EXIT_TRAINING_LABEL_NAMES = {
@@ -48,6 +50,7 @@ EXIT_TRAINING_LABEL_NAMES = {
     "initial_dim": "Initial dim",
     "hidden_dim": "Hidden dim",
     "res_n": "Residual blocks",
+    "seed": "Seed",
 }
 
 EXIT_TRAINING_RELATIVE_DIR = os.path.join("data", "exit_training")
@@ -80,6 +83,7 @@ def build_run_config(
     initial_dim: int,
     hidden_dim: int,
     res_n: int,
+    seed: int = 0,
 ) -> dict[str, Any]:
     return {
         "game": game,
@@ -96,24 +100,39 @@ def build_run_config(
         "initial_dim": initial_dim,
         "hidden_dim": hidden_dim,
         "res_n": res_n,
+        "seed": seed,
     }
 
 
+# Fields that are only included in the subdir slug when non-default.
+_SUBDIR_NONDEFAULT_ONLY = {
+    "seed": 0,
+}
+
+
 def run_subdir_name(run_config: dict[str, Any]) -> str:
-    return "_".join(
-        f"{alias}{format_run_value(run_config[key])}"
-        for key, alias in EXIT_TRAINING_SUBDIR_FIELDS
-    )
+    parts = []
+    for key, alias in EXIT_TRAINING_SUBDIR_FIELDS:
+        if key in _SUBDIR_NONDEFAULT_ONLY:
+            default = _SUBDIR_NONDEFAULT_ONLY[key]
+            if run_config.get(key, default) == default:
+                continue
+        parts.append(f"{alias}{format_run_value(run_config[key])}")
+    return "_".join(parts)
 
 
 def format_run_label(run_config: dict[str, Any] | None, fallback_name: str) -> str:
     if not isinstance(run_config, dict):
         return fallback_name
-    return "_".join(
-        f"{alias}{format_run_value(run_config[key])}"
-        for key, alias in EXIT_TRAINING_SUBDIR_FIELDS
-        if key in run_config
-    ) or fallback_name
+    parts = []
+    for key, alias in EXIT_TRAINING_SUBDIR_FIELDS:
+        if key not in run_config:
+            continue
+        if key in _SUBDIR_NONDEFAULT_ONLY:
+            if run_config.get(key, _SUBDIR_NONDEFAULT_ONLY[key]) == _SUBDIR_NONDEFAULT_ONLY[key]:
+                continue
+        parts.append(f"{alias}{format_run_value(run_config[key])}")
+    return "_".join(parts) or fallback_name
 
 
 def format_display_value(value: Any) -> str:

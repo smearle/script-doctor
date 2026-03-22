@@ -153,10 +153,28 @@ def build_categories(vr, cat_defs, dataset_games, metadata):
     # Drop categories with 0 levels
     order = [k for k in order if categories[k] > 0]
 
-    return categories, games_per_category, game_wide_game_counts, order
+    # Compute unique validated/error game counts
+    all_games = set()
+    error_games = set()
+    for display, key, typ in cat_defs:
+        data = vr.get(key, [] if typ in ('game_list', 'timeout_list') else {})
+        if typ == 'per_level_dict':
+            scoped = {g for g in data if g in dataset_games}
+        elif typ == 'timeout_list':
+            scoped = {e.get('game', '') for e in data if e.get('game', '') in dataset_games}
+        elif typ == 'game_list':
+            scoped = {e['game'] for e in data if e['game'] in dataset_games}
+        all_games |= scoped
+        if display != 'Successful':
+            error_games |= scoped
+    n_validated_games = len(all_games)
+    n_error_games = len(error_games)
+
+    return categories, games_per_category, order, n_validated_games, n_error_games
 
 
-def plot_validation(categories, games_per_category, order, out_path):
+def plot_validation(categories, games_per_category, order, n_validated_games,
+                    n_error_games, out_path):
     """Draw the two-bar stacked chart with magnification lines."""
     total_levels = sum(categories[k] for k in order)
 
@@ -195,29 +213,12 @@ def plot_validation(categories, games_per_category, order, out_path):
                 txt.remove()
             left += val
 
-    # Count totals
-    success_game_count = games_per_category.get('Successful', 0)
     error_order = [k for k in order if k != 'Successful']
-    error_games_set = set()
-    # We approximate n_error_games as sum (may double-count across categories)
-    n_error_games = len(set().union(*(
-        {k} for k in error_order  # placeholder; we use games_per_category for the title
-    )))
-    # Use the sum from games_per_category (games can appear in multiple error categories)
-    # For the title we want unique error games, but we only have per-category counts.
-    # Use the union approach from the caller instead. For now, sum unique-ish.
-    all_game_count = success_game_count
-    for k in error_order:
-        all_game_count = max(all_game_count, all_game_count)  # noop placeholder
-    # Actually just pass n_validated_games and n_error_games from caller
-    # For now compute from categories
-    n_validated_games = sum(games_per_category[k] for k in order)  # overcounts overlaps
-    n_error_games_approx = sum(games_per_category[k] for k in error_order)
 
     draw_bar(ax1, order, values, color_list, total_levels)
     ax1.xaxis.tick_top()
     ax1.xaxis.set_label_position('top')
-    ax1.set_xlabel(f'All validated levels ({total_levels:,} levels)',
+    ax1.set_xlabel(f'All validated levels ({n_validated_games:,} games, {total_levels:,} levels)',
                    fontsize=11, fontweight='bold', loc='left')
     ax1.set_title('')
 
@@ -228,7 +229,7 @@ def plot_validation(categories, games_per_category, order, out_path):
     draw_bar(ax2, error_order, error_values, error_colors, error_total)
     ax2.set_title('')
     ax2.set_xlabel(
-        f'Errors only ({error_total:,} levels, {100*error_total/total_levels:.1f}%)',
+        f'Errors only ({n_error_games:,} games, {error_total:,} levels, {100*error_total/total_levels:.1f}%)',
         fontsize=11, fontweight='bold', loc='left',
     )
 
@@ -238,7 +239,7 @@ def plot_validation(categories, games_per_category, order, out_path):
         v = categories[k]
         pct = 100 * v / total_levels if total_levels > 0 else 0
         ng = games_per_category.get(k, 0)
-        legend_labels.append(f'{k}: {v:,} ({pct:.1f}%) [{ng} games]')
+        legend_labels.append(f'{k}: {v:,} ({pct:.1f}%) [{ng:,} games]')
 
     legend_handles = [plt.Rectangle((0, 0), 1, 1, facecolor=COLORS[k], edgecolor='white') for k in order]
     fig.legend(legend_handles, legend_labels, loc='center left', bbox_to_anchor=(1.01, 0.5),
@@ -314,12 +315,12 @@ def main():
         with open(val_path) as f:
             vr = json.load(f)
 
-        categories, games_per_cat, _, order = build_categories(
+        categories, games_per_cat, order, n_validated, n_error = build_categories(
             vr, cat_defs, dataset_games, metadata)
 
         out_path = os.path.join(OUT_DIR, f'validation_results_{label}_{args.dataset}.png')
         print(f'\n=== {source.upper()} ({args.dataset}) ===')
-        plot_validation(categories, games_per_cat, order, out_path)
+        plot_validation(categories, games_per_cat, order, n_validated, n_error, out_path)
 
 
 if __name__ == '__main__':

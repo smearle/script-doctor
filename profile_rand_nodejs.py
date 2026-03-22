@@ -1,9 +1,8 @@
 """Profile original PuzzleScript engine speed while taking random actions in parallel."""
-import itertools
 import json
 import logging
-import math
 import os
+import random
 import subprocess
 import traceback
 from dataclasses import dataclass
@@ -23,21 +22,13 @@ from puzzlescript_jax.utils import get_list_of_games_for_testing, distribute_slu
 from puzzlescript_nodejs.rl_env import NodeJSBatchedPuzzleEnv
 
 
-BATCH_SIZES = [
-    1,
-    2,
-    4,
-    8,
-    16,
-    32,
-    36,
-    40,
-    48,
-]
 INCLUDED_NODEJS_EXECUTION_MODES = [
-    # "single_process",
+    "single_process",
     # "nodejs_native",
-    "nodejs_batched",
+    # "nodejs_batched",
+]
+INCLUDED_NODEJS_SWEEP_EXECUTION_MODES = [
+    # "nodejs_batched",
 ]
 WORKER_TIMEOUT_GRACE_SECONDS = 15.0
 WORKER_TIMEOUT_MULTIPLIER = 2.0
@@ -55,16 +46,30 @@ def get_stats_key(n_envs: int, execution_mode: str) -> str:
     return f"{n_envs}-{execution_mode}"
 
 
-def _get_run_specs() -> list[tuple[int, str]]:
+def _get_fixed_run_specs() -> list[tuple[int, str]]:
     run_specs = []
     for execution_mode in INCLUDED_NODEJS_EXECUTION_MODES:
         if execution_mode in {"single_process", "nodejs_native"}:
             run_specs.append((1, execution_mode))
-        elif execution_mode == "nodejs_batched":
-            run_specs.extend((n_envs, execution_mode) for n_envs in BATCH_SIZES)
+        elif execution_mode in INCLUDED_NODEJS_SWEEP_EXECUTION_MODES:
+            pass  # handled by the doubling sweep loop
         else:
             raise ValueError(f"Unsupported NodeJS execution mode: {execution_mode}")
     return run_specs
+
+
+def _best_fps(stats: dict) -> float:
+    fpss = stats.get("fps", ())
+    if not fpss:
+        return 0.0
+    return float(max(fpss))
+
+
+def get_effective_steps(n_steps: int, n_envs: int, min_steps: int) -> int:
+    """Scale steps inversely with batch size to keep total work roughly constant."""
+    if n_envs <= 1:
+        return n_steps
+    return max(n_steps // n_envs, min_steps)
 
 
 def save_results(results: dict, results_path: str) -> None:
@@ -126,9 +131,103 @@ def _get_nodejs_native_game_path(game: str) -> str:
     return os.path.join(GAMES_DIR, f"{game}.txt")
 
 
-def _random_rollout_worker(game_text: str, level_i: int, n_steps: int, timeout_ms: int) -> dict:
-    backend = NodeJSPuzzleScriptBackend()
-    return _run_random_rollout(backend, game_text=game_text, level_i=level_i, n_steps=n_steps, timeout_ms=timeout_ms)
+_SINGLE_STEP_CONTROLLER_PATH = os.path.join(
+    os.path.dirname(__file__), "puzzlescript_nodejs", "puzzlescript", "single_step_controller.js",
+)
+
+
+class SingleStepController:
+    """Thin subprocess wrapper: one Node process, one PuzzleScript env, one action per round-trip."""
+
+    def __init__(self, *, game_text: str, level_i: int) -> None:
+        self.proc = subprocess.Popen(
+            ["node", _SINGLE_STEP_CONTROLLER_PATH],
+            cwd=os.getcwd(),
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+        )
+        self._request({"cmd": "init", "gameText": game_text, "levelI": level_i})
+
+    def _request(self, payload: dict) -> dict:
+        assert self.proc.stdin is not None and self.proc.stdout is not None
+        self.proc.stdin.write((json.dumps(payload) + "\n").encode("utf-8"))
+        self.proc.stdin.flush()
+        line = self.proc.stdout.readline()
+        if not line:
+            stderr = b""
+            if self.proc.stderr is not None:
+                stderr = self.proc.stderr.read() or b""
+            raise RuntimeError(
+                f"Single-step controller exited without a response. stderr: {stderr.decode(errors='replace')}"
+            )
+        result = json.loads(line.decode("utf-8"))
+        if not result.get("ok", False):
+            raise RuntimeError(result.get("error", "Single-step controller request failed."))
+        return result
+
+    def step(self, action: int) -> bool:
+        """Send one action, return whether the episode was won."""
+        result = self._request({"cmd": "step", "action": action})
+        return bool(result.get("won", False))
+
+    def reset(self) -> None:
+        self._request({"cmd": "reset"})
+
+    def close(self) -> None:
+        if self.proc.poll() is not None:
+            return
+        try:
+            self._request({"cmd": "close"})
+        except Exception:
+            self.proc.terminate()
+        finally:
+            self.proc.wait(timeout=5.0)
+
+
+def _profile_single_process_rollout(
+    controller: SingleStepController,
+    *,
+    n_steps: int,
+    timeout_ms: int,
+) -> dict:
+    controller.reset()
+    start = timer()
+    completed_steps = 0
+    timeout = False
+    wins = 0
+
+    for completed_steps in range(n_steps):
+        if timeout_ms > 0 and completed_steps % 1_000 == 0:
+            if (timer() - start) * 1_000 > timeout_ms:
+                timeout = True
+                break
+
+        action = random.randint(0, 4)
+        won = controller.step(action)
+        if won:
+            wins += 1
+    else:
+        completed_steps = n_steps
+
+    wall_time = timer() - start
+    return {
+        "n_envs": 1,
+        "total_iterations": completed_steps,
+        "requested_iterations": n_steps,
+        "completed_ratio": completed_steps / n_steps if n_steps > 0 else 0.0,
+        "successful_workers": 1,
+        "failed_workers": 0,
+        "wall_time": wall_time,
+        "fps": completed_steps / wall_time if wall_time > 0 else 0.0,
+        "mean_worker_fps": completed_steps / wall_time if wall_time > 0 else 0.0,
+        "wins": wins,
+        "timeouts": int(timeout),
+        "timed_out": timeout,
+        "had_worker_failures": False,
+        "sample_worker_error": None,
+        "execution_mode": "single_process",
+    }
 
 
 def _run_random_rollout(
@@ -325,80 +424,6 @@ class PersistentRolloutWorkers:
                 proc.join(timeout=1.0)
 
 
-def _profile_single_process_rollout(
-    backend: NodeJSPuzzleScriptBackend,
-    *,
-    game_text: str,
-    level_i: int,
-    n_steps: int,
-    timeout_ms: int,
-) -> dict:
-    start = timer()
-    result = _run_random_rollout(
-        backend,
-        game_text=game_text,
-        level_i=level_i,
-        n_steps=n_steps,
-        timeout_ms=timeout_ms,
-    )
-    wall_time = timer() - start
-
-    return {
-        "n_envs": 1,
-        "total_iterations": result["iterations"],
-        "requested_iterations": n_steps,
-        "completed_ratio": result["iterations"] / n_steps if n_steps > 0 else 0.0,
-        "successful_workers": 1,
-        "failed_workers": 0,
-        "wall_time": wall_time,
-        "fps": result["iterations"] / wall_time if wall_time > 0 else 0.0,
-        "mean_worker_fps": result["iterations"] / result["time"] if result["time"] > 0 else 0.0,
-        "timeouts": int(result["timeout"]),
-        "timed_out": bool(result["timeout"]),
-        "had_worker_failures": False,
-        "sample_worker_error": None,
-        "execution_mode": "single_process",
-    }
-
-
-def _profile_nodejs_native_rollout(
-    backend: NodeJSPuzzleScriptBackend,
-    *,
-    game_text: str,
-    level_i: int,
-    n_steps: int,
-    timeout_ms: int,
-) -> dict:
-    start = timer()
-    result = backend.run_search(
-        "random",
-        game_text=game_text,
-        level_i=level_i,
-        n_steps=n_steps,
-        timeout_ms=timeout_ms,
-        warmup=False,
-    )
-    wall_time = timer() - start
-
-    return {
-        "n_envs": 1,
-        "total_iterations": result.iterations,
-        "requested_iterations": n_steps,
-        "completed_ratio": result.iterations / n_steps if n_steps > 0 else 0.0,
-        "successful_workers": 1,
-        "failed_workers": 0,
-        "wall_time": wall_time,
-        "fps": result.fps,
-        "mean_worker_fps": result.fps,
-        "engine_time": result.time,
-        "timeouts": int(result.timeout),
-        "timed_out": bool(result.timeout),
-        "had_worker_failures": False,
-        "sample_worker_error": None,
-        "execution_mode": "nodejs_native",
-    }
-
-
 def _profile_nodejs_batched_rollout(
     env: NodeJSBatchedPuzzleEnv,
     *,
@@ -541,10 +566,9 @@ def main(cfg: ProfileRandNodeJSConfig, games: Optional[List[str]] = None):
     else:
         games = [cfg.game]
 
-    run_specs = _get_run_specs()
+    fixed_run_specs = _get_fixed_run_specs()
 
-    for game, (n_envs, execution_mode) in itertools.product(games, run_specs):
-        print(f"\nGame: {game}, n_envs: {n_envs}, mode: {execution_mode}.")
+    for game in games:
         for level_i in range(1):
             results_path = os.path.join(device_dir, game, f"{get_level_str(level_i)}.json")
             if os.path.exists(results_path):
@@ -553,124 +577,221 @@ def main(cfg: ProfileRandNodeJSConfig, games: Optional[List[str]] = None):
             else:
                 n_envs_to_stats = {}
 
-            stats_key = get_stats_key(n_envs, execution_mode)
-            legacy_stats_key = str(n_envs) if execution_mode == "multiprocess" else None
-            if not cfg.overwrite and (
-                stats_key in n_envs_to_stats or (legacy_stats_key is not None and legacy_stats_key in n_envs_to_stats)
-            ):
-                print(
-                    f"Skipping {game} level {level_i} with n_envs={n_envs} mode={execution_mode} "
-                    f"as results already exist."
-                )
-                continue
-
             timeout_ms = cfg.timeout * 1_000 if cfg.timeout > 0 else -1
 
-            try:
-                single_process_stats_fn = None
-                persistent_workers = None
-                batched_env = None
-                game_text = _load_original_game_text(game)
-                native_runs = None
-                if execution_mode == "single_process":
-                    backend = NodeJSPuzzleScriptBackend()
-                    single_process_stats_fn = lambda: _profile_single_process_rollout(
-                        backend,
-                        game_text=game_text,
-                        level_i=level_i,
-                        n_steps=cfg.n_steps,
-                        timeout_ms=timeout_ms,
+            for n_envs, execution_mode in fixed_run_specs:
+                print(f"\nGame: {game}, n_envs: {n_envs}, mode: {execution_mode}.")
+                stats_key = get_stats_key(n_envs, execution_mode)
+                legacy_stats_key = str(n_envs) if execution_mode == "multiprocess" else None
+                if not cfg.overwrite and (
+                    stats_key in n_envs_to_stats or (legacy_stats_key is not None and legacy_stats_key in n_envs_to_stats)
+                ):
+                    print(
+                        f"Skipping {game} level {level_i} with n_envs={n_envs} mode={execution_mode} "
+                        f"as results already exist."
                     )
-                elif execution_mode == "nodejs_native":
-                    native_runs = _run_nodejs_native_pool(
-                        game_path=_get_nodejs_native_game_path(game),
-                        level_i=level_i,
-                        n_envs=1,
-                        n_steps=cfg.n_steps,
-                        timeout_ms=timeout_ms,
-                        repeats=3,
-                        execution_mode="nodejs_native",
-                    )
-                elif execution_mode == "nodejs_batched":
-                    batched_env = NodeJSBatchedPuzzleEnv(
-                        game=game,
-                        level_i=level_i,
-                        batch_size=n_envs,
-                        max_episode_steps=max(cfg.n_steps, 1),
-                    )
-                else:
-                    persistent_workers = PersistentRolloutWorkers.start(
-                        game_text=game_text,
-                        level_i=level_i,
-                        n_envs=n_envs,
-                    )
+                    continue
 
-                iterations = []
-                fpss = []
-                last_stats = None
+                effective_steps = get_effective_steps(cfg.n_steps, n_envs, cfg.min_steps)
+
                 try:
-                    run_count = 3 if native_runs is None else len(native_runs)
-                    for run_i in range(run_count):
-                        if native_runs is not None:
-                            stats = native_runs[run_i]
-                        elif single_process_stats_fn is not None:
-                            stats = single_process_stats_fn()
-                        elif batched_env is not None:
-                            stats = _profile_nodejs_batched_rollout(
-                                batched_env,
-                                n_steps=cfg.n_steps,
-                                timeout_ms=timeout_ms,
-                            )
-                        else:
-                            stats = persistent_workers.run_batch(
-                                n_steps=cfg.n_steps,
-                                timeout_ms=timeout_ms,
-                            )
-                        iterations.append(stats["total_iterations"])
-                        fpss.append(stats["fps"])
-                        last_stats = stats
-                        print(
-                            f"Loop {run_i} ran {stats['total_iterations']} steps in "
-                            f"{stats['wall_time']:.3f} seconds. FPS: {stats['fps']:,.2f}"
+                    single_step_controller = None
+                    persistent_workers = None
+                    native_runs = None
+                    if execution_mode == "single_process":
+                        game_text = _load_original_game_text(game)
+                        single_step_controller = SingleStepController(
+                            game_text=game_text,
+                            level_i=level_i,
                         )
-                finally:
-                    if batched_env is not None:
-                        batched_env.close()
-                    if persistent_workers is not None:
-                        persistent_workers.close()
+                    elif execution_mode == "nodejs_native":
+                        native_runs = _run_nodejs_native_pool(
+                            game_path=_get_nodejs_native_game_path(game),
+                            level_i=level_i,
+                            n_envs=1,
+                            n_steps=effective_steps,
+                            timeout_ms=timeout_ms,
+                            repeats=3,
+                            execution_mode="nodejs_native",
+                        )
+                    else:
+                        game_text = _load_original_game_text(game)
+                        persistent_workers = PersistentRolloutWorkers.start(
+                            game_text=game_text,
+                            level_i=level_i,
+                            n_envs=n_envs,
+                        )
 
-                n_envs_to_stats[stats_key] = {
-                    "fps": tuple(fpss),
-                    "iterations": tuple(iterations),
-                    "total_iterations": last_stats["total_iterations"],
-                    "requested_iterations": last_stats["requested_iterations"],
-                    "completed_ratio": last_stats["completed_ratio"],
-                    "successful_workers": last_stats["successful_workers"],
-                    "failed_workers": last_stats["failed_workers"],
-                    "wall_time": last_stats["wall_time"],
-                    "mean_worker_fps": last_stats["mean_worker_fps"],
-                    "engine_time": last_stats.get("engine_time"),
-                    "wins": last_stats.get("wins"),
-                    "timeouts": last_stats["timeouts"],
-                    "timed_out": last_stats["timed_out"],
-                    "had_worker_failures": last_stats["had_worker_failures"],
-                    "sample_worker_error": last_stats["sample_worker_error"],
-                    "execution_mode": last_stats["execution_mode"],
-                }
-            except Exception as exc:
-                err_msg = traceback.format_exc()
-                print(
-                    f"Error profiling {game} level {level_i} with n_envs={n_envs} "
-                    f"mode={execution_mode}: {err_msg}"
-                )
-                n_envs_to_stats[stats_key] = {
-                    "error_type": type(exc).__name__,
-                    "error": str(exc),
-                    "error_traceback": err_msg,
-                    "execution_mode": execution_mode,
-                }
+                    iterations = []
+                    fpss = []
+                    last_stats = None
+                    try:
+                        run_count = len(native_runs) if native_runs is not None else 3
+                        for run_i in range(run_count):
+                            if native_runs is not None:
+                                stats = native_runs[run_i]
+                            elif single_step_controller is not None:
+                                stats = _profile_single_process_rollout(
+                                    single_step_controller,
+                                    n_steps=effective_steps,
+                                    timeout_ms=timeout_ms,
+                                )
+                            else:
+                                stats = persistent_workers.run_batch(
+                                    n_steps=effective_steps,
+                                    timeout_ms=timeout_ms,
+                                )
+                            iterations.append(stats["total_iterations"])
+                            fpss.append(stats["fps"])
+                            last_stats = stats
+                            print(
+                                f"Loop {run_i} ran {stats['total_iterations']} steps in "
+                                f"{stats['wall_time']:.3f} seconds. FPS: {stats['fps']:,.2f}"
+                            )
+                    finally:
+                        if single_step_controller is not None:
+                            single_step_controller.close()
+                        if persistent_workers is not None:
+                            persistent_workers.close()
 
-            save_results(n_envs_to_stats, results_path)
+                    n_envs_to_stats[stats_key] = {
+                        "fps": tuple(fpss),
+                        "iterations": tuple(iterations),
+                        "total_iterations": last_stats["total_iterations"],
+                        "requested_iterations": last_stats["requested_iterations"],
+                        "completed_ratio": last_stats["completed_ratio"],
+                        "successful_workers": last_stats["successful_workers"],
+                        "failed_workers": last_stats["failed_workers"],
+                        "wall_time": last_stats["wall_time"],
+                        "mean_worker_fps": last_stats["mean_worker_fps"],
+                        "engine_time": last_stats.get("engine_time"),
+                        "wins": last_stats.get("wins"),
+                        "timeouts": last_stats["timeouts"],
+                        "timed_out": last_stats["timed_out"],
+                        "had_worker_failures": last_stats["had_worker_failures"],
+                        "sample_worker_error": last_stats["sample_worker_error"],
+                        "execution_mode": last_stats["execution_mode"],
+                    }
+                except Exception as exc:
+                    err_msg = traceback.format_exc()
+                    print(
+                        f"Error profiling {game} level {level_i} with n_envs={n_envs} "
+                        f"mode={execution_mode}: {err_msg}"
+                    )
+                    n_envs_to_stats[stats_key] = {
+                        "error_type": type(exc).__name__,
+                        "error": str(exc),
+                        "error_traceback": err_msg,
+                        "execution_mode": execution_mode,
+                    }
+
+                save_results(n_envs_to_stats, results_path)
+
+            if "nodejs_batched" in INCLUDED_NODEJS_SWEEP_EXECUTION_MODES:
+                prev_batched_best_fps = None
+                n_envs = 1
+                while True:
+                    execution_mode = "nodejs_batched"
+                    print(f"\nGame: {game}, n_envs: {n_envs}, mode: {execution_mode}.")
+                    stats_key = get_stats_key(n_envs, execution_mode)
+
+                    if not cfg.overwrite and stats_key in n_envs_to_stats:
+                        print(
+                            f"Skipping {game} level {level_i} with n_envs={n_envs} mode={execution_mode} "
+                            f"as results already exist."
+                        )
+                        stats_entry = n_envs_to_stats[stats_key]
+                        if "error_type" in stats_entry or _best_fps(stats_entry) <= 0:
+                            break
+                        current_batched_best_fps = _best_fps(stats_entry)
+                        if (
+                            prev_batched_best_fps is not None
+                            and current_batched_best_fps < prev_batched_best_fps
+                        ):
+                            break
+                        prev_batched_best_fps = current_batched_best_fps
+                        n_envs *= 2
+                        continue
+
+                    try:
+                        effective_steps = get_effective_steps(cfg.n_steps, n_envs, cfg.min_steps)
+                        batched_env = NodeJSBatchedPuzzleEnv(
+                            game=game,
+                            level_i=level_i,
+                            batch_size=n_envs,
+                            max_episode_steps=max(effective_steps, 1),
+                        )
+                        iterations = []
+                        fpss = []
+                        last_stats = None
+                        try:
+                            for run_i in range(3):
+                                stats = _profile_nodejs_batched_rollout(
+                                    batched_env,
+                                    n_steps=effective_steps,
+                                    timeout_ms=timeout_ms,
+                                )
+                                iterations.append(stats["total_iterations"])
+                                fpss.append(stats["fps"])
+                                last_stats = stats
+                                print(
+                                    f"Loop {run_i} ran {stats['total_iterations']} steps in "
+                                    f"{stats['wall_time']:.3f} seconds. FPS: {stats['fps']:,.2f}"
+                                )
+                        finally:
+                            batched_env.close()
+
+                        stats_entry = {
+                            "fps": tuple(fpss),
+                            "iterations": tuple(iterations),
+                            "total_iterations": last_stats["total_iterations"],
+                            "requested_iterations": last_stats["requested_iterations"],
+                            "completed_ratio": last_stats["completed_ratio"],
+                            "successful_workers": last_stats["successful_workers"],
+                            "failed_workers": last_stats["failed_workers"],
+                            "wall_time": last_stats["wall_time"],
+                            "mean_worker_fps": last_stats["mean_worker_fps"],
+                            "engine_time": last_stats.get("engine_time"),
+                            "wins": last_stats.get("wins"),
+                            "timeouts": last_stats["timeouts"],
+                            "timed_out": last_stats["timed_out"],
+                            "had_worker_failures": last_stats["had_worker_failures"],
+                            "sample_worker_error": last_stats["sample_worker_error"],
+                            "execution_mode": last_stats["execution_mode"],
+                        }
+                        n_envs_to_stats[stats_key] = stats_entry
+                    except Exception as exc:
+                        err_msg = traceback.format_exc()
+                        print(
+                            f"Error profiling {game} level {level_i} with n_envs={n_envs} "
+                            f"mode={execution_mode}: {err_msg}"
+                        )
+                        n_envs_to_stats[stats_key] = {
+                            "error_type": type(exc).__name__,
+                            "error": str(exc),
+                            "error_traceback": err_msg,
+                            "execution_mode": execution_mode,
+                        }
+                        break
+
+                    save_results(n_envs_to_stats, results_path)
+
+                    current_batched_best_fps = _best_fps(stats_entry)
+                    if current_batched_best_fps <= 0:
+                        break
+                    if (
+                        prev_batched_best_fps is not None
+                        and current_batched_best_fps < prev_batched_best_fps
+                    ):
+                        print(
+                            f"Stopping nodejs_batched sweep for {game} level {level_i}: "
+                            f"best FPS dropped from {prev_batched_best_fps:,.2f} "
+                            f"to {current_batched_best_fps:,.2f}."
+                        )
+                        break
+
+                    prev_batched_best_fps = current_batched_best_fps
+                    n_envs *= 2
 
 
 if __name__ == "__main__":

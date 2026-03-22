@@ -104,6 +104,13 @@ def _best_fps(stats: dict) -> float:
     return float(max(fpss))
 
 
+def get_effective_steps(n_steps: int, n_envs: int, min_steps: int) -> int:
+    """Scale steps inversely with batch size to keep total work roughly constant."""
+    if n_envs <= 1:
+        return n_steps
+    return max(n_steps // n_envs, min_steps)
+
+
 def _compile_game_for_cpp(parser: Any, game: str) -> str:
     js_engine = require(ENGINE_JS_PATH)
     compile_game(parser, js_engine, game, 0)
@@ -498,6 +505,8 @@ def main(cfg: ProfileRandCppConfig, games: Optional[List[str]] = None):
                     )
                     continue
 
+                effective_steps = get_effective_steps(cfg.n_steps, n_envs, cfg.min_steps)
+
                 try:
                     persistent_workers = None
                     iterations = []
@@ -508,7 +517,7 @@ def main(cfg: ProfileRandCppConfig, games: Optional[List[str]] = None):
                             stats_fn = lambda: _profile_single_process_rollout(
                                 serialized_json,
                                 level_i=level_i,
-                                n_steps=cfg.n_steps,
+                                n_steps=effective_steps,
                                 timeout_ms=timeout_ms,
                             )
                         else:
@@ -518,7 +527,7 @@ def main(cfg: ProfileRandCppConfig, games: Optional[List[str]] = None):
                                 n_envs=n_envs,
                             )
                             stats_fn = lambda: persistent_workers.run_batch(
-                                n_steps=cfg.n_steps,
+                                n_steps=effective_steps,
                                 timeout_ms=timeout_ms,
                             )
 
@@ -611,11 +620,12 @@ def main(cfg: ProfileRandCppConfig, games: Optional[List[str]] = None):
                             continue
 
                         try:
+                            effective_steps = get_effective_steps(cfg.n_steps, n_envs, cfg.min_steps)
                             batched_env = CppBatchedPuzzleScriptEnv(
                                 serialized_json,
                                 batch_size=n_envs,
                                 level_indices=[level_i] * n_envs,
-                                max_episode_steps=max(cfg.n_steps + 1, 2),
+                                max_episode_steps=max(effective_steps + 1, 2),
                                 num_threads=num_threads,
                             )
                             iterations = []
@@ -624,7 +634,7 @@ def main(cfg: ProfileRandCppConfig, games: Optional[List[str]] = None):
                             for run_i in range(3):
                                 stats = _profile_batched_rollout(
                                     batched_env,
-                                    n_steps=cfg.n_steps,
+                                    n_steps=effective_steps,
                                     timeout_ms=timeout_ms,
                                 )
                                 iterations.append(stats["total_iterations"])

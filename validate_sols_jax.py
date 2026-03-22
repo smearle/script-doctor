@@ -713,21 +713,33 @@ def main(cfg: JaxValidationConfig, games: Optional[List[str]] = None):
                     print(f"Level {level_i} solution failed (won in JS, did not win in jax)")
                 elif (multihot_level_js.shape != state.multihot_level.shape) or np.any(multihot_level_js != state.multihot_level):
                     js_state = state.replace(multihot_level=multihot_level_js)
-                    js_frame = backend.render_frame(js_states[-1])
-                    imageio.imsave(os.path.join(jax_sol_dir, f'level-{level_i}_state_js.png'), js_frame)
-                    jax_frame = env.render(state, cv2=False)
-                    jax_frame = np.array(jax_frame, dtype=np.uint8)
-                    imageio.imsave(os.path.join(jax_sol_dir, f'level-{level_i}_state_jax.png'), jax_frame)
-                    with open(state_log_path, 'w') as f:
-                        f.write(f"Level {level_i} solution failed\n")
-                        f.write(f"Actions: {actions}\n")
-                        f.write(f"Expected JS state:\n{format_state_for_log(js_state, env)}\n")
-                        f.write(f"Actual JAX state:\n{format_state_for_log(state, env)}\n")
+                    try:
+                        js_frame = backend.render_frame(js_states[-1])
+                        imageio.imsave(os.path.join(jax_sol_dir, f'level-{level_i}_state_js.png'), js_frame)
+                        jax_frame = env.render(state, cv2=False)
+                        jax_frame = np.array(jax_frame, dtype=np.uint8)
+                        imageio.imsave(os.path.join(jax_sol_dir, f'level-{level_i}_state_jax.png'), jax_frame)
+                    except Exception:
+                        print(f"Warning: failed to save state comparison images for level {level_i}")
+                        traceback.print_exc()
+                    try:
+                        with open(state_log_path, 'w') as f:
+                            f.write(f"Level {level_i} solution failed\n")
+                            f.write(f"Actions: {actions}\n")
+                            f.write(f"Expected JS state:\n{format_state_for_log(js_state, env)}\n")
+                            f.write(f"Actual JAX state:\n{format_state_for_log(state, env)}\n")
+                    except Exception:
+                        # State logging itself failed; write the traceback so the
+                        # error file still exists and is counted as a state error.
+                        with open(state_log_path, 'w') as f:
+                            f.write(f"Level {level_i} state mismatch (logging failed)\n")
+                            f.write(f"Actions: {actions}\n")
+                            f.write(traceback.format_exc())
                     if is_random_game(n_rules):
                         n_random_state_error += 1
                     else:
                         n_state_error += 1
-                    
+
                     print(f"Level {level_i} solution failed (state mismatch)")
                     # game_success = False
                 elif int(state.heuristic) != -int(level_score):

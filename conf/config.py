@@ -68,6 +68,7 @@ class ProfileJaxRandConfig(PSConfig):
     random_order: bool = False
     # max_episode_steps: int = 100
     n_steps: int = 5_000
+    min_steps: int = 100  # Floor for adaptive step scaling at large batch sizes
     # reevaluate: bool = True  # Whether to continue profiling, or just plot the results
     render: bool = False
     use_switch_env: bool = False  # Use jax.lax.switch-based env for faster compilation
@@ -83,6 +84,7 @@ class NodeJSConfig(PSConfig):
     dataset: str = "priority"  # priority, gallery, pedro, increpare
     random_order: bool = False
     n_steps: int = 5_000
+    min_steps: int = 100  # Floor for adaptive step scaling at large batch sizes
     overwrite: bool = False
     include_randomness: bool = True
     timeout: int = -1  # per-level search timeout in seconds (-1 = no timeout)
@@ -192,7 +194,9 @@ class ExitTrainConfig:
     lr: float = 1e-3
     blend_alpha: float = 0.5
     replay_max_size: int = 200_000
+    seed: int = 0
     resume: bool = True
+    plot: bool = False
     save_dir: Optional[str] = None
     # Architecture
     initial_dim: int = 512

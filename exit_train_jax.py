@@ -62,6 +62,83 @@ from exit_training_config import EXIT_TRAINING_RELATIVE_DIR, build_run_config, r
 EXIT_TRAINING_DIR = os.path.join(SCRIPT_DIR, EXIT_TRAINING_RELATIVE_DIR)
 
 
+# ---------------------------------------------------------------------------
+# Plot training curves from ExIt history
+# ---------------------------------------------------------------------------
+
+def plot_exit_training(history: list[dict], save_dir: str) -> None:
+    """Generate plots of key metrics over ExIt iterations."""
+    import matplotlib
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+
+    if not history:
+        return
+
+    iters = [r["iteration"] for r in history]
+
+    fig, axes = plt.subplots(2, 2, figsize=(12, 8))
+
+    # 1. Best env heuristic
+    ax = axes[0, 0]
+    best_env_h = [r.get("best_env_h") for r in history]
+    valid = [(i, v) for i, v in zip(iters, best_env_h) if v is not None]
+    if valid:
+        ax.plot(*zip(*valid), marker=".", markersize=3)
+    ax.set_xlabel("Iteration")
+    ax.set_ylabel("Best env h")
+    ax.set_title("Best Environment Heuristic")
+
+    # 2. Training loss
+    ax = axes[0, 1]
+    losses = [r.get("loss") for r in history]
+    valid = [(i, v) for i, v in zip(iters, losses) if v is not None]
+    if valid:
+        ax.plot(*zip(*valid), marker=".", markersize=3)
+    ax.set_xlabel("Iteration")
+    ax.set_ylabel("Loss")
+    ax.set_title("Training Loss")
+
+    # 3. Solution cost (only solved iterations)
+    ax = axes[1, 0]
+    costs = [r.get("cost") for r in history]
+    valid = [(i, v) for i, v in zip(iters, costs) if v is not None]
+    if valid:
+        ax.plot(*zip(*valid), marker=".", markersize=3, color="green")
+    # Also plot best cost so far as a step line
+    best_costs = [r.get("best_cost") for r in history]
+    valid_best = [(i, v) for i, v in zip(iters, best_costs) if v is not None]
+    if valid_best:
+        ax.step(*zip(*valid_best), where="post", color="darkgreen", alpha=0.6, label="best")
+        ax.legend()
+    ax.set_xlabel("Iteration")
+    ax.set_ylabel("Solution Cost")
+    ax.set_title("Solution Cost")
+
+    # 4. Generated states and best env f
+    ax = axes[1, 1]
+    best_env_f = [r.get("best_env_f") for r in history]
+    valid = [(i, v) for i, v in zip(iters, best_env_f) if v is not None]
+    if valid:
+        ax.plot(*zip(*valid), marker=".", markersize=3, label="best env f")
+    best_env_g = [r.get("best_env_g") for r in history]
+    valid_g = [(i, v) for i, v in zip(iters, best_env_g) if v is not None]
+    if valid_g:
+        ax.plot(*zip(*valid_g), marker=".", markersize=3, label="best env g", alpha=0.7)
+    ax.set_xlabel("Iteration")
+    ax.set_ylabel("Value")
+    ax.set_title("Best Env f / g")
+    ax.legend()
+
+    fig.suptitle(f"ExIt Training — {save_dir.split('/')[-2] if '/' in save_dir else save_dir}", fontsize=12)
+    fig.tight_layout()
+
+    plot_path = os.path.join(save_dir, "exit_training_curves.png")
+    fig.savefig(plot_path, dpi=150)
+    plt.close(fig)
+    print(f"  Training curves saved: {plot_path}")
+
+
 def _job_root_dir(game: str, level_i: int, save_dir: Optional[str] = None) -> str:
     if save_dir is not None:
         return save_dir
@@ -661,6 +738,7 @@ def run_exit_training(
     replay_max_size: int = 200_000,
     save_dir: str = None,
     resume: bool = False,
+    seed: int = 0,
     # Neural net architecture
     initial_dim: int = 512,
     hidden_dim: int = 256,
@@ -682,6 +760,7 @@ def run_exit_training(
         replay_max_size: Replay buffer capacity
         save_dir: Directory to save checkpoints
         resume: Whether to resume from a checkpoint
+        seed: Random seed for NN initialization and training sampling
         initial_dim: Neural net initial dimension
         hidden_dim: Neural net hidden dimension
         res_n: Number of residual blocks
@@ -701,6 +780,7 @@ def run_exit_training(
         initial_dim=initial_dim,
         hidden_dim=hidden_dim,
         res_n=res_n,
+        seed=seed,
     )
     save_dir = _resolve_run_dir(_job_root_dir(game, level_i, save_dir=save_dir), run_config)
     os.makedirs(save_dir, exist_ok=True)
@@ -712,7 +792,7 @@ def run_exit_training(
     print(f"  Max nodes: {max_nodes:,}  Batch size: {batch_size}")
     print(f"  cost_weight: {cost_weight}  blend_alpha: {blend_alpha}")
     print(f"  Train steps/iter: {train_steps_per_iter}  Train batch: {train_batch_size}")
-    print(f"  Network: initial_dim={initial_dim}, hidden_dim={hidden_dim}, Res_N={res_n}")
+    print(f"  Network: initial_dim={initial_dim}, hidden_dim={hidden_dim}, Res_N={res_n}  seed={seed}")
     print(f"  Save dir: {save_dir}")
     print()
 
@@ -721,6 +801,9 @@ def run_exit_training(
     rule_heuristic = PuzzleJaxHeuristic(puzzle)
 
     # ---- Build neural heuristic ----
+    # Seed numpy before NN construction so that NeuralHeuristicBase.get_new_params
+    # (which uses np.random.randint to generate the JAX init key) is reproducible.
+    np.random.seed(seed)
     model_path = os.path.join(save_dir, "heuristic.pkl")
     neural_heuristic = PuzzleScriptNeuralHeuristic(
         puzzle,
@@ -779,7 +862,7 @@ def run_exit_training(
         start_iter = 0
 
     # ---- Get initial state ----
-    solve_config, init_state = puzzle.get_inits(jax.random.PRNGKey(0))
+    solve_config, init_state = puzzle.get_inits(jax.random.PRNGKey(seed))
 
     # ---- Build A* once; pass heuristic params dynamically each iteration ----
     print("  Compiling A* once with dynamic heuristic params ...", end=" ", flush=True)
@@ -886,7 +969,7 @@ def run_exit_training(
         else:
             print(f"  [Train] Training for {train_steps_per_iter} steps ...", end=" ", flush=True)
             train_start = time.time()
-            rng = np.random.default_rng(iteration)
+            rng = np.random.default_rng(seed * 100_000 + iteration)
             epoch_losses = []
 
             params = neural_heuristic.params
@@ -976,6 +1059,8 @@ def run_exit_training(
     with open(os.path.join(save_dir, "history.json"), "w") as f:
         json.dump(history, f, indent=2)
 
+    plot_exit_training(history, save_dir)
+
     return history
 
 
@@ -1051,6 +1136,30 @@ def _job_root_dir_for_cfg(game: str, level_i: int, cfg: ExitTrainConfig, multi_r
     return _job_root_dir(game, level_i, save_dir=job_root_dir)
 
 
+def _load_and_plot(job_save_dir: str, game: str, level_i: int) -> None:
+    """Load history from disk and generate plots (plot-only mode)."""
+    history = None
+    # Try checkpoint first (has history embedded), then standalone history.json
+    checkpoint_path = os.path.join(job_save_dir, "checkpoint.json")
+    history_path = os.path.join(job_save_dir, "history.json")
+    for path in (checkpoint_path, history_path):
+        if os.path.exists(path):
+            try:
+                with open(path, "r") as f:
+                    data = json.load(f)
+                hist = data.get("history", data) if isinstance(data, dict) else data
+                if isinstance(hist, list) and len(hist) > 0:
+                    history = hist
+                    break
+            except Exception:
+                pass
+    if history is None:
+        print(f"  No history data found in {job_save_dir}, skipping plot.")
+        return
+    print(f"  Plotting {len(history)} iterations for {game} level {level_i}")
+    plot_exit_training(history, job_save_dir)
+
+
 def _run_exit_job(cfg: ExitTrainConfig, jobs: List[tuple[str, int]], multi_run: bool) -> None:
     for game, level_i in jobs:
         job_root_dir = _job_root_dir_for_cfg(game, level_i, cfg, multi_run=multi_run)
@@ -1070,9 +1179,16 @@ def _run_exit_job(cfg: ExitTrainConfig, jobs: List[tuple[str, int]], multi_run: 
             initial_dim=cfg.initial_dim,
             hidden_dim=cfg.hidden_dim,
             res_n=cfg.res_n,
+            seed=cfg.seed,
         )
 
         job_save_dir = _resolve_run_dir(job_root_dir, run_config)
+
+        # Plot-only mode: load history from disk and generate plots, skip training
+        if cfg.plot:
+            _load_and_plot(job_save_dir, game, level_i)
+            continue
+
         completed_iterations = _get_completed_iterations(job_save_dir)
         if completed_iterations >= cfg.iterations:
             print(
@@ -1097,6 +1213,7 @@ def _run_exit_job(cfg: ExitTrainConfig, jobs: List[tuple[str, int]], multi_run: 
                 replay_max_size=cfg.replay_max_size,
                 save_dir=job_root_dir,
                 resume=cfg.resume,
+                seed=cfg.seed,
                 initial_dim=cfg.initial_dim,
                 hidden_dim=cfg.hidden_dim,
                 res_n=cfg.res_n,
@@ -1136,6 +1253,7 @@ def main(cfg: ExitTrainConfig):
         slurm_gres=cfg.slurm_gres,
         slurm_array_parallelism=cfg.slurm_array_parallelism,
         slurm_account=os.environ.get("SLURM_ACCOUNT"),
+        slurm_setup=[f"export PYTHONPATH={JAXTAR_DIR}:$PYTHONPATH"],
     )
     executor.map_array(
         _run_exit_job,

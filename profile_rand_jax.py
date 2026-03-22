@@ -29,6 +29,8 @@ from utils_rl import get_env_params_from_config, init_ps_env
 # game_paths = glob.glob(os.path.join('data', 'scraped_games', '*.txt'))
 # games = [os.path.basename(p) for p in game_paths]
 
+N_WARMUP_LOOPS = 3
+
 BATCH_SIZES = [
     1,
     10,
@@ -37,7 +39,7 @@ BATCH_SIZES = [
     # 200,
     # 400,
     # 600,
-    1_000,
+    # 1_000,
     # 1_200,
     # 1_500,
     # 1_800,
@@ -48,7 +50,7 @@ BATCH_SIZES = [
     # 8_000,
     # 10_000,
 ]
-ADAPTIVE_BATCH_SIZE_START = 1_000
+ADAPTIVE_BATCH_SIZE_START = 100
 # batch_sizes = batch_sizes[::-1]
 VMAPS = [
     True,
@@ -89,6 +91,13 @@ def get_best_fps(stats):
     if not fpss:
         return 0.0
     return float(max(fpss))
+
+
+def get_effective_steps(n_steps: int, n_envs: int, min_steps: int) -> int:
+    """Scale steps inversely with batch size to keep total work roughly constant."""
+    if n_envs <= 1:
+        return n_steps
+    return max(n_steps // n_envs, min_steps)
 
 
 @hydra.main(version_base="1.3", config_path='./conf', config_name='profile_jax')
@@ -210,6 +219,8 @@ def main(cfg: ProfileJaxRandConfig, games: Optional[List[str]] = None):
                         rng, _rng = jax.random.split(rng)
                         reset_rng = jax.random.split(_rng, n_envs)
 
+                        effective_steps = get_effective_steps(cfg.n_steps, n_envs, cfg.min_steps)
+
                         def _env_step(carry, unused):
                             env_state, rng = carry
                             rng, _rng = jax.random.split(rng)
@@ -242,12 +253,12 @@ def main(cfg: ProfileJaxRandConfig, games: Optional[List[str]] = None):
                             print(f'Finished 2nd step (execute only) in {exec_time_2nd:.3f} seconds.')
                             print(f'Estimated compile time: {compile_time - exec_time_2nd:.3f} seconds.')
 
-                            n_env_steps = cfg.n_steps * n_envs
+                            n_env_steps = effective_steps * n_envs
                             times = []
-                            for i in range(3):
+                            for i in range(N_WARMUP_LOOPS):
                                 start = timer()
                                 carry, _ = jax.lax.scan(
-                                    _env_step_jitted, carry, None, cfg.n_steps
+                                    _env_step_jitted, carry, None, effective_steps
                                 )
                                 env_state: PJState = carry[0]
                                 env_state.multihot_level.block_until_ready()

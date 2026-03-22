@@ -4,7 +4,6 @@ import re
 
 import hydra
 from matplotlib import pyplot as plt
-from matplotlib.ticker import StrMethodFormatter
 
 from conf.config import PlotRandProfileConfig
 from profile_rand_jax import get_level_int, get_step_int, get_vmap
@@ -16,30 +15,42 @@ from puzzlescript_jax.globals import (
     PLOTS_DIR,
     PRIORITY_GAMES,
 )
-from puzzlescript_jax.preprocessing import count_rules
-from puzzlescript_jax.utils import init_ps_env
 
+PROFILING_PLOTS_DIR = os.path.join(PLOTS_DIR, "profiling")
+from puzzlescript_jax.preprocessing import count_rules
+from puzzlescript_jax.utils import game_names_remap, init_ps_env
 
 GAMES_TO_PLOT = PRIORITY_GAMES
+GAMES_TO_PLOT = [
+    'Take_Heart_Lass',
+    'Zen_Puzzle_Garden',
+    'kettle',
+    'limerick',
+    'notsnake',
+    'Slidings',
+    'sokoban_basic',
+    'atlas shrank',
+]
+
 JAX_RUN_STYLES = {
-    True: {"label": "PuzzleJAX", "color": "C0", "marker": "x", "linestyle": "-"},
-    False: {"label": "PuzzleJAX (for loop)", "color": "C1", "marker": "x", "linestyle": "-"},
+    True: {"label": "JAX", "color": "C3", "marker": "x", "linestyle": "-"},
+    False: {"label": "JAX (for loop)", "color": "C1", "marker": "x", "linestyle": "-"},
 }
 NODEJS_RUN_STYLES = {
-    "single_process": {"label": "NodeJS", "color": "C3", "marker": "o", "linestyle": "--"},
-    "nodejs_native": {"label": "NodeJS (native)", "color": "C4", "marker": "^", "linestyle": "--"},
-    "nodejs_batched": {"label": "NodeJS (batched)", "color": "C5", "marker": "D", "linestyle": "--"},
-    "multiprocess": {"label": "NodeJS (multiprocess)", "color": "C2", "marker": "s", "linestyle": "--"},
+    "single_process": {"label": "NodeJS", "color": "#F0C078", "marker": None, "linestyle": (0, (5, 3))},
+    "nodejs_native": {"label": "NodeJS (native)", "color": "#E8943A", "marker": None, "linestyle": (0, (5, 3))},
+    "nodejs_batched": {"label": "NodeJS (batched)", "color": "C2", "marker": "D", "linestyle": "--"},
+    "multiprocess": {"label": "NodeJS (multiprocess)", "color": "C5", "marker": "s", "linestyle": "--"},
     "nodejs_native_multiprocess": {
         "label": "NodeJS (native multiprocess)",
-        "color": "C9",
+        "color": "C6",
         "marker": "D",
         "linestyle": "--",
     },
 }
 CPP_RUN_STYLES = {
-    "cpp_batched": {"label": "C++ (batched)", "color": "C8", "marker": "*", "linestyle": "-"},
-    "cpp_native": {"label": "C++ (native)", "color": "C6", "marker": "P", "linestyle": "-."},
+    "cpp_batched": {"label": "C++ (batched)", "color": "C0", "marker": "*", "linestyle": "-"},
+    "cpp_native": {"label": "C++ (native)", "color": "C9", "marker": "P", "linestyle": "-."},
     "cpp_native_multiprocess": {
         "label": "C++ (native multiprocess)",
         "color": "C7",
@@ -53,8 +64,8 @@ INCLUDED_JAX_RUN_TYPES = [
 ]
 INCLUDED_NODEJS_RUN_TYPES = [
     "nodejs_batched",
-    # "single_process",
-    # "nodejs_native",
+    "single_process",
+    "nodejs_native",
     # "multiprocess",
     # "nodejs_native_multiprocess",
 ]
@@ -64,18 +75,24 @@ INCLUDED_CPP_RUN_TYPES = [
     # "cpp_native_multiprocess",
 ]
 LEGEND_LABEL_ORDER = [
-    "PuzzleJAX",
-    "PuzzleJAX (for loop)",
-    "NodeJS",
-    "NodeJS (native)",
-    "NodeJS (batched)",
-    "NodeJS (multiprocess)",
-    "NodeJS (native multiprocess)",
+    "JAX",
+    "JAX (for loop)",
     "C++ (batched)",
     "C++ (native)",
     "C++ (native multiprocess)",
+    "NodeJS (batched)",
+    "NodeJS",
+    "NodeJS (native)",
+    "NodeJS (multiprocess)",
+    "NodeJS (native multiprocess)",
 ]
 PROFILE_STATS_KEY_RE = re.compile(r"(?P<n_envs>\d+)-(?P<execution_mode>[a-z_]+)(?:-threads-(?P<num_threads>\d+))?$")
+
+
+def _format_game_label(game: str) -> str:
+    label = game_names_remap.get(game, game)
+    label = label.replace('_', ' ')
+    return label.title()
 
 def _get_best_fps(stats: dict) -> float:
     fpss = stats.get("fps", ())
@@ -486,7 +503,7 @@ def _plot_compile_time_vs_n_rules(
         ax.legend()
 
     fig.tight_layout()
-    plot_path = os.path.join(PLOTS_DIR, f"jax_compile_time_vs_n_rules_{rollout_len_str}.png").replace(
+    plot_path = os.path.join(PROFILING_PLOTS_DIR, f"jax_compile_time_vs_n_rules_{rollout_len_str}.png").replace(
         " ", "_"
     )
     print(f"Saving compile time plot to {plot_path}")
@@ -508,7 +525,7 @@ def _set_log_axes(ax, all_series: list[dict]) -> None:
 
 @hydra.main(version_base="1.3", config_path="conf", config_name="plot_rand_profile_config")
 def main(cfg: PlotRandProfileConfig):
-    os.makedirs(PLOTS_DIR, exist_ok=True)
+    os.makedirs(PROFILING_PLOTS_DIR, exist_ok=True)
     games_to_n_rules = _load_games_to_n_rules()
     rollout_len_strs = _discover_rollout_lengths()
 
@@ -537,7 +554,7 @@ def main(cfg: PlotRandProfileConfig):
         n_games = len(games_n_rules)
         n_rows = int(n_games ** 0.5)
         n_cols = int(n_games / n_rows) + (n_games % n_rows > 0)
-        fig, axes = plt.subplots(n_rows, n_cols, figsize=(n_cols * 5, n_rows * 5))
+        fig, axes = plt.subplots(n_rows, n_cols, figsize=(7.1, n_rows * 1.6))
 
         if n_games == 1:
             axes = [axes]
@@ -553,38 +570,54 @@ def main(cfg: PlotRandProfileConfig):
 
             all_series = jax_series.get(game, []) + nodejs_series.get(game, []) + cpp_series.get(game, [])
             for series in all_series:
-                ax.plot(
-                    series["x"],
-                    series["y"],
-                    label=series["label"],
-                    marker=series["marker"],
-                    markersize=5,
-                    linestyle=series["linestyle"],
-                    color=series["color"],
-                    alpha=series.get("alpha", 1.0),
-                    linewidth=series.get("linewidth", 1.0),
-                    zorder=series.get("zorder", 2),
-                )
-                # _plot_peak_reference_line(ax, series)
+                if series["marker"] is None and series["y"]:
+                    # Single-datapoint series: draw as a horizontal line
+                    ax.axhline(
+                        y=series["y"][0],
+                        label=series["label"],
+                        linestyle=series["linestyle"],
+                        color=series["color"],
+                        alpha=series.get("alpha", 1.0),
+                        linewidth=series.get("linewidth", 1.0),
+                        zorder=series.get("zorder", 2),
+                    )
+                else:
+                    ax.plot(
+                        series["x"],
+                        series["y"],
+                        label=series["label"],
+                        marker=series["marker"],
+                        markersize=3,
+                        linestyle=series["linestyle"],
+                        color=series["color"],
+                        alpha=series.get("alpha", 1.0),
+                        linewidth=series.get("linewidth", 1.0),
+                        zorder=series.get("zorder", 2),
+                    )
 
             _set_log_axes(ax, all_series)
-            ax.set_xlabel("batch size")
-            ax.set_ylabel("FPS")
-            ax.yaxis.set_major_formatter(StrMethodFormatter("{x:,.0f}"))
-            ax.grid(True)
-            ax.set_title(
-                f"{game}\n({n_rules} rule{'s' if n_rules != 1 else ''}"
-                f"{', stochastic' if has_randomness else ''})"
-            )
+            # "Batch Size" on the bottom-left subplot
+            if ax_y == 0 and ax_x == n_rows - 1:
+                ax.set_xlabel("Batch Size", fontsize=7)
+            # "FPS" on the middle-left subplot (middle row, column 0)
+            if ax_y == 0 and ax_x == n_rows // 2:
+                ax.set_ylabel("FPS", fontsize=7)
+            ax.tick_params(labelsize=6, width=0.5, length=3)
+            ax.tick_params(which="minor", width=0.3, length=2)
+            ax.xaxis.set_minor_locator(plt.NullLocator())
+            ax.yaxis.set_minor_locator(plt.NullLocator())
+            for spine in ax.spines.values():
+                spine.set_linewidth(0.5)
+            ax.grid(False)
+            pretty_name = _format_game_label(game)
+            subtitle = f"{n_rules} rule{'s' if n_rules != 1 else ''}"
+            if has_randomness:
+                subtitle += ", stochastic"
+            italic_name = pretty_name.replace(" ", "\\ ")
+            ax.set_title(f"$\\it{{{italic_name}}}$ ({subtitle})", fontsize=7)
 
-            handles, labels = ax.get_legend_handles_labels()
-            if labels:
-                label_to_handle = dict(zip(labels, handles))
-                ordered_labels = [label for label in LEGEND_LABEL_ORDER if label in label_to_handle]
-                remaining_labels = [label for label in labels if label not in ordered_labels]
-                final_labels = ordered_labels + remaining_labels
-                final_handles = [label_to_handle[label] for label in final_labels]
-                ax.legend(handles=final_handles, labels=final_labels)
+            if game_i == 0:
+                legend_handles, legend_labels = ax.get_legend_handles_labels()
 
         total_axes = n_rows * n_cols
         for empty_i in range(n_games, total_axes):
@@ -594,16 +627,27 @@ def main(cfg: PlotRandProfileConfig):
             else:
                 axes[ax_x, ax_y].axis("off")
 
-        rollout_len = get_step_int(rollout_len_str)
-        fig.suptitle(f"{rollout_len}-step random rollout", fontsize=16)
         fig.tight_layout()
+        # Horizontal legend along the bottom
+        if legend_labels:
+            label_to_handle = dict(zip(legend_labels, legend_handles))
+            ordered_labels = [label for label in LEGEND_LABEL_ORDER if label in label_to_handle]
+            remaining_labels = [label for label in legend_labels if label not in ordered_labels]
+            final_labels = ordered_labels + remaining_labels
+            final_handles = [label_to_handle[label] for label in final_labels]
+            fig.legend(
+                handles=final_handles, labels=final_labels,
+                loc="lower center", ncol=len(final_labels), fontsize=8,
+                frameon=False, bbox_to_anchor=(0.57, -0.09),
+            )
+        fig.subplots_adjust(bottom=0.10)
         plot_path = os.path.join(
-            PLOTS_DIR,
+            PROFILING_PLOTS_DIR,
             f"random_rollout_profile_{rollout_len_str}{('_select' if cfg.dataset == 'priority' else '')}.png",
         )
         plot_path = plot_path.replace(" ", "_")
         print(f"Saving plot to {plot_path}")
-        fig.savefig(plot_path)
+        fig.savefig(plot_path, dpi=300, bbox_inches="tight")
         plt.close(fig)
 
 

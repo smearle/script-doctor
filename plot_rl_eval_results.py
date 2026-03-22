@@ -72,6 +72,7 @@ def _iter_eval_runs(root: Path):
         raise FileNotFoundError(f"RL logs directory '{root}' does not exist.")
 
     for game_dir in sorted(p for p in root.iterdir() if p.is_dir()):
+        print(game_dir)
         for eval_path in sorted(game_dir.glob('**/eval_stats.json')):
             level_dir = eval_path.parent.parent
             run_dir = eval_path.parent
