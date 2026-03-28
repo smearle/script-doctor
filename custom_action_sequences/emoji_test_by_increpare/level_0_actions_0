@@ -1,0 +1,4 @@
+# xfail: solution error — JS wins but JAX does not
+# Regression test for solution_error category (0 rules).
+# JS solution: bfs, won=true, score=0
+[2, 1, 0, 3, 3, 3, 2, 1, 0, 1, 1, 2, 2, 3, 0, 1, 0, 3, 0, 0, 1, 2, 3, 2, 2, 3, 3, 0, 1, 2, 1, 0, 0]

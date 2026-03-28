@@ -1,0 +1,4 @@
+# xfail: state error — JS and JAX intermediate states diverge
+# Regression test for state_error category (1 rule).
+# JS solution: astar, won=false, score=0
+[1, 3, 2, 1, 1, 2, 1, 0, 1, 3, 3, 3, 2, 3, 3, 1, 2]

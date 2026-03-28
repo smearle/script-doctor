@@ -42,6 +42,7 @@ wandb
 *.egg-info
 tmp
 models/diff_lm
+evo_agentic_logs/*
 
 # Exclude cpp build artifacts
 *.o

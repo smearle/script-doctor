@@ -1,0 +1,4 @@
+# xfail: state error — JS and JAX intermediate states diverge
+# Regression test for state_error category (3 rules). Uses action button.
+# JS solution: bfs, won=false, score=0
+[1, 1, 1, 1, 1, 4, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3]

@@ -1,0 +1,90 @@
+title test_run_rules_on_level_start_score
+author Codex
+run_rules_on_level_start
+
+========
+OBJECTS
+========
+
+Background
+black
+.....
+.....
+.....
+.....
+.....
+
+Target
+blue
+.....
+.000.
+.0.0.
+.000.
+.....
+
+Player
+white
+.....
+.000.
+.0.0.
+.000.
+.....
+
+RobotPlayer
+purple
+.....
+.111.
+.111.
+.111.
+.....
+
+Crate
+orange
+.....
+.000.
+.000.
+.000.
+.....
+
+=======
+LEGEND
+=======
+
+. = Background
+P = Player
+R = RobotPlayer
+* = Crate
+O = Target
+
+======
+SOUNDS
+======
+
+================
+COLLISIONLAYERS
+================
+
+Background
+Target
+Player, RobotPlayer, Crate
+
+======
+RULES
+======
+
+right [ RobotPlayer ] -> [ > RobotPlayer ]
+[ > RobotPlayer | Crate ] -> [ > RobotPlayer | > Crate ]
+
+==============
+WINCONDITIONS
+==============
+
+All Target on Crate
+
+======
+LEVELS
+======
+
+.....
+R*..O
+.....
