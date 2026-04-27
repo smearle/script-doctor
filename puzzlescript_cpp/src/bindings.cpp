@@ -228,6 +228,26 @@ PYBIND11_MODULE(_puzzlescript_cpp, m) {
         py::gil_scoped_release release;
         return solveRandom(engine, maxLength, maxIters, timeoutMs);
     }, py::arg("engine"), py::arg("max_length") = 100, py::arg("max_iters") = 100000, py::arg("timeout_ms") = 60000);
+    py::class_<TransitionData>(m, "TransitionData")
+        .def_readonly("states", &TransitionData::states)
+        .def_readonly("actions", &TransitionData::actions)
+        .def_readonly("next_states", &TransitionData::nextStates)
+        .def_readonly("wons", &TransitionData::wons)
+        .def_readonly("width", &TransitionData::width)
+        .def_readonly("height", &TransitionData::height)
+        .def_readonly("iterations", &TransitionData::iterations)
+        .def_readonly("time", &TransitionData::time)
+        .def_readonly("timeout", &TransitionData::timeout)
+        .def_readonly("id_dict", &TransitionData::idDict);
+
+    m.def("collect_transitions_bfs", [](Engine& engine, int maxIters, int timeoutMs) {
+        py::gil_scoped_release release;
+        return collectTransitionsBFS(engine, maxIters, timeoutMs);
+    }, py::arg("engine"), py::arg("max_iters") = 100000, py::arg("timeout_ms") = -1);
+    m.def("collect_transitions_astar", [](Engine& engine, int maxIters, int timeoutMs) {
+        py::gil_scoped_release release;
+        return collectTransitionsAStar(engine, maxIters, timeoutMs);
+    }, py::arg("engine"), py::arg("max_iters") = 100000, py::arg("timeout_ms") = -1);
     m.def("solve_bfs", [](Engine& engine, int maxIters, int timeoutMs) {
         py::gil_scoped_release release;
         return solveBFS(engine, maxIters, timeoutMs);

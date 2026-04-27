@@ -32,6 +32,25 @@ struct MCTSOptions {
     int maxIterations = 100000;
 };
 
+struct TransitionData {
+    // Flat list of all unique (state, action, next_state) transitions visited.
+    // States are stored as raw LevelBackup.dat vectors (bitpacked int32).
+    std::vector<std::vector<int32_t>> states;
+    std::vector<int> actions;
+    std::vector<std::vector<int32_t>> nextStates;
+    // 1 if the corresponding next_state satisfies the win conditions.
+    std::vector<uint8_t> wons;
+    int width = 0;
+    int height = 0;
+    int iterations = 0;
+    double time = 0.0;
+    bool timeout = false;
+    std::vector<std::string> idDict;
+};
+
+TransitionData collectTransitionsBFS(Engine& engine, int maxIters = 100000, int timeoutMs = -1);
+TransitionData collectTransitionsAStar(Engine& engine, int maxIters = 100000, int timeoutMs = -1);
+
 RandomRolloutResult randomRolloutRaw(Engine& engine, int maxIters = 100000, int timeoutMs = -1);
 SolverResult solveRandom(Engine& engine, int maxLength = 100, int maxIters = 100000, int timeoutMs = 60000);
 SolverResult solveBFS(Engine& engine, int maxIters = 100000, int timeoutMs = -1);

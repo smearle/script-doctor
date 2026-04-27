@@ -8,6 +8,7 @@
 #include <queue>
 #include <random>
 #include <unordered_map>
+#include <unordered_set>
 
 namespace {
 
@@ -374,6 +375,119 @@ SolverResult solveBFS(Engine& engine, int maxIters, int timeoutMs) {
     }
 
     return makeSolverResult(engine, false, bestActions, iterations, start, bestScore, bestState, false);
+}
+
+TransitionData collectTransitionsBFS(Engine& engine, int maxIters, int timeoutMs) {
+    const auto start = Clock::now();
+    const LevelBackup initialState = engine.backupLevel();
+    std::queue<LevelBackup> frontier;
+    std::unordered_set<StateVec, StateVecHash> visited;
+    frontier.push(initialState);
+    visited.insert(initialState.dat);
+
+    TransitionData result;
+    result.width = initialState.width;
+    result.height = initialState.height;
+    result.idDict = engine.getIdDict();
+    int iterations = 0;
+
+    while (!frontier.empty() && iterations < maxIters) {
+        if (iterations % 1000 == 0 && timedOut(start, timeoutMs)) {
+            result.timeout = true;
+            break;
+        }
+
+        const LevelBackup parentState = frontier.front();
+        frontier.pop();
+
+        for (int action : actionsForEngine(engine)) {
+            engine.restoreLevel(parentState);
+            const bool changed = processInputSearch(engine, action);
+            LevelBackup nextState = engine.backupLevel();
+            const bool won = engine.isWinning();
+
+            // Record every (state, action, next_state) triple — including no-ops,
+            // so the world model learns to reproduce identity transitions too.
+            result.states.push_back(parentState.dat);
+            result.actions.push_back(action);
+            result.nextStates.push_back(nextState.dat);
+            result.wons.push_back(won ? 1 : 0);
+
+            if (!changed) {
+                continue;  // no-op: next_state == parent_state, nothing to expand
+            }
+            if (visited.find(nextState.dat) != visited.end()) {
+                continue;  // Don't expand further from already-visited states
+            }
+
+            visited.insert(nextState.dat);
+            frontier.push(nextState);
+        }
+
+        iterations += 1;
+    }
+
+    result.iterations = iterations;
+    result.time = elapsedSeconds(start);
+    return result;
+}
+
+TransitionData collectTransitionsAStar(Engine& engine, int maxIters, int timeoutMs) {
+    const auto start = Clock::now();
+    const LevelBackup initialState = engine.backupLevel();
+    std::priority_queue<PriorityNode, std::vector<PriorityNode>, AStarComparator> frontier;
+    std::unordered_set<StateVec, StateVecHash> visited;
+    visited.insert(initialState.dat);
+
+    double initScore = engine.getScore();
+    frontier.push(PriorityNode{initScore, initialState, 0, initScore});
+
+    TransitionData result;
+    result.width = initialState.width;
+    result.height = initialState.height;
+    result.idDict = engine.getIdDict();
+    int iterations = 0;
+
+    while (!frontier.empty() && iterations < maxIters) {
+        if (iterations % 1000 == 0 && timedOut(start, timeoutMs)) {
+            result.timeout = true;
+            break;
+        }
+
+        PriorityNode current = frontier.top();
+        frontier.pop();
+
+        for (int action : actionsForEngine(engine)) {
+            engine.restoreLevel(current.state);
+            const bool changed = processInputSearch(engine, action);
+            LevelBackup nextState = engine.backupLevel();
+            const bool won = engine.isWinning();
+
+            // Record every (state, action, next_state) triple — including no-ops,
+            // so the world model learns to reproduce identity transitions too.
+            result.states.push_back(current.state.dat);
+            result.actions.push_back(action);
+            result.nextStates.push_back(nextState.dat);
+            result.wons.push_back(won ? 1 : 0);
+
+            if (!changed) {
+                continue;  // no-op: next_state == current.state, nothing to expand
+            }
+            if (visited.find(nextState.dat) != visited.end()) {
+                continue;
+            }
+
+            visited.insert(nextState.dat);
+            const double score = engine.getScore();
+            frontier.push(PriorityNode{score + current.numSteps + 1.0, nextState, current.numSteps + 1, score});
+        }
+
+        iterations += 1;
+    }
+
+    result.iterations = iterations;
+    result.time = elapsedSeconds(start);
+    return result;
 }
 
 SolverResult solveAStar(Engine& engine, int maxIters, int timeoutMs) {

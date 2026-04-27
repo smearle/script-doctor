@@ -549,11 +549,15 @@ def get_env_from_ps_file(parser, game, log_dir: str = None, overwrite: bool = Tr
 # Keeping this here only for backwards compatibility
 def get_tree_from_txt(parser, game, log_dir: str = None, overwrite: bool = True, test_env_init: bool = True,
                       timeout: int = 10):
+    # Search order: custom_games (user overrides) -> gallery_games (official
+    # PuzzleScript.net gallery, preferred) -> scraped_games (community scrape)
+    # -> scraped_games_increpare. Gallery-first means games available in both
+    # gallery and scrape resolve to the official gallery version.
     filepath = os.path.join(CUSTOM_GAMES_DIR, game + '.txt')
     if not os.path.exists(filepath):
-        filepath = os.path.join(GAMES_DIR, game + '.txt')
-    if not os.path.exists(filepath):
         filepath = os.path.join(GALLERY_GAMES_DIR, game + '.txt')
+    if not os.path.exists(filepath):
+        filepath = os.path.join(GAMES_DIR, game + '.txt')
     if not os.path.exists(filepath):
         filepath = os.path.join(INCREPARE_GAMES_DIR, game + '.txt')
     logger.debug(f"Parsing {filepath}")

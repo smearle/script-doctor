@@ -47,3 +47,7 @@ evo_agentic_logs/*
 # Exclude cpp build artifacts
 *.o
 *.so
+
+nca_wm/logs
+nca_wm/sweep_launch_logs
+rollout_data

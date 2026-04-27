@@ -128,9 +128,21 @@ function createSandbox() {
     sandbox.redraw = function() {};
     sandbox.forceRegenImages = function() {};
     sandbox.consolePrintFromRule = function() {};
-    sandbox.consolePrint = function() {};
+    sandbox.__capturedErrors = [];
+    sandbox.consolePrint = function(msg) {
+        try {
+            const s = String(msg);
+            if (s.indexOf('errorText') !== -1 || s.indexOf('systemMessage') !== -1) {
+                sandbox.__capturedErrors.push(s.replace(/<[^>]+>/g, '').trim());
+            }
+        } catch (e) {}
+    };
     sandbox.console_print_raw = sandbox.console.log.bind(sandbox.console);
-    sandbox.consoleError = function() {};
+    sandbox.consoleError = function(msg) {
+        try {
+            sandbox.__capturedErrors.push(String(msg).replace(/<[^>]+>/g, '').trim());
+        } catch (e) {}
+    };
     sandbox.consoleCacheDump = function() {};
     sandbox.addToDebugTimeline = function() {
         return 0;
@@ -497,6 +509,14 @@ globalThis.__PS_NODE_API__ = {
         if (lv.objects) return { type: 'level', index: i };
         return { type: 'message', index: i, message: lv.message || '' };
     }),
+    getCapturedErrors: () => {
+        try { return (globalThis.__capturedErrors || []).slice(); }
+        catch (e) { return []; }
+    },
+    clearCapturedErrors: () => {
+        try { if (globalThis.__capturedErrors) globalThis.__capturedErrors.length = 0; }
+        catch (e) {}
+    },
     unloadGame,
     clearBackups: () => { backups = []; },
     drainLazyGeneration: () => { tick_lazy_function_generation(false); },

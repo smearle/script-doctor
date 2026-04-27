@@ -41,7 +41,7 @@ from typing import Optional
 # ---------------------------------------------------------------------------
 SCRIPT_DIR = Path(__file__).resolve().parent
 DATA_DIR = SCRIPT_DIR / "data"
-INCREPARE_DIR = DATA_DIR / "scraped_games_increpare"
+GAMES_DIR = DATA_DIR / "scraped_games_increpare"
 DOCS_PATH = SCRIPT_DIR / "script_doctor" / "all_documentation.txt"
 LOGS_ROOT = SCRIPT_DIR / "evo_agentic_logs"
 
@@ -91,18 +91,18 @@ def _load_docs() -> str:
 _INCREPARE_FILES: list[Path] | None = None
 
 
-def _list_increpare_games() -> list[Path]:
+def _list_games() -> list[Path]:
     global _INCREPARE_FILES
     if _INCREPARE_FILES is None:
-        _INCREPARE_FILES = sorted(INCREPARE_DIR.glob("*.txt"))
+        _INCREPARE_FILES = sorted(GAMES_DIR.glob("*.txt"))
     return _INCREPARE_FILES
 
 
-def sample_increpare_games(n: int = 3, max_chars: int = 12_000) -> list[str]:
+def sample_games(n: int = 3, max_chars: int = 12_000) -> list[str]:
     """Return up to *n* random increpare game texts, limited by total char count."""
-    files = _list_increpare_games()
+    files = _list_games()
     if not files:
-        logger.warning("No increpare games found in %s", INCREPARE_DIR)
+        logger.warning("No increpare games found in %s", GAMES_DIR)
         return []
     sampled: list[str] = []
     total_chars = 0
@@ -265,6 +265,7 @@ def query_vllm(
         temperature=temperature,
         max_tokens=max_tokens,
         enable_thinking=enable_thinking,
+        timeout=None,
     )
 
 
@@ -281,11 +282,30 @@ class CompileResult:
 
 
 def compile_game_text(code: str) -> CompileResult:
-    """Compile a PuzzleScript game from raw text using the Node.js backend."""
+    """Compile a PuzzleScript game from raw text using the Node.js backend.
+
+    The PuzzleScript engine silently falls back to an empty game on parse/compile
+    errors rather than throwing, so we also inspect captured ``consoleError`` /
+    error-class ``consolePrint`` output and treat ``n_levels == 0`` as failure.
+    """
     try:
         backend = _fresh_nodejs_backend()
+        try:
+            backend.engine.clearCapturedErrors()
+        except Exception:
+            pass
         backend.engine.compile(["restart"], code)
         n_levels = int(backend.get_num_levels())
+        try:
+            captured = [str(e) for e in list(backend.engine.getCapturedErrors())]
+        except Exception:
+            captured = []
+        real_errors = [e for e in captured if "Errors detected during compilation" not in e]
+        if n_levels == 0 or real_errors:
+            err_text = "\n".join(real_errors) if real_errors else (
+                "Compilation produced no playable levels (empty game)."
+            )
+            return CompileResult(success=False, error=err_text, n_levels=n_levels)
         return CompileResult(success=True, game_text=code, n_levels=n_levels)
     except Exception as e:
         error_msg = f"{type(e).__name__}: {e}"
@@ -488,7 +508,7 @@ def generate_and_evaluate(
     uid = _next_uid()
 
     # Sample fresh few-shot examples for this generation
-    fewshot_games = sample_increpare_games(n=fewshot_n)
+    fewshot_games = sample_games(n=fewshot_n)
     system_prompt = build_system_prompt(fewshot_games)
 
     code: str | None = None

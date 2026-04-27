@@ -656,6 +656,43 @@ def _load_unique_games_per_dataset():
         return json.load(f)
 
 
+def _load_games_dat_titles() -> set[str] | None:
+    """Return the set of lowercase filename-normalized titles from
+    PuzzleScript's games_dat.js — the *official* gallery list.
+
+    Our on-disk `gallery_games/` directory is polluted with demo files from
+    PuzzleScript/src/demo/ (e.g. actiontest, blank, rigidfail1, againexample)
+    that aren't real gallery entries. We filter against games_dat.js so
+    downstream consumers see only the actual gallery.
+
+    Returns None if games_dat.js isn't available (no filtering applied).
+    """
+    import re
+    # Repo root: puzzlescript_jax/ is one level below the repo root.
+    repo_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    games_dat_path = os.path.join(repo_root, 'PuzzleScript', 'src', 'games_dat.js')
+    if not os.path.isfile(games_dat_path):
+        return None
+    try:
+        from pathvalidate import sanitize_filename
+    except ImportError:
+        return None
+    with open(games_dat_path, encoding='utf-8') as f:
+        text = f.read()
+    json_text = text[text.index('['):text.rindex(']') + 1]
+    json_text = re.sub(r',\s*\]', ']', json_text)
+    json_text = re.sub(r',\s*\}', '}', json_text)
+    entries = json.loads(json_text)
+
+    # Same convention as collect_games._title_to_filename: space→underscore,
+    # then sanitize. Keep lowercase for case-insensitive matching on disk.
+    titles = set()
+    for e in entries:
+        name = e['title'].replace(' ', '_')
+        titles.add(sanitize_filename(name, replacement_text='_').lower())
+    return titles
+
+
 def get_list_of_games_for_testing(dataset="pedro", include_random=False, random_order=False):
     """Return an ordered list of game names for the given dataset tier.
 
@@ -682,8 +719,24 @@ def get_list_of_games_for_testing(dataset="pedro", include_random=False, random_
     # Load the precomputed deduped game lists (gallery, pedro, increpare)
     unique_per_dataset = _load_unique_games_per_dataset()
 
+    # The on-disk `gallery_games/` directory also contains demo/example files
+    # from PuzzleScript/src/demo (actiontest, blank, rigidfail1, etc.) that
+    # aren't in the real PuzzleScript gallery. Filter against games_dat.js
+    # so `dataset="gallery"` surfaces only genuine gallery entries —
+    # EXCEPT for PRIORITY_GAMES, which bypass the whitelist since they're
+    # hand-picked research anchors (some are PS demo files like sokoban_basic
+    # that aren't in the gallery but we want to keep as test cases).
+    # For pedro/increpare we DON'T apply this filter — those tiers
+    # intentionally include scraped/demo games beyond the official gallery.
+    gallery_whitelist = _load_games_dat_titles() if dataset == "gallery" else None
+    def _in_gallery(game_name: str) -> bool:
+        if gallery_whitelist is None:
+            return True
+        return game_name.lower() in gallery_whitelist
+
     # --- Build the ordered game list by tier ---
-    # Start with priority games (always first)
+    # Start with priority games (always first). PRIORITY is exempt from the
+    # games_dat.js whitelist.
     games = list(PRIORITY_GAMES)
     seen = set(games)
 
@@ -692,11 +745,15 @@ def get_list_of_games_for_testing(dataset="pedro", include_random=False, random_
             random.shuffle(games)
         return games
 
-    # Gallery tier: deduped against custom_games and within itself
+    # Gallery tier: PRIORITY entries stay as-is (hand-picked), and we add
+    # games that are both in our deduped gallery list and in games_dat.js.
     for g in unique_per_dataset.get("gallery", []):
-        if g not in seen:
-            games.append(g)
-            seen.add(g)
+        if g in seen:
+            continue
+        if not _in_gallery(g):
+            continue
+        games.append(g)
+        seen.add(g)
 
     if dataset == "gallery":
         if random_order:

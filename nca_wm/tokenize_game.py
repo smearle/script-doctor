@@ -103,14 +103,46 @@ _CHANNELS = [f"CH{i}" for i in range(MAX_CHANNELS)]
 MAX_GROUPS = 32
 _GROUPS = [f"G{i}" for i in range(MAX_GROUPS)]
 
-# Build vocabulary
-_ALL_TOKENS = (
+# ---- Sprite/visual tokens (opt-in via `encode_sprites=True`) ----
+# Each PuzzleScript object declares:
+#   - a list of 1..N colors (the object's local palette). We resolve named
+#     colors + hex codes to RGB then quantize to a 4x4x4 = 64-bucket grid.
+#   - a 5x5 sprite grid of digits 0-9 (indexing into that palette) or '.'
+# These tokens let us fold that info into the sequence with a bounded vocab.
+_SPRITE_STRUCT = [
+    "OBJ_START",        # start of an object's palette+sprite block
+    "OBJ_END",          # end of the block
+    "PALETTE_START",    # begin palette-color list
+    "SPRITE_START",     # begin 5x5 grid
+    "PIXEL_ROW_SEP",    # end-of-row separator inside sprite grid
+]
+
+# Palette-index tokens: 0-9 plus TRANSPARENT ('.')
+_SPRITE_PIX = [f"PIX{i}" for i in range(10)] + ["PIX_TRANSPARENT"]
+
+# Color tokens: RGB quantized to 2 bits per channel → 64 buckets.
+# (alpha handled via the separate PIX_TRANSPARENT palette-index token.)
+COLOR_Q_BITS = 2
+COLOR_Q_LEVELS = 1 << COLOR_Q_BITS          # 4 levels per channel
+COLOR_Q_TOTAL = COLOR_Q_LEVELS ** 3         # 64 buckets
+_SPRITE_CLRS = [f"COLOR_Q{i:02d}" for i in range(COLOR_Q_TOTAL)]
+
+# Build vocabulary in two stacked layers:
+#   1. _ALL_TOKENS_BASE (141): mechanics-only. Token IDs identical to
+#      pre-sprite-tokens tokenizer — existing checkpoints stay compatible.
+#   2. Sprite tokens appended at the end so their IDs sit above
+#      VOCAB_SIZE_BASE. Only emitted when `encode_sprites=True`.
+# Callers that know they want the extended vocab pass VOCAB_SIZE_EXT.
+_ALL_TOKENS_BASE = (
     _SPECIAL + _STRUCTURE + _RULE + _DIRECTIONS + _PREFIXES +
     _MODIFIERS + _COMMANDS + _WINCOND + _PRELUDE + _CHANNELS + _GROUPS
 )
+_ALL_TOKENS_EXT = _ALL_TOKENS_BASE + _SPRITE_STRUCT + _SPRITE_PIX + _SPRITE_CLRS
 
-VOCAB = {tok: i for i, tok in enumerate(_ALL_TOKENS)}
-VOCAB_SIZE = len(VOCAB)
+VOCAB = {tok: i for i, tok in enumerate(_ALL_TOKENS_EXT)}
+VOCAB_SIZE_BASE = len(_ALL_TOKENS_BASE)          # 141 — legacy compat
+VOCAB_SIZE_EXT = len(_ALL_TOKENS_EXT)             # ~183 — with sprite tokens
+VOCAB_SIZE = VOCAB_SIZE_BASE                      # default for legacy callers
 INV_VOCAB = {i: tok for tok, i in VOCAB.items()}
 
 
@@ -162,12 +194,48 @@ _QUANTIFIER_MAP = {
 
 
 # ---------------------------------------------------------------------------
+# Color resolution + quantization for sprite tokens
+# ---------------------------------------------------------------------------
+# All name→hex resolution goes through puzzlescript_jax.colors, which parses
+# the JS source of truth (PuzzleScript/src/js/colors.js) at import time.
+from puzzlescript_jax.colors import resolve_color_to_rgb as _resolve_name_or_hex
+
+
+def _resolve_color_to_rgb(s: str, palette_name: str | None = None):
+    """Thin wrapper around puzzlescript_jax.colors.resolve_color_to_rgb."""
+    return _resolve_name_or_hex(s, palette_name=palette_name)
+
+
+def _quantize_rgb(rgb: tuple[int, int, int]) -> int:
+    """Map (r,g,b) ∈ 0..255 to a bucket index in [0, COLOR_Q_TOTAL)."""
+    shift = 8 - COLOR_Q_BITS   # e.g. 6 for 2-bit quantization
+    r_q = rgb[0] >> shift
+    g_q = rgb[1] >> shift
+    b_q = rgb[2] >> shift
+    return (r_q * COLOR_Q_LEVELS + g_q) * COLOR_Q_LEVELS + b_q
+
+
+def color_q_to_rgb(bucket: int) -> tuple[int, int, int]:
+    """Inverse of _quantize_rgb, returning the bucket's CENTER RGB in 0..255."""
+    levels = COLOR_Q_LEVELS
+    r_q = (bucket // (levels * levels)) % levels
+    g_q = (bucket // levels) % levels
+    b_q = bucket % levels
+    # Map quantized coord 0..L-1 to center of its bucket on 0..255 range
+    step = 256 // levels
+    return (r_q * step + step // 2,
+            g_q * step + step // 2,
+            b_q * step + step // 2)
+
+
+# ---------------------------------------------------------------------------
 # Tokenizer
 # ---------------------------------------------------------------------------
 
 def tokenize_game(
     tree: PSGameTree,
     canonical_ids: list[str],
+    encode_sprites: bool = False,
 ) -> list[int]:
     """Tokenize a PSGameTree into a sequence of integer token IDs.
 
@@ -176,6 +244,9 @@ def tokenize_game(
         canonical_ids: list of canonical object names in channel order,
             as returned by CppPuzzleScriptEnv._canonical_ids.
             canonical_ids[i] is the object name for multihot channel i.
+        encode_sprites: if True, prepend each object's palette + 5x5 sprite
+            grid to the token sequence. See _SPRITE_STRUCT / _SPRITE_PIX /
+            _SPRITE_CLRS for the vocab extension. Uses VOCAB_SIZE_EXT.
 
     Returns:
         List of integer token IDs.
@@ -237,6 +308,54 @@ def tokenize_game(
     if tree.prelude.run_rules_on_level_start:
         tokens.append(V["PRE_RUN_RULES_ON_LEVEL_START"])
     if tokens:
+        tokens.append(V["SEP"])
+
+    # --- Sprites (opt-in) ---
+    if encode_sprites:
+        # One block per canonical object, in channel order. Each block:
+        #   OBJ_START CH{i} PALETTE_START COLOR_Q* ... SPRITE_START PIX* ... OBJ_END
+        for ch_i, name in enumerate(canonical_ids):
+            if ch_i >= MAX_CHANNELS:
+                break
+            obj = tree.objects.get(name) or tree.objects.get(name.lower())
+            if obj is None:
+                continue
+            tokens.append(V["OBJ_START"])
+            tokens.append(V[f"CH{ch_i}"])
+
+            # Palette: list of quantized color tokens.
+            tokens.append(V["PALETTE_START"])
+            colors = obj.colors if obj.colors is not None else []
+            for c in colors:
+                rgb = _resolve_color_to_rgb(c)
+                if rgb is None:
+                    # Transparent or unresolvable — reuse PIX_TRANSPARENT
+                    # at the palette level rather than adding more vocab.
+                    tokens.append(V["PIX_TRANSPARENT"])
+                else:
+                    tokens.append(V[f"COLOR_Q{_quantize_rgb(rgb):02d}"])
+
+            # Sprite grid (5x5 typically; shorter/odd sprites handled).
+            tokens.append(V["SPRITE_START"])
+            sprite = obj.sprite if obj.sprite is not None else []
+            n_rows = len(sprite)
+            for r in range(n_rows):
+                row = sprite[r]
+                for cell in row:
+                    c = str(cell).strip()
+                    if c == "." or c == "":
+                        tokens.append(V["PIX_TRANSPARENT"])
+                    elif c.isdigit():
+                        d = int(c)
+                        if 0 <= d <= 9:
+                            tokens.append(V[f"PIX{d}"])
+                        else:
+                            tokens.append(V["PIX_TRANSPARENT"])
+                    else:
+                        tokens.append(V["PIX_TRANSPARENT"])
+                if r < n_rows - 1:
+                    tokens.append(V["PIXEL_ROW_SEP"])
+            tokens.append(V["OBJ_END"])
         tokens.append(V["SEP"])
 
     # --- Collision layers ---
