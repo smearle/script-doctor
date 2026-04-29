@@ -127,21 +127,29 @@ COLOR_Q_LEVELS = 1 << COLOR_Q_BITS          # 4 levels per channel
 COLOR_Q_TOTAL = COLOR_Q_LEVELS ** 3         # 64 buckets
 _SPRITE_CLRS = [f"COLOR_Q{i:02d}" for i in range(COLOR_Q_TOTAL)]
 
-# Build vocabulary in two stacked layers:
-#   1. _ALL_TOKENS_BASE (141): mechanics-only. Token IDs identical to
-#      pre-sprite-tokens tokenizer — existing checkpoints stay compatible.
-#   2. Sprite tokens appended at the end so their IDs sit above
-#      VOCAB_SIZE_BASE. Only emitted when `encode_sprites=True`.
-# Callers that know they want the extended vocab pass VOCAB_SIZE_EXT.
+# Build vocabulary in three stacked layers, each appended at the end so
+# token IDs from earlier layers stay stable across vocab extensions:
+#   1. _ALL_TOKENS_BASE (141): mechanics-only. Identical to the original
+#      pre-sprite-tokens tokenizer.
+#   2. + _SPRITE_STRUCT/_PIX/_CLRS → VOCAB_SIZE_EXT (~183). Opt-in via
+#      `encode_sprites=True`.
+#   3. + _RULE_V2 (KERNEL_SEP, ID = VOCAB_SIZE_EXT) → VOCAB_SIZE_EXT_V2 (~184).
+#      Opt-in via `kernel_sep=True`. Distinguishes multi-kernel rules
+#      (`[A|B][C|D] -> [...]`) from single-kernel ones; without it the two
+#      collapse into the same token sequence.
+_RULE_V2 = ["KERNEL_SEP"]
+
 _ALL_TOKENS_BASE = (
     _SPECIAL + _STRUCTURE + _RULE + _DIRECTIONS + _PREFIXES +
     _MODIFIERS + _COMMANDS + _WINCOND + _PRELUDE + _CHANNELS + _GROUPS
 )
 _ALL_TOKENS_EXT = _ALL_TOKENS_BASE + _SPRITE_STRUCT + _SPRITE_PIX + _SPRITE_CLRS
+_ALL_TOKENS_EXT_V2 = _ALL_TOKENS_EXT + _RULE_V2
 
-VOCAB = {tok: i for i, tok in enumerate(_ALL_TOKENS_EXT)}
+VOCAB = {tok: i for i, tok in enumerate(_ALL_TOKENS_EXT_V2)}
 VOCAB_SIZE_BASE = len(_ALL_TOKENS_BASE)          # 141 — legacy compat
 VOCAB_SIZE_EXT = len(_ALL_TOKENS_EXT)             # ~183 — with sprite tokens
+VOCAB_SIZE_EXT_V2 = len(_ALL_TOKENS_EXT_V2)       # ~184 — adds KERNEL_SEP
 VOCAB_SIZE = VOCAB_SIZE_BASE                      # default for legacy callers
 INV_VOCAB = {i: tok for tok, i in VOCAB.items()}
 
@@ -236,6 +244,7 @@ def tokenize_game(
     tree: PSGameTree,
     canonical_ids: list[str],
     encode_sprites: bool = False,
+    kernel_sep: bool = False,
 ) -> list[int]:
     """Tokenize a PSGameTree into a sequence of integer token IDs.
 
@@ -247,6 +256,12 @@ def tokenize_game(
         encode_sprites: if True, prepend each object's palette + 5x5 sprite
             grid to the token sequence. See _SPRITE_STRUCT / _SPRITE_PIX /
             _SPRITE_CLRS for the vocab extension. Uses VOCAB_SIZE_EXT.
+        kernel_sep: if True, emit KERNEL_SEP between adjacent kernels on
+            either side of a rule, so multi-kernel rules
+            (`[A|B][C|D] -> [...]`) survive the round-trip. Required for
+            faithfully encoding games like constellationz, Cratopia,
+            Slidings, etc. Uses VOCAB_SIZE_EXT_V2 (always callable, but
+            new ID is only emitted when this flag is set).
 
     Returns:
         List of integer token IDs.
@@ -405,12 +420,16 @@ def tokenize_game(
         # LHS
         tokens.append(V["LHS"])
         if rule.left_kernels:
-            for part in rule.left_kernels:
+            for ki, part in enumerate(rule.left_kernels):
+                if ki > 0 and kernel_sep:
+                    tokens.append(V["KERNEL_SEP"])
                 _tokenize_kernel(part)
         # RHS
         tokens.append(V["RHS"])
         if rule.right_kernels:
-            for part in rule.right_kernels:
+            for ki, part in enumerate(rule.right_kernels):
+                if ki > 0 and kernel_sep:
+                    tokens.append(V["KERNEL_SEP"])
                 _tokenize_kernel(part)
         # Command
         if rule.command:

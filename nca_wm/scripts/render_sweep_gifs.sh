@@ -47,7 +47,7 @@ for cfg in "$REPO"/nca_wm/logs/*/config.json; do
         --render_only --render_gif \
         --load "$rundir" \
         --save_dir "$rundir" \
-        --n_random_episodes 5 --max_episode_steps 30 \
+        --max_episode_steps 30 \
         >>"$LOG" 2>&1
     echo "[render] done $rundir (exit=$?)" | tee -a "$LOG"
 done

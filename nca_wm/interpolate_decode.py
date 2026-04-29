@@ -36,7 +36,10 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from nca_wm.rule_attn_model import RuleAttnNCAWorldModel
 from nca_wm.token_decoder import SlotTokenDecoder, sample_tokens_from_slots
-from nca_wm.tokenize_game import VOCAB_SIZE_BASE, VOCAB_SIZE_EXT
+from nca_wm.tokenize_game import (
+    VOCAB_SIZE_BASE, VOCAB_SIZE_EXT, VOCAB_SIZE_EXT_V2, tokens_to_str,
+)
+from nca_wm.detokenize_game import detokenize
 
 
 # ----------------------------------------------------------------------
@@ -71,7 +74,15 @@ def build_models(cfg, game_infos):
         )
     max_C = max(g["n_objs"] for g in game_infos)
     max_tok_len = max(max((len(g.get("token_ids", [])) for g in game_infos), default=1), 1)
-    vocab_size = VOCAB_SIZE_EXT if cfg.get("encode_sprites", False) else VOCAB_SIZE_BASE
+    # Mirror train.py's vocab-size selection: KERNEL_SEP lives at the end of
+    # the vocab so kernel_sep=True implies the full V2 size regardless of
+    # encode_sprites.
+    if cfg.get("kernel_sep", False):
+        vocab_size = VOCAB_SIZE_EXT_V2
+    elif cfg.get("encode_sprites", False):
+        vocab_size = VOCAB_SIZE_EXT
+    else:
+        vocab_size = VOCAB_SIZE_BASE
 
     wm = RuleAttnNCAWorldModel(
         n_hid=cfg["n_hid"],
@@ -231,36 +242,54 @@ def main():
             sl_t = (1 - t) * sl_a + t * sl_b
             out = decode_slots(dec, dec_params, sl_t, max_tok_len)
             out = stop_at_pad(out)
-            path = os.path.join(save_dir, f"linear_t{t_idx:02d}_{t:.2f}.txt")
-            with open(path, "w") as f:
-                f.write(f"# linear interp: t={t:.4f} from {args.game_a} -> {args.game_b}\n")
-                f.write(f"# n_tokens={len(out)}\n")
+            stem = os.path.join(save_dir, f"linear_t{t_idx:02d}_{t:.2f}")
+            header = (f"# linear interp: t={t:.4f} from {args.game_a} -> {args.game_b}\n"
+                      f"# n_tokens={len(out)}\n")
+            with open(stem + ".txt", "w") as f:
+                f.write(header)
                 f.write(" ".join(str(int(x)) for x in out) + "\n")
-            print(f"  saved {path} ({len(out)} tokens)")
+            with open(stem + ".names.txt", "w") as f:
+                f.write(header)
+                f.write(tokens_to_str([int(x) for x in out]) + "\n")
+            with open(stem + ".ps.txt", "w") as f:
+                f.write(detokenize(
+                    [int(x) for x in out],
+                    title=f"interp_t{t:.2f}_{args.game_a}_to_{args.game_b}",
+                ))
+            print(f"  saved {stem}.{{txt,names.txt,ps.txt}} ({len(out)} tokens)")
     elif args.mode == "swap":
         # For each slot k, produce two outputs: only-k-from-B (in A's source) and
         # only-k-from-A (in B's source). Useful to find which slot owns what.
+        def _save_pair(stem: str, header: str, out, title: str):
+            with open(stem + ".txt", "w") as f:
+                f.write(header)
+                f.write(" ".join(str(int(x)) for x in out) + "\n")
+            with open(stem + ".names.txt", "w") as f:
+                f.write(header)
+                f.write(tokens_to_str([int(x) for x in out]) + "\n")
+            with open(stem + ".ps.txt", "w") as f:
+                f.write(detokenize([int(x) for x in out], title=title))
+
         for k in range(K):
+            tag = "dyn" if k < n_dyn else "app"
+
             sl_a_with_kb = sl_a.copy()
             sl_a_with_kb[k] = sl_b[k]
             out = decode_slots(dec, dec_params, sl_a_with_kb, max_tok_len)
             out = stop_at_pad(out)
-            tag = "dyn" if k < n_dyn else "app"
-            path = os.path.join(save_dir, f"swap_A_with_k{k:02d}_{tag}_fromB.txt")
-            with open(path, "w") as f:
-                f.write(f"# swap: A's source w/ slot{k} ({tag}) replaced by B's slot{k}\n")
-                f.write(f"# n_tokens={len(out)}\n")
-                f.write(" ".join(str(int(x)) for x in out) + "\n")
+            header = (f"# swap: A's source w/ slot{k} ({tag}) replaced by B's slot{k}\n"
+                      f"# n_tokens={len(out)}\n")
+            _save_pair(os.path.join(save_dir, f"swap_A_with_k{k:02d}_{tag}_fromB"),
+                       header, out, title=f"swap_A_k{k}_fromB")
 
             sl_b_with_ka = sl_b.copy()
             sl_b_with_ka[k] = sl_a[k]
             out = decode_slots(dec, dec_params, sl_b_with_ka, max_tok_len)
             out = stop_at_pad(out)
-            path = os.path.join(save_dir, f"swap_B_with_k{k:02d}_{tag}_fromA.txt")
-            with open(path, "w") as f:
-                f.write(f"# swap: B's source w/ slot{k} ({tag}) replaced by A's slot{k}\n")
-                f.write(f"# n_tokens={len(out)}\n")
-                f.write(" ".join(str(int(x)) for x in out) + "\n")
+            header = (f"# swap: B's source w/ slot{k} ({tag}) replaced by A's slot{k}\n"
+                      f"# n_tokens={len(out)}\n")
+            _save_pair(os.path.join(save_dir, f"swap_B_with_k{k:02d}_{tag}_fromA"),
+                       header, out, title=f"swap_B_k{k}_fromA")
             print(f"  swapped slot {k} ({tag})")
 
 

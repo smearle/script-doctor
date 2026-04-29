@@ -39,7 +39,7 @@ from puzzlescript_cpp import CppPuzzleScriptBackend, CppPuzzleScriptEnv
 from puzzlescript_jax.utils import init_ps_lark_parser
 from nca_wm.tokenize_game import (
     tokenize_game, get_game_tree_from_js,
-    VOCAB_SIZE_BASE, VOCAB_SIZE_EXT,
+    VOCAB_SIZE_BASE, VOCAB_SIZE_EXT, VOCAB_SIZE_EXT_V2,
 )
 
 N_ACTIONS = 5
@@ -189,209 +189,6 @@ def collect_unique_transitions(
     return data
 
 
-def _collect_random_episodes(
-    json_str: str, level_i: int, n_episodes: int, max_steps: int,
-) -> tuple[dict, int]:
-    """Collect random rollout transitions. Returns (data_dict, n_wins)."""
-    env = CppPuzzleScriptEnv(json_str, level_i=level_i, max_episode_steps=max_steps)
-    states, actions, next_states, wons, ep_ends = [], [], [], [], []
-    wins = 0
-    for _ in range(n_episodes):
-        obs, info = env.reset()
-        for _ in range(max_steps):
-            action = np.random.randint(N_ACTIONS)
-            states.append(obs)
-            actions.append(action)
-            obs, _, done, truncated, info = env.step(action)
-            next_states.append(obs)
-            wons.append(1 if info.get("won", False) else 0)
-            if done or truncated:
-                wins += int(info.get("won", False))
-                break
-        ep_ends.append(len(states))
-    return {
-        "states": np.array(states, dtype=np.uint8),
-        "actions": np.array(actions, dtype=np.int32),
-        "next_states": np.array(next_states, dtype=np.uint8),
-        "wons": np.array(wons, dtype=np.uint8),
-        "ep_ends": np.array(ep_ends, dtype=np.int32),
-    }, wins
-
-
-def collect_random_rollouts(
-    json_str: str,
-    game_name: str,
-    level_i: int = 0,
-    n_episodes: int = 500,
-    max_steps: int = 200,
-) -> dict:
-    """Collect random transitions, using/extending the per-game cache."""
-    # v3: per-transition win labels
-    cache_path = os.path.join(_cache_dir(game_name, level_i), "random_v3.npz")
-    cached = _load_npz_dict(cache_path)
-
-    cached_eps = 0
-    if cached is not None:
-        cached_eps = len(cached["ep_ends"])
-
-    if cached_eps >= n_episodes:
-        end_idx = int(cached["ep_ends"][n_episodes - 1])
-        data = {k: cached[k][:end_idx] for k in ("states", "actions", "next_states", "wons")}
-        data["ep_ends"] = cached["ep_ends"][:n_episodes]
-        print(f"  Random: {n_episodes:,} eps from cache ({len(data['states']):,} transitions)")
-        return data
-
-    # Need more episodes
-    deficit = n_episodes - cached_eps
-    print(f"  Random: {cached_eps:,} eps cached, collecting {deficit:,} more...")
-    new_data, wins = _collect_random_episodes(json_str, level_i, deficit, max_steps)
-    print(f"    Collected {deficit:,} eps, {len(new_data['states']):,} transitions, {wins:,} wins")
-
-    if cached is not None and len(cached["states"]) > 0:
-        offset = len(cached["states"])
-        merged = {
-            "states": np.concatenate([cached["states"], new_data["states"]]),
-            "actions": np.concatenate([cached["actions"], new_data["actions"]]),
-            "next_states": np.concatenate([cached["next_states"], new_data["next_states"]]),
-            "wons": np.concatenate([cached["wons"], new_data["wons"]]),
-            "ep_ends": np.concatenate([cached["ep_ends"], new_data["ep_ends"] + offset]),
-        }
-    else:
-        merged = new_data
-
-    _save_npz_dict(cache_path, merged)
-    print(f"    Cache updated: {len(merged['ep_ends']):,} total eps -> {cache_path}")
-
-    end_idx = int(merged["ep_ends"][n_episodes - 1])
-    data = {k: merged[k][:end_idx] for k in ("states", "actions", "next_states", "wons")}
-    data["ep_ends"] = merged["ep_ends"][:n_episodes]
-    return data
-
-
-def collect_search_trajectories(
-    json_str: str,
-    game_name: str,
-    level_i: int = 0,
-    algos: list[str] = ("bfs", "astar"),
-    n_steps: int = 100_000,
-    timeout_ms: int = 60_000,
-    max_episode_steps: int = 200,
-) -> dict | None:
-    """Collect search trajectories, using the per-game cache."""
-    cdir = _cache_dir(game_name, level_i)
-    all_states, all_actions, all_next_states, all_wons = [], [], [], []
-
-    for algo in algos:
-        # v3: per-transition win labels
-        cache_path = os.path.join(cdir, f"search_{algo}_v3_{n_steps}_{timeout_ms}.npz")
-        cached = _load_npz_dict(cache_path)
-
-        if cached is not None and len(cached["states"]) > 0:
-            print(f"  {algo}: {len(cached['states']):,} transitions from cache")
-            all_states.append(cached["states"])
-            all_actions.append(cached["actions"])
-            all_next_states.append(cached["next_states"])
-            all_wons.append(cached["wons"])
-            continue
-
-        # Run search
-        print(f"  Running {algo} ({n_steps:,} nodes, {timeout_ms:,}ms timeout)...")
-        backend = CppPuzzleScriptBackend()
-        backend.load_from_json(json_str)
-        env = CppPuzzleScriptEnv(json_str, level_i=level_i, max_episode_steps=max_episode_steps)
-
-        try:
-            backend.load_level("", level_i)
-            result = backend.run_search(
-                algo, game_text="", level_i=level_i,
-                n_steps=n_steps, timeout_ms=timeout_ms,
-            )
-        except Exception as e:
-            print(f"    {algo} failed: {e}")
-            _save_npz_dict(cache_path, {
-                "states": np.empty((0,), dtype=np.uint8),
-                "actions": np.empty((0,), dtype=np.int32),
-                "next_states": np.empty((0,), dtype=np.uint8),
-                "wons": np.empty((0,), dtype=np.uint8),
-            })
-            continue
-
-        sol_actions = result.actions
-        print(f"    {algo}: solved={result.solved}, len={len(sol_actions):,}, score={result.score}")
-
-        if not sol_actions:
-            _save_npz_dict(cache_path, {
-                "states": np.empty((0,), dtype=np.uint8),
-                "actions": np.empty((0,), dtype=np.int32),
-                "next_states": np.empty((0,), dtype=np.uint8),
-                "wons": np.empty((0,), dtype=np.uint8),
-            })
-            continue
-
-        # Replay to get per-step states
-        states, actions, next_states, wons = [], [], [], []
-        obs, _ = env.reset()
-        for a in sol_actions:
-            states.append(obs)
-            actions.append(a)
-            obs, _, done, _, info = env.step(a)
-            next_states.append(obs)
-            wons.append(1 if info.get("won", False) else 0)
-            if done:
-                break
-
-        search_data = {
-            "states": np.array(states, dtype=np.uint8),
-            "actions": np.array(actions, dtype=np.int32),
-            "next_states": np.array(next_states, dtype=np.uint8),
-            "wons": np.array(wons, dtype=np.uint8),
-        }
-        _save_npz_dict(cache_path, search_data)
-        print(f"    Cached {len(states):,} transitions -> {cache_path}")
-
-        all_states.append(search_data["states"])
-        all_actions.append(search_data["actions"])
-        all_next_states.append(search_data["next_states"])
-        all_wons.append(search_data["wons"])
-
-    if not all_states:
-        print("  No search trajectories collected.")
-        return None
-
-    total = sum(len(s) for s in all_states)
-    print(f"  Search total: {total:,} transitions")
-    return {
-        "states": np.concatenate(all_states),
-        "actions": np.concatenate(all_actions),
-        "next_states": np.concatenate(all_next_states),
-        "wons": np.concatenate(all_wons),
-    }
-
-
-def merge_datasets(random_data: dict, search_data: dict | None, search_weight: float) -> dict:
-    """Merge random and search data, oversampling search via index duplication.
-
-    Instead of materializing tiled arrays, creates a combined dataset with
-    repeated *indices* into the search data to avoid memory blowup.
-    """
-    if search_data is None or len(search_data["states"]) == 0:
-        return {k: random_data[k] for k in ("states", "actions", "next_states", "wons")}
-
-    n_random = len(random_data["states"])
-    n_search = len(search_data["states"])
-    n_search_target = min(int(search_weight * n_random), n_random)
-    rng = np.random.RandomState(0)
-    search_idx = rng.randint(0, n_search, size=n_search_target)
-    print(f"  Merging: {n_random:,} random + {n_search_target:,} search "
-          f"(sampled from {n_search:,})")
-
-    return {
-        k: np.concatenate([
-            random_data[k],
-            search_data[k][search_idx],
-        ], axis=0)
-        for k in ("states", "actions", "next_states", "wons")
-    }
 
 
 # Preset game sets for multi-game training
@@ -490,32 +287,24 @@ def _pad_obs(obs: np.ndarray, target_C: int, target_H: int, target_W: int) -> np
 def _dataset_cache_key(
     game_names: list[str],
     level_i: int | None,
-    data_mode: str,
     search_algo: str,
     n_search_steps: int,
     search_timeout_ms: int,
-    n_random_episodes: int,
-    max_episode_steps: int,
-    search_algos: list[str],
-    search_weight: float,
     encode_sprites: bool = False,
     max_transitions_per_game: int | None = None,
+    kernel_sep: bool = False,
 ) -> str:
     """Deterministic hash of all args that affect dataset contents."""
     import hashlib
     blob = json.dumps({
-        "format_version": 9,  # v9: transition-collector states now use canonical (deduped) obj count, matching CppPuzzleScriptEnv
+        "format_version": 10,  # v10: dropped random-rollout codepath; data is purely collect_unique_transitions output
         "games": sorted(game_names),
         "level": level_i,
-        "data_mode": data_mode,
         "search_algo": search_algo,
         "n_search_steps": n_search_steps,
         "search_timeout_ms": search_timeout_ms,
-        "n_random_episodes": n_random_episodes,
-        "max_episode_steps": max_episode_steps,
-        "search_algos": sorted(search_algos),
-        "search_weight": search_weight,
         "encode_sprites": encode_sprites,
+        "kernel_sep": kernel_sep,
         "max_transitions_per_game": max_transitions_per_game,
     }, sort_keys=True)
     return hashlib.sha256(blob.encode()).hexdigest()[:16]
@@ -525,23 +314,17 @@ def collect_multigame_dataset(
     game_names: list[str],
     ps_parser,
     level_i: int | None = None,
-    n_random_episodes: int = 500,
-    max_episode_steps: int = 200,
-    search_algos: list[str] = ("bfs", "astar"),
     n_search_steps: int = 100_000,
     search_timeout_ms: int = 60_000,
-    search_weight: float = 5.0,
-    data_mode: str = "unique",
     search_algo: str = "astar",
     encode_sprites: bool = False,
     max_transitions_per_game: int | None = None,
+    kernel_sep: bool = False,
 ) -> tuple[dict, list[dict]]:
-    """Collect padded transitions from multiple games.
+    """Collect padded transitions from multiple games via search-based unique-transition exploration.
 
     Args:
         level_i: If None (default), collect from all levels. If int, collect from that level only.
-        data_mode: "unique" for deduplicated random exploration (default),
-                   "random_search" for the old random+search+merge approach.
 
     Returns:
         dataset: merged dict with keys "states", "actions", "next_states", "game_ids"
@@ -550,11 +333,11 @@ def collect_multigame_dataset(
     """
     # Check for cached merged dataset (shared across experiments)
     cache_hash = _dataset_cache_key(
-        game_names, level_i, data_mode, search_algo,
-        n_search_steps, search_timeout_ms, n_random_episodes,
-        max_episode_steps, list(search_algos), search_weight,
+        game_names, level_i, search_algo,
+        n_search_steps, search_timeout_ms,
         encode_sprites=encode_sprites,
         max_transitions_per_game=max_transitions_per_game,
+        kernel_sep=kernel_sep,
     )
     merged_cache_dir = os.path.join(ROLLOUT_CACHE_DIR, "_merged")
     dataset_cache = os.path.join(merged_cache_dir, f"dataset_{cache_hash}.npz")
@@ -606,7 +389,8 @@ def collect_multigame_dataset(
         try:
             tree, canonical_ids = get_game_tree_from_js(ps_parser, name)
             token_ids = tokenize_game(tree, canonical_ids,
-                                       encode_sprites=encode_sprites)
+                                       encode_sprites=encode_sprites,
+                                       kernel_sep=kernel_sep)
         except Exception as e:
             print(f"  WARNING: tokenization failed ({e}), using empty tokens")
             tree, canonical_ids = None, None
@@ -670,27 +454,12 @@ def collect_multigame_dataset(
         raw_levels = []
         for li in levels:
             print(f"  Level {li}:")
-            if data_mode == "unique":
-                level_data = collect_unique_transitions(
-                    json_str, name, level_i=li,
-                    max_iters=n_search_steps,
-                    timeout_ms=search_timeout_ms,
-                    search_algo=search_algo,
-                )
-            else:
-                random_data = collect_random_rollouts(
-                    json_str, name, level_i=li,
-                    n_episodes=n_random_episodes,
-                    max_steps=max_episode_steps,
-                )
-                search_data = collect_search_trajectories(
-                    json_str, name, level_i=li,
-                    algos=search_algos,
-                    n_steps=n_search_steps,
-                    timeout_ms=search_timeout_ms,
-                    max_episode_steps=max_episode_steps,
-                )
-                level_data = merge_datasets(random_data, search_data, search_weight)
+            level_data = collect_unique_transitions(
+                json_str, name, level_i=li,
+                max_iters=n_search_steps,
+                timeout_ms=search_timeout_ms,
+                search_algo=search_algo,
+            )
             # Optional per-level cap so we never materialize huge per-game
             # tensors in RAM. Cap per level = max_per_game / n_levels,
             # so the total stays within the game budget.
@@ -3406,391 +3175,7 @@ def render_post_training_gifs(
 
 
 # ---------------------------------------------------------------------------
-# 5. Web server
-# ---------------------------------------------------------------------------
-
-def serve_world_model(
-    model,
-    params,
-    game_infos: list[dict],
-    ps_parser,
-    initial_game_id: int = 0,
-    level_i: int = 0,
-    port: int = 8000,
-    host: str = "0.0.0.0",
-    conditional: bool = True,
-    max_pad: tuple[int, int, int] = (1, 1, 1),
-    max_tok_len: int = 1,
-):
-    """Serve the trained world model as an interactive web app.
-
-    Multi-game aware: takes the full ``game_infos`` list and lets the user
-    pick a game (and level within it) at runtime. The model's apply path
-    pads each game's native (n_objs, H, W) state up to the global ``max_pad``
-    used during training, then crops back for rendering.
-
-    Conditional models (``rule_attn`` / ``film``) require per-game tokens —
-    enable via ``conditional=True`` and pass the matching ``max_tok_len``.
-    """
-    from flask import Flask, jsonify
-    import PIL.Image
-
-    app = Flask(__name__)
-    apply_fn = jax.jit(model.apply)
-    max_C, max_H, max_W = max_pad
-
-    # Mutable per-session state (rebound on game switch).
-    state: dict = {}
-
-    def _pad_tokens(tids):
-        pad = np.zeros(max_tok_len, dtype=np.int32)
-        mask = np.zeros(max_tok_len, dtype=np.bool_)
-        L = min(len(tids), max_tok_len)
-        pad[:L] = tids[:L]
-        mask[:L] = True
-        return pad, mask
-
-    def _switch(game_id: int, level_i: int):
-        info = game_infos[game_id]
-        backend = CppPuzzleScriptBackend()
-        backend.compile_game(ps_parser, info["name"])
-        env = CppPuzzleScriptEnv(info["json_str"], level_i=level_i, max_episode_steps=10000)
-        n_objs, grid_h, grid_w = env.observation_shape
-        real_obs, _ = env.reset()
-        # _pad_state_for_model already returns shape (1, max_C, max_H, max_W).
-        pred_state = _pad_state_for_model(real_obs, max_C, max_H, max_W)
-        state.clear()
-        state.update(
-            game_id=game_id,
-            level_i=level_i,
-            env=env,
-            backend=backend,
-            n_objs=n_objs,
-            grid_h=grid_h,
-            grid_w=grid_w,
-            real_obs=real_obs,
-            pred_state=pred_state,
-            step=0,
-            diverged=False,
-            last_action=None,
-        )
-        if conditional:
-            tids = info.get("token_ids", [])
-            pad, mask = _pad_tokens(tids)
-            state["tokens"] = jnp.array(pad[None])
-            state["mask"] = jnp.array(mask[None])
-
-    def _render_obs(obs_native):
-        objects = _multihot_to_objects(obs_native)
-        frame = state["backend"].render_frame_from_objects(
-            objects, state["grid_w"], state["grid_h"]
-        )
-        buf = io.BytesIO()
-        PIL.Image.fromarray(frame).save(buf, format="PNG")
-        return base64.b64encode(buf.getvalue()).decode()
-
-    def _crop_pred():
-        pred_bin = (state["pred_state"] > 0.5).astype(jnp.uint8)
-        return _unpad_pred(pred_bin, state["n_objs"], state["grid_h"], state["grid_w"])
-
-    def _apply_step(action):
-        a_oh = jnp.array(np.eye(N_ACTIONS, dtype=np.float32)[action][None])
-        if conditional:
-            logits, win_logit, _ = apply_fn(
-                params, state["pred_state"], a_oh, state["tokens"], state["mask"]
-            )
-        else:
-            logits, win_logit, _ = apply_fn(params, state["pred_state"], a_oh)
-        return logits, win_logit
-
-    def _state_payload():
-        real_b64 = _render_obs(state["real_obs"])
-        pred_native = _crop_pred()
-        pred_b64 = _render_obs(pred_native)
-        l1 = float(np.abs(pred_native.astype(np.int32) - state["real_obs"].astype(np.int32)).sum())
-        info = game_infos[state["game_id"]]
-        return dict(
-            real=real_b64, pred=pred_b64,
-            step=state["step"], l1=l1, diverged=state["diverged"],
-            game=info["name"], game_id=state["game_id"], level_i=state["level_i"],
-            n_levels=info.get("n_levels", 1),
-        )
-
-    _switch(initial_game_id, level_i)
-
-    @app.route("/")
-    def index():
-        return HTML_PAGE
-
-    @app.route("/api/games")
-    def list_games():
-        return jsonify([
-            {"name": g["name"], "n_levels": g.get("n_levels", 1)}
-            for g in game_infos
-        ])
-
-    @app.route("/api/select/<int:game_id>/<int:level_i>")
-    def select(game_id: int, level_i: int):
-        if game_id < 0 or game_id >= len(game_infos):
-            return jsonify(error="invalid game"), 400
-        nl = game_infos[game_id].get("n_levels", 1)
-        if level_i < 0 or level_i >= nl:
-            return jsonify(error="invalid level"), 400
-        _switch(game_id, level_i)
-        return jsonify(_state_payload())
-
-    @app.route("/api/state")
-    def get_state():
-        return jsonify(_state_payload())
-
-    @app.route("/api/step/<int:action>")
-    def step(action):
-        if action < 0 or action >= N_ACTIONS:
-            return jsonify(error="invalid action"), 400
-        logits, win_logit = _apply_step(action)
-        state["pred_state"] = (jax.nn.sigmoid(logits) > 0.5).astype(jnp.float32)
-        state["pred_won"] = float(jax.nn.sigmoid(win_logit)[0])
-        state["last_action"] = action
-        # Real env step
-        state["real_obs"], _, done, _, info = state["env"].step(action)
-        state["backend"].process_input(action)
-        while state["backend"].againing:
-            state["backend"].process_input(-1)
-        state["step"] += 1
-        payload = _state_payload()
-        payload.update(won=bool(info.get("won", False)), done=bool(done),
-                       pred_won=state["pred_won"])
-        return jsonify(payload)
-
-    @app.route("/api/step_dream/<int:action>")
-    def step_dream(action):
-        """Step only the world model (no real env) — pure dreaming."""
-        if action < 0 or action >= N_ACTIONS:
-            return jsonify(error="invalid action"), 400
-        logits, win_logit = _apply_step(action)
-        state["pred_state"] = (jax.nn.sigmoid(logits) > 0.5).astype(jnp.float32)
-        state["pred_won"] = float(jax.nn.sigmoid(win_logit)[0])
-        state["step"] += 1
-        state["diverged"] = True
-        state["last_action"] = action
-        pred_b64 = _render_obs(_crop_pred())
-        return jsonify(pred=pred_b64, step=state["step"], pred_won=state["pred_won"])
-
-    @app.route("/api/reset")
-    def reset():
-        _switch(state["game_id"], state["level_i"])
-        return jsonify(_state_payload())
-
-    print(f"\nServing NCA world model player at http://{host}:{port}")
-    print(f"  initial: {game_infos[initial_game_id]['name']} L{level_i}")
-    print(f"  available games: {len(game_infos)}\n")
-    app.run(host=host, port=port, debug=False)
-
-
-HTML_PAGE = r"""<!DOCTYPE html>
-<html>
-<head>
-<title>NCA World Model Player</title>
-<style>
-  * { margin: 0; padding: 0; box-sizing: border-box; }
-  body {
-    background: #1a1a2e; color: #eee; font-family: monospace;
-    display: flex; flex-direction: column; align-items: center;
-    min-height: 100vh; padding: 20px;
-  }
-  h1 { margin-bottom: 4px; font-size: 1.4em; color: #e94560; }
-  .subtitle { color: #888; margin-bottom: 16px; font-size: 0.9em; }
-  .selectors {
-    display: flex; gap: 12px; align-items: center;
-    margin-bottom: 16px; padding: 10px 16px;
-    background: #16213e; border-radius: 8px;
-  }
-  .selectors label { color: #888; font-size: 0.85em; }
-  .selectors select {
-    background: #0f3460; color: #eee; border: 1px solid #333;
-    padding: 4px 8px; border-radius: 4px; font-family: monospace;
-    font-size: 0.9em; min-width: 140px;
-  }
-  .game-row {
-    display: flex; gap: 24px; align-items: flex-start;
-    flex-wrap: wrap; justify-content: center;
-  }
-  .panel { text-align: center; }
-  .panel h2 { font-size: 1em; margin-bottom: 8px; }
-  .panel h2.real { color: #4ecca3; }
-  .panel h2.pred { color: #e94560; }
-  .panel img.game-img {
-    image-rendering: pixelated;
-    border: 2px solid #333;
-    min-width: 256px; min-height: 200px;
-    background: #111;
-  }
-  .info {
-    margin-top: 16px; padding: 12px 20px;
-    background: #16213e; border-radius: 8px;
-    display: flex; gap: 24px; font-size: 0.95em;
-  }
-  .info .val { color: #4ecca3; font-weight: bold; }
-  .info .warn { color: #e94560; }
-  .controls {
-    margin-top: 12px; color: #666; font-size: 0.85em;
-    line-height: 1.6;
-  }
-  .badge {
-    display: inline-block; padding: 2px 8px; border-radius: 4px;
-    color: #fff; font-size: 0.8em; margin-left: 8px;
-    vertical-align: middle;
-  }
-  .badge.dream { background: #e94560; }
-  .badge.hidden { display: none; }
-</style>
-</head>
-<body>
-  <h1>NCA World Model Player
-    <span id="dreamBadge" class="badge dream hidden">DREAM</span>
-  </h1>
-  <p class="subtitle">Real game engine vs. learned NCA world model</p>
-  <div class="selectors">
-    <label for="gameSelect">game:</label>
-    <select id="gameSelect"></select>
-    <label for="levelSelect">level:</label>
-    <select id="levelSelect"></select>
-  </div>
-  <div class="game-row">
-    <div class="panel">
-      <h2 class="real">Real Engine</h2>
-      <img id="realImg" class="game-img" src="" />
-    </div>
-    <div class="panel">
-      <h2 class="pred">NCA Prediction</h2>
-      <img id="predImg" class="game-img" src="" />
-    </div>
-  </div>
-  <div class="info">
-    <div>Step: <span class="val" id="stepVal">0</span></div>
-    <div>L1 divergence: <span class="val" id="l1Val">0</span></div>
-  </div>
-  <div class="controls">
-    Arrows / WASD = move &nbsp;|&nbsp; X = action &nbsp;|&nbsp;
-    R = restart &nbsp;|&nbsp; V = dream mode
-  </div>
-
-<script>
-const KEY_MAP = {
-  ArrowUp: 0, ArrowLeft: 1, ArrowDown: 2, ArrowRight: 3,
-  w: 0, a: 1, s: 2, d: 3, x: 4,
-};
-let dreaming = false;
-let busy = false;
-let games = [];          // [{name, n_levels}, ...]
-let currentGame = 0;
-let currentLevel = 0;
-
-async function fetchState() {
-  const r = await fetch('/api/state');
-  update(await r.json());
-}
-
-function update(d) {
-  if (d.real) document.getElementById('realImg').src = 'data:image/png;base64,' + d.real;
-  if (d.pred) document.getElementById('predImg').src = 'data:image/png;base64,' + d.pred;
-  if (d.step !== undefined) document.getElementById('stepVal').textContent = d.step;
-  if (d.l1 !== undefined) {
-    const el = document.getElementById('l1Val');
-    el.textContent = d.l1.toFixed(0);
-    el.className = d.l1 > 20 ? 'val warn' : 'val';
-  }
-  if (d.game_id !== undefined) currentGame = d.game_id;
-  if (d.level_i !== undefined) currentLevel = d.level_i;
-}
-
-function populateLevelSelect(gameId) {
-  const lvl = document.getElementById('levelSelect');
-  const n = (games[gameId] || {n_levels: 1}).n_levels;
-  lvl.innerHTML = '';
-  for (let i = 0; i < n; i++) {
-    const opt = document.createElement('option');
-    opt.value = i;
-    opt.textContent = 'L' + i;
-    lvl.appendChild(opt);
-  }
-  lvl.value = Math.min(currentLevel, n - 1);
-}
-
-async function selectGameLevel(gameId, levelI) {
-  busy = true;
-  dreaming = false;
-  document.getElementById('dreamBadge').classList.add('hidden');
-  update(await (await fetch(`/api/select/${gameId}/${levelI}`)).json());
-  busy = false;
-}
-
-async function init() {
-  games = await (await fetch('/api/games')).json();
-  const sel = document.getElementById('gameSelect');
-  games.forEach((g, i) => {
-    const opt = document.createElement('option');
-    opt.value = i;
-    opt.textContent = g.name;
-    sel.appendChild(opt);
-  });
-  // Read current state to know which game is active.
-  const cur = await (await fetch('/api/state')).json();
-  update(cur);
-  sel.value = currentGame;
-  populateLevelSelect(currentGame);
-  document.getElementById('levelSelect').value = currentLevel;
-
-  sel.addEventListener('change', async () => {
-    currentGame = parseInt(sel.value);
-    populateLevelSelect(currentGame);
-    currentLevel = 0;
-    await selectGameLevel(currentGame, 0);
-  });
-  document.getElementById('levelSelect').addEventListener('change', async (e) => {
-    currentLevel = parseInt(e.target.value);
-    await selectGameLevel(currentGame, currentLevel);
-  });
-}
-
-document.addEventListener('keydown', async (e) => {
-  if (busy) return;
-  const key = e.key;
-  // Don't intercept while a select is focused.
-  if (document.activeElement && document.activeElement.tagName === 'SELECT') return;
-
-  if (key === 'r' || key === 'R') {
-    busy = true;
-    dreaming = false;
-    document.getElementById('dreamBadge').classList.add('hidden');
-    update(await (await fetch('/api/reset')).json());
-    busy = false;
-    return;
-  }
-  if (key === 'v' || key === 'V') {
-    dreaming = !dreaming;
-    document.getElementById('dreamBadge').classList.toggle('hidden', !dreaming);
-    return;
-  }
-
-  const action = KEY_MAP[key];
-  if (action === undefined) return;
-  e.preventDefault();
-  busy = true;
-  const endpoint = dreaming ? '/api/step_dream/' : '/api/step/';
-  update(await (await fetch(endpoint + action)).json());
-  busy = false;
-});
-
-init();
-</script>
-</body>
-</html>
-"""
-
-
-# ---------------------------------------------------------------------------
-# 6. Main
+# 5. Main
 # ---------------------------------------------------------------------------
 
 def main():
@@ -3800,19 +3185,16 @@ def main():
     g.add_argument("--games", help="Comma-separated game names, or a preset name (e.g. 'small')")
     p.add_argument("--level", type=int, default=None,
                    help="Train on a single level index. Default: all levels.")
-    # Data collection
-    p.add_argument("--n_random_episodes", type=int, default=500)
+    # Data collection (search-driven unique-transition exploration; see
+    # collect_unique_transitions). --search_algos (plural) is for evaluation
+    # rollouts only, not training data collection.
     p.add_argument("--n_search_steps", type=int, default=100_000)
     p.add_argument("--search_timeout_ms", type=int, default=60_000)
-    p.add_argument("--search_algos", nargs="+", default=["bfs", "astar"])
-    p.add_argument("--search_weight", type=float, default=5.0,
-                   help="Oversample search data by this factor relative to random")
+    p.add_argument("--search_algos", nargs="+", default=["bfs", "astar"],
+                   help="Algorithms used during evaluation/GIF rollouts.")
     p.add_argument("--max_episode_steps", type=int, default=200)
-    p.add_argument("--data_mode", default="unique", choices=["unique", "random_search"],
-                   help="Data collection mode: 'unique' (deduplicated exploration) "
-                        "or 'random_search' (random rollouts + search)")
     p.add_argument("--search_algo", default="astar", choices=["astar", "bfs"],
-                   help="Search algorithm for 'unique' data mode (default: astar)")
+                   help="Search algorithm for training-data collection (default: astar)")
     # Architecture
     p.add_argument("--n_nca_steps", type=int, default=4,
                    help="Number of NCA update steps per forward pass")
@@ -3877,6 +3259,14 @@ def main():
                         "game-spec token sequence (uses VOCAB_SIZE_EXT and a "
                         "larger max_seq_len). Required to decode visual games "
                         "from the latent space.")
+    p.add_argument("--kernel_sep", action=argparse.BooleanOptionalAction, default=True,
+                   help="Emit KERNEL_SEP between adjacent kernels on each side "
+                        "of a multi-kernel rule (`[A][B] -> [...]`). Required "
+                        "for the encoder's rule slots to disentangle multi- "
+                        "vs single-kernel rule structure on games like "
+                        "constellationz, Cratopia, Slidings, Cyberbox. "
+                        "Adds 1 to the vocab. Defaults on for new runs; pass "
+                        "--no-kernel_sep to reproduce pre-fix tokenization.")
     p.add_argument("--sprite_loss_weight", type=float, default=0.0,
                    help="Weight on a sprite-decoder MSE loss term. When >0, "
                         "adds a Dense head on z predicting each channel's "
@@ -4067,15 +3457,12 @@ def main():
             dataset, game_infos = collect_multigame_dataset(
                 names_to_collect, ps_parser,
                 level_i=args.level,
-                n_random_episodes=args.n_random_episodes,
-                max_episode_steps=args.max_episode_steps,
-                search_algos=args.search_algos,
                 n_search_steps=args.n_search_steps,
                 search_timeout_ms=args.search_timeout_ms,
-                search_weight=args.search_weight,
                 search_algo=args.search_algo,
                 encode_sprites=args.encode_sprites,
                 max_transitions_per_game=(args.max_transitions_per_game or None),
+                kernel_sep=args.kernel_sep,
             )
             with open(infos_path, "wb") as f:
                 pickle.dump(game_infos, f)
@@ -4098,7 +3485,14 @@ def main():
             max_tok_len = max(max_tok_len, 1)
             # Use the extended vocab (with sprite tokens) only when
             # encode_sprites is enabled. Keeps embedding size tight otherwise.
-            vocab_size = VOCAB_SIZE_EXT if args.encode_sprites else VOCAB_SIZE_BASE
+            # KERNEL_SEP sits at the END of the full vocab (id = VOCAB_SIZE_EXT),
+            # so when kernel_sep is on we always need the V2 size to fit it.
+            if args.kernel_sep:
+                vocab_size = VOCAB_SIZE_EXT_V2
+            elif args.encode_sprites:
+                vocab_size = VOCAB_SIZE_EXT
+            else:
+                vocab_size = VOCAB_SIZE_BASE
             if args.architecture == "rule_attn":
                 from nca_wm.rule_attn_model import RuleAttnNCAWorldModel
                 model = RuleAttnNCAWorldModel(
@@ -4183,6 +3577,7 @@ def main():
 
         # Serve mode: skip eval, launch interactive server immediately
         if args.serve:
+            from nca_wm.serve import serve_world_model
             level_i = args.level if args.level is not None else 0
             initial_game_id = 0
             max_C = max(g["n_objs"] for g in game_infos)
@@ -4289,24 +3684,14 @@ def main():
         with open(ckpt_path, "rb") as f:
             params = pickle.load(f)
     else:
-        # Collect data
-        print("Collecting random rollouts...")
-        random_data = collect_random_rollouts(
+        print(f"Collecting unique transitions ({args.search_algo}, "
+              f"{args.n_search_steps:,} iters / {args.search_timeout_ms:,}ms)...")
+        dataset = collect_unique_transitions(
             json_str, args.game, level_i=args.level,
-            n_episodes=args.n_random_episodes,
-            max_steps=args.max_episode_steps,
-        )
-
-        print("Collecting search trajectories...")
-        search_data = collect_search_trajectories(
-            json_str, args.game, level_i=args.level,
-            algos=args.search_algos,
-            n_steps=args.n_search_steps,
+            max_iters=args.n_search_steps,
             timeout_ms=args.search_timeout_ms,
-            max_episode_steps=args.max_episode_steps,
+            search_algo=args.search_algo,
         )
-
-        dataset = merge_datasets(random_data, search_data, args.search_weight)
         print(f"Total dataset: {len(dataset['states']):,} transitions")
 
         # How many transitions actually involve a state change?
@@ -4369,6 +3754,7 @@ def main():
             backend_render.compile_game(ps_parser, args.game)
 
     if args.serve:
+        from nca_wm.serve import serve_world_model
         # Single-game path: wrap as a minimal game_infos list. Single-game
         # NCAWorldModel is unconditional (no token encoder), so pass
         # conditional=False and stub max_tok_len.
