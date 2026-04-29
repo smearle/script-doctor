@@ -1456,10 +1456,24 @@ def _weighted_bce_with_logits(logit, label, pos_weight):
     return pos_weight * label * jax.nn.softplus(-logit) + (1.0 - label) * jax.nn.softplus(logit)
 
 
+def _wm_p(params):
+    """Extract WM params from a possibly-joint params tree.
+
+    When joint token-decoder training is enabled, ``params`` is shaped
+    ``{"wm": <wm_params>, "dec": <decoder_params>}``. All eval / render code
+    only needs the WM half — this helper unwraps both shapes uniformly.
+    """
+    if isinstance(params, dict) and set(params.keys()) >= {"wm", "dec"}:
+        return params["wm"]
+    return params
+
+
 def make_train_step(model, optimizer, conditional=False,
                     win_loss_weight: float = 1.0, win_pos_weight: float = 1.0,
                     sprite_loss_weight: float = 0.0,
-                    change_loss_weight: float = 0.0):
+                    change_loss_weight: float = 0.0,
+                    decoder=None,
+                    token_decoder_loss_weight: float = 0.0):
     """Returns a JIT-compiled train step with a win-prediction head.
 
     If ``sprite_loss_weight > 0`` (and conditional), also optimizes a sprite-
@@ -1509,7 +1523,40 @@ def make_train_step(model, optimizer, conditional=False,
         return total, (state_loss, acc, change_acc, win_bce, win_acc, win_recall,
                         sprite_mse)
 
-    if conditional:
+    joint = decoder is not None and token_decoder_loss_weight > 0
+
+    if conditional and joint:
+        from nca_wm.token_decoder import shift_right, decoder_loss as _dec_loss
+
+        @jax.jit
+        def train_step(params, opt_state, states, action_onehots, next_states, wons,
+                        game_tokens, game_masks, target_sprites=None,
+                        target_tokens=None, target_token_masks=None):
+            def loss_fn(params):
+                wm_p, dec_p = params["wm"], params["dec"]
+                logits, win_logit, sprite_logits, all_slots = model.apply(
+                    wm_p, states, action_onehots, game_tokens, game_masks,
+                    return_slots=True,
+                )
+                heads_total, aux = _heads_loss(
+                    logits, win_logit, sprite_logits,
+                    states, next_states, wons,
+                    target_sprites=target_sprites,
+                )
+                # Decoder forward — teacher-forced (shift target right by one).
+                shifted = shift_right(target_tokens)
+                dec_logits = decoder.apply(dec_p, shifted, all_slots)
+                dec_loss_v, dec_acc_v = _dec_loss(
+                    dec_logits, target_tokens, target_token_masks,
+                )
+                total = heads_total + token_decoder_loss_weight * dec_loss_v
+                return total, aux + (dec_loss_v, dec_acc_v)
+
+            (loss, aux), grads = jax.value_and_grad(loss_fn, has_aux=True)(params)
+            updates, opt_state_new = optimizer.update(grads, opt_state, params)
+            params_new = optax.apply_updates(params, updates)
+            return (params_new, opt_state_new, loss) + aux
+    elif conditional:
         @jax.jit
         def train_step(params, opt_state, states, action_onehots, next_states, wons,
                         game_tokens, game_masks, target_sprites=None):
@@ -1517,9 +1564,14 @@ def make_train_step(model, optimizer, conditional=False,
                 logits, win_logit, sprite_logits = model.apply(
                     params, states, action_onehots, game_tokens, game_masks
                 )
-                return _heads_loss(logits, win_logit, sprite_logits,
-                                    states, next_states, wons,
-                                    target_sprites=target_sprites)
+                heads_total, aux = _heads_loss(
+                    logits, win_logit, sprite_logits,
+                    states, next_states, wons,
+                    target_sprites=target_sprites,
+                )
+                # Pad aux with zeros so the loop unpacks the same shape regardless of joint.
+                z = jnp.asarray(0.0, dtype=jnp.float32)
+                return heads_total, aux + (z, z)
 
             (loss, aux), grads = jax.value_and_grad(loss_fn, has_aux=True)(params)
             updates, opt_state_new = optimizer.update(grads, opt_state, params)
@@ -1532,9 +1584,13 @@ def make_train_step(model, optimizer, conditional=False,
                 logits, win_logit, sprite_logits = model.apply(
                     params, states, action_onehots
                 )
-                return _heads_loss(logits, win_logit, sprite_logits,
-                                    states, next_states, wons,
-                                    target_sprites=None)
+                heads_total, aux = _heads_loss(
+                    logits, win_logit, sprite_logits,
+                    states, next_states, wons,
+                    target_sprites=None,
+                )
+                z = jnp.asarray(0.0, dtype=jnp.float32)
+                return heads_total, aux + (z, z)
 
             (loss, aux), grads = jax.value_and_grad(loss_fn, has_aux=True)(params)
             updates, opt_state_new = optimizer.update(grads, opt_state, params)
@@ -1558,16 +1614,24 @@ def make_eval_forward(model, conditional: bool):
 
     if conditional:
         @jax.jit
-        def eval_forward(params, states, action_onehots, next_states,
-                         game_tokens, game_masks):
-            logits, _, _sprite_logits = model.apply(params, states, action_onehots,
+        def _eval_forward(wm_params, states, action_onehots, next_states,
+                          game_tokens, game_masks):
+            logits, _, _sprite_logits = model.apply(wm_params, states, action_onehots,
                                     game_tokens, game_masks)
             return _metrics(logits, states, next_states)
+
+        def eval_forward(params, states, action_onehots, next_states,
+                         game_tokens, game_masks):
+            return _eval_forward(_wm_p(params), states, action_onehots,
+                                 next_states, game_tokens, game_masks)
     else:
         @jax.jit
-        def eval_forward(params, states, action_onehots, next_states):
-            logits, _, _sprite_logits = model.apply(params, states, action_onehots)
+        def _eval_forward(wm_params, states, action_onehots, next_states):
+            logits, _, _sprite_logits = model.apply(wm_params, states, action_onehots)
             return _metrics(logits, states, next_states)
+
+        def eval_forward(params, states, action_onehots, next_states):
+            return _eval_forward(_wm_p(params), states, action_onehots, next_states)
     return eval_forward
 
 
@@ -1634,6 +1698,10 @@ def train(
     change_loss_weight: float = 0.0,
     lr_schedule: str = "constant",  # "constant" or "cosine"
     lr_min: float = 1e-6,
+    token_decoder_loss_weight: float = 0.0,
+    decoder_d_model: int = 128,
+    decoder_n_layers: int = 4,
+    decoder_n_heads: int = 4,
 ):
     """Train (or resume training) the NCA world model.
 
@@ -1767,6 +1835,22 @@ def train(
     rng, init_rng = jax.random.split(rng)
     dummy_state = jnp.zeros((1, max_C, max_H, max_W), dtype=jnp.float32)
     dummy_action = jnp.zeros((1, N_ACTIONS), dtype=jnp.float32)
+
+    # Decoder is wired in only for rule_attn + token_decoder_loss_weight > 0.
+    joint_decoder = None
+    is_rule_attn = isinstance(model, RuleAttnNCAWorldModel)
+    if conditional and is_rule_attn and token_decoder_loss_weight > 0:
+        from nca_wm.token_decoder import SlotTokenDecoder
+        max_tok_len = tokens_np.shape[1]
+        joint_decoder = SlotTokenDecoder(
+            vocab_size=model.vocab_size,
+            max_seq_len=max_tok_len,
+            d_model=decoder_d_model,
+            n_heads=decoder_n_heads,
+            n_layers=decoder_n_layers,
+            d_slot=model.d_slot,
+        )
+
     if init_params is not None:
         params = init_params
         print(f"Resuming from step {start_step:,}")
@@ -1775,12 +1859,25 @@ def train(
             max_tok_len = tokens_np.shape[1]
             dummy_tokens = jnp.zeros((1, max_tok_len), dtype=jnp.int32)
             dummy_mask = jnp.zeros((1, max_tok_len), dtype=jnp.bool_)
-            params = model.init(init_rng, dummy_state, dummy_action,
-                                dummy_tokens, dummy_mask)
+            wm_params = model.init(init_rng, dummy_state, dummy_action,
+                                   dummy_tokens, dummy_mask)
+            if joint_decoder is not None:
+                rng, dec_init_rng = jax.random.split(rng)
+                dummy_slots = jnp.zeros((1, model.n_slots, model.d_slot),
+                                        dtype=jnp.float32)
+                dec_params = joint_decoder.init(dec_init_rng, dummy_tokens, dummy_slots)
+                params = {"wm": wm_params, "dec": dec_params}
+            else:
+                params = wm_params
         else:
             params = model.init(init_rng, dummy_state, dummy_action)
     n_params = sum(p.size for p in jax.tree.leaves(params))
     print(f"Model params: {n_params:,}")
+    if joint_decoder is not None:
+        n_wm = sum(p.size for p in jax.tree.leaves(_wm_p(params)))
+        n_dec = n_params - n_wm
+        print(f"  [joint decoder] wm={n_wm:,}  decoder={n_dec:,}  "
+              f"(token_decoder_loss_weight={token_decoder_loss_weight})")
 
     # Optional LR schedule: constant by default (lr stays at the --lr value
     # the whole run). With --lr_schedule cosine, anneals lr from --lr down
@@ -1809,6 +1906,8 @@ def train(
         win_loss_weight=win_loss_weight, win_pos_weight=win_pos_weight,
         sprite_loss_weight=sprite_loss_weight,
         change_loss_weight=change_loss_weight,
+        decoder=joint_decoder,
+        token_decoder_loss_weight=token_decoder_loss_weight,
     )
     per_game_sprites_np = dataset.get("per_game_sprites")
     eval_forward = make_eval_forward(model, conditional=conditional)
@@ -1821,6 +1920,8 @@ def train(
     losses, accs, change_accs = [], [], []
     state_losses, win_losses, win_accs, win_recalls = [], [], [], []
     sprite_mses: list[float] = []
+    dec_losses: list[float] = []
+    dec_accs: list[float] = []
     # per_game_log[game_id] = list of dicts (step, loss, acc, change_acc)
     per_game_log: dict[int, list[dict]] = {g: [] for g in (per_game_eval or {})}
     t0 = time.time()
@@ -1863,7 +1964,7 @@ def train(
                              f"{g['name']}_step{global_step:08d}.gif")
         try:
             _render_training_gif(
-                apply_fn, params, g,
+                apply_fn, _wm_p(params), g,
                 max_C=mC, max_H=mH, max_W=mW,
                 save_path=path, n_steps=gif_n_steps,
                 seed=global_step,
@@ -1925,13 +2026,26 @@ def train(
             target_sprites = None
             if sprite_loss_weight > 0 and per_game_sprites_np is not None:
                 target_sprites = jnp.array(per_game_sprites_np[game_ids_batch])
-            (params, opt_state, loss, state_loss, acc, change_acc,
-             win_loss, win_acc, win_recall, sprite_mse) = train_step(
-                params, opt_state, s, a_oh, ns, w, gt, gm, target_sprites
-            )
+            if joint_decoder is not None:
+                # Recon target = the same token sequence the encoder consumed.
+                tgt_tokens = gt
+                tgt_mask = gm
+                (params, opt_state, loss, state_loss, acc, change_acc,
+                 win_loss, win_acc, win_recall, sprite_mse,
+                 dec_loss, dec_acc) = train_step(
+                    params, opt_state, s, a_oh, ns, w, gt, gm,
+                    target_sprites, tgt_tokens, tgt_mask,
+                )
+            else:
+                (params, opt_state, loss, state_loss, acc, change_acc,
+                 win_loss, win_acc, win_recall, sprite_mse,
+                 dec_loss, dec_acc) = train_step(
+                    params, opt_state, s, a_oh, ns, w, gt, gm, target_sprites
+                )
         else:
             (params, opt_state, loss, state_loss, acc, change_acc,
-             win_loss, win_acc, win_recall, sprite_mse) = train_step(
+             win_loss, win_acc, win_recall, sprite_mse,
+             dec_loss, dec_acc) = train_step(
                 params, opt_state, s, a_oh, ns, w
             )
         losses.append(float(loss))
@@ -1942,6 +2056,8 @@ def train(
         win_accs.append(float(win_acc))
         win_recalls.append(float(win_recall))
         sprite_mses.append(float(sprite_mse))
+        dec_losses.append(float(dec_loss))
+        dec_accs.append(float(dec_acc))
 
         global_step = start_step + step + 1
         # Atomic periodic checkpoint so a concurrent --render_only process can load
@@ -1956,13 +2072,17 @@ def train(
             avg_win_err = 1.0 - np.mean(win_accs[-log_interval:])
             avg_win_recall = np.mean(win_recalls[-log_interval:])
             avg_sprite_mse = np.mean(sprite_mses[-log_interval:]) if sprite_mses else 0.0
+            avg_dec_loss = np.mean(dec_losses[-log_interval:]) if dec_losses else 0.0
+            avg_dec_acc = np.mean(dec_accs[-log_interval:]) if dec_accs else 0.0
             elapsed = time.time() - t0
             sprite_bit = f"  sprite_mse={avg_sprite_mse:.4e}" if sprite_loss_weight > 0 else ""
+            dec_bit = (f"  dec_loss={avg_dec_loss:.4e}  dec_acc={avg_dec_acc:.3f}"
+                       if joint_decoder is not None else "")
             print(f"  step {global_step:,}/{start_step + n_updates:,}  loss={avg_loss:.4e}  "
                   f"state_loss={avg_state_loss:.4e}  err={avg_err:.4e}  "
                   f"change_err={avg_cerr:.4e}  win_loss={avg_win_loss:.4e}  "
-                  f"win_err={avg_win_err:.4e}  win_recall={avg_win_recall:.3f}{sprite_bit}  "
-                  f"({elapsed:.1f}s)")
+                  f"win_err={avg_win_err:.4e}  win_recall={avg_win_recall:.3f}"
+                  f"{sprite_bit}{dec_bit}  ({elapsed:.1f}s)")
             if wandb.run is not None:
                 wandb_log = {
                     "train/loss": avg_loss,
@@ -3652,34 +3772,48 @@ def main():
     # Architecture
     p.add_argument("--n_nca_steps", type=int, default=4,
                    help="Number of NCA update steps per forward pass")
-    p.add_argument("--n_hid", type=int, default=128)
+    p.add_argument("--n_hid", type=int, default=256)
     # Conditional model
-    p.add_argument("--conditional", action="store_true",
-                   help="Use ConditionalNCAWorldModel with game-spec encoder")
+    p.add_argument("--conditional", action=argparse.BooleanOptionalAction, default=True,
+                   help="Use ConditionalNCAWorldModel with game-spec encoder. "
+                        "Pass --no-conditional for the unconditional baseline.")
     p.add_argument("--d_z", type=int, default=64, help="Latent dimension for game encoder")
     p.add_argument("--d_model", type=int, default=64, help="Transformer hidden dim")
     p.add_argument("--n_enc_layers", type=int, default=2, help="Transformer encoder layers")
     p.add_argument("--n_heads", type=int, default=4, help="Transformer attention heads")
-    p.add_argument("--architecture", type=str, default="film",
+    p.add_argument("--architecture", type=str, default="rule_attn",
                    choices=["film", "rule_attn"],
-                   help="Conditioning architecture. 'film' = pooled-z FiLM on "
-                        "NCA (default). 'rule_attn' = K slot vectors from "
-                        "perceiver-style encoder, cells cross-attend to slots "
-                        "each NCA step.")
+                   help="Conditioning architecture. 'rule_attn' (default) = K "
+                        "slot vectors from perceiver-style encoder; cells "
+                        "cross-attend to slots each NCA step. 'film' = "
+                        "pooled-z FiLM on NCA.")
     p.add_argument("--n_slots", type=int, default=16,
                    help="Number of rule slots for --architecture rule_attn.")
     p.add_argument("--d_slot", type=int, default=64,
                    help="Per-slot dim for --architecture rule_attn.")
+    p.add_argument("--n_app_slots", type=int, default=1,
+                   help="Of the --n_slots, how many are appearance-only "
+                        "(decoder sees, NCA does not). Encourages dynamics "
+                        "and visual info to occupy disjoint slot subsets.")
+    # Joint token-decoder training (encoder is shared with WM; decoder
+    # cross-attends to ALL slots, while NCA only sees the dyn slots).
+    p.add_argument("--token_decoder_loss_weight", type=float, default=0.0,
+                   help="If >0, co-train an AR token decoder (recovering the "
+                        "PuzzleScript source from the encoder slots) and add "
+                        "this scaled cross-entropy to the WM loss.")
+    p.add_argument("--decoder_d_model", type=int, default=128)
+    p.add_argument("--decoder_n_layers", type=int, default=4)
+    p.add_argument("--decoder_n_heads", type=int, default=4)
     # Training
-    p.add_argument("--lr", type=float, default=1e-3)
+    p.add_argument("--lr", type=float, default=3e-4)
     p.add_argument("--n_updates", type=int, default=5000)
     p.add_argument("--batch_size", type=int, default=64)
     p.add_argument("--seed", type=int, default=0)
     p.add_argument("--log_interval", type=int, default=100)
-    p.add_argument("--patience", type=int, default=0,
+    p.add_argument("--patience", type=int, default=300,
                    help="Early stopping patience (in eval windows of log_interval steps). "
                         "0 disables early stopping.")
-    p.add_argument("--min_delta", type=float, default=1e-4,
+    p.add_argument("--min_delta", type=float, default=1e-8,
                    help="Minimum change_acc improvement to reset patience counter")
     p.add_argument("--win_loss_weight", type=float, default=1.0,
                    help="Scalar multiplier on the win-prediction BCE term (0 disables the head's contribution to grads)")
@@ -3689,10 +3823,11 @@ def main():
     p.add_argument("--ckpt_interval", type=int, default=1000,
                    help="Steps between periodic atomic saves of params.pkl during training. "
                         "Lower means a --render_only process sees fresher weights.")
-    p.add_argument("--balanced_sampling", action="store_true",
+    p.add_argument("--balanced_sampling", action=argparse.BooleanOptionalAction, default=True,
                    help="Multi-game only: draw each batch with equal share per game "
                         "(replaces uniform-over-transitions sampling). Compensates "
-                        "for per-game dataset-size imbalance.")
+                        "for per-game dataset-size imbalance. Pass --no-balanced_sampling "
+                        "to fall back to uniform-over-transitions.")
     p.add_argument("--encode_sprites", action="store_true",
                    help="Include each object's palette + 5x5 sprite in the "
                         "game-spec token sequence (uses VOCAB_SIZE_EXT and a "
@@ -3704,46 +3839,41 @@ def main():
                         "5x5x4 RGBA kernel; loss = MSE vs target sprite "
                         "from OBJECTS section. (Decoder head itself lands in "
                         "a follow-up; flag is plumbed for dataset-side prep.)")
-    p.add_argument("--change_loss_weight", type=float, default=0.0,
+    p.add_argument("--change_loss_weight", type=float, default=5.0,
                    help="Extra weight on changed cells in state BCE. 0 = uniform "
-                        "mean (default). >0 = each changed cell counts "
-                        "(1 + change_loss_weight)x vs unchanged. Use to escape "
-                        "identity collapse on multi-game sets where most cells "
-                        "don't change between t and t+1.")
-    p.add_argument("--lr_schedule", type=str, default="constant",
+                        "mean. >0 = each changed cell counts "
+                        "(1 + change_loss_weight)x vs unchanged. Default 5.0; "
+                        "needed to escape identity collapse on multi-game sets "
+                        "where most cells don't change between t and t+1.")
+    p.add_argument("--lr_schedule", type=str, default="cosine",
                    choices=["constant", "cosine"],
-                   help="LR schedule. 'constant' keeps --lr (default). "
-                        "'cosine' anneals from --lr down to --lr_min over "
-                        "n_updates steps — useful for sharp-minimum cases "
-                        "where the model walks out of optima without decay.")
-    p.add_argument("--lr_min", type=float, default=1e-6,
+                   help="LR schedule. 'cosine' (default) anneals from --lr down "
+                        "to --lr_min over n_updates steps. 'constant' keeps --lr.")
+    p.add_argument("--lr_min", type=float, default=1e-7,
                    help="Floor LR for cosine schedule. Ignored for constant.")
     p.add_argument("--gif_interval", type=int, default=0,
                    help="Render an intermittent (real | pred) rollout GIF "
                         "every N training steps (also at step 0). 0 disables.")
     p.add_argument("--gif_n_steps", type=int, default=15,
                    help="Length of each intermittent training GIF rollout.")
-    # Stability knobs for deeper NCA unrolls (e.g. n_nca_steps>=16). Both
-    # default OFF to preserve existing experiments.
-    p.add_argument("--grad_clip", type=float, default=0.0,
-                   help="Clip gradients by global norm to this value (0 = off). "
-                        "Recommended ~1.0 for large n_nca_steps.")
+    p.add_argument("--grad_clip", type=float, default=0.5,
+                   help="Clip gradients by global norm to this value (0 = off).")
     p.add_argument("--use_layernorm", action="store_true",
                    help="Apply a shared LayerNorm on h after each NCA step. "
                         "Stabilizes deep unrolls (large n_nca_steps).")
-    p.add_argument("--max_transitions_per_game", type=int, default=0,
+    p.add_argument("--max_transitions_per_game", type=int, default=200_000,
                    help="Cap per-game transition count (uniformly subsample). "
                         "0 disables. Essential for scaling to many games with "
                         "disparate sizes — prevents dataset OOM.")
     # Architectural pool flags (see _pool_features). Independent booleans;
     # any combination may be active.
-    p.add_argument("--axis_pool", action="store_true",
+    p.add_argument("--axis_pool", action=argparse.BooleanOptionalAction, default=True,
                    help="Inject row-max + col-max pooled features at each NCA step "
                         "(handles `[ X | ... | Y ]` style rules — X/Y in same row/col).")
-    p.add_argument("--axis_cummax", action="store_true",
+    p.add_argument("--axis_cummax", action=argparse.BooleanOptionalAction, default=True,
                    help="Inject directional cumulative-max (L→R, R→L, T→B, B→T) at "
                         "each NCA step (more expressive variant of axis_pool).")
-    p.add_argument("--global_pool", action="store_true",
+    p.add_argument("--global_pool", action=argparse.BooleanOptionalAction, default=True,
                    help="Inject grid-global max-pool features at each NCA step "
                         "(handles `[X] [Y]` multi-bracket rules — X and Y both "
                         "exist somewhere on the level).")
@@ -3793,18 +3923,22 @@ def main():
             game_names = [g.strip() for g in args.games.split(",")]
             preset_tag = f"{len(game_names)}games"
 
-        cond_tag = "cond" if args.conditional else "uncond"
-        patience_tag = f"_pat-{args.patience}" if args.patience > 0 else ""
-        bal_tag = "_bal" if args.balanced_sampling else ""
-        spr_tag = "_spr" if args.encode_sprites else ""
-        pool_tag = ""
-        if args.axis_pool: pool_tag += "_ap"
-        if args.axis_cummax: pool_tag += "_ac"
-        if args.global_pool: pool_tag += "_gp"
-        clw_tag = f"_clw{args.change_loss_weight:g}" if args.change_loss_weight > 0 else ""
-        arch_tag = f"_arch-{args.architecture}" if args.architecture != "film" else ""
+        # Tag only deviations from the canonical recipe; a default run gets a clean name.
+        parts = []
+        if not args.conditional: parts.append("uncond")
+        if not args.balanced_sampling: parts.append("uniform")
+        if not args.axis_pool: parts.append("no-ap")
+        if not args.axis_cummax: parts.append("no-ac")
+        if not args.global_pool: parts.append("no-gp")
+        if args.encode_sprites: parts.append("spr")
+        if args.change_loss_weight != 5.0: parts.append(f"clw{args.change_loss_weight:g}")
+        if args.architecture != "rule_attn": parts.append(f"arch-{args.architecture}")
+        if args.lr_schedule != "cosine": parts.append(f"lr-{args.lr_schedule}")
+        if args.grad_clip != 0.5: parts.append(f"gc{args.grad_clip:g}")
+        recipe_tag = ("_" + "_".join(parts)) if parts else ""
+        patience_tag = f"_pat-{args.patience}" if args.patience != 300 else ""
         save_dir = (args.save_dir or
-                    f"nca_wm/logs/multi_{preset_tag}_{cond_tag}{bal_tag}{spr_tag}{pool_tag}{clw_tag}{arch_tag}_level-{args.level}"
+                    f"nca_wm/logs/multi_{preset_tag}{recipe_tag}_level-{args.level}"
                     f"_nca-{args.n_nca_steps}_hid-{args.n_hid}_lr-{args.lr}"
                     f"{patience_tag}_s-{args.seed}")
 
@@ -3927,7 +4061,8 @@ def main():
                     n_hid=args.n_hid, n_steps=args.n_nca_steps, n_out=max_C,
                     vocab_size=vocab_size + 1,
                     enc_d_model=args.d_model, enc_n_self_layers=args.n_enc_layers,
-                    n_slots=args.n_slots, d_slot=args.d_slot,
+                    n_slots=args.n_slots, n_app_slots=args.n_app_slots,
+                    d_slot=args.d_slot,
                     n_attn_heads=args.n_heads,
                     max_seq_len=max_tok_len + 1,
                     axis_pool=pool_kwargs.get("axis_pool", False),
@@ -3980,6 +4115,10 @@ def main():
                 change_loss_weight=args.change_loss_weight,
                 lr_schedule=args.lr_schedule,
                 lr_min=args.lr_min,
+                token_decoder_loss_weight=args.token_decoder_loss_weight,
+                decoder_d_model=args.decoder_d_model,
+                decoder_n_layers=args.decoder_n_layers,
+                decoder_n_heads=args.decoder_n_heads,
             )
             # (curves saved inside train() with per-game arrays)
             os.makedirs(save_dir, exist_ok=True)
@@ -3994,6 +4133,10 @@ def main():
             with open(os.path.join(save_dir, "config.json"), "w") as f:
                 json.dump(vars(args), f, indent=2)
 
+        # Downstream code expects WM-only params (eval/render don't use the
+        # token decoder); unwrap if joint training produced a {wm,dec} dict.
+        wm_params = _wm_p(params)
+
         # Serve mode: skip eval, launch interactive server immediately
         if args.serve:
             # Serve the first game by default (or could add --serve_game flag)
@@ -4002,7 +4145,7 @@ def main():
             backend_render = CppPuzzleScriptBackend()
             backend_render.compile_game(ps_parser, info["name"])
             serve_world_model(
-                model, params, info["json_str"], backend_render,
+                model, wm_params, info["json_str"], backend_render,
                 level_i=args.level, port=args.port,
             )
             if wandb.run is not None:
@@ -4012,7 +4155,7 @@ def main():
         # Per-game evaluation
         print("\nEvaluating per-game (autoregressive rollout)...")
         evaluate_multigame(
-            model, params, game_infos, ps_parser,
+            model, wm_params, game_infos, ps_parser,
             search_algos=args.search_algos,
             search_n_steps=args.n_search_steps,
             search_timeout_ms=args.search_timeout_ms,
@@ -4026,7 +4169,7 @@ def main():
         if args.render_gif:
             print("\nRendering per-game comparison GIFs...")
             render_multigame_gifs(
-                model, params, game_infos, ps_parser,
+                model, wm_params, game_infos, ps_parser,
                 save_dir=save_dir, step_label=final_step,
                 search_algos=args.search_algos,
                 search_n_steps=args.n_search_steps,

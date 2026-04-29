@@ -51,7 +51,42 @@ def is_process_alive(run_dir: Path) -> bool:
     return False
 
 
+def _show_data_collection():
+    """Print a one-line summary of parallel data-collection if running.
+
+    Looks for /tmp/parallel_collect.log (default location) and reports the
+    last [N/total] line plus elapsed time. Silent if no log present.
+    """
+    import re
+    log_path = Path("/tmp/parallel_collect.log")
+    if not log_path.is_file():
+        return
+    try:
+        text = log_path.read_text(errors="replace")
+    except Exception:
+        return
+    # Find last "[ N/Total]" line
+    matches = re.findall(r"\[\s*(\d+)/(\d+)\] (OK|ERR)\s+(\S.*?)\s{2,}.*?\(\s*(\d+)s; ([\d.]+) min total\)", text)
+    if not matches:
+        return
+    last_n, total, status, name, elapsed_s, elapsed_min = matches[-1]
+    n_ok = sum(1 for m in matches if m[2] == "OK")
+    n_err = sum(1 for m in matches if m[2] == "ERR")
+    # Is the process still running? `pgrep -f parallel_collect` only catches
+    # the master script — multiprocessing 'spawn' workers run with cmdline
+    # like `from multiprocessing.spawn import spawn_main; ...`. So just check
+    # the master (one match is fine).
+    out = subprocess.run(["pgrep", "-f", "nca_wm.scripts.parallel_collect"],
+                          capture_output=True, text=True).stdout
+    alive = bool(out.strip())
+    status_str = "RUNNING" if alive else ("DONE" if "All done in" in text else "STOPPED")
+    print(f"\n=== data collection (parallel_collect.py) — {status_str} ===")
+    print(f"  progress: {last_n}/{total} games ({n_ok} ok, {n_err} err)  "
+          f"elapsed: {elapsed_min} min  last: {name}")
+
+
 def main():
+    _show_data_collection()
     runs = []
     for cfg_path in sorted(LOGS.glob("*/config.json")):
         d = cfg_path.parent

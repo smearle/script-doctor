@@ -25,6 +25,7 @@ import os
 import pickle
 import sys
 
+import imageio
 import jax
 import jax.numpy as jnp
 import numpy as np
@@ -63,9 +64,9 @@ def load_run(save_dir: str):
 def build_model(cfg, game_infos):
     if not cfg.get("conditional", False):
         raise ValueError("interpolate_rollout requires a conditional checkpoint")
-    if cfg.get("architecture", "film") != "film":
+    if cfg["architecture"] != "film":
         raise NotImplementedError(
-            f"Only --architecture film is supported here; got {cfg.get('architecture')!r}"
+            f"Only --architecture film is supported here; got {cfg['architecture']!r}"
         )
     max_C = max(g["n_objs"] for g in game_infos)
     max_tok_len = max(max((len(g.get("token_ids", [])) for g in game_infos), default=1), 1)
@@ -210,6 +211,9 @@ def main():
                    help="RNG seed for the (shared) random action sequence.")
     p.add_argument("--save_dir", default=None,
                    help="Output dir (default: <load>/interp).")
+    p.add_argument("--save_gif", action="store_true",
+                   help="Also write per-t rollout GIFs and a stacked all-t GIF.")
+    p.add_argument("--gif_fps", type=float, default=2.0)
     args = p.parse_args()
 
     cfg, params, game_infos = load_run(args.load)
@@ -261,8 +265,10 @@ def main():
         dummy_tokens = jnp.array(pad_a[None] if donor_info is info_a else pad_b[None])
         dummy_mask = jnp.array(mask_a[None] if donor_info is info_a else mask_b[None])
 
-        # Per-t rollout
+        # Per-t rollout. Keep raw frames for GIF construction.
         rows = []
+        # frames_by_t[t_idx] = list of (n_steps+1) RGB arrays
+        frames_by_t = []
         for t_idx, t in enumerate(ts):
             z = jnp.array(z_path[t_idx][None].astype(np.float32))
             state = jnp.array(_pad_state_for_model(obs0, max_C, max_H, max_W))
@@ -282,6 +288,7 @@ def main():
 
             t_label = f"t={t:.2f} (z = (1-t)·{args.game_a} + t·{args.game_b})"
             rows.append(label_strip(row_imgs, t_label, font))
+            frames_by_t.append(row_imgs)
         panel = stack_panels(rows)
         # Top banner per panel: which level we're rolling out on.
         title = f"Donor level: {donor_label}  |  actions={actions.tolist()}"
@@ -300,6 +307,78 @@ def main():
         out_path = os.path.join(save_dir, f"interp_on_{donor_label}.png")
         PIL.Image.fromarray(panel).save(out_path)
         print(f"Saved {out_path}  (shape={panel.shape})")
+
+        if args.save_gif:
+            n_t = len(ts)
+            n_frames = len(frames_by_t[0])
+            # Match frame size across t (should already match, but guard).
+            fh = max(im.shape[0] for row in frames_by_t for im in row)
+            fw = max(im.shape[1] for row in frames_by_t for im in row)
+
+            def _pad(im):
+                ph = fh - im.shape[0]
+                pw = fw - im.shape[1]
+                if ph or pw:
+                    im = np.pad(im, ((0, ph), (0, pw), (0, 0)))
+                return im
+
+            # Per-t rollout GIFs: animate over rollout time at fixed t.
+            for t_idx, t in enumerate(ts):
+                gif_frames = [_pad(im) for im in frames_by_t[t_idx]]
+                gif_path = os.path.join(
+                    save_dir,
+                    f"interp_on_{donor_label}_t{t_idx:02d}_{t:.2f}.gif",
+                )
+                imageio.mimsave(gif_path, gif_frames, fps=args.gif_fps, loop=0)
+                print(f"  Saved {gif_path}")
+
+            # Stacked GIF: each frame stacks all t's vertically (with t labels)
+            # and animates over rollout time. All frames must share a final
+            # size, so we pre-compute a max banner width over k = step labels.
+            step_label_max_w = 0
+            for k in range(n_frames):
+                bbox = font.getbbox(f"step {k}/{len(actions)}")
+                step_label_max_w = max(step_label_max_w, bbox[2] - bbox[0] + 8)
+            stacked_frames = []
+            for k in range(n_frames):
+                col = []
+                for t_idx, t in enumerate(ts):
+                    im = _pad(frames_by_t[t_idx][k])
+                    label = f"t={t:.2f}"
+                    bbox = font.getbbox(label)
+                    bh = 16
+                    bw = max(im.shape[1], bbox[2] - bbox[0] + 8)
+                    banner = PIL.Image.new("RGB", (bw, bh), (0, 0, 0))
+                    PIL.ImageDraw.Draw(banner).text(
+                        (4, 1), label, fill=(255, 255, 255), font=font
+                    )
+                    if im.shape[1] < bw:
+                        im = np.pad(im, ((0, 0), (0, bw - im.shape[1]), (0, 0)))
+                    col.append(np.concatenate([np.array(banner), im], axis=0))
+                # Common width across t banners
+                cw = max(c.shape[1] for c in col)
+                col = [
+                    np.pad(c, ((0, 0), (0, cw - c.shape[1]), (0, 0))) if c.shape[1] < cw else c
+                    for c in col
+                ]
+                step_label = f"step {k}/{len(actions)}"
+                bh = 18
+                bw = max(cw, step_label_max_w)
+                banner = PIL.Image.new("RGB", (bw, bh), (40, 40, 40))
+                PIL.ImageDraw.Draw(banner).text(
+                    (4, 2), step_label, fill=(255, 255, 255), font=font
+                )
+                col = [
+                    np.pad(c, ((0, 0), (0, bw - c.shape[1]), (0, 0))) if c.shape[1] < bw else c
+                    for c in col
+                ]
+                stacked = np.concatenate([np.array(banner)] + col, axis=0)
+                stacked_frames.append(stacked)
+            gif_path = os.path.join(
+                save_dir, f"interp_on_{donor_label}_all_t.gif"
+            )
+            imageio.mimsave(gif_path, stacked_frames, fps=args.gif_fps, loop=0)
+            print(f"  Saved {gif_path}")
 
     # Combined panel: stack both donor panels vertically with a separator.
     if len(panels) == 2:

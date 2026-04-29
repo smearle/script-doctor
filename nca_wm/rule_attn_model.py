@@ -110,7 +110,8 @@ class RuleAttnNCAWorldModel(nn.Module):
     max_seq_len: int = 192
     enc_d_model: int = 64
     enc_n_self_layers: int = 2
-    n_slots: int = 16
+    n_slots: int = 16             # total slots K = dyn + app
+    n_app_slots: int = 0          # last n_app_slots are app-only (decoder sees them, NCA does not)
     d_slot: int = 64
     # Cross-attention params (cells -> slots)
     n_attn_heads: int = 4
@@ -120,16 +121,20 @@ class RuleAttnNCAWorldModel(nn.Module):
     global_pool: bool = False
 
     @nn.compact
-    def __call__(self, state, action_onehot, game_tokens, game_mask):
+    def __call__(self, state, action_onehot, game_tokens, game_mask,
+                 return_slots: bool = False):
         """
         state: (B, C, H, W) multihot input.
         action_onehot: (B, N_ACTIONS).
         game_tokens: (B, S) int32.
         game_mask: (B, S) bool.
-        Returns: (logits, win_logit, sprite_logits_placeholder)
+        return_slots: if True, also return the full (B, n_slots, d_slot) slot
+            matrix (dyn + app) for downstream use (e.g. token decoder).
+        Returns: (logits, win_logit, sprite_logits[, all_slots])
           - logits: (B, C, H, W) next-state logits
           - win_logit: (B,)
           - sprite_logits: (B, C, 5, 5, 4) zeros placeholder
+          - all_slots (only if return_slots=True): (B, n_slots, d_slot)
         """
         B, C, H, W = state.shape
         # 1. Encode game into K rule slots
@@ -143,7 +148,12 @@ class RuleAttnNCAWorldModel(nn.Module):
             n_heads=self.n_attn_heads,
             name="game_encoder",
         )
-        slots = encoder(game_tokens, game_mask)  # (B, K, d_slot)
+        slots = encoder(game_tokens, game_mask)  # (B, K, d_slot), K = n_slots
+        # Split off appearance slots (last n_app_slots) — only the dyn slots
+        # condition the NCA. The full slot tensor is returned for the
+        # downstream token decoder.
+        n_dyn = self.n_slots - self.n_app_slots
+        slots_dyn = slots[:, :n_dyn, :]
 
         # 2. Embed input: (state, action) -> hidden state (B, H, W, n_hid)
         x = state.transpose(0, 2, 3, 1)  # (B, H, W, C)
@@ -189,12 +199,12 @@ class RuleAttnNCAWorldModel(nn.Module):
             h_flat = h.reshape(B, H * W, self.n_hid)
             # LN inputs to attention (pre-norm style).
             h_ln = nn.LayerNorm(name=f"attn_ln_{i}")(h_flat)
-            slots_ln = nn.LayerNorm(name=f"slot_ln_{i}")(slots)
+            slots_dyn_ln = nn.LayerNorm(name=f"slot_ln_{i}")(slots_dyn)
             attn_out = nn.MultiHeadDotProductAttention(
                 num_heads=self.n_attn_heads,
                 qkv_features=self.n_hid,
                 name=f"cell_slot_xattn_{i}",
-            )(h_ln, slots_ln, deterministic=True)  # (B, H*W, n_hid)
+            )(h_ln, slots_dyn_ln, deterministic=True)  # (B, H*W, n_hid)
             attn_out = attn_out.reshape(B, H, W, self.n_hid)
 
             # (d) residual update: conv path + slot attention path.
@@ -215,4 +225,6 @@ class RuleAttnNCAWorldModel(nn.Module):
         # Sprite placeholder (signature-compatible with ConditionalNCAWorldModel).
         sprite_logits = jnp.zeros((B, self.n_out, 5, 5, 4))
 
+        if return_slots:
+            return logits, win_logit, sprite_logits, slots
         return logits, win_logit, sprite_logits
