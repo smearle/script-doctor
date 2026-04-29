@@ -3410,153 +3410,180 @@ def render_post_training_gifs(
 # ---------------------------------------------------------------------------
 
 def serve_world_model(
-    model: NCAWorldModel,
+    model,
     params,
-    json_str: str,
-    backend: CppPuzzleScriptBackend,
+    game_infos: list[dict],
+    ps_parser,
+    initial_game_id: int = 0,
     level_i: int = 0,
     port: int = 8000,
     host: str = "0.0.0.0",
-    obj_names: list[str] | None = None,
+    conditional: bool = True,
+    max_pad: tuple[int, int, int] = (1, 1, 1),
+    max_tok_len: int = 1,
 ):
-    """Serve the NCA world model player as a web app."""
-    from flask import Flask, jsonify, Response
+    """Serve the trained world model as an interactive web app.
+
+    Multi-game aware: takes the full ``game_infos`` list and lets the user
+    pick a game (and level within it) at runtime. The model's apply path
+    pads each game's native (n_objs, H, W) state up to the global ``max_pad``
+    used during training, then crops back for rendering.
+
+    Conditional models (``rule_attn`` / ``film``) require per-game tokens —
+    enable via ``conditional=True`` and pass the matching ``max_tok_len``.
+    """
+    from flask import Flask, jsonify
     import PIL.Image
 
     app = Flask(__name__)
     apply_fn = jax.jit(model.apply)
-    model_viz = NCAWorldModel(n_hid=model.n_hid, n_steps=model.n_steps,
-                              n_out=model.n_out, return_intermediates=True)
-    apply_viz = jax.jit(model_viz.apply)
+    max_C, max_H, max_W = max_pad
 
-    env = CppPuzzleScriptEnv(json_str, level_i=level_i, max_episode_steps=10000)
-    n_objs, grid_h, grid_w = env.observation_shape
-    if obj_names is None:
-        obj_names = [f"ch{i}" for i in range(n_objs)]
+    # Mutable per-session state (rebound on game switch).
+    state: dict = {}
 
-    # Mutable state
-    state = {}
+    def _pad_tokens(tids):
+        pad = np.zeros(max_tok_len, dtype=np.int32)
+        mask = np.zeros(max_tok_len, dtype=np.bool_)
+        L = min(len(tids), max_tok_len)
+        pad[:L] = tids[:L]
+        mask[:L] = True
+        return pad, mask
 
-    def _reset():
+    def _switch(game_id: int, level_i: int):
+        info = game_infos[game_id]
+        backend = CppPuzzleScriptBackend()
+        backend.compile_game(ps_parser, info["name"])
+        env = CppPuzzleScriptEnv(info["json_str"], level_i=level_i, max_episode_steps=10000)
+        n_objs, grid_h, grid_w = env.observation_shape
         real_obs, _ = env.reset()
-        backend.load_level("", level_i)
-        state["real_obs"] = real_obs
-        state["pred_state"] = jnp.array(real_obs[None], dtype=jnp.float32)
-        state["step"] = 0
-        state["diverged"] = False
-        state["last_action"] = None
+        # _pad_state_for_model already returns shape (1, max_C, max_H, max_W).
+        pred_state = _pad_state_for_model(real_obs, max_C, max_H, max_W)
+        state.clear()
+        state.update(
+            game_id=game_id,
+            level_i=level_i,
+            env=env,
+            backend=backend,
+            n_objs=n_objs,
+            grid_h=grid_h,
+            grid_w=grid_w,
+            real_obs=real_obs,
+            pred_state=pred_state,
+            step=0,
+            diverged=False,
+            last_action=None,
+        )
+        if conditional:
+            tids = info.get("token_ids", [])
+            pad, mask = _pad_tokens(tids)
+            state["tokens"] = jnp.array(pad[None])
+            state["mask"] = jnp.array(mask[None])
 
-    def _render_obs(obs):
-        objects = _multihot_to_objects(obs)
-        frame = backend.render_frame_from_objects(objects, grid_w, grid_h)
+    def _render_obs(obs_native):
+        objects = _multihot_to_objects(obs_native)
+        frame = state["backend"].render_frame_from_objects(
+            objects, state["grid_w"], state["grid_h"]
+        )
         buf = io.BytesIO()
         PIL.Image.fromarray(frame).save(buf, format="PNG")
         return base64.b64encode(buf.getvalue()).decode()
 
-    def _img_to_b64(img_arr):
-        buf = io.BytesIO()
-        PIL.Image.fromarray(img_arr).save(buf, format="PNG")
-        return base64.b64encode(buf.getvalue()).decode()
+    def _crop_pred():
+        pred_bin = (state["pred_state"] > 0.5).astype(jnp.uint8)
+        return _unpad_pred(pred_bin, state["n_objs"], state["grid_h"], state["grid_w"])
 
-    _reset()
+    def _apply_step(action):
+        a_oh = jnp.array(np.eye(N_ACTIONS, dtype=np.float32)[action][None])
+        if conditional:
+            logits, win_logit, _ = apply_fn(
+                params, state["pred_state"], a_oh, state["tokens"], state["mask"]
+            )
+        else:
+            logits, win_logit, _ = apply_fn(params, state["pred_state"], a_oh)
+        return logits, win_logit
+
+    def _state_payload():
+        real_b64 = _render_obs(state["real_obs"])
+        pred_native = _crop_pred()
+        pred_b64 = _render_obs(pred_native)
+        l1 = float(np.abs(pred_native.astype(np.int32) - state["real_obs"].astype(np.int32)).sum())
+        info = game_infos[state["game_id"]]
+        return dict(
+            real=real_b64, pred=pred_b64,
+            step=state["step"], l1=l1, diverged=state["diverged"],
+            game=info["name"], game_id=state["game_id"], level_i=state["level_i"],
+            n_levels=info.get("n_levels", 1),
+        )
+
+    _switch(initial_game_id, level_i)
 
     @app.route("/")
     def index():
         return HTML_PAGE
 
+    @app.route("/api/games")
+    def list_games():
+        return jsonify([
+            {"name": g["name"], "n_levels": g.get("n_levels", 1)}
+            for g in game_infos
+        ])
+
+    @app.route("/api/select/<int:game_id>/<int:level_i>")
+    def select(game_id: int, level_i: int):
+        if game_id < 0 or game_id >= len(game_infos):
+            return jsonify(error="invalid game"), 400
+        nl = game_infos[game_id].get("n_levels", 1)
+        if level_i < 0 or level_i >= nl:
+            return jsonify(error="invalid level"), 400
+        _switch(game_id, level_i)
+        return jsonify(_state_payload())
+
     @app.route("/api/state")
     def get_state():
-        real_b64 = _render_obs(state["real_obs"])
-        pred_obs = np.array(state["pred_state"][0] > 0.5, dtype=np.uint8)
-        pred_b64 = _render_obs(pred_obs)
-        real_f = jnp.array(state["real_obs"][None], dtype=jnp.float32)
-        l1 = float(jnp.abs(state["pred_state"] - real_f).sum())
-        return jsonify(real=real_b64, pred=pred_b64, step=state["step"],
-                       l1=l1, diverged=state["diverged"])
+        return jsonify(_state_payload())
 
     @app.route("/api/step/<int:action>")
     def step(action):
         if action < 0 or action >= N_ACTIONS:
             return jsonify(error="invalid action"), 400
-        a_oh = jnp.array(np.eye(N_ACTIONS, dtype=np.float32)[action][None])
-
-        # NCA prediction
-        logits, win_logit, _sprite_logits = apply_fn(params, state["pred_state"], a_oh)
+        logits, win_logit = _apply_step(action)
         state["pred_state"] = (jax.nn.sigmoid(logits) > 0.5).astype(jnp.float32)
         state["pred_won"] = float(jax.nn.sigmoid(win_logit)[0])
         state["last_action"] = action
-
-        # Real env
-        state["real_obs"], _, done, _, info = env.step(action)
-        backend.process_input(action)
-        while backend.againing:
-            backend.process_input(-1)
+        # Real env step
+        state["real_obs"], _, done, _, info = state["env"].step(action)
+        state["backend"].process_input(action)
+        while state["backend"].againing:
+            state["backend"].process_input(-1)
         state["step"] += 1
-
-        real_f = jnp.array(state["real_obs"][None], dtype=jnp.float32)
-        l1 = float(jnp.abs(state["pred_state"] - real_f).sum())
-
-        real_b64 = _render_obs(state["real_obs"])
-        pred_obs = np.array(state["pred_state"][0] > 0.5, dtype=np.uint8)
-        pred_b64 = _render_obs(pred_obs)
-
-        return jsonify(real=real_b64, pred=pred_b64, step=state["step"],
-                       l1=l1, won=bool(info.get("won", False)), done=bool(done),
+        payload = _state_payload()
+        payload.update(won=bool(info.get("won", False)), done=bool(done),
                        pred_won=state["pred_won"])
+        return jsonify(payload)
 
     @app.route("/api/step_dream/<int:action>")
     def step_dream(action):
-        """Step only the NCA world model (no real env) — pure dreaming."""
+        """Step only the world model (no real env) — pure dreaming."""
         if action < 0 or action >= N_ACTIONS:
             return jsonify(error="invalid action"), 400
-        a_oh = jnp.array(np.eye(N_ACTIONS, dtype=np.float32)[action][None])
-        logits, win_logit, _sprite_logits = apply_fn(params, state["pred_state"], a_oh)
+        logits, win_logit = _apply_step(action)
         state["pred_state"] = (jax.nn.sigmoid(logits) > 0.5).astype(jnp.float32)
         state["pred_won"] = float(jax.nn.sigmoid(win_logit)[0])
         state["step"] += 1
         state["diverged"] = True
         state["last_action"] = action
-
-        pred_obs = np.array(state["pred_state"][0] > 0.5, dtype=np.uint8)
-        pred_b64 = _render_obs(pred_obs)
+        pred_b64 = _render_obs(_crop_pred())
         return jsonify(pred=pred_b64, step=state["step"], pred_won=state["pred_won"])
-
-    @app.route("/api/activations/<int:action>")
-    def get_activations(action):
-        """Run one NCA step with intermediates and return visualization images."""
-        if action < 0 or action >= N_ACTIONS:
-            return jsonify(error="invalid action"), 400
-        a_oh = jnp.array(np.eye(N_ACTIONS, dtype=np.float32)[action][None])
-        logits, _win_logit, _sprite_logits, intermediates = apply_viz(params, state["pred_state"], a_oh)
-
-        result = {"steps": []}
-        for step_i, (h, readout) in enumerate(
-            zip(intermediates["hidden"], intermediates["readouts"])
-        ):
-            h_np = np.array(h[0])        # (H, W, n_hid)
-            r_np = np.array(readout[0])   # (C, H, W)
-
-            # Hidden channels grid
-            hid_grid = _make_channel_grid(h_np)
-            hid_img = _apply_colormap(hid_grid)
-
-            # Labeled output channels
-            out_img = _labeled_channel_grid(r_np, obj_names)
-
-            result["steps"].append({
-                "hidden": _img_to_b64(hid_img),
-                "output": _img_to_b64(out_img),
-            })
-
-        return jsonify(result)
 
     @app.route("/api/reset")
     def reset():
-        _reset()
-        return get_state()
+        _switch(state["game_id"], state["level_i"])
+        return jsonify(_state_payload())
 
     print(f"\nServing NCA world model player at http://{host}:{port}")
-    print("Use arrow keys / WASD to play. Press V to toggle dream mode.\n")
+    print(f"  initial: {game_infos[initial_game_id]['name']} L{level_i}")
+    print(f"  available games: {len(game_infos)}\n")
     app.run(host=host, port=port, debug=False)
 
 
@@ -3573,6 +3600,17 @@ HTML_PAGE = r"""<!DOCTYPE html>
   }
   h1 { margin-bottom: 4px; font-size: 1.4em; color: #e94560; }
   .subtitle { color: #888; margin-bottom: 16px; font-size: 0.9em; }
+  .selectors {
+    display: flex; gap: 12px; align-items: center;
+    margin-bottom: 16px; padding: 10px 16px;
+    background: #16213e; border-radius: 8px;
+  }
+  .selectors label { color: #888; font-size: 0.85em; }
+  .selectors select {
+    background: #0f3460; color: #eee; border: 1px solid #333;
+    padding: 4px 8px; border-radius: 4px; font-family: monospace;
+    font-size: 0.9em; min-width: 140px;
+  }
   .game-row {
     display: flex; gap: 24px; align-items: flex-start;
     flex-wrap: wrap; justify-content: center;
@@ -3604,31 +3642,20 @@ HTML_PAGE = r"""<!DOCTYPE html>
     vertical-align: middle;
   }
   .badge.dream { background: #e94560; }
-  .badge.act { background: #0f3460; }
   .badge.hidden { display: none; }
-  /* Activations panel */
-  #actPanel {
-    margin-top: 20px; width: 100%; max-width: 1200px;
-    display: none;
-  }
-  #actPanel.visible { display: block; }
-  #actPanel h3 { color: #e94560; margin-bottom: 8px; font-size: 1em; }
-  .act-step {
-    margin-bottom: 16px; padding: 12px;
-    background: #16213e; border-radius: 8px;
-  }
-  .act-step h4 { color: #4ecca3; margin-bottom: 6px; font-size: 0.9em; }
-  .act-row { display: flex; gap: 12px; flex-wrap: wrap; align-items: flex-start; }
-  .act-row .act-label { color: #888; font-size: 0.8em; margin-bottom: 2px; }
-  .act-row img { max-width: 100%; border: 1px solid #333; background: #111; }
 </style>
 </head>
 <body>
   <h1>NCA World Model Player
     <span id="dreamBadge" class="badge dream hidden">DREAM</span>
-    <span id="actBadge" class="badge act hidden">ACTIVATIONS</span>
   </h1>
   <p class="subtitle">Real game engine vs. learned NCA world model</p>
+  <div class="selectors">
+    <label for="gameSelect">game:</label>
+    <select id="gameSelect"></select>
+    <label for="levelSelect">level:</label>
+    <select id="levelSelect"></select>
+  </div>
   <div class="game-row">
     <div class="panel">
       <h2 class="real">Real Engine</h2>
@@ -3645,12 +3672,7 @@ HTML_PAGE = r"""<!DOCTYPE html>
   </div>
   <div class="controls">
     Arrows / WASD = move &nbsp;|&nbsp; X = action &nbsp;|&nbsp;
-    R = restart &nbsp;|&nbsp; V = dream mode &nbsp;|&nbsp;
-    T = show activations
-  </div>
-  <div id="actPanel">
-    <h3>NCA Internal Activations</h3>
-    <div id="actContent"></div>
+    R = restart &nbsp;|&nbsp; V = dream mode
   </div>
 
 <script>
@@ -3658,11 +3680,11 @@ const KEY_MAP = {
   ArrowUp: 0, ArrowLeft: 1, ArrowDown: 2, ArrowRight: 3,
   w: 0, a: 1, s: 2, d: 3, x: 4,
 };
-const ACTION_NAMES = ['up', 'left', 'down', 'right', 'action'];
 let dreaming = false;
-let showAct = false;
 let busy = false;
-let lastAction = 0;
+let games = [];          // [{name, n_levels}, ...]
+let currentGame = 0;
+let currentLevel = 0;
 
 async function fetchState() {
   const r = await fetch('/api/state');
@@ -3678,38 +3700,70 @@ function update(d) {
     el.textContent = d.l1.toFixed(0);
     el.className = d.l1 > 20 ? 'val warn' : 'val';
   }
+  if (d.game_id !== undefined) currentGame = d.game_id;
+  if (d.level_i !== undefined) currentLevel = d.level_i;
 }
 
-async function fetchActivations(action) {
-  const r = await fetch('/api/activations/' + action);
-  const d = await r.json();
-  const container = document.getElementById('actContent');
-  container.innerHTML = '';
-  d.steps.forEach((s, i) => {
-    const div = document.createElement('div');
-    div.className = 'act-step';
-    div.innerHTML = `
-      <h4>NCA Step ${i + 1}</h4>
-      <div class="act-row">
-        <div><div class="act-label">Hidden channels (${ACTION_NAMES[action]})</div>
-             <img src="data:image/png;base64,${s.hidden}" /></div>
-        <div><div class="act-label">Output channels (per object)</div>
-             <img src="data:image/png;base64,${s.output}" /></div>
-      </div>`;
-    container.appendChild(div);
+function populateLevelSelect(gameId) {
+  const lvl = document.getElementById('levelSelect');
+  const n = (games[gameId] || {n_levels: 1}).n_levels;
+  lvl.innerHTML = '';
+  for (let i = 0; i < n; i++) {
+    const opt = document.createElement('option');
+    opt.value = i;
+    opt.textContent = 'L' + i;
+    lvl.appendChild(opt);
+  }
+  lvl.value = Math.min(currentLevel, n - 1);
+}
+
+async function selectGameLevel(gameId, levelI) {
+  busy = true;
+  dreaming = false;
+  document.getElementById('dreamBadge').classList.add('hidden');
+  update(await (await fetch(`/api/select/${gameId}/${levelI}`)).json());
+  busy = false;
+}
+
+async function init() {
+  games = await (await fetch('/api/games')).json();
+  const sel = document.getElementById('gameSelect');
+  games.forEach((g, i) => {
+    const opt = document.createElement('option');
+    opt.value = i;
+    opt.textContent = g.name;
+    sel.appendChild(opt);
+  });
+  // Read current state to know which game is active.
+  const cur = await (await fetch('/api/state')).json();
+  update(cur);
+  sel.value = currentGame;
+  populateLevelSelect(currentGame);
+  document.getElementById('levelSelect').value = currentLevel;
+
+  sel.addEventListener('change', async () => {
+    currentGame = parseInt(sel.value);
+    populateLevelSelect(currentGame);
+    currentLevel = 0;
+    await selectGameLevel(currentGame, 0);
+  });
+  document.getElementById('levelSelect').addEventListener('change', async (e) => {
+    currentLevel = parseInt(e.target.value);
+    await selectGameLevel(currentGame, currentLevel);
   });
 }
 
 document.addEventListener('keydown', async (e) => {
   if (busy) return;
   const key = e.key;
+  // Don't intercept while a select is focused.
+  if (document.activeElement && document.activeElement.tagName === 'SELECT') return;
 
   if (key === 'r' || key === 'R') {
     busy = true;
     dreaming = false;
     document.getElementById('dreamBadge').classList.add('hidden');
     update(await (await fetch('/api/reset')).json());
-    if (showAct) await fetchActivations(lastAction);
     busy = false;
     return;
   }
@@ -3718,27 +3772,17 @@ document.addEventListener('keydown', async (e) => {
     document.getElementById('dreamBadge').classList.toggle('hidden', !dreaming);
     return;
   }
-  if (key === 't' || key === 'T') {
-    showAct = !showAct;
-    document.getElementById('actPanel').classList.toggle('visible', showAct);
-    document.getElementById('actBadge').classList.toggle('hidden', !showAct);
-    if (showAct) await fetchActivations(lastAction);
-    return;
-  }
 
   const action = KEY_MAP[key];
   if (action === undefined) return;
   e.preventDefault();
   busy = true;
-  lastAction = action;
-
   const endpoint = dreaming ? '/api/step_dream/' : '/api/step/';
   update(await (await fetch(endpoint + action)).json());
-  if (showAct) await fetchActivations(action);
   busy = false;
 });
 
-fetchState();
+init();
 </script>
 </body>
 </html>
@@ -4139,14 +4183,24 @@ def main():
 
         # Serve mode: skip eval, launch interactive server immediately
         if args.serve:
-            # Serve the first game by default (or could add --serve_game flag)
-            info = game_infos[0]
-            print(f"\nServing {info['name']} (multi-game model, step {final_step:,})...")
-            backend_render = CppPuzzleScriptBackend()
-            backend_render.compile_game(ps_parser, info["name"])
+            level_i = args.level if args.level is not None else 0
+            initial_game_id = 0
+            max_C = max(g["n_objs"] for g in game_infos)
+            max_H = max(g["H"] for g in game_infos)
+            max_W = max(g["W"] for g in game_infos)
+            max_tok_len = max(
+                max((len(g.get("token_ids", [])) for g in game_infos), default=1), 1
+            )
+            print(f"\nServing multi-game web app (model step {final_step:,}, "
+                  f"{len(game_infos)} games)...")
             serve_world_model(
-                model, wm_params, info["json_str"], backend_render,
-                level_i=args.level, port=args.port,
+                model, wm_params, game_infos, ps_parser,
+                initial_game_id=initial_game_id,
+                level_i=level_i,
+                port=args.port,
+                conditional=args.conditional,
+                max_pad=(max_C, max_H, max_W),
+                max_tok_len=max_tok_len,
             )
             if wandb.run is not None:
                 wandb.finish()
@@ -4315,10 +4369,26 @@ def main():
             backend_render.compile_game(ps_parser, args.game)
 
     if args.serve:
+        # Single-game path: wrap as a minimal game_infos list. Single-game
+        # NCAWorldModel is unconditional (no token encoder), so pass
+        # conditional=False and stub max_tok_len.
+        single_info = {
+            "name": args.game,
+            "json_str": json_str,
+            "n_objs": int(env.observation_shape[0]),
+            "H": int(env.observation_shape[1]),
+            "W": int(env.observation_shape[2]),
+            "n_levels": int(env.num_levels),
+            "token_ids": [],
+        }
         serve_world_model(
-            model, params, json_str, backend_render,
-            level_i=args.level, port=args.port,
-            obj_names=obj_names,
+            model, params, [single_info], ps_parser,
+            initial_game_id=0,
+            level_i=(args.level if args.level is not None else 0),
+            port=args.port,
+            conditional=False,
+            max_pad=(single_info["n_objs"], single_info["H"], single_info["W"]),
+            max_tok_len=1,
         )
     elif args.play:
         play_dir = os.path.join(save_dir, "play")
