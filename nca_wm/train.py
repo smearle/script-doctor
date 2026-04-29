@@ -1146,13 +1146,20 @@ class ConditionalNCAWorldModel(nn.Module):
     max_seq_len: int = 192
 
     @nn.compact
-    def __call__(self, state, action_onehot, game_tokens, game_mask):
+    def __call__(self, state, action_onehot, game_tokens, game_mask,
+                 z_override=None):
         """
         Args:
             state: (B, C, H, W) float32 multihot level.
             action_onehot: (B, 5) float32 one-hot action.
             game_tokens: (B, S) int32 tokenized game spec.
             game_mask: (B, S) bool mask (True for real tokens).
+            z_override: optional (B, d_z) latent to substitute for the
+                encoder's output. When provided, the FiLM/NCA path uses
+                this z; the encoder is still invoked (with the supplied
+                tokens) so its params are exercised, then its output is
+                discarded. Used by interpolation/sampling tools to roll
+                out under custom latents without rebuilding the module.
         Returns:
             (logits, win_logit) or (logits, win_logit, intermediates).
         """
@@ -1168,6 +1175,8 @@ class ConditionalNCAWorldModel(nn.Module):
             max_seq_len=self.max_seq_len,
             name="game_encoder",
         )(game_tokens, game_mask)  # (B, d_z)
+        if z_override is not None:
+            z = z_override
 
         # --- FiLM parameters from z (shared across NCA steps) ---
         # Initialize gamma near 1, beta near 0 for identity-like start

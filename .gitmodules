@@ -1,3 +1,6 @@
 [submodule "PuzzleScript"]
 	path = PuzzleScript
 	url = git@github.com:increpare/PuzzleScript
+[submodule "JAXtar"]
+	path = JAXtar
+	url = git@github.com:smearle/JAXtar
