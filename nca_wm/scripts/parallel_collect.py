@@ -106,7 +106,14 @@ def main():
                    help="'gallery' or comma-separated game names")
     p.add_argument("--workers", type=int, default=16)
     p.add_argument("--max-iters", type=int, default=100_000)
-    p.add_argument("--timeout-ms", type=int, default=60_000)
+    p.add_argument("--timeout-ms", type=int, default=-1,
+                   help="Per-level wall-clock cap in ms; -1 = no cap. We default "
+                        "off because cutting search short corrupts our 'as many "
+                        "transitions as we aimed for' invariant — the iteration "
+                        "cap is the only intended truncation.")
+    p.add_argument("--warn-after-min", type=float, default=15.0,
+                   help="Print a warning if a single level takes longer than "
+                        "this many minutes — early signal of a runaway level.")
     p.add_argument("--no-skip-existing", action="store_true",
                    help="recollect even if cache exists")
     args = p.parse_args()
@@ -122,6 +129,7 @@ def main():
 
     skip_existing = not args.no_skip_existing
     work = [(g, args.max_iters, args.timeout_ms, skip_existing) for g in games]
+    warn_threshold_s = max(0.0, args.warn_after_min * 60.0)
 
     t0 = time.time()
     n_done = 0
@@ -137,7 +145,10 @@ def main():
             if r["ok"]:
                 total_new += r["new"]
                 total_cached += r["cached"]
-                print(f"[{n_done:>3d}/{len(games)}] OK  {r['name']:40s}  "
+                tag = "OK"
+                if r["elapsed_s"] > warn_threshold_s:
+                    tag = f"OK[!{r['elapsed_s']/60:.0f}m]"
+                print(f"[{n_done:>3d}/{len(games)}] {tag:9s} {r['name']:40s}  "
                       f"levels: cached={r['cached']:>2d} new={r['new']:>2d} "
                       f"empty={r['empty']:>2d}  trans={r['total_trans']:>7d}  "
                       f"({r['elapsed_s']:>5.0f}s; {elapsed/60:.1f} min total)")

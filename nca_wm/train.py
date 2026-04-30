@@ -90,6 +90,26 @@ def _dat_to_multihot(
     (same dedup as CppPuzzleScriptEnv.observation_shape). Output channels are
     then n_canonical, and the stride is still computed over the raw n_objs
     since that's the bitpacking layout used by the engine.
+
+    For converting many states at once, use `_dats_to_multihot_batch`, which
+    vectorizes over states (~100x faster on big collections).
+    """
+    return _dats_to_multihot_batch(
+        [dat], n_objs, width, height, raw_to_canonical, n_canonical,
+    )[0]
+
+
+def _dats_to_multihot_batch(
+    dats, n_objs: int, width: int, height: int,
+    raw_to_canonical: dict[int, int] | None = None,
+    n_canonical: int | None = None,
+) -> np.ndarray:
+    """Batch convert bitpacked states to (n_states, out_C, H, W) uint8 multihot.
+
+    Replaces a Python triple-loop over (state, cell, object) with a single
+    vectorized pass per raw object index. Numpy does the per-cell bit-test
+    across all states in C, so a workload that previously took hours of
+    Python time finishes in seconds.
     """
     stride_obj = (n_objs + 31) // 32
     if raw_to_canonical is not None:
@@ -97,17 +117,29 @@ def _dat_to_multihot(
         out_C = n_canonical
     else:
         out_C = n_objs
-    obs = np.zeros((out_C, height, width), dtype=np.uint8)
-    for x in range(width):
-        for y in range(height):
-            flat_idx = (x * height + y) * stride_obj
-            for obj_i in range(n_objs):
-                word = obj_i // 32
-                bit = obj_i % 32
-                if dat[flat_idx + word] & (1 << bit):
-                    c = raw_to_canonical[obj_i] if raw_to_canonical is not None else obj_i
-                    obs[c, y, x] = 1
-    return obs
+
+    n_states = len(dats)
+    if n_states == 0:
+        return np.zeros((0, out_C, height, width), dtype=np.uint8)
+
+    # Stack & reshape into (n_states, width, height, stride_obj) uint32.
+    # The flat layout matches `(x * height + y) * stride_obj + word` from the
+    # original loop, so reshape((-1, w, h, stride_obj)) lines up directly.
+    arr = np.asarray(dats, dtype=np.uint32).reshape(
+        n_states, width, height, stride_obj
+    )
+
+    out = np.zeros((n_states, out_C, height, width), dtype=np.uint8)
+    for raw_i in range(n_objs):
+        c = raw_to_canonical[raw_i] if raw_to_canonical is not None else raw_i
+        word = raw_i // 32
+        bit_mask = np.uint32(1 << (raw_i % 32))
+        # mask shape: (n_states, width, height) bool. Transpose to (..., h, w)
+        # to match the original `obs[c, y, x] = 1` ordering, then OR-merge
+        # bits into the canonical channel.
+        mask = (arr[..., word] & bit_mask) != 0
+        out[:, c] |= mask.transpose(0, 2, 1).astype(np.uint8)
+    return out
 
 
 def collect_unique_transitions(
@@ -115,7 +147,7 @@ def collect_unique_transitions(
     game_name: str,
     level_i: int = 0,
     max_iters: int = 100_000,
-    timeout_ms: int = 60_000,
+    timeout_ms: int = -1,
     search_algo: str = "astar",
 ) -> dict:
     """Collect unique transitions via C++ state-space exploration.
@@ -175,11 +207,13 @@ def collect_unique_transitions(
         _save_npz_dict(cache_path, empty)
         return empty
 
-    # Convert bitpacked states to multihot (with dedup applied)
-    states = np.array([_dat_to_multihot(s, raw_n_objs, w, h, raw_to_canonical, n_objs)
-                        for s in result.states], dtype=np.uint8)
-    next_states = np.array([_dat_to_multihot(s, raw_n_objs, w, h, raw_to_canonical, n_objs)
-                             for s in result.next_states], dtype=np.uint8)
+    # Convert bitpacked states to multihot (with dedup applied). The batch
+    # conversion vectorizes across states; the previous per-state Python loop
+    # was the dominant cost for big collections (millions of states).
+    states = _dats_to_multihot_batch(
+        result.states, raw_n_objs, w, h, raw_to_canonical, n_objs)
+    next_states = _dats_to_multihot_batch(
+        result.next_states, raw_n_objs, w, h, raw_to_canonical, n_objs)
     actions = np.array(result.actions, dtype=np.int32)
     wons = np.array(result.wons, dtype=np.uint8)
 
@@ -297,7 +331,7 @@ def _dataset_cache_key(
     """Deterministic hash of all args that affect dataset contents."""
     import hashlib
     blob = json.dumps({
-        "format_version": 12,  # v12: train_levels added (level subsetting for generalization studies)
+        "format_version": 13,  # v13: collection-time timeout removed (timeout_ms=-1 default)
         "games": sorted(game_names),
         "level": level_i,
         "train_levels": sorted(train_levels) if train_levels is not None else None,
@@ -315,7 +349,7 @@ def collect_multigame_dataset(
     ps_parser,
     level_i: int | None = None,
     n_search_steps: int = 100_000,
-    search_timeout_ms: int = 60_000,
+    search_timeout_ms: int = -1,
     search_algo: str = "astar",
     encode_sprites: bool = False,
     max_transitions_per_game: int | None = None,
@@ -2172,7 +2206,7 @@ def evaluate_multigame(
     max_steps: int = 50,
     search_algos: list[str] = ("bfs", "astar"),
     search_n_steps: int = 100_000,
-    search_timeout_ms: int = 60_000,
+    search_timeout_ms: int = -1,
     save_dir: str | None = None,
 ):
     """Evaluate per game, per level, per rollout type (random + search).
@@ -2708,7 +2742,7 @@ def render_multigame_gifs(
     step_label: int | None = None,
     search_algos: list[str] = ("bfs", "astar"),
     search_n_steps: int = 100_000,
-    search_timeout_ms: int = 60_000,
+    search_timeout_ms: int = -1,
 ):
     """Render a single combined GIF: for each game and level, random rollout then search rollout.
 
@@ -3198,7 +3232,7 @@ def main():
     # collect_unique_transitions). --search_algos (plural) is for evaluation
     # rollouts only, not training data collection.
     p.add_argument("--n_search_steps", type=int, default=100_000)
-    p.add_argument("--search_timeout_ms", type=int, default=60_000)
+    p.add_argument("--search_timeout_ms", type=int, default=-1)
     p.add_argument("--search_algos", nargs="+", default=["bfs", "astar"],
                    help="Algorithms used during evaluation/GIF rollouts.")
     p.add_argument("--max_episode_steps", type=int, default=200)
@@ -3324,9 +3358,6 @@ def main():
                    help="Load params from this dir instead of the default save_dir")
     p.add_argument("--play", action="store_true",
                    help="Interactive play mode (w/a/s/d/x keys)")
-    p.add_argument("--serve", action="store_true",
-                   help="Launch web server for browser-based play")
-    p.add_argument("--port", type=int, default=8000)
     # Logging
     p.add_argument("--wandb", action="store_true", help="Enable wandb logging")
     p.add_argument("--wandb_project", default="nca-world-model", help="wandb project name")
@@ -3585,32 +3616,6 @@ def main():
         # token decoder); unwrap if joint training produced a {wm,dec} dict.
         wm_params = _wm_p(params)
 
-        # Serve mode: skip eval, launch interactive server immediately
-        if args.serve:
-            from nca_wm.serve import serve_world_model
-            level_i = args.level if args.level is not None else 0
-            initial_game_id = 0
-            max_C = max(g["n_objs"] for g in game_infos)
-            max_H = max(g["H"] for g in game_infos)
-            max_W = max(g["W"] for g in game_infos)
-            max_tok_len = max(
-                max((len(g.get("token_ids", [])) for g in game_infos), default=1), 1
-            )
-            print(f"\nServing multi-game web app (model step {final_step:,}, "
-                  f"{len(game_infos)} games)...")
-            serve_world_model(
-                model, wm_params, game_infos, ps_parser,
-                initial_game_id=initial_game_id,
-                level_i=level_i,
-                port=args.port,
-                conditional=args.conditional,
-                max_pad=(max_C, max_H, max_W),
-                max_tok_len=max_tok_len,
-            )
-            if wandb.run is not None:
-                wandb.finish()
-            return
-
         # Per-game evaluation
         print("\nEvaluating per-game (autoregressive rollout)...")
         evaluate_multigame(
@@ -3754,7 +3759,7 @@ def main():
     obj_names = env._canonical_ids
 
     # Modes that need the renderer
-    need_renderer = args.play or args.serve or args.render_gif
+    need_renderer = args.play or args.render_gif
     if need_renderer:
         # May already exist from post-training GIF rendering; create if not
         try:
@@ -3763,30 +3768,7 @@ def main():
             backend_render = CppPuzzleScriptBackend()
             backend_render.compile_game(ps_parser, args.game)
 
-    if args.serve:
-        from nca_wm.serve import serve_world_model
-        # Single-game path: wrap as a minimal game_infos list. Single-game
-        # NCAWorldModel is unconditional (no token encoder), so pass
-        # conditional=False and stub max_tok_len.
-        single_info = {
-            "name": args.game,
-            "json_str": json_str,
-            "n_objs": int(env.observation_shape[0]),
-            "H": int(env.observation_shape[1]),
-            "W": int(env.observation_shape[2]),
-            "n_levels": int(env.num_levels),
-            "token_ids": [],
-        }
-        serve_world_model(
-            model, params, [single_info], ps_parser,
-            initial_game_id=0,
-            level_i=(args.level if args.level is not None else 0),
-            port=args.port,
-            conditional=False,
-            max_pad=(single_info["n_objs"], single_info["H"], single_info["W"]),
-            max_tok_len=1,
-        )
-    elif args.play:
+    if args.play:
         play_dir = os.path.join(save_dir, "play")
         play_world_model(
             model, params, json_str, backend_render,
