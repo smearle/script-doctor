@@ -95,13 +95,19 @@ _PRELUDE = [
     "PRE_RUN_RULES_ON_LEVEL_START",
 ]
 
-# Channel references: ch0..ch_MAX
+# Channel references: ch0..ch_MAX. Base vocab covers CH0..CH63;
+# the V2 extension adds CH64..CH(MAX_CHANNELS_V2-1) at the end of the
+# vocab without disturbing existing IDs.
 MAX_CHANNELS = 64
+MAX_CHANNELS_V2 = 384      # covers the largest gallery game (Rose: 355 objs)
 _CHANNELS = [f"CH{i}" for i in range(MAX_CHANNELS)]
+_CHANNELS_V2_EXT = [f"CH{i}" for i in range(MAX_CHANNELS, MAX_CHANNELS_V2)]
 
-# Group references: g0..g_MAX
+# Group references: g0..g_MAX. Same V1/V2 split as channels.
 MAX_GROUPS = 32
+MAX_GROUPS_V2 = 128        # covers the largest gallery game (Rose: 102 groups)
 _GROUPS = [f"G{i}" for i in range(MAX_GROUPS)]
+_GROUPS_V2_EXT = [f"G{i}" for i in range(MAX_GROUPS, MAX_GROUPS_V2)]
 
 # ---- Sprite/visual tokens (opt-in via `encode_sprites=True`) ----
 # Each PuzzleScript object declares:
@@ -127,16 +133,18 @@ COLOR_Q_LEVELS = 1 << COLOR_Q_BITS          # 4 levels per channel
 COLOR_Q_TOTAL = COLOR_Q_LEVELS ** 3         # 64 buckets
 _SPRITE_CLRS = [f"COLOR_Q{i:02d}" for i in range(COLOR_Q_TOTAL)]
 
-# Build vocabulary in three stacked layers, each appended at the end so
-# token IDs from earlier layers stay stable across vocab extensions:
+# Build vocabulary in stacked layers, each appended at the end so token IDs
+# from earlier layers stay stable across vocab extensions:
 #   1. _ALL_TOKENS_BASE (141): mechanics-only. Identical to the original
 #      pre-sprite-tokens tokenizer.
 #   2. + _SPRITE_STRUCT/_PIX/_CLRS → VOCAB_SIZE_EXT (~183). Opt-in via
 #      `encode_sprites=True`.
-#   3. + _RULE_V2 (KERNEL_SEP, ID = VOCAB_SIZE_EXT) → VOCAB_SIZE_EXT_V2 (~184).
-#      Opt-in via `kernel_sep=True`. Distinguishes multi-kernel rules
-#      (`[A|B][C|D] -> [...]`) from single-kernel ones; without it the two
-#      collapse into the same token sequence.
+#   3. V2 additions (always on):
+#      - KERNEL_SEP: distinguishes multi-kernel rules (`[A|B][C|D] -> [...]`)
+#        from single-kernel ones; without it the two collapse.
+#      - CH64..CH383 and G32..G127: cover the larger gallery games
+#        (Rose has 355 objs and 102 groups; the V1 limits silently
+#        truncate them, dropping all references beyond MAX_*).
 _RULE_V2 = ["KERNEL_SEP"]
 
 _ALL_TOKENS_BASE = (
@@ -144,12 +152,14 @@ _ALL_TOKENS_BASE = (
     _MODIFIERS + _COMMANDS + _WINCOND + _PRELUDE + _CHANNELS + _GROUPS
 )
 _ALL_TOKENS_EXT = _ALL_TOKENS_BASE + _SPRITE_STRUCT + _SPRITE_PIX + _SPRITE_CLRS
-_ALL_TOKENS_EXT_V2 = _ALL_TOKENS_EXT + _RULE_V2
+_ALL_TOKENS_EXT_V2 = (
+    _ALL_TOKENS_EXT + _RULE_V2 + _CHANNELS_V2_EXT + _GROUPS_V2_EXT
+)
 
 VOCAB = {tok: i for i, tok in enumerate(_ALL_TOKENS_EXT_V2)}
 VOCAB_SIZE_BASE = len(_ALL_TOKENS_BASE)          # 141 — legacy compat
 VOCAB_SIZE_EXT = len(_ALL_TOKENS_EXT)             # ~183 — with sprite tokens
-VOCAB_SIZE_EXT_V2 = len(_ALL_TOKENS_EXT_V2)       # ~184 — adds KERNEL_SEP
+VOCAB_SIZE_EXT_V2 = len(_ALL_TOKENS_EXT_V2)       # ~504 — adds V2 ext tokens
 VOCAB_SIZE = VOCAB_SIZE_BASE                      # default for legacy callers
 INV_VOCAB = {i: tok for tok, i in VOCAB.items()}
 
@@ -244,9 +254,12 @@ def tokenize_game(
     tree: PSGameTree,
     canonical_ids: list[str],
     encode_sprites: bool = False,
-    kernel_sep: bool = False,
 ) -> list[int]:
     """Tokenize a PSGameTree into a sequence of integer token IDs.
+
+    KERNEL_SEP is always emitted between adjacent kernels on either side of
+    a rule (so multi-kernel rules like `[A|B][C|D] -> [...]` round-trip
+    faithfully), and the V2 channel/group limits are always used.
 
     Args:
         tree: Parsed game tree (from js_bridge.parsed_state_to_tree or GenPSTree).
@@ -255,19 +268,15 @@ def tokenize_game(
             canonical_ids[i] is the object name for multihot channel i.
         encode_sprites: if True, prepend each object's palette + 5x5 sprite
             grid to the token sequence. See _SPRITE_STRUCT / _SPRITE_PIX /
-            _SPRITE_CLRS for the vocab extension. Uses VOCAB_SIZE_EXT.
-        kernel_sep: if True, emit KERNEL_SEP between adjacent kernels on
-            either side of a rule, so multi-kernel rules
-            (`[A|B][C|D] -> [...]`) survive the round-trip. Required for
-            faithfully encoding games like constellationz, Cratopia,
-            Slidings, etc. Uses VOCAB_SIZE_EXT_V2 (always callable, but
-            new ID is only emitted when this flag is set).
+            _SPRITE_CLRS for the vocab extension.
 
     Returns:
         List of integer token IDs.
     """
     tokens: list[int] = []
     V = VOCAB  # shorthand
+    max_ch = MAX_CHANNELS_V2
+    max_g = MAX_GROUPS_V2
 
     # Build name → channel index mapping
     name_to_ch: dict[str, int] = {}
@@ -298,13 +307,13 @@ def tokenize_game(
         # Direct channel reference
         if name_l in name_to_ch:
             ch = name_to_ch[name_l]
-            if ch < MAX_CHANNELS:
+            if ch < max_ch:
                 return [V[f"CH{ch}"]]
             return []  # skip if beyond max
         # Legend group reference
         if name_l in group_map:
             gi = group_map[name_l]
-            if gi < MAX_GROUPS:
+            if gi < max_g:
                 return [V[f"G{gi}"]]
             return []
         # Legend alias (single object synonym) — resolve to channel
@@ -330,7 +339,7 @@ def tokenize_game(
         # One block per canonical object, in channel order. Each block:
         #   OBJ_START CH{i} PALETTE_START COLOR_Q* ... SPRITE_START PIX* ... OBJ_END
         for ch_i, name in enumerate(canonical_ids):
-            if ch_i >= MAX_CHANNELS:
+            if ch_i >= max_ch:
                 break
             obj = tree.objects.get(name) or tree.objects.get(name.lower())
             if obj is None:
@@ -384,16 +393,20 @@ def tokenize_game(
     for key, le in legend.items():
         if le.operator is None:
             continue  # skip simple aliases
+        gi = group_map[key]
+        if gi >= max_g:
+            # Drop the entire group declaration if its index exceeds the
+            # vocab range — the prior behavior of emitting just the
+            # GROUP_OR/AND header (with no index) made the chunk
+            # ambiguous, which hopelessly confuses the round-trip.
+            continue
         if le.operator.lower() == "or":
             tokens.append(V["GROUP_OR"])
         elif le.operator.lower() == "and":
             tokens.append(V["GROUP_AND"])
         else:
             continue
-        gi = group_map[key]
-        if gi < MAX_GROUPS:
-            tokens.append(V[f"G{gi}"])
-        # List member channels
+        tokens.append(V[f"G{gi}"])
         for obj_name in le.obj_names:
             tokens.extend(_resolve_name(obj_name))
         tokens.append(V["SEP"])
@@ -421,14 +434,14 @@ def tokenize_game(
         tokens.append(V["LHS"])
         if rule.left_kernels:
             for ki, part in enumerate(rule.left_kernels):
-                if ki > 0 and kernel_sep:
+                if ki > 0:
                     tokens.append(V["KERNEL_SEP"])
                 _tokenize_kernel(part)
         # RHS
         tokens.append(V["RHS"])
         if rule.right_kernels:
             for ki, part in enumerate(rule.right_kernels):
-                if ki > 0 and kernel_sep:
+                if ki > 0:
                     tokens.append(V["KERNEL_SEP"])
                 _tokenize_kernel(part)
         # Command
@@ -481,10 +494,8 @@ def tokenize_game(
         q = wc.quantifier.lower()
         if q in _QUANTIFIER_MAP:
             tokens.append(V[_QUANTIFIER_MAP[q]])
-        # Source object
         if wc.src_obj:
             tokens.extend(_resolve_name(wc.src_obj))
-        # Target object
         if wc.trg_obj:
             tokens.append(V["WC_ON"])
             tokens.extend(_resolve_name(wc.trg_obj))

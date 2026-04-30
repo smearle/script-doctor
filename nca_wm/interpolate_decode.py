@@ -36,9 +36,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from nca_wm.rule_attn_model import RuleAttnNCAWorldModel
 from nca_wm.token_decoder import SlotTokenDecoder, sample_tokens_from_slots
-from nca_wm.tokenize_game import (
-    VOCAB_SIZE_BASE, VOCAB_SIZE_EXT, VOCAB_SIZE_EXT_V2, tokens_to_str,
-)
+from nca_wm.tokenize_game import tokens_to_str
 from nca_wm.detokenize_game import detokenize
 
 
@@ -74,15 +72,7 @@ def build_models(cfg, game_infos):
         )
     max_C = max(g["n_objs"] for g in game_infos)
     max_tok_len = max(max((len(g.get("token_ids", [])) for g in game_infos), default=1), 1)
-    # Mirror train.py's vocab-size selection: KERNEL_SEP lives at the end of
-    # the vocab so kernel_sep=True implies the full V2 size regardless of
-    # encode_sprites.
-    if cfg.get("kernel_sep", False):
-        vocab_size = VOCAB_SIZE_EXT_V2
-    elif cfg.get("encode_sprites", False):
-        vocab_size = VOCAB_SIZE_EXT
-    else:
-        vocab_size = VOCAB_SIZE_BASE
+    vocab_size = int(cfg["vocab_size"])
 
     wm = RuleAttnNCAWorldModel(
         n_hid=cfg["n_hid"],

@@ -121,13 +121,16 @@ def _grp_name(g: int) -> str:
 # Groups use a parallel alphabet starting at the *end* of the object range
 # to minimize collision risk.
 def _legend_key_for_obj(ch: int) -> str:
-    pool = "abcdefghijklmnopqrstuvwxyz0123456789"
-    return pool[ch % len(pool)]
+    """Per-object legend alias. Single char while the pool fits; multi-char
+    fallback for higher channel indices to keep keys unique.
 
-
-def _legend_key_for_grp(g: int) -> str:
-    pool = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
-    return pool[g % len(pool)]
+    Skip PS reserved direction chars (`v ^ < >`) — PS treats them as
+    keywords even when used as legend keys.
+    """
+    pool = "abcdefghijklmnopqrstuwxyz0123456789"  # 35 chars
+    if ch < len(pool):
+        return pool[ch]
+    return f"o{ch}"
 
 
 def _split_sections(tokens: list[int]) -> list[list[int]]:
@@ -147,6 +150,19 @@ def _split_sections(tokens: list[int]) -> list[list[int]]:
     return out
 
 
+def _skip_loop_markers(toks: list[int], i: int = 0) -> int:
+    """Return the first index >= i whose token is not LOOP_START / LOOP_END.
+
+    Loop markers are bare (not SEP-bounded), so they cluster at the head of
+    whichever chunk follows. Every section parser needs to step past them
+    before looking at its expected leading token.
+    """
+    while i < len(toks) and INV_VOCAB.get(toks[i], "") in {"LOOP_START",
+                                                            "LOOP_END"}:
+        i += 1
+    return i
+
+
 def _classify_section(toks: list[int]) -> str:
     """Identify which section type a SEP-bounded chunk represents.
 
@@ -156,10 +172,7 @@ def _classify_section(toks: list[int]) -> str:
     """
     if not toks:
         return "empty"
-    j = 0
-    while j < len(toks) and INV_VOCAB.get(toks[j], "") in {"LOOP_START",
-                                                            "LOOP_END"}:
-        j += 1
+    j = _skip_loop_markers(toks, 0)
     if j == len(toks):
         return "loop_marker"
     head_name = INV_VOCAB.get(toks[j], "")
@@ -195,7 +208,7 @@ def _parse_prelude(toks: list[int]) -> dict:
 def _parse_sprites(toks: list[int]) -> list[dict]:
     """Parse a sprites section into a list of {"ch": int, "palette": [...], "sprite": [[...]]} dicts."""
     objs: list[dict] = []
-    i = 0
+    i = _skip_loop_markers(toks, 0)
     while i < len(toks):
         if INV_VOCAB.get(toks[i]) != "OBJ_START":
             i += 1
@@ -251,8 +264,11 @@ def _parse_sprites(toks: list[int]) -> list[dict]:
 
 def _parse_layer(toks: list[int]) -> list[tuple[str, int]]:
     """Return [(kind, idx)] where kind is 'ch' or 'g'."""
+    i = _skip_loop_markers(toks, 0)
+    if i >= len(toks) or INV_VOCAB.get(toks[i], "") != "LAYER":
+        return []
     out: list[tuple[str, int]] = []
-    for t in toks[1:]:  # skip the LAYER head token
+    for t in toks[i + 1:]:  # skip the LAYER head token
         name = INV_VOCAB.get(t, "")
         ch = _ch_idx(name)
         if ch is not None:
@@ -265,15 +281,18 @@ def _parse_layer(toks: list[int]) -> list[tuple[str, int]]:
 
 
 def _parse_group(toks: list[int]) -> dict | None:
-    head = INV_VOCAB.get(toks[0], "")
-    op = "or" if head == "GROUP_OR" else ("and" if head == "GROUP_AND" else None)
-    if op is None or len(toks) < 2:
+    i = _skip_loop_markers(toks, 0)
+    if i + 1 >= len(toks):
         return None
-    g = _g_idx(INV_VOCAB.get(toks[1], ""))
+    head = INV_VOCAB.get(toks[i], "")
+    op = "or" if head == "GROUP_OR" else ("and" if head == "GROUP_AND" else None)
+    if op is None:
+        return None
+    g = _g_idx(INV_VOCAB.get(toks[i + 1], ""))
     if g is None:
         return None
     members: list[tuple[str, int]] = []
-    for t in toks[2:]:
+    for t in toks[i + 2:]:
         name = INV_VOCAB.get(t, "")
         ch = _ch_idx(name)
         if ch is not None:
@@ -298,10 +317,7 @@ def _parse_rule(toks: list[int]) -> dict | None:
     """
     if not toks:
         return None
-    i = 0
-    while i < len(toks) and INV_VOCAB.get(toks[i], "") in {"LOOP_START",
-                                                            "LOOP_END"}:
-        i += 1
+    i = _skip_loop_markers(toks, 0)
     if i >= len(toks) or INV_VOCAB.get(toks[i]) != "RULE":
         return None
     i += 1
@@ -385,9 +401,12 @@ def _parse_kernels_until(toks: list[int], i: int, stop: set[str]):
 
 
 def _parse_win(toks: list[int]) -> dict | None:
-    if not toks or INV_VOCAB.get(toks[0]) != "WIN":
+    if not toks:
         return None
-    i = 1
+    i = _skip_loop_markers(toks, 0)
+    if i >= len(toks) or INV_VOCAB.get(toks[i]) != "WIN":
+        return None
+    i += 1
     quant = "all"
     if i < len(toks):
         name = INV_VOCAB.get(toks[i], "")
@@ -424,13 +443,18 @@ def _parse_win(toks: list[int]) -> dict | None:
 
 def _emit_objects(sprites: list[dict], all_obj_chs: list[int]) -> str:
     """Emit OBJECTS section. Includes any object referenced anywhere, even if
-    we have no sprite block for it (uses a stub palette+grid)."""
+    we have no sprite block for it (uses a stub palette+grid).
+
+    Object lines emit only the object name — legend keys are added in the
+    LEGEND section instead. Inline `<name> <key>` syntax also auto-registers
+    a legend alias, which conflicts with our explicit legend entries
+    ("Name X already in use") under the JS PuzzleScript parser.
+    """
     lines: list[str] = []
     by_ch = {o["ch"]: o for o in sprites}
     for ch in all_obj_chs:
         name = _obj_name(ch)
-        key = _legend_key_for_obj(ch)
-        lines.append(f"{name} {key}")
+        lines.append(name)
         obj = by_ch.get(ch)
         if obj is None or not obj["palette"]:
             # Stub: opaque mid-gray palette, blank 5x5 transparent sprite.
@@ -470,6 +494,19 @@ def _emit_objects(sprites: list[dict], all_obj_chs: list[int]) -> str:
 
 def _emit_legend(all_obj_chs: list[int], groups: list[dict]) -> str:
     lines: list[str] = []
+    # PuzzleScript requires both `Player` and `Background` to exist (as
+    # objects or as legend aliases) — without them the JS engine errors
+    # out before parse completes. Our token vocab doesn't preserve which
+    # canonical channel is the player vs the background, so we alias both
+    # to the first object as a placeholder. Rules reference Obj<i>
+    # directly (not Player), so this placeholder doesn't change the rule
+    # semantics; it only satisfies the engine's existence check.
+    if all_obj_chs:
+        first = _obj_name(all_obj_chs[0])
+        lines.append(f"Background = {first}")
+        # Pick a different obj for Player if we have one — otherwise reuse.
+        player_ch = all_obj_chs[1] if len(all_obj_chs) > 1 else all_obj_chs[0]
+        lines.append(f"Player = {_obj_name(player_ch)}")
     # Object aliases — purely for level use; rules use the long name directly.
     for ch in all_obj_chs:
         lines.append(f"{_legend_key_for_obj(ch)} = {_obj_name(ch)}")
@@ -480,9 +517,14 @@ def _emit_legend(all_obj_chs: list[int], groups: list[dict]) -> str:
             members.append(_obj_name(idx) if kind == "ch" else _grp_name(idx))
         if not members:
             continue
-        # Group symbol (single char) maps to first member; the GroupName itself
-        # is then assigned via member-list using OR/AND.
-        # PuzzleScript syntax: `Name = a or b or c`
+        # Single-member operator groups must still carry the operator keyword
+        # in the source, or the lark grammar parses them as simple aliases
+        # (legend_data: LEGEND_PIXEL object_name legend_operation*; with no
+        # operation, operator=None and the entry won't be re-tokenized as a
+        # group). Duplicating the member yields `Grp8 = Grp7 or Grp7`, which
+        # the tokenizer's post-resolution dedup collapses back to one token.
+        if len(members) == 1:
+            members = members * 2
         lines.append(
             f"{_grp_name(grp['g'])} = " +
             f" {grp['op']} ".join(members)
@@ -493,9 +535,14 @@ def _emit_legend(all_obj_chs: list[int], groups: list[dict]) -> str:
 def _emit_collision_layers(layers: list[list[tuple[str, int]]]) -> str:
     out: list[str] = []
     for layer in layers:
-        names = []
+        names: list[str] = []
+        seen: set[str] = set()
         for kind, idx in layer:
-            names.append(_obj_name(idx) if kind == "ch" else _grp_name(idx))
+            n = _obj_name(idx) if kind == "ch" else _grp_name(idx)
+            if n in seen:
+                continue
+            seen.add(n)
+            names.append(n)
         if names:
             out.append(", ".join(names))
     return "\n".join(out)
@@ -524,10 +571,23 @@ def _emit_rules(rules: list[dict],
             out.append("startloop")
         prefix_str = " ".join(r["prefixes"])
         lhs = _emit_rule_side(r["lhs"])
-        rhs = _emit_rule_side(r["rhs"])
-        line = (f"{prefix_str} " if prefix_str else "") + f"{lhs} -> {rhs}"
-        if r["command"]:
-            line += f" {r['command']}"
+        # When there's no RHS at all (e.g. `[LHS] -> cancel` in the source),
+        # emit `[LHS] -> {command}` rather than `[LHS] -> [ ] {command}`.
+        # The JS engine rejects an empty bracket whose cell count doesn't
+        # match the LHS.
+        if r["rhs"]:
+            rhs = _emit_rule_side(r["rhs"])
+            body = f"{lhs} -> {rhs}"
+            if r["command"]:
+                body += f" {r['command']}"
+        elif r["command"]:
+            body = f"{lhs} -> {r['command']}"
+        else:
+            # Degenerate identity rule — mirror the LHS so the cell count
+            # check passes. (No tokenizer path produces this case today,
+            # but be defensive.)
+            body = f"{lhs} -> {lhs}"
+        line = (f"{prefix_str} " if prefix_str else "") + body
         out.append(line)
         if i in loop_ends:
             out.append("endloop")

@@ -39,7 +39,7 @@ from puzzlescript_cpp import CppPuzzleScriptBackend, CppPuzzleScriptEnv
 from puzzlescript_jax.utils import init_ps_lark_parser
 from nca_wm.tokenize_game import (
     tokenize_game, get_game_tree_from_js,
-    VOCAB_SIZE_BASE, VOCAB_SIZE_EXT, VOCAB_SIZE_EXT_V2,
+    VOCAB_SIZE_EXT,
 )
 
 N_ACTIONS = 5
@@ -292,19 +292,19 @@ def _dataset_cache_key(
     search_timeout_ms: int,
     encode_sprites: bool = False,
     max_transitions_per_game: int | None = None,
-    kernel_sep: bool = False,
+    train_levels: list[int] | None = None,
 ) -> str:
     """Deterministic hash of all args that affect dataset contents."""
     import hashlib
     blob = json.dumps({
-        "format_version": 10,  # v10: dropped random-rollout codepath; data is purely collect_unique_transitions output
+        "format_version": 12,  # v12: train_levels added (level subsetting for generalization studies)
         "games": sorted(game_names),
         "level": level_i,
+        "train_levels": sorted(train_levels) if train_levels is not None else None,
         "search_algo": search_algo,
         "n_search_steps": n_search_steps,
         "search_timeout_ms": search_timeout_ms,
         "encode_sprites": encode_sprites,
-        "kernel_sep": kernel_sep,
         "max_transitions_per_game": max_transitions_per_game,
     }, sort_keys=True)
     return hashlib.sha256(blob.encode()).hexdigest()[:16]
@@ -319,7 +319,7 @@ def collect_multigame_dataset(
     search_algo: str = "astar",
     encode_sprites: bool = False,
     max_transitions_per_game: int | None = None,
-    kernel_sep: bool = False,
+    train_levels: list[int] | None = None,
 ) -> tuple[dict, list[dict]]:
     """Collect padded transitions from multiple games via search-based unique-transition exploration.
 
@@ -337,7 +337,7 @@ def collect_multigame_dataset(
         n_search_steps, search_timeout_ms,
         encode_sprites=encode_sprites,
         max_transitions_per_game=max_transitions_per_game,
-        kernel_sep=kernel_sep,
+        train_levels=train_levels,
     )
     merged_cache_dir = os.path.join(ROLLOUT_CACHE_DIR, "_merged")
     dataset_cache = os.path.join(merged_cache_dir, f"dataset_{cache_hash}.npz")
@@ -389,8 +389,7 @@ def collect_multigame_dataset(
         try:
             tree, canonical_ids = get_game_tree_from_js(ps_parser, name)
             token_ids = tokenize_game(tree, canonical_ids,
-                                       encode_sprites=encode_sprites,
-                                       kernel_sep=kernel_sep)
+                                       encode_sprites=encode_sprites)
         except Exception as e:
             print(f"  WARNING: tokenization failed ({e}), using empty tokens")
             tree, canonical_ids = None, None
@@ -437,7 +436,12 @@ def collect_multigame_dataset(
     for game_id, info in enumerate(game_infos):
         name = info["name"]
         json_str = info["json_str"]
-        levels = [level_i] if level_i is not None else list(range(info["n_levels"]))
+        if train_levels is not None:
+            levels = [li for li in train_levels if 0 <= li < info["n_levels"]]
+        elif level_i is not None:
+            levels = [level_i]
+        else:
+            levels = list(range(info["n_levels"]))
         print(f"\n[{game_id+1}/{len(game_infos)}] Collecting data for {name} "
               f"({len(levels)} level{'s' if len(levels) != 1 else ''})...")
 
@@ -3185,6 +3189,11 @@ def main():
     g.add_argument("--games", help="Comma-separated game names, or a preset name (e.g. 'small')")
     p.add_argument("--level", type=int, default=None,
                    help="Train on a single level index. Default: all levels.")
+    p.add_argument("--train_levels", default=None,
+                   help="Comma-separated level indices to train on (e.g. '0,1,8'). "
+                        "Overrides --level when set. Eval still runs over all "
+                        "levels per-game so held-out levels are reported as "
+                        "out-of-distribution metrics.")
     # Data collection (search-driven unique-transition exploration; see
     # collect_unique_transitions). --search_algos (plural) is for evaluation
     # rollouts only, not training data collection.
@@ -3259,14 +3268,6 @@ def main():
                         "game-spec token sequence (uses VOCAB_SIZE_EXT and a "
                         "larger max_seq_len). Required to decode visual games "
                         "from the latent space.")
-    p.add_argument("--kernel_sep", action=argparse.BooleanOptionalAction, default=True,
-                   help="Emit KERNEL_SEP between adjacent kernels on each side "
-                        "of a multi-kernel rule (`[A][B] -> [...]`). Required "
-                        "for the encoder's rule slots to disentangle multi- "
-                        "vs single-kernel rule structure on games like "
-                        "constellationz, Cratopia, Slidings, Cyberbox. "
-                        "Adds 1 to the vocab. Defaults on for new runs; pass "
-                        "--no-kernel_sep to reproduce pre-fix tokenization.")
     p.add_argument("--sprite_loss_weight", type=float, default=0.0,
                    help="Weight on a sprite-decoder MSE loss term. When >0, "
                         "adds a Dense head on z predicting each channel's "
@@ -3333,6 +3334,9 @@ def main():
     p.add_argument("--sweep_name", default=None,
                    help="Tag for grouping runs in sweep_nca_wm.py cross-evaluation")
     args = p.parse_args()
+    parsed_train_levels = None
+    if args.train_levels:
+        parsed_train_levels = [int(x) for x in args.train_levels.split(",") if x.strip()]
 
     ps_parser = init_ps_lark_parser()
     multigame = args.games is not None
@@ -3462,7 +3466,7 @@ def main():
                 search_algo=args.search_algo,
                 encode_sprites=args.encode_sprites,
                 max_transitions_per_game=(args.max_transitions_per_game or None),
-                kernel_sep=args.kernel_sep,
+                train_levels=parsed_train_levels,
             )
             with open(infos_path, "wb") as f:
                 pickle.dump(game_infos, f)
@@ -3483,16 +3487,22 @@ def main():
         if args.conditional:
             max_tok_len = max(len(g.get("token_ids", [])) for g in game_infos)
             max_tok_len = max(max_tok_len, 1)
-            # Use the extended vocab (with sprite tokens) only when
-            # encode_sprites is enabled. Keeps embedding size tight otherwise.
-            # KERNEL_SEP sits at the END of the full vocab (id = VOCAB_SIZE_EXT),
-            # so when kernel_sep is on we always need the V2 size to fit it.
-            if args.kernel_sep:
-                vocab_size = VOCAB_SIZE_EXT_V2
-            elif args.encode_sprites:
-                vocab_size = VOCAB_SIZE_EXT
-            else:
-                vocab_size = VOCAB_SIZE_BASE
+            # Auto-size the vocab to cover only the tokens actually emitted
+            # across the training set. V2 vocab IDs run up to VOCAB_SIZE_EXT_V2,
+            # but games using fewer features only emit IDs in the lower range —
+            # embedding those extra slots would just waste params. Floor at
+            # VOCAB_SIZE_EXT + 1 since KERNEL_SEP (always emitted for multi-
+            # kernel rules) sits at index VOCAB_SIZE_EXT.
+            max_token_id_used = 0
+            for g in game_infos:
+                tids = g.get("token_ids") or []
+                if tids:
+                    max_token_id_used = max(max_token_id_used, int(max(tids)))
+            vocab_size = max(max_token_id_used + 1, VOCAB_SIZE_EXT + 1)
+            # Stash on args so subsequent vars(args) writes of config.json
+            # carry vocab_size through to the saved config (loaders depend
+            # on this field to rebuild the embedding).
+            args.vocab_size = vocab_size
             if args.architecture == "rule_attn":
                 from nca_wm.rule_attn_model import RuleAttnNCAWorldModel
                 model = RuleAttnNCAWorldModel(
