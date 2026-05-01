@@ -655,6 +655,266 @@ def collect_multigame_dataset(
     return merged, game_infos
 
 
+def collect_multigame_dataset_synthetic(
+    game_names: list[str],
+    ps_parser,
+    *,
+    n_levels: int,
+    width: int,
+    height: int,
+    seed: int,
+    mode: str,
+    require_solvable: bool,
+    max_attempts_per_level: int,
+    max_iters_search: int,
+    timeout_ms_search: int,
+    min_states: int,
+    evolve_pop_size: int = 64,
+    evolve_max_generations: int = 200,
+    evolve_n_mutations_min: int = 1,
+    evolve_n_mutations_max: int = 3,
+    encode_sprites: bool = False,
+    kernel_sep: bool = False,
+    max_transitions_per_game: int | None = None,
+    per_game_size: bool = False,
+    multi_grid: bool = False,
+    grid_sizes: list[tuple[int, int]] | None = None,
+    fallback_dynamics: bool = False,
+    no_a_count_max: int = 3,
+) -> tuple[dict, list[dict]]:
+    """Synthetic-level variant of collect_multigame_dataset.
+
+    Generates ``n_levels`` valid synthetic levels per game (via
+    nca_wm.synthetic_levels.collect_synthetic_dataset) and assembles the
+    same per-game merged dataset shape used by the rest of the pipeline.
+
+    Game-spec tokenization and sprite tensors come from the same code
+    paths as the authored-data variant, so downstream training is
+    identical.
+    """
+    from nca_wm.synthetic_levels import collect_synthetic_dataset
+
+    game_infos: list[dict] = []
+    per_game_states: list[np.ndarray] = []
+    per_game_actions: list[np.ndarray] = []
+    per_game_next_states: list[np.ndarray] = []
+    per_game_wons: list[np.ndarray] = []
+
+    for game_id, name in enumerate(game_names):
+        print(f"\n[synth {game_id+1}/{len(game_names)}] {name}")
+        # Compile + tokenize game spec (identical to authored path)
+        backend = CppPuzzleScriptBackend()
+        try:
+            json_str = backend.compile_and_serialize(ps_parser, name)
+            env0 = CppPuzzleScriptEnv(json_str, level_i=0, max_episode_steps=10)
+        except Exception as e:
+            print(f"  SKIP {name}: compile/env init failed ({e})")
+            continue
+        # Per-game grid sizing.
+        # Priority: (1) explicit --grid_sizes overrides everything (recommended
+        # for multi_grid since authored sizes can be huge — TSP 20x19, kettle
+        # 15x15 — and synth at those defeats the purpose of avoiding big-grid
+        # BFS). (2) --multi_grid uses unique authored sizes. (3) --per_game_size
+        # picks max authored dim. (4) Fallback: global --synthetic_w/h.
+        sizes_to_gen: list[tuple[int, int]] = [(int(width), int(height))]
+        if grid_sizes:
+            sizes_to_gen = list(grid_sizes)
+            print(f"  grid_sizes: {name} → {sizes_to_gen} (explicit override)")
+        elif per_game_size or multi_grid:
+            try:
+                authored_dims: set[tuple[int, int]] = set()
+                for li in range(int(env0.num_levels)):
+                    env_li = CppPuzzleScriptEnv(json_str, level_i=li, max_episode_steps=10)
+                    _, lh, lw = env_li.observation_shape
+                    authored_dims.add((int(lw), int(lh)))
+                if authored_dims:
+                    if multi_grid:
+                        sizes_to_gen = sorted(authored_dims)
+                        print(f"  multi_grid: {name} → {sizes_to_gen} ({len(sizes_to_gen)} unique authored sizes)")
+                    else:
+                        # per_game_size: pick max-dim
+                        max_w = max(w for w, h in authored_dims)
+                        max_h = max(h for w, h in authored_dims)
+                        sizes_to_gen = [(max_w, max_h)]
+                        print(f"  per_game_size: {name} → ({max_w}, {max_h}) (authored max-dim)")
+            except Exception as e:
+                print(f"  per_game_size detection failed for {name} ({e}); using global ({width}, {height})")
+        try:
+            tree, canonical_ids = get_game_tree_from_js(ps_parser, name)
+            token_ids = tokenize_game(
+                tree, canonical_ids,
+                encode_sprites=encode_sprites, kernel_sep=kernel_sep,
+            )
+        except Exception as e:
+            print(f"  WARNING: tokenization failed ({e}), using empty tokens")
+            tree, canonical_ids = None, None
+            token_ids = []
+
+        sprite_tensor = None
+        if tree is not None and canonical_ids is not None:
+            try:
+                sprite_tensor = _build_sprite_tensor(tree, canonical_ids)
+            except Exception as e:
+                print(f"  WARNING: sprite tensor build failed ({e})")
+
+        # Collect synthetic transitions at each size (single size when not
+        # using --multi_grid). Per-size n_levels is divided across the sizes
+        # so total levels-per-game stays at n_levels.
+        per_size_n = max(1, n_levels // max(1, len(sizes_to_gen)))
+        synth_parts = []
+        for s_w, s_h in sizes_to_gen:
+            synth = collect_synthetic_dataset(
+                game_name=name,
+                n_levels=per_size_n, width=s_w, height=s_h,
+                seed=seed,
+                max_iters_search=max_iters_search,
+                timeout_ms_search=timeout_ms_search,
+                min_states=min_states,
+                mode=mode,
+                require_solvable=require_solvable,
+                max_attempts_per_level=max_attempts_per_level,
+                evolve_pop_size=evolve_pop_size,
+                evolve_max_generations=evolve_max_generations,
+                evolve_n_mutations_min=evolve_n_mutations_min,
+                evolve_n_mutations_max=evolve_n_mutations_max,
+                fallback_dynamics=fallback_dynamics,
+                no_a_count_max=no_a_count_max,
+                verbose=True,
+            )
+            s_states = np.asarray(synth["states"], dtype=np.uint8)
+            if s_states.size == 0:
+                continue
+            synth_parts.append({
+                "states": s_states,
+                "next_states": np.asarray(synth["next_states"], dtype=np.uint8),
+                "actions": np.asarray(synth["actions"], dtype=np.int32),
+                "wons": np.asarray(synth["wons"], dtype=np.uint8),
+            })
+        if not synth_parts:
+            print(f"  SKIP {name}: no transitions collected at any size")
+            continue
+        # Pad each part's spatial dims to per-game max and concatenate.
+        max_C = max(p["states"].shape[1] for p in synth_parts)
+        max_H = max(p["states"].shape[2] for p in synth_parts)
+        max_W = max(p["states"].shape[3] for p in synth_parts)
+        def _pad_part(arr):
+            return _pad_obs(arr, max_C, max_H, max_W)
+        states = np.concatenate([_pad_part(p["states"]) for p in synth_parts])
+        next_states = np.concatenate([_pad_part(p["next_states"]) for p in synth_parts])
+        actions = np.concatenate([p["actions"] for p in synth_parts])
+        wons = np.concatenate([p["wons"] for p in synth_parts])
+        if len(synth_parts) > 1:
+            print(f"  multi_grid: {name} merged {len(synth_parts)} sizes "
+                  f"→ ({max_C}, {max_H}, {max_W}); {len(states):,} total transitions")
+
+        n_trans = len(states)
+        if (max_transitions_per_game is not None
+                and n_trans > max_transitions_per_game):
+            rng = np.random.RandomState(42 + game_id)
+            idx = rng.choice(n_trans, size=max_transitions_per_game, replace=False)
+            states = states[idx]; actions = actions[idx]
+            next_states = next_states[idx]; wons = wons[idx]
+            n_trans = len(states)
+
+        _, g_C, g_H, g_W = states.shape
+        per_game_states.append(states)
+        per_game_actions.append(actions)
+        per_game_next_states.append(next_states)
+        per_game_wons.append(wons)
+
+        # n_levels is the engine's authored-level count, not the synthetic
+        # count: evaluation rolls out via the real engine and uses these
+        # indices, so synthetic-trained models are evaluated on authored
+        # levels as a held-out test (which is the whole point of this path).
+        try:
+            n_authored_levels = int(env0.num_levels)
+        except Exception:
+            n_authored_levels = 1
+        info = {
+            "name": name,
+            "json_str": json_str,
+            "n_objs": int(g_C),
+            "H": int(g_H),
+            "W": int(g_W),
+            "n_levels": n_authored_levels,
+            "n_synth_levels": int(n_levels),
+            "token_ids": token_ids,
+            "sprite_tensor": sprite_tensor,
+            "n_transitions": int(n_trans),
+            "n_wins": int(wons.sum()),
+        }
+        game_infos.append(info)
+        print(f"  {name}: {n_trans:,} transitions, {int(wons.sum()):,} winning, "
+              f"shape=({g_C}, {g_H}, {g_W})")
+
+    if not game_infos:
+        raise RuntimeError("Synthetic data collection produced no games. Check params.")
+
+    max_C = max(g["n_objs"] for g in game_infos)
+    max_H = max(g["H"] for g in game_infos)
+    max_W = max(g["W"] for g in game_infos)
+
+    # Token padding (mirrors collect_multigame_dataset)
+    max_tok_len = max(len(g["token_ids"]) for g in game_infos)
+    max_tok_len = max(max_tok_len, 1)
+    per_game_tokens = []
+    per_game_masks = []
+    for info in game_infos:
+        tids = info["token_ids"]
+        padded = np.zeros(max_tok_len, dtype=np.int32)
+        mask = np.zeros(max_tok_len, dtype=np.bool_)
+        padded[:len(tids)] = tids
+        mask[:len(tids)] = True
+        per_game_tokens.append(padded)
+        per_game_masks.append(mask)
+    per_game_tokens = np.array(per_game_tokens)
+    per_game_masks = np.array(per_game_masks)
+
+    per_game_sprites = np.zeros((len(game_infos), max_C, 5, 5, 4), dtype=np.uint8)
+    for gi, info in enumerate(game_infos):
+        st = info.get("sprite_tensor")
+        if st is None:
+            continue
+        n = min(max_C, st.shape[0])
+        per_game_sprites[gi, :n] = st[:n]
+
+    game_shapes = np.array(
+        [(info["n_objs"], info["H"], info["W"]) for info in game_infos],
+        dtype=np.int32,
+    )
+    per_game_n_transitions = np.array(
+        [len(s) for s in per_game_states], dtype=np.int64,
+    )
+    merged = {
+        "per_game_states": per_game_states,
+        "per_game_next_states": per_game_next_states,
+        "per_game_actions": per_game_actions,
+        "per_game_wons": per_game_wons,
+        "per_game_tokens": per_game_tokens,
+        "per_game_masks": per_game_masks,
+        "per_game_sprites": per_game_sprites,
+        "game_shapes": game_shapes,
+        "per_game_n_transitions": per_game_n_transitions,
+        "max_C": int(max_C),
+        "max_H": int(max_H),
+        "max_W": int(max_W),
+        "game_ids": np.concatenate(
+            [np.full(len(s), g, dtype=np.int32)
+             for g, s in enumerate(per_game_states)],
+            axis=0,
+        ) if per_game_states else np.empty((0,), dtype=np.int32),
+        "game_tokens": per_game_tokens,
+        "game_masks": per_game_masks,
+    }
+    n_total = int(per_game_n_transitions.sum())
+    n_wins_tot = int(sum(int(w.sum()) for w in per_game_wons))
+    print(f"\n[synth] Total: {n_total:,} transitions from {len(game_infos)} games, "
+          f"per-game native shapes (global max=({max_C}, {max_H}, {max_W})), "
+          f"max_tokens={max_tok_len}, "
+          f"{n_wins_tot:,} winning ({100*n_wins_tot/max(1,n_total):.3f}%)")
+    return merged, game_infos
+
+
 # --------- v7 per-game cache pack/unpack helpers ---------
 PER_GAME_LIST_KEYS = (
     "per_game_states", "per_game_next_states",
@@ -3438,6 +3698,61 @@ def main():
                         "(handles `[X] [Y]` multi-bracket rules — X and Y both "
                         "exist somewhere on the level).")
     # Output
+    # Synthetic-level generation. When --synthetic_levels > 0, replace the
+    # authored levels of each requested game with N procedurally-generated
+    # valid levels. The generator is game-agnostic: tile patterns are sampled
+    # from the empirical distribution observed in the game's authored levels,
+    # then exactly one player is forced. Validity = (not already winning,
+    # solvable within BFS budget, ≥ min_states reachable, no timeout).
+    p.add_argument("--synthetic_levels", type=int, default=0,
+                   help="If >0, generate N synthetic levels instead of using authored levels")
+    p.add_argument("--synthetic_w", type=int, default=7, help="Width of synthetic levels")
+    p.add_argument("--synthetic_h", type=int, default=7, help="Height of synthetic levels")
+    p.add_argument("--synthetic_seed", type=int, default=0, help="Seed for synthetic level generation")
+    p.add_argument("--synthetic_min_states", type=int, default=20,
+                   help="Min reachable BFS states for a synthetic level to be accepted")
+    p.add_argument("--synthetic_mode", type=str, default="tile_pattern_empirical",
+                   choices=["tile_pattern_empirical", "tile_pattern_uniform", "evolve"],
+                   help="Level-finding strategy. 'tile_pattern_*' = rejection sampling "
+                        "from the per-tile pattern distribution; 'evolve' = population GA "
+                        "with BFS-iterations fitness (use for harder games where rejection "
+                        "sampling has very low acceptance).")
+    p.add_argument("--synthetic_per_game_size", action="store_true",
+                   help="Auto-detect per-game synth grid size from each game's authored max-dim. "
+                        "Empirically (see RUNNING_REPORT) only synth at the authored max-dim "
+                        "transfers cleanly to authored levels — smaller misses rule structure, "
+                        "bigger learns position-padding artifacts. Overrides --synthetic_w/h.")
+    p.add_argument("--synthetic_multi_grid", action="store_true",
+                   help="Generate at multiple grid sizes per game and merge via spatial padding. "
+                        "Closes the residual gap on games with mixed authored sizes. Combined with "
+                        "--synthetic_grid_sizes for explicit size list, or default uses authored sizes.")
+    p.add_argument("--synthetic_grid_sizes", type=str, default=None,
+                   help='Explicit comma-separated grid sizes for multi_grid: "5x5,7x7,9x9". '
+                        'Overrides authored-size detection — recommended since authored sizes '
+                        'can be very large (TSP 20x19, kettle 15x15) and synth at those defeats '
+                        'the purpose of avoiding big-grid BFS. Hardcoded small sizes train at '
+                        'tractable BFS depths and rely on size-up generalization to bigger eval levels.')
+    p.add_argument("--synthetic_fallback_dynamics", action="store_true",
+                   help="If a game produces 0 levels with require_solvable=True (e.g. Zen at "
+                        "small grids), retry once with require_solvable=False so the multi-game "
+                        "pipeline still gets dynamics-only data for that game.")
+    p.add_argument("--synthetic_no_a_count_max", type=int, default=3,
+                   help="For 'no A' (num=-1) win conditions, cap count(A) at start to this value "
+                        "so BFS reachable-state-space stays tractable. Default 3 enables Zen-class "
+                        "synth gen; sweep over {3,5,8,12} to balance solvability vs distribution match.")
+    p.add_argument("--synthetic_evolve_pop_size", type=int, default=64)
+    p.add_argument("--synthetic_evolve_max_generations", type=int, default=200)
+    p.add_argument("--synthetic_evolve_n_mutations_min", type=int, default=1)
+    p.add_argument("--synthetic_evolve_n_mutations_max", type=int, default=3)
+    p.add_argument("--synthetic_require_solvable", action=argparse.BooleanOptionalAction, default=True,
+                   help="Reject levels with no winning transition observed within BFS budget. "
+                        "Default True so the wons head sees positives; pass --no-synthetic_require_solvable "
+                        "to keep all valid-dynamics levels (will produce wons=0 always, head will collapse).")
+    p.add_argument("--synthetic_max_attempts_per_level", type=int, default=1000,
+                   help="Total attempt budget = n_levels * this")
+    p.add_argument("--synthetic_max_iters_search", type=int, default=5000,
+                   help="BFS budget per synthetic level during validity check + transition collection")
+    p.add_argument("--synthetic_timeout_ms_search", type=int, default=2000)
     p.add_argument("--save_dir", default=None)
     p.add_argument("--render_gif", action="store_true", help="Render comparison GIF after training")
     p.add_argument("--render_only", action="store_true",
@@ -3503,6 +3818,13 @@ def main():
             parts.append(f"vq{args.vq_codebook_size}")
         if args.lr_schedule != "cosine": parts.append(f"lr-{args.lr_schedule}")
         if args.grad_clip != 0.5: parts.append(f"gc{args.grad_clip:g}")
+        if args.synthetic_levels > 0:
+            parts.append(
+                f"synth{args.synthetic_levels}-{args.synthetic_w}x{args.synthetic_h}"
+                f"-{args.synthetic_mode.replace('tile_pattern_', 'tp-')}"
+                + ("-solv" if args.synthetic_require_solvable else "-any")
+                + f"-s{args.synthetic_seed}"
+            )
         recipe_tag = ("_" + "_".join(parts)) if parts else ""
         patience_tag = f"_pat-{args.patience}" if args.patience != 300 else ""
         save_dir = (args.save_dir or
@@ -3606,16 +3928,47 @@ def main():
         if needs_training:
             names_to_collect = [g["name"] for g in game_infos] if game_infos else game_names
             os.makedirs(save_dir, exist_ok=True)
-            dataset, game_infos = collect_multigame_dataset(
-                names_to_collect, ps_parser,
-                level_i=args.level,
-                n_search_steps=args.n_search_steps,
-                search_timeout_ms=args.search_timeout_ms,
-                search_algo=args.search_algo,
-                encode_sprites=args.encode_sprites,
-                max_transitions_per_game=(args.max_transitions_per_game or None),
-                train_levels=parsed_train_levels,
-            )
+            if args.synthetic_levels > 0:
+                dataset, game_infos = collect_multigame_dataset_synthetic(
+                    names_to_collect, ps_parser,
+                    n_levels=args.synthetic_levels,
+                    width=args.synthetic_w,
+                    height=args.synthetic_h,
+                    seed=args.synthetic_seed,
+                    mode=args.synthetic_mode,
+                    require_solvable=args.synthetic_require_solvable,
+                    max_attempts_per_level=args.synthetic_max_attempts_per_level,
+                    max_iters_search=args.synthetic_max_iters_search,
+                    timeout_ms_search=args.synthetic_timeout_ms_search,
+                    min_states=args.synthetic_min_states,
+                    per_game_size=args.synthetic_per_game_size,
+                    multi_grid=args.synthetic_multi_grid,
+                    grid_sizes=(
+                        [tuple(int(x) for x in s.split("x"))
+                         for s in args.synthetic_grid_sizes.split(",")]
+                        if args.synthetic_grid_sizes else None
+                    ),
+                    fallback_dynamics=args.synthetic_fallback_dynamics,
+                    no_a_count_max=args.synthetic_no_a_count_max,
+                    evolve_pop_size=args.synthetic_evolve_pop_size,
+                    evolve_max_generations=args.synthetic_evolve_max_generations,
+                    evolve_n_mutations_min=args.synthetic_evolve_n_mutations_min,
+                    evolve_n_mutations_max=args.synthetic_evolve_n_mutations_max,
+                    encode_sprites=args.encode_sprites,
+                    kernel_sep=args.kernel_sep,
+                    max_transitions_per_game=(args.max_transitions_per_game or None),
+                )
+            else:
+                dataset, game_infos = collect_multigame_dataset(
+                    names_to_collect, ps_parser,
+                    level_i=args.level,
+                    n_search_steps=args.n_search_steps,
+                    search_timeout_ms=args.search_timeout_ms,
+                    search_algo=args.search_algo,
+                    encode_sprites=args.encode_sprites,
+                    max_transitions_per_game=(args.max_transitions_per_game or None),
+                    train_levels=parsed_train_levels,
+                )
             with open(infos_path, "wb") as f:
                 pickle.dump(game_infos, f)
         elif game_infos is None:

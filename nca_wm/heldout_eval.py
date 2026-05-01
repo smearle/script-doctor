@@ -193,14 +193,20 @@ def _rollout_with_identity(
     """
     n_objs = info["n_objs"]
     json_str = info["json_str"]
-    H_eval = info["H"]
-    W_eval = info["W"]
+    info_H = info["H"]
+    info_W = info["W"]
 
     n_steps = len(actions) if actions else max_steps
     env = CppPuzzleScriptEnv(json_str, level_i=level_i,
                              max_episode_steps=n_steps)
     real_obs, _ = env.reset()
     _, H, W = real_obs.shape
+    # Pad to whichever is larger: the saved info dims (training shape) or
+    # the actual level dims. Needed when training shape differs from authored
+    # level shape (e.g. synthetic-trained model evaluated on bigger
+    # authored levels).
+    H_eval = max(info_H, H)
+    W_eval = max(info_W, W)
     total_tiles = n_objs * H * W
     total_cells = H * W
 
@@ -329,6 +335,7 @@ def evaluate_heldout(
     include_train_sample: int = 0,
     out_subdir: str = "heldout_eval",
     seed: int = 0,
+    max_levels_per_game: int | None = None,
 ):
     print(f"\n=== Loading checkpoint from {save_dir} ===")
     cfg, params, train_game_infos = _load_run(save_dir)
@@ -402,7 +409,10 @@ def evaluate_heldout(
     def _eval_one_game(info, bucket: str):
         name = info["name"]
         per_level = {}
-        for li in range(info["n_levels"]):
+        n_levels_to_eval = info["n_levels"]
+        if max_levels_per_game is not None:
+            n_levels_to_eval = min(n_levels_to_eval, max_levels_per_game)
+        for li in range(n_levels_to_eval):
             print(f"\n  [{bucket}] {name} L{li} "
                   f"(shape={info['H']}x{info['W']}, n_objs={info['n_objs']}) "
                   f"-- {n_random_episodes} random eps x {max_steps} steps")
@@ -608,6 +618,8 @@ def main():
                     help="How many training games to also re-eval (control). 0 = skip.")
     ap.add_argument("--out_subdir", default="heldout_eval")
     ap.add_argument("--seed", type=int, default=0)
+    ap.add_argument("--max_levels_per_game", type=int, default=None,
+                    help="Cap the number of levels evaluated per held-out game (for fast turnaround).")
     args = ap.parse_args()
 
     heldout = [g.strip() for g in args.heldout_games.split(",") if g.strip()]
@@ -618,6 +630,7 @@ def main():
         include_train_sample=args.include_train_sample,
         out_subdir=args.out_subdir,
         seed=args.seed,
+        max_levels_per_game=args.max_levels_per_game,
     )
 
 
