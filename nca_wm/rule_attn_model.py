@@ -29,6 +29,57 @@ import flax.linen as nn
 N_ACTIONS = 5
 
 
+class VectorQuantizer(nn.Module):
+    """VQ-VAE-style quantization of slot vectors against a learned codebook.
+
+    Each input vector is replaced by its nearest codebook entry under squared
+    L2 distance. Gradient through the quantization step uses the
+    straight-through estimator (Oord et al., 2017), so the encoder can still
+    be trained by the downstream task loss.
+
+    Returns codebook and commitment losses separately; the caller is
+    responsible for adding them (with a chosen commitment weight) to the
+    total loss.
+    """
+    codebook_size: int = 512
+    d_slot: int = 64
+    commitment_weight: float = 0.25
+
+    @nn.compact
+    def __call__(self, slots):
+        """
+        slots: (..., d_slot) — typically (B, K, d_slot) for rule slots.
+        Returns: (slots_q, codebook_loss, commitment_loss, indices)
+            slots_q: same shape as slots, post-quantization (with STE).
+            codebook_loss: scalar (pulls codebook entries to encoder outputs).
+            commitment_loss: scalar (pulls encoder outputs to codebook entries).
+            indices: same leading shape as slots, int32 codebook indices.
+        """
+        codebook = self.param(
+            "codebook",
+            nn.initializers.normal(stddev=1.0 / (self.d_slot ** 0.5)),
+            (self.codebook_size, self.d_slot),
+        )
+        flat = slots.reshape(-1, self.d_slot)                  # (N, d)
+        # squared L2 distance: ||x||^2 - 2 x·c + ||c||^2
+        x_sq = jnp.sum(flat ** 2, axis=-1, keepdims=True)       # (N, 1)
+        c_sq = jnp.sum(codebook ** 2, axis=-1)[None, :]         # (1, K_cb)
+        xc   = flat @ codebook.T                                # (N, K_cb)
+        dists = x_sq - 2.0 * xc + c_sq                          # (N, K_cb)
+        idx_flat = jnp.argmin(dists, axis=-1)                    # (N,)
+        quantized_flat = codebook[idx_flat]                      # (N, d)
+        quantized = quantized_flat.reshape(slots.shape)
+        indices = idx_flat.reshape(slots.shape[:-1])
+
+        codebook_loss   = jnp.mean((jax.lax.stop_gradient(slots) - quantized) ** 2)
+        commitment_loss = jnp.mean((slots - jax.lax.stop_gradient(quantized)) ** 2)
+
+        # Straight-through: forward pass uses quantized; backward pass passes
+        # gradient straight through to slots.
+        slots_q = slots + jax.lax.stop_gradient(quantized - slots)
+        return slots_q, codebook_loss, commitment_loss, indices
+
+
 class RuleSlotEncoder(nn.Module):
     """Perceiver-style encoder: tokens -> K × d_slot rule slots.
 
@@ -119,10 +170,15 @@ class RuleAttnNCAWorldModel(nn.Module):
     axis_pool: bool = False
     axis_cummax: bool = False
     global_pool: bool = False
+    # VQ-VAE-style codebook quantization on the encoder slots.
+    # When use_vq=False (default), no VQ params or behaviour change.
+    use_vq: bool = False
+    vq_codebook_size: int = 512
+    vq_commitment_weight: float = 0.25
 
     @nn.compact
     def __call__(self, state, action_onehot, game_tokens, game_mask,
-                 return_slots: bool = False):
+                 return_slots: bool = False, return_vq_aux: bool = False):
         """
         state: (B, C, H, W) multihot input.
         action_onehot: (B, N_ACTIONS).
@@ -149,6 +205,25 @@ class RuleAttnNCAWorldModel(nn.Module):
             name="game_encoder",
         )
         slots = encoder(game_tokens, game_mask)  # (B, K, d_slot), K = n_slots
+
+        # Optional VQ-VAE quantization of slots against a shared codebook.
+        # Gated entirely on use_vq so the default-off path is parameter- and
+        # behaviour-identical to the pre-VQ model (existing checkpoints load
+        # unchanged).
+        if self.use_vq:
+            vq = VectorQuantizer(
+                codebook_size=self.vq_codebook_size,
+                d_slot=self.d_slot,
+                commitment_weight=self.vq_commitment_weight,
+                name="slot_vq",
+            )
+            slots, vq_codebook_loss, vq_commitment_loss, vq_indices = vq(slots)
+        else:
+            zero = jnp.asarray(0.0, dtype=jnp.float32)
+            vq_codebook_loss = zero
+            vq_commitment_loss = zero
+            vq_indices = jnp.zeros(slots.shape[:-1], dtype=jnp.int32)
+
         # Split off appearance slots (last n_app_slots) — only the dyn slots
         # condition the NCA. The full slot tensor is returned for the
         # downstream token decoder.
@@ -225,6 +300,11 @@ class RuleAttnNCAWorldModel(nn.Module):
         # Sprite placeholder (signature-compatible with ConditionalNCAWorldModel).
         sprite_logits = jnp.zeros((B, self.n_out, 5, 5, 4))
 
+        vq_aux = (vq_codebook_loss, vq_commitment_loss, vq_indices)
+        if return_slots and return_vq_aux:
+            return logits, win_logit, sprite_logits, slots, vq_aux
         if return_slots:
             return logits, win_logit, sprite_logits, slots
+        if return_vq_aux:
+            return logits, win_logit, sprite_logits, vq_aux
         return logits, win_logit, sprite_logits

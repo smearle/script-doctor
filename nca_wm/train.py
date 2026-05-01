@@ -1280,7 +1280,10 @@ def make_train_step(model, optimizer, conditional=False,
                     sprite_loss_weight: float = 0.0,
                     change_loss_weight: float = 0.0,
                     decoder=None,
-                    token_decoder_loss_weight: float = 0.0):
+                    token_decoder_loss_weight: float = 0.0,
+                    use_vq: bool = False,
+                    vq_commitment_weight: float = 0.25,
+                    vq_loss_weight: float = 1.0):
     """Returns a JIT-compiled train step with a win-prediction head.
 
     If ``sprite_loss_weight > 0`` (and conditional), also optimizes a sprite-
@@ -1332,6 +1335,17 @@ def make_train_step(model, optimizer, conditional=False,
 
     joint = decoder is not None and token_decoder_loss_weight > 0
 
+    def _vq_utilization(vq_indices):
+        counts = jnp.bincount(
+            vq_indices.reshape(-1),
+            length=getattr(model, "vq_codebook_size", 1),
+        )
+        return (counts > 0).sum().astype(jnp.float32)
+
+    # All three train_step variants append (vq_cb_loss, vq_commit_loss,
+    # vq_utilization) to aux as the last positions, regardless of whether VQ
+    # is enabled. When VQ is off they are zeros — keeps the loop unpack shape
+    # stable.
     if conditional and joint:
         from nca_wm.token_decoder import shift_right, decoder_loss as _dec_loss
 
@@ -1341,10 +1355,20 @@ def make_train_step(model, optimizer, conditional=False,
                         target_tokens=None, target_token_masks=None):
             def loss_fn(params):
                 wm_p, dec_p = params["wm"], params["dec"]
-                logits, win_logit, sprite_logits, all_slots = model.apply(
-                    wm_p, states, action_onehots, game_tokens, game_masks,
-                    return_slots=True,
-                )
+                if use_vq:
+                    logits, win_logit, sprite_logits, all_slots, vq_aux = model.apply(
+                        wm_p, states, action_onehots, game_tokens, game_masks,
+                        return_slots=True, return_vq_aux=True,
+                    )
+                    vq_cb_loss, vq_commit_loss, vq_indices = vq_aux
+                    vq_util = _vq_utilization(vq_indices)
+                else:
+                    logits, win_logit, sprite_logits, all_slots = model.apply(
+                        wm_p, states, action_onehots, game_tokens, game_masks,
+                        return_slots=True,
+                    )
+                    z = jnp.asarray(0.0, dtype=jnp.float32)
+                    vq_cb_loss, vq_commit_loss, vq_util = z, z, z
                 heads_total, aux = _heads_loss(
                     logits, win_logit, sprite_logits,
                     states, next_states, wons,
@@ -1357,7 +1381,13 @@ def make_train_step(model, optimizer, conditional=False,
                     dec_logits, target_tokens, target_token_masks,
                 )
                 total = heads_total + token_decoder_loss_weight * dec_loss_v
-                return total, aux + (dec_loss_v, dec_acc_v)
+                if use_vq:
+                    total = total + vq_loss_weight * (
+                        vq_cb_loss + vq_commitment_weight * vq_commit_loss
+                    )
+                return total, aux + (
+                    dec_loss_v, dec_acc_v, vq_cb_loss, vq_commit_loss, vq_util,
+                )
 
             (loss, aux), grads = jax.value_and_grad(loss_fn, has_aux=True)(params)
             updates, opt_state_new = optimizer.update(grads, opt_state, params)
@@ -1368,17 +1398,33 @@ def make_train_step(model, optimizer, conditional=False,
         def train_step(params, opt_state, states, action_onehots, next_states, wons,
                         game_tokens, game_masks, target_sprites=None):
             def loss_fn(params):
-                logits, win_logit, sprite_logits = model.apply(
-                    params, states, action_onehots, game_tokens, game_masks
-                )
+                if use_vq:
+                    logits, win_logit, sprite_logits, vq_aux = model.apply(
+                        params, states, action_onehots, game_tokens, game_masks,
+                        return_vq_aux=True,
+                    )
+                    vq_cb_loss, vq_commit_loss, vq_indices = vq_aux
+                    vq_util = _vq_utilization(vq_indices)
+                else:
+                    logits, win_logit, sprite_logits = model.apply(
+                        params, states, action_onehots, game_tokens, game_masks
+                    )
+                    z = jnp.asarray(0.0, dtype=jnp.float32)
+                    vq_cb_loss, vq_commit_loss, vq_util = z, z, z
                 heads_total, aux = _heads_loss(
                     logits, win_logit, sprite_logits,
                     states, next_states, wons,
                     target_sprites=target_sprites,
                 )
-                # Pad aux with zeros so the loop unpacks the same shape regardless of joint.
+                total = heads_total
+                if use_vq:
+                    total = total + vq_loss_weight * (
+                        vq_cb_loss + vq_commitment_weight * vq_commit_loss
+                    )
+                # Pad dec losses with zeros so the loop unpack is independent
+                # of the joint-decoder branch.
                 z = jnp.asarray(0.0, dtype=jnp.float32)
-                return heads_total, aux + (z, z)
+                return total, aux + (z, z, vq_cb_loss, vq_commit_loss, vq_util)
 
             (loss, aux), grads = jax.value_and_grad(loss_fn, has_aux=True)(params)
             updates, opt_state_new = optimizer.update(grads, opt_state, params)
@@ -1397,7 +1443,7 @@ def make_train_step(model, optimizer, conditional=False,
                     target_sprites=None,
                 )
                 z = jnp.asarray(0.0, dtype=jnp.float32)
-                return heads_total, aux + (z, z)
+                return heads_total, aux + (z, z, z, z, z)
 
             (loss, aux), grads = jax.value_and_grad(loss_fn, has_aux=True)(params)
             updates, opt_state_new = optimizer.update(grads, opt_state, params)
@@ -1509,6 +1555,9 @@ def train(
     decoder_d_model: int = 128,
     decoder_n_layers: int = 4,
     decoder_n_heads: int = 4,
+    use_vq: bool = False,
+    vq_commitment_weight: float = 0.25,
+    vq_loss_weight: float = 1.0,
 ):
     """Train (or resume training) the NCA world model.
 
@@ -1715,6 +1764,9 @@ def train(
         change_loss_weight=change_loss_weight,
         decoder=joint_decoder,
         token_decoder_loss_weight=token_decoder_loss_weight,
+        use_vq=use_vq,
+        vq_commitment_weight=vq_commitment_weight,
+        vq_loss_weight=vq_loss_weight,
     )
     per_game_sprites_np = dataset.get("per_game_sprites")
     eval_forward = make_eval_forward(model, conditional=conditional)
@@ -1729,6 +1781,9 @@ def train(
     sprite_mses: list[float] = []
     dec_losses: list[float] = []
     dec_accs: list[float] = []
+    vq_cb_losses: list[float] = []
+    vq_commit_losses: list[float] = []
+    vq_utils: list[float] = []
     # per_game_log[game_id] = list of dicts (step, loss, acc, change_acc)
     per_game_log: dict[int, list[dict]] = {g: [] for g in (per_game_eval or {})}
     t0 = time.time()
@@ -1839,20 +1894,23 @@ def train(
                 tgt_mask = gm
                 (params, opt_state, loss, state_loss, acc, change_acc,
                  win_loss, win_acc, win_recall, sprite_mse,
-                 dec_loss, dec_acc) = train_step(
+                 dec_loss, dec_acc,
+                 vq_cb_loss, vq_commit_loss, vq_util) = train_step(
                     params, opt_state, s, a_oh, ns, w, gt, gm,
                     target_sprites, tgt_tokens, tgt_mask,
                 )
             else:
                 (params, opt_state, loss, state_loss, acc, change_acc,
                  win_loss, win_acc, win_recall, sprite_mse,
-                 dec_loss, dec_acc) = train_step(
+                 dec_loss, dec_acc,
+                 vq_cb_loss, vq_commit_loss, vq_util) = train_step(
                     params, opt_state, s, a_oh, ns, w, gt, gm, target_sprites
                 )
         else:
             (params, opt_state, loss, state_loss, acc, change_acc,
              win_loss, win_acc, win_recall, sprite_mse,
-             dec_loss, dec_acc) = train_step(
+             dec_loss, dec_acc,
+             vq_cb_loss, vq_commit_loss, vq_util) = train_step(
                 params, opt_state, s, a_oh, ns, w
             )
         losses.append(float(loss))
@@ -1865,6 +1923,9 @@ def train(
         sprite_mses.append(float(sprite_mse))
         dec_losses.append(float(dec_loss))
         dec_accs.append(float(dec_acc))
+        vq_cb_losses.append(float(vq_cb_loss))
+        vq_commit_losses.append(float(vq_commit_loss))
+        vq_utils.append(float(vq_util))
 
         global_step = start_step + step + 1
         # Atomic periodic checkpoint so a concurrent --render_only process can load
@@ -1881,15 +1942,21 @@ def train(
             avg_sprite_mse = np.mean(sprite_mses[-log_interval:]) if sprite_mses else 0.0
             avg_dec_loss = np.mean(dec_losses[-log_interval:]) if dec_losses else 0.0
             avg_dec_acc = np.mean(dec_accs[-log_interval:]) if dec_accs else 0.0
+            avg_vq_cb = np.mean(vq_cb_losses[-log_interval:]) if vq_cb_losses else 0.0
+            avg_vq_commit = np.mean(vq_commit_losses[-log_interval:]) if vq_commit_losses else 0.0
+            avg_vq_util = np.mean(vq_utils[-log_interval:]) if vq_utils else 0.0
             elapsed = time.time() - t0
             sprite_bit = f"  sprite_mse={avg_sprite_mse:.4e}" if sprite_loss_weight > 0 else ""
             dec_bit = (f"  dec_loss={avg_dec_loss:.4e}  dec_acc={avg_dec_acc:.3f}"
                        if joint_decoder is not None else "")
+            vq_bit = (f"  vq_cb={avg_vq_cb:.4e}  vq_commit={avg_vq_commit:.4e}"
+                      f"  vq_util={avg_vq_util:.1f}"
+                      if use_vq else "")
             print(f"  step {global_step:,}/{start_step + n_updates:,}  loss={avg_loss:.4e}  "
                   f"state_loss={avg_state_loss:.4e}  err={avg_err:.4e}  "
                   f"change_err={avg_cerr:.4e}  win_loss={avg_win_loss:.4e}  "
                   f"win_err={avg_win_err:.4e}  win_recall={avg_win_recall:.3f}"
-                  f"{sprite_bit}{dec_bit}  ({elapsed:.1f}s)")
+                  f"{sprite_bit}{dec_bit}{vq_bit}  ({elapsed:.1f}s)")
             if wandb.run is not None:
                 wandb_log = {
                     "train/loss": avg_loss,
@@ -1902,6 +1969,10 @@ def train(
                 }
                 if sprite_loss_weight > 0:
                     wandb_log["train/sprite_mse"] = avg_sprite_mse
+                if use_vq:
+                    wandb_log["vq/codebook_loss"] = avg_vq_cb
+                    wandb_log["vq/commit_loss"] = avg_vq_commit
+                    wandb_log["vq/codebook_utilization"] = avg_vq_util
                 wandb.log(wandb_log, step=global_step)
 
             # Per-game diagnostic pass (multi-game only, with game_names known).
@@ -1957,6 +2028,9 @@ def train(
                     "losses": np.array(losses),
                     "accs": np.array(accs),
                     "change_accs": np.array(change_accs),
+                    "vq_cb_losses": np.array(vq_cb_losses),
+                    "vq_commit_losses": np.array(vq_commit_losses),
+                    "vq_utils": np.array(vq_utils),
                 }
                 if per_game_log:
                     for g, rows in per_game_log.items():
@@ -2030,6 +2104,9 @@ def train(
         "losses": np.array(losses),
         "accs": np.array(accs),
         "change_accs": np.array(change_accs),
+        "vq_cb_losses": np.array(vq_cb_losses),
+        "vq_commit_losses": np.array(vq_commit_losses),
+        "vq_utils": np.array(vq_utils),
     }
     if per_game_log:
         for g, rows in per_game_log.items():
@@ -3264,6 +3341,20 @@ def main():
                    help="Of the --n_slots, how many are appearance-only "
                         "(decoder sees, NCA does not). Encourages dynamics "
                         "and visual info to occupy disjoint slot subsets.")
+    # VQ-VAE-style codebook on the encoder slots. Off by default — enabling
+    # adds a `slot_vq/codebook` param and two VQ losses; default-off path is
+    # parameter-identical to the pre-VQ model so existing checkpoints load.
+    p.add_argument("--vq_codebook", action=argparse.BooleanOptionalAction,
+                   default=False,
+                   help="If set, quantize encoder slots to a learned shared "
+                        "codebook (VQ-VAE style) before they enter the NCA. "
+                        "Only valid with --architecture rule_attn.")
+    p.add_argument("--vq_codebook_size", type=int, default=512,
+                   help="Number of entries in the slot codebook.")
+    p.add_argument("--vq_commitment_weight", type=float, default=0.25,
+                   help="Beta in vq_total = codebook_loss + beta*commitment_loss.")
+    p.add_argument("--vq_loss_weight", type=float, default=1.0,
+                   help="Multiplier on vq_total when added to the training loss.")
     # Joint token-decoder training (encoder is shared with WM; decoder
     # cross-attends to ALL slots, while NCA only sees the dyn slots).
     p.add_argument("--token_decoder_loss_weight", type=float, default=0.0,
@@ -3369,6 +3460,12 @@ def main():
     if args.train_levels:
         parsed_train_levels = [int(x) for x in args.train_levels.split(",") if x.strip()]
 
+    if args.vq_codebook and args.architecture != "rule_attn":
+        p.error("--vq_codebook is only supported with --architecture rule_attn")
+    if args.vq_codebook and not args.conditional:
+        p.error("--vq_codebook requires --conditional (slots come from the "
+                "game encoder, which only exists in conditional mode)")
+
     ps_parser = init_ps_lark_parser()
     multigame = args.games is not None
 
@@ -3402,6 +3499,8 @@ def main():
         if args.encode_sprites: parts.append("spr")
         if args.change_loss_weight != 5.0: parts.append(f"clw{args.change_loss_weight:g}")
         if args.architecture != "rule_attn": parts.append(f"arch-{args.architecture}")
+        if args.vq_codebook:
+            parts.append(f"vq{args.vq_codebook_size}")
         if args.lr_schedule != "cosine": parts.append(f"lr-{args.lr_schedule}")
         if args.grad_clip != 0.5: parts.append(f"gc{args.grad_clip:g}")
         recipe_tag = ("_" + "_".join(parts)) if parts else ""
@@ -3446,6 +3545,24 @@ def main():
                       f"[wandb] continuing without wandb logging.")
 
         load_dir = args.load or save_dir
+        if args.load is not None:
+            load_cfg_path = os.path.join(load_dir, "config.json")
+            if os.path.isfile(load_cfg_path):
+                with open(load_cfg_path) as f:
+                    load_cfg = json.load(f)
+                load_vq = bool(load_cfg.get("vq_codebook", False))
+                load_vq_size = int(load_cfg.get("vq_codebook_size", 512))
+                if load_vq != bool(args.vq_codebook):
+                    raise RuntimeError(
+                        f"--load points to a run with vq_codebook={load_vq}, "
+                        f"but this invocation has vq_codebook={args.vq_codebook}. "
+                        "Pass matching VQ flags or use the original run command."
+                    )
+                if load_vq and load_vq_size != int(args.vq_codebook_size):
+                    raise RuntimeError(
+                        f"--load points to a VQ run with vq_codebook_size={load_vq_size}, "
+                        f"but this invocation has vq_codebook_size={args.vq_codebook_size}."
+                    )
         ckpt_path = os.path.join(load_dir, "params.pkl")
         infos_path = os.path.join(load_dir, "game_infos.pkl")
 
@@ -3547,6 +3664,9 @@ def main():
                     axis_pool=pool_kwargs.get("axis_pool", False),
                     axis_cummax=pool_kwargs.get("axis_cummax", False),
                     global_pool=pool_kwargs.get("global_pool", False),
+                    use_vq=args.vq_codebook,
+                    vq_codebook_size=args.vq_codebook_size,
+                    vq_commitment_weight=args.vq_commitment_weight,
                 )
             else:  # default: film
                 model = ConditionalNCAWorldModel(
@@ -3598,6 +3718,9 @@ def main():
                 decoder_d_model=args.decoder_d_model,
                 decoder_n_layers=args.decoder_n_layers,
                 decoder_n_heads=args.decoder_n_heads,
+                use_vq=args.vq_codebook,
+                vq_commitment_weight=args.vq_commitment_weight,
+                vq_loss_weight=args.vq_loss_weight,
             )
             # (curves saved inside train() with per-game arrays)
             os.makedirs(save_dir, exist_ok=True)

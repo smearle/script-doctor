@@ -12,6 +12,12 @@ submitit_logs
 node.def
 package-lock.json
 
+.aris
+.claude
+.codex
+
+nca_wm/refine-logs
+
 script-doctor-nodejs
 
 *.swp

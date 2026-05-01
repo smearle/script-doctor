@@ -89,6 +89,9 @@ def build_models(cfg, game_infos):
         axis_pool=cfg.get("axis_pool", False),
         axis_cummax=cfg.get("axis_cummax", False),
         global_pool=cfg.get("global_pool", False),
+        use_vq=cfg.get("vq_codebook", False),
+        vq_codebook_size=cfg.get("vq_codebook_size", 512),
+        vq_commitment_weight=cfg.get("vq_commitment_weight", 0.25),
     )
     dec = SlotTokenDecoder(
         vocab_size=vocab_size + 1,
