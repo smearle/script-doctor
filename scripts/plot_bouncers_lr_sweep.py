@@ -45,18 +45,20 @@ plt.rcParams.update({
 
 
 def discover_runs():
-    """Return list of (variant, L, R, run_dir) for both pool and nopool variants."""
-    pat_pool = re.compile(r"single_Bouncers_L(\d+)_R(\d+)$")
-    pat_nopool = re.compile(r"single_Bouncers_nopool_L(\d+)_R(\d+)$")
+    """Return list of (variant, L, R, run_dir).
+
+    Variants: 'pool' (default), 'nopool' (no global-context flags),
+    'nopool_stab' (LN+input_skip bundled), 'nopool_lnonly', 'nopool_skiponly'.
+    """
+    pat_full = re.compile(r"single_Bouncers_(?:(\w+?)_)?L(\d+)_R(\d+)$")
     runs = []
     for d in sorted(LOGS.glob("single_Bouncers_*L*_R*")):
-        m = pat_nopool.search(d.name)
-        if m:
-            runs.append(("nopool", int(m.group(1)), int(m.group(2)), d))
+        m = pat_full.search(d.name)
+        if not m:
             continue
-        m = pat_pool.search(d.name)
-        if m:
-            runs.append(("pool", int(m.group(1)), int(m.group(2)), d))
+        variant = m.group(1) or "pool"
+        L, R = int(m.group(2)), int(m.group(3))
+        runs.append((variant, L, R, d))
     return runs
 
 
@@ -266,6 +268,63 @@ def fig_params_vs_rollout(runs, colors):
     plt.close(fig)
 
 
+def fig_stab_disagg(runs):
+    """Paper figure: 4-cell ablation (bare, LN-only, skip-only, bundled) on
+    the two regimes (L=1,R=16 max-shared) and (L=16,R=1 per-step deep).
+    Grouped bar chart with cell colors highlighting the active component."""
+    fig, axes = plt.subplots(1, 2, figsize=(10, 4.5), sharey=True)
+    regimes = [
+        ("(L=1, R=16)\nmax-shared", 1, 16),
+        ("(L=16, R=1)\nper-step deep", 16, 1),
+    ]
+    cell_order = [
+        ("nopool",          "bare"),
+        ("nopool_lnonly",   "LN only"),
+        ("nopool_skiponly", "input_skip only"),
+        ("nopool_stab",     "bundled (LN + skip)"),
+    ]
+    cell_colors = {
+        "bare": "#888",
+        "LN only": "#7777cc",
+        "input_skip only": "#33aa33",
+        "bundled (LN + skip)": "#cc7733",
+    }
+    for ax, (title, L, R) in zip(axes, regimes):
+        ys = []
+        labels = []
+        cs = []
+        for variant, label in cell_order:
+            err = None
+            for r in runs:
+                if (r["variant"] == variant and r["L"] == L and r["R"] == R
+                        and r["eval_path"] is not None):
+                    levels = per_level_rollout(r["eval_path"], "bfs")
+                    if levels:
+                        err = float(np.mean([v for _, v in levels]))
+                    break
+            if err is not None:
+                ys.append(err)
+                labels.append(label)
+                cs.append(cell_colors[label])
+        x = np.arange(len(ys))
+        bars = ax.bar(x, ys, color=cs, edgecolor="black", linewidth=0.5)
+        ax.set_xticks(x)
+        ax.set_xticklabels(labels, rotation=15, ha="right")
+        for xi, yi in zip(x, ys):
+            ax.text(xi, yi + 0.0008, f"{yi*100:.2f}%", ha="center", va="bottom",
+                    fontsize=10)
+        ax.set_title(title)
+        ax.set_ylim(0, max(ys) * 1.25 if ys else 0.05)
+        ax.grid(axis="y", alpha=0.3)
+    axes[0].set_ylabel("BFS rollout cell-error (mean over levels)")
+    fig.suptitle("Bouncers (no pool): LN vs input_skip ablation",
+                 fontsize=15)
+    fig.tight_layout()
+    fig.savefig(OUT / "stab_disagg.pdf")
+    fig.savefig(OUT / "stab_disagg.png", dpi=180)
+    plt.close(fig)
+
+
 def write_summary_csv(runs):
     rows = ["variant,L,R,total_steps,n_params,best_train_loss,headline_algo,mean_rollout_err,bfs_err,random_err,n_levels_eval"]
     for r in sorted(runs, key=lambda x: (x["variant"], x["total"], x["R"])):
@@ -298,6 +357,7 @@ def main():
     fig_train_loss(runs, colors)
     fig_final_rollout_bars(runs, colors)
     fig_params_vs_rollout(runs, colors)
+    fig_stab_disagg(runs)
     write_summary_csv(runs)
     print(f"Wrote figures + CSV to {OUT}")
 

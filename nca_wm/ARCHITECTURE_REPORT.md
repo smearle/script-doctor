@@ -185,34 +185,40 @@ New rule_attn experiments should report **both** the train metric and at
 least the 50-step autoregressive eval — they're cheap (the eval already
 runs at end-of-train) and they're often pointing in opposite directions.
 
-### F4. LN+input_skip stability patch is per-step-only, not a generic deep-NCA stabilizer
+### F4. The "stab patch" is just `--input_skip`; `--use_layernorm` is at best neutral, at worst harmful
 
 Two flags were added 2026-05-01 to make deep per-step rule_attn unrolls
-trainable:
+trainable, originally treated as a single bundle:
 
 | Flag | Effect |
 |---|---|
 | `--use_layernorm` | shared pre-norm `LayerNorm` on `h` at start of every NCA step |
 | `--input_skip` | re-inject the embedded `(state, action)` into the conv input at every step |
 
-Both default off. The motivation was "deep unrolls without skip connections
-will diverge"; this turned out to be wrong (per-step n=16 stock trains
-stably and beats n=4 on train loss). What the patch *actually* does is
-**regularize** an over-parameterized per-step body: it forces a smoother
-optimization that doesn't overfit per-step. On per-step n=16 it raises
-train loss only slightly but cuts rollout error 3-4× (the column-winning
-row above).
+Both default off.
 
-The 2026-05-02 shared-weights sweep settled the regularizer hypothesis: on
-shared n=16, the same patch raises train loss 30× (5.43e-7 → 1.61e-5) and
-*degrades* bfs/astar rollouts (75→212, 100→124). The shared body has ~14×
-fewer params and doesn't have a per-step over-parameterization problem to
-regularize.
+**Disaggregating the bundle (Bouncers no-pool, 2026-05-03):** the bundle's
+benefit comes entirely from `input_skip`. Adding LN on top is at best
+neutral and in the per-step regime degrades rollouts.
 
-**Recommendation:** Do not combine `--n_nca_repeats=n_nca_steps`
-(all-shared) with `--use_layernorm --input_skip`. The patch is for the
-per-step body (`--n_nca_repeats=1`) only; it has no place in the
-recommended recipe.
+| (L, R) | bare bfs | LN-only | **skip-only** | bundled |
+|---|---|---|---|---|
+| (1, 16) max-shared | 3.59% | 2.80% | **0.88%** | 0.88% |
+| (16, 1) per-step deep | (n/a) | 1.83% | **0.88%** | 1.06% |
+
+Earlier (2026-05-02) shared-weights Collapse evidence said the bundle was
+*anti*-helpful for shared bodies (raised train loss 30×, degraded rollouts
+75→212). The 2026-05-03 disaggregation explains that result: the offending
+component was LN. With pool ON and shared weights, LN raised train loss
+30×; with pool OFF and shared weights, LN partially helps (3.59 → 2.80) but
+input_skip alone fully recovers (3.59 → 0.88). **LN's effect is regime-
+dependent and unreliable; input_skip's effect is consistent and large.**
+
+**Recommendation:** default `--input_skip` on for any deep config (≥8
+iterations), pool or no-pool, shared or per-step. Drop `--use_layernorm`
+entirely from the recommended recipe. The earlier-cited rollout-error
+3-4× recovery on per-step n=16 was almost certainly the input_skip half
+of the patch; the LN half was carrying along for the ride.
 
 ### F5. `change_loss_weight` is what actually breaks identity-collapse
 
@@ -864,6 +870,7 @@ fully-shared special case of the new factorization).
 --architecture rule_attn \
 --n_hid 256 --n_nca_steps 4 --n_nca_repeats 4 --n_slots 16 \
 --axis_pool --axis_cummax --global_pool \
+--input_skip \
 --change_loss_weight 5.0 --grad_clip 0.5 \
 --balanced_sampling --kernel_sep \
 --token_decoder_loss_weight 0.1 \
@@ -880,9 +887,9 @@ values give a hierarchy not yet swept — E10).
 ### When to deviate
 
 - **Looping-dynamics game / `again`-heavy**: try `--n_nca_steps {8, 16}`
-  with shared weights. Compare to `n_steps=4` with cummax-off for the
-  pooling-as-substitute control. Do **not** combine with
-  `--use_layernorm --input_skip` (F4).
+  with shared weights and `--input_skip` on. Compare to `n_steps=4` with
+  cummax-off for the pooling-as-substitute control. Do **not** add
+  `--use_layernorm` — input_skip alone is the active component (F4).
 - **Single-game runs on small games**: `--no-balanced_sampling` is fine.
 - **Synthetic data**: see the synth section in `RUNNING_REPORT`. The
   per-game-size + `--synthetic_no_a_count_max 5` recipe is current.

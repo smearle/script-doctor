@@ -186,6 +186,85 @@ Summary CSV: `nca_wm/figures/bouncers_lr_sweep/summary_table.csv`.
    Whether this gap closes with adaptive halting / harder games is the
    question for stage B.
 
+## Bouncers depth & no-pool sweep + LN/skip disaggregation (2026-05-03)
+
+This sweep combined three axes on a single game (Bouncers, h=256, batch=16, 15k steps):
+1. The `n_layers × n_repeats` factoring across L × R ∈ {(8,1), (4,1), (1,4), (1,8),
+   (2,4), (4,2), (4,4), (2,8), (1,16), (2,16), (1,32), (1,64)}.
+2. Pool flags ON vs OFF (`--no-axis_pool --no-axis_cummax --no-global_pool`).
+3. Stabilization patch on/off and its components individually (LN-only, input_skip-only,
+   bundled), specifically targeted at the configs that regressed.
+
+Figures: `nca_wm/figures/bouncers_lr_sweep/`.
+
+### Pool ON: depth ceiling around per-step layer count L
+
+| (L, R) | total | params | train | bfs |
+|---:|---:|---:|---:|---:|
+| (8, 1) | 8 | 9.9 M | 1.2e-7 | **0.19%** |
+| (4, 4) | 16 | 5.0 M | 9.6e-8 | **0.19%** |
+| (4, 2) | 8 | 5.0 M | 1.2e-7 | 0.51% |
+| (2, 4) | 8 | 2.6 M | 6.2e-8 | 0.51% |
+| (2, 8) | 16 | 2.6 M | 1.4e-7 | 0.69% |
+| (1, 8) | 8 | 1.4 M | 1.0e-7 | 0.66% |
+| (1, 16) | 16 | 1.4 M | 1.4e-7 | 0.80% |
+| (1, 32) | 32 | 1.4 M | 2.1e-7 | 2.05% |
+| (1, 64) | 64 | 1.4 M | 3.9e-7 | 1.79% |
+| (2, 16) | 32 | 2.6 M | 2.8e-7 | **4.84%** |
+
+Pool variant best is `(L=8, R=1)` and `(L=4, R=4)` both at **0.19% bfs** — *the same*
+at half the params. Past total=16 with low L, depth starts to hurt: `(2, 16)` jumps to
+4.84%. **L (per-step layer count) sets the rollout floor; R (shared repeats) refines
+within that floor up to about R=8.**
+
+### Pool OFF: depth ceiling lifts dramatically at high R, fully recovered by input_skip
+
+| (L, R) | total | params | bare bfs | LN-only | skip-only | bundled |
+|---:|---:|---:|---:|---:|---:|---:|
+| (8, 1) | 8 | 6.7 M | 0.88% | — | — | — |
+| (1, 8) | 8 | 1.0 M | 0.98% | — | — | — |
+| (4, 4) | 16 | 3.5 M | 0.98% | — | — | — |
+| (1, 16) | 16 | 1.0 M | 3.59% | 2.80% | **0.88%** | 0.88% |
+| (16, 1) | 16 | 13.4 M | (not run) | 1.83% | **0.88%** | 1.06% |
+| (2, 16) | 32 | 1.8 M | 8.26% | — | — | 1.25% |
+| (1, 32) | 32 | 1.0 M | 4.04% | — | — | 1.81% |
+| (1, 64) | 64 | 1.0 M | 1.35% | — | — | — |
+
+Without the patch, shared-deep nopool degrades sharply past R=8. The bundled patch
+recovers it by 4-7×. **Disaggregating shows the recovery is entirely input_skip.**
+
+### LN vs input_skip — the patch is just input_skip
+
+`(L=1, R=16)` max-shared regime:
+- bare: 3.59% — LN-only: 2.80% — **skip-only: 0.88%** — bundled: 0.88%
+
+`(L=16, R=1)` per-step deep regime:
+- LN-only: 1.83% — **skip-only: 0.88%** — bundled: 1.06%
+
+**input_skip alone matches or beats the bundled patch in both regimes.** LN on top of
+input_skip is at best neutral (max-shared) and degrades the per-step regime by ~20%.
+LN-alone gives only partial recovery in the max-shared regime and is worse than
+skip-alone everywhere.
+
+### Findings
+
+1. **The "stab patch" should be reduced to just input_skip.** LN is at best neutral,
+   at worst (in the per-step deep regime) harmful when combined with input_skip. Future
+   work should default `--input_skip` on for any deep config and drop `--use_layernorm`.
+2. **The architecture report's "stab patch off for shared weights" Collapse finding is
+   contradicted on Bouncers-without-pool.** input_skip helps shared bodies a lot when
+   pool is off. The Collapse anti-stab finding may have been entirely the LN component
+   degrading in the with-pool regime — worth a re-test on Collapse with skip-only.
+3. **Pool variant has its own depth ceiling around L=4.** `(L=8, R=1)` and `(L=4, R=4)`
+   tie at 0.19% bfs (best on Bouncers). Going to L=1 with R≥16 starts to degrade. With
+   pool, the L axis matters more than total depth.
+4. **Bouncers — even no-pool — is too easy to test depth past 16.** All configs reach
+   <2% bfs once they have input_skip. The architecture's depth-helps-iterative-reasoning
+   capability isn't actually being tested. Need a harder game.
+5. **Non-monotonic depth at high R.** Bare `(1, 32)` is worse than `(1, 64)` (4.04% →
+   1.35%). The optimization landscape at high sharing has local minima — adding more
+   iterations can either degrade or recover depending on which optimum the model lands in.
+
 ## Findings so far
 
 1. **Per-game cap + bitpack works.** scaling_gallery_v2 (59 games, max shape 19×30×43,
