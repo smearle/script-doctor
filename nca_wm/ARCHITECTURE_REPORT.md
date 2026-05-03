@@ -766,6 +766,34 @@ Collapse despite their `again`-driven design. The 1-rule games like
 varislide collapse to "memorize one tick's outcome per starting
 state" with enough training and modest model capacity.
 
+**Multi-size synthetic-data correction (2026-05-03, E15-E17)**:
+The "memorization-via-cross-attention-to-slots" hypothesis was tested
+by training varislide on 64 random levels at each of widths
+{6, 8, 10, 12, 16}. Observations:
+
+1. **Memorization broke as predicted**: train change_err climbed
+   from single-level 5e-5 → multi-grid 0.05-0.10 (1000×), confirming
+   that with diverse levels the model can no longer 1-shot-memorize
+   per-state outcomes.
+2. **The model failed to learn the rule instead**: eval change_err on
+   right-action transitions stays at 0.44-0.50 across all widths
+   (in-distribution AND OOD). The model's predictions become
+   low-confidence (many cells with no channel above 0.5).
+3. **More compute doesn't help**: 50k updates at h=256 (5× more
+   updates, 2× wider) plateaus at the same 0.05-0.08 train change_err.
+   Not an under-training problem — an architectural ceiling.
+
+The implication is sobering: the rule_attn architecture seems to have
+a "memorize-or-fail" character on this task, with no in-between regime
+that learns the underlying slide rule. With the slot encoder being
+level-independent (slots only depend on the game's rule tokens, not on
+the level's spatial state), the body has to do all level-conditional
+work via the conv + pool features alone — and it apparently can't,
+even with rich pool features available. This is a stronger version of
+F1 ("pool is load-bearing"): pool can substitute for depth on a
+single level (where memorization works), but cannot substitute for the
+rule-learning capacity needed across diverse levels.
+
 Saved figures:
 - `halt_modes_comparison_figure.{pdf,png}` (Collapse 4-mode comparison, corrected)
 - varislide per-level figures show the *unused* learned halt
@@ -813,7 +841,10 @@ Numbered for reference; status updates land here as runs complete.
 | E14 | Adaptive halt on a Q1-positive substrate | Show per-instance computation in the regime where pool can't substitute even when on (flood-fill, non-axis propagation). | not started — needs Q1-positive game first |
 | E15 | Varislide × multi-size synthetic levels (widths 6,8,10,12,16) — pool-on vs pool-off | F1 / Q2 — does data diversity break the per-state memorization? | **done — partial**: data diversity DID break memorization (train change_err climbed from 5e-5 single-level to 0.05-0.10 multi-grid pool, 0.12-0.17 multi-grid no-pool; eval change_err 0.30-0.50 on right-action transitions for both). Model attempts to learn the rule but is under-trained at 10k updates / h=128. Visual inspection of predictions shows low-confidence outputs (many cells with no channel > 0.5). |
 | E16 | OOD-width varislide eval (widths 20, 24, never seen during training) at trained depth + at extended n_repeats | Q1+Q2 — does the model generalize the slide rule to wider levels? Does extending n_repeats at inference help on harder OOD examples? | **done — preliminary**: change_err ~0.40-0.50 at OOD widths, but ALSO ~0.30-0.40 at IN-distribution widths (with held-out seed). Increasing n_repeats {16, 32, 48} doesn't help (in fact slight degradation). Conclusion is moot until in-distribution training succeeds; needs E17. |
-| E17 | Varislide synth multi-grid with longer training (50k-100k updates) and/or h=256 | Determine if data diversity + sufficient compute lets the model actually learn the slide rule (vs current under-trained state). | not started |
+| E17 | Varislide synth multi-grid with longer training (50k updates, h=256) | Determine if data diversity + sufficient compute lets the model actually learn the slide rule. | **done — negative**: train change_err plateaued at 0.05-0.08 (basically same as 10k/h=128 run). Eval right-action change_err still 0.44-0.50 at all widths. **5× compute + 2× width did not help**. The architecture appears to have a real ceiling on this task once memorization is unavailable. |
+| E18 | Architectural workarounds for the multi-size synth ceiling | Try: (a) per-cell halting, (b) input_skip + LN at depth, (c) higher change_loss_weight, (d) larger n_slots, (e) asynchronous/stochastic NCA updates (Mordvintsev's NCA training tricks) | not started — exploratory |
+| E19 | Depth sweep on varislide synth multi-grid (n_steps ∈ {8, 16, 20, 24, 32}, all fully shared, h=256, 50k updates) | Q1 — does depth genuinely help on the diverse-data regime where memorization is unavailable? | **done — non-monotone**: n=8/16/24/32 all sit at eval change_err ≈ 0.45 (basically the architectural ceiling); only **n=20 is a clear outlier at 0.29**, including OOD widths {20, 24}. Train metric is identical across depths (vacuous-batch averaging masks the difference). The non-monotone shape argues this is **single-seed optimization variance** more than a true depth-effect signal. Needs multi-seed verification. |
+| E20 | Multi-seed verification of n=20 vs other depths | Disambiguate "n=20 is lucky" vs "n=20 is genuinely a sweet spot". Same setup, multiple seeds each. | not started |
 
 Sweep scripts live in `nca_wm/scripts/`; templates:
 `run_collapse_shared_weights_sweep.sh` (the F2 sweep),
