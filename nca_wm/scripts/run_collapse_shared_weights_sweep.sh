@@ -43,8 +43,8 @@ run_one() {
     echo "[$tag] starting SHARED n_nca_steps=$n_steps $stab"
     CUDA_VISIBLE_DEVICES=0 PYTHONUNBUFFERED=1 "$PY" "$REPO/nca_wm/train.py" \
         --games Collapse --level 0 \
-        --conditional --architecture rule_attn --shared_weights \
-        --n_hid 256 --n_nca_steps "$n_steps" \
+        --conditional --architecture rule_attn \
+        --n_hid 256 --n_nca_steps "$n_steps" --n_nca_repeats "$n_steps" \
         --axis_pool --axis_cummax --global_pool \
         --change_loss_weight 5.0 --grad_clip 0.5 \
         --balanced_sampling \
