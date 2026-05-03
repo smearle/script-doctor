@@ -2,6 +2,19 @@
 
 Living doc. Last refresh: 2026-05-01.
 
+> **Architectural decisions live in `ARCHITECTURE_REPORT.md`** — that doc
+> takes a stand on what the right architecture is and why (global-pool
+> stack, rule_attn vs FiLM, depth + skip-connection findings on
+> looping-dynamics games, adaptive-pass-count direction). Use this doc
+> for chronological run logs.
+>
+> Latest architectural finding (2026-05-01): on Collapse single-game,
+> deeper rule_attn lowers train loss but increases autoregressive
+> rollout drift; the new `--use_layernorm --input_skip` patch trades 9×
+> higher train loss for 3-4× lower rollout error. Global pooling is
+> load-bearing on this game — no-pool runs sit in identity collapse
+> regardless of depth. See ARCHITECTURE_REPORT for the table.
+
 ## Current best recipe
 
 `rule_attn` arch (`rule_attn_model.py`) with `K=16`, `n_hid=256`, `n_nca_steps=4`,

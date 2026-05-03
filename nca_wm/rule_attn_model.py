@@ -175,6 +175,24 @@ class RuleAttnNCAWorldModel(nn.Module):
     use_vq: bool = False
     vq_codebook_size: int = 512
     vq_commitment_weight: float = 0.25
+    # Deep-unroll stabilization knobs. Both default-off so existing checkpoints
+    # load unchanged. Enable when running large n_steps (≥8) where the bare
+    # residual stack starts to diverge.
+    #   use_layernorm: pre-norm LayerNorm on h at the start of every NCA step
+    #     (one shared weight set across steps, like NCAWorldModel.use_layernorm).
+    #   input_skip: re-inject the embedded input into the conv input at every
+    #     step, mirroring NCAWorldModel's `parts = [h, inp]`. Makes it harder
+    #     for deep stacks to lose track of the original observation.
+    use_layernorm: bool = False
+    input_skip: bool = False
+    # Shared NCA-body weights across steps. Default off so existing checkpoints
+    # load unchanged. When True, conv / pool_proj / attn_ln / slot_ln /
+    # cell_slot_xattn / out are allocated once and reused at every step (the
+    # same inductive bias as NCAWorldModel and as the PuzzleScript engine,
+    # which applies the same rule set on every iteration of an `again` loop).
+    # Decouples "depth" (how many iterations) from "capacity" (how many
+    # parameters), and is a prerequisite for adaptive halting.
+    shared_weights: bool = False
 
     @nn.compact
     def __call__(self, state, action_onehot, game_tokens, game_mask,
@@ -235,7 +253,33 @@ class RuleAttnNCAWorldModel(nn.Module):
         act = action_onehot[:, None, None, :]
         act = jnp.broadcast_to(act, (B, H, W, N_ACTIONS))
         inp = jnp.concatenate([x, act], axis=-1)  # (B, H, W, C+5)
-        h = nn.Dense(self.n_hid, name="embed")(inp)
+        h_inp = nn.Dense(self.n_hid, name="embed")(inp)
+        h = h_inp
+
+        # Shared LayerNorm across NCA steps (pre-norm). Allocated once so
+        # depth doesn't multiply parameter count of this stabilizer.
+        step_norm = nn.LayerNorm(name="step_ln") if self.use_layernorm else None
+
+        # When shared_weights=True, allocate every per-step layer once and
+        # reuse at every iteration — same inductive bias as the PuzzleScript
+        # engine (one rule set, applied repeatedly until the state stops
+        # changing). Layer names are unsuffixed so the allocation is distinct
+        # from the per-step `_{i}` names used in the un-shared path; existing
+        # un-shared checkpoints therefore continue to load bit-identically.
+        if self.shared_weights:
+            shared_conv = nn.Conv(self.n_hid, kernel_size=(3, 3),
+                                   padding="SAME", name="conv")
+            shared_pool_proj = (nn.Dense(self.n_hid, name="pool_proj")
+                                if (self.axis_pool or self.axis_cummax
+                                    or self.global_pool) else None)
+            shared_attn_ln = nn.LayerNorm(name="attn_ln")
+            shared_slot_ln = nn.LayerNorm(name="slot_ln")
+            shared_xattn = nn.MultiHeadDotProductAttention(
+                num_heads=self.n_attn_heads,
+                qkv_features=self.n_hid,
+                name="cell_slot_xattn",
+            )
+            shared_out = nn.Dense(self.n_hid, name="out")
 
         # 3. NCA steps. Each step:
         #    (a) 3x3 conv over hidden state (neighbor interaction)
@@ -243,10 +287,21 @@ class RuleAttnNCAWorldModel(nn.Module):
         #    (c) cross-attention from each cell to K rule slots
         #    (d) residual update
         for i in range(self.n_steps):
+            # Pre-norm on h before the step (stabilizes deep unrolls).
+            h_step = step_norm(h) if step_norm is not None else h
+            # Optional input skip: re-inject the embedded (state, action) so
+            # the model doesn't drift from the original observation across
+            # many steps.
+            conv_in = (jnp.concatenate([h_step, h_inp], axis=-1)
+                       if self.input_skip else h_step)
             # (a) conv over hidden state
-            h_conv = nn.Conv(
-                self.n_hid, kernel_size=(3, 3), padding="SAME", name=f"conv_{i}"
-            )(h)
+            if self.shared_weights:
+                h_conv = shared_conv(conv_in)
+            else:
+                h_conv = nn.Conv(
+                    self.n_hid, kernel_size=(3, 3), padding="SAME",
+                    name=f"conv_{i}",
+                )(conv_in)
 
             # (b) pool features (if requested). Same semantics as in
             # ConditionalNCAWorldModel; kept inline to avoid the cross-module
@@ -267,24 +322,35 @@ class RuleAttnNCAWorldModel(nn.Module):
                 pool_feats.append(jnp.broadcast_to(global_max, h.shape))
             if pool_feats:
                 pool_cat = jnp.concatenate([h_conv] + pool_feats, axis=-1)
-                h_conv = nn.Dense(self.n_hid, name=f"pool_proj_{i}")(pool_cat)
+                if self.shared_weights:
+                    h_conv = shared_pool_proj(pool_cat)
+                else:
+                    h_conv = nn.Dense(self.n_hid, name=f"pool_proj_{i}")(pool_cat)
 
             # (c) cross-attention: each cell attends to rule slots.
             # Flatten spatial: (B, H*W, n_hid).
             h_flat = h.reshape(B, H * W, self.n_hid)
             # LN inputs to attention (pre-norm style).
-            h_ln = nn.LayerNorm(name=f"attn_ln_{i}")(h_flat)
-            slots_dyn_ln = nn.LayerNorm(name=f"slot_ln_{i}")(slots_dyn)
-            attn_out = nn.MultiHeadDotProductAttention(
-                num_heads=self.n_attn_heads,
-                qkv_features=self.n_hid,
-                name=f"cell_slot_xattn_{i}",
-            )(h_ln, slots_dyn_ln, deterministic=True)  # (B, H*W, n_hid)
+            if self.shared_weights:
+                h_ln = shared_attn_ln(h_flat)
+                slots_dyn_ln = shared_slot_ln(slots_dyn)
+                attn_out = shared_xattn(h_ln, slots_dyn_ln, deterministic=True)
+            else:
+                h_ln = nn.LayerNorm(name=f"attn_ln_{i}")(h_flat)
+                slots_dyn_ln = nn.LayerNorm(name=f"slot_ln_{i}")(slots_dyn)
+                attn_out = nn.MultiHeadDotProductAttention(
+                    num_heads=self.n_attn_heads,
+                    qkv_features=self.n_hid,
+                    name=f"cell_slot_xattn_{i}",
+                )(h_ln, slots_dyn_ln, deterministic=True)  # (B, H*W, n_hid)
             attn_out = attn_out.reshape(B, H, W, self.n_hid)
 
             # (d) residual update: conv path + slot attention path.
             delta = nn.gelu(h_conv + attn_out)
-            delta = nn.Dense(self.n_hid, name=f"out_{i}")(delta)
+            if self.shared_weights:
+                delta = shared_out(delta)
+            else:
+                delta = nn.Dense(self.n_hid, name=f"out_{i}")(delta)
             h = h + delta
 
         # 4. Readouts

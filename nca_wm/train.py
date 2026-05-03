@@ -3944,8 +3944,25 @@ def main():
     p.add_argument("--grad_clip", type=float, default=0.5,
                    help="Clip gradients by global norm to this value (0 = off).")
     p.add_argument("--use_layernorm", action="store_true",
-                   help="Apply a shared LayerNorm on h after each NCA step. "
+                   help="Apply a shared LayerNorm on h between NCA steps "
+                        "(post-step on FiLM/uncond, pre-step on rule_attn). "
                         "Stabilizes deep unrolls (large n_nca_steps).")
+    p.add_argument("--input_skip", action="store_true",
+                   help="rule_attn-only: re-inject the embedded (state, "
+                        "action) input into the conv at every NCA step. "
+                        "Mirrors the input-skip in NCAWorldModel; helps "
+                        "deep unrolls keep contact with the original "
+                        "observation. No-op for FiLM/uncond (those already "
+                        "have the input skip).")
+    p.add_argument("--shared_weights", action="store_true",
+                   help="rule_attn-only: share NCA-body weights (conv, "
+                        "pool_proj, attn_ln, slot_ln, cell_slot_xattn, out) "
+                        "across all n_nca_steps iterations. Matches the "
+                        "PuzzleScript engine's inductive bias (one rule set, "
+                        "applied repeatedly until convergence) and decouples "
+                        "depth from parameter count. Prerequisite for any "
+                        "adaptive-halting variant. No-op for FiLM/uncond — "
+                        "NCAWorldModel is already shared-weight by design.")
     p.add_argument("--max_transitions_per_game", type=int, default=200_000,
                    help="Cap per-game transition count (uniformly subsample). "
                         "0 disables. Essential for scaling to many games with "
@@ -4079,6 +4096,7 @@ def main():
         if args.encode_sprites: parts.append("spr")
         if args.change_loss_weight != 5.0: parts.append(f"clw{args.change_loss_weight:g}")
         if args.architecture != "rule_attn": parts.append(f"arch-{args.architecture}")
+        if args.shared_weights: parts.append("shared")
         if args.vq_codebook:
             parts.append(f"vq{args.vq_codebook_size}")
         if args.lr_schedule != "cosine": parts.append(f"lr-{args.lr_schedule}")
@@ -4285,6 +4303,9 @@ def main():
                     use_vq=args.vq_codebook,
                     vq_codebook_size=args.vq_codebook_size,
                     vq_commitment_weight=args.vq_commitment_weight,
+                    use_layernorm=args.use_layernorm,
+                    input_skip=args.input_skip,
+                    shared_weights=args.shared_weights,
                 )
             else:  # default: film
                 model = ConditionalNCAWorldModel(
