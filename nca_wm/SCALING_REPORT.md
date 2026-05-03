@@ -30,6 +30,16 @@ Shared training-time defaults (unless overridden in the recipe column):
 - **Bouncers L×R sweep**: DONE (2026-05-03). 6 configs, results in
    `nca_wm/figures/bouncers_lr_sweep/` and SCALING_RESULTS.md.
 - **v3_combined**: still in eval (per-step n=8, 59 games).
+- **Multi-grid varislide canary** (architectural side, 2026-05-03): DONE
+   for depth/compute/sharing axes. Multi-seed verification of
+   architecture-report E15-E19 — see ARCHITECTURE_REPORT F8 + E20-E22.
+   Headline: rule-conditioned NCAs do not reliably learn iterative rule
+   application on multi-grid synth, regardless of depth (8↔64), compute
+   (10k↔50k), or sharing. Per-seed argmax variance is ~5×, train loss
+   blind to it. Figures: `nca_wm/figures/varislide_depth_sweep/`.
+   Scripts: `run_varislide_depth_seedsweep.sh`,
+   `run_varislide_long_seedsweep.sh`, `run_varislide_perstep_seedsweep.sh`.
+   Cross-check `run_microban_multigrid.sh` is queued (E23).
 
 ## Open questions / next experiments
 

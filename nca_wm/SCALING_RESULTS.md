@@ -302,3 +302,30 @@ skip-alone everywhere.
    like "negative transfer from scaling 14g → 59g" turned out to be the recipe
    difference, not the dataset. Once recipe is held constant (v3_combined vs
    scaling_14), the per-game gap shrinks dramatically.
+
+## Cross-reference: persistently-hard games and the multi-grid varislide canary (2026-05-03)
+
+The persistently-hard gallery games (Take_Heart_Lass, Travelling_salesman, notsnake,
+It_Dies_In_The_Light, the_art_of_cloning, Lightdown, …) all share a property:
+their dynamics involve iterative rule application that pool features
+(`axis_pool` / `axis_cummax` / `global_pool`) cannot fully substitute for. They are
+the gallery-scale analog of the varislide canary documented in
+`ARCHITECTURE_REPORT.md` F8.
+
+Multi-seed verification on multi-grid varislide (E20-E22) establishes that
+rule-conditioned NCAs do not reliably learn iterative rule application
+under varied-grid synth, regardless of depth (8 ↔ 64), compute (10k vs
+50k), weight-sharing, or change-loss-weighting. The "fire-once" basin is
+the typical solution under random init; the iterative basin is rare and
+not reachable with current optimization. Per-seed argmax variance is ~5×.
+
+**Implication for the gallery scaling story:** the per-game variance
+documented above (no single recipe wins all games; ensemble buys ~5%
+headroom per game) is consistent with the varislide canary mechanism —
+each game's rule structure determines whether the model lands in a
+"learn the rule" basin or a "fire-once / partial" basin, and current
+recipes (depth, capacity, duration) don't shift that landscape. The
+remaining unblocked candidates from F8 (hard slot routing, per-cell
+halt, replay-buffer curriculum) are also what's most likely to move
+gallery scaling beyond its current ceiling. Worth treating these as
+joint, not separate, problems.

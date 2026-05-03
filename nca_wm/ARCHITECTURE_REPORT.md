@@ -250,6 +250,87 @@ saturates `scaling_6` at 1.5e-5 best-loss. **Any pre-2026-04-18 saved
 checkpoint should be considered suspect.** Kept here so that anyone reading
 old logs knows why pre-fix numbers don't reproduce.
 
+### F8. (2026-05-03) Multi-grid varislide is an init-determined basin failure, not depth/compute/sharing/clw
+
+Multi-seed verification (E20-E22) of the architecture-report E15-E19
+results pins down what's actually happening on multi-grid varislide
+(custom 1-rule slide-until-wall game, widths {6,8,10,12,16}):
+
+**Headline (3 seeds × 4 depths × multiple recipes, all measured by
+right-action change_err and player-position argmax accuracy):**
+
+| recipe | change_err (mean ± std) | argmax_acc (mean ± std) |
+|---|---|---|
+| shared, depth=8, 10k | 0.443 ± 0.041 | 0.227 ± 0.067 |
+| shared, depth=16, 10k | 0.443 ± 0.055 | 0.231 ± 0.105 |
+| shared, depth=32, 10k | 0.420 ± 0.109 | 0.174 ± 0.095 |
+| shared, depth=64, 10k | 0.429 ± 0.049 | 0.296 ± 0.164 |
+| shared, depth=16, 50k | 0.466 ± 0.026 | 0.194 ± 0.114 |
+| **per-step**, depth=16, 10k | 0.418 ± 0.075 | 0.250 ± 0.041 |
+| `--input_skip`, depth=16, 10k (n=1) | 0.474 | 0.196 |
+| `--change_loss_weight 50`, depth=16, 10k (n=1) | 0.445 | 0.532 |
+
+**Five claims established by these data:**
+
+1. **Depth doesn't help.** 8 ↔ 64 with shared weights: no monotonic
+   trend, all means within each other's std. The E19 "n=20 outlier at
+   0.29" was single-seed noise (E20).
+2. **5× compute doesn't help.** Long-training (50k) at depth=16 is no
+   better than 10k. Per-seed *ordering* is preserved across compute
+   budgets (best seed at 10k is best at 50k) — i.e., the basin is
+   determined at init and stable under further optimization.
+3. **Sharing isn't the active variable.** Per-step weights (~11× more
+   params, n_repeats=1) give essentially identical aggregate metrics.
+   Faint hint that per-step gets d≥2 right more often (~0.4 vs ~0.2),
+   but overall it's a wash.
+4. **Per-seed variance dwarfs the recipe signal.** Within shared-depth=64,
+   seed 0 → argmax 0.07, seed 1 → 0.44 — same hyperparams, ~6× different
+   solution quality. The optimization landscape has multiple basins of
+   very different rule-learning quality reachable from random init.
+5. **Best-loss is essentially identical (1.6–1.8e-4) across every
+   recipe and every seed of every depth.** F3's train-rollout decoupling
+   is amplified here: the train loss is *blind* to a 5× swing in actual
+   rule-learning quality.
+
+**Diagnosis (per-distance breakdown, baseline seed=0):** the failure is
+*asymmetric*. The model perfectly suppresses the player at the cleared
+cell (sigmoid 0.000 on Player at GT 1→0 cells) and at no-change cells,
+but fails to place the player at the destination (sigmoid 0.090, only
+6.4% above 0.5). For slide_d=1 the model gets the right cell ~64% of the
+time at low confidence; for slide_d≥2 it collapses to chance (~33%) and
+mean predicted slide distance is ~2 regardless of true distance. The
+model has converged to a "fire the rule once" mode and never iterates.
+
+**Mechanism (working hypothesis):** the per-state lookup attractor is
+much easier to find than the iterative-rule-application attractor under
+final-step BCE. Multi-grid prevents per-state memorization (forces SOME
+rule-learning), but the model gets stuck in the lowest-effort partial
+solution — fire the rule once, get d=1 right ~60% of the time on
+average, plateau loss at ~1.7e-4. None of the tested architectural
+variants (depth, sharing, capacity, input_skip, change_loss_weight)
+reliably escape this attractor. The "lucky" seeds are in a different
+basin that learned more iteration; they're not reproducible from a
+distinct init.
+
+**Consequence — paper-relevant:** rule-conditioned NCAs with the
+current architecture do not reliably learn iterative rule application
+on multi-grid synth data, regardless of depth budget, compute budget,
+weight sharing, capacity, or change-loss weighting. The remaining
+candidate fixes that have NOT been ruled out are (a) hard / sparse
+rule-slot routing (one slot active per step) so the model can't smear
+"fire-once" across all slots, (b) per-cell halt mechanism so cells in
+their fixed point stop updating, (c) curriculum / replay-buffer
+training that selectively exposes the model to slide_d ≥ 2 instances,
+(d) auxiliary "is-changing" mask head factoring "where to fire" from
+"what to write." Hand-coded engine-aligned per-step supervision (E18-ish)
+is technically ruled in but is single-game and doesn't generalize.
+
+**Operational note:** train change_err for multi-grid varislide can
+read 0% in the log while right-action change_err is 86%, because most
+training batches have zero changing transitions and the per-batch
+formula returns 1.0 when n_changed=0. Always re-evaluate per relevant
+action with the inspector at `nca_wm/scripts/inspect_varislide_distance.py`.
+
 ## Open questions
 
 ### Q1. Does NCA depth help games with genuine looping dynamics?
@@ -850,7 +931,10 @@ Numbered for reference; status updates land here as runs complete.
 | E17 | Varislide synth multi-grid with longer training (50k updates, h=256) | Determine if data diversity + sufficient compute lets the model actually learn the slide rule. | **done — negative**: train change_err plateaued at 0.05-0.08 (basically same as 10k/h=128 run). Eval right-action change_err still 0.44-0.50 at all widths. **5× compute + 2× width did not help**. The architecture appears to have a real ceiling on this task once memorization is unavailable. |
 | E18 | Architectural workarounds for the multi-size synth ceiling | Try: (a) per-cell halting, (b) input_skip + LN at depth, (c) higher change_loss_weight, (d) larger n_slots, (e) asynchronous/stochastic NCA updates (Mordvintsev's NCA training tricks) | not started — exploratory |
 | E19 | Depth sweep on varislide synth multi-grid (n_steps ∈ {8, 16, 20, 24, 32}, all fully shared, h=256, 50k updates) | Q1 — does depth genuinely help on the diverse-data regime where memorization is unavailable? | **done — non-monotone**: n=8/16/24/32 all sit at eval change_err ≈ 0.45 (basically the architectural ceiling); only **n=20 is a clear outlier at 0.29**, including OOD widths {20, 24}. Train metric is identical across depths (vacuous-batch averaging masks the difference). The non-monotone shape argues this is **single-seed optimization variance** more than a true depth-effect signal. Needs multi-seed verification. |
-| E20 | Multi-seed verification of n=20 vs other depths | Disambiguate "n=20 is lucky" vs "n=20 is genuinely a sweet spot". Same setup, multiple seeds each. | not started |
+| E20 | Multi-seed verification of depth sweep on multi-grid varislide | Disambiguate "n=20 is lucky" vs "depth genuinely helps". Shared weights, n_hid=128, depth ∈ {8, 16, 32, 64} × 3 seeds, 10k steps. | **done — n=20 was noise**: change_err 0.42–0.44 mean across all depths (within each other's std); argmax_acc 0.17–0.30. Per-seed argmax variance is huge (~5× within a single depth), best_loss is identical across all 12 runs. See F8. Script: `run_varislide_depth_seedsweep.sh`. |
+| E21 | Long-training depth=16 multi-seed (50k steps × 3 seeds) | Optimization-vs-architecture disambiguation: does longer training find the iteration basin? | **done — negative**: 5× compute does not move the needle (10k argmax 0.231±0.105; 50k argmax 0.194±0.114). Per-seed ordering is preserved (best seed at 10k is still best at 50k), confirming the basin is init-determined and stable under more optimization. Script: `run_varislide_long_seedsweep.sh`. |
+| E22 | Per-step (un-shared) weights at depth=16 × 3 seeds | F2 cross-check: does removing the sharing constraint find a different basin? Per-step has ~11× more params (5.1M vs 447K). | **done — wash**: per-step change_err 0.418±0.075 vs shared 0.443±0.055 — within noise. Hint that per-step gets d=2,3 right more often (~0.4 vs ~0.2 shared) at the cost of d=1, but overall metrics indistinguishable. Sharing wasn't the active variable. Script: `run_varislide_perstep_seedsweep.sh`. |
+| E23 | Multi-grid microban cross-check (single-grid w=12 vs multi-grid widths 8-16) | Does the multi-grid synth failure recur on a sokoban-class chain-push game with depth-bound dynamics? Tests whether the canary generalizes beyond varislide. | not started; script `run_microban_multigrid.sh` ready |
 
 Sweep scripts live in `nca_wm/scripts/`; templates:
 `run_collapse_shared_weights_sweep.sh` (the F2 sweep),
