@@ -16,6 +16,7 @@ import io
 import json
 import os
 import pickle
+import re
 import sys
 import time
 from pathlib import Path
@@ -94,6 +95,118 @@ def _pack_states(arr: np.ndarray) -> np.ndarray:
 def _unpack_states(packed: np.ndarray, W: int) -> np.ndarray:
     """Reverse of `_pack_states` — returns (..., H, W) uint8."""
     return np.unpackbits(packed, axis=-1, count=W)
+
+
+def _solution_from_sol_dir(sol_root: str, game_name: str, level_i: int,
+                            translate_js_to_jax: bool = False) -> list[int] | None:
+    """Look for a pre-computed winning solution under
+    `<sol_root>/<game_name>/<algo>_<budget>-steps_level-<level_i>.json` and
+    return its action sequence. Preference order: astar > bfs > gbfs > mcts;
+    within each algorithm, larger search budgets first.
+
+    Solutions under `data/cpp_sols/` use the same C++-backend action IDs as
+    eval rollouts (no translation). Solutions under `data/js_sols/` use the
+    JS-engine convention; pass `translate_js_to_jax=True` to remap to the
+    JAX/CPP convention via the table in
+    `.claude/projects/.../memory/reference_action_mappings.md`.
+    """
+    import glob
+    import json
+    game_dir = os.path.join(sol_root, game_name)
+    if not os.path.isdir(game_dir):
+        return None
+    candidates: list[str] = []
+    for prio_algo in ("astar", "bfs", "gbfs", "mcts"):
+        pattern = os.path.join(
+            game_dir, f"{prio_algo}_*-steps_level-{level_i}.json"
+        )
+        # Sort by largest budget first (longer search ⇒ likelier to have won).
+        files = sorted(glob.glob(pattern),
+                        key=lambda p: int(re.search(r"_(\d+)-steps_", p).group(1))
+                                       if re.search(r"_(\d+)-steps_", p) else 0,
+                        reverse=True)
+        candidates.extend(files)
+    # JS → JAX action-ID remap: js[0,1,2,3,4]=L,R,U,D,A → jax[0,2,3,1,4]=L,D,R,U,A.
+    JS2JAX = [0, 2, 3, 1, 4]
+    for path in candidates:
+        try:
+            with open(path) as f:
+                d = json.load(f)
+        except Exception:
+            continue
+        if not d.get("won"):
+            continue
+        actions = d.get("actions") or []
+        if not actions:
+            continue
+        if translate_js_to_jax:
+            try:
+                actions = [JS2JAX[int(a)] for a in actions]
+            except (IndexError, ValueError):
+                continue
+        return [int(a) for a in actions]
+    return None
+
+
+def _solution_from_transitions_cache(game_name: str, level_i: int) -> list[int] | None:
+    """Look for an existing transitions cache that contains a winning
+    trajectory for `(game_name, level_i)` and reconstruct the action sequence
+    via the BFS-on-collected-edges helper from `synthetic_levels`. Returns
+    None if no cache exists or no winning trajectory is reachable from the
+    initial state in the collected edge set.
+
+    Bypasses the per-eval search call when training already explored the
+    goal — typically saves tens of seconds per level on hard games where
+    eval search would otherwise hit the wallclock timeout.
+    """
+    import glob
+    cache_dir = _cache_dir(game_name, level_i)
+    if not os.path.isdir(cache_dir):
+        return None
+    candidates = []
+    # Prefer astar (heuristic-guided ⇒ likelier to have hit a goal sooner)
+    # over bfs; prefer non-capped over capped (full edge set survives).
+    for prio_algo in ("astar", "bfs"):
+        for prio_cap in ("capall", "cap*"):
+            pattern = os.path.join(
+                cache_dir,
+                f"{prio_algo}_transitions_v5_*_{prio_cap}.npz",
+            )
+            candidates.extend(sorted(glob.glob(pattern)))
+    seen = set()
+    for path in candidates:
+        if path in seen:
+            continue
+        seen.add(path)
+        d = _load_npz_dict(path)
+        if d is None:
+            continue
+        wons = np.asarray(d.get("wons", []))
+        if wons.size == 0 or not bool(wons.any()):
+            continue
+        # `_extract_bfs_solution` keys states as `tuple(int(x) for x in s)`,
+        # which assumes 1-D rows. Cached states are bitpacked-multidim
+        # `(N, C, H, packed_W)` — flatten the trailing axes so each "state"
+        # becomes one 1-D byte sequence. Hash equality is preserved.
+        states = np.asarray(d["states"])
+        next_states = np.asarray(d["next_states"])
+        actions = np.asarray(d["actions"]).tolist()
+        wons_list = wons.tolist()
+        n = len(actions)
+        if n == 0:
+            continue
+        states_flat = states.reshape(n, -1)
+        next_states_flat = next_states.reshape(n, -1)
+        try:
+            from nca_wm.synthetic_levels import _extract_bfs_solution
+            chain = _extract_bfs_solution(
+                list(states_flat), actions, list(next_states_flat), wons_list,
+            )
+        except Exception:
+            chain = []
+        if chain:
+            return [int(a) for a in chain]
+    return None
 
 
 def _dat_to_multihot(
@@ -3100,15 +3213,38 @@ def evaluate_multigame(
             backend_search = CppPuzzleScriptBackend()
             backend_search.load_from_json(json_str)
             for algo in search_algos:
-                # Try cache first, then run search
+                # Try cache first, then training-transitions extraction, then
+                # actually re-run search. Both shortcuts yield action IDs in the
+                # C++-backend convention, which is what `_run_eval_rollout`
+                # consumes — so they're drop-in interchangeable.
                 cache_path = os.path.join(
                     _cache_dir(name, level_i),
                     f"search_{algo}_{search_n_steps}_{search_timeout_ms}.npz"
                 )
                 cached = _load_npz_dict(cache_path)
+                sol_actions = None
                 if cached is not None and len(cached["actions"]) > 0:
                     sol_actions = cached["actions"].tolist()
-                else:
+                if sol_actions is None:
+                    # Reuse the winning trajectory the training-time collector
+                    # already explored. Saves up to `search_timeout_ms` of
+                    # wall-clock per (game, level, algo) on hard games where
+                    # search would otherwise time out at eval.
+                    sol_actions = _solution_from_transitions_cache(name, level_i)
+                if sol_actions is None:
+                    # Pre-computed solutions from prior search_cpp / search_nodejs
+                    # runs. cpp_sols use the same C++-backend action IDs as eval.
+                    sol_actions = _solution_from_sol_dir(
+                        os.path.join(_REPO_ROOT, "data", "cpp_sols"),
+                        name, level_i, translate_js_to_jax=False,
+                    )
+                if sol_actions is None:
+                    # js_sols use the JS-engine action convention; remap to JAX/CPP.
+                    sol_actions = _solution_from_sol_dir(
+                        os.path.join(_REPO_ROOT, "data", "js_sols"),
+                        name, level_i, translate_js_to_jax=True,
+                    )
+                if sol_actions is None:
                     try:
                         backend_search.load_level("", level_i)
                         result = backend_search.run_search(
@@ -3120,6 +3256,13 @@ def evaluate_multigame(
                         sol_actions = list(result.actions)
                     except Exception:
                         continue
+                # Persist whatever we ended up with so the next eval run
+                # (this run or any other model trained on the same game) is
+                # entirely search-free for this (algo, budget, timeout).
+                if cached is None:
+                    _save_npz_dict(cache_path, {
+                        "actions": np.asarray(sol_actions, dtype=np.int32),
+                    })
 
                 r = _run_eval_rollout(
                     apply_fn, params, json_str, level_i, n_objs,

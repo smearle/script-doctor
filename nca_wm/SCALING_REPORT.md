@@ -25,8 +25,20 @@ Shared training-time defaults (unless overridden in the recipe column):
 `max_transitions_per_game=200_000`, `search_timeout_ms=60_000`, `n_search_steps=100_000`,
 `balanced_sampling=True`, `seed=0`, `--patience` set per run.
 
+## Active runs
+
+- **Bouncers L×R sweep**: DONE (2026-05-03). 6 configs, results in
+   `nca_wm/figures/bouncers_lr_sweep/` and SCALING_RESULTS.md.
+- **v3_combined**: still in eval (per-step n=8, 59 games).
+
 ## Open questions / next experiments
 
+- **L×R sweep on a harder game.** Bouncers turned out too easy to discriminate
+   the configs on capability — only on parameter efficiency. Re-run the same
+   sweep on Mirror Isles or Heroes of Sokoban (looping is non-axis-aligned and
+   long, so global pooling can't substitute for actual iteration). Expect
+   bigger gaps between `(L=8, R=1)` and `(L=1, R=8)` if the architecture has
+   a real iterative-reasoning bottleneck.
 - **v3_combined eval (in progress)** is the cleanest dataset-size comparison vs
    scaling_14 — same recipe, same 150k steps, only the game set differs. Once it
    finishes, update SCALING_RESULTS.md with per-game v3_combined vs scaling_14 deltas

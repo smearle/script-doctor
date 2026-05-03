@@ -121,6 +121,71 @@ sokoban_match3 0.6%, nekopuzzle 1.8%, Multi-word_Dictionary_Game 0%, Zen_Puzzle_
 not the dataset size.** The dataset-size effect, controlled for recipe, is small (e.g.
 Zen_Puzzle_Garden 0% → 2%). Need v3_combined's full eval to make the final call.
 
+## Bouncers L×R sweep (single-game, 2026-05-03)
+
+The 2026-05-02 architectural change replaced the `--shared_weights` flag with
+`--n_nca_repeats`, factoring `n_steps` into `(n_layers × n_repeats)`:
+
+- **n_layers** = inner block of distinct rule-application layers (one
+  conv → pool → cross-attn → out per layer, each with its own weights). The
+  engine analog is one ordered run-through of the rule list.
+- **n_repeats** = number of times the L-layer block is re-applied with shared
+  weights. The engine analog is the `again` loop.
+
+Bouncers (5 levels, 200k transitions, 0 winning trajectories — eval falls
+back to BFS oracle rollouts) was picked for its `again`-heavy gameplay.
+Six configs trained at `n_hid=256`, batch=16, 15k steps, lr=3e-4 (recipe
+matches the architecture-report Collapse sweep).
+
+Figures: `nca_wm/figures/bouncers_lr_sweep/{train_loss_curves,final_rollout_bars,params_vs_rollout}.{pdf,png}`.
+Summary CSV: `nca_wm/figures/bouncers_lr_sweep/summary_table.csv`.
+
+| (L, R) | total | params | best train loss | BFS rollout (mean over levels) | random rollout |
+| ---: | ---: | ---: | ---: | ---: | ---: |
+| (4, 1) | 4 | 5.03 M | 1.3e-7 | **0.51%** | 0.61% |
+| (1, 4) | 4 | 1.39 M | 2.3e-7 | **0.51%** | 0.56% |
+| (8, 1) | 8 | 9.89 M | 1.2e-7 | **0.19%** | 0.39% |
+| (4, 2) | 8 | 5.03 M | 1.2e-7 | 0.51% | 0.53% |
+| **(2, 4)** | **8** | **2.60 M** | **6.2e-8** | 0.51% | **0.39%** |
+| (1, 8) | 8 | 1.39 M | 1.0e-7 | 0.66% | 0.57% |
+
+### Findings
+
+1. **Bouncers is too easy at all configs.** Even the smallest (1.4M params,
+   `(L=1, R=8)`) reaches sub-1% rollout error on every level. The sweep does
+   not discriminate the configs on absolute capability — only on parameter
+   efficiency. To actually stress the L×R axis we need a harder game (per the
+   architecture report: Mirror Isles, Heroes of Sokoban, Sokoboros).
+2. **Sharing does not hurt train loss on Bouncers.** All four total=8 configs
+   reach train loss in [6.2e-8, 1.2e-7] — within an order of magnitude.
+   `(L=2, R=4)` achieves the lowest train loss of all six configs at less than
+   1/3 the params of `(L=8, R=1)`. The "engine-faithful" split (small inner
+   block × multiple `again`-style repeats) finds the tightest fit.
+3. **Per-step weights (`R=1`) win on BFS rollout, but only narrowly.**
+   `(L=8, R=1)` at 9.9M params hits 0.19% BFS — best in the sweep.
+   `(L=2, R=4)` at 2.6M (3.8× fewer params) hits 0.51%. Going further to
+   `(L=1, R=8)` at 1.4M hits 0.66%. The Pareto frontier is *real but narrow*
+   — sharing trades ~0.3-0.5% absolute BFS error for 4-7× param reduction.
+4. **Random rollout doesn't track BFS.** `(L=2, R=4)` ties `(L=8, R=1)` on
+   random rollout (0.39%) at 4× fewer params. The 9.9M model isn't more
+   robust to off-policy actions than the 2.6M shared-block one.
+5. **Doubling iterations via repeats with the same inner block doesn't
+   help.** `(L=4, R=1)` and `(L=4, R=2)` hit identical BFS error (0.51%);
+   `(L=1, R=4)` and `(L=1, R=8)` differ by only 0.15%. On Bouncers, n_steps=4
+   is already saturated; adding more iterations refines but doesn't unlock
+   new capability.
+6. **Architecture strength (current rule_attn body):** the inductive bias
+   for sharing across iterations is real and almost free. `(L=1, R=4)` ties
+   `(L=4, R=1)` on BFS (0.51%) at <1/3 the params and the same total
+   compute. The `n_repeats` axis is the right way to add depth cheaply.
+7. **Architecture weakness:** per-step weights still buy real (small)
+   gains, suggesting the inner-block representation is *not* a perfect
+   match for the engine's iterative semantics. A truly faithful neural
+   analog would have `(L=1, R=8)` matching `(L=8, R=1)` exactly. The
+   ~0.5% gap is the residual capacity per-step-specialization is buying.
+   Whether this gap closes with adaptive halting / harder games is the
+   question for stage B.
+
 ## Findings so far
 
 1. **Per-game cap + bitpack works.** scaling_gallery_v2 (59 games, max shape 19×30×43,
