@@ -335,6 +335,82 @@ Validation gates in `train.py` enforce the prerequisites:
 token decoder. Smoke-tested on Collapse-L0 (300 updates, h=64): training
 loss decreased monotonically; eval ran end-to-end.
 
+#### v1 → v2 ponder-loss fix (2026-05-03)
+
+The v1 ponder loss did `L_rec = (mean_batch(p_k)) · (mean_batch(L_k))`,
+i.e. averaged the halt distribution and the per-step loss separately
+across the batch and then took their outer product. This is the
+"average-difficulty model" — it can't reward per-input adaptive
+halting, because each batch element's halt distribution gets paired
+with the batch *mean* per-step loss rather than its own.
+
+The bug surfaced cleanly on the no-pool varislide test (E13): with
+fixed code the model should halt deeper for longer slide distances
+(more iteration needed); with the v1 loss it instead halted *shallower*
+for harder examples (an artifact of the wrong gradient).
+
+**v2 fix**: `L_rec = mean_b(Σ_k p_k(b) · L_k(b))` — per-batch-element
+halt distribution paired with per-batch-element per-step loss. State
+loss and win loss both keep their batch axis until *after* the
+multiplication by p. Reporting metrics (`acc`, `change_acc`, `win_acc`,
+`E[k]`, etc.) still use the batch-marginal halt distribution since
+they're scalars; the loss now correctly couples per-input p_k(b) with
+per-input L_k(b).
+
+All E11/E12/E13 numbers were collected under v1; E13 was re-run under
+v2. Per-instance E[k] decreased very slightly (1.85 → 1.62 across the
+distance range) but the headline pattern was unchanged, see below.
+
+#### E13 (v2) result: halt collapses to k=1 + model never learns slide dynamics
+
+Same setup as E13 v1 but with the per-batch ponder-loss fix. Per-level
+halt distribution at eval (filtering to "right" action):
+
+| level | slide_distance | E[halt step] | argmax_k | L_1 chg_err | L_8 chg_err | L_16 chg_err |
+|---|---|---|---|---|---|---|
+| L0 | 1  | 1.85 | 1 | 1.000 | 1.000 | 1.000 |
+| L1 | 2  | 1.84 | 1 | 1.000 | 1.000 | 1.000 |
+| L2 | 3  | 1.84 | 1 | 1.000 | 1.000 | 1.000 |
+| L3 | 4  | 1.84 | 1 | 1.000 | 1.000 | 1.000 |
+| L4 | 6  | 1.74 | 1 | 0.667 | 0.889 | 0.889 |
+| L5 | 8  | 1.68 | 1 | 0.950 | 0.750 | 0.750 |
+| L6 | 12 | 1.65 | 1 | 0.962 | 0.808 | 0.808 |
+| L7 | 16 | 1.62 | 1 | 0.946 | 0.730 | 0.730 |
+
+Halt mass concentrated at k=1 (~0.6) for every level. **The model never
+learned to predict the slide correctly** — change_err on changed cells
+is 65-100% across all NCA depths. For long slides (L5-L7), depth helps
+a little (L_16 chg_err ≈ 0.73 vs L_1 ≈ 0.95) but the gap is small
+enough that the KL prior toward early halting wins.
+
+**Why this happened — the F1 ↔ Q2 interaction.** The no-pool regime
+caused per-F1 identity-collapse on the dynamics: the model fits L_k ≈
+"predict identity at all k" rather than learning depth-dependent
+predictions. Per-step losses then look uniformly mediocre, the
+optimizer takes the easiest gradient path (halt early to satisfy KL),
+and the halt distribution loses the per-instance signal it needs.
+
+**What the experiment was actually trying to do, and where the
+substrate failed:**
+
+- **Goal**: show E[k] tracks instance difficulty within a single
+  trained model.
+- **Required**: (a) dynamics tractable for the model so L_k can be
+  meaningfully low for some k, and (b) the *required* k differs by
+  instance.
+- **What happened**: pool-on (E12) made k irrelevant (L_k uniformly
+  low ⇒ halt is KL-dominated near prior); pool-off (E13) made k useless
+  (L_k uniformly high ⇒ halt is KL-dominated near k=1).
+- **Open**: the middle regime — dynamics tractable enough to learn
+  cleanly but with depth genuinely binding — needs a different
+  substrate. Likely candidates: pool with one channel but not all
+  three, or a Q1-positive game where pool *cannot* substitute even
+  when on (flood-fill / non-axis-aligned propagation).
+
+Saved figures (both with corrected padding): `varislide_per_level_figure.{pdf,png}`
+(pool-on) and `varislide_per_level_nopool_v2_fixed_figure.{pdf,png}`
+(pool-off, v2 loss).
+
 #### v1 limitations (worth knowing before reading numbers)
 
 - **Inference uses final-step logits, not the halt-aware prediction.**
@@ -356,16 +432,127 @@ loss decreased monotonically; eval ran end-to-end.
   halt — closer to NCA semantics — wasn't implemented; cells all halt
   together.
 
-#### Predictions worth checking with E6
+#### Smoke-test result: halt head learns sensible depth on Collapse-L0
 
-- On Collapse (which shared n=2 already saturates), the halt distribution
-  should concentrate on small k.
-- On a Q1-positive game (Bouncers / E1, or the flood-fill pathfinding
-  game / E8 if found), the halt distribution should be wider, and E[k]
-  should track problem difficulty.
-- The KL prior weight is the single most sensitive hyperparameter:
-  `halt_kl_weight=0` will let the model never halt (effectively
-  fixed-depth-T); `halt_kl_weight=∞` will collapse to the prior.
+300 updates at h=64 (small), `halt_prior_p=0.2`, `halt_kl_weight=0.01`,
+batch of 64 transitions:
+
+| step k | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 |
+|---|---|---|---|---|---|---|---|---|
+| `p_k` (learned) | 0.235 | **0.302** | 0.239 | 0.142 | 0.059 | 0.018 | 0.004 | 0.001 |
+| Geom prior | 0.200 | 0.160 | 0.128 | 0.102 | 0.082 | 0.066 | 0.052 | 0.210 |
+
+`E[halt step] = 2.55` (prior would give 4.16); `KL(p ‖ prior) = 0.38`
+nats. **56/64** batch elements pick k=2 as their argmax. Matches F2:
+Collapse-L0 saturates at n_steps=2, and the halt head independently
+discovered the same.
+
+#### KL-weight sensitivity sweep (3000 updates, h=128, Collapse-L0)
+
+| `halt_kl_weight` | best loss | E[k] | p_1 | p_2 | p_3 | p_4 | p_5..8 |
+|---|---|---|---|---|---|---|---|
+| 0 (no KL)        | 6.09e-3 | **1.08** | 0.92 | 0.07 | 0.00 | 0.00 | 0.00 |
+| 0.01 (default)   | 6.67e-3 | 4.03 | 0.01 | 0.21 | 0.27 | 0.20 | 0.31 |
+| 0.1 (strong)     | 6.60e-3 | 3.72 | 0.16 | 0.21 | 0.18 | 0.13 | 0.32 |
+
+**Findings:**
+
+- **`kl=0` collapses the halt distribution to step 1.** This is the
+  standard PonderNet failure mode: with no regularizer, the gradient
+  takes the path of least resistance and forces λ_1 ≈ 1, so all loss
+  mass is on L_1. The halt head learns "always halt now"; deep iteration
+  is unused.
+- **`kl=0.01` (default) is a clean working point.** The distribution is
+  data-driven (peak at k=3, nontrivial mass through k=8) and not
+  dominated by the prior.
+- **`kl=0.1` (strong)** pulls the distribution closer to the prior shape
+  (head and truncation both visible) at modest train-loss cost.
+- **Train loss is ~constant (6.0e-3 to 6.7e-3) across all three.**
+  Once Collapse's dynamics are learned, *which step* the readout
+  happens at barely affects accuracy — confirming F2 (Collapse
+  saturates fast). The KL term is essentially free on this game and
+  necessary to avoid halt collapse.
+
+#### Cross-game gradient (E11 results, 2026-05-03) — muddier than hoped
+
+5000-update runs at h=128, identical recipe across three games chosen
+for an a-priori complexity gradient (sokoban_basic → sokoban_match3 →
+Atlas_Shrank, the last with 4× `again` rules and gravity propagation).
+Halt distribution and final-step state loss:
+
+| game | E[k] | KL | final state_loss | change_err |
+|---|---|---|---|---|
+| sokoban_basic   | 3.98 | 0.29 | 1.5e-3 | low |
+| sokoban_match3  | 4.48 | **0.01** | 5.0e-4 | low |
+| Atlas_Shrank    | 3.09 | 0.20 | 7.4e-4 | **0.29** |
+
+The hypothesized "complexity → deeper halt" doesn't show up as a clean
+monotone gradient. Three things going on:
+
+- **sokoban_match3 KL ≈ 0**: the halt head essentially didn't learn
+  anything game-specific — distribution = the geometric prior. The
+  per-step state loss is low across all k, so there's no gradient
+  signal pulling the halt away from prior.
+- **Atlas_Shrank's change_err is 0.29**: 5000 updates at h=128 wasn't
+  enough to learn its dynamics. The halt distribution reflects an
+  under-trained model, not a saturated one.
+- **All three with full pool features**: pool/cummax/global make the
+  *predictive* problem easy enough that depth isn't binding, so the
+  halt head's training signal is weak. The proper test (Q1) needs
+  pool ablated off, or a game where pool can't substitute.
+
+Saved figure: `nca_wm/logs_halt_arch/multigame_halt_figure.{pdf,png}`.
+Useful as a "what halt distributions look like across games" reference,
+*not* as evidence of complexity-tracked halting. The within-game
+varislide test (E12) is the cleaner demonstration.
+
+#### Within-game per-instance test (E12, pool-on, 2026-05-03) — flat
+
+Custom `varislide` game: one rule (`right [ > Player | no Wall ] -> [ |
+> Player ] again`), 8 levels with the player at distance ∈ {1, 2, 3,
+4, 6, 8, 12, 16} from the right wall. Trained jointly on all 8 levels,
+n_steps=16, n_repeats=16, halt_kl_weight=0.01, halt_prior_p=0.2,
+5000 updates. Per-level halt distribution at eval (filtering to
+"right" action only):
+
+| level | slide_distance | E[halt step] |
+|---|---|---|
+| L0 | 1  | 4.75 |
+| L1 | 2  | 4.78 |
+| L2 | 3  | 4.79 |
+| L3 | 4  | 4.78 |
+| L4 | 6  | 4.82 |
+| L5 | 8  | 4.72 |
+| L6 | 12 | 4.70 |
+| L7 | 16 | 4.68 |
+
+**E[k] is essentially constant (4.7-4.8) across the entire distance
+range.** The model didn't learn to adapt computation per instance.
+Train state_loss ended at 5e-5 (perfectly fit) and change_err ≈ 0, so
+the model *did* learn the dynamics — just without iterating per-input.
+
+This is **F1 in disguise**: with `axis_cummax + global_pool` on, the
+NCA can resolve "where's the wall?" in one step via cummax, so the
+slide is a 1-step prediction problem regardless of distance. Depth
+isn't binding, halt training has no per-input gradient signal, and the
+distribution stabilizes near the prior shape.
+
+**Direct implication for showing per-instance adaptive computation:**
+the test substrate has to be one where pool cannot substitute for
+depth. This collapses the question back into Q1: we need a Q1-positive
+game (no axis-aligned `[X | ... | Y]` shortcut, e.g. flood-fill, light
+beams, multi-character coordination) for adaptive halt to have anything
+interesting to do.
+
+E13 (no-pool varislide, currently running bg `bit1zr59b`) is the
+controlled version: same game, all pool features off. The model now
+needs n_steps ≥ slide_distance to even *see* the wall, so the halt
+head has a real per-input difficulty gradient to fit. If it still
+doesn't track distance after that, we need to question the loss
+formulation; if it does, the pool-vs-depth interaction with halting
+is the load-bearing finding.
+
+Saved figure (pool-on): `nca_wm/logs_halt_arch/varislide_per_level_figure.{pdf,png}`.
 
 #### Beyond v1
 
@@ -376,11 +563,214 @@ loss decreased monotonically; eval ran end-to-end.
   property, but per-cell halting would let cells stop early once their
   local dynamics converged (closer to engine semantics where a rule
   doesn't fire on cells where its precondition is false).
-- **Heuristic stopping.** "No change since last step" — `||h_k − h_{k−1}|| < ε` —
-  is a free baseline that doesn't need a learned head; should be
-  measured against the learned variant.
 - **KL prior shape.** Geometric is the natural default; uniform-over-{1..T}
   or a learned prior are obvious alternatives.
+
+#### Convergence-based stopping (uniform-halt + ε-threshold)
+
+Implemented 2026-05-03 as an alternative to the learned halt head. The
+core idea: instead of training a halt-prediction head (which collapsed
+in E13 because of the F1 ↔ Q2 interaction), train the body so its
+readout is good at *every* step, then halt at inference when consecutive
+predictions stop changing. This matches the PuzzleScript engine's actual
+termination criterion ("stop when state stops changing").
+
+**New CLI flag**: `--halt_mode {ponder, uniform, argmax_st}` (only
+meaningful with `--adaptive_halt`):
+
+- `ponder` (default): existing PonderNet ponder loss with learned halt
+  head + KL prior. Body gradient at every k weighted by p_k → rewards
+  shortcuts.
+- `uniform`: `L = mean_k(L_k)` (every step weighted equally). The halt
+  head's gradients still come from the KL term (so set
+  `--halt_kl_weight=0` for a clean uniform run); the halt distribution
+  is no longer used for the loss. Body must be good at every depth →
+  even more shortcut pressure than ponder.
+- `argmax_st` (added 2026-05-03 in response to a "shortcut pressure"
+  observation): straight-through estimator on the argmax of p. Forward
+  computes `L_{k*}` only at the per-example selected step
+  `k*(b) = argmax_k p_k(b)`; backward gradient on halt logits flows via
+  soft p so halt can still learn. **Removes the per-step shortcut
+  pressure** — body sees gradient only through L at its selected
+  depth, so it isn't penalized for "wrong at k=1" on examples that
+  should compute longer. Keep KL prior on (`--halt_kl_weight=0.01`) to
+  prevent halt collapsing to k=1.
+
+**Inference helper**: `nca_wm/scripts/eval_convergence_halt.py` takes a
+trained checkpoint, computes per-step predictions, and reports the
+effective halt step at multiple ε thresholds (`fraction of cells
+changing < ε between consecutive steps → halt`), plus the prediction
+quality at the convergence step vs at fixed `n_steps` vs at the
+oracle-best step.
+
+**Diagnostic result on existing learned-halt models**: per-step error
+trajectories and Δ_disc (fraction of cells whose binary prediction
+changed between consecutive steps) on three checkpoints:
+
+| model | err_per_step trajectory | Δ_disc trajectory | usable convergence signal? |
+|---|---|---|---|
+| smoke (300u, h=64) | 0.31 → 0.20 monotone↓ | 0.05 → 0.005 monotone↓ | yes |
+| kl=0.01 (3000u, h=128) | 0.19 → 0.13 (k=4 min) → 0.25 | non-monotone, min at k=4 | partially — model *diverges* after k=4 |
+| multigame sokoban_basic | 0.002 → 0.024 monotone↑ | 0.002–0.007 small | no (best at k=1; later steps worse) |
+
+Headline finding: **the learned-halt models drift after their
+expected-halt step** — they only optimize the readout at steps where
+`p_k` is large. For convergence-stopping to work cleanly, the body
+needs to be uniformly good at every step, which is what `--halt_mode
+uniform` is designed to provide.
+
+#### E6c result (2026-05-03) — convergence-halt is a strict win on uniform-trained bodies
+
+Three matched runs on Collapse-L0 (h=128, n_steps=8, n_repeats=8,
+5000 updates), differing only in halt mode:
+
+| mode | per-step err trajectory (k=1..8) | err @ fixed_T=8 | err @ conv-halt (ε=0.01) | mean halt k |
+|---|---|---|---|---|
+| `learned` (PonderNet) | 0.14, 0.07, 0.06, 0.06, 0.06, **0.06**, 0.06, 0.07 | 0.074 | 0.064 | 3.1 |
+| `uniform` (mean-over-k) | 0.13, 0.06, 0.06, **0.06**, 0.06, 0.09, 0.12, 0.15 | **0.149** | **0.063** | 3.0 |
+| `none` (final-step only) | (no per-step output) | 0.017 | n/a | 8 |
+
+(Eval batch = 256 transitions from `Collapse/level_0` cache, mixed
+across the 4 directional actions.)
+
+**Three findings:**
+
+1. **Convergence stopping recovers near-oracle performance on the
+   uniform model.** `uniform` mode's body trains to be good at k=2-5
+   (err ≈ 0.063) but **drifts catastrophically past k=5** (err climbs to
+   0.149 by k=8). Naively reading out at the trained `n_steps=8` is
+   2.4× worse than reading out at the oracle-best step. Convergence
+   halting at ε ∈ {0.005, 0.01, 0.05} picks step 3 automatically with
+   err = 0.063 — **matches the oracle minimum (err 0.062 at k=4) without
+   any learned halt mechanism**.
+
+2. **The drift is inherent to splitting gradient across many readouts.**
+   `learned` mode (which weights early steps more heavily under the
+   ponder loss) drifts much less (k=1..8 err: 0.14, 0.07, 0.06, ..., 0.07).
+   `uniform` mode (which weights all steps equally) sees the drift
+   strongly because it's actively asking the body to be good at all 8
+   steps simultaneously — and the residual stack can't, so later steps
+   become noisy. The net effect: convergence stopping isn't useful for
+   `learned` (no drift to fix) but is essential for `uniform`.
+
+3. **`none` mode wins on absolute error but loses on adaptability.**
+   The single-readout baseline reaches err=0.017 — 4× lower than either
+   adaptive mode at their best step. This isn't surprising: with only
+   one readout, all 8 NCA steps' gradients flow through it; with 8
+   readouts, gradient is divided. The tradeoff: `none` mode gives no
+   per-instance compute control, can't halt early on easy inputs, and
+   has no inference-time mechanism to drop computation. For tasks where
+   adaptive computation is the goal, `uniform` + convergence-halt is
+   the cleanest mechanism we have; for tasks where it isn't, single
+   readout is strictly better.
+
+**Implication for adaptive halt overall**: convergence stopping
+sidesteps the halt-collapse failure mode entirely (no learned head, no
+KL prior to tune, no F1 ↔ Q2 interaction). The remaining work is
+closing the absolute-err gap between uniform-mode and single-readout
+mode — which is an *optimization* problem (how to train a body to be
+uniformly good at all depths without sacrificing peak accuracy), not a
+halting problem. Likely interventions: stochastic unroll length,
+geometric weighting on per-step loss, longer training.
+
+Saved figure: `nca_wm/logs_halt_arch/convergence_halt_figure.{pdf,png}`.
+
+#### Four halt-mode comparison on Collapse-L0 (2026-05-03, **corrected**)
+
+**IMPORTANT correction**: an earlier version of this section had eval
+numbers that were systematically wrong because the analysis script
+read bit-packed cache bytes as raw state (cache stores
+`np.packbits(states, axis=-1)` for ~8× compression). The corrected
+numbers below are dramatically lower across the board, and reverse
+the headline conclusion about `none` mode:
+
+| mode | best per-step err | err @ fixed_T=8 | err @ conv-halt (ε=0.01) | conv-halt picks k≈ |
+|---|---|---|---|---|
+| `ponder`         | **0.005** (k=8) | 0.005 | 0.005 | 2.2 |
+| `uniform`        | 0.005 (k=2)     | 0.045 | 0.005 | 2.0 |
+| `argmax_st`      | 0.005 (k=2)     | 0.075 | 0.005 | 2.5 |
+| `convergence_st` | 0.005 (k=2)     | 0.050 | 0.005 | 2.4 |
+| `none`           | (n/a) — single readout | **0.013** | n/a | 8 |
+
+(per-step err = whole-cell error; full-dataset change_err = error
+restricted to cells that change, on right-action transitions only.
+Eval batch = 256 transitions.)
+
+**Findings (corrected):**
+
+1. **All four adaptive modes reach essentially perfect peak err
+   (~0.005).** The body learns the dynamics in ~1-2 NCA steps; any
+   step beyond that is "extra" computation.
+2. **Drift severity ranks: `argmax_st` > `convergence_st` > `uniform` > `ponder`.**
+   `ponder` mode is essentially flat (no drift at any depth) because
+   its per-step loss weighting reflects the KL-prior'd halt
+   distribution — since halt converges to small k, only later-step
+   weights are tiny and the body stays near its fixed point.
+   `uniform`/`argmax_st`/`convergence_st` have weaker pressure on
+   later steps' usefulness, so they drift past their effective depth.
+3. **Convergence-stopping fully recovers the drift.** All three
+   drifting modes hit the ~0.005 floor under conv-halt at ε=0.01.
+   The mechanism does exactly what it was designed to do.
+4. **`none` mode is actually 2-3× WORSE** than the best adaptive
+   mode (0.013 vs 0.005). The earlier inversion of this conclusion
+   was an analysis artifact (raw bytes read instead of unpacked
+   states). The story is now: **adaptive computation is a strict win
+   on this task** — it gives both lower err *and* the option to halt
+   early at inference.
+5. **The dynamics ARE learned in ~1 NCA step** — see varislide check
+   below. Cells encode (state, action) at embed time; the slot
+   encoder + 1 conv pass + cross-attention seems to be enough to
+   memorize the per-state next-state mapping for the small reachable
+   state spaces of these games. This explains why halt prefers k=1-2
+   so aggressively across all modes.
+
+Saved figure: `nca_wm/logs_halt_arch/halt_modes_comparison_figure.{pdf,png}`.
+
+#### Varislide check: dynamics ARE learned (corrected 2026-05-03)
+
+Per-level best-step change_err (action=3, right) on the full cached
+right-action set, with proper bit-unpacking:
+
+| mode | L0 (d=1) | L3 (d=4) | L5 (d=8) | L7 (d=16) | best_k typical |
+|---|---|---|---|---|---|
+| **pool-on ponder**       | 0.00 | 0.00 | 0.00 | 0.00 | 1 |
+| **pool-off ponder v2**   | 0.07 | 0.00 | 0.00 | 0.01 | 1-2 |
+| **pool-off argmax_st**   | 0.07 | 0.00 | 0.00 | 0.00 | 1 |
+| **pool-off convergence_st** | 0.03 | 0.03 | 0.02 | 0.01 | 2 |
+
+**The model perfectly fits varislide in 1 NCA step — even without
+pool features.** This is genuinely surprising given the no-pool 3×3
+receptive field shouldn't be enough to predict a 16-cell slide.
+
+**Most likely explanation**: each level has only ~30-60 unique
+BFS-reachable states. Each state's encoded `(state, action)` tensor
+is quite distinct (different player positions, different wall
+layouts in the level-conditioning slots). The shared-weight body —
+via cross-attention to the slot-encoder output and a single 3×3
+conv that sees the cell's local neighborhood — effectively
+memorizes a per-state lookup table. Adaptive depth is unnecessary;
+the model isn't doing iterative computation, it's pattern-matching.
+
+This dissolves the F1 ↔ Q2 framing for varislide: the model
+*can* learn the dynamics in 1 step regardless of pool. The earlier
+"halt collapse" findings were correct in describing the halt
+distribution (peaks at k=1-3) but wrong in interpreting them as
+shortcut-pressure failure — the dynamics genuinely complete in 1
+step on this task. Halt converging to k=1 is the *right* answer.
+
+**The relevant question for adaptive halting becomes**: do we have a
+task where the model genuinely *can't* fit the dynamics in 1 step?
+Likely answer: yes for true Q1-positive games (flood-fill, beam
+tracing, multi-character coordination), no for varislide and
+Collapse despite their `again`-driven design. The 1-rule games like
+varislide collapse to "memorize one tick's outcome per starting
+state" with enough training and modest model capacity.
+
+Saved figures:
+- `halt_modes_comparison_figure.{pdf,png}` (Collapse 4-mode comparison, corrected)
+- varislide per-level figures show the *unused* learned halt
+  distribution; the actual model behavior (per-level best step) is
+  reported in the table above.
 
 ### Q3. Cross-game generalization of shared weights
 
@@ -409,11 +799,21 @@ Numbered for reference; status updates land here as runs complete.
 | E5 | Shared-weights, no-LN attn variant | Decoupling whether the per-step `attn_ln_{i}` LNs were doing meaningful per-step work | not started |
 | E6 | Adaptive-halt sweep — halt_kl_weight ∈ {0, 1e-3, 1e-2, 1e-1}, halt_prior_p ∈ {0.05, 0.1, 0.2} on the Q1-positive game | Q2; whether halting actually concentrates probability on a sensible step distribution and whether L_rec beats the equivalent fixed-depth model | implementation landed 2026-05-03 (`--adaptive_halt`); awaits Q1-positive game pick. Smoke-test passed on Collapse-L0 (300 updates). |
 | E6b | Halt-aware inference | Q2 v1 limitation — measure what halting buys at inference if you actually use the halt distribution at predict time | not started; needs apply_fn extension |
-| E6c | Heuristic stopping baseline (`||h_k − h_{k−1}|| < ε`) | Q2; free baseline against learned halting | not started |
+| E6c | Heuristic stopping baseline (`||y_k − y_{k−1}|| < ε`) | Q2; free baseline against learned halting | **done — strict win on uniform-trained bodies** (matches oracle min at ~step 3 vs 2.4× worse at fixed_T=8). See E6c result section above. |
+| E6d | Close uniform vs single-readout absolute-err gap | Optimization side: uniform mode err is 4× worse than single readout. Try stochastic unroll length, geometric per-step weighting, longer training. | not started |
+| E6e | Argmax-ST halt mode — addresses the "every aggregator rewards shortcuts" observation by computing loss at one selected step per example | Q2 — does removing per-step shortcut pressure let the body learn depth-required dynamics in the no-pool regime? | **done — partial**: same halt collapse as ponder on varislide-nopool (E[k] = 1.07-1.25); on Collapse, drift signature differs (sharp k=4 jump) but body has same peak err as other modes. |
+| E6f | Convergence-ST halt mode — symmetric to E6e but step selection comes from body's own convergence pattern (no learned head) | Q2 — does the body learn cleaner depth-required dynamics when the halt rule is mechanically the same at training and inference? | **done**: doesn't fix the no-pool dynamics-learning problem (still F1) but is the only mode that doesn't collapse halt to k=1 (mean k=4-9 on varislide). On Collapse, drifts most severely past k=2 → benefits most from convergence-stopping at inference. |
 | E7 | Cross-game depth seed-variance | F2 / F3 — is the rollout-error noise we see across n one-seed noise or systematic? | not started |
 | E8 | Locate flood-fill parliament/pathfinding game and re-run E1 there | Q1 with the strongest possible substrate (flood-fill ≡ depth-bound propagation) | not started — title not yet located in gallery |
 | E9 (sanity) | Microban L0 shared depth sweep | Out-of-scope for Q1 (axis-aligned chains), kept as a "shared weights port off Collapse" sanity check | L0 done; folds into F2 evidence, not Q1. L0 was too easy (shared n=2 → 0 wrong tiles); all-levels variant ready as `run_microban_alllevels_shared_sweep.sh` if needed |
 | E10 | Hierarchical n_repeats sweep (e.g. n=16 with repeats∈{1,2,4,8,16}) | F2 — what's the right rule-layer granularity? Pure inner-block-only and pure outer-loop-only are extremes; intermediate could win | not started; needs the new `--n_nca_repeats` factorization (added 2026-05-03) |
+| E11 | Multi-game adaptive-halt sweep across a complexity gradient (`sokoban_basic` → `sokoban_match3` → `Atlas_Shrank`) + paper-ready figure | Q2 — does E[halt step] track game complexity? Same shared body, same KL/prior, only the game spec varies. | running (bg `bkykzibu0`); scripts `run_multigame_halt_sweep.sh` + `plot_halt_distributions.py` |
+| E12 | Within-game per-instance halt: custom `varislide` game (1-rule slide-until-wall) trained jointly on levels with player at distances ∈ {1,2,3,4,6,8,12,16}; per-level halt-distribution plot. | Q2 — does the *same* model adapt computation per input instance? Cleaner than E11 because the encoder output is constant across instances; only the spatial state varies. | **done with pool-on, negative result** — E[k] ≈ 4.75 flat across all distances; pool features substitute for depth. See F1+Q2 cross-ref above. |
+| E13 | varislide with all pool features OFF | Force depth to be binding. Hypothesis: E[k] tracks slide_distance. | **done — negative**: model collapses to halt-at-k=1 + identity-prediction (F1 ↔ Q2 interaction). See section above. |
+| E14 | Adaptive halt on a Q1-positive substrate | Show per-instance computation in the regime where pool can't substitute even when on (flood-fill, non-axis propagation). | not started — needs Q1-positive game first |
+| E15 | Varislide × multi-size synthetic levels (widths 6,8,10,12,16) — pool-on vs pool-off | F1 / Q2 — does data diversity break the per-state memorization? | **done — partial**: data diversity DID break memorization (train change_err climbed from 5e-5 single-level to 0.05-0.10 multi-grid pool, 0.12-0.17 multi-grid no-pool; eval change_err 0.30-0.50 on right-action transitions for both). Model attempts to learn the rule but is under-trained at 10k updates / h=128. Visual inspection of predictions shows low-confidence outputs (many cells with no channel > 0.5). |
+| E16 | OOD-width varislide eval (widths 20, 24, never seen during training) at trained depth + at extended n_repeats | Q1+Q2 — does the model generalize the slide rule to wider levels? Does extending n_repeats at inference help on harder OOD examples? | **done — preliminary**: change_err ~0.40-0.50 at OOD widths, but ALSO ~0.30-0.40 at IN-distribution widths (with held-out seed). Increasing n_repeats {16, 32, 48} doesn't help (in fact slight degradation). Conclusion is moot until in-distribution training succeeds; needs E17. |
+| E17 | Varislide synth multi-grid with longer training (50k-100k updates) and/or h=256 | Determine if data diversity + sufficient compute lets the model actually learn the slide rule (vs current under-trained state). | not started |
 
 Sweep scripts live in `nca_wm/scripts/`; templates:
 `run_collapse_shared_weights_sweep.sh` (the F2 sweep),

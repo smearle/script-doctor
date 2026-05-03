@@ -1735,7 +1735,8 @@ def make_train_step(model, optimizer, conditional=False,
                     vq_loss_weight: float = 1.0,
                     adaptive_halt: bool = False,
                     halt_prior_p: float = 0.1,
-                    halt_kl_weight: float = 0.01):
+                    halt_kl_weight: float = 0.01,
+                    halt_mode: str = "ponder"):
     """Returns a JIT-compiled train step with a win-prediction head.
 
     If ``sprite_loss_weight > 0`` (and conditional), also optimizes a sprite-
@@ -1820,9 +1821,13 @@ def make_train_step(model, optimizer, conditional=False,
         last_surv = jnp.exp(jnp.sum(log_one_minus[:-1], axis=0))  # (B,)
         p = p.at[-1].set(last_surv)                             # (T, B), Σ_k p_k = 1
 
-        # Per-step state loss with the same change-weighting scheme.
-        # Vectorise over T by reshaping: treat T as an outer axis.
-        # bce_k: (T, B, n_out, H, W); take per-step mean (weighted).
+        # Per-step, per-batch-element state loss. Critically we keep the
+        # batch axis until *after* multiplying by p, so each batch element's
+        # halt distribution can pair with its own per-step loss — which is
+        # what enables per-input adaptive halting. (The previous version
+        # averaged loss + p over batch independently and then took their
+        # outer product; that lost the per-element coupling that PonderNet
+        # depends on.)
         next_b = next_states[None]                              # (1, B, n_out, H, W)
         states_b = states[None]
         bce = optax.sigmoid_binary_cross_entropy(per_step_logits, jnp.broadcast_to(next_b, per_step_logits.shape))
@@ -1830,25 +1835,75 @@ def make_train_step(model, optimizer, conditional=False,
             changed = (states_b != next_b).astype(bce.dtype)
             changed = jnp.broadcast_to(changed, per_step_logits.shape)
             weight = 1.0 + change_loss_weight * changed
-            # Per-step state loss = weighted-mean BCE for each k.
-            state_loss_per_step = (bce * weight).sum(axis=(1, 2, 3, 4)) / weight.sum(axis=(1, 2, 3, 4))
+            # (T, B): weighted-mean BCE per (step, batch-element).
+            state_loss_per_step_per_b = (bce * weight).sum(axis=(2, 3, 4)) / weight.sum(axis=(2, 3, 4))
         else:
-            state_loss_per_step = bce.mean(axis=(1, 2, 3, 4))   # (T,)
+            state_loss_per_step_per_b = bce.mean(axis=(2, 3, 4))  # (T, B)
 
-        # Per-step win BCE (mean over batch).
+        # Per-step, per-batch-element win BCE.
         wons_f = wons.astype(jnp.float32)
-        win_bce_k = jax.vmap(
-            lambda wl: _weighted_bce_with_logits(wl, wons_f, win_pos_weight).mean()
-        )(per_step_win)                                          # (T,)
+        # _weighted_bce_with_logits returns (B,) for each step's (B,) logits.
+        win_bce_per_step_per_b = jax.vmap(
+            lambda wl: _weighted_bce_with_logits(wl, wons_f, win_pos_weight)
+        )(per_step_win)                                          # (T, B)
 
-        # Per-step total head loss (state + win), then expected-step loss.
-        L_per_step = state_loss_per_step + win_loss_weight * win_bce_k  # (T,)
-        # E_p[L]: weight by p over T, then mean over batch.
-        # p has shape (T, B); per-batch weighted L_k. We summed L_k over
-        # the batch already; so use p.mean(axis=1) as the marginal weight.
-        # (Equivalent to assuming the batch-mean L is the same per item.)
-        p_marginal = p.mean(axis=1)                              # (T,)
-        L_rec = (p_marginal * L_per_step).sum()
+        # Per-batch-element total head loss at each step.
+        L_per_step_per_b = state_loss_per_step_per_b + win_loss_weight * win_bce_per_step_per_b  # (T, B)
+        # Loss aggregation across the T (per-step) axis. Three modes:
+        #   ponder    — PonderNet-style: weight by learned halt distribution p.
+        #               L = E_b[Σ_k p_k(b) · L_k(b)]. Each example chooses its
+        #               own halt step via the halt head; KL regularizer pulls
+        #               p toward a geometric prior. Body gets gradient at
+        #               every k, weighted — rewards shortcut predictions.
+        #   uniform   — mean over k (treats every step's prediction as equally
+        #               important). Body must make readout good at *every*
+        #               depth — prerequisite for convergence-based stopping at
+        #               inference but actively rewards shortcuts even more.
+        #   argmax_st — Straight-through argmax: forward computes L only at
+        #               k* = argmax_k p_k(b) (one selected step per batch
+        #               element); backward gradient on halt logits flows via
+        #               soft p (so halt can still learn). Body sees gradient
+        #               only through L_{k*}, so it isn't penalized for being
+        #               wrong at unselected k's. Combined with the KL prior
+        #               this should let the model learn depth-specialised
+        #               predictions per instance without shortcut pressure.
+        if halt_mode == "uniform":
+            L_rec = L_per_step_per_b.mean()  # mean over (T, B)
+        elif halt_mode == "argmax_st":
+            # Hard one-hot mask of argmax in forward; soft p in backward.
+            k_star = jnp.argmax(p, axis=0)                        # (B,)
+            mask_hard = jax.nn.one_hot(k_star, T, axis=0)          # (T, B)
+            mask = mask_hard + p - jax.lax.stop_gradient(p)
+            L_rec = (mask * L_per_step_per_b).sum(axis=0).mean()
+        elif halt_mode == "convergence_st":
+            # Convergence-based selection. k*(b) = first k where the
+            # discrete prediction has converged (fraction of cells whose
+            # binary readout flipped between k-1 and k is below
+            # halt_prior_p). If never converges within T, falls back to T.
+            # No halt-head gradient is meaningful here (the head is unused
+            # for selection); body gradient flows only through L_{k*}.
+            B_ax = per_step_logits.shape[1]
+            preds = (jax.nn.sigmoid(per_step_logits) > 0.5).astype(jnp.float32)
+            n_cells = preds.shape[2] * preds.shape[3] * preds.shape[4]
+            # diff[k] = fraction of cells changing between step k and k-1
+            # for k=1..T-1.
+            diff = (preds[1:] != preds[:-1]).astype(jnp.float32).sum(
+                axis=(2, 3, 4)) / n_cells                          # (T-1, B)
+            converged = diff < halt_prior_p                        # (T-1, B)
+            # Stack a sentinel "always converged" row at the end so argmax
+            # finds the latest step if no earlier convergence happened.
+            converged_full = jnp.concatenate(
+                [converged, jnp.ones((1, B_ax), dtype=bool)], axis=0)  # (T, B)
+            k_star_idx = jnp.argmax(converged_full.astype(jnp.int32), axis=0)
+            k_star = jnp.minimum(k_star_idx + 1, T - 1)             # (B,) in 0..T-1
+            mask_hard = jax.nn.one_hot(k_star, T, axis=0)           # (T, B)
+            L_rec = (mask_hard * L_per_step_per_b).sum(axis=0).mean()
+        else:  # "ponder" (default)
+            L_rec = (p * L_per_step_per_b).sum(axis=0).mean()
+        # Batch-marginal helpers for the reporting metrics below.
+        state_loss_per_step = state_loss_per_step_per_b.mean(axis=1)  # (T,)
+        win_bce_k = win_bce_per_step_per_b.mean(axis=1)               # (T,)
+        p_marginal = p.mean(axis=1)                                    # (T,)
 
         # KL(p || Geometric(halt_prior_p)) per batch element, mean.
         # prior_k = (1 - halt_prior_p)^(k-1) * halt_prior_p for k < T;
@@ -2155,6 +2210,7 @@ def train(
     vq_loss_weight: float = 1.0,
     halt_prior_p: float = 0.1,
     halt_kl_weight: float = 0.01,
+    halt_mode: str = "ponder",
 ):
     """Train (or resume training) the NCA world model.
 
@@ -2417,6 +2473,7 @@ def train(
         adaptive_halt=getattr(model, "adaptive_halt", False),
         halt_prior_p=halt_prior_p,
         halt_kl_weight=halt_kl_weight,
+        halt_mode=halt_mode,
     )
     per_game_sprites_np = dataset.get("per_game_sprites")
     eval_forward = make_eval_forward(model, conditional=conditional)
@@ -4126,7 +4183,31 @@ def main():
                    help="Weight on KL(p || Geom(halt_prior_p)) in the "
                         "ponder loss. Larger → stronger pressure toward the "
                         "geometric prior; smaller → halt distribution is "
-                        "fit to data with less regularization.")
+                        "fit to data with less regularization. Ignored "
+                        "when --halt_mode=uniform.")
+    p.add_argument("--halt_mode",
+                   choices=["ponder", "uniform", "argmax_st", "convergence_st"],
+                   default="ponder",
+                   help="Per-step loss aggregation under --adaptive_halt. "
+                        "'ponder' (default) is PonderNet-style with the "
+                        "learned halt distribution + KL prior. 'uniform' "
+                        "weights every step equally — pre-requisite for "
+                        "convergence-based stopping at inference, since "
+                        "the body has to be good at every depth (not just "
+                        "at the expected halt step). Set --halt_kl_weight=0 "
+                        "with uniform. 'argmax_st' uses straight-through "
+                        "estimator on the argmax of p: forward computes L "
+                        "only at the single selected step, backward updates "
+                        "halt logits via soft p. Removes the shortcut "
+                        "pressure of weighing every k, but body specialises "
+                        "at one depth per example — keep KL prior on to "
+                        "prevent halt collapse to k=1. 'convergence_st' "
+                        "selects the first k at which the binary readout "
+                        "has converged (fraction of cells flipping below "
+                        "halt_prior_p), then computes L only at that step. "
+                        "No halt-head signal is used; body gradient flows "
+                        "through k* iterations only. Training and inference "
+                        "share the same halting rule mechanically.")
     p.add_argument("--n_nca_repeats", type=int, default=1,
                    help="rule_attn-only: factor n_nca_steps into a "
                         "(n_layers × n_repeats) hierarchy mirroring the "
@@ -4290,7 +4371,11 @@ def main():
         if args.change_loss_weight != 5.0: parts.append(f"clw{args.change_loss_weight:g}")
         if args.architecture != "rule_attn": parts.append(f"arch-{args.architecture}")
         if args.n_nca_repeats != 1: parts.append(f"rep{args.n_nca_repeats}")
-        if args.adaptive_halt: parts.append(f"halt-p{args.halt_prior_p:g}-kl{args.halt_kl_weight:g}")
+        if args.adaptive_halt:
+            if args.halt_mode == "uniform":
+                parts.append("halt-uniform")
+            else:
+                parts.append(f"halt-p{args.halt_prior_p:g}-kl{args.halt_kl_weight:g}")
         if args.vq_codebook:
             parts.append(f"vq{args.vq_codebook_size}")
         if args.lr_schedule != "cosine": parts.append(f"lr-{args.lr_schedule}")
@@ -4432,7 +4517,7 @@ def main():
                     evolve_n_mutations_min=args.synthetic_evolve_n_mutations_min,
                     evolve_n_mutations_max=args.synthetic_evolve_n_mutations_max,
                     encode_sprites=args.encode_sprites,
-                    kernel_sep=args.kernel_sep,
+                    kernel_sep=getattr(args, "kernel_sep", False),
                     max_transitions_per_game=(args.max_transitions_per_game or None),
                 )
             else:
@@ -4557,6 +4642,7 @@ def main():
                 vq_loss_weight=args.vq_loss_weight,
                 halt_prior_p=args.halt_prior_p,
                 halt_kl_weight=args.halt_kl_weight,
+                halt_mode=args.halt_mode,
             )
             # (curves saved inside train() with per-game arrays)
             os.makedirs(save_dir, exist_ok=True)

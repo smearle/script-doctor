@@ -1,0 +1,110 @@
+title VariSlide
+author claude
+homepage local
+
+(
+  Minimal Collapse-derivative for the adaptive-halt within-game test.
+  One rule, one action does work: pressing right makes the player slide
+  cell-by-cell until hitting a wall (engine resolves the `again` loop
+  within a single tick). Each level places the player at a different
+  distance from the right wall, so the same model has to do varying
+  amounts of computation per instance to predict the next state.
+
+  The halt head should learn to halt at depth ~= distance for "right"
+  transitions, and ~= 1 for any other action (which is a no-op here).
+)
+
+========
+OBJECTS
+========
+
+Background
+white
+
+Wall
+darkgray
+
+Player
+blue
+.000.
+.000.
+00000
+.000.
+.0.0.
+
+=======
+LEGEND
+=======
+
+. = Background
+# = Wall
+P = Player
+
+=======
+SOUNDS
+=======
+
+================
+COLLISIONLAYERS
+================
+
+Background
+Wall
+Player
+
+======
+RULES
+======
+
+(slide right until wall)
+right [ > Player | no Wall ] -> [ | > Player ] again
+
+==============
+WINCONDITIONS
+==============
+
+(no win — purely a dynamics test bed)
+
+=======
+LEVELS
+=======
+
+(distance 1)
+######
+#P#..#
+######
+
+(distance 2)
+######
+#P.#.#
+######
+
+(distance 3)
+######
+#P..##
+######
+
+(distance 4)
+#######
+#P...##
+#######
+
+(distance 6)
+#########
+#P.....##
+#########
+
+(distance 8)
+###########
+#P.......##
+###########
+
+(distance 12)
+###############
+#P...........##
+###############
+
+(distance 16)
+###################
+#P...............##
+###################
