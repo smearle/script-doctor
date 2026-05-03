@@ -3954,15 +3954,21 @@ def main():
                         "deep unrolls keep contact with the original "
                         "observation. No-op for FiLM/uncond (those already "
                         "have the input skip).")
-    p.add_argument("--shared_weights", action="store_true",
-                   help="rule_attn-only: share NCA-body weights (conv, "
-                        "pool_proj, attn_ln, slot_ln, cell_slot_xattn, out) "
-                        "across all n_nca_steps iterations. Matches the "
-                        "PuzzleScript engine's inductive bias (one rule set, "
-                        "applied repeatedly until convergence) and decouples "
-                        "depth from parameter count. Prerequisite for any "
-                        "adaptive-halting variant. No-op for FiLM/uncond — "
-                        "NCAWorldModel is already shared-weight by design.")
+    p.add_argument("--n_nca_repeats", type=int, default=1,
+                   help="rule_attn-only: factor n_nca_steps into a "
+                        "(n_layers × n_repeats) hierarchy mirroring the "
+                        "PuzzleScript engine's two loop levels. Inner block "
+                        "of n_layers = n_nca_steps // n_nca_repeats distinct "
+                        "rule-application layers (each with its own weights, "
+                        "analogous to one ordered rule list). Outer loop "
+                        "applies the inner block n_nca_repeats times, sharing "
+                        "weights across repeats — analogous to the engine's "
+                        "`again` loop. Defaults (n_nca_repeats=1) reproduce "
+                        "the historical per-step body bit-identically; "
+                        "n_nca_repeats=n_nca_steps is fully shared (one rule "
+                        "layer applied n_steps times). Constraint: "
+                        "n_nca_steps must be divisible by n_nca_repeats. "
+                        "No-op for FiLM/uncond.")
     p.add_argument("--max_transitions_per_game", type=int, default=200_000,
                    help="Cap per-game transition count (uniformly subsample). "
                         "0 disables. Essential for scaling to many games with "
@@ -4096,7 +4102,7 @@ def main():
         if args.encode_sprites: parts.append("spr")
         if args.change_loss_weight != 5.0: parts.append(f"clw{args.change_loss_weight:g}")
         if args.architecture != "rule_attn": parts.append(f"arch-{args.architecture}")
-        if args.shared_weights: parts.append("shared")
+        if args.n_nca_repeats != 1: parts.append(f"rep{args.n_nca_repeats}")
         if args.vq_codebook:
             parts.append(f"vq{args.vq_codebook_size}")
         if args.lr_schedule != "cosine": parts.append(f"lr-{args.lr_schedule}")
@@ -4305,7 +4311,7 @@ def main():
                     vq_commitment_weight=args.vq_commitment_weight,
                     use_layernorm=args.use_layernorm,
                     input_skip=args.input_skip,
-                    shared_weights=args.shared_weights,
+                    n_repeats=args.n_nca_repeats,
                 )
             else:  # default: film
                 model = ConditionalNCAWorldModel(

@@ -92,6 +92,7 @@ def build_models(cfg, game_infos):
         use_vq=cfg.get("vq_codebook", False),
         vq_codebook_size=cfg.get("vq_codebook_size", 512),
         vq_commitment_weight=cfg.get("vq_commitment_weight", 0.25),
+        n_repeats=cfg.get("n_nca_repeats", 1),
     )
     dec = SlotTokenDecoder(
         vocab_size=vocab_size + 1,

@@ -413,6 +413,7 @@ def main():
             axis_pool=args.axis_pool,
             axis_cummax=args.axis_cummax,
             global_pool=args.global_pool,
+            n_repeats=getattr(args, "n_nca_repeats", 1),
         )
     else:
         model = ConditionalNCAWorldModel(

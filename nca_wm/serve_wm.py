@@ -54,6 +54,7 @@ def _build_wm(cfg, game_infos):
             d_slot=cfg["d_slot"],
             n_attn_heads=cfg["n_heads"],
             max_seq_len=max_tok_len + 1,
+            n_repeats=cfg.get("n_nca_repeats", 1),
             **pool_kwargs,
         ), max_tok_len
     if arch == "film":
