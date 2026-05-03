@@ -471,6 +471,34 @@ Two findings:
 
 ## Open questions
 
+### Synthetic-to-human level generalization audit (2026-05-03)
+
+Added `nca_wm/scripts/analyze_synth_generalization.py`, a post-hoc reporter
+over existing `heldout_eval*/results.json` files. It writes:
+
+- `nca_wm/figures/synth_generalization/summary.csv`
+- `nca_wm/figures/synth_generalization/summary.md`
+
+Current cached-result readout: single-game synthetic sokoban at the matched
+authored grid size transfers perfectly to Microban/Microban_I. The pattern
+mostly repeats for multi-game synth when using per-game-size / multi-grid
+training: Microban transfer beats identity and is competitive with authored
+`scaling_6`. The failures are now localized: grid-size mismatch (`w=8` synth
+on 6x7 sokoban), mixed-size `nekopuzzle` without multi-grid, `Travelling_salesman`,
+and swarm/dynamics-heavy games such as `kettle`, where synthetic data remains
+weaker than authored data despite beating identity at step 1.
+
+Follow-up for the suspicious `w=8` sokoban failure: added
+`nca_wm/scripts/run_sokoban_w8_memorization_sweep.sh` and
+`nca_wm/scripts/summarize_sokoban_w8_memorization_sweep.py`. This sweeps
+synthetic pool size `{64,256,512}` and NCA depth `{1,2,4}` while holding the
+original failed recipe fixed otherwise, then evaluates Microban/Microban_I plus
+the authored `sokoban_basic` control. Interpretation: if more levels fixes it,
+the 8x8 run was data-diversity limited; if shallow NCA fixes it, the depth/capacity
+is learning grid-position artifacts; if neither fixes it, the generator's 8x8
+distribution is structurally misaligned with 6x7 authored sokoban rather than
+merely under-sampled.
+
 1. **Replay-buffer curriculum confirmed as the right design** (TSP holdout 64.2% vs all static baselines >85%). Open: how does it behave at larger scale (1024-level buffer, 50 generations), and on simpler games where static already does well (sokoban_basic) — does it preserve the perfect Microban transfer or drift?
 2. **Sampling-temperature ablation**: `--replay_softmax_temp 0.005` was a one-shot guess. Sweep over `[0.0001, 0.001, 0.01, 0.1, 1.0]` to find the right concentration.
 3. **Why does TSP plateau at ~64% even with replay-buffer wins?** Either rule-attn memorizes city configurations (probe by training on a fixed pool but evaluating on permuted-city versions of the *same* configurations), or 8×8 has insufficient rule-firing density (probe by trying 16×16 matching authored TSP).

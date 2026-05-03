@@ -81,7 +81,9 @@ def _build_model(cfg: dict, game_infos: list[dict]):
     max_C = max(g["n_objs"] for g in game_infos)
     max_tok_len = max((len(g.get("token_ids", [])) for g in game_infos), default=1)
     max_tok_len = max(max_tok_len, 1)
-    if cfg.get("kernel_sep", False):
+    if "vocab_size" in cfg:
+        vocab_size = int(cfg["vocab_size"])
+    elif cfg.get("kernel_sep", False):
         vocab_size = VOCAB_SIZE_EXT_V2
     elif cfg.get("encode_sprites", False):
         vocab_size = VOCAB_SIZE_EXT
@@ -159,7 +161,7 @@ def _build_heldout_game_info(
         tree, canonical_ids = get_game_tree_from_js(ps_parser, name)
         token_ids = tokenize_game(
             tree, canonical_ids,
-            encode_sprites=encode_sprites, kernel_sep=kernel_sep,
+            encode_sprites=encode_sprites,
         )
     except Exception as e:
         print(f"  SKIP {name}: tokenize failed ({e})")
@@ -337,6 +339,7 @@ def evaluate_heldout(
     out_subdir: str = "heldout_eval",
     seed: int = 0,
     max_levels_per_game: int | None = None,
+    allow_training_games: bool = False,
 ):
     print(f"\n=== Loading checkpoint from {save_dir} ===")
     cfg, params, train_game_infos = _load_run(save_dir)
@@ -363,10 +366,12 @@ def evaluate_heldout(
     encode_sprites = cfg.get("encode_sprites", False)
     kernel_sep = cfg.get("kernel_sep", False)
     for name in heldout_games:
-        if name in train_game_names:
+        if name in train_game_names and not allow_training_games:
             print(f"  SKIP {name}: in training set, not held-out")
             skipped.append((name, "in_training_set"))
             continue
+        if name in train_game_names and allow_training_games:
+            print(f"  ALLOW {name}: in training set, rebuilding authored levels for eval")
         info = _build_heldout_game_info(
             name, ps_parser,
             encode_sprites=encode_sprites, kernel_sep=kernel_sep,
@@ -621,6 +626,8 @@ def main():
     ap.add_argument("--seed", type=int, default=0)
     ap.add_argument("--max_levels_per_game", type=int, default=None,
                     help="Cap the number of levels evaluated per held-out game (for fast turnaround).")
+    ap.add_argument("--allow_training_games", action="store_true",
+                    help="Do not skip names that were in the training set; rebuild/evaluate their authored levels.")
     args = ap.parse_args()
 
     heldout = [g.strip() for g in args.heldout_games.split(",") if g.strip()]
@@ -632,6 +639,7 @@ def main():
         out_subdir=args.out_subdir,
         seed=args.seed,
         max_levels_per_game=args.max_levels_per_game,
+        allow_training_games=args.allow_training_games,
     )
 
 

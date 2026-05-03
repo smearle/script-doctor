@@ -1045,7 +1045,7 @@ def collect_multigame_dataset_synthetic(
             tree, canonical_ids = get_game_tree_from_js(ps_parser, name)
             token_ids = tokenize_game(
                 tree, canonical_ids,
-                encode_sprites=encode_sprites, kernel_sep=kernel_sep,
+                encode_sprites=encode_sprites,
             )
         except Exception as e:
             print(f"  WARNING: tokenization failed ({e}), using empty tokens")
