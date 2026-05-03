@@ -1732,7 +1732,10 @@ def make_train_step(model, optimizer, conditional=False,
                     token_decoder_loss_weight: float = 0.0,
                     use_vq: bool = False,
                     vq_commitment_weight: float = 0.25,
-                    vq_loss_weight: float = 1.0):
+                    vq_loss_weight: float = 1.0,
+                    adaptive_halt: bool = False,
+                    halt_prior_p: float = 0.1,
+                    halt_kl_weight: float = 0.01):
     """Returns a JIT-compiled train step with a win-prediction head.
 
     If ``sprite_loss_weight > 0`` (and conditional), also optimizes a sprite-
@@ -1781,6 +1784,121 @@ def make_train_step(model, optimizer, conditional=False,
             sprite_mse = jnp.asarray(0.0, dtype=jnp.float32)
         return total, (state_loss, acc, change_acc, win_bce, win_acc, win_recall,
                         sprite_mse)
+
+    def _ponder_loss(per_step_logits, per_step_win, per_step_halt_logits,
+                      states, next_states, wons):
+        """PonderNet-style adaptive-halting loss.
+
+        per_step_logits: (T, B, n_out, H, W) — logits at each NCA step.
+        per_step_win:    (T, B)              — win logits at each step.
+        per_step_halt_logits: (T, B)         — halt logits at each step.
+
+        Halt distribution: λ_k = sigmoid(halt_logits_k) for k < T; the last
+        step is forced halt (λ_T := 1) so Σ_k p_k = 1 exactly.
+            p_k = λ_k · Π_{j<k}(1 - λ_j)
+
+        Loss = Σ_k p_k · L_k + halt_kl_weight · KL(p || Geom(halt_prior_p))
+        where L_k is the same _heads_loss-style state+win loss at step k.
+
+        Returns (total_loss, aux) where aux mirrors _heads_loss's aux but
+        with metrics computed at the *expected* step (Σ_k p_k · metric_k)
+        plus an extra (expected_steps, kl) pair.
+        """
+        T = per_step_logits.shape[0]
+        # Halt probs: λ ∈ (0, 1)^{T, B}, with the last row forced to 1.
+        lam = jax.nn.sigmoid(per_step_halt_logits)              # (T, B)
+        # Build cumulative survival Π_{j<k}(1 - λ_j) along T.
+        # surv[k] = Π_{j<k} (1 - λ_j); surv[0] = 1.
+        log_one_minus = jnp.log(jnp.clip(1.0 - lam, 1e-6, 1.0))  # (T, B)
+        surv = jnp.exp(jnp.concatenate([
+            jnp.zeros((1, log_one_minus.shape[1])),
+            jnp.cumsum(log_one_minus, axis=0)[:-1],
+        ], axis=0))                                             # (T, B)
+        # p_k for k<T uses λ_k * surv_k; p_T uses surv_T (forced halt).
+        p = lam * surv                                          # (T, B)
+        # Replace the last row with the forced-halt mass.
+        last_surv = jnp.exp(jnp.sum(log_one_minus[:-1], axis=0))  # (B,)
+        p = p.at[-1].set(last_surv)                             # (T, B), Σ_k p_k = 1
+
+        # Per-step state loss with the same change-weighting scheme.
+        # Vectorise over T by reshaping: treat T as an outer axis.
+        # bce_k: (T, B, n_out, H, W); take per-step mean (weighted).
+        next_b = next_states[None]                              # (1, B, n_out, H, W)
+        states_b = states[None]
+        bce = optax.sigmoid_binary_cross_entropy(per_step_logits, jnp.broadcast_to(next_b, per_step_logits.shape))
+        if change_loss_weight > 0:
+            changed = (states_b != next_b).astype(bce.dtype)
+            changed = jnp.broadcast_to(changed, per_step_logits.shape)
+            weight = 1.0 + change_loss_weight * changed
+            # Per-step state loss = weighted-mean BCE for each k.
+            state_loss_per_step = (bce * weight).sum(axis=(1, 2, 3, 4)) / weight.sum(axis=(1, 2, 3, 4))
+        else:
+            state_loss_per_step = bce.mean(axis=(1, 2, 3, 4))   # (T,)
+
+        # Per-step win BCE (mean over batch).
+        wons_f = wons.astype(jnp.float32)
+        win_bce_k = jax.vmap(
+            lambda wl: _weighted_bce_with_logits(wl, wons_f, win_pos_weight).mean()
+        )(per_step_win)                                          # (T,)
+
+        # Per-step total head loss (state + win), then expected-step loss.
+        L_per_step = state_loss_per_step + win_loss_weight * win_bce_k  # (T,)
+        # E_p[L]: weight by p over T, then mean over batch.
+        # p has shape (T, B); per-batch weighted L_k. We summed L_k over
+        # the batch already; so use p.mean(axis=1) as the marginal weight.
+        # (Equivalent to assuming the batch-mean L is the same per item.)
+        p_marginal = p.mean(axis=1)                              # (T,)
+        L_rec = (p_marginal * L_per_step).sum()
+
+        # KL(p || Geometric(halt_prior_p)) per batch element, mean.
+        # prior_k = (1 - halt_prior_p)^(k-1) * halt_prior_p for k < T;
+        # prior_T = (1 - halt_prior_p)^(T-1)  (truncation mass).
+        ks = jnp.arange(T)
+        log_prior = jnp.where(
+            ks < T - 1,
+            ks * jnp.log1p(-halt_prior_p) + jnp.log(halt_prior_p),
+            (T - 1) * jnp.log1p(-halt_prior_p),
+        )                                                        # (T,)
+        # KL = Σ_k p_k log(p_k / prior_k), averaged over batch.
+        log_p = jnp.log(jnp.clip(p, 1e-8, 1.0))                  # (T, B)
+        kl_per_b = (p * (log_p - log_prior[:, None])).sum(axis=0)  # (B,)
+        kl = kl_per_b.mean()
+
+        total = L_rec + halt_kl_weight * kl
+
+        # Reporting metrics: use the expected step (E[k]+1, since k is
+        # 0-indexed) and the expected per-step state metrics.
+        exp_step = (p_marginal * (jnp.arange(T) + 1).astype(jnp.float32)).sum()
+
+        # For aux compatibility with _heads_loss, compute expected-state-loss
+        # (= L_rec but state-only), plus expected acc and change_acc using
+        # the per-step argmax predictions weighted by p.
+        preds = (jax.nn.sigmoid(per_step_logits) > 0.5).astype(jnp.float32)
+        next_b_full = jnp.broadcast_to(next_b, per_step_logits.shape)
+        states_b_full = jnp.broadcast_to(states_b, per_step_logits.shape)
+        correct = (preds == next_b_full).astype(jnp.float32)
+        acc_k = correct.mean(axis=(1, 2, 3, 4))                  # (T,)
+        changed_full = (states_b_full != next_b_full).astype(jnp.float32)
+        changed_correct_k = (correct * changed_full).sum(axis=(1, 2, 3, 4))
+        n_changed_k = changed_full.sum(axis=(1, 2, 3, 4))
+        change_acc_k = jnp.where(n_changed_k > 0, changed_correct_k / n_changed_k, 1.0)
+        acc = (p_marginal * acc_k).sum()
+        change_acc = (p_marginal * change_acc_k).sum()
+        # Win metrics from the expected-step.
+        win_preds = (jax.nn.sigmoid(per_step_win) > 0.5).astype(jnp.float32)
+        win_acc_k = (win_preds == wons_f[None]).astype(jnp.float32).mean(axis=1)
+        win_acc = (p_marginal * win_acc_k).sum()
+        n_win = wons_f.sum()
+        win_tp_k = ((win_preds == 1.0) & (wons_f[None] == 1.0)).astype(jnp.float32).sum(axis=1)
+        win_recall_k = jnp.where(n_win > 0, win_tp_k / n_win, 1.0)
+        win_recall = (p_marginal * win_recall_k).sum()
+
+        sprite_mse = jnp.asarray(0.0, dtype=jnp.float32)
+        state_loss_exp = (p_marginal * state_loss_per_step).sum()
+        win_bce_exp = (p_marginal * win_bce_k).sum()
+
+        return total, (state_loss_exp, acc, change_acc, win_bce_exp,
+                       win_acc, win_recall, sprite_mse), (exp_step, kl)
 
     joint = decoder is not None and token_decoder_loss_weight > 0
 
@@ -1854,17 +1972,30 @@ def make_train_step(model, optimizer, conditional=False,
                     )
                     vq_cb_loss, vq_commit_loss, vq_indices = vq_aux
                     vq_util = _vq_utilization(vq_indices)
+                elif adaptive_halt:
+                    logits, win_logit, sprite_logits, halt_aux = model.apply(
+                        params, states, action_onehots, game_tokens, game_masks,
+                    )
+                    z = jnp.asarray(0.0, dtype=jnp.float32)
+                    vq_cb_loss, vq_commit_loss, vq_util = z, z, z
                 else:
                     logits, win_logit, sprite_logits = model.apply(
                         params, states, action_onehots, game_tokens, game_masks
                     )
                     z = jnp.asarray(0.0, dtype=jnp.float32)
                     vq_cb_loss, vq_commit_loss, vq_util = z, z, z
-                heads_total, aux = _heads_loss(
-                    logits, win_logit, sprite_logits,
-                    states, next_states, wons,
-                    target_sprites=target_sprites,
-                )
+                if adaptive_halt:
+                    per_step_logits, per_step_win, per_step_halt = halt_aux
+                    heads_total, aux, _ = _ponder_loss(
+                        per_step_logits, per_step_win, per_step_halt,
+                        states, next_states, wons,
+                    )
+                else:
+                    heads_total, aux = _heads_loss(
+                        logits, win_logit, sprite_logits,
+                        states, next_states, wons,
+                        target_sprites=target_sprites,
+                    )
                 total = heads_total
                 if use_vq:
                     total = total + vq_loss_weight * (
@@ -1900,6 +2031,21 @@ def make_train_step(model, optimizer, conditional=False,
             return (params_new, opt_state_new, loss) + aux
 
     return train_step
+
+
+def make_apply_fn(model):
+    """Jitted model.apply that always returns a (logits, win, sprite) 3-tuple.
+
+    The model can return additional trailing aux tensors (slots, vq_aux,
+    halt_aux) under various flags, but the eval / rollout / rendering
+    code paths only need the first three. This wrapper hides the
+    branching so those callers stay simple.
+    """
+    _jit = jax.jit(model.apply)
+    def apply_fn(*args, **kwargs):
+        out = _jit(*args, **kwargs)
+        return out[0], out[1], out[2]
+    return apply_fn
 
 
 def make_eval_forward(model, conditional: bool):
@@ -2007,6 +2153,8 @@ def train(
     use_vq: bool = False,
     vq_commitment_weight: float = 0.25,
     vq_loss_weight: float = 1.0,
+    halt_prior_p: float = 0.1,
+    halt_kl_weight: float = 0.01,
 ):
     """Train (or resume training) the NCA world model.
 
@@ -2266,10 +2414,13 @@ def train(
         use_vq=use_vq,
         vq_commitment_weight=vq_commitment_weight,
         vq_loss_weight=vq_loss_weight,
+        adaptive_halt=getattr(model, "adaptive_halt", False),
+        halt_prior_p=halt_prior_p,
+        halt_kl_weight=halt_kl_weight,
     )
     per_game_sprites_np = dataset.get("per_game_sprites")
     eval_forward = make_eval_forward(model, conditional=conditional)
-    apply_fn = jax.jit(model.apply)  # reused by intermittent gif rendering
+    apply_fn = make_apply_fn(model)  # reused by intermittent gif rendering
 
     os.makedirs(save_dir, exist_ok=True)
     # Note: RUNNING.pid lock is written earlier in main() before dataset load,
@@ -2663,7 +2814,7 @@ def evaluate_world_model(
 ):
     """Roll out the world model alongside the real env and measure divergence."""
     env = CppPuzzleScriptEnv(json_str, level_i=level_i, max_episode_steps=max_steps)
-    apply_fn = jax.jit(model.apply)
+    apply_fn = make_apply_fn(model)
 
     all_l1_errors = []
     for ep_i in range(n_episodes):
@@ -2820,7 +2971,7 @@ def evaluate_multigame(
     max_W = max(g["W"] for g in game_infos)
     from nca_wm.rule_attn_model import RuleAttnNCAWorldModel
     conditional = isinstance(model, (ConditionalNCAWorldModel, RuleAttnNCAWorldModel))
-    apply_fn = jax.jit(model.apply)
+    apply_fn = make_apply_fn(model)
 
     # Prepare padded token arrays for conditional eval
     if conditional:
@@ -3370,7 +3521,7 @@ def render_multigame_gifs(
         mask[:len(tids)] = True
         return {"game_tokens": padded, "game_mask": mask}
 
-    apply_fn = jax.jit(model.apply)
+    apply_fn = make_apply_fn(model)
     tag = f"_step{step_label}" if step_label is not None else ""
 
     for info in game_infos:
@@ -3566,7 +3717,7 @@ def play_world_model(
     Each step renders the predicted state as an image and saves a GIF at the end.
     """
     env = CppPuzzleScriptEnv(json_str, level_i=level_i, max_episode_steps=10000)
-    apply_fn = jax.jit(model.apply)
+    apply_fn = make_apply_fn(model)
     n_objs, grid_h, grid_w = env.observation_shape
 
     real_obs, _ = env.reset()
@@ -3722,7 +3873,7 @@ def render_rollout_comparison(
 
     max_steps = len(actions) if actions else n_steps
     env = CppPuzzleScriptEnv(json_str, level_i=level_i, max_episode_steps=max_steps)
-    apply_fn = jax.jit(model.apply)
+    apply_fn = make_apply_fn(model)
     n_objs, grid_h, grid_w = env.observation_shape
 
     real_obs, _ = env.reset()
@@ -3954,6 +4105,28 @@ def main():
                         "deep unrolls keep contact with the original "
                         "observation. No-op for FiLM/uncond (those already "
                         "have the input skip).")
+    p.add_argument("--adaptive_halt", action="store_true",
+                   help="rule_attn-only: enable PonderNet-style adaptive "
+                        "halting. The model emits a halting probability at "
+                        "every NCA step from a small head over pooled `h`. "
+                        "Loss is the expected per-step heads-loss under the "
+                        "induced halt distribution, plus a KL-to-geometric "
+                        "prior regularizer (--halt_prior_p / --halt_kl_weight). "
+                        "Requires --n_nca_repeats=n_nca_steps for the "
+                        "halt-at-step-k semantic to be coherent (one shared "
+                        "rule layer applied k times); otherwise different "
+                        "halts pick between distinct per-step rule layers. "
+                        "Currently supported only in the conditional, "
+                        "non-VQ, non-joint-decoder training path.")
+    p.add_argument("--halt_prior_p", type=float, default=0.1,
+                   help="Geometric-prior parameter for adaptive halt. "
+                        "Smaller → encourages later halt (longer rollouts). "
+                        "Default 0.1 → expected ~10 steps under the prior.")
+    p.add_argument("--halt_kl_weight", type=float, default=0.01,
+                   help="Weight on KL(p || Geom(halt_prior_p)) in the "
+                        "ponder loss. Larger → stronger pressure toward the "
+                        "geometric prior; smaller → halt distribution is "
+                        "fit to data with less regularization.")
     p.add_argument("--n_nca_repeats", type=int, default=1,
                    help="rule_attn-only: factor n_nca_steps into a "
                         "(n_layers × n_repeats) hierarchy mirroring the "
@@ -4068,6 +4241,20 @@ def main():
     if args.vq_codebook and not args.conditional:
         p.error("--vq_codebook requires --conditional (slots come from the "
                 "game encoder, which only exists in conditional mode)")
+    if args.adaptive_halt:
+        if args.architecture != "rule_attn":
+            p.error("--adaptive_halt is only supported with --architecture rule_attn")
+        if not args.conditional:
+            p.error("--adaptive_halt requires --conditional (the v1 ponder loss "
+                    "is wired only into the conditional training path)")
+        if args.vq_codebook:
+            p.error("--adaptive_halt + --vq_codebook is not yet supported")
+        if args.token_decoder_loss_weight > 0:
+            p.error("--adaptive_halt + joint token decoder is not yet supported")
+        if args.n_nca_repeats != args.n_nca_steps:
+            p.error("--adaptive_halt requires --n_nca_repeats == --n_nca_steps "
+                    f"(one shared rule layer applied n_nca_steps times); got "
+                    f"n_nca_repeats={args.n_nca_repeats} vs n_nca_steps={args.n_nca_steps}")
 
     ps_parser = init_ps_lark_parser()
     multigame = args.games is not None
@@ -4103,6 +4290,7 @@ def main():
         if args.change_loss_weight != 5.0: parts.append(f"clw{args.change_loss_weight:g}")
         if args.architecture != "rule_attn": parts.append(f"arch-{args.architecture}")
         if args.n_nca_repeats != 1: parts.append(f"rep{args.n_nca_repeats}")
+        if args.adaptive_halt: parts.append(f"halt-p{args.halt_prior_p:g}-kl{args.halt_kl_weight:g}")
         if args.vq_codebook:
             parts.append(f"vq{args.vq_codebook_size}")
         if args.lr_schedule != "cosine": parts.append(f"lr-{args.lr_schedule}")
@@ -4312,6 +4500,7 @@ def main():
                     use_layernorm=args.use_layernorm,
                     input_skip=args.input_skip,
                     n_repeats=args.n_nca_repeats,
+                    adaptive_halt=args.adaptive_halt,
                 )
             else:  # default: film
                 model = ConditionalNCAWorldModel(
@@ -4366,6 +4555,8 @@ def main():
                 use_vq=args.vq_codebook,
                 vq_commitment_weight=args.vq_commitment_weight,
                 vq_loss_weight=args.vq_loss_weight,
+                halt_prior_p=args.halt_prior_p,
+                halt_kl_weight=args.halt_kl_weight,
             )
             # (curves saved inside train() with per-game arrays)
             os.makedirs(save_dir, exist_ok=True)

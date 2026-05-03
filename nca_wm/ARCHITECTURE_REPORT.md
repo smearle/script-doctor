@@ -298,38 +298,89 @@ Candidate audit (gallery games, by how cleanly they meet the criteria):
 
 Active follow-up experiments — see "In-progress" section below.
 
-### Q2. Adaptive pass count
+### Q2. Adaptive pass count — PonderNet-style halt (v1 implemented 2026-05-03)
 
 A fixed `n_steps` is wasteful for easy transitions and insufficient for
 hard ones. The natural extension: let the model halt — analogous to
 PonderNet / Adaptive Computation Time / Universal Transformers' halting.
-Now well-posed thanks to F2: with one shared body, "halt at step k" is
-asking the same rule set to converge in k iterations, not selecting
-between k different models.
+F2 made this well-posed: with one shared body
+(`--n_nca_repeats=n_nca_steps`), "halt at step k" asks the same rule set
+to converge in k iterations, not selecting between k different models.
 
-Sketch:
+#### What's now in the code
 
-- A small per-cell or global "halt" head reads `h` at each step and emits
-  a halting probability `p_i ∈ [0, 1]`.
-- Loss is the expected loss across halt distributions, with a regularizer
-  encouraging short rollouts (small `E[steps]`).
-- At inference, sample/threshold `p_i` to terminate.
+`RuleAttnNCAWorldModel` gained an `adaptive_halt: bool = False` flag.
+When True:
 
-For PuzzleScript specifically, the engine itself terminates each tick when
-"no rule fires"; analogous "no change since last step" is a natural
-halting signal that could be hard-coded: stop when `||h_i - h_{i-1}|| < eps`.
+- A small head (one shared `LayerNorm` + `Dense(n_hid → 1)`, ~97 params
+  at h=32) reads pooled `h` at every NCA step and emits a halt logit.
+- The model returns per-step `(logits_k, win_logit_k, halt_logit_k)`
+  stacked along a leading T axis as a trailing `halt_aux` element.
 
-Open before implementing:
+Training side (`make_train_step` / `_ponder_loss` in `train.py`):
 
-- Does a halting model beat a fixed-depth model with matched expected
-  steps? Adaptive computation papers consistently report only modest gains.
-- For batched training, halting is simulated via expected-value
-  computation — does this still yield the wall-clock savings that matter
-  at inference?
-- Is the `n_steps` bottleneck binding in practice, or is the
-  body-parameter count the binding constraint?
+- Halt distribution: `λ_k = sigmoid(halt_logit_k)` for `k < T`; the last
+  step is forced halt (`λ_T := 1`) so `Σ_k p_k = 1` exactly, where
+  `p_k = λ_k · Π_{j<k}(1 − λ_j)`.
+- Loss `= L_rec + halt_kl_weight · KL(p ‖ Geom(halt_prior_p))` where
+  `L_rec = Σ_k p_k · L_k` and `L_k` is the same state+win loss
+  `_heads_loss` computes (with the same `change_loss_weight`).
 
-Second-order until Q1 lands.
+CLI flags: `--adaptive_halt`, `--halt_prior_p` (geometric prior
+parameter, default 0.1 → expected ~10 steps), `--halt_kl_weight` (KL
+weight, default 0.01).
+
+Validation gates in `train.py` enforce the prerequisites:
+`--n_nca_repeats == --n_nca_steps`, `--conditional`, no VQ, no joint
+token decoder. Smoke-tested on Collapse-L0 (300 updates, h=64): training
+loss decreased monotonically; eval ran end-to-end.
+
+#### v1 limitations (worth knowing before reading numbers)
+
+- **Inference uses final-step logits, not the halt-aware prediction.**
+  `apply_fn` returns the (logits, win, sprite) at step T. A real
+  inference path would either pick `argmax_k p_k` or use the expected
+  prediction `Σ_k p_k · y_k`. Eval rollouts under v1 are thus *the
+  fixed-depth-T equivalent* — useful only as a sanity check, not as a
+  measurement of what halting buys at inference.
+- **Logged metrics are the expected-step state/win loss, not raw `L_k`
+  or KL.** The KL term enters `loss` but isn't surfaced separately in
+  the log line. Hard to tell from a log alone whether the halt prior
+  is too tight.
+- **No expected-step trace.** `E_p[k]` is computed inside `_ponder_loss`
+  but discarded; should be logged so we can watch the model decide how
+  many steps it actually wants.
+- **Only the conditional / non-VQ / non-joint-decoder path is wired.**
+  FiLM and unconditional bodies don't expose per-step intermediates.
+- **Halt head is global (one halt prob per batch element).** A per-cell
+  halt — closer to NCA semantics — wasn't implemented; cells all halt
+  together.
+
+#### Predictions worth checking with E6
+
+- On Collapse (which shared n=2 already saturates), the halt distribution
+  should concentrate on small k.
+- On a Q1-positive game (Bouncers / E1, or the flood-fill pathfinding
+  game / E8 if found), the halt distribution should be wider, and E[k]
+  should track problem difficulty.
+- The KL prior weight is the single most sensitive hyperparameter:
+  `halt_kl_weight=0` will let the model never halt (effectively
+  fixed-depth-T); `halt_kl_weight=∞` will collapse to the prior.
+
+#### Beyond v1
+
+- **Halt-aware inference.** Add an inference path that thresholds `p_k`
+  or returns `Σ_k p_k · y_k`. Without this, "what does halting buy at
+  inference time?" can't be answered.
+- **Per-cell halting.** PuzzleScript convergence is a per-tick global
+  property, but per-cell halting would let cells stop early once their
+  local dynamics converged (closer to engine semantics where a rule
+  doesn't fire on cells where its precondition is false).
+- **Heuristic stopping.** "No change since last step" — `||h_k − h_{k−1}|| < ε` —
+  is a free baseline that doesn't need a learned head; should be
+  measured against the learned variant.
+- **KL prior shape.** Geometric is the natural default; uniform-over-{1..T}
+  or a learned prior are obvious alternatives.
 
 ### Q3. Cross-game generalization of shared weights
 
@@ -356,7 +407,9 @@ Numbered for reference; status updates land here as runs complete.
 | E3 | Multi-game shared-weights validation on `scaling_large` | Q3 — does the shared inductive bias hold under multi-game training? | not started; script `run_scaling_large_shared_validation.sh` ready |
 | E4 | Param-matched shared-vs-per-step (shared n=16 vs per-step n=2 at ~equal params) | F2 — is the win param efficiency or the inductive bias? | not started |
 | E5 | Shared-weights, no-LN attn variant | Decoupling whether the per-step `attn_ln_{i}` LNs were doing meaningful per-step work | not started |
-| E6 | Adaptive-halt prototype on the Q1-positive game | Q2; lower bound on halting gains in our regime | blocked on Q1 |
+| E6 | Adaptive-halt sweep — halt_kl_weight ∈ {0, 1e-3, 1e-2, 1e-1}, halt_prior_p ∈ {0.05, 0.1, 0.2} on the Q1-positive game | Q2; whether halting actually concentrates probability on a sensible step distribution and whether L_rec beats the equivalent fixed-depth model | implementation landed 2026-05-03 (`--adaptive_halt`); awaits Q1-positive game pick. Smoke-test passed on Collapse-L0 (300 updates). |
+| E6b | Halt-aware inference | Q2 v1 limitation — measure what halting buys at inference if you actually use the halt distribution at predict time | not started; needs apply_fn extension |
+| E6c | Heuristic stopping baseline (`||h_k − h_{k−1}|| < ε`) | Q2; free baseline against learned halting | not started |
 | E7 | Cross-game depth seed-variance | F2 / F3 — is the rollout-error noise we see across n one-seed noise or systematic? | not started |
 | E8 | Locate flood-fill parliament/pathfinding game and re-run E1 there | Q1 with the strongest possible substrate (flood-fill ≡ depth-bound propagation) | not started — title not yet located in gallery |
 | E9 (sanity) | Microban L0 shared depth sweep | Out-of-scope for Q1 (axis-aligned chains), kept as a "shared weights port off Collapse" sanity check | L0 done; folds into F2 evidence, not Q1. L0 was too easy (shared n=2 → 0 wrong tiles); all-levels variant ready as `run_microban_alllevels_shared_sweep.sh` if needed |

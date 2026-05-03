@@ -199,6 +199,14 @@ class RuleAttnNCAWorldModel(nn.Module):
     # behaviour with names `conv_0` (vs the old `conv`); old shared
     # checkpoints will not load — there are none in active use.
     n_repeats: int = 1
+    # Adaptive halting (PonderNet-style). When True, the model emits a
+    # halting probability at every NCA step from a small head over the
+    # globally-pooled `h`, plus a per-step readout (logits) and per-step
+    # win logit. The training loop weights per-step losses by the cumulative
+    # halt distribution and adds a KL-to-geometric-prior regularizer
+    # (controlled by --halt_prior_p / --halt_kl_weight in train.py).
+    # Default off; old checkpoints unaffected.
+    adaptive_halt: bool = False
 
     @nn.compact
     def __call__(self, state, action_onehot, game_tokens, game_mask,
@@ -307,6 +315,24 @@ class RuleAttnNCAWorldModel(nn.Module):
         outs = [nn.Dense(self.n_hid, name=f"out_{i}")
                 for i in range(n_layers)]
 
+        # Per-step readout / win / halt heads. The readout and win heads are
+        # the same Modules used at the end of the model; lifting them above
+        # the loop lets us call them at every step under adaptive_halt
+        # without changing the un-shared / non-halt code path's parameters.
+        # Halt head only allocated when adaptive_halt — keeps default-off
+        # checkpoints param-identical.
+        readout_layer = nn.Dense(self.n_out, name="readout")
+        win_ln = nn.LayerNorm(name="win_ln")
+        win_out = nn.Dense(1, name="win_out")
+        if self.adaptive_halt:
+            halt_ln = nn.LayerNorm(name="halt_ln")
+            halt_out = nn.Dense(1, name="halt_out")
+
+        # Buffers for per-step outputs (only used when adaptive_halt).
+        per_step_logits = []   # each (B, n_out, H, W)
+        per_step_win = []      # each (B,)
+        per_step_halt = []     # each (B,) — raw logit, sigmoid → halt prob
+
         # 3. NCA steps. Each step:
         #    (a) 3x3 conv over hidden state (neighbor interaction)
         #    (b) optional global pool concatenation
@@ -357,20 +383,49 @@ class RuleAttnNCAWorldModel(nn.Module):
                 delta = outs[i](delta)
                 h = h + delta
 
+                if self.adaptive_halt:
+                    step_readout = readout_layer(h)         # (B, H, W, n_out)
+                    step_logits = step_readout.transpose(0, 3, 1, 2)
+                    step_pool = h.mean(axis=(1, 2))         # (B, n_hid)
+                    step_win = win_out(win_ln(step_pool)).squeeze(-1)
+                    step_halt = halt_out(halt_ln(step_pool)).squeeze(-1)
+                    per_step_logits.append(step_logits)
+                    per_step_win.append(step_win)
+                    per_step_halt.append(step_halt)
+
         # 4. Readouts
         # Next-state logits
-        readout = nn.Dense(self.n_out, name="readout")(h)   # (B, H, W, n_out)
+        readout = readout_layer(h)                          # (B, H, W, n_out)
         logits = readout.transpose(0, 3, 1, 2)               # (B, n_out, H, W)
 
         # Win logit: pool + dense
         pooled = h.mean(axis=(1, 2))  # (B, n_hid)
-        pooled = nn.LayerNorm(name="win_ln")(pooled)
-        win_logit = nn.Dense(1, name="win_out")(pooled).squeeze(-1)  # (B,)
+        pooled = win_ln(pooled)
+        win_logit = win_out(pooled).squeeze(-1)             # (B,)
 
         # Sprite placeholder (signature-compatible with ConditionalNCAWorldModel).
         sprite_logits = jnp.zeros((B, self.n_out, 5, 5, 4))
 
         vq_aux = (vq_codebook_loss, vq_commitment_loss, vq_indices)
+
+        # When adaptive_halt is on, append per-step (logits, win, halt_logit)
+        # as the final return element. When off, return shapes are
+        # bit-identical to the pre-2026-05-03 model so existing callers
+        # need no changes.
+        if self.adaptive_halt:
+            halt_logits_per_step = jnp.stack(per_step_halt, axis=0)  # (T, B)
+            logits_per_step = jnp.stack(per_step_logits, axis=0)     # (T, B, n_out, H, W)
+            win_per_step = jnp.stack(per_step_win, axis=0)           # (T, B)
+            halt_aux = (logits_per_step, win_per_step, halt_logits_per_step)
+            if return_slots and return_vq_aux:
+                return logits, win_logit, sprite_logits, slots, vq_aux, halt_aux
+            if return_slots:
+                return logits, win_logit, sprite_logits, slots, halt_aux
+            if return_vq_aux:
+                return logits, win_logit, sprite_logits, vq_aux, halt_aux
+            return logits, win_logit, sprite_logits, halt_aux
+
+        # adaptive_halt = False — original return signatures.
         if return_slots and return_vq_aux:
             return logits, win_logit, sprite_logits, slots, vq_aux
         if return_slots:
