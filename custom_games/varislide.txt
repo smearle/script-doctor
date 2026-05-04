@@ -49,8 +49,7 @@ COLLISIONLAYERS
 ================
 
 Background
-Wall
-Player
+Wall, Player
 
 ======
 RULES

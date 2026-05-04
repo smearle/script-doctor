@@ -43,6 +43,13 @@ import optax  # noqa: E402
 
 from nca_wm.rule_attn_model import RuleAttnNCAWorldModel  # noqa: E402
 from nca_wm.train import _unpack_states  # noqa: E402
+from nca_wm.tokenize_game import (  # noqa: E402
+    VOCAB_SIZE_EXT,
+    get_game_tree_from_js,
+    tokenize_game,
+)
+from puzzlescript_cpp import CppPuzzleScriptBackend  # noqa: E402
+from puzzlescript_jax.utils import init_ps_lark_parser  # noqa: E402
 
 ROLLOUT_CACHE_DIR = os.path.join(_REPO, "rollout_data")
 N_ACTIONS = 5
@@ -91,7 +98,8 @@ def simulate_varislide_iterations(state: np.ndarray, action: int,
     return out
 
 
-def load_dataset(game: str = "varislide", train_seed: int = 0):
+def load_dataset(game: str = "varislide", train_seed: int = 0,
+                 widths: set[int] | None = None):
     """Load all multi-grid synth caches for the game.
 
     Returns (states_padded, actions, next_states_padded, native_lH, native_lW, max_H, max_W)
@@ -107,6 +115,15 @@ def load_dataset(game: str = "varislide", train_seed: int = 0):
     all_states, all_actions, all_next, all_lH, all_lW = [], [], [], [], []
     grid_max_H, grid_max_W = 0, 0
     for c in caches:
+        dirname = os.path.basename(os.path.dirname(c))
+        if widths is not None:
+            try:
+                wh = dirname.removeprefix("synthetic_")
+                w = int(wh.split("x", 1)[0])
+            except Exception:
+                w = -1
+            if w not in widths:
+                continue
         z = np.load(c)
         s_raw, a, n_raw = z["states"], z["actions"], z["next_states"]
         if "W" in z.files:
@@ -121,6 +138,9 @@ def load_dataset(game: str = "varislide", train_seed: int = 0):
         all_lW.append(np.full(len(s), s.shape[3], dtype=np.int32))
         grid_max_H = max(grid_max_H, s.shape[2])
         grid_max_W = max(grid_max_W, s.shape[3])
+    if not all_states:
+        width_msg = f" matching widths={sorted(widths)}" if widths is not None else ""
+        raise RuntimeError(f"no synth caches for {game} seed={train_seed}{width_msg}")
     pad_states, pad_next = [], []
     for s, n in zip(all_states, all_next):
         ph, pw = grid_max_H - s.shape[2], grid_max_W - s.shape[3]
@@ -154,8 +174,39 @@ def precompute_intermediate_states(states: np.ndarray, actions: np.ndarray,
     return out
 
 
+def build_game_info(game: str, states: np.ndarray, max_H: int, max_W: int,
+                    encode_sprites: bool = False) -> tuple[list[dict], dict]:
+    """Compile/tokenize the game when no prior run dir is available."""
+    ps_parser = init_ps_lark_parser()
+    backend = CppPuzzleScriptBackend()
+    json_str = backend.compile_and_serialize(ps_parser, game)
+    tree, canonical_ids = get_game_tree_from_js(ps_parser, game)
+    token_ids = tokenize_game(tree, canonical_ids, encode_sprites=encode_sprites)
+    max_token_id = max(token_ids) if token_ids else 0
+    cfg = {
+        "vocab_size": max(max_token_id + 1, VOCAB_SIZE_EXT + 1),
+        "d_model": 64,
+        "n_enc_layers": 2,
+        "d_slot": 64,
+        "n_heads": 4,
+        "n_app_slots": 0,
+    }
+    info = {
+        "name": game,
+        "json_str": json_str,
+        "n_objs": int(states.shape[1]),
+        "H": int(max_H),
+        "W": int(max_W),
+        "n_levels": 0,
+        "token_ids": token_ids,
+    }
+    return [info], cfg
+
+
 def make_model(n_hid: int, n_steps: int, n_out: int, n_slots: int,
-               src_cfg: dict, max_seq_len: int, input_skip: bool):
+               src_cfg: dict, max_seq_len: int, input_skip: bool,
+               use_vq: bool = False, vq_codebook_size: int = 512,
+               vq_commitment_weight: float = 0.25):
     return RuleAttnNCAWorldModel(
         n_hid=n_hid, n_steps=n_steps, n_out=n_out,
         vocab_size=src_cfg["vocab_size"] + 1,
@@ -164,6 +215,9 @@ def make_model(n_hid: int, n_steps: int, n_out: int, n_slots: int,
         d_slot=src_cfg["d_slot"],
         n_attn_heads=src_cfg["n_heads"], max_seq_len=max_seq_len,
         axis_pool=True, axis_cummax=True, global_pool=True,
+        use_vq=use_vq,
+        vq_codebook_size=vq_codebook_size,
+        vq_commitment_weight=vq_commitment_weight,
         use_layernorm=False, input_skip=input_skip,
         n_repeats=n_steps,           # fully shared body
         adaptive_halt=True,          # to expose per-step logits
@@ -187,34 +241,56 @@ def main():
     p.add_argument("--save_dir", required=True)
     p.add_argument("--seed", type=int, default=0)
     p.add_argument("--log_interval", type=int, default=250)
-    p.add_argument("--game_info_from", default="nca_wm/logs_canary/varislide_reproduce_h128",
-                    help="Borrow game_infos.pkl + token mapping from a prior run")
+    p.add_argument("--game", default="varislide")
+    p.add_argument("--train_seed", type=int, default=0)
+    p.add_argument("--widths", default=None,
+                    help="Optional comma-separated synthetic widths to load, "
+                         "useful when old caches exist for a stale game spec.")
+    p.add_argument("--game_info_from", default=None,
+                    help="Optional prior run dir to borrow game_infos.pkl + config. "
+                         "If omitted, compile/tokenize --game directly.")
+    p.add_argument("--vq_codebook", action="store_true",
+                    help="Quantize rule-attention slots with a VQ codebook.")
+    p.add_argument("--vq_codebook_size", type=int, default=512)
+    p.add_argument("--vq_commitment_weight", type=float, default=0.25)
+    p.add_argument("--vq_loss_weight", type=float, default=1.0)
     args = p.parse_args()
 
     os.makedirs(args.save_dir, exist_ok=True)
-    json.dump(vars(args), open(os.path.join(args.save_dir, "config.json"), "w"), indent=2)
 
     print(f"[load] dataset...")
-    states, actions, next_states, native_lH, native_lW, H, W = load_dataset()
+    widths = ({int(x) for x in args.widths.split(",") if x.strip()}
+              if args.widths else None)
+    states, actions, next_states, native_lH, native_lW, H, W = load_dataset(
+        args.game, train_seed=args.train_seed, widths=widths)
     print(f"[load] {len(states)} transitions, max grid={H}x{W}")
     print(f"[load] right-action transitions: {(actions == RIGHT_ACTION).sum()}")
     print(f"[load] native widths in dataset: {sorted(set(native_lW.tolist()))}")
 
-    print(f"[load] borrowing game_infos from {args.game_info_from}")
-    gi = pickle.load(open(os.path.join(args.game_info_from, "game_infos.pkl"), "rb"))
+    if args.game_info_from:
+        print(f"[load] borrowing game_infos from {args.game_info_from}")
+        gi = pickle.load(open(os.path.join(args.game_info_from, "game_infos.pkl"), "rb"))
+        src_cfg = json.load(open(os.path.join(args.game_info_from, "config.json")))
+    else:
+        print(f"[load] compiling/tokenizing {args.game}")
+        gi, src_cfg = build_game_info(args.game, states, H, W)
     g = gi[0]
     toks_np = np.asarray(g["token_ids"])
     eff_len = max(toks_np.shape[0], 1)
     # Save game_infos so the inspector can find it
     with open(os.path.join(args.save_dir, "game_infos.pkl"), "wb") as f:
         pickle.dump(gi, f)
-    # Read C_pad from the borrowed config so embed_in matches
-    src_cfg = json.load(open(os.path.join(args.game_info_from, "config.json")))
     C_pad = src_cfg.get("C_pad")
     if C_pad is None:
-        # Read from borrowed params
-        src_params = pickle.load(open(os.path.join(args.game_info_from, "params_best.pkl"), "rb"))
-        C_pad = src_params["params"]["embed"]["kernel"].shape[0] - N_ACTIONS
+        if args.game_info_from:
+            # Read from borrowed params
+            src_params = pickle.load(open(os.path.join(args.game_info_from, "params_best.pkl"), "rb"))
+            C_pad = src_params["params"]["embed"]["kernel"].shape[0] - N_ACTIONS
+        else:
+            C_pad = states.shape[1]
+    args.vocab_size = int(src_cfg["vocab_size"])
+    args.C_pad = int(C_pad)
+    json.dump(vars(args), open(os.path.join(args.save_dir, "config.json"), "w"), indent=2)
     # Pad states to C_pad channels for the model
     if states.shape[1] != C_pad:
         ph_c = C_pad - states.shape[1]
@@ -248,9 +324,13 @@ def main():
 
     # Build model
     print(f"[build] model: n_hid={args.n_hid}, n_steps={args.n_steps}, "
-          f"n_slots={args.n_slots}, input_skip={args.input_skip}")
+          f"n_slots={args.n_slots}, input_skip={args.input_skip}, "
+          f"vq={args.vq_codebook}")
     model = make_model(args.n_hid, args.n_steps, C_pad, args.n_slots,
-                        src_cfg, eff_len + 1, args.input_skip)
+                        src_cfg, eff_len + 1, args.input_skip,
+                        use_vq=args.vq_codebook,
+                        vq_codebook_size=args.vq_codebook_size,
+                        vq_commitment_weight=args.vq_commitment_weight)
 
     rng = jax.random.PRNGKey(args.seed)
     rng, subkey = jax.random.split(rng)
@@ -279,11 +359,22 @@ def main():
     @jax.jit
     def train_step(params, opt_state, s_b, a_b, n_b, inter_b, t_b, m_b):
         def loss_fn(params):
-            out = model.apply(params, s_b, a_b, t_b, m_b)
+            out = model.apply(params, s_b, a_b, t_b, m_b,
+                              return_vq_aux=args.vq_codebook)
             # adaptive_halt=True returns (logits, win_logit, sprite_logits, halt_aux)
             # halt_aux = (logits_per_step, win_per_step, halt_logits_per_step)
             final_logits = out[0]                 # (B, C, H, W)
             halt_aux = out[-1]
+            if args.vq_codebook:
+                vq_cb_loss, vq_commit_loss, vq_indices = out[-2]
+                vq_util = jnp.count_nonzero(jnp.bincount(
+                    vq_indices.reshape(-1),
+                    length=args.vq_codebook_size,
+                ))
+            else:
+                vq_cb_loss = jnp.asarray(0.0)
+                vq_commit_loss = jnp.asarray(0.0)
+                vq_util = jnp.asarray(0)
             per_step_logits = halt_aux[0]          # (T, B, C, H, W)
             T = per_step_logits.shape[0]
             # Per-step targets: inter_b is (B, n_steps+1, C, H, W); we want
@@ -315,13 +406,17 @@ def main():
                 total = final_loss
             else:
                 total = final_loss + args.per_step_loss_weight * per_step_loss_mean
+            if args.vq_codebook:
+                total = total + args.vq_loss_weight * (
+                    vq_cb_loss + args.vq_commitment_weight * vq_commit_loss)
             # Diagnostics
             preds_final = (jax.nn.sigmoid(final_logits) > 0.5).astype(jnp.float32)
             chg = (s_b != final_target)
             n_chg = chg.sum()
             chg_correct = ((preds_final == final_target) & chg).sum()
             change_acc = jnp.where(n_chg > 0, chg_correct / n_chg, 1.0)
-            return total, (final_loss, per_step_loss_mean, change_acc)
+            return total, (final_loss, per_step_loss_mean, change_acc,
+                           vq_cb_loss, vq_commit_loss, vq_util)
         (loss, aux), grads = jax.value_and_grad(loss_fn, has_aux=True)(params)
         updates, opt_state = optimizer.update(grads, opt_state, params)
         params = optax.apply_updates(params, updates)
@@ -350,11 +445,16 @@ def main():
             with open(os.path.join(args.save_dir, "params_best.pkl"), "wb") as f:
                 pickle.dump(params, f)
         if step % args.log_interval == 0 or step == 1:
-            final_loss, per_step_loss, chg_acc = [float(x) for x in aux]
+            final_loss, per_step_loss, chg_acc, vq_cb, vq_commit, vq_util = [
+                float(x) for x in aux
+            ]
             elapsed = time.time() - t_start
+            vq_bit = (f"  vq_cb={vq_cb:.2e}  vq_commit={vq_commit:.2e}"
+                      f"  vq_util={vq_util:.0f}"
+                      if args.vq_codebook else "")
             print(f"  step {step:>5d}/{args.n_updates}  loss={loss_v:.4e}  "
                   f"final={final_loss:.4e}  per_step={per_step_loss:.4e}  "
-                  f"change_acc={chg_acc:.4f}  ({elapsed:.0f}s)")
+                  f"change_acc={chg_acc:.4f}{vq_bit}  ({elapsed:.0f}s)")
     with open(os.path.join(args.save_dir, "params.pkl"), "wb") as f:
         pickle.dump(params, f)
     print(f"[done] best_loss={best_loss:.4e}; saved to {args.save_dir}")

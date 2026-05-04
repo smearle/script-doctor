@@ -46,24 +46,31 @@ PLAYER = 2
 
 
 def _build_model_from_cfg(cfg, gtoks_len, n_objs):
+    n_steps = cfg.get("n_nca_steps", cfg.get("n_steps"))
+    n_repeats = cfg.get("n_nca_repeats", n_steps)
     eff_seq_len = max(gtoks_len, 1) + 1
     return RuleAttnNCAWorldModel(
-        n_hid=cfg["n_hid"], n_steps=cfg["n_nca_steps"], n_out=n_objs,
+        n_hid=cfg["n_hid"], n_steps=n_steps, n_out=n_objs,
         vocab_size=cfg["vocab_size"] + 1,
-        enc_d_model=cfg["d_model"], enc_n_self_layers=cfg["n_enc_layers"],
+        enc_d_model=cfg.get("d_model", 64),
+        enc_n_self_layers=cfg.get("n_enc_layers", 2),
         n_slots=cfg["n_slots"], n_app_slots=cfg.get("n_app_slots", 0),
-        d_slot=cfg["d_slot"], n_attn_heads=cfg["n_heads"],
+        d_slot=cfg.get("d_slot", 64), n_attn_heads=cfg.get("n_heads", 4),
         max_seq_len=eff_seq_len,
-        axis_pool=cfg["axis_pool"], axis_cummax=cfg["axis_cummax"],
-        global_pool=cfg["global_pool"],
+        axis_pool=cfg.get("axis_pool", True),
+        axis_cummax=cfg.get("axis_cummax", True),
+        global_pool=cfg.get("global_pool", True),
+        use_vq=cfg.get("vq_codebook", False),
+        vq_codebook_size=cfg.get("vq_codebook_size", 512),
+        vq_commitment_weight=cfg.get("vq_commitment_weight", 0.25),
         use_layernorm=cfg.get("use_layernorm", False),
         input_skip=cfg.get("input_skip", False),
-        n_repeats=cfg["n_nca_repeats"],
+        n_repeats=n_repeats,
         adaptive_halt=cfg.get("adaptive_halt", False),
     )
 
 
-def inspect(run_dir: str):
+def inspect(run_dir: str, train_seed: int = 0, widths: set[int] | None = None):
     cfg = json.load(open(os.path.join(run_dir, "config.json")))
     gi = pickle.load(open(os.path.join(run_dir, "game_infos.pkl"), "rb"))
     p_path = os.path.join(run_dir, "params_best.pkl")
@@ -80,9 +87,17 @@ def inspect(run_dir: str):
     model = _build_model_from_cfg(cfg, toks_np.shape[0], C_pad)
 
     dist_to_acc = {}
-    for cache in sorted(glob.glob(os.path.join(ROLLOUT_CACHE_DIR, "varislide",
-                                                 "synthetic_*x3",
-                                                 "seed0_n12_v9*solv0*.npz"))):
+    pattern = os.path.join(ROLLOUT_CACHE_DIR, "varislide", "synthetic_*x3",
+                           f"seed{train_seed}_n*_v9*solv0*.npz")
+    for cache in sorted(glob.glob(pattern)):
+        if widths is not None:
+            wh = os.path.basename(os.path.dirname(cache)).removeprefix("synthetic_")
+            try:
+                w = int(wh.split("x", 1)[0])
+            except Exception:
+                w = -1
+            if w not in widths:
+                continue
         z = np.load(cache)
         s_raw, a, n_raw = z["states"], z["actions"], z["next_states"]
         if "W" in z.files:
@@ -142,9 +157,10 @@ def inspect(run_dir: str):
                 (sig_at_arrival, argmax == out_col, max_sig, argmax - in_col))
 
     print(f"\n=== {run_dir} ===")
-    print(f"  n_nca_steps={cfg['n_nca_steps']} n_hid={cfg['n_hid']} "
+    print(f"  n_nca_steps={cfg.get('n_nca_steps', cfg.get('n_steps'))} n_hid={cfg['n_hid']} "
           f"input_skip={cfg.get('input_skip', False)} "
-          f"clw={cfg.get('change_loss_weight', 5.0)}")
+          f"clw={cfg.get('change_loss_weight', 5.0)} "
+          f"vq={cfg.get('vq_codebook', False)}")
     print(f"  {'slide_d':>8}  {'n':>5}  {'sig@gt':>8}  {'max_sig':>8}  "
           f"{'argmax_correct':>15}  {'mean_pred_d':>12}")
     for d in sorted(dist_to_acc.keys()):
@@ -161,9 +177,14 @@ def inspect(run_dir: str):
 def main():
     p = argparse.ArgumentParser()
     p.add_argument("--runs", nargs="+", required=True)
+    p.add_argument("--train_seed", type=int, default=0)
+    p.add_argument("--widths", default=None,
+                   help="Optional comma-separated synthetic widths to evaluate.")
     args = p.parse_args()
+    widths = ({int(x) for x in args.widths.split(",") if x.strip()}
+              if args.widths else None)
     for r in args.runs:
-        inspect(r)
+        inspect(r, train_seed=args.train_seed, widths=widths)
 
 
 if __name__ == "__main__":
