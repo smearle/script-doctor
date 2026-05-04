@@ -1119,9 +1119,9 @@ def collect_multigame_dataset_synthetic(
             n_trans = len(states)
 
         _, g_C, g_H, g_W = states.shape
-        per_game_states.append(states)
+        per_game_states.append(_pack_states(states))
         per_game_actions.append(actions)
-        per_game_next_states.append(next_states)
+        per_game_next_states.append(_pack_states(next_states))
         per_game_wons.append(wons)
 
         # n_levels is the engine's authored-level count, not the synthetic
