@@ -112,6 +112,7 @@ def _build_model(cfg: dict, game_infos: list[dict]):
             n_attn_heads=cfg["n_heads"],
             max_seq_len=max_tok_len + 1,
             n_repeats=cfg.get("n_nca_repeats", 1),
+            mask_hidden=cfg.get("mask_hidden", False),
             **pool_kwargs,
         )
     return ConditionalNCAWorldModel(
@@ -207,9 +208,20 @@ def _rollout_with_identity(
     # Pad to whichever is larger: the saved info dims (training shape) or
     # the actual level dims. Needed when training shape differs from authored
     # level shape (e.g. synthetic-trained model evaluated on bigger
-    # authored levels).
-    H_eval = max(info_H, H)
-    W_eval = max(info_W, W)
+    # authored levels). We round up to next-pow2 (min 8) to match training's
+    # bucket convention (`_next_pow2` in train.py), so models trained with
+    # mask_hidden=True see eval inputs at the same bucketed shape they
+    # learned to operate on. Without this, a model trained at bucket (8,8)
+    # eval'd on a 7x7 native shape produces garbage because its mask-derived
+    # features were learned for the (8,8) canvas.
+    def _next_pow2(x: int, min_val: int = 8) -> int:
+        v = max(min_val, int(x))
+        p = 1
+        while p < v:
+            p <<= 1
+        return p
+    H_eval = max(_next_pow2(info_H), _next_pow2(H))
+    W_eval = max(_next_pow2(info_W), _next_pow2(W))
     total_tiles = n_objs * H * W
     total_cells = H * W
 
@@ -248,12 +260,10 @@ def _rollout_with_identity(
 
         real_next, _, done, truncated, _ = env.step(action)
 
-        # Slice prediction down to real env's spatial extent.
-        _, pad_H, pad_W = pred_next.shape[1:]
-        oy_c, _ = _pad_offsets(H, int(pad_H))
-        ox_c, _ = _pad_offsets(W, int(pad_W))
+        # Slice prediction down to real env's spatial extent — top-left
+        # aligned to match training-time bucket padding.
         pred_binary = np.array(
-            pred_next[0, :n_objs, oy_c:oy_c+H, ox_c:ox_c+W] > 0.5,
+            pred_next[0, :n_objs, :H, :W] > 0.5,
             dtype=np.uint8,
         )
         # Model error.

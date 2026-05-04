@@ -259,7 +259,7 @@ def main():
                     help="Hard cap on replay buffer size (drops oldest if exceeded).")
     ap.add_argument("--max_attempts_init", type=int, default=10000,
                     help="Per-pool attempt cap. With require_solvable=True at 7x7 "
-                         "sokoban, acceptance is ~0.3%, so plan ~600 attempts/level.")
+                         "sokoban, acceptance is ~0.3%%, so plan ~600 attempts/level.")
     ap.add_argument("--max_attempts_per_gen_factor", type=float, default=10.0,
                     help="Per-gen child-validity attempts cap = factor * n_children_per_gen.")
     ap.add_argument("--parent_rank_temperature", type=float, default=0.1,
@@ -352,7 +352,7 @@ def main():
     # ------------------------------------------------------------------
     tree, canonical_ids = get_game_tree_from_js(parser, args.game)
     token_ids = tokenize_game(
-        tree, canonical_ids, encode_sprites=False, kernel_sep=True,
+        tree, canonical_ids, encode_sprites=False,
     )
     max_tok_len = max(len(token_ids), 1)
     tokens_arr = np.zeros(max_tok_len, dtype=np.int32)

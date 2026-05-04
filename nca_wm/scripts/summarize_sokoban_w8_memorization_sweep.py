@@ -2,7 +2,7 @@
 
 Expected run dirs are named:
 
-    sokoban_w8_n{synthetic_levels}_nca{n_nca_steps}_seed0
+    sokoban_w8_n{synthetic_levels}_nca{n_nca_steps}_seed0[_maskpad]
 
 Each should contain ``heldout_eval_dual_control/results.json`` from
 ``run_sokoban_w8_memorization_sweep.sh``.
@@ -17,7 +17,10 @@ from pathlib import Path
 from statistics import mean
 
 
-RUN_RE = re.compile(r"sokoban_w8_n(?P<n_levels>\d+)_nca(?P<nca>\d+)_seed(?P<seed>\d+)$")
+RUN_RE = re.compile(
+    r"sokoban_w8_n(?P<n_levels>\d+)_nca(?P<nca>\d+)_seed(?P<seed>\d+)"
+    r"(?P<maskpad>_maskpad)?$"
+)
 
 
 @dataclass(frozen=True)
@@ -25,6 +28,7 @@ class Row:
     n_levels: int
     nca_steps: int
     seed: int
+    mask_padded_loss: bool
     bucket: str
     game: str
     model_step1: float
@@ -75,6 +79,7 @@ def _load_rows(run_dir: Path) -> list[Row]:
                 n_levels=int(m.group("n_levels")),
                 nca_steps=int(m.group("nca")),
                 seed=int(m.group("seed")),
+                mask_padded_loss=bool(m.group("maskpad")),
                 bucket=bucket,
                 game=game,
                 model_step1=_avg(step1),
@@ -107,16 +112,17 @@ def _write_markdown(rows: list[Row], path: Path) -> None:
         lines.extend([
             f"## {title}",
             "",
-            "| synth levels | nca steps | game | step-1 | rollout | identity step-1 | perfect | verdict |",
-            "|---:|---:|---|---:|---:|---:|---:|---|",
+            "| synth levels | nca steps | mask padded | game | step-1 | rollout | identity step-1 | perfect | verdict |",
+            "|---:|---:|---|---|---:|---:|---:|---:|---|",
         ])
         for r in sorted(
             [x for x in rows if x.bucket == bucket],
-            key=lambda x: (x.game, x.n_levels, x.nca_steps, x.seed),
+            key=lambda x: (x.game, x.n_levels, x.nca_steps, x.mask_padded_loss, x.seed),
         ):
             verdict = "beats identity" if r.beats_identity else "fails identity"
             lines.append(
-                f"| {r.n_levels} | {r.nca_steps} | {r.game} | "
+                f"| {r.n_levels} | {r.nca_steps} | "
+                f"{'yes' if r.mask_padded_loss else 'no'} | {r.game} | "
                 f"{_pct(r.model_step1)} | {_pct(r.model_rollout)} | "
                 f"{_pct(r.identity_step1)} | {r.perfect}/{r.total} | {verdict} |"
             )
@@ -131,7 +137,7 @@ def _write_markdown(rows: list[Row], path: Path) -> None:
 
 def main() -> None:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--root", default="nca_wm/logs_sokoban_w8_mem_v2")
+    ap.add_argument("--root", default="nca_wm/logs_sokoban_w8_mem_v3")
     ap.add_argument("--out", default=None)
     args = ap.parse_args()
 

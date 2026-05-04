@@ -118,6 +118,19 @@ def _load_run_for_game(save_dir: str):
         pp = os.path.join(save_dir, "params.pkl")
     with open(pp, "rb") as f:
         params = pickle.load(f)
+    # Override cfg["vocab_size"] from the actual checkpoint params so older
+    # runs (where vocab_size wasn't recorded but the embedding was sized to
+    # max-used-token-id) load with the right embedding shape. The minus-1 is
+    # because we pass vocab_size+1 (for the CLS token) when building.
+    try:
+        leaves = jax.tree_util.tree_leaves_with_path(params)
+        for k, v in leaves:
+            ks = jax.tree_util.keystr(k)
+            if "tok_embed" in ks and "embedding" in ks:
+                cfg["vocab_size"] = int(v.shape[0]) - 1
+                break
+    except Exception:
+        pass
     return cfg, params, game_infos
 
 
@@ -192,11 +205,10 @@ def main():
         print(f"\n=== checkpoint: {label}  ({path}) ===")
         cfg, params, game_infos = _load_run_for_game(path)
 
-        # Tokenize using the checkpoint's encode_sprites/kernel_sep (default True for kernel_sep)
+        # Tokenize using the checkpoint's encode_sprites; kernel_sep is implicit/always-on now.
         encode_sprites = cfg.get("encode_sprites", False)
-        kernel_sep = cfg.get("kernel_sep", True)
         token_ids = tokenize_game(tree, canonical_ids,
-                                   encode_sprites=encode_sprites, kernel_sep=kernel_sep)
+                                   encode_sprites=encode_sprites)
         # Pad tokens to whatever max_seq_len the checkpoint expected.
         train_max_seq_len = max(len(g.get("token_ids", [])) for g in game_infos)
         train_max_seq_len = max(train_max_seq_len, 1)
@@ -212,25 +224,59 @@ def main():
         model = _build_model(cfg, game_infos)
         eval_forward = make_eval_forward(model, conditional=True)
 
-        # Score each holdout level
+        # Score each holdout level. Batch transitions to bound peak GPU memory:
+        # a 16K-transition level in one shot blows past 20 GB for the rule_attn
+        # model. Use a fixed CHUNK so jit only compiles once per checkpoint.
+        CHUNK = 256
         per_level = []
         for li, p in enumerate(payloads):
-            states = jnp.asarray(p["mh_states"], dtype=jnp.float32)
-            next_states = jnp.asarray(p["mh_next_states"], dtype=jnp.float32)
-            actions_oh = jnp.asarray(np.eye(N_ACTIONS, dtype=np.float32)[p["np_actions"]])
-            n = states.shape[0]
-            tokens_b = jnp.broadcast_to(tokens[None], (n, tokens.shape[0]))
-            mask_b = jnp.broadcast_to(mask[None], (n, mask.shape[0]))
-            bce, acc, change_acc = eval_forward(
-                params, states, actions_oh, next_states, tokens_b, mask_b,
-            )
-            ce = float(1.0 - change_acc)
+            states_full = np.asarray(p["mh_states"], dtype=np.float32)
+            nexts_full = np.asarray(p["mh_next_states"], dtype=np.float32)
+            actions_full = np.eye(N_ACTIONS, dtype=np.float32)[p["np_actions"]]
+            n = states_full.shape[0]
+            if n == 0:
+                per_level.append({
+                    "level": li, "n_transitions": 0,
+                    "change_err": 0.0, "bce": 0.0, "acc": 0.0,
+                })
+                continue
+            n_pad = (CHUNK - n % CHUNK) % CHUNK
+            if n_pad:
+                states_full = np.concatenate([states_full,
+                    np.zeros((n_pad, *states_full.shape[1:]), states_full.dtype)])
+                nexts_full = np.concatenate([nexts_full,
+                    np.zeros((n_pad, *nexts_full.shape[1:]), nexts_full.dtype)])
+                actions_full = np.concatenate([actions_full,
+                    np.zeros((n_pad, N_ACTIONS), actions_full.dtype)])
+            tokens_b = jnp.broadcast_to(jnp.asarray(tokens)[None], (CHUNK, len(tokens)))
+            mask_b = jnp.broadcast_to(jnp.asarray(mask)[None], (CHUNK, len(mask)))
+            bce_sum = 0.0
+            acc_w = 0.0
+            cacc_w = 0.0
+            real = 0
+            for s0 in range(0, states_full.shape[0], CHUNK):
+                sl = slice(s0, s0 + CHUNK)
+                s = jnp.asarray(states_full[sl])
+                nx = jnp.asarray(nexts_full[sl])
+                a = jnp.asarray(actions_full[sl])
+                bce, acc, change_acc = eval_forward(
+                    params, s, a, nx, tokens_b, mask_b,
+                )
+                # weight each chunk by # of real transitions in it
+                lo, hi = s0, min(s0 + CHUNK, n)
+                w = max(0, hi - lo)
+                if w > 0:
+                    bce_sum += float(bce) * w
+                    acc_w += float(acc) * w
+                    cacc_w += float(change_acc) * w
+                    real += w
+            ce = float(1.0 - cacc_w / max(real, 1))
             per_level.append({
                 "level": li,
                 "n_transitions": int(n),
                 "change_err": ce,
-                "bce": float(bce),
-                "acc": float(acc),
+                "bce": bce_sum / max(real, 1),
+                "acc": acc_w / max(real, 1),
             })
         change_errs = np.array([r["change_err"] for r in per_level])
         print(f"  mean change_err: {change_errs.mean():.4f}")

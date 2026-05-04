@@ -185,6 +185,17 @@ class RuleAttnNCAWorldModel(nn.Module):
     #     for deep stacks to lose track of the original observation.
     use_layernorm: bool = False
     input_skip: bool = False
+    # Architectural padding mask. When True, the NCA's hidden state and
+    # win-pool weighting are zeroed/excluded outside each sample's actual
+    # playable area. The mask is derived from the input state itself: real
+    # cells have at least the background bit set (sum across channels ≥ 1),
+    # padding cells (added by per-bucket batching of mixed-size data) are
+    # all-zero across channels (sum == 0). Helpful for multi-grid training
+    # (closes a 5-7× transfer gap vs unmasked); harmful for single-grid
+    # (causes the shared readout bias to collapse → degenerate "predict 0
+    # everywhere"). Default off for safety; turn on explicitly when training
+    # has multiple per-sample sizes (e.g. --synthetic_multi_grid).
+    mask_hidden: bool = False
     # Factor `n_steps` into a (n_layers × n_repeats) hierarchy mirroring the
     # PuzzleScript engine's two-level loop:
     #   - Inner block of n_layers distinct rule-application layers (one full
@@ -269,6 +280,17 @@ class RuleAttnNCAWorldModel(nn.Module):
         inp = jnp.concatenate([x, act], axis=-1)  # (B, H, W, C+5)
         h_inp = nn.Dense(self.n_hid, name="embed")(inp)
         h = h_inp
+
+        # Spatial mask for padding cells (multi-grid / bucket-padded batches).
+        # Derived from the input: real cells have ≥1 channel set; padding
+        # cells are all-zero. mask: (B, H, W, 1) where 1 = real, 0 = padding.
+        if self.mask_hidden:
+            mask_2d = (x.sum(axis=-1) > 0).astype(jnp.float32)   # (B, H, W)
+            mask_bcast = mask_2d[..., None]                       # (B, H, W, 1)
+            h = h * mask_bcast
+        else:
+            mask_2d = None
+            mask_bcast = None
 
         # Shared LayerNorm across NCA steps (pre-norm). Allocated once so
         # depth doesn't multiply parameter count of this stabilizer.
@@ -382,6 +404,8 @@ class RuleAttnNCAWorldModel(nn.Module):
                 delta = nn.gelu(h_conv + attn_out)
                 delta = outs[i](delta)
                 h = h + delta
+                if mask_bcast is not None:
+                    h = h * mask_bcast
 
                 if self.adaptive_halt:
                     step_readout = readout_layer(h)         # (B, H, W, n_out)
@@ -398,8 +422,15 @@ class RuleAttnNCAWorldModel(nn.Module):
         readout = readout_layer(h)                          # (B, H, W, n_out)
         logits = readout.transpose(0, 3, 1, 2)               # (B, n_out, H, W)
 
-        # Win logit: pool + dense
-        pooled = h.mean(axis=(1, 2))  # (B, n_hid)
+        # Win logit: pool + dense. When mask_hidden is on, average over real
+        # cells only (padded cells are 0 in h, but dividing by total H*W would
+        # under-weight pooled signal in small samples).
+        if mask_bcast is not None:
+            pooled = (h * mask_bcast).sum(axis=(1, 2)) / jnp.maximum(
+                mask_bcast.sum(axis=(1, 2)), 1.0
+            )  # (B, n_hid)
+        else:
+            pooled = h.mean(axis=(1, 2))  # (B, n_hid)
         pooled = win_ln(pooled)
         win_logit = win_out(pooled).squeeze(-1)             # (B,)
 

@@ -18,15 +18,23 @@ set -u
 
 REPO=/home/jupyter-earle/script-doctor
 PY=$REPO/.venv/bin/python3
-LOGDIR=$REPO/nca_wm/logs_sokoban_w8_mem_v2
+LOGDIR=$REPO/nca_wm/logs_sokoban_w8_mem_v3
 EVAL_SUBDIR=heldout_eval_dual_control
+MASK_OPTIONS=${MASK_OPTIONS:-"0 1"}
 mkdir -p "$LOGDIR"
 
 run_one() {
     local n_levels=$1
     local n_steps=$2
-    local save_dir="$LOGDIR/sokoban_w8_n${n_levels}_nca${n_steps}_seed0"
-    local log="$LOGDIR/sokoban_w8_n${n_levels}_nca${n_steps}_seed0.out"
+    local mask_pad=$3
+    local suffix=""
+    local mask_args=()
+    if [ "$mask_pad" -eq 1 ]; then
+        suffix="_maskpad"
+        mask_args=(--mask_padded_loss)
+    fi
+    local save_dir="$LOGDIR/sokoban_w8_n${n_levels}_nca${n_steps}_seed0${suffix}"
+    local log="$LOGDIR/sokoban_w8_n${n_levels}_nca${n_steps}_seed0${suffix}.out"
     local train_done=0
 
     if [ -f "$save_dir/RUNNING.pid" ]; then
@@ -36,11 +44,11 @@ run_one() {
             local cmdline
             cmdline=$(ps -p "$pid" -o args= 2>/dev/null || echo "")
             if printf '%s' "$cmdline" | grep -F "$save_dir" >/dev/null 2>&1; then
-                echo "[n=$n_levels depth=$n_steps] SKIP - already running (pid $pid)"
+                echo "[n=$n_levels depth=$n_steps mask=$mask_pad] SKIP - already running (pid $pid)"
                 return
             fi
         fi
-        echo "[n=$n_levels depth=$n_steps] removing stale RUNNING.pid"
+        echo "[n=$n_levels depth=$n_steps mask=$mask_pad] removing stale RUNNING.pid"
         rm -f "$save_dir/RUNNING.pid"
     fi
     if "$PY" -c 'import json,sys; from pathlib import Path; d=Path(sys.argv[1]); meta=d/"train_meta.json"; cfg=d/"config.json"; ok=False
@@ -52,14 +60,14 @@ print(1 if ok else 0)' "$save_dir" 20000 | grep -q 1; then
     fi
 
     if [ "$train_done" -eq 1 ] && [ -f "$save_dir/$EVAL_SUBDIR/results.json" ]; then
-        echo "[n=$n_levels depth=$n_steps] SKIP - train+eval already complete"
+        echo "[n=$n_levels depth=$n_steps mask=$mask_pad] SKIP - train+eval already complete"
         return
     fi
 
     if [ "$train_done" -eq 1 ]; then
-        echo "[n=$n_levels depth=$n_steps] training already complete -> $save_dir"
+        echo "[n=$n_levels depth=$n_steps mask=$mask_pad] training already complete -> $save_dir"
     else
-        echo "[n=$n_levels depth=$n_steps] training -> $save_dir"
+        echo "[n=$n_levels depth=$n_steps mask=$mask_pad] training -> $save_dir"
         CUDA_VISIBLE_DEVICES="${CUDA_VISIBLE_DEVICES:-0}" PYTHONUNBUFFERED=1 "$PY" "$REPO/nca_wm/train.py" \
             --games scaling_1 \
             --conditional --architecture rule_attn \
@@ -82,17 +90,18 @@ print(1 if ok else 0)' "$save_dir" 20000 | grep -q 1; then
             --n_updates 20000 --patience 200 --min_delta 1e-8 \
             --batch_size 64 --lr 3e-4 \
             --log_interval 2000 --ckpt_interval 5000 \
+            "${mask_args[@]}" \
             --save_dir "$save_dir" \
             --seed 0 \
             >"$log" 2>&1
         local train_exit=$?
-        echo "[n=$n_levels depth=$n_steps] train exit=$train_exit"
+        echo "[n=$n_levels depth=$n_steps mask=$mask_pad] train exit=$train_exit"
         if [ "$train_exit" -ne 0 ]; then
             return
         fi
     fi
 
-    echo "[n=$n_levels depth=$n_steps] heldout eval"
+    echo "[n=$n_levels depth=$n_steps mask=$mask_pad] heldout eval"
     "$PY" "$REPO/nca_wm/heldout_eval.py" \
         --load "$save_dir" \
         --heldout_games sokoban_basic,Microban,Microban_I \
@@ -102,14 +111,16 @@ print(1 if ok else 0)' "$save_dir" 20000 | grep -q 1; then
         --allow_training_games \
         --out_subdir "$EVAL_SUBDIR" \
         >>"$log" 2>&1
-    echo "[n=$n_levels depth=$n_steps] eval exit=$?"
+    echo "[n=$n_levels depth=$n_steps mask=$mask_pad] eval exit=$?"
 }
 
 # Keep the first pass small enough to answer the question quickly.
 # Add 1024 only after the lower-N/depth signal is clear.
 for n_levels in 64 256 512; do
     for n_steps in 1 2 4; do
-        run_one "$n_levels" "$n_steps"
+        for mask_pad in $MASK_OPTIONS; do
+            run_one "$n_levels" "$n_steps" "$mask_pad"
+        done
     done
 done
 
