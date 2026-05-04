@@ -3150,12 +3150,14 @@ def _run_eval_rollout(
 
         real_obs, _, done, truncated, _ = env.step(action)
 
-        # Slice predicted and real to the real (centered) extent
-        _, pad_H, pad_W = pred_next.shape[1:]
-        oy_c, _ = _pad_offsets(H, int(pad_H))
-        ox_c, _ = _pad_offsets(W, int(pad_W))
+        # Slice predicted to the real (top-left-aligned) extent. Training-time
+        # bucket padding via _pad_state_for_model writes obs to padded[:C,:H,:W],
+        # so the prediction's "real" region is also top-left, NOT centered. A
+        # prior version used _pad_offsets here (centered slicing) and reported
+        # ~85% cell-error on small authored levels evaluated against bucket-
+        # padded predictions; that was a slicing bug, not a learning failure.
         pred_binary = np.array(
-            pred_next[0, :n_objs, oy_c:oy_c+H, ox_c:ox_c+W] > 0.5, dtype=np.uint8,
+            pred_next[0, :n_objs, :H, :W] > 0.5, dtype=np.uint8,
         )
         mismatch = (pred_binary != real_obs)
         n_wrong_bits = int(mismatch.sum())
@@ -3560,16 +3562,11 @@ def _render_training_gif(
             logits, _, _sprite_logits = apply_fn(params, pred_state, a_oh)
         pred_state = (jax.nn.sigmoid(logits) > 0.5).astype(jnp.float32)
         real_obs, _, done, truncated, _ = env.step(action)
-        # Slice pred back to real extent
-        _, pad_H, pad_W = pred_state.shape[1:]
-        oy_c, _ = _pad_offsets(H, int(pad_H))
-        ox_c, _ = _pad_offsets(W, int(pad_W))
-        logits_np = np.array(
-            logits[0, :n_objs, oy_c:oy_c + H, ox_c:ox_c + W]
-        )
+        # Slice pred back to real (top-left-aligned) extent — matches the
+        # top-left padding done by _pad_state_for_model.
+        logits_np = np.array(logits[0, :n_objs, :H, :W])
         pred_crop = np.array(
-            pred_state[0, :n_objs, oy_c:oy_c + H, ox_c:ox_c + W] > 0.5,
-            dtype=np.uint8,
+            pred_state[0, :n_objs, :H, :W] > 0.5, dtype=np.uint8,
         )
         frames.append(render_triptych(real_obs, logits_np, pred_crop,
                                        t + 1, action))
@@ -3688,15 +3685,12 @@ def _render_rollout_frames(
         pred_won_prob = float(jax.nn.sigmoid(win_logit)[0])
 
         # Build per-NCA-step output channel images (only game object channels,
-        # cropped from the centered pad).
+        # cropped from the top-left, matching _pad_state_for_model's
+        # top-left-aligned input padding).
         n_nca_steps = len(intermediates["readouts"])
         obj_imgs = []
         for readout in intermediates["readouts"]:
-            pad_H, pad_W = int(readout.shape[2]), int(readout.shape[3])
-            oy_c, _ = _pad_offsets(grid_h, pad_H)
-            ox_c, _ = _pad_offsets(grid_w, pad_W)
-            r_np = np.array(readout[0, :n_objs,
-                                    oy_c:oy_c+grid_h, ox_c:ox_c+grid_w])
+            r_np = np.array(readout[0, :n_objs, :grid_h, :grid_w])
             obj_img = _labeled_channel_grid(r_np, obj_names[:n_objs])
             obj_imgs.append(obj_img)
         last_obj_img = obj_imgs[-1]
@@ -4086,17 +4080,21 @@ def play_world_model(
 def _pad_state_for_model(obs: np.ndarray, target_C: int,
                          target_H: int | None = None,
                          target_W: int | None = None) -> jnp.ndarray:
-    """Pad a (C, H, W) observation to (1, target_C, target_H, target_W) for the model.
+    """Pad a (C, H, W) observation to (1, target_C, eff_H, eff_W) for the model.
 
     Level is top-left-aligned to match training-time bucket padding (where
     ``s_buf[i, :C_g, :H_g, :W_g] = ...``). Centering would put real cells in
     different (row,col) positions than the model saw during training, which is
     catastrophic with --mask_hidden (model is conditioned on the input mask
     pattern) and merely sub-optimal without it.
+
+    eff_H/W = max(target, obs) so OOD-larger eval levels (e.g. authored width
+    19 vs training max 16) are run at their own size — the NCA is convolutional
+    and handles arbitrary (H,W).
     """
     C, H, W = obs.shape
-    tH = target_H or H
-    tW = target_W or W
+    tH = max(target_H or H, H)
+    tW = max(target_W or W, W)
     if C == target_C and H == tH and W == tW:
         return jnp.array(obs[None], dtype=jnp.float32)
     padded = np.zeros((1, target_C, tH, tW), dtype=np.float32)
@@ -4438,23 +4436,16 @@ def main():
                    help="Cap per-game transition count (uniformly subsample). "
                         "0 disables. Essential for scaling to many games with "
                         "disparate sizes — prevents dataset OOM.")
-    p.add_argument("--mask_padded_loss", action=argparse.BooleanOptionalAction, default=False,
+    p.add_argument("--mask_padded_loss", action=argparse.BooleanOptionalAction, default=True,
                    help="Mask state loss/metrics outside each sampled transition's real "
                         "(C,H,W) region after bucket padding. Hidden activations are "
                         "unchanged by this flag; pair with --mask_hidden to also stop the "
-                        "NCA from computing in padded cells. Recommended: on for "
-                        "multi-grid training (with --mask_hidden); off for single-grid "
-                        "(where the constant mask pattern collapses the readout bias).")
-    p.add_argument("--mask_hidden", action=argparse.BooleanOptionalAction, default=False,
+                        "NCA from computing in padded cells.")
+    p.add_argument("--mask_hidden", action=argparse.BooleanOptionalAction, default=True,
                    help="(rule_attn only) Architecturally zero out the NCA's hidden state "
                         "and win-pool weighting outside each sample's real (H,W) region. "
                         "Mask is derived from the input itself (real cells have ≥1 channel "
-                        "set; padding is all-zero). Closes a 5-7× transfer gap vs the "
-                        "un-masked baseline on MULTI-GRID training, but causes degenerate "
-                        "'predict 0 everywhere' solutions on SINGLE-GRID training (where "
-                        "the mask pattern is constant across batches, allowing the readout's "
-                        "shared bias to collapse). Recommended: turn on for multi-grid, "
-                        "leave off for single-grid. Default off for safety.")
+                        "set; padding is all-zero).")
     # Architectural pool flags (see _pool_features). Independent booleans;
     # any combination may be active.
     p.add_argument("--axis_pool", action=argparse.BooleanOptionalAction, default=True,

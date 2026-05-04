@@ -30,16 +30,28 @@ Shared training-time defaults (unless overridden in the recipe column):
 - **Bouncers L×R sweep**: DONE (2026-05-03). 6 configs, results in
    `nca_wm/figures/bouncers_lr_sweep/` and SCALING_RESULTS.md.
 - **v3_combined**: still in eval (per-step n=8, 59 games).
-- **Multi-grid varislide canary** (architectural side, 2026-05-03): DONE
-   for depth/compute/sharing axes. Multi-seed verification of
-   architecture-report E15-E19 — see ARCHITECTURE_REPORT F8 + E20-E22.
-   Headline: rule-conditioned NCAs do not reliably learn iterative rule
-   application on multi-grid synth, regardless of depth (8↔64), compute
-   (10k↔50k), or sharing. Per-seed argmax variance is ~5×, train loss
-   blind to it. Figures: `nca_wm/figures/varislide_depth_sweep/`.
-   Scripts: `run_varislide_depth_seedsweep.sh`,
-   `run_varislide_long_seedsweep.sh`, `run_varislide_perstep_seedsweep.sh`.
-   Cross-check `run_microban_multigrid.sh` is queued (E23).
+- **Varislide post-bitpack-fix sweep** (2026-05-04): DONE. 34/34 runs at
+   100% argmax — every architectural variant solves multi-grid varislide.
+   Findings written up in SCALING_RESULTS.md "Varislide post-bitpack-fix"
+   and ARCHITECTURE_REPORT F8 (annotated as withdrawn). Figures:
+   `nca_wm/figures/varislide_postfix/{argmax_by_depth, argmax_by_LR,
+   argmax_pool_onoff}.{pdf,png}` + `summary.{csv,md}`. The pre-fix
+   "varislide depth/compute/sharing flat" claims (F8) were entirely a
+   bitpack regression artifact.
+- **Heroes_of_Sokoban L0 depth × sharing × pool sweep** (2026-05-04): DONE.
+   16 configs. Headline: pool OFF + input_skip + shared (bucket C) is the
+   most robust recipe across depth ∈ {4, 8, 16, 32}; pool ON + per-step
+   collapses at d=32 (1.94% → 15.35%). Pool ON harms at d=4 (~6.5% vs ~1.4%
+   no-pool). See SCALING_RESULTS.md "Heroes_of_Sokoban" section for
+   per-config table and recommendation. Figures:
+   `nca_wm/figures/heroes_sweep/{heroes_bfs_by_depth, summary}.*`.
+- **Multi-grid varislide canary** (pre-fix runs, INVALIDATED 2026-05-04 by
+   bitpack regression 1fa557d). All `varislide_depth*_s*`,
+   `varislide_long50k_d16_s*`, and `varislide_perstep_d16_s*` runs in
+   `logs_canary/` saw all-zero states/next_states during training; the
+   "fire-once" / "depth flat" / "5× per-seed argmax variance" findings
+   are artifacts. Re-running via the postfix sweep above. Old figures in
+   `nca_wm/figures/varislide_depth_sweep/` should not be cited.
 
 ## Open questions / next experiments
 

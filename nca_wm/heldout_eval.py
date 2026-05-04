@@ -113,6 +113,12 @@ def _build_model(cfg: dict, game_infos: list[dict]):
             max_seq_len=max_tok_len + 1,
             n_repeats=cfg.get("n_nca_repeats", 1),
             mask_hidden=cfg.get("mask_hidden", False),
+            use_layernorm=cfg.get("use_layernorm", False),
+            input_skip=cfg.get("input_skip", False),
+            adaptive_halt=cfg.get("adaptive_halt", False),
+            use_vq=cfg.get("vq_codebook", False),
+            vq_codebook_size=cfg.get("vq_codebook_size", 512),
+            vq_commitment_weight=cfg.get("vq_commitment_weight", 0.25),
             **pool_kwargs,
         )
     return ConditionalNCAWorldModel(

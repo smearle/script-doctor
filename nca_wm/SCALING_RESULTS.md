@@ -265,6 +265,234 @@ skip-alone everywhere.
    1.35%). The optimization landscape at high sharing has local minima — adding more
    iterations can either degrade or recover depending on which optimum the model lands in.
 
+## Varislide post-bitpack-fix sweep (2026-05-04)
+
+After the May 4 synth bit-pack fix (commit 1fa557d), 34 configs were re-run
+on multi-grid varislide synth ({6,8,10,12,16}x3) at h=128, batch=16, lr=3e-4,
+10k updates, mask_hidden=True default. Per-distance argmax-correct (% of
+right-action transitions where argmax(player-row sigmoid) lands at the GT
+slide-stop column) is the direct test of "did the model learn to iterate."
+
+**Headline: every single variant solves it.**
+
+| bucket | configs tested | argmax (mean) | min |
+|---|---|---|---|
+| A: depth × seed (fully shared) | 3 depths {8, 16, 32} × 3 seeds | 100.0% | 99.9% (d=32 s0) |
+| B: L × R factor at total=16 | 5 (L,R) × 3 seeds | 100.0% | 99.7% (L=2 R=8 s2) |
+| C: pool OFF + input_skip | 3 depths × 3 seeds | 100.0% | 100.0% |
+| C': pool OFF, no input_skip | depth=16 seed=0 | 100.0% | 100.0% |
+
+(The 99.7%/99.9% outliers each reflect 1–2 misclassified cells out of hundreds.)
+
+Figures: `nca_wm/figures/varislide_postfix/{argmax_by_depth, argmax_by_LR,
+argmax_pool_onoff}.{pdf,png}`. Summary CSV/MD same dir.
+
+### Findings
+
+1. **Depth ≥ 8 fully shared is sufficient** — d=8/16/32 all hit 100%; the pre-fix
+   "depth flat 8↔64 means depth doesn't help" claim from F8 was the bitpack
+   regression, not architecture. With correct training data, depth 8 is plenty
+   for this 1-rule slide game.
+2. **Every L×R factoring at total=16 works** — (1,16), (2,8), (4,4), (8,2),
+   (16,1) all hit 100%. Per-step weights vs fully-shared: indistinguishable
+   on this game. (Bouncers L×R sweep had a narrow Pareto frontier; varislide
+   doesn't.)
+3. **Pool OFF doesn't matter for varislide** — pool ON, pool OFF + input_skip,
+   and pool OFF + no input_skip all hit 100%. The 1-rule sliding dynamic is
+   purely local (3×3 conv suffices for the iterative step), so the global
+   pool features that matter for `[X][Y]` rules aren't load-bearing here.
+   Picking a harder canary (Heroes_of_Sokoban / Mirror Isles, per the bouncers
+   F1 follow-up) is required to actually stress the pool axis.
+4. **Per-seed variance is NOT real on this canary.** The pre-fix "5× per-seed
+   argmax variance" finding was the bitpack bug producing all-zero training
+   data; under different-init RNGs the model converged to different
+   "predict-zero-everywhere" stalls because some seeds happened to find
+   slightly different local minima of the all-zero-target BCE. Post-fix all
+   3 seeds at every config are within 0.3% of each other.
+5. **State-loss plateaus at ~6e-2 with mask_hidden=True even at change_acc=100%.**
+   Pre-mask runs hit ~1e-7 at the same predictions. The plateau is BCE on
+   under-confident logits over real cells (padded cells are already zero from
+   the mask multiply); it is not a signal of learning failure. Don't read
+   "loss not driving to machine zero" as a problem on masked runs.
+
+### Implications for the gallery scaling story
+
+The persistently-hard gallery games (Take_Heart_Lass, Travelling_salesman,
+notsnake, …) were previously cross-referenced to F8 as "the gallery-scale
+analog of the varislide canary." That extrapolation now has no empirical
+grounding — the varislide canary doesn't fail post-fix. The gallery per-game
+variance documented above is therefore unexplained by an
+architectural-iterative-reasoning story; the next experiment should isolate
+the actual gallery bottleneck (per-game capacity / data / rule complexity).
+The "remaining candidate fixes" enumerated in F8 (hard slot routing, per-cell
+halt, replay-buffer curriculum, auxiliary heads) are NO LONGER motivated by
+this canary and should be re-justified before pursuing.
+
+## Held-out transfer eval (2026-05-04)
+
+First valid transfer measurement on the existing multi-game checkpoints,
+post the 2026-05-04 `_build_model` flag-plumbing fix in `heldout_eval.py`.
+Default 6-game held-out list (`blank, sumo, the_undertaking, wrappingrecipe,
+rigidfail1, constellationz`) — these are in `scaling_large` but not in
+`scaling_14`. Baseline = identity predictor (next == current).
+
+**Note on validity:** Default heldout overlaps `scaling_gallery_v2`
+(blank held-out only, others in v2's training set). So the v2/v2_nca8/
+v2_long200k numbers are *in-distribution* spot checks, not transfer
+measurements; they're recorded below for completeness but the only valid
+transfer cell here is `multi_scaling_14_v3recipe`.
+
+### multi_scaling_14_v3recipe (14 train games, 150k steps, no mask_hidden)
+
+| held-out game | model AR step1 | identity step1 | transfer |
+|---|---|---|---|
+| sumo | 8.2% | 5.7% | worse than id |
+| the_undertaking | **0.5%** | 0.9% | **beats id** |
+| wrappingrecipe | 4.5% | 3.3% | worse than id |
+| rigidfail1 | **2.6%** | 5.9% | **beats id** |
+| constellationz | 4.5% | 1.0% | worse than id |
+
+2/5 held-out games beat the identity baseline at single-step prediction.
+AR rollout error compounds quickly on the failing 3 (mean 16-34%).
+
+**Note:** the model has issues even on its OWN training games at step 1
+(Travelling_salesman: AR step1 model 3.4% vs identity 1.5%) — so the limited
+transfer is consistent with the model's overall not-yet-mastery of harder
+games.
+
+### scaling_14 + mask_hidden=True ablation (2026-05-04)
+
+Two follow-up runs at the same recipe as `multi_scaling_14_v3recipe` (h=256,
+n_nca=8, batch=32, lr=3e-4) but with `--mask_hidden --mask_padded_loss` and
+80k steps (not 150k):
+
+- `multi_scaling_14_mask_v1`: fully-shared body (n_nca_repeats=8).
+- `multi_scaling_14_mask_v2_perstep`: per-step weights (n_nca_repeats=1).
+
+| held-out game | v3 (no mask, 150k) | mask_v1 (shared, 80k) | mask_v2 (per-step, 80k) | identity |
+|---|---|---|---|---|
+| sumo | 8.21% | 12.14% | **5.71%** | 5.71% |
+| the_undertaking | **0.49%** | 0.50% | **0.37%** | 0.91% |
+| wrappingrecipe | 4.49% | 6.94% | **2.04%** | 3.27% |
+| rigidfail1 | **2.59%** | 3.70% | **2.59%** | 5.93% |
+| constellationz | 4.53% | **0.12%** | 2.66% | 1.01% |
+| **beats-id count** | **2/5** | **3/5** | **3/5** | — |
+
+(Bold = beats identity at step 1.)
+
+Both mask variants beat the v3recipe baseline on the beats-identity tally
+(3/5 vs 2/5). Effects are non-uniform: `mask_v1` (fully-shared) gets a 38×
+improvement on `constellationz` (4.53% → 0.12%) but regresses on `sumo`
+and `wrappingrecipe`. `mask_v2_perstep` is more uniform and gets the best
+step-1 numbers on 3 of 5 games.
+
+**AR rollout (30-step mean):** all three variants compound errors quickly.
+`mask_v1` is best on `constellationz` rollout (1.33% mean vs v3's 15.63%) but
+worse on `the_undertaking` (5.03% vs v3's 2.02%). The mask-hidden mechanism
+sharpens single-step prediction but does not by itself fix multi-step drift.
+
+### Hard-game transfer (2026-05-04)
+
+To stress-test transfer beyond the simpler default heldout list, all 3
+scaling_14 checkpoints were also evaluated on 4 of the persistently-hard
+gallery games not in scaling_14 (`It_Dies_In_The_Light`, `Lightdown`,
+`Take_Heart_Lass`, `the_art_of_cloning` — `notsnake` is actually in
+scaling_14 and was filtered out of the heldout list):
+
+| game | v3 step1 | mask_v1 step1 | mask_v2 step1 | identity |
+|---|---|---|---|---|
+| It_Dies_In_The_Light | 51.5% | 56.1% | 60.1% | 0.8% |
+| Lightdown | 47.4% | 37.7% | 48.0% | 5.6% |
+| Take_Heart_Lass | 15.6% | 35.2% | 20.8% | 10.2% |
+| the_art_of_cloning | 3.2% | 7.9% | 5.9% | 3.2% |
+| **beats-id count** | **0/4** | **0/4** | **0/4** | — |
+
+**None** of the 3 scaling_14 transfer variants beats identity on any of the
+4 hard heldout games. The persistently-hard classification (per the F8
+withdrawn cross-reference and the v2 baseline numbers above) holds for
+transfer too: at the scaling_14 game-set size, these games are not yet
+modeled at *all* — let alone transferable. Mask helps slightly (mask_v1 is
+~10pp better than v3 on Lightdown) but doesn't change the qualitative
+picture.
+
+The actionable takeaway: **transfer to "simple" games is achievable already
+(3/5 with mask), but transfer to "hard" games requires the bottleneck on
+hard games to be solved first — likely dataset scale, per-game capacity,
+or fundamentally different mechanics.**
+
+### Caveats for future transfer experiments
+
+1. **scaling_14_v3recipe was trained without `mask_hidden=True`.** Per the
+   varislide canary memory, mask_hidden is what enables translation-
+   equivariance; transfer should improve with mask_hidden=True multi-game
+   training. Worth a follow-up.
+2. Default heldout list (`heldout_eval.py:DEFAULT_HELDOUT`) overlaps any
+   training preset ⊇ `scaling_large`. Pick a true-disjoint list for v2/v3
+   transfer eval (or at least filter heldout per checkpoint's training set).
+3. Heldout numbers for `multi_scaling_gallery_v2_long200k` and `_nca8`:
+   Near-zero on all 5 "heldout" games — but those games are in v2's training
+   set. These are validation spot checks, not transfer.
+
+Result files: `nca_wm/logs/multi_scaling_*/heldout_transfer_v1/results.json`
++ `rollout_curves.png` + `step1_bar.png` per checkpoint.
+
+## Heroes_of_Sokoban L0 depth × sharing × pool sweep (2026-05-04)
+
+A harder-than-Bouncers single-game sweep on `Heroes_of_Sokoban` level 0.
+Heroes has genuinely non-local rules — `[> Wizard] -> [Wizard > Temp]` then
+`[> Temp | no Moveable no Static] -> [ | > Temp]` (chain projectile travel
+through empty space), `[Action Fighter] [SThief] -> ...` (multi-bracket
+character swap), and `late [Weighing YellowSwitch] [YellowDoor] -> ...`
+(multi-bracket door state). Pool features cannot substitute for actual
+iteration here.
+
+Recipe: rule_attn, h=256, n_slots=16, n_app_slots=1, batch=16, lr=3e-4,
+15k updates, mask_hidden=True default, change_loss_weight=5.0. 16 configs
+= depth ∈ {4, 8, 16, 32} × {fully-shared, per-step} × {pool ON, pool OFF + input_skip}.
+
+**BFS rollout cell-error per step (lower is better):**
+
+| depth | A: pool+shared | B: pool+per-step | C: nopool+skip+shared | D: nopool+skip+per-step |
+|---|---|---|---|---|
+| 4  | 6.48% | 6.45% | 1.50% | **1.41%** |
+| 8  | 1.61% | 1.89% | 1.71% | **1.57%** |
+| 16 | **1.57%** | 1.94% | 1.58% | 1.74% |
+| 32 | 1.78% | 15.35% | **1.50%** | 1.63% |
+
+Plot: `nca_wm/figures/heroes_sweep/heroes_bfs_by_depth.{pdf,png}`.
+CSV/MD: `nca_wm/figures/heroes_sweep/summary.{csv,md}`.
+
+### Findings
+
+1. **Pool ON harms at low depth (d=4).** Both pool-ON variants hit
+   ~6.5% rollout error at d=4, while pool-OFF + input_skip variants stay
+   ~1.4-1.5%. Pool gives the model a short-circuit ("look up where the
+   player is across the row/grid") that distracts it from learning the
+   iterative `[> Temp | empty] -> [ | > Temp]` travel rule when only 4
+   NCA steps are available. Pool ON catches up at d ≥ 8.
+2. **Pool ON + per-step weights collapses at d=32 (15.35%).** Train loss
+   keeps improving (final 7.07e-2 — actually best of the sweep!), but
+   rollout error explodes. Train-loss decoupling from rollout error (F3)
+   is severe in this regime — adding more independent step-weights with
+   a pool short-circuit lets the model overfit to per-step BCE without
+   learning correct iteration.
+3. **No-pool + input_skip is robust across all depths.** Both shared
+   (C, max 1.71%) and per-step (D, max 1.74%) stay in [1.4%, 1.8%] across
+   depths {4, 8, 16, 32}. **C wins at d=32 (1.50%).**
+4. **Best loss is essentially constant (~0.072–0.079) across all 16
+   configs.** Cell error varies ~10× (1.41% → 15.35%). F3 decoupling
+   verified again: only rollout error tells you what's actually happening.
+5. **Recipe recommendation for scaling:** **C — pool OFF + input_skip +
+   fully-shared body — is the most robust pick.** It's competitive at
+   low depth (best at d=4), best at d=32, never blows up, and uses
+   shared weights so it's parameter-efficient. Pool flags (`axis_pool`,
+   `axis_cummax`, `global_pool`) should be considered ON BY DEFAULT only
+   for very-shallow models or games with truly global rules.
+6. **Re-test on Bouncers under this lens:** the prior Bouncers sweep
+   (still in this file above) found `(L=4,R=4)` and `(L=8,R=1)` tied at
+   best with pool ON. Bouncers is too local to expose the pool-OFF
+   advantage — Heroes shows the gap that Bouncers couldn't.
+
 ## Findings so far
 
 1. **Per-game cap + bitpack works.** scaling_gallery_v2 (59 games, max shape 19×30×43,
@@ -303,7 +531,18 @@ skip-alone everywhere.
    difference, not the dataset. Once recipe is held constant (v3_combined vs
    scaling_14), the per-game gap shrinks dramatically.
 
-## Cross-reference: persistently-hard games and the multi-grid varislide canary (2026-05-03)
+## Cross-reference: persistently-hard games and the multi-grid varislide canary (2026-05-03, INVALIDATED 2026-05-04)
+
+> **2026-05-04 — withdrawn pending re-eval.** The "varislide canary fails"
+> claim cited below was an artifact of the synth bit-pack regression (commit
+> 1fa557d, May 1–4). Post-fix re-runs at h=128, depth ∈ {8, 16}, fully
+> shared, mask_hidden=True default: 100% argmax across slide distances on
+> the same multi-grid synth set (`nca_wm/logs_canary/varislide_postfixA_*`).
+> The architectural extrapolation below — that gallery scaling's per-game
+> variance is the *same* phenomenon — therefore loses its empirical
+> grounding and should not be cited. Treat the gallery per-game variance as
+> still unexplained until a fresh post-fix gallery experiment isolates the
+> mechanism.
 
 The persistently-hard gallery games (Take_Heart_Lass, Travelling_salesman, notsnake,
 It_Dies_In_The_Light, the_art_of_cloning, Lightdown, …) all share a property:

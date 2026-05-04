@@ -2,7 +2,7 @@
 # Just n=24 and n=32 (n=8, n=16, n=20 already done).
 set -u
 
-REPO=/home/jupyter-earle/script-doctor
+REPO=/home/jupyter-smearle/script-doctor
 PY=$REPO/.venv/bin/python3
 LOGDIR=$REPO/nca_wm/logs_halt_arch
 

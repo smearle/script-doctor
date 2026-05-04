@@ -252,6 +252,25 @@ old logs knows why pre-fix numbers don't reproduce.
 
 ### F8. (2026-05-03) Multi-grid varislide is an init-determined basin failure, not depth/compute/sharing/clw
 
+> **2026-05-04 INVALIDATED.** All five claims below were artifacts of the
+> 2026-05-01 bitpack regression (commit 1fa557d): `collect_multigame_dataset_synthetic`
+> appended raw uint8 multihot arrays where the bucket loader expected bit-packed
+> data, so every synth-trained model since May 1 saw all-zero `states` /
+> `next_states`. Train loss looked like it converged (BCE on all-zero targets
+> with logits → -∞ underflows to ~1e-42); meanwhile the model learned to predict
+> 0 everywhere, producing the 86% right-action change_err and the per-distance
+> "fire-once" failure mode reported here.
+>
+> Post-fix (1fa557d) re-runs at h=128, batch=16, lr=3e-4, 10k updates,
+> mask_hidden=True default: depth ∈ {8, 16} fully shared all reach 100%
+> argmax across slide distances {1, 2, 3+} on the same multi-grid synth set.
+> The full re-run sweep (depth, L×R factor, pool on/off) is in
+> `nca_wm/logs_canary/varislide_postfix{A,B,C,Cp}_*` and summarized in
+> `nca_wm/figures/varislide_postfix/`. F8's specific architectural claims
+> (depth flat, sharing flat, basin-init dominant, "rule-conditioned NCAs do
+> not reliably learn iterative rule application") should be considered
+> withdrawn pending that sweep's full results.
+
 Multi-seed verification (E20-E22) of the architecture-report E15-E19
 results pins down what's actually happening on multi-grid varislide
 (custom 1-rule slide-until-wall game, widths {6,8,10,12,16}):

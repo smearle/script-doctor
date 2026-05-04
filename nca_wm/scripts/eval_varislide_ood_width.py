@@ -67,6 +67,7 @@ def _build_model(cfg, gtoks_len, n_objs, n_steps_override=None,
         use_layernorm=cfg.get("use_layernorm", False),
         input_skip=cfg.get("input_skip", False),
         n_repeats=n_repeats,
+        mask_hidden=cfg.get("mask_hidden", False),
         adaptive_halt=cfg.get("adaptive_halt", False),
     )
 

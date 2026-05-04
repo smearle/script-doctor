@@ -8,7 +8,7 @@ test bed, not a goal-completion test).
 """
 from __future__ import annotations
 
-from nca_wm.rule_gp import Rule
+from nca_wm.rule_gp import Rule, WinCondition
 
 
 DEFAULT_OBJECTS = ["ObjA", "ObjB", "ObjC"]
@@ -40,6 +40,46 @@ DEFAULT_LEVEL = (
     "#......#\n"
     "########\n"
 )
+
+
+def random_level_text(rng, *, w: int = 8, h: int = 8,
+                      n_a: int | None = None, n_b: int | None = None,
+                      n_c: int | None = None,
+                      wall_density: float = 0.0,
+                      objects_pixels: dict[str, str] | None = None) -> str:
+    """Build a random level: wall border, 1 player, scattered typed objects.
+
+    Counts default to a small uniform draw (1–3 of each); optional internal
+    wall placement controlled by ``wall_density`` (0 disables).
+    """
+    pixels = list((objects_pixels or _OBJECT_PIXEL).values())
+    if n_a is None:
+        n_a = rng.randint(1, 3)
+    if n_b is None:
+        n_b = rng.randint(1, 3)
+    if n_c is None:
+        n_c = rng.randint(1, 3)
+    grid = [["#" if r == 0 or r == h - 1 or c == 0 or c == w - 1 else "."
+             for c in range(w)] for r in range(h)]
+    interior = [(r, c) for r in range(1, h - 1) for c in range(1, w - 1)]
+    rng.shuffle(interior)
+    cursor = 0
+    if wall_density > 0:
+        n_walls = int(wall_density * len(interior))
+        for _ in range(n_walls):
+            if cursor >= len(interior):
+                break
+            r, c = interior[cursor]; cursor += 1
+            grid[r][c] = "#"
+    placements = [("P", 1)] + [(p, n) for p, n in
+                               zip(("A", "B", "C"), (n_a, n_b, n_c))]
+    for sym, count in placements:
+        for _ in range(count):
+            if cursor >= len(interior):
+                break
+            r, c = interior[cursor]; cursor += 1
+            grid[r][c] = sym
+    return "\n".join("".join(row) for row in grid) + "\n"
 
 
 def _objects_section(objects: list[str]) -> str:
@@ -75,15 +115,33 @@ def _rules_section(rules: list[Rule]) -> str:
     return "\n".join(r.unparse() for r in rules) + "\n"
 
 
+def _winconditions_section(wins: list[WinCondition]) -> str:
+    if not wins:
+        return "(no win)\n"
+    return "\n".join(w.unparse() for w in wins) + "\n"
+
+
 def assemble_game(
     rules: list[Rule],
     *,
     title: str = "rule_gp_game",
     objects: list[str] | None = None,
     level: str | None = None,
+    levels: list[str] | None = None,
+    wins: list[WinCondition] | None = None,
 ) -> str:
+    """Assemble a complete PuzzleScript game string.
+
+    Pass ``levels`` (list of grid strings) to embed multiple levels — they
+    will appear as separate playable levels in the LEVELS section, each
+    addressable via ``cpp_engine.load_level(i)``. ``level`` (singular) is a
+    shorthand for ``levels=[level]``.
+    """
     objs = objects or DEFAULT_OBJECTS
-    lvl = level or DEFAULT_LEVEL
+    if levels is None:
+        levels = [level] if level is not None else [DEFAULT_LEVEL]
+    lvl = "\n\n".join(l.rstrip() + "\n" for l in levels)
+    win_block = _winconditions_section(wins or [])
     return (
         f"title {title}\n"
         f"author rule_gp\n"
@@ -110,6 +168,7 @@ def assemble_game(
         f"==============\n"
         f"WINCONDITIONS\n"
         f"==============\n\n"
+        f"{win_block}\n"
         f"=======\n"
         f"LEVELS\n"
         f"=======\n\n"

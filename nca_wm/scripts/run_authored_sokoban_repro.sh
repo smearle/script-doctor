@@ -2,7 +2,7 @@
 # Reproduce the human-authored sokoban -> Microban generalization anchor.
 set -u
 
-REPO=/home/jupyter-earle/script-doctor
+REPO=/home/jupyter-smearle/script-doctor
 PY=$REPO/.venv/bin/python3
 LOGDIR=$REPO/nca_wm/logs_authored_sokoban_repro
 SAVE_DIR=$LOGDIR/scaling1_authored_seed0_current

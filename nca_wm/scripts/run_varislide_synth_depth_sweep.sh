@@ -4,7 +4,7 @@
 # Same setup as varislide_synth_pool_long_seed0 (h=256, 50k updates).
 set -u
 
-REPO=/home/jupyter-earle/script-doctor
+REPO=/home/jupyter-smearle/script-doctor
 PY=$REPO/.venv/bin/python3
 LOGDIR=$REPO/nca_wm/logs_halt_arch
 mkdir -p "$LOGDIR"

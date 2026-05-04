@@ -13,7 +13,7 @@
 # Same n_steps ladder so the table lines up.
 set -u
 
-REPO=/home/jupyter-earle/script-doctor
+REPO=/home/jupyter-smearle/script-doctor
 PY=$REPO/.venv/bin/python3
 LOGDIR=$REPO/nca_wm/logs_microban_arch
 mkdir -p "$LOGDIR"

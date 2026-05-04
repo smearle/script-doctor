@@ -7,7 +7,7 @@
 # sokoban_basic.
 set -u
 
-REPO=/home/jupyter-earle/script-doctor
+REPO=/home/jupyter-smearle/script-doctor
 PY=$REPO/.venv/bin/python3
 LOGDIR=$REPO/nca_wm/logs_mask_ab
 EVAL_SUBDIR=heldout_eval_dual_control

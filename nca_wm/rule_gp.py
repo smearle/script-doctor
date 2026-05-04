@@ -61,6 +61,26 @@ class Rule:
         return " ".join(toks)
 
 
+@dataclass
+class WinCondition:
+    """``WINCONDITIONS`` line: ``{quantifier} {obj} [on {on_obj}]``."""
+    quantifier: str          # "no" | "some" | "all"
+    obj: str
+    on_obj: str = ""
+
+    def unparse(self) -> str:
+        if self.on_obj:
+            return f"{self.quantifier} {self.obj} on {self.on_obj}"
+        return f"{self.quantifier} {self.obj}"
+
+
+@dataclass
+class Ruleset:
+    """Bundle of rules plus win conditions — one such bundle defines a game."""
+    rules: list[Rule] = field(default_factory=list)
+    wins: list[WinCondition] = field(default_factory=list)
+
+
 # ---------------------------------------------------------------------------
 # Mutators — each returns a fresh deep-copied Rule.
 # ---------------------------------------------------------------------------
@@ -125,6 +145,162 @@ def base_two_cell_rule() -> Rule:
             Cell([CellContent("ObjB")]),
         ])],
     )
+
+
+def base_push_rule(obj: str = "ObjA") -> Rule:
+    """``[ > Player | obj ] -> [ > Player | > obj ]`` — sokoban push."""
+    return Rule(
+        lhs=[RulePart(cells=[
+            Cell([CellContent("Player", modifier=">")]),
+            Cell([CellContent(obj)]),
+        ])],
+        rhs_parts=[RulePart(cells=[
+            Cell([CellContent("Player", modifier=">")]),
+            Cell([CellContent(obj, modifier=">")]),
+        ])],
+    )
+
+
+def base_delete_rule(obj: str = "ObjA") -> Rule:
+    """``[ Player | obj ] -> [ Player | ]`` — pickup/destroy on contact."""
+    return Rule(
+        lhs=[RulePart(cells=[
+            Cell([CellContent("Player")]),
+            Cell([CellContent(obj)]),
+        ])],
+        rhs_parts=[RulePart(cells=[
+            Cell([CellContent("Player")]),
+            Cell([]),  # empty cell on RHS deletes whatever was there
+        ])],
+    )
+
+
+BASE_RULE_FACTORIES = {
+    "convert_a_to_b": lambda: base_two_cell_rule(),
+    "push_a":         lambda: base_push_rule("ObjA"),
+    "push_b":         lambda: base_push_rule("ObjB"),
+    "delete_a":       lambda: base_delete_rule("ObjA"),
+    "delete_b":       lambda: base_delete_rule("ObjB"),
+}
+
+
+# ---------------------------------------------------------------------------
+# Random ruleset mutation for the evolutionary loop.
+# ---------------------------------------------------------------------------
+
+def random_mutate_rule(rule: Rule, rng) -> Rule:
+    """Apply one random mutation to a single rule."""
+    op = rng.choice([
+        "set_modifier_lhs", "set_modifier_rhs", "toggle_again",
+        "toggle_prefix", "swap_obj_in_rhs",
+    ])
+    if op == "set_modifier_lhs":
+        target = rng.choice(["Player", "ObjA", "ObjB", "ObjC"])
+        mod = rng.choice(list(VALID_OBJECT_MODIFIERS))
+        return set_object_modifier(rule, target, mod, side="lhs")
+    if op == "set_modifier_rhs":
+        target = rng.choice(["Player", "ObjA", "ObjB", "ObjC"])
+        mod = rng.choice(list(VALID_OBJECT_MODIFIERS))
+        return set_object_modifier(rule, target, mod, side="rhs")
+    if op == "toggle_again":
+        return set_command(rule, "" if "again" in rule.commands else "again")
+    if op == "toggle_prefix":
+        if rule.prefixes:
+            return set_prefix(rule, "")
+        return set_prefix(rule, rng.choice(["late", "right", "left", "up", "down"]))
+    if op == "swap_obj_in_rhs":
+        # Replace one RHS object with a random different one.
+        import copy
+        out = copy.deepcopy(rule)
+        for part in out.rhs_parts:
+            for cell in part.cells:
+                for cc in cell.contents:
+                    if cc.obj in {"ObjA", "ObjB", "ObjC"}:
+                        cc.obj = rng.choice([o for o in ("ObjA", "ObjB", "ObjC")
+                                             if o != cc.obj])
+                        return out
+        return out
+    return rule
+
+
+VALID_WIN_QUANTIFIERS = ("no", "some", "all")
+DEFAULT_WIN_OBJECTS = ("ObjA", "ObjB", "ObjC")
+
+
+def mutate_wins(wins: list[WinCondition], rng, *,
+                objects=DEFAULT_WIN_OBJECTS,
+                max_wins: int = 2) -> list[WinCondition]:
+    """Apply one random mutation to a win-condition list."""
+    wins = list(wins)
+    op = rng.choices(
+        ["add", "drop", "change_quantifier", "change_obj", "toggle_on"],
+        weights=[0.45, 0.15, 0.15, 0.15, 0.10],
+        k=1,
+    )[0]
+    if op == "drop" and wins:
+        del wins[rng.randrange(len(wins))]
+        return wins
+    if op == "add" and len(wins) < max_wins:
+        q = rng.choice(["no", "some", "all"])
+        obj = rng.choice(list(objects))
+        on_obj = ""
+        if q == "all":
+            on_obj = rng.choice([o for o in objects if o != obj])
+        wins.append(WinCondition(q, obj, on_obj))
+        return wins
+    if not wins:
+        return wins
+    i = rng.randrange(len(wins))
+    cur = wins[i]
+    if op == "change_quantifier":
+        new_q = rng.choice([q for q in ("no", "some", "all") if q != cur.quantifier])
+        new_on = cur.on_obj
+        if new_q == "all" and not new_on:
+            new_on = rng.choice([o for o in objects if o != cur.obj])
+        elif new_q != "all":
+            new_on = ""
+        wins[i] = WinCondition(new_q, cur.obj, new_on)
+    elif op == "change_obj":
+        wins[i] = WinCondition(
+            cur.quantifier,
+            rng.choice([o for o in objects if o != cur.obj]),
+            cur.on_obj,
+        )
+    elif op == "toggle_on":
+        if cur.on_obj:
+            wins[i] = WinCondition(cur.quantifier, cur.obj, "")
+        else:
+            wins[i] = WinCondition(
+                cur.quantifier, cur.obj,
+                rng.choice([o for o in objects if o != cur.obj]),
+            )
+    return wins
+
+
+def mutate_ruleset(rules: list[Rule], rng, *,
+                   max_rules: int = 4) -> list[Rule]:
+    """Apply one random ruleset-level mutation."""
+    rules = list(rules)
+    op = rng.choices(
+        ["mutate_one", "add", "drop"],
+        weights=[0.6, 0.3, 0.1],
+        k=1,
+    )[0]
+    if op == "drop" and len(rules) > 1:
+        del rules[rng.randrange(len(rules))]
+        return rules
+    if op == "add" and len(rules) < max_rules:
+        factory = rng.choice(list(BASE_RULE_FACTORIES.values()))
+        rules.append(factory())
+        return rules
+    if not rules:
+        # Fallback: ensure at least one rule.
+        factory = rng.choice(list(BASE_RULE_FACTORIES.values()))
+        rules.append(factory())
+        return rules
+    i = rng.randrange(len(rules))
+    rules[i] = random_mutate_rule(rules[i], rng)
+    return rules
 
 
 def enumerate_smoketest_rulesets() -> list[tuple[dict, list[Rule]]]:

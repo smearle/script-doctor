@@ -16,6 +16,7 @@ if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 
 from puzzlescript_jax.utils import init_ps_lark_parser
+from puzzlescript_jax.preprocessing import add_extra_games_dir
 from puzzlescript_cpp import CppPuzzleScriptBackend
 
 
@@ -45,6 +46,12 @@ def main() -> None:
     run_dir = Path(args.run_dir)
     out_dir = Path(args.out_dir) if args.out_dir else run_dir / "gifs"
     out_dir.mkdir(parents=True, exist_ok=True)
+
+    # Newer runs put materialized games under <run_dir>/games/. Register that
+    # so the lookup chain finds them (older runs left them in custom_games/).
+    games_subdir = run_dir / "games"
+    if games_subdir.is_dir():
+        add_extra_games_dir(str(games_subdir))
 
     games = _collect_games(run_dir)
     print(f"[curriculum_gifs] {len(games)} unique compiled games in {run_dir}")

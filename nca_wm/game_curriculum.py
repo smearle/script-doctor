@@ -42,7 +42,8 @@ if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 
 from puzzlescript_cpp import CppPuzzleScriptBackend, CppPuzzleScriptEnv
-from puzzlescript_jax.globals import CUSTOM_GAMES_DIR, SIMPLIFIED_GAMES_DIR
+from puzzlescript_jax.globals import SIMPLIFIED_GAMES_DIR
+from puzzlescript_jax.preprocessing import add_extra_games_dir
 from puzzlescript_jax.utils import init_ps_lark_parser
 
 from nca_wm.tokenize_game import get_game_tree_from_js, tokenize_game
@@ -164,11 +165,25 @@ def _source_for_game(parser, game_name: str) -> str:
     return backend.compile_game(parser, game_name)
 
 
+_MATERIALIZE_DIR: Path | None = None
+
+
+def _set_materialize_dir(p: Path) -> None:
+    """Configure where ``_materialize_game`` writes generated game .txt files.
+
+    Also registers the dir with the lookup search-path so the C++ backend
+    can find materialized games by name without polluting custom_games/.
+    """
+    global _MATERIALIZE_DIR
+    _MATERIALIZE_DIR = p
+    p.mkdir(parents=True, exist_ok=True)
+    add_extra_games_dir(str(p))
+
+
 def _materialize_game(name: str, code: str) -> Path:
-    """Write code into custom_games and clear any stale simplified cache."""
-    custom_dir = Path(CUSTOM_GAMES_DIR)
-    custom_dir.mkdir(parents=True, exist_ok=True)
-    path = custom_dir / f"{name}.txt"
+    """Write code into the per-run games dir and clear any stale simp cache."""
+    assert _MATERIALIZE_DIR is not None, "_set_materialize_dir() not called"
+    path = _MATERIALIZE_DIR / f"{name}.txt"
     path.write_text(code.strip() + "\n", encoding="utf-8")
 
     simplified_dir = Path(SIMPLIFIED_GAMES_DIR)
@@ -630,9 +645,11 @@ def main() -> None:
     run_tag = f"{_safe_slug(args.model, 24)}_{int(time.time())}_{args.seed}"
     base_dir = Path(args.save_dir or f"nca_wm/logs/game_curriculum_{run_tag}")
     base_dir.mkdir(parents=True, exist_ok=True)
+    _set_materialize_dir(base_dir / "games")
 
     parser = init_ps_lark_parser()
     print(f"[game-curriculum] save_dir={base_dir}")
+    print(f"[game-curriculum] games   -> {base_dir / 'games'}")
     print(f"[game-curriculum] model={args.model} base_url={args.vllm_base_url}")
 
     pop = _seed_population(parser, args, run_tag)

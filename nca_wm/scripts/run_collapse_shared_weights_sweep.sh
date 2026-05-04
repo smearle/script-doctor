@@ -19,7 +19,7 @@
 # Single-GPU serial sweep (small game, cached dataset reused across runs).
 set -u
 
-REPO=/home/jupyter-earle/script-doctor
+REPO=/home/jupyter-smearle/script-doctor
 PY=$REPO/.venv/bin/python3
 LOGDIR=$REPO/nca_wm/logs_collapse_arch
 mkdir -p "$LOGDIR"

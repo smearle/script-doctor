@@ -547,13 +547,36 @@ def get_env_from_ps_file(parser, game, log_dir: str = None, overwrite: bool = Tr
         return None, tree, PJParseErrors.ENV_ERROR, gen_error_str(e)
 
 # Keeping this here only for backwards compatibility
+_EXTRA_GAMES_DIRS: list[str] = []
+
+
+def add_extra_games_dir(path: str) -> None:
+    """Prepend ``path`` to the game-lookup search list.
+
+    Lets generated/experiment artifacts live outside ``custom_games/`` while
+    still being resolvable by name through ``get_tree_from_txt``. Idempotent.
+    """
+    p = os.path.abspath(path)
+    if p in _EXTRA_GAMES_DIRS:
+        return
+    _EXTRA_GAMES_DIRS.insert(0, p)
+
+
 def get_tree_from_txt(parser, game, log_dir: str = None, overwrite: bool = True, test_env_init: bool = True,
                       timeout: int = 10):
-    # Search order: custom_games (user overrides) -> gallery_games (official
-    # PuzzleScript.net gallery, preferred) -> scraped_games (community scrape)
-    # -> scraped_games_increpare. Gallery-first means games available in both
-    # gallery and scrape resolve to the official gallery version.
-    filepath = os.path.join(CUSTOM_GAMES_DIR, game + '.txt')
+    # Search order: any registered extra dirs (per-experiment outputs) ->
+    # custom_games (user overrides) -> gallery_games (official PuzzleScript.net
+    # gallery, preferred) -> scraped_games (community scrape) ->
+    # scraped_games_increpare. Gallery-first within the curated set means
+    # games available in both gallery and scrape resolve to the gallery version.
+    filepath = None
+    for extra in _EXTRA_GAMES_DIRS:
+        candidate = os.path.join(extra, game + '.txt')
+        if os.path.exists(candidate):
+            filepath = candidate
+            break
+    if filepath is None:
+        filepath = os.path.join(CUSTOM_GAMES_DIR, game + '.txt')
     if not os.path.exists(filepath):
         filepath = os.path.join(GALLERY_GAMES_DIR, game + '.txt')
     if not os.path.exists(filepath):

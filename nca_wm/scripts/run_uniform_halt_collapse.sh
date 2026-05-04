@@ -12,7 +12,7 @@
 # stopping (||y_k - y_{k-1}|| < eps).
 set -u
 
-REPO=/home/jupyter-earle/script-doctor
+REPO=/home/jupyter-smearle/script-doctor
 PY=$REPO/.venv/bin/python3
 LOGDIR=$REPO/nca_wm/logs_halt_arch
 mkdir -p "$LOGDIR"

@@ -16,7 +16,7 @@
 # the single training game as an authored sokoban_basic control.
 set -u
 
-REPO=/home/jupyter-earle/script-doctor
+REPO=/home/jupyter-smearle/script-doctor
 PY=$REPO/.venv/bin/python3
 LOGDIR=$REPO/nca_wm/logs_sokoban_w8_mem_v3
 EVAL_SUBDIR=heldout_eval_dual_control
