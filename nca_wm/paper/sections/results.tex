@@ -138,12 +138,66 @@ rollout error. The mechanism is small but systematic per-step errors
 compounding destructively under autoregression. Reporting only
 best-loss hides the rollout-drift cost of going deeper or wider.
 
-\subsection{Pool-feature ablation}
+\subsection{Pool-feature and input-skip ablation}
 \label{sec:results-pool}
 
-[Figure: pool-on vs.\ pool-off on \textsc{collapse}, both at depths
-$T \in \{2, 4, 8, 16\}$, reporting train loss + autoregressive
-rollout error.]
+We decompose the NCA-shared advantage on the multi-grid synth setting
+(Table~\ref{tab:baselines-synth}) by individually disabling each
+component of the pool stack and the input-skip connection. Every
+NCA step in the full recipe sees three flavours of broadcast
+non-local features --- axis max-pool (row + column max), axis
+cumulative max (directional prefix-max in each of four directions),
+and grid-wide global max --- plus a re-injection of the embedded
+$(s_t, a_t)$ at every step. Results in Table~\ref{tab:ablation-pool}.
+
+\begin{table}[t]
+  \centering
+  \caption{\textbf{Per-feature ablation of the NCA-shared recipe on
+    multi-grid synth \textsc{sokoban\_basic}.} Mean $\pm$ std over 3
+    seeds at 10k updates. $\Delta$BFS reports the absolute increase
+    in BFS final cell-error vs.\ the full recipe; relative figures
+    in parentheses. Train loss is essentially constant across all
+    configurations (F3 still applies).}
+  \label{tab:ablation-pool}
+  \small
+  \begin{tabular}{l c c c c}
+    \toprule
+    Recipe & params (M) & best loss & BFS final-err & $\Delta$BFS vs.\ full \\
+    \midrule
+    \textbf{Full (axis + cummax + global + input-skip)} & 3.07 & $0.098 \pm 0.004$ & $\mathbf{4.37\% \pm 2.02\%}$ & --- \\
+    \midrule
+    no axis-cummax    & 2.94 & $0.098 \pm 0.003$ & $4.37\% \pm 2.24\%$  & $+0.00$ ($+0\%$) \\
+    no input-skip     & 2.48 & $0.098 \pm 0.004$ & $5.95\% \pm 4.24\%$  & $+1.58$ ($+36\%$) \\
+    no axis-pool      & 2.94 & $0.100 \pm 0.004$ & $6.75\% \pm 0.56\%$  & $+2.38$ ($+55\%$) \\
+    no global-pool    & 3.01 & $0.098 \pm 0.005$ & $10.71\% \pm 2.57\%$ & $+6.35$ ($+145\%$) \\
+    no pool at all    & 2.68 & $0.100 \pm 0.005$ & $10.71\% \pm 3.89\%$ & $+6.35$ ($+145\%$) \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+Three observations:
+\textbf{(i)} \emph{global-pool} is the single most important pool
+feature. Removing it alone is as bad as removing all three pool
+flavours combined ($+145\%$ relative BFS error in both cases),
+indicating that grid-wide presence-of-X signals are doing all the
+non-local work on this task; \textbf{(ii)} \emph{axis-cummax} ---
+the directional prefix-max designed for axis-aligned ``rule fires
+once X is in the same row/column as Y'' patterns --- contributes
+nothing measurable on \textsc{sokoban\_basic} ($+0\%$). Sokoban
+chained-pushing rules look like
+\texttt{[ Crate | Crate ] -> [\,| Crate Crate\,]}, which depends
+on the immediate $3{\times}3$ neighbourhood, not a directional axial
+lookup. We expect the cummax feature to recover its load-bearing
+role on games whose rule sets do reference far-apart same-axis cells
+(e.g.\ \textsc{collapse}, \textsc{varislide});
+\textbf{(iii)} \emph{input-skip} contributes a modest $+36\%$ but
+with the highest variance across configurations
+($\sigma = 4.24\%$), suggesting it is a stability mechanism rather
+than an information-carrying feature: when training lands in a good
+basin it isn't strictly needed, but it cuts the bad-basin tail.
+Train loss is essentially identical ($0.098 \pm 0.004$) across all
+six configurations despite a $2.5\times$ swing in BFS rollout
+error --- yet another instance of F3 (\S\ref{sec:results-F3}).
 
 \subsection{Hierarchical weight sharing}
 \label{sec:results-hierarchy}
