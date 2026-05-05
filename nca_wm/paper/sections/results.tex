@@ -16,38 +16,42 @@ Table~\ref{tab:baselines-synth}.
 \begin{table}[t]
   \centering
   \caption{\textbf{Baselines vs.\ rule-conditioned NCA on
-    \textsc{microban} (authored levels).} Single seed at 10k updates.
-    Lower is better for loss and cell-error; A* first-divergence step
-    is higher-is-better. Param count is in millions.}
+    \textsc{microban} (authored levels).} Mean $\pm$ std over 3 seeds
+    at 10k updates. Lower is better for loss and cell-error; A* first-
+    divergence step is higher-is-better. Param count in millions;
+    architectures sorted by BFS final cell-error.}
   \label{tab:baselines-microban}
   \small
-  \begin{tabular}{l c c c c c}
+  \begin{tabular}{l c c c c}
     \toprule
-    Architecture & params (M) & best loss & BFS final-err & rand mean-err & A* first-div \\
+    Architecture & params (M) & best loss & BFS final-err & A* first-div \\
     \midrule
-    \textbf{NCA (shared, $T{=}4, n_r{=}T$)} & \textbf{1.94} & 0.106 & 0.34\% & 0.04\% & 64 \\
-    NCA (per-step, $T{=}4, n_r{=}1$)        & 7.36          & 0.107 & 0.00\% & 0.09\% & none \\
-    CNN (4-block ResNet)                    & 5.00          & 0.107 & 0.00\% & 0.09\% & none \\
-    U-Net (2 levels)                        & 6.07          & 0.107 & 6.27\% & 3.00\% & 12 \\
-    ViT (4 layers)                          & 3.99          & 0.107 & 11.67\% & 6.07\% & 1 \\
+    \textbf{NCA (shared, $T{=}4, n_r{=}T$)} & \textbf{1.94} & $0.107 \pm 0.002$ & $\mathbf{0.11\% \pm 0.16\%}$ & $64$ \\
+    CNN (4-block ResNet)                    & 5.00          & $0.107 \pm 0.002$ & $0.32\% \pm 0.24\%$         & $89$ \\
+    NCA (per-step, $T{=}4, n_r{=}1$)        & 7.36          & $0.107 \pm 0.002$ & $0.47\% \pm 0.66\%$         & $35$ \\
+    U-Net (2 levels)                        & 6.07          & $0.108 \pm 0.002$ & $4.84\% \pm 1.03\%$         & $14$ \\
+    ViT (4 layers)                          & 3.99          & $0.107 \pm 0.002$ & $10.96\% \pm 0.50\%$        & $<1$ \\
     \bottomrule
   \end{tabular}
 \end{table}
 
 Three findings on this controlled, memorizable single-game setting:
-\textbf{(i)} the NCA with shared weights matches CNN / per-step NCA
-on oracle-policy rollout error at $2.5{-}3.8\times$ fewer parameters,
-\textbf{(ii)} U-Net and ViT both actively underperform despite
+\textbf{(i)} the NCA with shared weights wins on BFS rollout
+($0.11\% \pm 0.16\%$) at the fewest parameters (1.94M),
+$2.9\times$ better than the same-depth feed-forward CNN
+($0.32\% \pm 0.24\%$) at $2.6\times$ fewer params and
+$4.3\times$ better than the per-step NCA ($0.47\% \pm 0.66\%$);
+\textbf{(ii)} U-Net and ViT both actively underperform here despite
 parameter counts comparable to or exceeding NCA-shared --- U-Net's
 2-level downsampling loses fine-grained player position on small
-grids, and ViT's global self-attention diverges within the first
-rollout step (mean first-divergence step $0.8$), suggesting
+grids, and ViT's global self-attention diverges before the first
+rollout step (mean first-divergence step under $1$), suggesting
 locality plus iteration is a stronger inductive bias for grid-rule
-dynamics than unrestricted global attention; and \textbf{(iii)} best
-train loss is essentially identical (0.106--0.107) across all five
-architectures, illustrating finding F3 (\S\ref{sec:results-F3}):
-train loss is invisible to a $\geq 30\times$ swing in autoregressive
-rollout error (0.34\% vs.\ 11.67\%).
+dynamics than unrestricted global attention; \textbf{(iii)} best
+train loss is essentially identical ($0.107 \pm 0.002$) across all
+five architectures, illustrating finding F3
+(\S\ref{sec:results-F3}): train loss is invisible to a $\geq 100\times$
+swing in autoregressive rollout error ($0.11\%$ vs.\ $10.96\%$).
 
 \medskip\noindent
 The full comparison on the multi-grid synthetic data
@@ -58,42 +62,46 @@ analyzed in \S\ref{sec:results-ceiling}.
 \begin{table}[t]
   \centering
   \caption{\textbf{Baselines vs.\ rule-conditioned NCA on
-    \textsc{sokoban\_basic} (multi-grid synthetic).} Single seed at 10k
-    updates; widths $\{5{\times}5, 6{\times}6, 7{\times}7, 8{\times}8\}$
-    with 256 synthetic levels per width. Memorization is unavailable;
-    the model has to learn the rule. Architectures sorted by BFS final
-    cell-error (lower is better). Multi-seed numbers are forthcoming.}
+    \textsc{sokoban\_basic} (multi-grid synthetic).} Mean $\pm$ std
+    over 3 seeds at 10k updates; widths
+    $\{5{\times}5, 6{\times}6, 7{\times}7, 8{\times}8\}$ with 256
+    synthetic levels per width. Memorization is unavailable; the model
+    has to learn the slide rule across grid sizes. Architectures
+    sorted by BFS final cell-error.}
   \label{tab:baselines-synth}
   \small
   \begin{tabular}{l c c c c}
     \toprule
-    Architecture & params (M) & best loss & BFS final-err & A* final-err \\
+    Architecture & params (M) & best loss & BFS final-err & A* first-div \\
     \midrule
-    \textbf{NCA (shared, $T{=}4, n_r{=}T$)} & \textbf{3.07} & \textbf{0.067} & \textbf{3.57\%} & \textbf{3.57\%} \\
-    NCA (per-step, $T{=}4, n_r{=}1$)        & 8.49          & 0.068          & 4.76\%          & 4.76\% \\
-    CNN (4-block ResNet)                    & 5.00          & 0.067          & 8.33\%          & 8.33\% \\
-    U-Net (2 levels)                        & 6.07          & 0.070          & 9.52\%          & 9.52\% \\
-    ViT (4 layers)                          & 3.99          & 0.085          & 11.90\%         & 11.90\% \\
+    \textbf{NCA (shared, $T{=}4, n_r{=}T$)} & \textbf{3.07} & $0.069 \pm 0.003$ & $\mathbf{4.37\% \pm 2.02\%}$ & $9.2$ \\
+    CNN (4-block ResNet)                    & 5.00          & $0.069 \pm 0.003$ & $5.56\% \pm 3.12\%$         & $7.0$ \\
+    NCA (per-step, $T{=}4, n_r{=}1$)        & 8.49          & $0.070 \pm 0.003$ & $5.95\% \pm 3.50\%$         & $13.8$ \\
+    U-Net (2 levels)                        & 6.07          & $0.071 \pm 0.003$ & $8.33\% \pm 0.97\%$         & $0.5$ \\
+    ViT (4 layers)                          & 3.99          & $0.084 \pm 0.002$ & $12.70\% \pm 1.12\%$        & $0.7$ \\
     \bottomrule
   \end{tabular}
 \end{table}
 
 The synthetic-multi-grid setting is the headline comparison: per-state
-memorization is impossible (256 levels per width $\times$ 4 widths
-$=$ 1024 distinct levels share one rule set), so the model has to
-\emph{learn the slide rule}. Three observations: \textbf{(i)} the
-NCA with shared weights wins on BFS rollout error (3.57\%) at the
-fewest parameters (3.07M), beating the same-depth feed-forward CNN
-by $2.3\times$ in error and at $1.6\times$ fewer params;
-\textbf{(ii)} U-Net (9.52\%) and ViT (11.90\%) both underperform
-here as well, with U-Net's hierarchical bias actively losing in this
-discrete-grid regime and ViT's global attention failing to even
-\emph{fit} the train loss (0.085 vs.\ 0.067 for the other four);
-\textbf{(iii)} train loss now does begin to discriminate
-architectures (ViT's 0.085 outlier), but NCA-shared, NCA-per-step,
-and CNN are again indistinguishable on train loss (0.067--0.068)
-despite a $2.3\times$ difference in BFS rollout error --- F3 still
-applies.
+memorization is unavailable (4 widths $\times$ 256 synthetic levels
+per width $=$ 1024 distinct levels share one rule set), so the model
+must \emph{learn the rule that maps state plus action to the next
+state}. Three observations: \textbf{(i)} the NCA with shared weights
+again wins on BFS rollout ($4.37\% \pm 2.02\%$) at the fewest
+parameters (3.07M), beating the matched-depth CNN
+($5.56\% \pm 3.12\%$) and the per-step NCA
+($5.95\% \pm 3.50\%$); the $2.8\times$ parameter advantage over
+NCA-per-step suggests the shared-weights inductive bias is doing real
+work, not just compressing capacity; \textbf{(ii)} U-Net
+($8.33\% \pm 0.97\%$) and ViT ($12.70\% \pm 1.12\%$) underperform
+here as well, with ViT also failing to fit the train loss
+($0.084 \pm 0.002$ vs.\ $0.069 \pm 0.003$ for the other four);
+\textbf{(iii)} the seed-to-seed variance on this task is large
+($\sigma > 2\%$ on BFS error for all NCA / CNN variants), reflecting
+the multiple-basin optimization landscape we previously characterized
+on the closely related \textsc{varislide} task (F8); the large gap
+to U-Net and ViT is robust to that variance.
 
 \paragraph{(F1) Pool features are load-bearing.}
 A bare $3{\times}3$ convolution can only propagate one cell of context
