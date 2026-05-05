@@ -49,6 +49,7 @@ wandb
 tmp
 models/diff_lm
 evo_agentic_logs/*
+.jax_compile_cache
 
 # Exclude cpp build artifacts
 *.o
@@ -57,3 +58,4 @@ evo_agentic_logs/*
 nca_wm/logs
 nca_wm/sweep_launch_logs
 rollout_data
+generated_games

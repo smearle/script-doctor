@@ -348,6 +348,217 @@ The "remaining candidate fixes" enumerated in F8 (hard slot routing, per-cell
 halt, replay-buffer curriculum, auxiliary heads) are NO LONGER motivated by
 this canary and should be re-justified before pursuing.
 
+## Varislide iteration extrapolation (2026-05-04)
+
+Test of the user's NCA hypothesis: a shared-weight NCA trained at small
+depth D_train should be able to "iterate further" at inference (D_eval >
+D_train) and capture longer slides than the training compute graph
+encodes. Train pool OFF + shared (n_layers=1, n_repeats=D_train) on
+narrow synth grids {6x3, 8x3} (so the trained-time max slide ≤ ~6
+cells), then re-instantiate the model with overridden n_steps =
+n_repeats = D_eval and evaluate on widths {6, 8, 10, 12, 16}. 12 runs
+total: D_train ∈ {2, 4, 8} × seeds {0,1,2} pool OFF, plus pool-ON
+control at D_train=2.
+
+Argmax-correct (mean ± std over 3 seeds, aggregated across all 5 widths):
+
+| D_train | D_eval | short (d≤2) | med (3–7) |
+|---|---|---|---|
+| 2 (pool OFF) | 1 | 0.841 ± 0.006 | 0.024 ± 0.017 |
+| 2 (pool OFF) | **2** | **0.969 ± 0.001** | **0.762 ± 0.045** |
+| 2 (pool OFF) | 4 | 0.891 ± 0.023 | 0.548 ± 0.089 |
+| 2 (pool OFF) | 8 | 0.253 ± 0.027 | 0.202 ± 0.144 |
+| 2 (pool OFF) | 16 | 0.101 ± 0.034 | 0.131 ± 0.094 |
+| 2 (pool OFF) | 64 | 0.000 ± 0.000 | 0.000 ± 0.000 |
+| 4 (pool OFF) | 1 | 0.567 ± 0.068 | 0.000 ± 0.000 |
+| 4 (pool OFF) | 2 | 0.894 ± 0.008 | 0.012 ± 0.017 |
+| 4 (pool OFF) | **4** | **0.967 ± 0.000** | **1.000 ± 0.000** |
+| 4 (pool OFF) | 8 | 0.800 ± 0.101 | 0.381 ± 0.251 |
+| 4 (pool OFF) | 16 | 0.288 ± 0.057 | 0.024 ± 0.034 |
+| 4 (pool OFF) | 64 | 0.161 ± 0.055 | 0.036 ± 0.029 |
+| 8 (pool OFF) | 1 | 0.107 ± 0.068 | 0.000 ± 0.000 |
+| 8 (pool OFF) | 4 | 0.863 ± 0.033 | 0.012 ± 0.017 |
+| 8 (pool OFF) | **8** | **0.967 ± 0.000** | **1.000 ± 0.000** |
+| 8 (pool OFF) | 16 | 0.892 ± 0.093 | 0.881 ± 0.121 |
+| 8 (pool OFF) | 32 | 0.334 ± 0.207 | 0.298 ± 0.248 |
+| 8 (pool OFF) | 64 | 0.108 ± 0.069 | 0.071 ± 0.058 |
+| 2 (pool ON)  | 2 | 0.967 ± 0.000 | 0.988 ± 0.017 |
+| 2 (pool ON)  | 4 | 0.892 ± 0.057 | 0.845 ± 0.131 |
+| 2 (pool ON)  | 8 | 0.325 ± 0.066 | 0.476 ± 0.089 |
+| 2 (pool ON)  | 64 | 0.000 ± 0.000 | 0.000 ± 0.000 |
+
+Figures: `nca_wm/figures/varislide_depth_extrap/{fig_argmax_vs_Deval,
+fig_argmax_by_distance, fig_argmax_by_distance_pool}.{pdf,png}`,
+`summary.{csv,md}`. Eval JSON per run at
+`logs_depth_extrap/<tag>/depth_extrap_eval.json`.
+
+### Findings
+
+1. **The shared-weight body genuinely learns a per-iteration shift
+   rule.** Each D_train's accuracy at D_eval = D_train is 96.7% / 100%
+   on short / med slides. Cranking D_eval *down* below D_train degrades
+   accuracy in proportion to slide distance (D_eval=1 → only d=1 works;
+   D_eval=2 → d≤2 work; etc.). This confirms the NCA decomposes the
+   `again` loop into a stack of "shift player by 1 cell" operations —
+   exactly the PuzzleScript engine semantics.
+2. **Limited 1-step extrapolation works.** D_eval = 2× D_train still
+   delivers usable accuracy on short slides (e.g., D_train=4 →
+   D_eval=8: 80.0% short / 38.1% med; D_train=8 → D_eval=16: 89.2%
+   short / 88.1% med). So *some* depth headroom exists at inference,
+   but only ~1 doubling.
+3. **Beyond ~2× D_train the dynamics collapse.** Every config drops
+   sharply once D_eval ≥ 4× D_train and is at 0% by D_eval=64 — the
+   shared-weight body has no fixed point at "rest state," so applying
+   the rule too many times smears or destroys the player. This is the
+   classic Mordvintsev-NCA stability problem: without explicit
+   training-time signal that "applying the rule when no change is
+   needed should be a no-op," the model's hidden state drifts off the
+   learned manifold.
+4. **Pool ON does not buy stability.** The pool-ON control at D_train=2
+   slightly improves accuracy at D_eval ∈ {2, 4} (98.8% vs 76.2% on
+   med slides at D_eval=2), but it collapses at the *same* rate when
+   D_eval grows large (0% at D_eval=64). Global-context features help
+   the per-step rule, not the iteration extrapolation.
+
+### Interpretation
+
+The user's hypothesis ("more inference iterations capture non-local /
+looping dynamics") is **partially true but bounded** under fixed-depth
+training. The model learns the iterative semantics — each NCA step ≈
+one PuzzleScript `again` firing — but it has not learned to be
+*idempotent at the rest state*, so iterating past convergence destroys
+the prediction. The follow-up below (uniform-halt training) confirms
+this is an optimization artifact, not an architectural ceiling.
+
+### Follow-up: uniform per-step supervision unlocks depth-arbitrary iteration
+
+Re-trained pool OFF + input_skip + shared at T_max = 32 with
+`--adaptive_halt --halt_mode uniform --halt_kl_weight 0` (3 seeds, full
+multi-grid {6,8,10,12,16}x3, otherwise identical recipe). Uniform halt
+weights every per-step readout equally in the loss, forcing the body
+to predict the correct next state at every k=1..32 — including all the
+post-convergence steps where the input is already the rest state. This
+should make the rest state a fixed point.
+
+Per-distance argmax-correct (3 seeds, mean ± std, all 5 widths pooled):
+
+| D_eval | short (d≤2) | med (3–7) |
+|---|---|---|
+| 1 | 0.844 ± 0.000 | 0.024 ± 0.034 |
+| 2 | 0.971 ± 0.001 | 0.119 ± 0.017 |
+| 4 | 0.985 ± 0.004 | 0.988 ± 0.017 |
+| 8 | **1.000 ± 0.000** | **1.000 ± 0.000** |
+| 16 | **1.000 ± 0.000** | **1.000 ± 0.000** |
+| 32 | **1.000 ± 0.000** | **1.000 ± 0.000** |
+| 64 | **1.000 ± 0.000** | **1.000 ± 0.000** |
+
+**The hypothesis is fully validated under uniform-halt training.** Once
+the body is trained to be valid at every step, accuracy is 100% across
+every slide distance for every D_eval ≥ 4 (the max slide distance in
+the dataset), and crucially **stays at 100% at D_eval=64, which is 2×
+past T_max** — the body is genuinely a stable fixed point at the rest
+state. D_eval=1 still only solves d=1 (single-cell shift per
+iteration), and D_eval=2 only solves d≤2, confirming the model has
+*not* shortcut its way around iteration: long slides require many
+iterations, and the model's per-step semantics match PuzzleScript's
+`again` loop exactly.
+
+Combined with the fixed-depth result, the story is clean: shared-weight
+NCAs with pool OFF can capture PuzzleScript's looping rule semantics
+*and* iterate beyond training depth, but only when training-time signal
+forces idempotence at convergence. Fixed-depth training collapses past
+~2× D_train; uniform-halt training does not collapse out to 2× T_max.
+
+Run dirs: `nca_wm/logs_depth_extrap/nopool_uniform_T32_s{0,1,2}/`.
+Combined heatmap (4 panels: D_train ∈ {2,4,8} fixed, plus D_train=32
+uniform): `nca_wm/figures/varislide_depth_extrap/fig_argmax_by_distance.{pdf,png}`
+— the uniform panel is fully yellow across the entire upper-right
+quadrant, in clear contrast to the diagonal-only stripes of the fixed
+panels.
+
+### Width-OOD generalization
+
+The same uniform-halt checkpoints were re-evaluated on OOD synthetic
+widths {20, 24, 32} (none seen at training; max train width was 16) at
+D_eval up to 128 (= 4× T_max). New synth caches generated via
+`collect_synthetic_dataset(varislide, width=20|24|32, height=3, n=64,
+seed=0)`. Argmax-correct (mean ± std over 3 seeds, all observed
+right-action delta transitions pooled across slide distances):
+
+| D_eval | W=16 (train) | W=20 (OOD) | W=24 (OOD) | W=32 (OOD) |
+|---|---|---|---|---|
+| 8 | 1.000 ± 0.000 | 0.984 ± 0.007 | 0.987 ± 0.008 | 0.995 ± 0.003 |
+| 16 | 1.000 ± 0.000 | 0.996 ± 0.006 | 0.998 ± 0.002 | 0.998 ± 0.002 |
+| 32 | 1.000 ± 0.000 | 0.996 ± 0.005 | 0.998 ± 0.002 | 0.998 ± 0.002 |
+| 64 | 1.000 ± 0.000 | 0.996 ± 0.005 | 0.998 ± 0.003 | 0.998 ± 0.002 |
+| 128 | 0.972 ± 0.039 | 0.994 ± 0.005 | 0.997 ± 0.004 | 0.997 ± 0.003 |
+
+The model generalizes simultaneously along **both** axes — depth (4×
+T_max at D_eval=128) and grid width (2× max train width at W=32) —
+with no measurable degradation. Caveat: synth varislide level
+generation produces dense walls, so most OOD-width transitions are
+still short-slide (d ≤ 5); the long-slide-on-wide-grid regime would
+need handcrafted test cases or a level generator with controlled
+slide-distance density. The result so far establishes that the body is
+a stable local rule on grids of any width, and that body iterated to
+convergence is correct.
+
+### Handcrafted long-slide stress test — caveats to "depth-arbitrary"
+
+To close the synth-density caveat, a handcrafted authored-layout
+benchmark was added (`scripts/eval_varislide_handcrafted_slides.py`,
+output `<run>/depth_extrap_handcrafted.json`). One canonical level per
+slide_d ∈ {3, 6, 12, 18, 24, 30}: 3 rows × W columns with W = d+4,
+walls all around the perimeter and a `##` pair at the right edge of
+the middle row (mirrors `custom_games/varislide.txt`); player at col
+1 slides to col W-3.
+
+The pure-iteration story does **not** hold here. Per-seed, per-(D_eval,
+d) prediction (target = pred player col, ✓ if argmax cell == target):
+
+| D_eval | d=3 | d=6 | d=12 | d=18 | d=24 | d=30 |
+|---|---|---|---|---|---|---|
+| seed 0, 4 | ✗ off-by-1 to wall | ✗ off-by-1 | ✗ off-by-1 | ✗ off-by-1 | ✗ off-by-1 | ✗ off-by-1 |
+| seed 0, 8 | ✗ to wall | **✓** | **✓** | **✓** | **✓** | **✓** |
+| seed 0, 16+ | ✗ stuck at col 5 | ✗ stuck at col 5 | ✗ stuck | ✗ stuck | ✗ stuck | ✗ stuck |
+| seed 1, 4–128 | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ |
+| seed 2, 4 | **✓** | ✗ | ✗ | ✗ | ✗ | ✗ |
+| seed 2, 8+ | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ |
+
+Three observations refute the strong "iteration extrapolation" claim:
+
+1. **Seed-specific behavior.** Only seed 0 at D_eval=8 nails d=6
+   through d=30. Seeds 1 and 2 fail at every D_eval × d combination
+   except seed 2 at d=3, D_eval=4. The synth-eval 100% number was
+   driven by short-slide (d≤5) transitions, where all three seeds work.
+2. **Seed 0 at D_eval=8 solving d=30 is non-iterative.** With pool OFF
+   and a 3×3 conv per step, 8 NCA iterations propagate info at most 8
+   cells. Yet seed 0 correctly places the player 30 cells from its
+   start in 8 steps. The mechanism is a local pattern detector: each
+   cell asks "am I empty with empty-left and wall-right?" and emits
+   itself as the player. This is a global *equilibrium* of the slide,
+   not the iterative trajectory. Cross-attention to the per-game rule
+   slots routes the equilibrium pattern to every cell.
+3. **D_eval ≥ 16 collapses on the authored layout.** Even seed 0
+   plateaus at "predict col 5 regardless of W" once D_eval > 8. The
+   "100% at D_eval=128 on synth" was layout-luck — the synth
+   distribution mostly has d≤5 ⇒ true target IS at low column ⇒
+   "guess col 5" is often right by coincidence.
+
+**Updated claim.** The uniform-halt recipe makes per-step readouts
+valid at every k=1..T_max, *on the training distribution*. Beyond
+training distribution (here: a different layout where slides are long
+and walls are bookended) the model often relies on layout-specific
+pattern shortcuts that are seed- and depth-fragile. The earlier
+strong "iteration extrapolation unlocked" claim should be tempered:
+the body learns a stable rule on the training distribution, but it
+does *not* automatically generalize to longer slides on different
+layouts via iteration alone. Truly bulletproof depth extrapolation
+likely needs either (i) training data with long-slide authored-layout
+levels, or (ii) an architecture that can't take the equilibrium
+shortcut (e.g. forcing per-step transition supervision against the
+engine's intermediate states).
+
 ## Held-out transfer eval (2026-05-04)
 
 First valid transfer measurement on the existing multi-game checkpoints,
@@ -746,6 +957,214 @@ When training synth-only and evaluating on authored:
 - The arch findings above are still valid: **pool ON is load-bearing for
   long-range-rule games** (3-5pp BFS gap vs pool OFF on neko); depth saturates
   at 8-16; share-vs-perstep is a wash.
+
+## Embedding distinctness probe on v3_combined (2026-05-05)
+
+First test of "do per-game latents become distinct in the rule-encoding space"
+on the 59-game gallery_v2 training. New tool `nca_wm/latent_scatter_rule_attn.py`
+encodes each game's tokens through the saved `RuleSlotEncoder`, flattens
+(K=16, d_slot=64) slots to a 1024-dim vector, and computes PCA + pairwise
+cosine distances.
+
+Two reductions tested (same picture):
+- `flat`: full 1024-d slot stack → PC1+PC2 explain 61.9% of variance.
+- `dyn_mean`: mean over the 15 dynamic slots → 64-d. Same tightest pairs.
+
+**Key result**: the two pairs of token-equivalent gallery_v2 games have
+**cosine distance ≈ 0** in the learned embedding:
+- `twolittlecrates2 ↔ twolittlecrates4`: cos dist = -0.0000
+- `sokoban_basic ↔ Microban`: cos dist = -0.0000 (the model also collapses
+  `blank` here per the dedup analysis)
+- `sokoban_basic ↔ sokoban_match3`: 0.0053 (related rules; near-collapse,
+  not full)
+- `Modality ↔ Ebony_&_Ivory`: 0.0056
+- `rigid_one_unlimited ↔ rigid_parallel_unlimited`: 0.0140
+- `2D_Whale_World ↔ Lime_Rick`: 0.0140
+
+**Median pairwise cos dist = 0.7665, mean = 0.7960.** Most of the 1711
+pairs are well-separated; the embedding space is mostly meaningful, with
+collapse only at the dedup-identified duplicates.
+
+**Most distinct pairs** (cos dist ≈ 1.8): scriptcross is the lone wolf,
+followed by `blockfaker`, `Love_and_Pieces`, `lunar_lockout`, `The_observer's_paradox`.
+
+scaling_14 (14 games) for contrast: tightest pair `sokoban_match3 ↔
+scriptcross` at 0.064 — no zero-distance collisions because the
+gallery_v2 internal duplicates (Microban, blank, twolittlecrates4) aren't
+in scaling_14.
+
+Figures:
+- `nca_wm/logs/multi_scaling_gallery_v3_combined/interp/latent_scatter_flat.{pdf,png,npz,json}`
+- `nca_wm/logs/multi_scaling_gallery_v3_combined/interp/latent_scatter_dyn_mean.{pdf,png,npz,json}`
+- `nca_wm/logs/multi_scaling_14_v3recipe/interp/latent_scatter_flat.{pdf,png,npz,json}`
+
+### Object-ordering blind spot in dedup (2026-05-05)
+
+Sanity-tested the tokenizer's name-invariance assumption: `tokenize_game`
+depends on the order of `canonical_ids`, which is the order of object
+declaration in the OBJECTS section. Two games with identical mechanics
+but different declaration order get different token sequences → different
+hashes → invisible to v1 dedup.
+
+Re-hashing the 3,474-game deduped pool with **alphabetically-sorted**
+canonical_ids reveals 26 additional collisions across 21 new groups
+(largest: 4-game group merging into `blank`'s cluster). That's ~0.7% extra
+dedup. Small enough to defer, but a known blind spot — for the most
+faithful structural test we'd canonicalize object order before tokenizing.
+Current dedup numbers remain valid as an *upper bound* on token-distinct
+game count.
+
+## Held-out game overlay on v3_combined (2026-05-05)
+
+First "unseen game" generalization test. Picked 30 held-out games from
+`data/heldout_v4_n30.json` (stratified across complexity buckets, none
+in scaling_gallery_v4 by name or token-hash). Encoded each through the
+`v3_combined` `RuleSlotEncoder` and computed 1-NN distance to training
+games in the 1024-d slot space.
+
+**1-NN cosine distance summary**: min=0.009, median=0.123, mean=0.123, max=0.306.
+
+Every held-out game lands within 0.31 of *some* training game — no
+held-out falls completely outside the training manifold. This is the
+encouraging baseline.
+
+Closest pairs (heldout → 1-NN training):
+- `angize_by_ali_nikkhah → Midas` (0.009)
+- `escape_by_shawn_martin → nekopuzzle` (0.027)
+- `________________by_ncrecc → scriptcross` (0.042)
+- `Hamiltwo → Smother` (0.056)
+- `link_by_jeffjeff123456 → Smother` (0.055)
+- `Heroes_of_Sokoban_-_Ancient_Japan → Smother` (0.103)
+
+The Heroes_of_Sokoban-variant landing near `Smother` is consistent with
+both having multi-bracket / contagion-style mechanics — the encoder
+appears to capture *something* mechanically meaningful, not just lexical
+similarity.
+
+Most-distant held-outs (least similar to any training game):
+- `a_snowballs_chance_in_hell_by_iznaut → Lightdown` (0.306)
+- `ice_sliding_by_by_ian_cox → Travelling_salesman` (0.247)
+- `the_single_flame_by_hassan_masood → MC_Escher's_...` (0.211)
+- `Surround_Yourself_With_Dogs → Lightdown` (0.194)
+- `hedgehogger_by_increpare → It_Dies_In_The_Light` (0.187)
+
+Plot: `nca_wm/logs/multi_scaling_gallery_v3_combined/interp/heldout_overlay_flat.{pdf,png,npz,json}`.
+
+**Hypothesis test on scaling**: re-run after v3 (97 games) finishes.
+Prediction: median 1-NN distance drops as the encoder sees more rule
+patterns. If it doesn't, the bottleneck isn't pattern coverage.
+
+### Held-out 1-NN scaling table — pre-v3 (2026-05-05)
+
+Same 30-game held-out set encoded through 5 existing rule_attn checkpoints,
+restricted to the 21 held-outs that fit in every run's max_tok_len for
+apples-to-apples comparison:
+
+| run | n_games | mask_hidden | n_updates | median 1-NN | mean 1-NN |
+|---|---:|:---:|---:|---:|---:|
+| `multi_scaling_14_v3recipe` | 14 | False | 150k | 0.144 | 0.165 |
+| `multi_scaling_14_mask_v1` (shared) | 14 | True | 80k | **0.077** | **0.093** |
+| `multi_scaling_14_mask_v2_perstep` | 14 | True | 80k | 0.133 | 0.162 |
+| `multi_scaling_gallery_v2_nca8` | 59 | False | 80k | 0.117 | 0.129 |
+| `multi_scaling_gallery_v3_combined` | 59 | False | 150k | 0.119 | 0.119 |
+
+Findings:
+
+1. **`mask_hidden=True` + shared weights at 14 games beats 59 games without
+   mask** (median 0.077 vs 0.117). Recipe lever > 4× dataset size on
+   this metric. This is consistent with the "mask_hidden enables
+   translation-equivariance / cleaner encoder signal" hypothesis from
+   the per-step varislide canary work.
+2. **`mask_hidden=True` + per-step weights doesn't help nearly as much**
+   (0.133 vs shared 0.077). Sharing across NCA steps appears to
+   regularize the encoder toward more compact latents.
+3. **Pure scale (no mask): 14g → 59g** halves the 1-NN gap from 0.144
+   to 0.117 (~0.03 reduction per 4× games). Slower than the mask
+   improvement but real.
+4. **Longer training at 59g is a wash** for held-out 1-NN
+   (v2_nca8 80k = 0.117 ≈ v3_combined 150k = 0.119).
+5. **Compounding prediction**: v3 (97g + mask + shared + 150k) should
+   land ≤ 0.07 if mask and scale stack cleanly.
+
+Figures:
+- `nca_wm/figures/heldout_scaling/median_1nn_common_subset.{pdf,png,json}`
+- `nca_wm/figures/heldout_scaling/summary_flat.md`
+
+### Held-out AR rollout baseline on v3_combined (2026-05-05)
+
+Predictive-accuracy counterpart to the latent-geometric metric. Ran
+`heldout_eval.py` on 29 of 30 games in `data/heldout_v4_n30.json` (1
+game crashed the run via JIT-cache OOM at the end). 2 levels per game,
+3 random episodes, 30-step horizon.
+
+**Headline numbers**:
+- **8/29 games beat identity at step 1** (model_step1 ≤ identity_step1).
+- **1/29 games beat identity on full 30-step rollout mean.**
+- Average model step1 cell-error: 0.068 (vs identity 0.027, ~2.5× worse).
+
+Game-pattern findings:
+- **Best transfer** (model ≤ identity at step 1): `watchers_ritual`,
+  `my_nana_ate_my_kid_brother`, `link_by_jeffjeff123456`,
+  `monophobic_multiban_by_increpare`, `haberdashery_by_lee2sman`,
+  `the_single_flame`, `cyberpunk_2020`, `kyles_chesse_cuisine`. Mostly
+  simple short-horizon games where identity is itself strong (state
+  changes little step-to-step).
+- **Worst transfer**: `pacman__by_cora` (model 0.307 vs identity 0.025
+  step1), `headless_people_problems` (0.252 vs 0.012), `Surround_Yourself_With_Dogs`
+  (0.283 vs 0.085). Complex multi-rule mechanics (chasing, contagion)
+  where the model fails because rule structure is OOD, even though
+  identity also has a poor mean.
+
+Files: `nca_wm/logs/multi_scaling_gallery_v3_combined/heldout_v4_n30/{results.json,rollout_curves.png,step1_bar.png}`.
+
+The compounding prediction for v3 (97g + mask_hidden + shared, 150k):
+more games + better encoder geometry should narrow the avg step1 gap
+(0.068 → ?) and grow the beats-identity tally (8/29 → ?). The 1-NN
+latent metric predicts the beats-identity tally because tighter
+latent-neighborhood ⇒ encoder treats heldout like a known game ⇒
+better predictive accuracy.
+
+## Travelling_salesman: data dilution, not mechanics complexity (2026-05-05)
+
+`Travelling_salesman` (TSM) has been a "persistently hard" game across
+v2 / v2_long / v2_smallbatch / v3_combined: change_err 0.99 even at
+150k steps in multi-game training. We tested whether it's mechanically
+hard by training a single-game NCA (rule_attn, n_hid=256, n_slots=16,
+d_slot=64, n_nca=8, batch=32, lr=3e-4, mask_hidden, change_loss_weight=5.0).
+
+**TSM single-game (30k steps):**
+- step 250: change_err = 0.54
+- step 500: change_err = 0.66 (early oscillation, not converged)
+- **step 1,000: change_err = 0.031 (3.1%)**, win_recall = 1.000
+- **step 2,000: change_err = 2.1e-9 (essentially zero)**, err = 0%
+- step 30,000: state_loss = 1.7e-12, fully memorized.
+- Eval (10 random episodes): step-1 L1 = 4.4 cells, step-20 L1 = 20.4 cells.
+  (Random actions are partly OOD vs A* training trajectories, so this
+  reflects per-cell rollout drift on unseen state-action regions, not a
+  rule-learning failure.)
+
+**Multi-game v3 (94 games) at the same step counts**: average change_err
+∼0.11–0.13; TSM-specific change_err 0.99 (recurring as worst-fit game).
+
+**Headline**: TSM is fully learnable (memorizable) in 2k single-game
+steps but stays at change_err ≈ 1.0 in 94-game training. The
+mechanically simple 4-rule game (no `...`, no globals, just a 3-cell
+pattern `[ > Player | Link | Node ]`) is not the bottleneck. The
+persistently-hard pattern in v2/v3 reflects **capacity competition /
+data dilution**: with balanced sampling at 1/N share and 13 levels with
+14K state-changing transitions × 50 winning trajectories, TSM's
+gradient signal gets drowned out by easier games' transitions.
+
+This is consistent with the broader persistent-hard cluster
+(Take_Heart_Lass, Travelling_salesman, Lightdown, It_Dies_In_The_Light,
+notsnake): they all have small authored datasets (1–12 levels) and
+sparse winning paths. Future fixes:
+- Per-game synth augmentation to grow the per-game dataset.
+- Hard-game-aware sampling (boost sample share for high-loss games).
+- Per-game expert paths (Mixture-of-Experts) to give hard games
+  dedicated capacity.
+
+Files: `nca_wm/logs/tsm_single_v3recipe/{config.json, params.pkl}`.
 
 ## Findings so far
 

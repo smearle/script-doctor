@@ -1,0 +1,68 @@
+{
+  "n_common_heldout": 21,
+  "common_heldout": [
+    "Surround_Yourself_With_Dogs",
+    "________________by_ncrecc",
+    "block_game_by_emily_dresden",
+    "build_a_snowman_challenges_by_flyingfroakie",
+    "cat_adventure_2_by_whenyoucando",
+    "charge_the_bot_by_tiddly5",
+    "cyberpunk_2020_by_gzhao-jpg",
+    "escape_by_shawn_martin",
+    "gdd301_demo_game_by_emma_hubbell",
+    "ice_sliding_by_by_ian_cox",
+    "in_the_way_by_giovanni_mota",
+    "kitten_rescue_by_unknownprodigy-beep",
+    "kyles_chesse_cuisine_by_techythanh",
+    "link_by_jeffjeff123456",
+    "megabot_invades!_by_louis_g",
+    "monophobic_multiban_by_increpare",
+    "my_nana_ate_my_kid_brother_by_ruth_williams",
+    "pacman__by_cora",
+    "the_best_2d_game_ever_created_by_cwm_gaming",
+    "the_single_flame_by_hassan_masood",
+    "watchers_ritual_by_purpledragon17"
+  ],
+  "rows": [
+    {
+      "run": "multi_scaling_14_v3recipe",
+      "n_games": 14,
+      "mask": false,
+      "nupd": 150000,
+      "median_1nn": 0.14403510093688965,
+      "mean_1nn": 0.16538773548035396
+    },
+    {
+      "run": "multi_scaling_14_mask_v1",
+      "n_games": 14,
+      "mask": true,
+      "nupd": 80000,
+      "median_1nn": 0.07694745063781738,
+      "mean_1nn": 0.09321950730823335
+    },
+    {
+      "run": "multi_scaling_14_mask_v2_perstep",
+      "n_games": 14,
+      "mask": true,
+      "nupd": 80000,
+      "median_1nn": 0.1325840950012207,
+      "mean_1nn": 0.16226019178118026
+    },
+    {
+      "run": "multi_scaling_gallery_v2_nca8",
+      "n_games": 59,
+      "mask": false,
+      "nupd": 80000,
+      "median_1nn": 0.1168903112411499,
+      "mean_1nn": 0.12910059236344837
+    },
+    {
+      "run": "multi_scaling_gallery_v3_combined",
+      "n_games": 59,
+      "mask": false,
+      "nupd": 150000,
+      "median_1nn": 0.11940348148345947,
+      "mean_1nn": 0.1190418487503415
+    }
+  ]
+}

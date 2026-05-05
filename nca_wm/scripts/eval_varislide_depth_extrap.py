@@ -77,7 +77,7 @@ def _load_transitions(train_seed: int, widths):
     for w in widths:
         wh = f"synthetic_{w}x3"
         pat = os.path.join(ROLLOUT_CACHE_DIR, "varislide", wh,
-                           f"seed{train_seed}_n*_v9*solv0*.npz")
+                           f"seed{train_seed}_n*_v*_mode-tile_pattern_empirical_solv0*.npz")
         files = sorted(glob.glob(pat))
         if not files:
             print(f"  [warn] no cache files for width {w} at {pat}")
