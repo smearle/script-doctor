@@ -144,12 +144,13 @@ def pad_tokens(token_ids, max_seq_len):
     return pad, mask, L
 
 
-def decode_slots_greedy(decoder, dec_params, slots, max_len, bos_id=0):
+def decode_slots_greedy(decoder, dec_params, slots, max_len, bos_id=0,
+                         eos_id=None):
     """Greedy decode from slots → token sequence (B, max_len)."""
     from nca_wm.token_decoder import sample_tokens_from_slots
     return sample_tokens_from_slots(
         decoder, dec_params, slots, max_len=max_len,
-        bos_id=bos_id, temperature=0.0,
+        bos_id=bos_id, eos_id=eos_id, temperature=0.0,
     )
 
 
@@ -254,10 +255,19 @@ def main():
     def _decoder_logits(slots, tokens_in):
         return decoder.apply(dec_params, tokens_in, slots, deterministic=True)
 
+    # If the checkpoint was trained with --use_eos, stop AR generation at the
+    # first emitted EOS. Older checkpoints (use_eos absent or False) decode
+    # the full max_len and the caller cleans the tail.
+    eos_id_for_sampling = None
+    if cfg.get("use_eos", False):
+        from nca_wm.tokenize_game import EOS_ID
+        eos_id_for_sampling = EOS_ID
+
     def _decode_batch(slots_batch, max_len):
         # Autoregressive sampling for novel-sample mode (slow, only used on
         # a handful of samples).
-        return decode_slots_greedy(decoder, dec_params, slots_batch, max_len)
+        return decode_slots_greedy(decoder, dec_params, slots_batch, max_len,
+                                    eos_id=eos_id_for_sampling)
 
     recon_acc = []
     for i, name in enumerate(names):

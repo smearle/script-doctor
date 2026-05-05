@@ -635,11 +635,13 @@ def detokenize(
     grammar; it is not guaranteed to be playable (e.g. levels are
     synthetic, sprite palettes are quantized).
     """
-    # Strip BOS/PAD if present.
+    # Strip BOS/PAD/EOS if present.
     pad = VOCAB["PAD"]
+    eos = VOCAB.get("EOS")
     while token_ids and token_ids[0] == pad:
         token_ids = token_ids[1:]
-    while token_ids and token_ids[-1] == pad:
+    while token_ids and (token_ids[-1] == pad
+                         or (eos is not None and token_ids[-1] == eos)):
         token_ids = token_ids[:-1]
 
     chunks = _split_sections(token_ids)

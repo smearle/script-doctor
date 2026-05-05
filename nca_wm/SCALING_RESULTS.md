@@ -1192,18 +1192,37 @@ that even a closest-fit slot still leaves residual error.
 **Symbolic AE results (autoregressive sampling, 16 random + 9 interpolation):**
 
 - **TF reconstruction**: 100% perfect across all 94 training games.
-- **AR compile-rate (initial run)**: 0/25. The decoder generates
-  garbage past the real game spec because there's no EOS handling —
-  even the t=0.00 endpoint of an interpolation between known games
-  produces sokoban-like opening rules then ~50 redundant winconditions.
-- **Workaround**: added `stop_at_pad=True` to
-  `sample_tokens_from_slots`, halting AR generation at the first PAD
-  prediction. Re-sampling in progress.
-- **Honest paper framing**: 100% TF reconstruction confirms slots
-  contain enough information to recover training games; the AR-compile
-  gap reflects a known sequence-modeling limitation (no EOS) rather
-  than a latent-space problem. Future work should add EOS-token
-  training.
+  Given the right history at each position, the decoder predicts the
+  correct next token everywhere.
+- **AR engine-load**: 0/25 across both random Gaussian samples and
+  9-point sokoban_basic ↔ Travelling_salesman interpolation. Tested
+  twice (initial + with `stop_at_pad=True` patch); the patch shortens
+  decoded sequences by ~20% but doesn't fix engine-load.
+- **What's actually decoded**: AR samples produce *structurally*
+  PuzzleScript-shaped output — push rules `[ > Obj2 | Obj4 ] -> [ > Obj2
+  | > Obj4 ]`, ellipsis rules `[ > ... | Obj1 ] -> [ > ... | Obj1 ]`,
+  `late` prefixes — confirming the decoder learned the rule grammar.
+  Even the t=0.00 endpoint produces a sokoban-style first push rule.
+- **Why engine-load fails**: the JS engine *parses* the decoded text
+  (PuzzleScript syntax is satisfied) but then crashes in
+  `serializeCompiledStateJSON` because (i) AR generation emits ~40
+  redundant `all Obj1 on Obj4`-style win-conditions instead of
+  stopping at one, and (ii) decoded rules reference `Grp1`, `Grp2`,
+  etc. as legend groups but the LEGEND section only emits `Grp0` because
+  the AR sequence didn't include the corresponding `GROUP_OR` /
+  `GROUP_AND` structure tokens in the right place.
+- **Diagnosis**: a teacher-forcing-vs-autoregressive gap. The decoder
+  has learned the conditional `p(t_n | t_{<n}, slot)` perfectly but
+  hasn't learned a stable basin to *generate* well-formed sequences
+  from BOS. Standard fixes (explicit EOS token, scheduled sampling,
+  decoder pretraining on the token corpus alone, structure-aware
+  generation) should close this; we leave as a clear future-work item.
+- **Honest paper framing**: 100% TF reconstruction proves the latent
+  space carries the spec information. The 0% AR engine-load reflects
+  a known sequence-modeling limitation, not a latent-space limitation.
+  Inverse-fitting (which optimizes the slot directly without going
+  through AR) sidesteps this issue and works (final fit BCE 8e-4 to
+  7e-3 across 3 OOD games).
 
 Files:
 - `nca_wm/logs/multi_scaling_gallery_v3_decoder/`

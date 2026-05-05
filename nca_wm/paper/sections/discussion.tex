@@ -13,10 +13,19 @@ smoothly with the number of games, generalize to held-out rule
 systems, decode meaningful symbolic programs, and permit inverse
 fitting from transitions.
 
-\papertodo{Once the broad-corpus, autoencoder, and inverse-fitting
-results are added, rewrite this paragraph as a positive synthesis.
-Until then, keep this limitation explicit so the body does not imply
-that all abstract claims have already been demonstrated.}
+The broad-corpus and joint-AE results in
+\S\ref{sec:results-autoencoder} and \S\ref{sec:results-inverse-fit}
+take partial steps in each direction: training on 94 deduped human
+games delivers median 1-step teacher-forced cell-error of $0.15\%$
+with a tighter held-out 1-NN slot neighbourhood under the joint
+decoder objective; inverse-fitting recovers OOD games' dynamics
+through the latent variable to $\sim 10^{-3}$ BCE and lands the
+recovered slot near a mechanically related training game. The two
+remaining gaps in the engine-modelling story are
+(i) autoregressive sampling of new playable games (which currently
+generates structurally valid but engine-load-failing PuzzleScript)
+and (ii) breaking the multi-grid synthetic-data ceiling described
+below.
 
 \paragraph{What the iterated local update buys.}
 The architecture comparison in \S\ref{sec:results-baselines}
@@ -54,11 +63,20 @@ factoring ``where to fire'' from ``what to write.'' A successful
 break here would close the most important remaining gap between
 authored-data and synthetic-multi-grid performance.
 
-\papertodo{Reconcile this ceiling with the abstract's
-``near-perfect fidelity'' claim. If near-perfect results are obtained
-on the broad authored corpus but not synthetic multi-grid OOD tasks,
-state that distinction explicitly and explain what type of
-generalization remains unsolved.}
+``Near-perfect fidelity'' in the abstract refers to the
+on-distribution regime: training on authored levels of human-written
+games and evaluating on the same authored levels gives a median
+1-step teacher-forced cell-error of $0.15\%$ on 94 broad-corpus
+games (Table~\ref{tab:headline-fidelity}). The
+multi-grid synthetic ceiling is a separate distribution-shift result:
+when the model is trained on synthetic levels of multiple grid
+sizes \emph{without} access to authored-data memorisation, current
+recipes plateau well above the on-distribution regime. The two are
+consistent --- the model interpolates faithfully on authored data
+but does not yet truly learn the underlying rule under multi-grid
+synth --- and we believe both are necessary milestones for an
+engine-modelling claim. The candidate fixes outlined above are
+specific to the synth-ceiling gap.
 
 \paragraph{Beyond PuzzleScript.}
 The architecture is not domain-specific. Any deterministic

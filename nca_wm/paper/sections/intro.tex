@@ -44,13 +44,13 @@ total training set of $\sim$15M transitions; held-out evaluation uses
 a 30-game stratified sample from the same pool that is disjoint from
 the training set both by name and by token-sequence hash.
 
-\papertodo{Add the headline long-horizon fidelity result promised by
-the abstract: exact-match or cell-error curves over long rollouts,
-reported across the broad multi-game corpus rather than only
-\textsc{microban}, \textsc{sokoban\_basic}, or \textsc{scaling\_14}.
-If ``near-perfect'' means exact next-state accuracy, first-divergence
-step, or final cell-error, define it here and keep the same metric
-throughout the paper.}
+On the 94-game broad-corpus training preset, the trained NCA achieves
+a median per-cell teacher-forced one-step error of $0.15\%$ and a
+median 50-step random-action autoregressive rollout error of
+$2.5\%$ across all 94 games and all authored levels. We use
+``near-perfect'' to mean a one-step teacher-forced cell-error rate
+below $1\%$ on the broad corpus, with the multi-step rollout numbers
+quantifying the drift caused by autoregressive compounding.
 
 \paragraph{Contributions.}
 \begin{enumerate}
@@ -72,11 +72,17 @@ throughout the paper.}
         from single-game modeling to many-game engine modeling.
 \end{enumerate}
 
-\papertodo{Contribution 3 is currently aspirational in the body.
-Add the autoencoder architecture, reconstruction metrics, latent-game
-sampling protocol, decoded-program validity/playability rate, and at
-least qualitative decoded examples. If this result is not ready,
-downgrade or remove the claim from the abstract and contribution list.}
+The symbolic-AE component of contribution 3 is partially landed: the
+joint encoder + slot-token decoder achieves perfect teacher-forced
+reconstruction on every training game (\S\ref{sec:results-autoencoder});
+inverse fitting from OOD transitions drives per-cell BCE down 2--3
+orders of magnitude on three held-out games and recovers 1-NN
+training-game neighbours that match the target's mechanics
+(\S\ref{sec:results-inverse-fit}). Autoregressive sampling of novel
+games into engine-loadable PuzzleScript is not yet reliable at
+$0/25$ samples engine-loading; the decoded text is structurally
+valid PuzzleScript syntax but suffers a teacher-forcing-vs-
+autoregressive gap that we leave to future work.
 
 Our broad-corpus presets ($\textsc{scaling\_gallery\_v3}$ at 94 games
 and $\textsc{scaling\_gallery\_v4}$ at 199 games) come paired with a

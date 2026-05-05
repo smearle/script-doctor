@@ -147,20 +147,27 @@ _SPRITE_CLRS = [f"COLOR_Q{i:02d}" for i in range(COLOR_Q_TOTAL)]
 #        truncate them, dropping all references beyond MAX_*).
 _RULE_V2 = ["KERNEL_SEP"]
 
+# EOS: end-of-sequence marker, appended at the tail of each game's token list
+# when `append_eos=True`. Placed at the very end of the vocab so all earlier
+# token IDs stay stable across this addition (existing checkpoints are not
+# disturbed because they were trained without EOS in their token streams).
+_END = ["EOS"]
+
 _ALL_TOKENS_BASE = (
     _SPECIAL + _STRUCTURE + _RULE + _DIRECTIONS + _PREFIXES +
     _MODIFIERS + _COMMANDS + _WINCOND + _PRELUDE + _CHANNELS + _GROUPS
 )
 _ALL_TOKENS_EXT = _ALL_TOKENS_BASE + _SPRITE_STRUCT + _SPRITE_PIX + _SPRITE_CLRS
 _ALL_TOKENS_EXT_V2 = (
-    _ALL_TOKENS_EXT + _RULE_V2 + _CHANNELS_V2_EXT + _GROUPS_V2_EXT
+    _ALL_TOKENS_EXT + _RULE_V2 + _CHANNELS_V2_EXT + _GROUPS_V2_EXT + _END
 )
 
 VOCAB = {tok: i for i, tok in enumerate(_ALL_TOKENS_EXT_V2)}
 VOCAB_SIZE_BASE = len(_ALL_TOKENS_BASE)          # 141 — legacy compat
 VOCAB_SIZE_EXT = len(_ALL_TOKENS_EXT)             # ~183 — with sprite tokens
-VOCAB_SIZE_EXT_V2 = len(_ALL_TOKENS_EXT_V2)       # ~504 — adds V2 ext tokens
+VOCAB_SIZE_EXT_V2 = len(_ALL_TOKENS_EXT_V2)       # ~505 — adds V2 + EOS
 VOCAB_SIZE = VOCAB_SIZE_BASE                      # default for legacy callers
+EOS_ID = VOCAB["EOS"]
 INV_VOCAB = {i: tok for tok, i in VOCAB.items()}
 
 
@@ -254,6 +261,7 @@ def tokenize_game(
     tree: PSGameTree,
     canonical_ids: list[str],
     encode_sprites: bool = False,
+    append_eos: bool = False,
 ) -> list[int]:
     """Tokenize a PSGameTree into a sequence of integer token IDs.
 
@@ -269,6 +277,10 @@ def tokenize_game(
         encode_sprites: if True, prepend each object's palette + 5x5 sprite
             grid to the token sequence. See _SPRITE_STRUCT / _SPRITE_PIX /
             _SPRITE_CLRS for the vocab extension.
+        append_eos: if True, append a single EOS token at the end of the
+            returned sequence. Used as the autoregressive decoder's stop
+            signal; without it the decoder has no learned termination and
+            generation runs to max_seq_len with garbage tail.
 
     Returns:
         List of integer token IDs.
@@ -501,6 +513,8 @@ def tokenize_game(
             tokens.extend(_resolve_name(wc.trg_obj))
         tokens.append(V["SEP"])
 
+    if append_eos:
+        tokens.append(EOS_ID)
     return tokens
 
 
