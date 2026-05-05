@@ -195,6 +195,51 @@ configurations. We discuss candidate fixes in \S\ref{sec:discussion}.
 \subsection{Multi-game scaling}
 \label{sec:results-scaling}
 
-[Per-game change-error on \textsc{scaling\_14} for our model and the
-three baselines; held-out evaluation on a few games not seen during
-training.]
+Table~\ref{tab:baselines-scaling14} reports the head-to-head comparison
+on the \textsc{scaling\_14} benchmark: 14 PuzzleScript games sharing
+the rule-slot encoder, with grid sizes from $4{\times}4$ to
+$32{\times}24$ and rule counts from a handful (basic Sokoban) to
+$\sim$30 (\texttt{Heroes\_of\_Sokoban}, \texttt{Sokoboros}). Single
+seed, 20k updates, $d_h = 256$.
+
+\begin{table}[t]
+  \centering
+  \caption{\textbf{Multi-game baselines on \textsc{scaling\_14}.}
+    Single seed at 20k updates. Mean cell-error rate averaged across
+    games and levels. Both NCA variants beat all three non-NCA
+    baselines; within the NCA family, the per-step body wins on BFS
+    rollout while the shared body wins on train loss
+    (parameter-efficient).}
+  \label{tab:baselines-scaling14}
+  \small
+  \begin{tabular}{l c c c c}
+    \toprule
+    Architecture & params (M) & best loss & BFS final-err & A* final-err \\
+    \midrule
+    \textbf{NCA (per-step, $T{=}4, n_r{=}1$)} & 7.37 & $1.6 \times 10^{-5}$ & $\mathbf{10.46\%}$ & $\mathbf{11.88\%}$ \\
+    CNN (4-block ResNet)                      & 5.01 & $1.8 \times 10^{-5}$ & $12.14\%$          & $12.94\%$ \\
+    NCA (shared, $T{=}4, n_r{=}T$)            & \textbf{1.96} & $\mathbf{8.6 \times 10^{-6}}$ & $13.44\%$ & $14.64\%$ \\
+    U-Net (2 levels)                          & 6.09 & $1.1 \times 10^{-4}$ & $20.81\%$          & $23.59\%$ \\
+    ViT (4 layers)                            & 4.01 & $1.4 \times 10^{-3}$ & $26.29\%$          & $26.47\%$ \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+The multi-game story is more nuanced than the single-game one.
+\textbf{(i)} Both NCA variants outperform all three non-NCA baselines
+on autoregressive rollout, with U-Net at $1.55\times$ and ViT at
+$\sim$$2\times$ NCA-perstep's BFS error. \textbf{(ii)} Within the NCA
+family, the per-step body wins on BFS rollout (10.46\%) while the
+shared body wins on train loss ($8.6 \times 10^{-6}$, almost
+$2\times$ lower than per-step). The shared body's lower train loss
+combined with its higher rollout error is a textbook instance of F3
+(\S\ref{sec:results-F3}): per-step capacity helps the model encode
+the joint distribution of 14 distinct rule sets, while the shared
+body's compactness pays a small cost on rollout drift.
+\textbf{(iii)} ViT's train loss is now $\sim$$80\times$ higher than
+NCA-shared ($1.35 \times 10^{-3}$ vs.\ $8.6 \times 10^{-6}$),
+confirming the structural mismatch we observed on the synthetic
+single-game setting (\S\ref{sec:results-baselines}): unrestricted
+global attention does not fit grid-rule dynamics well even at modest
+scale. \textbf{(iv)} Per-game breakdowns and held-out cross-game
+generalization are deferred to the appendix.

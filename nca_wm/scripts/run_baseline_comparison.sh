@@ -146,7 +146,7 @@ fi
 if [ "$WHICH" = "multi" ] || [ "$WHICH" = "all" ]; then
     games_tag="scaling_14"
     GAMES="scaling_14"
-    N_UPDATES=80000
+    N_UPDATES=${N_UPDATES_MULTI:-80000}
     SYNTH=""  # multi-game uses authored data only for now
 
     for seed in $(seq 0 $((N_SEEDS - 1))); do
