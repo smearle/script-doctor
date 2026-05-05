@@ -1,0 +1,63 @@
+\begin{thebibliography}{10}
+
+\bibitem{banino2021pondernet}
+Andrea Banino, Jan Balaguer, and Charles Blundell.
+\newblock {PonderNet}: Learning to ponder.
+\newblock In {\em ICML Workshop on Automated Machine Learning}, 2021.
+
+\bibitem{dehghani2018universal}
+Mostafa Dehghani, Stephan Gouws, Oriol Vinyals, Jakob Uszkoreit, and {\L}ukasz Kaiser.
+\newblock Universal transformers.
+\newblock In {\em International Conference on Learning Representations}, 2018.
+
+\bibitem{graves2016act}
+Alex Graves.
+\newblock Adaptive computation time for recurrent neural networks.
+\newblock {\em arXiv preprint arXiv:1603.08983}, 2016.
+
+\bibitem{ha2018world}
+David Ha and J{\"u}rgen Schmidhuber.
+\newblock World models.
+\newblock In {\em Advances in Neural Information Processing Systems}, 2018.
+
+\bibitem{lavelle2013puzzlescript}
+Stephen Lavelle.
+\newblock {PuzzleScript}: an open-source html5 puzzle game engine.
+\newblock \url{https://www.puzzlescript.net/}, 2013.
+
+\bibitem{micheli2022iris}
+Vincent Micheli, Eloi Alonso, and Fran{\c{c}}ois Fleuret.
+\newblock Transformers are sample-efficient world models.
+\newblock {\em arXiv preprint arXiv:2209.00588}, 2022.
+
+\bibitem{mordvintsev2020growing}
+Alexander Mordvintsev, Ettore Randazzo, Eyvind Niklasson, and Michael Levin.
+\newblock Growing neural cellular automata.
+\newblock {\em Distill}, 2020.
+
+\bibitem{najarro2022hypernca}
+Elias Najarro, Shyam Sudhakaran, Claire Glanois, and Sebastian Risi.
+\newblock Hypernca: Growing developmental networks with neural cellular automata.
+\newblock In {\em ICLR Workshop on From Cells to Societies: Collective Learning across Scales}, 2022.
+
+\bibitem{niklasson2021selforganising}
+Eyvind Niklasson, Alexander Mordvintsev, Ettore Randazzo, and Michael Levin.
+\newblock Self-organising textures.
+\newblock {\em Distill}, 2021.
+
+\bibitem{palm2022variational}
+Rasmus~Berg Palm, Miguel Gonz{\'a}lez-Duque, Shyam Sudhakaran, and Sebastian Risi.
+\newblock Variational neural cellular automata.
+\newblock In {\em International Conference on Learning Representations}, 2022.
+
+\bibitem{robine2023transformer}
+Jan Robine, Marc H{\"o}ftmann, Tobias Uelwer, and Stefan Harmeling.
+\newblock Transformer-based world models are happy with 100k interactions.
+\newblock In {\em International Conference on Learning Representations}, 2023.
+
+\bibitem{shi2015convlstm}
+Xingjian Shi, Zhourong Chen, Hao Wang, Dit-Yan Yeung, Wai-Kin Wong, and Wang-chun Woo.
+\newblock Convolutional {LSTM} network: A machine learning approach for precipitation nowcasting.
+\newblock In {\em Advances in Neural Information Processing Systems}, 2015.
+
+\end{thebibliography}

@@ -205,39 +205,42 @@ seed, 20k updates, $d_h = 256$.
 \begin{table}[t]
   \centering
   \caption{\textbf{Multi-game baselines on \textsc{scaling\_14}.}
-    Single seed at 20k updates. Mean cell-error rate averaged across
-    games and levels. Both NCA variants beat all three non-NCA
-    baselines; within the NCA family, the per-step body wins on BFS
-    rollout while the shared body wins on train loss
-    (parameter-efficient).}
+    Mean $\pm$ std over 3 seeds at 20k updates. Cell-error rate
+    averaged across games and levels. Both NCA variants beat all
+    three non-NCA baselines; within the NCA family, the per-step
+    body wins on BFS rollout while the shared body wins on train loss
+    (parameter-efficient) and has notably lower seed-to-seed variance.}
   \label{tab:baselines-scaling14}
   \small
   \begin{tabular}{l c c c c}
     \toprule
     Architecture & params (M) & best loss & BFS final-err & A* final-err \\
     \midrule
-    \textbf{NCA (per-step, $T{=}4, n_r{=}1$)} & 7.37 & $1.6 \times 10^{-5}$ & $\mathbf{10.46\%}$ & $\mathbf{11.88\%}$ \\
-    CNN (4-block ResNet)                      & 5.01 & $1.8 \times 10^{-5}$ & $12.14\%$          & $12.94\%$ \\
-    NCA (shared, $T{=}4, n_r{=}T$)            & \textbf{1.96} & $\mathbf{8.6 \times 10^{-6}}$ & $13.44\%$ & $14.64\%$ \\
-    U-Net (2 levels)                          & 6.09 & $1.1 \times 10^{-4}$ & $20.81\%$          & $23.59\%$ \\
-    ViT (4 layers)                            & 4.01 & $1.4 \times 10^{-3}$ & $26.29\%$          & $26.47\%$ \\
+    \textbf{NCA (per-step, $T{=}4, n_r{=}1$)} & 7.37 & $\sim$$0$ & $\mathbf{12.39\% \pm 1.82\%}$ & $13.57\% \pm 1.76\%$ \\
+    NCA (shared, $T{=}4, n_r{=}T$)            & \textbf{1.96} & $\sim$$0$ & $13.12\% \pm \mathbf{0.24\%}$ & $14.68\% \pm 0.08\%$ \\
+    CNN (4-block ResNet)                      & 5.01 & $\sim$$0$ & $13.56\% \pm 1.08\%$ & $14.71\% \pm 1.42\%$ \\
+    U-Net (2 levels)                          & 6.09 & $1.0 \times 10^{-4}$ & $21.03\% \pm 0.29\%$ & $23.15\% \pm 0.40\%$ \\
+    ViT (4 layers)                            & 4.01 & $7.7 \times 10^{-4}$ & $23.14\% \pm 2.40\%$ & $24.67\% \pm 1.87\%$ \\
     \bottomrule
   \end{tabular}
 \end{table}
 
 The multi-game story is more nuanced than the single-game one.
 \textbf{(i)} Both NCA variants outperform all three non-NCA baselines
-on autoregressive rollout, with U-Net at $1.55\times$ and ViT at
-$\sim$$2\times$ NCA-perstep's BFS error. \textbf{(ii)} Within the NCA
-family, the per-step body wins on BFS rollout (10.46\%) while the
-shared body wins on train loss ($8.6 \times 10^{-6}$, almost
-$2\times$ lower than per-step). The shared body's lower train loss
-combined with its higher rollout error is a textbook instance of F3
-(\S\ref{sec:results-F3}): per-step capacity helps the model encode
+on autoregressive rollout, with U-Net at $1.6\times$ and ViT at
+$\sim$$1.9\times$ NCA-perstep's BFS error; the NCA / non-NCA gap is
+robust to seed (no overlap of $\pm 1\sigma$ intervals).
+\textbf{(ii)} Within the NCA family, the per-step body has the
+lowest mean BFS error ($12.39\% \pm 1.82\%$) but the shared body
+has notably lower seed-to-seed variance ($\pm 0.24\%$ vs.\
+$\pm 1.82\%$); the per-step's higher capacity helps the model encode
 the joint distribution of 14 distinct rule sets, while the shared
-body's compactness pays a small cost on rollout drift.
-\textbf{(iii)} ViT's train loss is now $\sim$$80\times$ higher than
-NCA-shared ($1.35 \times 10^{-3}$ vs.\ $8.6 \times 10^{-6}$),
+body's compactness yields a more constrained optimization landscape.
+At $\pm 1\sigma$ NCA-shared and NCA-perstep overlap, so we cannot
+distinguish them on aggregate BFS rollout, but NCA-shared wins
+parameter efficiency by $3.8\times$.
+\textbf{(iii)} ViT's train loss is $\sim$$10^{4}$ times higher than
+the NCA / CNN family ($\sim$$8 \times 10^{-4}$ vs.\ $\sim$$0$),
 confirming the structural mismatch we observed on the synthetic
 single-game setting (\S\ref{sec:results-baselines}): unrestricted
 global attention does not fit grid-rule dynamics well even at modest

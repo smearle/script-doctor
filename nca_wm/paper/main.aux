@@ -1,0 +1,109 @@
+\relax 
+\providecommand\hyper@newdestlabel[2]{}
+\providecommand\HyField@AuxAddToFields[1]{}
+\providecommand\HyField@AuxAddToCoFields[2]{}
+\def\@LN@column{1}
+\@writefile{toc}{\contentsline {section}{\numberline {1}Introduction}{1}{section.1}\protected@file@percent }
+\newlabel{sec:intro}{{1}{1}{Introduction}{section.1}{}}
+\citation{mordvintsev2020growing}
+\citation{niklasson2021selforganising,palm2022variational,najarro2022hypernca}
+\citation{ha2018world}
+\citation{micheli2022iris,robine2023transformer}
+\citation{lavelle2013puzzlescript}
+\def\@LN@column{1}
+\@writefile{toc}{\contentsline {paragraph}{Contributions.}{2}{section*.1}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{Why baselines from a different family.}{2}{section*.2}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {2}Related Work}{2}{section.2}\protected@file@percent }
+\newlabel{sec:related}{{2}{2}{Related Work}{section.2}{}}
+\@writefile{toc}{\contentsline {paragraph}{Neural Cellular Automata.}{2}{section*.3}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{World models and self-prediction.}{2}{section*.4}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{PuzzleScript and rule-based puzzle games.}{2}{section*.5}\protected@file@percent }
+\citation{banino2021pondernet}
+\citation{graves2016act}
+\citation{dehghani2018universal}
+\citation{shi2015convlstm}
+\def\@LN@column{1}
+\@writefile{toc}{\contentsline {paragraph}{Adaptive computation.}{3}{section*.6}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{Learned local-update grids more broadly.}{3}{section*.7}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {3}Method}{3}{section.3}\protected@file@percent }
+\newlabel{sec:method}{{3}{3}{Method}{section.3}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {3.1}Problem setup}{3}{subsection.3.1}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {3.2}Rule-conditioned NCA world model}{3}{subsection.3.2}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{Slot encoder.}{3}{section*.8}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{NCA dynamics body.}{3}{section*.9}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{Pool features.}{3}{section*.10}\protected@file@percent }
+\def\@LN@column{1}
+\@writefile{toc}{\contentsline {paragraph}{Hierarchical weight sharing.}{4}{section*.11}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{Heads.}{4}{section*.12}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {3.3}Baselines}{4}{subsection.3.3}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {3.4}Adaptive halting (optional)}{4}{subsection.3.4}\protected@file@percent }
+\newlabel{sec:method-halt}{{3.4}{4}{Adaptive halting (optional)}{subsection.3.4}{}}
+\@writefile{toc}{\contentsline {section}{\numberline {4}Experimental setup}{4}{section.4}\protected@file@percent }
+\newlabel{sec:experiments}{{4}{4}{Experimental setup}{section.4}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {4.1}Data}{4}{subsection.4.1}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{Synthetic levels.}{4}{section*.13}\protected@file@percent }
+\def\@LN@column{1}
+\@writefile{toc}{\contentsline {subsection}{\numberline {4.2}Game suites}{5}{subsection.4.2}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {4.3}Architectures and hyper-parameters}{5}{subsection.4.3}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {4.4}Evaluation}{5}{subsection.4.4}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {5}Results}{5}{section.5}\protected@file@percent }
+\newlabel{sec:results}{{5}{5}{Results}{section.5}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {5.1}Baselines vs.\ rule-conditioned NCA}{5}{subsection.5.1}\protected@file@percent }
+\newlabel{sec:results-baselines}{{5.1}{5}{Baselines vs.\ rule-conditioned NCA}{subsection.5.1}{}}
+\def\@LN@column{1}
+\@writefile{lot}{\contentsline {table}{\numberline {1}{\ignorespaces \textbf  {Baselines vs.\ rule-conditioned NCA on \textsc  {microban} (authored levels).} Mean $\pm $ std over 3 seeds at 10k updates. Lower is better for loss and cell-error; A* first- divergence step is higher-is-better. Param count in millions; architectures sorted by BFS final cell-error.}}{6}{table.1}\protected@file@percent }
+\newlabel{tab:baselines-microban}{{1}{6}{\textbf {Baselines vs.\ rule-conditioned NCA on \textsc {microban} (authored levels).} Mean $\pm $ std over 3 seeds at 10k updates. Lower is better for loss and cell-error; A* first- divergence step is higher-is-better. Param count in millions; architectures sorted by BFS final cell-error}{table.1}{}}
+\@writefile{lot}{\contentsline {table}{\numberline {2}{\ignorespaces \textbf  {Baselines vs.\ rule-conditioned NCA on \textsc  {sokoban\_basic} (multi-grid synthetic).} Mean $\pm $ std over 3 seeds at 10k updates; widths $\{5{\times }5, 6{\times }6, 7{\times }7, 8{\times }8\}$ with 256 synthetic levels per width. Memorization is unavailable; the model has to learn the slide rule across grid sizes. Architectures sorted by BFS final cell-error.}}{6}{table.2}\protected@file@percent }
+\newlabel{tab:baselines-synth}{{2}{6}{\textbf {Baselines vs.\ rule-conditioned NCA on \textsc {sokoban\_basic} (multi-grid synthetic).} Mean $\pm $ std over 3 seeds at 10k updates; widths $\{5{\times }5, 6{\times }6, 7{\times }7, 8{\times }8\}$ with 256 synthetic levels per width. Memorization is unavailable; the model has to learn the slide rule across grid sizes. Architectures sorted by BFS final cell-error}{table.2}{}}
+\@writefile{toc}{\contentsline {paragraph}{(F1) Pool features are load-bearing.}{6}{section*.14}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{(F2) Shared NCA-body weights are the right inductive bias.}{6}{section*.15}\protected@file@percent }
+\def\@LN@column{1}
+\newlabel{sec:results-F3}{{5.1}{7}{(F3) Train loss decouples from autoregressive rollout error}{section*.16}{}}
+\@writefile{toc}{\contentsline {paragraph}{(F3) Train loss decouples from autoregressive rollout error.}{7}{section*.16}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {5.2}Pool-feature ablation}{7}{subsection.5.2}\protected@file@percent }
+\newlabel{sec:results-pool}{{5.2}{7}{Pool-feature ablation}{subsection.5.2}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {5.3}Hierarchical weight sharing}{7}{subsection.5.3}\protected@file@percent }
+\newlabel{sec:results-hierarchy}{{5.3}{7}{Hierarchical weight sharing}{subsection.5.3}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {5.4}Adaptive halting}{7}{subsection.5.4}\protected@file@percent }
+\newlabel{sec:results-halting}{{5.4}{7}{Adaptive halting}{subsection.5.4}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {5.5}Multi-grid synthetic data ceiling}{7}{subsection.5.5}\protected@file@percent }
+\newlabel{sec:results-ceiling}{{5.5}{7}{Multi-grid synthetic data ceiling}{subsection.5.5}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {5.6}Multi-game scaling}{7}{subsection.5.6}\protected@file@percent }
+\newlabel{sec:results-scaling}{{5.6}{7}{Multi-game scaling}{subsection.5.6}{}}
+\bibstyle{plain}
+\bibdata{references}
+\bibcite{banino2021pondernet}{{1}{}{{}}{{}}}
+\bibcite{dehghani2018universal}{{2}{}{{}}{{}}}
+\bibcite{graves2016act}{{3}{}{{}}{{}}}
+\def\@LN@column{1}
+\@writefile{lot}{\contentsline {table}{\numberline {3}{\ignorespaces \textbf  {Multi-game baselines on \textsc  {scaling\_14}.} Single seed at 20k updates. Mean cell-error rate averaged across games and levels. Both NCA variants beat all three non-NCA baselines; within the NCA family, the per-step body wins on BFS rollout while the shared body wins on train loss (parameter-efficient).}}{8}{table.3}\protected@file@percent }
+\newlabel{tab:baselines-scaling14}{{3}{8}{\textbf {Multi-game baselines on \textsc {scaling\_14}.} Single seed at 20k updates. Mean cell-error rate averaged across games and levels. Both NCA variants beat all three non-NCA baselines; within the NCA family, the per-step body wins on BFS rollout while the shared body wins on train loss (parameter-efficient)}{table.3}{}}
+\@writefile{toc}{\contentsline {section}{\numberline {6}Discussion}{8}{section.6}\protected@file@percent }
+\newlabel{sec:discussion}{{6}{8}{Discussion}{section.6}{}}
+\@writefile{toc}{\contentsline {paragraph}{What the iterated local update buys.}{8}{section*.17}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{Memorization as a confound.}{8}{section*.18}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{Open: escaping the multi-grid ceiling.}{8}{section*.19}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{Beyond PuzzleScript.}{8}{section*.20}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{Limitations.}{8}{section*.21}\protected@file@percent }
+\bibcite{ha2018world}{{4}{}{{}}{{}}}
+\bibcite{lavelle2013puzzlescript}{{5}{}{{}}{{}}}
+\bibcite{micheli2022iris}{{6}{}{{}}{{}}}
+\bibcite{mordvintsev2020growing}{{7}{}{{}}{{}}}
+\bibcite{najarro2022hypernca}{{8}{}{{}}{{}}}
+\bibcite{niklasson2021selforganising}{{9}{}{{}}{{}}}
+\bibcite{palm2022variational}{{10}{}{{}}{{}}}
+\bibcite{robine2023transformer}{{11}{}{{}}{{}}}
+\bibcite{shi2015convlstm}{{12}{}{{}}{{}}}
+\def\@LN@column{1}
+\@writefile{toc}{\contentsline {section}{\numberline {A}Implementation details}{9}{section.A}\protected@file@percent }
+\newlabel{app:impl}{{A}{9}{Implementation details}{section.A}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {A.1}Model construction}{9}{subsection.A.1}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {A.2}Tokenization}{9}{subsection.A.2}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {A.3}Per-game \textsc  {scaling\_14} breakdown}{9}{subsection.A.3}\protected@file@percent }
+\newlabel{app:per-game}{{A.3}{9}{Per-game \textsc {scaling\_14} breakdown}{subsection.A.3}{}}
+\providecommand\NAT@force@numbers{}\NAT@force@numbers
+\def\@LN@column{1}
+\@writefile{lof}{\contentsline {figure}{\numberline {1}{\ignorespaces \textbf  {Per-game BFS final cell-error on \textsc  {scaling\_14}.} Rows are games (sorted by NCA-shared error, ascending); columns are architectures. Single seed at 20k updates. Both NCA variants beat the three non-NCA baselines on the vast majority of games; ViT is the only architecture with a catastrophic failure on a small game (\textsc  {scriptcross}).}}{10}{figure.1}\protected@file@percent }
+\newlabel{fig:per-game-heatmap}{{1}{10}{\textbf {Per-game BFS final cell-error on \textsc {scaling\_14}.} Rows are games (sorted by NCA-shared error, ascending); columns are architectures. Single seed at 20k updates. Both NCA variants beat the three non-NCA baselines on the vast majority of games; ViT is the only architecture with a catastrophic failure on a small game (\textsc {scriptcross})}{figure.1}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {A.4}Reproducibility}{10}{subsection.A.4}\protected@file@percent }
+\gdef \@abspage@last{10}
