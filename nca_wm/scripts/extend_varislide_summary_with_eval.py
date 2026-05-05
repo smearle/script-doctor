@@ -37,8 +37,13 @@ TRAIN_W = {6, 8, 10, 12, 16}
 
 
 def _load_eval(run_dir):
-    p = os.path.join(run_dir, "eval_multigame.npz")
-    if not os.path.exists(p):
+    # Prefer the post-fix re-eval (top-left slicing) when present, fall back
+    # to the original npz for backwards compat.
+    for fname in ("eval_multigame_tlfix.npz", "eval_multigame.npz"):
+        p = os.path.join(run_dir, fname)
+        if os.path.exists(p):
+            break
+    else:
         return None
     z = np.load(p, allow_pickle=True)
     out = {"per_level": {}}

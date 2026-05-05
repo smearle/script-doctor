@@ -94,7 +94,16 @@ PYBIND11_MODULE(_puzzlescript_cpp, m) {
              "Create a backup of the current level state")
         .def("restore_level", &Engine::restoreLevel,
              py::arg("backup"),
-             "Restore level from a backup");
+             "Restore level from a backup")
+        .def("set_track_rules_fired", &Engine::setTrackRulesFired,
+             py::arg("on"),
+             "Enable/disable per-call rule-firing telemetry. Off by default.")
+        .def("clear_rules_fired", &Engine::clearRulesFired,
+             "Zero the rules-fired accumulator. Off-state no-op.")
+        .def("get_rules_fired", &Engine::getRulesFired,
+             "Sorted list of rule globalIndex values fired since last clear.")
+        .def("get_rule_count", &Engine::getRuleCount,
+             "Total compiled rule count (including direction-substituted variants).");
 
     py::class_<LevelBackup>(m, "LevelBackup")
         .def(py::init<>())
@@ -233,17 +242,26 @@ PYBIND11_MODULE(_puzzlescript_cpp, m) {
         .def_readonly("actions", &TransitionData::actions)
         .def_readonly("next_states", &TransitionData::nextStates)
         .def_readonly("wons", &TransitionData::wons)
+        .def_readonly("rules_fired", &TransitionData::rulesFired,
+                      "Per-transition list of fired rule global indices. "
+                      "Empty unless track_rules_fired=True was passed.")
         .def_readonly("width", &TransitionData::width)
         .def_readonly("height", &TransitionData::height)
         .def_readonly("iterations", &TransitionData::iterations)
+        .def_readonly("n_rules", &TransitionData::n_rules)
         .def_readonly("time", &TransitionData::time)
         .def_readonly("timeout", &TransitionData::timeout)
         .def_readonly("id_dict", &TransitionData::idDict);
 
-    m.def("collect_transitions_bfs", [](Engine& engine, int maxIters, int timeoutMs) {
-        py::gil_scoped_release release;
-        return collectTransitionsBFS(engine, maxIters, timeoutMs);
-    }, py::arg("engine"), py::arg("max_iters") = 100000, py::arg("timeout_ms") = -1);
+    m.def("collect_transitions_bfs",
+          [](Engine& engine, int maxIters, int timeoutMs, bool trackRulesFired) {
+              py::gil_scoped_release release;
+              return collectTransitionsBFS(engine, maxIters, timeoutMs, trackRulesFired);
+          },
+          py::arg("engine"),
+          py::arg("max_iters") = 100000,
+          py::arg("timeout_ms") = -1,
+          py::arg("track_rules_fired") = false);
     m.def("collect_transitions_astar", [](Engine& engine, int maxIters, int timeoutMs) {
         py::gil_scoped_release release;
         return collectTransitionsAStar(engine, maxIters, timeoutMs);

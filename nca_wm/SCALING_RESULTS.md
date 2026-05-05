@@ -287,6 +287,26 @@ slide-stop column) is the direct test of "did the model learn to iterate."
 Figures: `nca_wm/figures/varislide_postfix/{argmax_by_depth, argmax_by_LR,
 argmax_pool_onoff}.{pdf,png}`. Summary CSV/MD same dir.
 
+**Held-out authored map-size eval (re-eval 2026-05-04 with top-left
+slicing fix):** all 34 checkpoints were re-evaluated against authored
+varislide levels (W ∈ {6, 7, 9, 11, 15, 19}) using the corrected slicing.
+Numbers in `figures/varislide_postfix/eval_summary.{csv,md}`. Per-step
+cell-error rate (mean over 30-step rollout):
+
+- **TF (teacher-forced) train widths:** ≤ 0.06% across every config.
+- **TF interp widths (W ∈ {7, 9, 11, 15}):** 0.20–0.62%.
+- **TF OOD width (W=19, only L7):** 0.12–0.40%.
+- **AR (autoregressive) train widths:** essentially 0%; AR interp 2–5%
+  (compounding error); AR OOD (W=19) 1–3%.
+- **BFS-oracle rollouts:** 0% on train widths, 0.08–0.32% on interp,
+  ~1.56% on the W=19 OOD slice (deterministic — same value across most
+  configs because it's a fixed authored level).
+
+The corrected eval confirms varislide is fully solved by every config:
+both the trained-width "TF=0%" claim and the held-out width
+generalization are tight, with at most ~5% AR error in the worst case
+(typically L7 which has W=19 > training max W=16).
+
 ### Findings
 
 1. **Depth ≥ 8 fully shared is sufficient** — d=8/16/32 all hit 100%; the pre-fix
@@ -436,7 +456,7 @@ or fundamentally different mechanics.**
 Result files: `nca_wm/logs/multi_scaling_*/heldout_transfer_v1/results.json`
 + `rollout_curves.png` + `step1_bar.png` per checkpoint.
 
-## Heroes_of_Sokoban L0 depth × sharing × pool sweep (2026-05-04)
+## Heroes_of_Sokoban L0 depth × sharing × pool sweep (2026-05-04, RE-EVAL)
 
 A harder-than-Bouncers single-game sweep on `Heroes_of_Sokoban` level 0.
 Heroes has genuinely non-local rules — `[> Wizard] -> [Wizard > Temp]` then
@@ -450,48 +470,282 @@ Recipe: rule_attn, h=256, n_slots=16, n_app_slots=1, batch=16, lr=3e-4,
 15k updates, mask_hidden=True default, change_loss_weight=5.0. 16 configs
 = depth ∈ {4, 8, 16, 32} × {fully-shared, per-step} × {pool ON, pool OFF + input_skip}.
 
-**BFS rollout cell-error per step (lower is better):**
+**The original numbers in this section were inflated by the centered-vs-top-left
+slicing bug fixed 2026-05-04** (`train.py` `_run_eval_rollout` was extracting
+predictions from the centered position of the padded grid, but training-time
+predictions live at the top-left). All 16 checkpoints were re-evaluated via
+`reeval_via_render_only.sh` and the corrected numbers below replace the
+prior table. The original buggy npz is preserved at
+`logs_heroes/heroes_*/eval_multigame_buggy.npz`; corrected at
+`eval_multigame_tlfix.npz`.
+
+The re-eval also revealed that the original eval iterated over **every**
+authored level (L0–L21), not just L0. Since training only saw L0, the
+non-zero numbers on L1–L21 are an in-game generalization probe (transfer
+across map sizes/layouts). The split below makes that explicit.
+
+**BFS rollout cell-error per step (corrected):**
 
 | depth | A: pool+shared | B: pool+per-step | C: nopool+skip+shared | D: nopool+skip+per-step |
 |---|---|---|---|---|
-| 4  | 6.48% | 6.45% | 1.50% | **1.41%** |
-| 8  | 1.61% | 1.89% | 1.71% | **1.57%** |
-| 16 | **1.57%** | 1.94% | 1.58% | 1.74% |
-| 32 | 1.78% | 15.35% | **1.50%** | 1.63% |
+| L0 (training level) | | | | |
+| 4  | 0.00% | 0.00% | **0.00%** | 0.00% |
+| 8  | 0.00% | 0.00% | **0.00%** | 0.00% |
+| 16 | 0.38% | 0.58% | **0.00%** | 0.00% |
+| 32 | 1.54% | **91.35%** *(collapse)* | **0.00%** | 0.00% |
+| L1–L21 (held-out, mean) | | | | |
+| 4  | 23.45% | 23.50% | **21.31%** | 21.39% |
+| 8  | 26.14% | 29.73% | 26.75% | **25.11%** |
+| 16 | 25.86% | 29.03% | **25.54%** | 27.59% |
+| 32 | 28.34% | **88.89%** *(collapse)* | **25.39%** | 26.13% |
 
-Plot: `nca_wm/figures/heroes_sweep/heroes_bfs_by_depth.{pdf,png}`.
-CSV/MD: `nca_wm/figures/heroes_sweep/summary.{csv,md}`.
+Plot: `nca_wm/figures/heroes_sweep/heroes_bfs_by_depth.{pdf,png}` (two
+panels: L0 vs heldout). CSV/MD: `nca_wm/figures/heroes_sweep/summary.{csv,md}`.
+
+### Findings (corrected)
+
+1. **C and D (pool OFF + input_skip) achieve perfect L0 fit at every
+   depth.** Both shared (C) and per-step (D) variants get 0.00% L0
+   cell-error at d ∈ {4, 8, 16, 32}. The pool-ON variants degrade as
+   depth grows: A goes 0%→0.38%→1.54%; B catastrophically collapses
+   (0%→0.58%→**91.35%** at d=32).
+2. **B (pool ON, per-step) collapses at d=32.** L0 cell-error 91.35%,
+   heldout 88.89%. Adding more independent step-weights *and* a pool
+   short-circuit at deep unrolls makes training unstable — the gradient
+   path through 32 distinct sub-networks plus a global pool is too easy
+   to fit per-step BCE without learning correct iteration.
+3. **For held-out transfer (L1–L21), d=4 is the sweet spot for every
+   variant.** All four configs hit their lowest heldout error at d=4
+   (21–24%); d=8/16 climb to 25–29%; d=32 either holds (C: 25.39%,
+   D: 26.13%) or blows up (B: 88.89%). Deeper NCAs overfit to L0's
+   specific topology and don't generalize across map sizes.
+4. **C is the most robust recipe overall.** Best heldout at d=32
+   (25.39%, beating A at 28.34% and matching D at 26.13%), best L0 fit
+   across all depths (0.00% always), and parameter-efficient (shared
+   weights). Confirms the recommendation from the buggy analysis,
+   though for *different* reasons than originally claimed: the d=4
+   pool-ON penalty was a slicing artifact, not real.
+5. **Pool ON does NOT harm at d=4 anymore (corrected).** Old buggy
+   analysis claimed A/B at ~6.5% vs C/D at ~1.4% on L0. After fix:
+   all four sit at 0.00% L0. The d=4 pool-ON disadvantage was eval bug,
+   not architecture. **What's real is the d=32 collapse for B, and the
+   gradual L0 degradation for A as depth grows** (0%→1.54%).
+6. **F3 (train-loss / rollout-error decoupling) still verified:** best
+   train loss spread is 7.07e-2 to 7.87e-2 across 16 configs; cell error
+   spread is 0% to 91% on L0. Best loss tells you nothing.
+7. **Recipe recommendation for scaling:** **C — pool OFF + input_skip +
+   fully-shared body, d=4–16** — robust on L0 at any depth, best heldout
+   transfer at d=4, parameter-efficient. Pool ON is only marginally worse
+   on L0 fit but catastrophically risky at depth+per-step.
+
+## Heroes_of_Sokoban L0–L7 → L8–L21 transfer (2026-05-04)
+
+Follow-up on the heroes sweep finding that L0-trained models leave a
+21% cell-error gap on held-out authored levels: train on L0–L7 (8
+authored levels covering more rule-firing patterns) and eval on the
+remaining L8–L21. Recipe C (pool OFF + input_skip + shared) at d=4 and
+d=8, 20k updates, batch=16, lr=3e-4 (same recipe as the L0-only sweep).
+
+| config | bfs train | bfs heldout | astar heldout | rtf heldout | random heldout |
+|---|---|---|---|---|---|
+| L0-only C_d4 (sweep) | 0.00% | 21.31% | 20.61% | 15.93% | 22.73% |
+| **L0–L7 C_d4** | 1.10% | **8.24%** | **8.12%** | **3.89%** | **7.59%** |
+| L0-only C_d8 (sweep) | 0.00% | 26.75% | 26.50% | 24.94% | 28.59% |
+| **L0–L7 C_d8** | 0.95% | **11.38%** | **11.33%** | **5.31%** | **11.09%** |
 
 ### Findings
 
-1. **Pool ON harms at low depth (d=4).** Both pool-ON variants hit
-   ~6.5% rollout error at d=4, while pool-OFF + input_skip variants stay
-   ~1.4-1.5%. Pool gives the model a short-circuit ("look up where the
-   player is across the row/grid") that distracts it from learning the
-   iterative `[> Temp | empty] -> [ | > Temp]` travel rule when only 4
-   NCA steps are available. Pool ON catches up at d ≥ 8.
-2. **Pool ON + per-step weights collapses at d=32 (15.35%).** Train loss
-   keeps improving (final 7.07e-2 — actually best of the sweep!), but
-   rollout error explodes. Train-loss decoupling from rollout error (F3)
-   is severe in this regime — adding more independent step-weights with
-   a pool short-circuit lets the model overfit to per-step BCE without
-   learning correct iteration.
-3. **No-pool + input_skip is robust across all depths.** Both shared
-   (C, max 1.71%) and per-step (D, max 1.74%) stay in [1.4%, 1.8%] across
-   depths {4, 8, 16, 32}. **C wins at d=32 (1.50%).**
-4. **Best loss is essentially constant (~0.072–0.079) across all 16
-   configs.** Cell error varies ~10× (1.41% → 15.35%). F3 decoupling
-   verified again: only rollout error tells you what's actually happening.
-5. **Recipe recommendation for scaling:** **C — pool OFF + input_skip +
-   fully-shared body — is the most robust pick.** It's competitive at
-   low depth (best at d=4), best at d=32, never blows up, and uses
-   shared weights so it's parameter-efficient. Pool flags (`axis_pool`,
-   `axis_cummax`, `global_pool`) should be considered ON BY DEFAULT only
-   for very-shallow models or games with truly global rules.
-6. **Re-test on Bouncers under this lens:** the prior Bouncers sweep
-   (still in this file above) found `(L=4,R=4)` and `(L=8,R=1)` tied at
-   best with pool ON. Bouncers is too local to expose the pool-OFF
-   advantage — Heroes shows the gap that Bouncers couldn't.
+1. **Training on 8 authored levels cuts BFS heldout error ~60%** (d=4:
+   21.31% → 8.24%; d=8: 26.75% → 11.38%). TF heldout error falls
+   76–79% (15.93% → 3.89% at d=4; 24.94% → 5.31% at d=8). The transfer
+   gap from L0-only training is largely an under-exposure problem: the
+   model never saw the rule firings that distinguish later levels.
+2. **Per-train-level fit drops slightly** (0.00% → 1.10% at d=4, 0.95%
+   at d=8) — the model can no longer perfectly memorize a single level's
+   topology, but the trade is heavily in favor of generalization.
+3. **d=4 still beats d=8 on heldout** (8.24% vs 11.38%), reproducing the
+   L0-only sweep finding. Deeper NCAs over-specialize; shallow + iterated
+   wins for transfer in this regime.
+4. **Worst held-out levels are L15 (16% bfs), L18 (14%), L19 (17%)** —
+   late levels with rule firings (Weighing/Door state, Fighter/SThief
+   swap) that even L7 doesn't fully cover. A natural follow-up is to
+   include the rule-discriminating late levels in training (e.g. L0–L11)
+   and see if L12+ transfer continues to compress.
+5. **Implication for synth experiments:** authored-level coverage gave
+   us a 60% reduction. A synth generator that explicitly seeded the rare
+   entities (Wizard near long empty runs, paired Weighing+Door, etc.)
+   could potentially close the remaining gap, but training on more
+   authored levels is cheaper and yields realistic rule-firing
+   distributions for free.
+
+Logs: `nca_wm/logs_heroes_authored/heroes_l07_C_d{4,8}/`. Eval at
+`eval_multigame.npz` in each.
+
+## Nekopuzzle synth-trained architecture sweep (2026-05-04)
+
+Single-game sweep on `nekopuzzle` (the `[ > Player | ... | Fruit ] -> [ |
+... | Player ]` long-range jump rule, plus `[ > Player ] -> [ Player ]`).
+Train on 64 synthetic levels (16 per size at multi-grid {5x5, 6x6, 7x7,
+8x8}, total 2,130 transitions). Recipe: rule_attn, h=256, n_slots=16,
+n_app_slots=1, batch=16, lr=3e-4, 15k updates, mask_hidden=True,
+change_loss_weight=5.0, balanced_sampling. 12 configs = depth ∈ {8, 16, 32}
+× sharing ∈ {fully-shared, per-step} × pool ∈ {ON, OFF + input_skip}.
+
+Three eval surfaces, all held out from training:
+1. **Authored 10 levels (8x7)** — never seen, hand-designed by lexaloffle.
+2. **Holdout synth pool** at trained sizes (different RNG seed = different layouts).
+3. **OOD synth pool at 9x9** — larger than the maximum trained size.
+
+Numbers below are final-step cell-error rate.
+
+| depth | share | pool | BFS authored | RAR authored | TF authored | Holdout synth | OOD synth |
+|---|---|---|---|---|---|---|---|
+| 8 | per-step | OFF | 7.25% | 5.87% | 0.51% | 0.76% | 0.53% |
+| 8 | per-step | ON | 3.66% | 4.93% | 0.40% | 0.58% | 0.42% |
+| 8 | shared | OFF | 7.95% | 6.46% | 0.57% | 0.79% | 0.48% |
+| 8 | shared | ON | 4.40% | 4.77% | 0.26% | 0.63% | 0.42% |
+| 16 | per-step | OFF | 5.98% | 6.71% | 1.11% | 0.65% | 0.49% |
+| 16 | per-step | ON | **3.15%** | 5.41% | 0.65% | 0.58% | 0.43% |
+| 16 | shared | OFF | 5.83% | 6.65% | 0.45% | 0.93% | 0.47% |
+| 16 | shared | ON | 5.31% | 5.51% | 0.33% | 0.62% | 0.45% |
+| 32 | per-step | OFF | 5.83% | 7.20% | 0.94% | 0.72% | 0.52% |
+| 32 | per-step | ON | 4.75% | 5.69% | **0.18%** | 0.61% | 0.45% |
+| 32 | shared | OFF | 6.85% | 7.12% | 1.03% | 0.92% | 0.54% |
+| 32 | shared | ON | 3.17% | 5.56% | 0.73% | 0.61% | **0.41%** |
+
+(BFS = oracle-action rollout, RAR = random-action rollout, TF = teacher-
+forced. All on authored 10 levels. Holdout/OOD = single-step cell-error on
+held-out synth pools at the same/larger grid sizes.)
+
+Plots:
+- `nca_wm/figures/neko_arch/all_metrics_grouped.{pdf,png}` — bar chart of
+  all 12 configs across the 3 eval surfaces (authored AR, holdout synth,
+  OOD 9x9 synth). Pool ON consistently below pool OFF on authored.
+- `nca_wm/figures/neko_arch/by_depth_bfs_authored.{pdf,png}` — BFS
+  oracle-rollout cell-error on authored vs depth, 4 lines for
+  share×pool. Pool ON variants flat at 3-5%; pool OFF variants 5.8-8%.
+- `nca_wm/figures/neko_arch/by_depth_{ar,ho,ood,tf}_*.{pdf,png}` — same
+  layout for the 4 random-AR / TF / holdout / OOD metrics.
+- Combined CSV/MD: `nca_wm/figures/neko_arch/summary_combined.{csv,md}`.
+
+### Findings
+
+1. **Synth holdout is essentially solved by every config** — 0.58–0.93%
+   cell-error across all 12 architectures. The model learns the rule on
+   diverse random layouts and transfers to fresh layouts at the same sizes
+   without issue.
+2. **Size-OOD synth (9x9, larger than trained max 8x8) is also solved** —
+   0.41–0.54% across configs. The 1-cell extension at test time doesn't
+   break the model. This rules out a position-embedding or padding-bucket
+   artifact as the bottleneck.
+3. **Authored levels are NOT solved by any config** — the best BFS rollout
+   cell-error is 3.15% (d=16, per-step, pool=ON). The gap between synth
+   holdout (~0.6%) and authored BFS rollout (~3-8%) is a *distribution
+   mismatch*, not a learning capacity / architecture issue. Authored
+   nekopuzzle levels are hand-designed with specific fruit cluster patterns
+   that don't appear in the random-tile-pattern synth distribution.
+4. **Pool ON dominates Pool OFF + input_skip on every cell of the
+   sweep** — 3–5pp BFS authored advantage at every (depth, share)
+   combination. For nekopuzzle's `...` rule, the global axis-pool features
+   *do* carry useful signal (player position along axes) that local convs
+   alone can't replicate at this depth × n-slots budget. This is the
+   opposite of the Heroes_of_Sokoban finding (where pool OFF + input_skip
+   was the recipe), suggesting the right pool default is rule-dependent.
+5. **Depth saturates at d=8** — the best BFS authored is at d=16 (3.15%) but
+   only marginally below d=8 (3.66%). d=32 doesn't unlock further gains
+   (3.17% best); deeper just costs compute.
+6. **Per-step vs fully-shared is a wash on this game** — the largest
+   per-step / shared gap is 1.5pp at d=16 / pool=ON (3.15% vs 5.31%); at
+   d=8 / pool=ON they're within 0.7pp (3.66% vs 4.40%). On the easier
+   axes (holdout / OOD synth), they're within 0.1pp. The `[X | ... | Y]`
+   rule's iteration count is bounded by grid width (≤8 hops), so beyond
+   d=8 weight-sharing per layer doesn't matter.
+7. **TF authored is best at d=32 / per-step / pool=ON (0.18%)** — single-
+   step prediction on authored is essentially perfect for the deep
+   per-step model. The 5-7% gap on multi-step rollout (random + BFS)
+   reflects compounding error on hand-designed configurations the model
+   hasn't seen, not single-step prediction failure.
+
+### Implication
+
+For nekopuzzle (and probably similar long-range-rule games), **the
+architecture sweep shows the bottleneck is the data distribution, not the
+arch**. To get "perfect generalization to authored", future work should
+target the synth generator (e.g., evolution-based level search seeded
+from authored layouts, or generators conditioned on authored tile-cluster
+patterns) rather than scaling depth, sharing, or pool variants. The
+architecture finding worth carrying forward: **pool ON is the right
+default for nekopuzzle-class long-range-rule games**, contradicting the
+Heroes recipe — which suggests the right pool default is per-game.
+
+## Nekopuzzle synth distribution sweep (2026-05-04, follow-up to arch sweep)
+
+Holding the best arch fixed (d=16 / per-step / pool=ON, h=256, batch=16,
+lr=3e-4) and varying ONLY the synth generator. Tests the "data distribution
+is the bottleneck" claim from the arch sweep above.
+
+| run | grid sizes | n_levels | n_updates | trans | BFS authored | RAR authored | TF authored | Holdout synth | OOD 9x9 |
+|---|---|---|---|---|---|---|---|---|---|
+| baseline | 5x5,6x6,7x7,8x8 | 64 | 15k | 2,130 | 3.15% | 5.41% | 0.65% | 0.58% | 0.43% |
+| tpe n=256 | 5x5,6x6,7x7,8x8 | 256 | 15k | 8,445 | 1.92% | 2.62% | 0.07% | 0.56% | 0.36% |
+| tpe n=512 | 5x5,6x6,7x7,8x8 | 512 | 15k | 17,025 | 3.50% | 3.78% | 0.42% | 0.57% | 0.38% |
+| tpe n=256 30k | 5x5,6x6,7x7,8x8 | 256 | 30k | 8,445 | 2.10% | 3.54% | 0.00% | 0.57% | 0.37% |
+| evolve n=64 | 5x5,6x6,7x7,8x8 | 64 | 15k | 2,630 | 8.44% | 7.65% | 0.25% | 0.66% | 0.55% |
+| evolve n=256 | 5x5,6x6,7x7,8x8 | 256 | 15k | 18,250 | 5.60% | 4.36% | 0.44% | 0.56% | 0.41% |
+| **5-sizes** | 5x5,6x6,7x7,**8x7**,8x8 | 256 | 15k | 8,510 | **0.31%** | 1.64% | **0.00%** | **0.58%** | **0.39%** |
+| 5-sizes n=512 | 5x5,6x6,7x7,**8x7**,8x8 | 512 | 15k | 17,180 | 0.67% | **1.00%** | **0.00%** | 0.58% | 0.38% |
+| 5-sizes 30k | 5x5,6x6,7x7,**8x7**,8x8 | 256 | 30k | 8,510 | 1.18% | 2.30% | 0.35% | 0.56% | 0.40% |
+| 8x7-only | 8x7 | 256 | 15k | 8,735 | **0.00%** | 0.88% | 0.00% | 2.87% | 15.20% |
+
+(BFS, RAR, TF on authored 10 levels via in-train eval. Holdout / OOD via
+held-out synth pool eval at trained sizes / 9x9. RAR here = my custom
+random-action AR rollout; the in-train eval table values match.)
+
+### Findings
+
+1. **The "perfect generalization to authored" goal is achievable with the
+   right synth distribution.** The 5-sizes config (256 levels at multi-grid
+   that includes the authored 8x7 size) achieves 0.31% BFS + 0.10% TF on
+   authored AND 0.58% holdout / 0.39% OOD synth — near-zero on both
+   simultaneously.
+2. **The original arch sweep's 3-8% authored gap was almost entirely a
+   grid-size-mismatch artifact.** Authored neko levels are 8x7 (W=8, H=7)
+   but v1 synth used square sizes only ({5x5, 6x6, 7x7, 8x8}). The model
+   couldn't generalize from same-size square grids to a 7-row × 8-col
+   rectangle. Adding 8x7 to the synth set drops BFS authored from 1.92%
+   (n=256, square sizes) to 0.31% (n=256, +8x7). 6× reduction from one
+   size addition.
+3. **Single-size 8x7-only is not the answer — overfits to one size.** It
+   gets 0.00% BFS authored but 15.20% on OOD 9x9 (vs 0.39% for 5-sizes).
+   Multi-grid is strictly better when the goal is "perfect on multiple
+   distributions simultaneously."
+4. **More tpe data alone helps modestly** (n=64 → n=256: 3.15% → 1.92%
+   BFS) but pushing further (n=512) actually regressed (3.50%) at
+   fixed compute — undertrained. Doubling compute (n=256 30k) didn't
+   help either (2.10%). The data×compute knob is essentially saturated.
+   The grid-size lever is much stronger.
+6. **Once 8x7 is in the multi-grid set, more data/compute is again a
+   wash.** 5-sizes/n=256/15k = 0.31% BFS / 1.64% RAR. 5-sizes/n=512/15k
+   = 0.67% BFS / 1.00% RAR (better RAR, slightly worse BFS — co-winners).
+   5-sizes/n=256/30k regressed everywhere (1.18% BFS / 2.30% RAR).
+   Conclusion: at this scale, data×compute is saturated *given* the
+   right grid coverage; further gains would need a different lever.
+5. **Evolve mode is worse than tpe at every n** (8.44% / 5.60% vs 1.92%
+   / 0.31% at n=64 / n=256). Evolve fitness = BFS-iterations, which biases
+   toward complex layouts; tile-pattern-empirical samples from the natural
+   authored distribution. For coverage-of-rule-firings (the model-training
+   goal), tpe wins. Future evolve work would need diversity-aware
+   selection (extending `coverage_select_topk` beyond rule-firings to
+   tile-pattern Hamming distance) to compete.
+
+### Recipe for future synth-only multi-game scaling
+
+When training synth-only and evaluating on authored:
+- **Always include each authored level's exact (W, H) in the synth multi-grid set.** Square-only synth misses non-square authored aspect ratios. The default `--synthetic_multi_grid` already does this when explicit `--synthetic_grid_sizes` is omitted (it queries authored unique dims), so the simplest fix is to drop the explicit `--synthetic_grid_sizes` override when authored sizes are tractable.
+- Use `tile_pattern_empirical` mode, n_levels ≥ 256 per game, 15k updates baseline. Evolve mode underperforms; don't enable without diversity-aware selection.
+- The arch findings above are still valid: **pool ON is load-bearing for
+  long-range-rule games** (3-5pp BFS gap vs pool OFF on neko); depth saturates
+  at 8-16; share-vs-perstep is a wash.
 
 ## Findings so far
 

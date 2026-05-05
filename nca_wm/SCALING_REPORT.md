@@ -27,6 +27,40 @@ Shared training-time defaults (unless overridden in the recipe column):
 
 ## Active runs
 
+- **Varislide iteration-extrapolation** (2026-05-04, in progress): tests
+   whether an NCA WM trained at *small* depth on narrow grids
+   ({6x3, 8x3}) with **pool OFF** + shared weights extrapolates to
+   longer slides at inference by simply running more NCA steps. Train
+   D_train ∈ {2, 4, 8} × seeds {0,1,2} pool OFF, plus pool-ON control
+   at D_train=2. Eval reuses the same params at D_eval ∈ {1,2,4,8,16,32,64}
+   on widths {6,8,10,12,16}. Hypothesis: with pool OFF, accuracy on
+   long slides (d > D_train) requires D_eval ≥ d at inference — this
+   is the Neural-CA "iteration extrapolation" claim. Pool ON should
+   succeed at any D_eval (global features = 1-step shortcut). Logs in
+   `nca_wm/logs_depth_extrap/`. Scripts:
+   `run_varislide_depth_extrap_sweep.sh` (train),
+   `eval_varislide_depth_extrap.py` (re-eval with overridden n_steps),
+   `plot_varislide_depth_extrap.py` (figures).
+- **Nekopuzzle synth-arch sweep** (2026-05-04): DONE. 12-config arch sweep
+   plus follow-up synth-distribution sweep + v5 data/compute extension.
+   Headline: **the user's "perfect generalization to authored" goal is
+   achieved when the synth multi-grid set includes the authored grid
+   size**. With 5-sizes (incl 8x7) at n=256: 0.31% BFS / 1.64% RAR /
+   0.58% holdout / 0.39% OOD. v5 n=512/5sizes is a co-winner with better
+   RAR (1.00%) but slightly worse BFS (0.67%); v5 n=256/30k/5sizes
+   regressed everywhere — once 8x7 is in the multi-grid set, data×compute
+   is saturated. Original v1 3-8% gap was almost entirely a
+   grid-size-mismatch artifact ({5x5,6x6,7x7,8x8} vs authored 8x7). Arch
+   findings still valid: pool ON dominant (3-5pp), depth saturates at
+   d=8-16, per-step ≈ shared. GIFs of v4 + v5 at
+   `logs_neko_arch/{neko_d16_pool_perstep_tpe_n256_5sizes_s0,
+   neko_d16_pool_perstep_tpe_n512_5sizes_s0}/gifs/rollout_nekopuzzle_bfs.gif`.
+   Full followup table in `SCALING_RESULTS.md`. Logs in
+   `nca_wm/logs_neko_arch/`. Scripts: `run_neko_synth_sweep.sh`,
+   `run_neko_synth_v2_evolve.sh`, `run_neko_synth_v3_more_data.sh`,
+   `run_neko_synth_v4_authored_size.sh`, `run_neko_synth_v5_push.sh`,
+   `reeval_neko_arch_sweep.py`, `aggregate_neko_arch_summary.py`,
+   `plot_neko_arch_sweep.py`, `render_rule_attn_gifs.py`.
 - **Bouncers L×R sweep**: DONE (2026-05-03). 6 configs, results in
    `nca_wm/figures/bouncers_lr_sweep/` and SCALING_RESULTS.md.
 - **v3_combined**: still in eval (per-step n=8, 59 games).
@@ -38,13 +72,28 @@ Shared training-time defaults (unless overridden in the recipe column):
    argmax_pool_onoff}.{pdf,png}` + `summary.{csv,md}`. The pre-fix
    "varislide depth/compute/sharing flat" claims (F8) were entirely a
    bitpack regression artifact.
-- **Heroes_of_Sokoban L0 depth × sharing × pool sweep** (2026-05-04): DONE.
-   16 configs. Headline: pool OFF + input_skip + shared (bucket C) is the
-   most robust recipe across depth ∈ {4, 8, 16, 32}; pool ON + per-step
-   collapses at d=32 (1.94% → 15.35%). Pool ON harms at d=4 (~6.5% vs ~1.4%
-   no-pool). See SCALING_RESULTS.md "Heroes_of_Sokoban" section for
-   per-config table and recommendation. Figures:
-   `nca_wm/figures/heroes_sweep/{heroes_bfs_by_depth, summary}.*`.
+- **Heroes_of_Sokoban L0–L7 → L8–L21 transfer** (2026-05-04): DONE.
+   Recipe C (pool OFF + input_skip + shared) at d=4 and d=8, 20k updates.
+   Headline: training on 8 authored levels cuts BFS heldout error ~60%
+   (d=4: 21.31% → 8.24%; d=8: 26.75% → 11.38%). TF heldout falls 76–79%.
+   d=4 still beats d=8 on transfer. See SCALING_RESULTS.md
+   "Heroes_of_Sokoban L0–L7 → L8–L21 transfer" for full table.
+- **Heroes_of_Sokoban L0 depth × sharing × pool sweep** (2026-05-04, RE-EVAL):
+   DONE + corrected. The first pass used buggy centered-vs-top-left
+   slicing in `train.py` `_run_eval_rollout` — corrected via re-eval
+   (`scripts/reeval_via_render_only.sh`, npz files saved as
+   `eval_multigame_tlfix.npz`). Corrected headline:
+   - **L0 fit:** C and D (pool OFF + input_skip) achieve **0.00% at every
+     depth**; A degrades 0→0.38→1.54% as d grows; **B collapses to 91.35%
+     at d=32**.
+   - **Held-out (L1–L21, mean):** all variants best at d=4 (21–24%);
+     C wins at d=32 (25.39%); B blows up to 88.89% at d=32.
+   - **Recipe:** C (pool OFF + input_skip + shared) most robust overall.
+     The d=4 pool-ON penalty in the original analysis was a slicing
+     artifact; the d=32 per-step+pool collapse is real.
+   See SCALING_RESULTS.md "Heroes_of_Sokoban …RE-EVAL" section for full
+   per-config table. Figures: `nca_wm/figures/heroes_sweep/heroes_bfs_by_depth.{pdf,png}`
+   (two panels: L0 vs heldout) + `summary.{csv,md}`.
 - **Multi-grid varislide canary** (pre-fix runs, INVALIDATED 2026-05-04 by
    bitpack regression 1fa557d). All `varislide_depth*_s*`,
    `varislide_long50k_d16_s*`, and `varislide_perstep_d16_s*` runs in

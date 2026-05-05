@@ -21,8 +21,9 @@ def _load(p):
     with open(p) as f:
         for r in csv.DictReader(f):
             for k in ("best_loss","final_loss","final_change_acc",
-                      "bfs_err_mean","astar_err_mean","random_err_mean",
-                      "random_tf_err_mean"):
+                      "bfs_err_mean","bfs_err_l0","bfs_err_heldout",
+                      "astar_err_mean","astar_err_l0","astar_err_heldout",
+                      "random_err_mean","random_tf_err_mean"):
                 v = r.get(k, "")
                 try:
                     r[k] = float(v) if v else float("nan")
@@ -65,29 +66,39 @@ def main():
         if b is None: continue
         bys.setdefault(b, []).append(r)
 
-    # Plot 1: bfs_err vs depth (semi-log y for d=4 outliers)
-    fig, ax = plt.subplots(figsize=(8, 5))
     colors = {"A: pool ON, shared":"C0", "B: pool ON, per-step":"C1",
               "C: pool OFF + skip, shared":"C2", "D: pool OFF + skip, per-step":"C3"}
     markers = {"A: pool ON, shared":"o", "B: pool ON, per-step":"s",
                "C: pool OFF + skip, shared":"^", "D: pool OFF + skip, per-step":"D"}
-    for b in ["A: pool ON, shared", "B: pool ON, per-step",
-              "C: pool OFF + skip, shared", "D: pool OFF + skip, per-step"]:
+    BUCKETS = ["A: pool ON, shared", "B: pool ON, per-step",
+               "C: pool OFF + skip, shared", "D: pool OFF + skip, per-step"]
+    os.makedirs(outdir, exist_ok=True)
+
+    # Two-panel: L0 (training) vs heldout (transfer to L1-L21)
+    fig, (axL, axR) = plt.subplots(1, 2, figsize=(13, 5), sharex=True)
+    for b in BUCKETS:
         rs = sorted(bys.get(b, []), key=lambda r: r["n_steps"])
         if not rs: continue
         x = [r["n_steps"] for r in rs]
-        y = [r["bfs_err_mean"] * 100 for r in rs]
-        ax.plot(x, y, marker=markers[b], color=colors[b], label=b,
-                linewidth=2, markersize=10)
-    ax.set_xscale("log", base=2)
-    ax.set_yscale("log")
-    ax.set_xticks([4, 8, 16, 32]); ax.set_xticklabels([4, 8, 16, 32])
-    ax.set_xlabel("NCA depth (n_steps)")
-    ax.set_ylabel("BFS rollout cell-error (%)")
-    ax.set_title("Heroes_of_Sokoban L0: depth × sharing × pool")
-    ax.legend(loc="upper left")
-    ax.grid(True, which="both", alpha=0.3)
-    os.makedirs(outdir, exist_ok=True)
+        # Use 0.05% as a y-floor stand-in for "0%" so log scale shows them.
+        yL = [max(r["bfs_err_l0"] * 100, 0.05) for r in rs]
+        yR = [r["bfs_err_heldout"] * 100 for r in rs]
+        axL.plot(x, yL, marker=markers[b], color=colors[b], label=b,
+                 linewidth=2, markersize=10)
+        axR.plot(x, yR, marker=markers[b], color=colors[b], label=b,
+                 linewidth=2, markersize=10)
+    for ax in (axL, axR):
+        ax.set_xscale("log", base=2)
+        ax.set_xticks([4, 8, 16, 32]); ax.set_xticklabels([4, 8, 16, 32])
+        ax.set_xlabel("NCA depth (n_steps)")
+        ax.grid(True, which="both", alpha=0.3)
+    axL.set_yscale("log")
+    axL.set_ylabel("BFS cell-error (%)")
+    axL.set_title("L0 (training level)")
+    axR.set_ylabel("BFS cell-error (%)")
+    axR.set_title("L1–L21 mean (held-out)")
+    axL.legend(loc="upper left", fontsize=10)
+    fig.suptitle("Heroes_of_Sokoban: depth × sharing × pool (re-eval, top-left fix)")
     fig.savefig(os.path.join(outdir, "heroes_bfs_by_depth.pdf"), bbox_inches="tight")
     fig.savefig(os.path.join(outdir, "heroes_bfs_by_depth.png"), bbox_inches="tight", dpi=150)
     print(f"  wrote {outdir}/heroes_bfs_by_depth.pdf|.png")

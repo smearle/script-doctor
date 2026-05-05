@@ -61,6 +61,9 @@ struct Rule {
     std::vector<BitVec> cellRowMasks;
     std::vector<BitVec> cellRowMasks_Movements;
     BitVec ruleMask;
+    // Stable index assigned at JSON-load time: position in Engine::allRules_.
+    // Used by opt-in rule-firing telemetry (see Engine::setTrackRulesFired).
+    int globalIndex = -1;
 };
 
 // ---- LevelDef ----
@@ -134,6 +137,27 @@ public:
     LevelBackup backupLevel() const;
     void restoreLevel(const LevelBackup& bak);
 
+    // Opt-in rule-firing telemetry.
+    //
+    // When enabled, the engine records the set of rule indices
+    // (Rule::globalIndex) that fired in successful (non-rolled-back) calls to
+    // processInput. The set accumulates across calls until clearRulesFired()
+    // is invoked — so callers that wrap multiple processInput calls per
+    // logical "transition" (e.g. action + 'again' ticks) get the union for
+    // free.
+    //
+    // Off by default — the rule-apply hot path adds two predicted-false
+    // branches; no allocations until setTrackRulesFired(true).
+    void setTrackRulesFired(bool on);
+    bool getTrackRulesFired() const { return trackRulesFired_; }
+    // Zero the accumulator. Caller decides the unit of accumulation.
+    void clearRulesFired();
+    // Decoded indices (sorted ascending) of rules that fired since the last
+    // clearRulesFired() / setTrackRulesFired(true). Empty when off.
+    std::vector<int32_t> getRulesFired() const;
+    // Total number of rules (including direction-substituted variants).
+    int getRuleCount() const { return static_cast<int>(allRules_.size()); }
+
 private:
     // ---- State from compilation ----
     int objectCount_ = 0;
@@ -177,6 +201,16 @@ private:
 
     BitVec sfxCreateMask_;
     BitVec sfxDestroyMask_;
+
+    // Rule-firing telemetry (opt-in; see setTrackRulesFired).
+    bool trackRulesFired_ = false;
+    // firedThisCall_: bits set within the current processInput; zeroed at the
+    // top of processInput, also zeroed on each rigid-body rollback so
+    // rolled-back rule applications don't leak into the accumulator.
+    BitVec firedThisCall_;
+    // firedAccumulated_: caller-managed accumulator. firedThisCall_ is OR'd
+    // into this at the end of each successful (non-rolled-back) processInput.
+    BitVec firedAccumulated_;
 
     // Ownership of all allocated CellPatterns and CellReplacements
     std::vector<CellPattern*> allCellPatterns_;

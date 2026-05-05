@@ -40,15 +40,22 @@ struct TransitionData {
     std::vector<std::vector<int32_t>> nextStates;
     // 1 if the corresponding next_state satisfies the win conditions.
     std::vector<uint8_t> wons;
+    // Per-transition list of rule globalIndex values that fired during the
+    // corresponding processInput. Empty unless trackRulesFired=true was
+    // passed to the collector. Each element is the sorted-ascending set of
+    // fired rules for that transition.
+    std::vector<std::vector<int32_t>> rulesFired;
     int width = 0;
     int height = 0;
     int iterations = 0;
     double time = 0.0;
     bool timeout = false;
+    int n_rules = 0;  // total rule count (for decoding rulesFired indices)
     std::vector<std::string> idDict;
 };
 
-TransitionData collectTransitionsBFS(Engine& engine, int maxIters = 100000, int timeoutMs = -1);
+TransitionData collectTransitionsBFS(Engine& engine, int maxIters = 100000, int timeoutMs = -1,
+                                     bool trackRulesFired = false);
 TransitionData collectTransitionsAStar(Engine& engine, int maxIters = 100000, int timeoutMs = -1);
 
 RandomRolloutResult randomRolloutRaw(Engine& engine, int maxIters = 100000, int timeoutMs = -1);

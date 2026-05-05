@@ -291,6 +291,7 @@ bool Engine::loadFromJSON(const std::string& json_str) {
             std::vector<Rule*> group;
             for (const auto& ruleJ : groupJ) {
                 auto* rule = new Rule();
+                rule->globalIndex = static_cast<int>(allRules_.size());
                 allRules_.push_back(rule);
 
                 rule->direction = ruleJ["direction"].get<int>();
@@ -495,6 +496,40 @@ void Engine::restoreLevel(const LevelBackup& bak) {
 
 void Engine::restart() {
     loadLevel(curLevel_);
+}
+
+// ============================================================
+// Rule-firing telemetry (opt-in)
+// ============================================================
+void Engine::setTrackRulesFired(bool on) {
+    trackRulesFired_ = on;
+    if (on) {
+        // BitVec is sized in 32-bit words; round up.
+        const int n_rules = static_cast<int>(allRules_.size());
+        const int n_words = (n_rules + 31) / 32;
+        if (firedThisCall_.size() != n_words) {
+            firedThisCall_ = BitVec(n_words);
+            firedAccumulated_ = BitVec(n_words);
+        } else {
+            firedThisCall_.setZero();
+            firedAccumulated_.setZero();
+        }
+    }
+}
+
+void Engine::clearRulesFired() {
+    if (!trackRulesFired_) return;
+    firedAccumulated_.setZero();
+}
+
+std::vector<int32_t> Engine::getRulesFired() const {
+    std::vector<int32_t> out;
+    if (!trackRulesFired_) return out;
+    const int n_rules = static_cast<int>(allRules_.size());
+    for (int i = 0; i < n_rules; ++i) {
+        if (firedAccumulated_.get(i)) out.push_back(i);
+    }
+    return out;
 }
 
 // ============================================================
@@ -1160,6 +1195,7 @@ bool Engine::ruleTryApply(Rule& rule) {
         ruleQueueCommands(rule);
     }
 
+    if (trackRulesFired_ && result) firedThisCall_.ibitset(rule.globalIndex);
     return result;
 }
 
@@ -1188,6 +1224,7 @@ bool Engine::applyRandomRuleGroup(std::vector<Rule*>& ruleGroup) {
     bool modified = ruleApplyAt(rule, match.tuple, false, delta);
 
     ruleQueueCommands(rule);
+    if (trackRulesFired_ && modified) firedThisCall_.ibitset(rule.globalIndex);
     return modified;
 }
 
@@ -1381,6 +1418,8 @@ bool Engine::processInput(int dir) {
     sfxDestroyMask_.setZero();
     level_.calculateRowColMasks();
 
+    if (trackRulesFired_) firedThisCall_.setZero();
+
     // Main loop (with rigid body rollback)
     int iteration = 0;
     bool rigidloop = false;
@@ -1402,6 +1441,8 @@ bool Engine::processInput(int dir) {
             }
             level_.commandQueue.clear();
             level_.commandQueueSourceRules.clear();
+            // Clear fired-this-turn bits accumulated by the rolled-back attempt.
+            if (trackRulesFired_) firedThisCall_.setZero();
             sfxCreateMask_.setZero();
             sfxDestroyMask_.setZero();
             level_.calculateRowColMasks();
@@ -1483,6 +1524,11 @@ bool Engine::processInput(int dir) {
     }
 
     if (winning_) againing_ = false;
+
+    // Commit this call's rule-firings into the accumulator. Cancel /
+    // require_player_movement rollback paths return earlier without committing,
+    // since those paths leave the visible level unchanged.
+    if (trackRulesFired_) firedAccumulated_.ior(firedThisCall_);
 
     return modified;
 }

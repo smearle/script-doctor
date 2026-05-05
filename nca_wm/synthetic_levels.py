@@ -878,6 +878,7 @@ def search_validate(
     timeout_ms: int = 2000,
     min_states: int = 20,
     require_solvable: bool = False,
+    track_rules_fired: bool = False,
 ) -> dict | None:
     """Restore ``dat`` into ``engine`` and run BFS-based transition collection.
 
@@ -893,6 +894,7 @@ def search_validate(
         return None
     result = collect_transitions_bfs(
         engine, max_iters=max_iters, timeout_ms=timeout_ms,
+        track_rules_fired=track_rules_fired,
     )
     iterations = int(result.iterations)
     if iterations < min_states:
@@ -916,6 +918,10 @@ def search_validate(
         solution_actions = _extract_bfs_solution(
             result.states, result.actions, result.next_states, wons,
         )
+    rules_fired_per_t = (
+        [list(rf) for rf in result.rules_fired] if track_rules_fired else []
+    )
+    rules_fired_union: list[int] = sorted(set().union(*rules_fired_per_t)) if rules_fired_per_t else []
     return {
         "states": result.states,
         "actions": list(result.actions),
@@ -927,6 +933,9 @@ def search_validate(
         "width": int(result.width),
         "height": int(result.height),
         "solution_actions": solution_actions,
+        "rules_fired": rules_fired_per_t,
+        "rules_fired_union": rules_fired_union,
+        "n_rules": int(result.n_rules) if track_rules_fired else 0,
     }
 
 
@@ -1023,13 +1032,20 @@ def _eval_candidate_fitness(
     *,
     max_iters: int,
     timeout_ms: int,
+    track_rules_fired: bool = False,
+    rule_coverage_weight: float = 0.0,
 ) -> tuple[float, dict | None]:
     """Score a candidate level. Returns (fitness, accepted_payload_or_None).
 
     Fitness encoding:
       -inf : invalid (already winning, BFS timeout, or 0 iterations)
-      iterations + 0  : valid-dynamics, not solvable
-      iterations + 1e6 : valid-dynamics, solvable
+      iterations + rule_coverage_weight * unique_rules_fired
+                  + (1e6 if solvable else 0)
+
+    The rule-coverage term biases evolution toward levels whose reachable
+    state space exercises more of the game's rule set — important for games
+    like sokoban_match3 where a level can have a huge state space without
+    ever triggering the match-3 rule.
 
     Caller decides via ``require_solvable`` whether non-solvable scoring
     counts toward acceptance.
@@ -1040,12 +1056,19 @@ def _eval_candidate_fitness(
         return -float("inf"), None
     result = collect_transitions_bfs(
         engine, max_iters=max_iters, timeout_ms=timeout_ms,
+        track_rules_fired=track_rules_fired,
     )
     iterations = int(result.iterations)
     if iterations <= 0 or result.timeout:
         return -float("inf"), None
     wons = list(result.wons)
     is_solvable = bool(any(w for w in wons))
+    rules_fired_per_t = (
+        [list(rf) for rf in result.rules_fired] if track_rules_fired else []
+    )
+    rules_fired_union: set[int] = set()
+    for rf in rules_fired_per_t:
+        rules_fired_union.update(rf)
     payload = {
         "states": result.states,
         "actions": list(result.actions),
@@ -1057,8 +1080,15 @@ def _eval_candidate_fitness(
         "width": int(result.width),
         "height": int(result.height),
         "is_solvable": is_solvable,
+        "rules_fired": rules_fired_per_t,
+        "rules_fired_union": sorted(rules_fired_union),
+        "n_rules": int(result.n_rules) if track_rules_fired else 0,
     }
-    fitness = float(iterations) + (1e6 if is_solvable else 0.0)
+    fitness = (
+        float(iterations)
+        + rule_coverage_weight * len(rules_fired_union)
+        + (1e6 if is_solvable else 0.0)
+    )
     return fitness, payload
 
 
@@ -1081,6 +1111,9 @@ def _evolve_levels(
     elite_frac: float = 0.5,
     max_generations: int = 200,
     init_dats: list[list[int]] | None = None,
+    track_rules_fired: bool = False,
+    rule_coverage_weight: float = 0.0,
+    coverage_select_topk: bool = False,
     verbose: bool = True,
 ) -> tuple[list[list[int]], list[dict]]:
     """Population-based GA that finds valid levels via fitness =
@@ -1138,6 +1171,8 @@ def _evolve_levels(
                 engine, dat, width, height,
                 max_iters=max_iters_search,
                 timeout_ms=timeout_ms_search,
+                track_rules_fired=track_rules_fired,
+                rule_coverage_weight=rule_coverage_weight,
             )
             scored.append((fit, payload, dat))
             # Acceptance criteria for this level:
@@ -1156,10 +1191,14 @@ def _evolve_levels(
             seen.add(key)
             accepted_dats.append(list(dat))
             accepted_payloads.append(payload)
-            if len(accepted_dats) >= n_target:
+            # Early-stop only when not in coverage-select mode. In coverage
+            # mode we keep evolving for the full budget so selection pressure
+            # has time to push toward higher-coverage levels, then pick the
+            # top-K at the end.
+            if not coverage_select_topk and len(accepted_dats) >= n_target:
                 break
 
-        if len(accepted_dats) >= n_target:
+        if not coverage_select_topk and len(accepted_dats) >= n_target:
             break
 
         # Selection: top-K elites, sort by fitness descending; -inf goes last.
@@ -1193,17 +1232,72 @@ def _evolve_levels(
         if verbose and (gen_idx % 5 == 0 or len(accepted_dats) >= n_target):
             best = scored[0][0]
             elapsed = time.time() - t0
+            extras = ""
+            if track_rules_fired:
+                # Best level's rule coverage (top-of-population payload).
+                top_payload = scored[0][1]
+                if top_payload is not None:
+                    cov = len(top_payload.get("rules_fired_union", []))
+                    n_rules = top_payload.get("n_rules", 0)
+                    extras = f"  best_rules={cov}/{n_rules}"
             print(
                 f"[evolve] gen {gen_idx}/{max_generations}  "
-                f"best_fit={best:.0f}  accepted={len(accepted_dats)}/{n_target}  "
+                f"best_fit={best:.0f}  accepted={len(accepted_dats)}/{n_target}{extras}  "
                 f"({elapsed:.1f}s)"
             )
 
+    # Coverage-select-topk: greedy selection over the full pool to maximize
+    # *union* coverage (each pick is the level adding the most new rules to
+    # the running union, tiebroken by per-level coverage then iterations).
+    # This explicitly targets the diversity goal — maximizing distinct rules
+    # the dataset exercises — rather than picking by individual fitness.
+    if coverage_select_topk and track_rules_fired and len(accepted_dats) > n_target:
+        n_pre = len(accepted_dats)
+        # Build (idx, fired_set, iters) tuples
+        cands = [
+            (i,
+             frozenset(p.get("rules_fired_union", [])),
+             int(p.get("iterations", 0)))
+            for i, p in enumerate(accepted_payloads)
+        ]
+        chosen: list[int] = []
+        running_union: set[int] = set()
+        remaining = list(cands)
+        while len(chosen) < n_target and remaining:
+            # Score each remaining cand by (new_rules_added, individual_cov, iters)
+            best_idx = -1
+            best_key = (-1, -1, -1)
+            for ri, (i, fired, iters) in enumerate(remaining):
+                new_rules = len(fired - running_union)
+                key = (new_rules, len(fired), iters)
+                if key > best_key:
+                    best_key = key
+                    best_idx = ri
+            if best_idx < 0:
+                break
+            i, fired, _ = remaining.pop(best_idx)
+            chosen.append(i)
+            running_union |= fired
+        accepted_dats = [accepted_dats[i] for i in chosen]
+        accepted_payloads = [accepted_payloads[i] for i in chosen]
+        if verbose:
+            print(f"[evolve] coverage-select: kept top-{len(chosen)}/{n_pre} by greedy union coverage")
+
     if verbose:
         elapsed = time.time() - t0
+        cov_summary = ""
+        if track_rules_fired and accepted_payloads:
+            unions = [set(p.get("rules_fired_union", [])) for p in accepted_payloads]
+            n_rules = accepted_payloads[0].get("n_rules", 0)
+            mean_cov = (sum(len(u) for u in unions) / max(1, len(unions))) if unions else 0
+            global_union = set().union(*unions) if unions else set()
+            cov_summary = (
+                f" rules-covered: mean-per-level={mean_cov:.1f}/{n_rules},"
+                f" union={len(global_union)}/{n_rules}"
+            )
         print(
             f"[evolve] DONE: {len(accepted_dats)}/{n_target} accepted "
-            f"in {elapsed:.1f}s after {gen_idx+1} generations"
+            f"in {elapsed:.1f}s after {gen_idx+1} generations.{cov_summary}"
         )
     return accepted_dats, accepted_payloads
 
@@ -1212,7 +1306,7 @@ def _evolve_levels(
 # Top-level entry point: generate + collect + cache
 # ---------------------------------------------------------------------------
 
-CACHE_VERSION = 9  # bumped: cache stores per-level solution actions (BFS-optimal path) for replay/render without re-search
+CACHE_VERSION = 10  # bumped: optional rule-firing telemetry + rule-coverage fitness term
 
 
 def collect_synthetic_dataset(
@@ -1235,6 +1329,9 @@ def collect_synthetic_dataset(
     seed_from_authored: bool = False,
     fallback_dynamics: bool = False,
     no_a_count_max: int = 3,
+    track_rules_fired: bool = False,
+    rule_coverage_weight: float = 0.0,
+    coverage_select_topk: bool = False,
     cache_root: str = "rollout_data",
     verbose: bool = True,
 ) -> dict:
@@ -1261,11 +1358,20 @@ def collect_synthetic_dataset(
     # Only suffix the cache key with K when it's not the default, to keep
     # existing v8 caches at K=3 readable without rename.
     k_tag = f"_k{no_a_count_max}" if no_a_count_max != 3 else ""
+    # Rule-coverage tag: only present when active, so old call sites still hit
+    # their existing cache files.
+    rc_tag = (
+        f"_rc{rule_coverage_weight:g}"
+        if (track_rules_fired and rule_coverage_weight != 0.0)
+        else ""
+    )
+    if coverage_select_topk:
+        rc_tag += "_cstop"
     cache_path = os.path.join(
         cache_dir,
         f"seed{seed}_n{n_levels}_v{CACHE_VERSION}"
         f"_mode-{mode_tag}{seed_tag}_solv{int(require_solvable)}"
-        f"_mi{max_iters_search}_tmo{timeout_ms_search}_ms{min_states}{k_tag}.npz",
+        f"_mi{max_iters_search}_tmo{timeout_ms_search}_ms{min_states}{k_tag}{rc_tag}.npz",
     )
     if os.path.isfile(cache_path):
         if verbose:
@@ -1350,6 +1456,9 @@ def collect_synthetic_dataset(
             n_mutations_max=evolve_n_mutations_max,
             max_generations=evolve_max_generations,
             init_dats=init_dats,
+            track_rules_fired=track_rules_fired,
+            rule_coverage_weight=rule_coverage_weight,
+            coverage_select_topk=coverage_select_topk,
             verbose=verbose,
         )
         # Bookkeeping: in evolve mode "attempts" tracks total BFS calls.
@@ -1374,6 +1483,7 @@ def collect_synthetic_dataset(
                 timeout_ms=timeout_ms_search,
                 min_states=min_states,
                 require_solvable=require_solvable,
+                track_rules_fired=track_rules_fired,
             )
             if result is None:
                 n_search_rejects += 1
@@ -1425,6 +1535,23 @@ def collect_synthetic_dataset(
     n_solvable_levels = sum(
         1 for r in accepted_results if any(int(w) for w in r["wons"])
     )
+    # Rule-coverage rollup (when tracking on).
+    rule_coverage_stats: dict = {}
+    if track_rules_fired and accepted_results:
+        per_level = [set(r.get("rules_fired_union", [])) for r in accepted_results]
+        n_rules_total = int(accepted_results[0].get("n_rules", 0))
+        global_union = set().union(*per_level) if per_level else set()
+        rule_coverage_stats = {
+            "track_rules_fired": True,
+            "rule_coverage_weight": rule_coverage_weight,
+            "n_rules_total": n_rules_total,
+            "n_rules_covered_dataset_union": len(global_union),
+            "rules_covered_dataset_union": sorted(global_union),
+            "n_rules_covered_per_level_mean": (
+                sum(len(s) for s in per_level) / max(1, len(per_level))
+            ),
+            "n_rules_covered_per_level_min": min((len(s) for s in per_level), default=0),
+        }
     gen_stats = {
         "game_name": game_name,
         "n_levels_target": n_levels,
@@ -1445,6 +1572,7 @@ def collect_synthetic_dataset(
         "max_iters_search": max_iters_search,
         "timeout_ms_search": timeout_ms_search,
         "seed": seed,
+        **rule_coverage_stats,
     }
     dataset["gen_stats"] = np.array([json.dumps(gen_stats)], dtype=object)
     if verbose:
@@ -1487,6 +1615,9 @@ def collect_synthetic_dataset(
             seed_from_authored=seed_from_authored,
             fallback_dynamics=False,  # don't recurse
             no_a_count_max=no_a_count_max,
+            track_rules_fired=track_rules_fired,
+            rule_coverage_weight=rule_coverage_weight,
+            coverage_select_topk=coverage_select_topk,
             cache_root=cache_root,
             verbose=verbose,
         )
@@ -1521,7 +1652,20 @@ def _main():
                     help="Seed initial population from cropped authored levels.")
     ap.add_argument("--no_a_count_max", type=int, default=3,
                     help="Cap count(A) at start for 'no A' (num=-1) win conditions.")
+    ap.add_argument("--track_rules_fired", action="store_true",
+                    help="Collect per-transition rule-firing telemetry from the engine.")
+    ap.add_argument("--rule_coverage_weight", type=float, default=0.0,
+                    help="Fitness term: weight per unique rule fired in a level's reachable "
+                         "state space. Implies --track_rules_fired when > 0.")
+    ap.add_argument("--coverage_select_topk", action="store_true",
+                    help="Disable early stop: evolve full budget then greedily select top-K "
+                         "by union rule coverage. Implies --track_rules_fired.")
     args = ap.parse_args()
+    track_rules = (
+        args.track_rules_fired
+        or args.rule_coverage_weight > 0.0
+        or args.coverage_select_topk
+    )
     collect_synthetic_dataset(
         game_name=args.game,
         n_levels=args.n_levels,
@@ -1540,6 +1684,9 @@ def _main():
         evolve_n_mutations_max=args.evolve_n_mutations_max,
         seed_from_authored=args.seed_from_authored,
         no_a_count_max=args.no_a_count_max,
+        track_rules_fired=track_rules,
+        rule_coverage_weight=args.rule_coverage_weight,
+        coverage_select_topk=args.coverage_select_topk,
         verbose=True,
     )
 

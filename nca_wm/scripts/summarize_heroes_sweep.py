@@ -47,46 +47,50 @@ def _final_train_metrics(run_dir):
     return out
 
 
-def _bfs_rollout_err(run_dir):
-    """Read eval_multigame.npz and extract per-action rollout cell error.
+def _bfs_rollout_err(run_dir, npz_name="eval_multigame_tlfix.npz"):
+    """Read eval npz with flat keys '<game>_L<lvl>_<kind>_cell_error_rate'
+    and aggregate per-step cell error per kind.
 
-    Returns mean over all levels for {bfs, astar, random} sub-keys, and
-    per-action min over levels (best level), max over levels (worst level).
+    Returns:
+      {kind}_cell_err_mean    — mean over all (game, level) pairs (every level)
+      {kind}_cell_err_l0      — only the training level (L0)
+      {kind}_cell_err_heldout — mean over L1+ (transfer to other authored levels)
     """
-    p = os.path.join(run_dir, "eval_multigame.npz")
+    import re
+    p = os.path.join(run_dir, npz_name)
     if not os.path.exists(p):
-        return {}
+        # fall back to the buggy file if tlfix not yet written
+        p = os.path.join(run_dir, "eval_multigame.npz")
+        if not os.path.exists(p):
+            return {}
     z = np.load(p, allow_pickle=True)
+    pat = re.compile(r"^(?P<game>.+)_L(?P<lvl>\d+)_(?P<kind>bfs|astar|random|random_tf)_cell_error_rate$")
+    by_kind_all = defaultdict(list)
+    by_kind_l0 = defaultdict(list)
+    by_kind_held = defaultdict(list)
+    for k in z.files:
+        m = pat.match(k)
+        if not m:
+            continue
+        kind = m.group("kind")
+        lvl = int(m.group("lvl"))
+        v = np.asarray(z[k]).astype(float)
+        if v.size == 0 or not np.isfinite(v).any():
+            continue
+        mean_v = float(np.nanmean(v))
+        by_kind_all[kind].append(mean_v)
+        if lvl == 0:
+            by_kind_l0[kind].append(mean_v)
+        else:
+            by_kind_held[kind].append(mean_v)
     out = {}
     for kind in ("bfs", "astar", "random", "random_tf"):
-        # Records stored as dict-like arrays; need to introspect shape.
-        # eval_multigame stores per-game per-level per-kind. Iterate.
-        try:
-            data = z["eval"].item() if "eval" in z.files else None
-        except Exception:
-            data = None
-        if not data:
-            return out
-        # data: {game_name: {level_i: {kind: array_or_dict}}}
-        all_means = []
-        all_total = []
-        for game, levels in data.items():
-            if not isinstance(levels, dict):
-                continue
-            for li, kinds in levels.items():
-                if not isinstance(kinds, dict) or kind not in kinds:
-                    continue
-                cell_err = kinds[kind].get("model_wrong_cells")
-                tiles = kinds[kind].get("total_cells")
-                if cell_err is None or tiles is None or tiles == 0:
-                    continue
-                cell_err = np.asarray(cell_err)
-                m = float(np.nanmean(cell_err) / tiles)
-                all_means.append(m)
-                all_total.append(tiles)
-        if all_means:
-            out[f"{kind}_cell_err_mean"] = float(np.mean(all_means))
-            out[f"{kind}_cell_err_max"]  = float(np.max(all_means))
+        if by_kind_all[kind]:
+            out[f"{kind}_cell_err_mean"] = float(np.mean(by_kind_all[kind]))
+        if by_kind_l0[kind]:
+            out[f"{kind}_cell_err_l0"] = float(np.mean(by_kind_l0[kind]))
+        if by_kind_held[kind]:
+            out[f"{kind}_cell_err_heldout"] = float(np.mean(by_kind_held[kind]))
     return out
 
 
@@ -126,7 +130,7 @@ def _summarize_run(run_dir):
     cfg = json.load(open(os.path.join(run_dir, "config.json")))
     name = os.path.basename(run_dir)
     train = _final_train_metrics(run_dir)
-    ev = _eval_from_log(run_dir)
+    ev = _bfs_rollout_err(run_dir)
     n_steps = cfg.get("n_nca_steps")
     n_reps = cfg.get("n_nca_repeats", 1)
     return {
@@ -141,7 +145,11 @@ def _summarize_run(run_dir):
         "final_loss": train.get("final_losses"),
         "final_change_acc": train.get("final_change_accs"),
         "bfs_err_mean": ev.get("bfs_cell_err_mean"),
+        "bfs_err_l0": ev.get("bfs_cell_err_l0"),
+        "bfs_err_heldout": ev.get("bfs_cell_err_heldout"),
         "astar_err_mean": ev.get("astar_cell_err_mean"),
+        "astar_err_l0": ev.get("astar_cell_err_l0"),
+        "astar_err_heldout": ev.get("astar_cell_err_heldout"),
         "random_err_mean": ev.get("random_cell_err_mean"),
         "random_tf_err_mean": ev.get("random_tf_cell_err_mean"),
     }
@@ -205,21 +213,28 @@ def main():
             continue
         by_bucket[b].append(r)
 
+    lines.append(
+        "Re-evaluated 2026-05-04 with the top-left slicing fix. `bfs L0` is the "
+        "training level (cell-error should be ~0 if the model fit it). "
+        "`bfs heldout` is the mean over authored levels L1–L21, which the model "
+        "never saw during training — these test in-game generalization across map sizes/topology.\n"
+    )
     for bucket in ["A: pool ON, shared", "B: pool ON, per-step",
                    "C: pool OFF + skip, shared", "D: pool OFF + skip, per-step"]:
         rs = sorted(by_bucket.get(bucket, []), key=lambda r: r["n_steps"])
         if not rs:
             continue
         lines.append(f"\n## {bucket}\n")
-        lines.append("| depth | best loss | final loss | final change_acc | bfs err | astar err | random_tf err | random err |")
-        lines.append("|---|---|---|---|---|---|---|---|")
+        lines.append("| depth | best loss | final change_acc | bfs L0 | bfs heldout | astar L0 | astar heldout | random_tf err | random err |")
+        lines.append("|---|---|---|---|---|---|---|---|---|")
         for r in rs:
             lines.append(
                 f"| {r['n_steps']} | {fmt_loss(r['best_loss'])} | "
-                f"{fmt_loss(r['final_loss'])} | "
                 f"{(str(round(r['final_change_acc']*100,2)) + '%') if r['final_change_acc'] else '—'} | "
-                f"{fmt_err(r['bfs_err_mean'])} | "
-                f"{fmt_err(r['astar_err_mean'])} | "
+                f"{fmt_err(r['bfs_err_l0'])} | "
+                f"{fmt_err(r['bfs_err_heldout'])} | "
+                f"{fmt_err(r['astar_err_l0'])} | "
+                f"{fmt_err(r['astar_err_heldout'])} | "
                 f"{fmt_err(r['random_tf_err_mean'])} | "
                 f"{fmt_err(r['random_err_mean'])} |"
             )

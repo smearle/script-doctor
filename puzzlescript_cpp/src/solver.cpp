@@ -377,7 +377,8 @@ SolverResult solveBFS(Engine& engine, int maxIters, int timeoutMs) {
     return makeSolverResult(engine, false, bestActions, iterations, start, bestScore, bestState, false);
 }
 
-TransitionData collectTransitionsBFS(Engine& engine, int maxIters, int timeoutMs) {
+TransitionData collectTransitionsBFS(Engine& engine, int maxIters, int timeoutMs,
+                                     bool trackRulesFired) {
     const auto start = Clock::now();
     const LevelBackup initialState = engine.backupLevel();
     std::queue<LevelBackup> frontier;
@@ -391,6 +392,13 @@ TransitionData collectTransitionsBFS(Engine& engine, int maxIters, int timeoutMs
     result.idDict = engine.getIdDict();
     int iterations = 0;
 
+    // Opt-in: turn on per-turn rule-firing tracking. Off path is a single
+    // predicted-false branch in the rule-apply hot path.
+    if (trackRulesFired) {
+        engine.setTrackRulesFired(true);
+        result.n_rules = engine.getRuleCount();
+    }
+
     while (!frontier.empty() && iterations < maxIters) {
         if (iterations % 1000 == 0 && timedOut(start, timeoutMs)) {
             result.timeout = true;
@@ -402,6 +410,7 @@ TransitionData collectTransitionsBFS(Engine& engine, int maxIters, int timeoutMs
 
         for (int action : actionsForEngine(engine)) {
             engine.restoreLevel(parentState);
+            if (trackRulesFired) engine.clearRulesFired();
             const bool changed = processInputSearch(engine, action);
             LevelBackup nextState = engine.backupLevel();
             const bool won = engine.isWinning();
@@ -412,6 +421,11 @@ TransitionData collectTransitionsBFS(Engine& engine, int maxIters, int timeoutMs
             result.actions.push_back(action);
             result.nextStates.push_back(nextState.dat);
             result.wons.push_back(won ? 1 : 0);
+            if (trackRulesFired) {
+                // Union across action + any 'again' ticks (processInputSearch
+                // loops). The accumulator survives until the next clear.
+                result.rulesFired.push_back(engine.getRulesFired());
+            }
 
             if (!changed) {
                 continue;  // no-op: next_state == parent_state, nothing to expand
@@ -426,6 +440,8 @@ TransitionData collectTransitionsBFS(Engine& engine, int maxIters, int timeoutMs
 
         iterations += 1;
     }
+
+    if (trackRulesFired) engine.setTrackRulesFired(false);
 
     result.iterations = iterations;
     result.time = elapsedSeconds(start);
