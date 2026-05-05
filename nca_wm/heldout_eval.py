@@ -289,7 +289,13 @@ def _rollout_with_identity(
         if teacher_forced:
             pred_state = _pad_state_for_model(real_next, max_C, H_eval, W_eval)
         else:
-            pred_state = pred_next
+            # Match training-time padding: zero outside the level's actual
+            # (n_objs, H, W) extent. Otherwise binarized predictions in unused
+            # channels / off-level cells leak in as OOD nonzero input the next
+            # step, which the model never trained to tolerate.
+            clean = jnp.zeros_like(pred_next)
+            clean = clean.at[:, :n_objs, :H, :W].set(pred_next[:, :n_objs, :H, :W])
+            pred_state = clean
 
         prev_real = real_next
         if done or truncated:

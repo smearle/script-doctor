@@ -3168,11 +3168,16 @@ def _run_eval_rollout(
             first_div = t
 
         # Next input: model's own prediction (autoregressive) or re-padded real
-        # state (teacher-forced).
+        # state (teacher-forced). For AR, zero outside the level's actual
+        # (n_objs, H, W) extent so off-level binarized predictions don't leak
+        # in as OOD nonzero input — training inputs always have those regions
+        # exactly zero (see _pad_state_for_model + bucket loader).
         if teacher_forced:
             pred_state = _pad_state_for_model(real_obs, max_C, max_H, max_W)
         else:
-            pred_state = pred_next
+            clean = jnp.zeros_like(pred_next)
+            clean = clean.at[:, :n_objs, :H, :W].set(pred_next[:, :n_objs, :H, :W])
+            pred_state = clean
 
         if done or truncated:
             break
