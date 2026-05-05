@@ -1124,6 +1124,93 @@ latent metric predicts the beats-identity tally because tighter
 latent-neighborhood ⇒ encoder treats heldout like a known game ⇒
 better predictive accuracy.
 
+## v3+decoder (94g, joint encoder + NCA + token decoder, 2026-05-05)
+
+First joint-AE training run at the broad-corpus scale: 94 deduped games,
+150k steps, batch=32, recipe matches v3 (no decoder) plus
+`--token_decoder_loss_weight 1.0`. Joint params layout `{"wm": ..., "dec": ...}`;
+encoder + NCA = 9.89M params, decoder = 1.18M params (12% extra), per-step
+wall-clock ~110ms (~20% slower than the no-decoder run).
+
+**Training metrics (final, step 150k):**
+- state_loss: 0.0049 (vs v3 no-decoder: 0.0049 — within noise)
+- change_err: 0.013 (vs v3 no-decoder: 0.015)
+- win_recall: 0.996
+- dec_loss: 2.4e-9, dec_acc: 1.000
+
+The joint decoder objective imposes essentially **zero cost on
+prediction quality**: state_loss / change_err track the no-decoder run
+within noise (the table-1 ablation for the paper).
+
+**Token reconstruction (teacher-forced):**
+- 94/94 training games: perfect (1.000) per-position match.
+- The decoder learns the conditional next-token distribution well
+  enough to fully recover every training game given the right history.
+
+**Held-out latent geometry (v3+decoder vs v3 no-decoder vs scaling_14_mask):**
+
+| run | n_games | mask | decoder | median 1-NN cos dist |
+|---|---:|:---:|:---:|---:|
+| scaling_14_mask_v1 | 14 | True | False | **0.077** |
+| scaling_14_v3recipe | 14 | False | False | 0.144 |
+| v3_combined | 59 | False | False | 0.119 |
+| v3 (no decoder) | 94 | True | False | 0.215 |
+| **v3+decoder** | 94 | True | True | **0.153** |
+
+At 94 games with `mask_hidden=True`, **adding the joint decoder
+tightens** the held-out 1-NN distance from 0.215 → 0.153 — a 29%
+reduction. The decoder objective forces slots to retain
+spec-recoverable information, and the encoder responds by placing
+mechanically-similar games closer in the slot space, so held-out
+games' 1-NN training games are nearer.
+
+Note that `scaling_14_mask_v1` (14g, no decoder) still has the
+tightest held-out 1-NN (0.077), but at 14 training games the held-out
+games are mostly easy push-puzzles that map close to several training
+games by default; at 94 games the encoder has to model wider
+mechanical diversity, which raises the average 1-NN before the decoder
+constraint pulls it back down.
+
+**Inverse-fit on 4 OOD held-out games (frozen NCA + decoder, optimize
+slot from observed transitions, 2000 Adam steps at lr=5e-3, init=knn):**
+
+| target | final fit BCE | 1-NN train | cos dist |
+|---|---:|---|---:|
+| `monophobic_multiban_by_increpare` | **8.4e-04** | `run_em_over_by_xxsethyxxxoultraomeg` | 0.389 |
+| `cat_adventure_2_by_whenyoucando` | **8.4e-04** | `neko_puzzle_by_increpare` | 0.394 |
+| `in_the_way_by_giovanni_mota` | 7.2e-03 | `run_em_over_by_xxsethyxxxoultraomeg` | 0.477 |
+| `shadow_by_unknown_author` (smoke) | 1.2e-01 | `rigid_parallel_many` | 0.206 |
+
+The optimization successfully drives BCE down 2-3 orders of magnitude
+on the observed OOD transitions for the easier targets. The 1-NN
+matches are mechanically meaningful: `cat_adventure_2 → neko_puzzle`
+both push-puzzle styles; `monophobic_multiban → run_em_over` both
+multi-character-control / chase-style mechanics. `shadow` (a 2-rule
+1×4-grid game) fits worst because its rule structure is so atypical
+that even a closest-fit slot still leaves residual error.
+
+**Symbolic AE results (autoregressive sampling, 16 random + 9 interpolation):**
+
+- **TF reconstruction**: 100% perfect across all 94 training games.
+- **AR compile-rate (initial run)**: 0/25. The decoder generates
+  garbage past the real game spec because there's no EOS handling —
+  even the t=0.00 endpoint of an interpolation between known games
+  produces sokoban-like opening rules then ~50 redundant winconditions.
+- **Workaround**: added `stop_at_pad=True` to
+  `sample_tokens_from_slots`, halting AR generation at the first PAD
+  prediction. Re-sampling in progress.
+- **Honest paper framing**: 100% TF reconstruction confirms slots
+  contain enough information to recover training games; the AR-compile
+  gap reflects a known sequence-modeling limitation (no EOS) rather
+  than a latent-space problem. Future work should add EOS-token
+  training.
+
+Files:
+- `nca_wm/logs/multi_scaling_gallery_v3_decoder/`
+- `nca_wm/logs/multi_scaling_gallery_v3_decoder/interp/heldout_overlay_flat.{pdf,png,json}`
+- `nca_wm/logs/multi_scaling_gallery_v3_decoder/sampled_games/{interp,random}_*.txt`
+- `nca_wm/logs/multi_scaling_gallery_v3_decoder/inverse_fit/<game>/{summary.json,fitted_decoded.txt}`
+
 ## Travelling_salesman: data dilution, not mechanics complexity (2026-05-05)
 
 `Travelling_salesman` (TSM) has been a "persistently hard" game across

@@ -221,7 +221,8 @@ class RuleAttnNCAWorldModel(nn.Module):
 
     @nn.compact
     def __call__(self, state, action_onehot, game_tokens, game_mask,
-                 return_slots: bool = False, return_vq_aux: bool = False):
+                 return_slots: bool = False, return_vq_aux: bool = False,
+                 slots_override=None):
         """
         state: (B, C, H, W) multihot input.
         action_onehot: (B, N_ACTIONS).
@@ -229,6 +230,11 @@ class RuleAttnNCAWorldModel(nn.Module):
         game_mask: (B, S) bool.
         return_slots: if True, also return the full (B, n_slots, d_slot) slot
             matrix (dyn + app) for downstream use (e.g. token decoder).
+        slots_override: if provided ((B, n_slots, d_slot) float32), skip the
+            encoder and use these slots directly. Used by inverse-fitting
+            and latent-sampling tools to bypass the encoder. game_tokens /
+            game_mask are still required for shape compatibility with the
+            init/apply path but are unused on the forward pass.
         Returns: (logits, win_logit, sprite_logits[, all_slots])
           - logits: (B, C, H, W) next-state logits
           - win_logit: (B,)
@@ -236,7 +242,7 @@ class RuleAttnNCAWorldModel(nn.Module):
           - all_slots (only if return_slots=True): (B, n_slots, d_slot)
         """
         B, C, H, W = state.shape
-        # 1. Encode game into K rule slots
+        # 1. Encode game into K rule slots (or use override).
         encoder = RuleSlotEncoder(
             vocab_size=self.vocab_size,
             max_seq_len=self.max_seq_len,
@@ -247,7 +253,15 @@ class RuleAttnNCAWorldModel(nn.Module):
             n_heads=self.n_attn_heads,
             name="game_encoder",
         )
-        slots = encoder(game_tokens, game_mask)  # (B, K, d_slot), K = n_slots
+        if slots_override is not None:
+            # Still call the encoder so its params are registered with this
+            # module's variable scope (otherwise apply with the saved
+            # checkpoint complains about unused params). The output is
+            # discarded.
+            _ = encoder(game_tokens, game_mask)
+            slots = slots_override
+        else:
+            slots = encoder(game_tokens, game_mask)  # (B, K, d_slot), K = n_slots
 
         # Optional VQ-VAE quantization of slots against a shared codebook.
         # Gated entirely on use_vq so the default-off path is parameter- and

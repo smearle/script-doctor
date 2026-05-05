@@ -162,13 +162,19 @@ class SlotTokenDecoder(nn.Module):
 
 def sample_tokens_from_slots(decoder, params, slots, max_len: int,
                               bos_id: int = 0, eos_id: int | None = None,
-                              temperature: float = 0.0, rng=None):
+                              temperature: float = 0.0, rng=None,
+                              stop_at_pad: bool = True):
     """Greedy/temperature sampling from a SlotTokenDecoder.
 
     Args:
         decoder: SlotTokenDecoder instance.
         params: trained decoder params.
         slots: (B, K, d_slot) float32.
+        stop_at_pad: if True (default), zero out all positions after each
+            sample's first PAD (=0) prediction. The decoder was trained on
+            sequences right-padded with PAD, so a predicted PAD signals
+            "end of game spec"; without this, AR generation rambles past
+            the real content and produces invalid PuzzleScript.
     Returns:
         (B, max_len) int32 token sequence.
     """
@@ -185,6 +191,25 @@ def sample_tokens_from_slots(decoder, params, slots, max_len: int,
             next_tok = jax.random.categorical(sub, step_logits / temperature, axis=-1)
         if t + 1 < max_len:
             tokens = tokens.at[:, t + 1].set(next_tok)
+    if stop_at_pad:
+        # PAD token is index 0 (matches `_SPECIAL` in tokenize_game.py).
+        # For each sample, find the first 0 (excluding the leading BOS at
+        # position 0, which is also 0) and zero out everything after it.
+        # We work in numpy to avoid jit-tracer issues.
+        import numpy as _np
+        toks_np = _np.asarray(tokens)
+        cleaned = _np.zeros_like(toks_np)
+        for b in range(B):
+            row = toks_np[b]
+            # Skip the leading BOS at position 0 (= 0).
+            # Find the first PAD at position >= 1 (a predicted 0).
+            after_bos = row[1:]
+            first_pad = _np.argmax(after_bos == 0) if (after_bos == 0).any() else len(after_bos)
+            # Keep tokens from BOS through (first_pad inclusive) position;
+            # that is, positions 0 .. first_pad. Zero the rest.
+            keep_through = 1 + first_pad  # inclusive index in the full row
+            cleaned[b, :keep_through] = row[:keep_through]
+        tokens = jnp.array(cleaned)
     return tokens
 
 

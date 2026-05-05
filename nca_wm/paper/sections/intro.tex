@@ -1,64 +1,97 @@
 \section{Introduction}
 \label{sec:intro}
 
-Learned world models have been studied across pixel-based video-game
-benchmarks (Atari, ALE, MuJoCo image observations) and procedurally
-generated environments. The standard recipe pairs a high-capacity
-encoder--decoder---typically a CNN, U-Net, or recently a video
-Transformer---with an action-conditioned dynamics module that predicts
-the next observation given the current observation and an action. These
-architectures excel when the underlying state is high-dimensional and
-the dynamics are smooth in pixel space.
+Learned world models have been studied primarily in settings where
+the environment is observed as pixels and the task is to predict the
+next frame or latent video token. The standard recipe pairs a
+high-capacity visual encoder--decoder---typically a CNN, U-Net, or
+video Transformer---with an action-conditioned dynamics module. This
+is a natural fit when the observation is visually rich and the
+underlying mechanics are comparatively smooth or uniform. It is a
+less natural fit for games whose difficulty lies not in rendering but
+in a large space of symbolic rule systems.
 
-PuzzleScript games are a different regime. Each game is fully
-specified by a short text file describing object kinds, layered grid
-levels, and a list of declarative rules of the form
-\texttt{[ Player | Crate ] -> [ | Player Crate ]}. The engine evaluates
-these rules in order on the grid at every tick, with \texttt{again}
-rules causing the rule list to be re-evaluated until the state stops
-changing. The state is therefore a \emph{discrete multi-channel grid},
-the dynamics are \emph{deterministic and combinatorial}, and the
-``hard'' computation per tick is a sequence of small local updates
-applied repeatedly. Pixel-style world models do not match this
-substrate well: they spend capacity modeling continuous-valued tile
-appearance, lack any inductive bias toward local rule application, and
-cannot easily share parameters across the engine's outer
-\texttt{again} loop.
+PuzzleScript games are such a regime. Each game is fully specified by
+a short text file describing object kinds, layered grid levels, and a
+list of declarative rewrite rules, e.g.
+\texttt{[ Player | Crate ] -> [ | Player Crate ]}. The engine
+evaluates these rules in order on the grid at every tick, with
+\texttt{again} rules causing the rule list to be re-evaluated until
+the state stops changing. The state is a \emph{discrete multi-channel
+grid}, the dynamics are \emph{deterministic and combinatorial}, and
+the hard computation per tick is a sequence of atomic local updates
+applied repeatedly. Foregoing pixels lets us model the environment in
+its native state representation and measure fidelity cell-by-cell
+against the original engine.
 
 We propose a different architecture: a \emph{rule-conditioned Neural
 Cellular Automaton} (NCA) world model. A perceiver-style encoder maps
-the tokenized game spec to $K$ slot vectors representing rule
-embeddings; the dynamics body is a single local update layer applied
-for $T$ iterations on a hidden grid, with cells cross-attending to
-those slots at every step. The same body parameters are reused across
-iterations, mirroring the engine's outer loop, while the slot encoder
-provides per-game conditioning that makes the model game-agnostic.
+the tokenized game description to $K$ latent slots; the dynamics body
+is a local update rule applied for $T$ iterations on a hidden grid,
+with cells cross-attending to those slots at every step. The same body
+parameters can be reused across iterations, mirroring the engine's
+outer loop, while the conditioner makes the dynamics model portable
+across games. In the full version of the model, these slots are tied
+to a symbolic-game autoencoder so that game latents can both condition
+dynamics and decode back into program text.
+
+Concretely, the deduplicated candidate corpus contains 3{,}474
+token-distinct human-authored games (ranging from one to twenty rules
+each), of which up to 199 are used in our largest training preset.
+Across these 199 games we collect roughly 23{,}500 transitions per
+game on average from authored levels via bounded A* search, for a
+total training set of $\sim$15M transitions; held-out evaluation uses
+a 30-game stratified sample from the same pool that is disjoint from
+the training set both by name and by token-sequence hash.
+
+\papertodo{Add the headline long-horizon fidelity result promised by
+the abstract: exact-match or cell-error curves over long rollouts,
+reported across the broad multi-game corpus rather than only
+\textsc{microban}, \textsc{sokoban\_basic}, or \textsc{scaling\_14}.
+If ``near-perfect'' means exact next-state accuracy, first-divergence
+step, or final cell-error, define it here and keep the same metric
+throughout the paper.}
 
 \paragraph{Contributions.}
 \begin{enumerate}
-  \item A rule-conditioned NCA world model that learns multi-game
-        dynamics for PuzzleScript with a single shared local update
-        rule, conditioned via cross-attention on perceiver-style slots
-        encoding the game's rule set.
+  \item A rule-conditioned NCA world model that learns PuzzleScript
+        dynamics with a shared local update rule, conditioned via
+        cross-attention on latent slots encoding the game's symbolic
+        rule description.
   \item A controlled comparison against non-NCA baselines (CNN, U-Net,
         ViT) that share the rule-slot encoder but differ in the
         spatial-update body. The comparison isolates the contribution
         of the iterated-local-update inductive bias.
-  \item Empirical analyses of three architectural axes that the NCA
-        couples by design but which can be ablated independently:
-        global pooling features (axial / cumulative max / global max),
-        weight sharing across NCA steps (a hierarchical
-        $n_{\text{layers}} \times n_{\text{repeats}}$ factorization),
-        and adaptive halting (PonderNet-style learned halt vs.\
-        convergence-based stopping).
-  \item A characterization of an architectural ceiling on the
-        multi-grid synthetic-data regime, where the model loses the
-        per-state memorization shortcut and is forced to learn
-        transferable rule application. Our experiments suggest current
-        rule-conditioned NCAs do not reliably escape this ceiling
-        without additional supervision; we discuss candidate
-        interventions.
+  \item A symbolic-game latent space that is jointly optimized with
+        the dynamics model, allowing the same game embedding to
+        support forward simulation, decoding to program text, and
+        inverse fitting of unknown rules from observed transitions.
+  \item Empirical analyses of the architectural choices that matter
+        for engine-like dynamics: non-local pool features, weight
+        sharing across NCA steps, adaptive halting, and the transition
+        from single-game modeling to many-game engine modeling.
 \end{enumerate}
+
+\papertodo{Contribution 3 is currently aspirational in the body.
+Add the autoencoder architecture, reconstruction metrics, latent-game
+sampling protocol, decoded-program validity/playability rate, and at
+least qualitative decoded examples. If this result is not ready,
+downgrade or remove the claim from the abstract and contribution list.}
+
+Our broad-corpus presets ($\textsc{scaling\_gallery\_v3}$ at 94 games
+and $\textsc{scaling\_gallery\_v4}$ at 199 games) come paired with a
+30-game held-out set that is disjoint from any training preset both
+by name and by token-sequence hash. We measure engine-level
+generalization along two complementary axes:
+(i) \emph{geometric}, by encoding the held-out games' tokens through
+the trained encoder and reporting their 1-NN cosine distance to the
+nearest training-game slot, and (ii) \emph{predictive}, by running
+the autoregressive next-state prediction conditioned on the held-out
+encoding and comparing per-cell to the engine's ground truth, against
+an identity baseline. The first measures whether the encoder
+\emph{places} held-out games near mechanically-similar training games;
+the second measures whether the dynamics model \emph{behaves}
+correctly on those novel rule combinations.
 
 \paragraph{Why baselines from a different family.}
 Reviewers of NCA papers often (rightly) ask whether the same task could

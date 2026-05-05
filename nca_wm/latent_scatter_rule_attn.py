@@ -84,7 +84,11 @@ def encode_all(cfg, params, game_infos, reduce: str):
     max_tok_len = max(max((len(g.get("token_ids", [])) for g in game_infos),
                           default=1), 1)
     enc = build_encoder(cfg, max_tok_len)
-    enc_params = {"params": params["params"]["game_encoder"]}
+    # Handle joint-decoder layout {"wm": ..., "dec": ...} vs flat layout.
+    if isinstance(params, dict) and "wm" in params:
+        enc_params = {"params": params["wm"]["params"]["game_encoder"]}
+    else:
+        enc_params = {"params": params["params"]["game_encoder"]}
 
     @jax.jit
     def _enc_one(tids, mask):

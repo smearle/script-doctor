@@ -14,23 +14,61 @@ deterministically yields a next state $s_{t+1}$ via the engine. The
 state can also carry a terminal \emph{won} bit, since some rules
 trigger a win on certain conditions.
 
-We train a model $f_\theta(s_t, a_t, \mathrm{spec}) \mapsto
-\widehat{s}_{t+1}$ where $\mathrm{spec}$ is the tokenized game source
-(a sequence of integers from a shared $\sim$140-symbol vocabulary that
-covers the engine's grammar plus per-game object names and 5$\times$5
-sprite RGBA values when sprite tokens are enabled). At evaluation we
-roll the model out autoregressively and compare cell-by-cell against
-the engine.
+We train a model $f_\theta(s_t, a_t, g) \mapsto
+\widehat{s}_{t+1}$ where $g$ is a latent representation of the
+game's symbolic source. In the experiments below, $g$ is produced
+from the tokenized game source (a sequence of integers from a shared
+$\sim$140-symbol vocabulary that covers the engine grammar plus
+per-game object names and 5$\times$5 sprite RGBA values when sprite
+tokens are enabled). At evaluation we roll the model out
+autoregressively and compare cell-by-cell against the engine.
+
+\paragraph{Conditioning interface.}
+The game-spec autoencoder is trained \emph{jointly} with the world
+model. Concretely, for each transition $(s_t, a_t, s_{t+1})$ in the
+training set, we (i) encode the game's token sequence to a slot matrix
+$z \in \mathbb{R}^{K \times d_{\text{slot}}}$ via the perceiver-style
+encoder $\mathrm{Enc}_\phi$, (ii) drive the rule-conditioned NCA from
+$(s_t, a_t)$ conditioned on $z$ to produce
+$\widehat{s}_{t+1}$, and (iii) feed $z$ to a causal token decoder
+$\mathrm{Dec}_\psi$ that predicts the original token sequence
+autoregressively under teacher forcing. The training loss is
+\begin{equation*}
+  \mathcal{L} \;=\; \mathcal{L}_{\text{state}}(\widehat{s}_{t+1}, s_{t+1})
+  \;+\; \alpha\,\mathcal{L}_{\text{win}}
+  \;+\; \beta\,\mathcal{L}_{\text{tok}}(\mathrm{Dec}_\psi(z), \mathrm{spec}) \, ,
+\end{equation*}
+with $\beta = 1.0$ in the joint runs and $\beta = 0$ in the encoder-only
+ablation. Default dimensions: $K=16$, $d_{\text{slot}}=64$, encoder
+$d_{\text{model}}=64$ with two self-attention layers, decoder
+$d_{\text{model}}=128$ with four causal-attention layers.
 
 \subsection{Rule-conditioned NCA world model}
 
-\paragraph{Slot encoder.}
+\paragraph{Game-description encoder.}
 A perceiver-style encoder $\mathrm{Enc}_\phi$ maps the game's token
-sequence $\mathrm{spec} \in \mathbb{Z}^{S}$ to $K$ slot vectors $z \in
-\mathbb{R}^{K \times d}$. The encoder applies $\ell$ self-attention
+sequence $\mathrm{spec} \in \mathbb{Z}^{S}$, or the corresponding
+autoencoder latent, to $K$ slot vectors $z \in \mathbb{R}^{K \times d}$.
+For token-conditioned runs, the encoder applies $\ell$ self-attention
 layers over the tokens, then $K$ learned query vectors cross-attend
 into the contextualized token sequence to produce $z$. Slots are
 shared across cells and remain fixed throughout the rollout.
+
+\paragraph{Symbolic token decoder.}
+$\mathrm{Dec}_\psi$ is a four-layer causal Transformer over the same
+$\sim$140-symbol vocabulary used by the encoder. Each token position
+self-attends causally to prior positions and cross-attends to the
+$K$ slots at every layer. We train under teacher forcing: the input
+sequence is the right-shifted target tokens with a learned BOS, and
+the per-position loss is masked cross-entropy against the next
+target token (\S\ref{sec:experiments} reports per-token reconstruction
+accuracy). Object names and sprite-RGB tokens are vocab-extended on a
+per-game basis; the decoder treats them as ordinary tokens and the
+detokenizer assigns generic names $\mathrm{Obj}_i$ on round-trip
+to .puzzlescript source. Validity checks (parser-loadable +
+JS-engine-compilable) are reported as separate metrics, since
+syntactic well-formedness and engine acceptance both diverge from
+exact-token reconstruction in the OOD-sample regime.
 
 \paragraph{NCA dynamics body.}
 We embed the input $(s_t, a_t)$ into a hidden grid $h^{(0)} \in
@@ -108,9 +146,43 @@ spatial-update body.
     iteration.
 \end{itemize}
 
-All baselines accept the same input $(s_t, a_t, \mathrm{spec})$ and
+All baselines accept the same input $(s_t, a_t, g)$ and
 produce the same $(\widehat{s}_{t+1}, \widehat{w}_{t+1})$ outputs as
 the NCA, allowing identical training and evaluation pipelines.
+
+\subsection{Fitting unknown games from transitions}
+\label{sec:method-inverse}
+
+Because the dynamics model is conditioned on a continuous game
+representation, we can freeze the NCA parameters and infer an
+unobserved game embedding from transition data. Given observations
+$\mathcal{D}=\{(s_t,a_t,s_{t+1})\}$ from an unknown game, we optimize
+the latent game variable $g$ to minimize the same next-state loss
+used during training while holding $\theta$ fixed. If $g$ lives in
+the autoencoder latent space, the fitted embedding can then be
+decoded to symbolic game code.
+
+\paragraph{Inverse-fit setup.}
+We freeze the world model and decoder parameters $(\theta, \psi)$ and
+treat $z \in \mathbb{R}^{K \times d_{\text{slot}}}$ as the only free
+variable. The encoder $\mathrm{Enc}_\phi$ is bypassed entirely; we
+inject the optimized $z$ into the world model via a slot-override
+path. We initialize $z$ from one of three schemes: \emph{random}
+(small Gaussian around the empirical training-slot mean),
+\emph{mean} (the centroid of training slots), or \emph{knn}
+(the slot of the training game whose token-sequence is closest to
+the OOD target by some heuristic --- when the target's tokens are
+unobserved, this falls back to random). The objective is the same
+per-cell next-state BCE used during training, summed over the
+observed transitions; we run 2,000 Adam steps at learning rate
+$5 \times 10^{-3}$ with mini-batch size 32. The held-out games are
+drawn from the deduped scrape pool and verified disjoint from the
+training set both by name and by token-sequence hash, so the slot
+optimization is genuinely fitting OOD dynamics. After fitting, we
+decode $z$ to a token sequence and report (i) final fit BCE on
+observed transitions, (ii) cell-error on held-out transitions of the
+target game, (iii) cosine distance to the 1-NN training slot, and
+(iv) whether the decoded text parses + compiles via the JS engine.
 
 \subsection{Adaptive halting (optional)}
 \label{sec:method-halt}

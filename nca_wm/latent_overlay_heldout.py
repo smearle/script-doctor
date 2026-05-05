@@ -123,7 +123,12 @@ def main():
     max_tok_len = max(max((len(g.get("token_ids", [])) for g in game_infos),
                           default=1), 1)
     enc = build_encoder(cfg, max_tok_len)
-    enc_params = {"params": params["params"]["game_encoder"]}
+    # Joint-decoder runs save params as {"wm": ..., "dec": ...}; non-joint
+    # runs save just the world-model params. Handle both layouts.
+    if isinstance(params, dict) and "wm" in params:
+        enc_params = {"params": params["wm"]["params"]["game_encoder"]}
+    else:
+        enc_params = {"params": params["params"]["game_encoder"]}
 
     @jax.jit
     def _enc(tids, mask):

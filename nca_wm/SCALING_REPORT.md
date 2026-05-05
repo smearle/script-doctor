@@ -54,12 +54,11 @@ Shared training-time defaults (unless overridden in the recipe column):
   finishes, run `latent_scatter_rule_attn` and compare embedding
   distinctness vs v3_combined (59g). Recipe matches v3_combined except
   mask_hidden=True (current default; v3_combined predates that flip).
-- **scaling_gallery_v4 (n=200) preset is staged** in `train.py`
+- **scaling_gallery_v4 (n=199) preset is staged** in `train.py`
   MULTI_GAME_PRESETS. A* cache warming for the 138 new-vs-v3 games
-  launched 2026-05-05 in parallel with v3 training (CPU-only via
-  `nca_wm/scripts/warm_caches.py`, log `/tmp/warm_v4_minus_v3.log`).
-  When v3 training finishes, v4 launch will skip A* search since the
-  per-level caches are already populated.
+  **DONE 2026-05-05** (225.8 min CPU, 15.8M transitions cached, log
+  `/tmp/warm_v4_minus_v3.log`). v4 training launch will skip A*.
+  Pending v3 + v3+decoder finishing first.
 - **Held-out tooling**: `nca_wm/scripts/pick_heldout.py` picks N games
   disjoint from a training preset (by name AND token-hash); output
   `data/heldout_v4_n30.json`. `nca_wm/latent_overlay_heldout.py` encodes

@@ -1,6 +1,36 @@
 \section{Results}
 \label{sec:results}
 
+\subsection{Abstract-facing results still to add}
+\label{sec:results-abstract-todos}
+
+\papertodo{Headline dynamics fidelity table: for the full
+human-authored corpus, report one-step exact state accuracy, changed
+cell accuracy, 50/100/500-step rollout cell-error, first-divergence
+step, and win-bit accuracy. Break down by train games, held-out
+levels in seen games, and held-out games. This table should directly
+support or revise the abstract's ``near-perfect fidelity over long
+time horizons'' claim.}
+
+\papertodo{Scaling curve: train on increasing numbers of games
+(e.g. 1, 4, 14, 50, 100, all) with a fixed model family and report
+rollout fidelity plus held-out-game performance. This is the missing
+result for the final abstract sentence: ``By scaling data ... modeling
+a game engine.''}
+
+\papertodo{Symbolic autoencoder results: report reconstruction
+accuracy, grammar-valid decode rate, engine-load success rate, and
+examples of decoded games from training reconstructions and latent
+samples. Include a table or figure showing that sampled latent games
+are not merely malformed token sequences.}
+
+\papertodo{Latent inverse-fitting results: freeze the NCA, optimize
+an unknown game latent from OOD transition observations, decode it to
+game code, and evaluate both transition fit and decoded-program
+validity. Include at least one qualitative recovered-rule example and
+a quantitative comparison to nearest-neighbor retrieval over training
+game latents.}
+
 \subsection{Baselines vs.\ rule-conditioned NCA}
 \label{sec:results-baselines}
 

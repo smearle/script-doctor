@@ -11,6 +11,34 @@ multi-game training we draw batches with one share per game per step
 (\emph{balanced sampling}), which compensates for per-game dataset-size
 imbalance.
 
+\paragraph{Corpus.}
+Our corpus is the union of four PuzzleScript collections: the official
+PuzzleScript.net gallery, a community scrape of the same site, an
+increpare-author scrape, and a small set of curated custom games.
+After (a) deduplicating by lowercased filename across collections and
+(b) collapsing structural near-duplicates by hashing the canonical
+name-invariant token sequence produced by our tokenizer, the pool
+contains 3{,}474 token-distinct games with rule counts in
+$\{1,\ldots,20\}$, object counts $\le 20$, level counts $\le 30$, and
+grid areas $\le 30$. The pool's largest collision group is 445 copies
+of the default PuzzleScript template, all of which collapse to the
+same token sequence under our tokenizer; this dedup step is essential
+because the encoder cannot otherwise be expected to produce distinct
+slot embeddings for token-identical inputs. Median rule count is 6
+(min 1, max 20), median level count is 3 (max 30), and grid sizes
+range from $1{\times}3$ to $30{\times}40$. We use four nested presets
+spanning the dataset-size axis: $\textsc{scaling\_14}$ (14 curated
+games for ablations), $\textsc{scaling\_gallery\_v2}$ (59 gallery
+games for a within-source scaling point),
+$\textsc{scaling\_gallery\_v3}$ (94 games), and
+$\textsc{scaling\_gallery\_v4}$ (199 games extending into the
+scrape pool). For each game we run bounded A* from each authored
+level (60 s wallclock and 100k iteration budget per level) and cache
+the resulting unique transitions on disk under bit-packing, with a
+per-game cap of 200k transitions. Held-out evaluation games are
+drawn from the deduped pool and verified disjoint from the training
+set both by name and by token-sequence hash.
+
 \paragraph{Synthetic levels.}
 For ablations and held-out evaluations we additionally generate
 synthetic levels by sampling tile-pattern distributions from each
@@ -23,7 +51,7 @@ allowed our model to match the authored-data baseline on the
 
 \subsection{Game suites}
 
-We evaluate on three suites of increasing breadth:
+We evaluate on four suites of increasing breadth:
 
 \begin{itemize}
   \item \textbf{Single-game} (\textsc{microban}, 10 authored levels):
@@ -41,6 +69,12 @@ We evaluate on three suites of increasing breadth:
     multi-character control, and several \texttt{again}-driven
     simulations. Per-game grid sizes range from $4{\times}4$ to
     $32{\times}24$.
+  \item \textbf{Broad-corpus} ($\textsc{scaling\_gallery\_v3}$ and
+    $\textsc{scaling\_gallery\_v4}$): 94 and 199 games respectively,
+    all drawn from the deduped pool described above. Used for the
+    multi-game scaling curve and for held-out-game evaluation. The
+    held-out set is a 30-game stratified sample from the same pool,
+    disjoint from both presets by name and by token-hash.
 \end{itemize}
 
 \subsection{Architectures and hyper-parameters}
@@ -80,3 +114,21 @@ We report two complementary metrics:
 Per finding F3 in our architecture report~(\S\ref{sec:results}), train
 loss decouples from autoregressive rollout error in the
 over-capacity regime; reporting both is essential.
+
+\paragraph{Symbolic-game-modeling metrics.}
+For experiments involving the joint token decoder we additionally
+report:
+\begin{itemize}
+  \item \textbf{Token reconstruction accuracy}: per-position match
+    rate between the decoder's argmax prediction and the target token,
+    under teacher forcing on training games. We report mean and the
+    fraction of games at perfect reconstruction.
+  \item \textbf{Engine-load success rate}: fraction of decoded token
+    sequences that, after detokenization to PuzzleScript source, parse
+    and compile via the JS engine. Reported separately for training-
+    reconstruction, latent-interpolation, and Gaussian-sample inputs.
+  \item \textbf{Latent-fit quality} (inverse-fitting): final per-cell
+    BCE on observed OOD transitions, cell-error on held-out transitions
+    of the target game, cosine distance to the 1-NN training slot, and
+    whether the recovered code engine-loads.
+\end{itemize}

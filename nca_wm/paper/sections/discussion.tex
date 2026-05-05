@@ -1,6 +1,23 @@
 \section{Discussion}
 \label{sec:discussion}
 
+\paragraph{From forward model to engine model.}
+The abstract frames the project as a shift from modeling one game to
+modeling a space of games organized by dynamics. The present results
+support the first half of that claim: a rule-conditioned, iterated
+local-update model is a strong forward model for PuzzleScript-style
+grid dynamics and is more parameter-efficient than several
+non-iterative baselines. The remaining burden is to show that the
+learned representation is genuinely engine-like: it should scale
+smoothly with the number of games, generalize to held-out rule
+systems, decode meaningful symbolic programs, and permit inverse
+fitting from transitions.
+
+\papertodo{Once the broad-corpus, autoencoder, and inverse-fitting
+results are added, rewrite this paragraph as a positive synthesis.
+Until then, keep this limitation explicit so the body does not imply
+that all abstract claims have already been demonstrated.}
+
 \paragraph{What the iterated local update buys.}
 The architecture comparison in \S\ref{sec:results-baselines}
 isolates one question: holding the conditioner constant, does the
@@ -36,6 +53,12 @@ $\geq 2$ instances, and (d) auxiliary ``is-changing'' mask head
 factoring ``where to fire'' from ``what to write.'' A successful
 break here would close the most important remaining gap between
 authored-data and synthetic-multi-grid performance.
+
+\papertodo{Reconcile this ceiling with the abstract's
+``near-perfect fidelity'' claim. If near-perfect results are obtained
+on the broad authored corpus but not synthetic multi-grid OOD tasks,
+state that distinction explicitly and explain what type of
+generalization remains unsolved.}
 
 \paragraph{Beyond PuzzleScript.}
 The architecture is not domain-specific. Any deterministic
