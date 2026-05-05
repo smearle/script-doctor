@@ -58,24 +58,42 @@ analyzed in \S\ref{sec:results-ceiling}.
 \begin{table}[t]
   \centering
   \caption{\textbf{Baselines vs.\ rule-conditioned NCA on
-    \textsc{sokoban\_basic} (multi-grid synth).} Three seeds; widths
-    $\{5{\times}5, 6{\times}6, 7{\times}7, 8{\times}8\}$ with 256
-    levels per width. Memorization is unavailable; the model has to
-    learn the rule.}
+    \textsc{sokoban\_basic} (multi-grid synthetic).} Single seed at 10k
+    updates; widths $\{5{\times}5, 6{\times}6, 7{\times}7, 8{\times}8\}$
+    with 256 synthetic levels per width. Memorization is unavailable;
+    the model has to learn the rule. Architectures sorted by BFS final
+    cell-error (lower is better). Multi-seed numbers are forthcoming.}
   \label{tab:baselines-synth}
   \small
-  \begin{tabular}{l c c c c c}
+  \begin{tabular}{l c c c c}
     \toprule
-    Architecture & params (M) & best loss & BFS final-err & rand mean-err & A* first-div \\
+    Architecture & params (M) & best loss & BFS final-err & A* final-err \\
     \midrule
-    NCA (shared)  & TBD & TBD & TBD & TBD & TBD \\
-    NCA (per-step) & TBD & TBD & TBD & TBD & TBD \\
-    CNN           & TBD & TBD & TBD & TBD & TBD \\
-    U-Net         & TBD & TBD & TBD & TBD & TBD \\
-    ViT           & TBD & TBD & TBD & TBD & TBD \\
+    \textbf{NCA (shared, $T{=}4, n_r{=}T$)} & \textbf{3.07} & \textbf{0.067} & \textbf{3.57\%} & \textbf{3.57\%} \\
+    NCA (per-step, $T{=}4, n_r{=}1$)        & 8.49          & 0.068          & 4.76\%          & 4.76\% \\
+    CNN (4-block ResNet)                    & 5.00          & 0.067          & 8.33\%          & 8.33\% \\
+    U-Net (2 levels)                        & 6.07          & 0.070          & 9.52\%          & 9.52\% \\
+    ViT (4 layers)                          & 3.99          & 0.085          & 11.90\%         & 11.90\% \\
     \bottomrule
   \end{tabular}
 \end{table}
+
+The synthetic-multi-grid setting is the headline comparison: per-state
+memorization is impossible (256 levels per width $\times$ 4 widths
+$=$ 1024 distinct levels share one rule set), so the model has to
+\emph{learn the slide rule}. Three observations: \textbf{(i)} the
+NCA with shared weights wins on BFS rollout error (3.57\%) at the
+fewest parameters (3.07M), beating the same-depth feed-forward CNN
+by $2.3\times$ in error and at $1.6\times$ fewer params;
+\textbf{(ii)} U-Net (9.52\%) and ViT (11.90\%) both underperform
+here as well, with U-Net's hierarchical bias actively losing in this
+discrete-grid regime and ViT's global attention failing to even
+\emph{fit} the train loss (0.085 vs.\ 0.067 for the other four);
+\textbf{(iii)} train loss now does begin to discriminate
+architectures (ViT's 0.085 outlier), but NCA-shared, NCA-per-step,
+and CNN are again indistinguishable on train loss (0.067--0.068)
+despite a $2.3\times$ difference in BFS rollout error --- F3 still
+applies.
 
 \paragraph{(F1) Pool features are load-bearing.}
 A bare $3{\times}3$ convolution can only propagate one cell of context
