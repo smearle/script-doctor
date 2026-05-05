@@ -1,0 +1,68 @@
+\documentclass{article}
+
+\usepackage{neurips_2026}
+
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{hyperref}
+\usepackage{url}
+\usepackage{booktabs}
+\usepackage{amsfonts}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{nicefrac}
+\usepackage{microtype}
+\usepackage{xcolor}
+\usepackage{graphicx}
+
+\title{Rule-Conditioned Neural Cellular Automata as World Models for
+PuzzleScript Games}
+
+\author{%
+  Anonymous \\
+  Affiliation \\
+  \texttt{anonymous@example.com} \\
+}
+
+\begin{document}
+
+\maketitle
+
+\begin{abstract}
+We study learned world models for the PuzzleScript family of grid-based
+puzzle games---a domain with sharply combinatorial dynamics, deterministic
+discrete states, hand-authored rule sets that often induce iterative
+\texttt{again} loops, and dozens of distinct games sharing a common
+substrate. We propose a \emph{rule-conditioned Neural Cellular Automaton}
+(NCA) world model in which a perceiver-style encoder maps each game's
+tokenized rule set to $K$ slot vectors, and a shared local update rule
+applied for $T$ iterations cross-attends to those slots at every step.
+This architecture mirrors the engine's own two-level loop
+(an ordered list of rules applied repeatedly until convergence) and
+generalizes across games at modest scale. We benchmark this model
+against three non-NCA baselines that share the slot encoder but replace
+the iterated local update with a non-iterative spatial body: a deep
+ResNet, a U-Net, and a ViT with global self-attention. The comparison
+isolates the contribution of the iterated-local-update inductive bias
+from the conditioner. We additionally study adaptive halting via
+PonderNet- and convergence-style stopping rules, and characterize a
+ceiling that arises in the multi-grid synthetic-data regime where the
+model can no longer memorize per-state outcomes. We release tooling
+that packages the comparison reproducibly across a fourteen-game
+benchmark.
+\end{abstract}
+
+\input{sections/intro}
+\input{sections/related}
+\input{sections/method}
+\input{sections/experiments}
+\input{sections/results}
+\input{sections/discussion}
+
+\bibliographystyle{plain}
+\bibliography{references}
+
+\appendix
+\input{sections/appendix}
+
+\end{document}

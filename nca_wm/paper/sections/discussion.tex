@@ -1,0 +1,58 @@
+\section{Discussion}
+\label{sec:discussion}
+
+\paragraph{What the iterated local update buys.}
+The architecture comparison in \S\ref{sec:results-baselines}
+isolates one question: holding the conditioner constant, does the
+NCA's iterated-local-update body outperform a non-iterative body?
+Our findings suggest the answer is yes on tasks where the engine's
+\texttt{again} loop produces non-trivial cascade chains, and roughly
+a wash on tasks where one tick of dynamics resolves in a single rule
+firing. The NCA's parameter efficiency is also striking: shared
+weights with $T \cdot n_\ell$ effective depth use the same parameters
+as a one-step model.
+
+\paragraph{Memorization as a confound.}
+A key observation in \S\ref{sec:results-ceiling} is that the
+single-level / single-grid setting allows the model to learn a
+per-state lookup table via cross-attention over rich slot
+representations. ``Pool features substitute for depth'' is the
+single-level reading; ``the model memorizes per-state outcomes'' is
+the multi-level reading of the same architectural configuration.
+Both are real, and disentangling them required the multi-grid
+synthetic-data regime that we describe in \S\ref{sec:results-ceiling}.
+We recommend the multi-grid synth setup as a default check for
+future PuzzleScript world-model work: if your model only succeeds at
+the single-grid setting, you may not be learning the dynamics.
+
+\paragraph{Open: escaping the multi-grid ceiling.}
+Our experiments characterize the ceiling but do not break it. The
+remaining candidate fixes that have not been ruled out are
+(a) hard / sparse rule-slot routing so the model cannot smear
+``fire-once'' across all slots, (b) per-cell halt mechanism so cells
+in their fixed point stop updating, (c) curriculum or replay-buffer
+training that selectively exposes the model to slide-distance
+$\geq 2$ instances, and (d) auxiliary ``is-changing'' mask head
+factoring ``where to fire'' from ``what to write.'' A successful
+break here would close the most important remaining gap between
+authored-data and synthetic-multi-grid performance.
+
+\paragraph{Beyond PuzzleScript.}
+The architecture is not domain-specific. Any deterministic
+discrete-grid simulator with declarative rules (Conway's Game of
+Life and its variants, cellular-automata gas dynamics, Asari-style
+chemical-reaction grids) admits the same modeling pattern: tokenize
+the rules, encode them via the slot encoder, train an NCA body
+shared across iterations. We expect the comparison against
+non-iterative baselines to favor the NCA more strongly as the
+underlying engine's outer-loop iteration count grows.
+
+\paragraph{Limitations.}
+Our slot encoder is level-independent: the slots depend only on the
+game's rule tokens, not on the level's spatial state. This is the
+intended design (one encoded game $\Rightarrow$ many levels) but it
+also caps what the slots can carry. A version where slots can attend
+back into the input grid (perceiver-IO style) would be a natural
+extension. We also restrict to single-step prediction; multi-step
+training (predict $s_{t+k}$ for $k > 1$) is straightforward to add
+and not yet explored.

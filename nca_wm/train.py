@@ -2385,11 +2385,17 @@ def train(
         Stops when no improvement of at least min_delta for ``patience``
         consecutive evaluation windows.
     """
-    # Any encoder-based model (FiLM or rule-attention) counts as "conditional"
-    # for dataset/init-signature purposes.
+    # Any encoder-based model (FiLM, rule-attention, or non-NCA baseline that
+    # reuses the rule-slot encoder) counts as "conditional" for dataset/init-
+    # signature purposes.
     from nca_wm.rule_attn_model import RuleAttnNCAWorldModel
+    from nca_wm.baselines import (
+        CNNWorldModel, UNetWorldModel, ViTWorldModel,
+    )
     conditional = "game_tokens" in dataset and isinstance(
-        model, (ConditionalNCAWorldModel, RuleAttnNCAWorldModel)
+        model,
+        (ConditionalNCAWorldModel, RuleAttnNCAWorldModel,
+         CNNWorldModel, UNetWorldModel, ViTWorldModel),
     )
 
     # Single-game callers (`collect_unique_transitions` directly into train())
@@ -3215,7 +3221,12 @@ def evaluate_multigame(
     max_H = max(g["H"] for g in game_infos)
     max_W = max(g["W"] for g in game_infos)
     from nca_wm.rule_attn_model import RuleAttnNCAWorldModel
-    conditional = isinstance(model, (ConditionalNCAWorldModel, RuleAttnNCAWorldModel))
+    from nca_wm.baselines import CNNWorldModel, UNetWorldModel, ViTWorldModel
+    conditional = isinstance(
+        model,
+        (ConditionalNCAWorldModel, RuleAttnNCAWorldModel,
+         CNNWorldModel, UNetWorldModel, ViTWorldModel),
+    )
     apply_fn = make_apply_fn(model)
 
     # Prepare padded token arrays for conditional eval
@@ -3770,7 +3781,13 @@ def render_multigame_gifs(
     """
     max_H = max(g["H"] for g in game_infos)
     max_W = max(g["W"] for g in game_infos)
-    conditional = isinstance(model, ConditionalNCAWorldModel)
+    from nca_wm.rule_attn_model import RuleAttnNCAWorldModel
+    from nca_wm.baselines import CNNWorldModel, UNetWorldModel, ViTWorldModel
+    conditional = isinstance(
+        model,
+        (ConditionalNCAWorldModel, RuleAttnNCAWorldModel,
+         CNNWorldModel, UNetWorldModel, ViTWorldModel),
+    )
     os.makedirs(save_dir, exist_ok=True)
 
     # Prepare padded token arrays for conditional rendering
@@ -4275,11 +4292,23 @@ def main():
     p.add_argument("--n_enc_layers", type=int, default=2, help="Transformer encoder layers")
     p.add_argument("--n_heads", type=int, default=4, help="Transformer attention heads")
     p.add_argument("--architecture", type=str, default="rule_attn",
-                   choices=["film", "rule_attn"],
-                   help="Conditioning architecture. 'rule_attn' (default) = K "
-                        "slot vectors from perceiver-style encoder; cells "
-                        "cross-attend to slots each NCA step. 'film' = "
-                        "pooled-z FiLM on NCA.")
+                   choices=["film", "rule_attn", "cnn", "unet", "vit"],
+                   help="Spatial-update body. 'rule_attn' (default) = NCA "
+                        "with per-step cross-attention to K rule slots. "
+                        "'film' = NCA with pooled-z FiLM conditioning. "
+                        "Non-NCA baselines (share the rule_attn slot encoder "
+                        "but apply a one-shot body): 'cnn' = deep ResNet, "
+                        "'unet' = 2-level U-Net with bottleneck FiLM, 'vit' "
+                        "= Transformer over flattened cells with slot "
+                        "cross-attn. Baselines do not support --adaptive_halt "
+                        "or --vq_codebook.")
+    p.add_argument("--baseline_n_blocks", type=int, default=4,
+                   help="Number of CNN-baseline residual blocks "
+                        "(--architecture cnn). Param count scales with this.")
+    p.add_argument("--baseline_n_levels", type=int, default=2,
+                   help="Number of U-Net down/up levels (--architecture unet).")
+    p.add_argument("--baseline_n_layers", type=int, default=4,
+                   help="Number of ViT encoder layers (--architecture vit).")
     p.add_argument("--n_slots", type=int, default=16,
                    help="Number of rule slots for --architecture rule_attn.")
     p.add_argument("--d_slot", type=int, default=64,
@@ -4541,6 +4570,16 @@ def main():
     if args.train_levels:
         parsed_train_levels = [int(x) for x in args.train_levels.split(",") if x.strip()]
 
+    BASELINE_ARCHS = {"cnn", "unet", "vit"}
+    if args.architecture in BASELINE_ARCHS:
+        if not args.conditional:
+            p.error(f"--architecture {args.architecture} requires --conditional "
+                    "(baselines reuse the rule_attn slot encoder)")
+        if args.vq_codebook:
+            p.error(f"--vq_codebook is not supported with --architecture {args.architecture}")
+        if args.adaptive_halt:
+            p.error(f"--adaptive_halt is not supported with --architecture {args.architecture} "
+                    "(no iteration → no halt semantics)")
     if args.vq_codebook and args.architecture != "rule_attn":
         p.error("--vq_codebook is only supported with --architecture rule_attn")
     if args.vq_codebook and not args.conditional:
@@ -4813,6 +4852,39 @@ def main():
                     adaptive_halt=args.adaptive_halt,
                     mask_hidden=args.mask_hidden,
                 )
+            elif args.architecture in ("cnn", "unet", "vit"):
+                from nca_wm.baselines import (
+                    CNNWorldModel, UNetWorldModel, ViTWorldModel,
+                )
+                shared_kw = dict(
+                    n_hid=args.n_hid, n_out=max_C,
+                    vocab_size=vocab_size + 1,
+                    enc_d_model=args.d_model, enc_n_self_layers=args.n_enc_layers,
+                    n_slots=args.n_slots, n_app_slots=args.n_app_slots,
+                    d_slot=args.d_slot,
+                    n_attn_heads=args.n_heads,
+                    max_seq_len=max_tok_len + 1,
+                    mask_hidden=args.mask_hidden,
+                )
+                if args.architecture == "cnn":
+                    model = CNNWorldModel(
+                        n_blocks=args.baseline_n_blocks,
+                        axis_pool=pool_kwargs.get("axis_pool", False),
+                        axis_cummax=pool_kwargs.get("axis_cummax", False),
+                        global_pool=pool_kwargs.get("global_pool", False),
+                        **shared_kw,
+                    )
+                elif args.architecture == "unet":
+                    model = UNetWorldModel(
+                        n_levels=args.baseline_n_levels,
+                        **shared_kw,
+                    )
+                else:  # vit
+                    model = ViTWorldModel(
+                        n_layers=args.baseline_n_layers,
+                        n_heads=args.n_heads,
+                        **shared_kw,
+                    )
             else:  # default: film
                 model = ConditionalNCAWorldModel(
                     n_hid=args.n_hid, n_steps=args.n_nca_steps, n_out=max_C,

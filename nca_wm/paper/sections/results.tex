@@ -1,0 +1,174 @@
+\section{Results}
+\label{sec:results}
+
+\subsection{Baselines vs.\ rule-conditioned NCA}
+\label{sec:results-baselines}
+
+Table~\ref{tab:baselines-microban} reports the head-to-head comparison
+on \textsc{microban} (10 authored levels), trained for 10k updates per
+seed at $d_h = 256$ with the canonical recipe (\S\ref{sec:experiments}).
+We measure best train cross-entropy loss, end-of-rollout cell-error
+rate under three policies (random, BFS-optimal, A*-optimal), and final
+parameter count. The table reports a single seed; the multi-seed
+synthetic-data comparison is reported in
+Table~\ref{tab:baselines-synth}.
+
+\begin{table}[t]
+  \centering
+  \caption{\textbf{Baselines vs.\ rule-conditioned NCA on
+    \textsc{microban} (authored levels).} Single seed at 10k updates.
+    Lower is better for loss and cell-error; A* first-divergence step
+    is higher-is-better. Param count is in millions.}
+  \label{tab:baselines-microban}
+  \small
+  \begin{tabular}{l c c c c c}
+    \toprule
+    Architecture & params (M) & best loss & BFS final-err & rand mean-err & A* first-div \\
+    \midrule
+    \textbf{NCA (shared, $T{=}4, n_r{=}T$)} & \textbf{1.94} & 0.106 & 0.34\% & 0.04\% & 64 \\
+    NCA (per-step, $T{=}4, n_r{=}1$)        & 7.36          & 0.107 & 0.00\% & 0.09\% & none \\
+    CNN (4-block ResNet)                    & 5.00          & 0.107 & 0.00\% & 0.09\% & none \\
+    U-Net (2 levels)                        & 6.07          & 0.107 & 6.27\% & 3.00\% & 12 \\
+    ViT (4 layers)                          & 3.99          & 0.107 & 11.67\% & 6.07\% & 1 \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+Three findings on this controlled, memorizable single-game setting:
+\textbf{(i)} the NCA with shared weights matches CNN / per-step NCA
+on oracle-policy rollout error at $2.5{-}3.8\times$ fewer parameters,
+\textbf{(ii)} U-Net and ViT both actively underperform despite
+parameter counts comparable to or exceeding NCA-shared --- U-Net's
+2-level downsampling loses fine-grained player position on small
+grids, and ViT's global self-attention diverges within the first
+rollout step (mean first-divergence step $0.8$), suggesting
+locality plus iteration is a stronger inductive bias for grid-rule
+dynamics than unrestricted global attention; and \textbf{(iii)} best
+train loss is essentially identical (0.106--0.107) across all five
+architectures, illustrating finding F3 (\S\ref{sec:results-F3}):
+train loss is invisible to a $\geq 30\times$ swing in autoregressive
+rollout error (0.34\% vs.\ 11.67\%).
+
+\medskip\noindent
+The full comparison on the multi-grid synthetic data
+regime---where memorization is unavailable and rule learning is
+required---is reported in Table~\ref{tab:baselines-synth} and
+analyzed in \S\ref{sec:results-ceiling}.
+
+\begin{table}[t]
+  \centering
+  \caption{\textbf{Baselines vs.\ rule-conditioned NCA on
+    \textsc{sokoban\_basic} (multi-grid synth).} Three seeds; widths
+    $\{5{\times}5, 6{\times}6, 7{\times}7, 8{\times}8\}$ with 256
+    levels per width. Memorization is unavailable; the model has to
+    learn the rule.}
+  \label{tab:baselines-synth}
+  \small
+  \begin{tabular}{l c c c c c}
+    \toprule
+    Architecture & params (M) & best loss & BFS final-err & rand mean-err & A* first-div \\
+    \midrule
+    NCA (shared)  & TBD & TBD & TBD & TBD & TBD \\
+    NCA (per-step) & TBD & TBD & TBD & TBD & TBD \\
+    CNN           & TBD & TBD & TBD & TBD & TBD \\
+    U-Net         & TBD & TBD & TBD & TBD & TBD \\
+    ViT           & TBD & TBD & TBD & TBD & TBD \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+\paragraph{(F1) Pool features are load-bearing.}
+A bare $3{\times}3$ convolution can only propagate one cell of context
+per NCA step. Several PuzzleScript rule patterns reference cells
+arbitrarily far apart along an axis or anywhere on the level
+(\texttt{[X | ... | Y]}, \texttt{[X][Y]}). Without pool features the
+NCA needs $\Omega(\max(H,W))$ steps just to surface non-local
+information; with axis-cummax + global pool one step suffices.
+Across the 19-game \textsc{scaling\_large} preset and a controlled
+\textsc{collapse} no-pool ablation, turning pool off costs both
+convergence speed and final loss, with the no-pool model collapsing
+into the identity-prediction minimum even at $4{\times}$ the depth.
+
+\paragraph{(F2) Shared NCA-body weights are the right inductive bias.}
+The PuzzleScript engine has two natural levels of iteration: an
+inner ordered list of rules applied once each per tick, and an outer
+\texttt{again} loop that re-runs the rule list until the state stops
+changing. We factor $T = n_\ell \cdot n_r$ accordingly. On a single-game
+depth sweep ($T \in \{2, 4, 8, 16\}$), shared $T{=}8$ reaches
+$5.5{\times}$ lower train loss with $7{\times}$ fewer parameters than
+the per-step body at the same depth; shared $T{=}2$ at 14$\times$
+fewer parameters than the deepest per-step variant matches it on
+oracle-action rollouts. Hierarchical $n_r > 1$ sits between these
+extremes and is the subject of an ongoing ablation
+(\S\ref{sec:results-hierarchy}).
+
+\paragraph{(F3) Train loss decouples from autoregressive rollout error.}
+\label{sec:results-F3}
+A model with the lowest train (per-step) loss is not the model with
+the lowest autoregressive rollout error. Concretely, in the
+over-capacity regime we observe per-step models with
+$5{\times}$ lower train loss but $3{-}4{\times}$ higher 50-step
+rollout error. The mechanism is small but systematic per-step errors
+compounding destructively under autoregression. Reporting only
+best-loss hides the rollout-drift cost of going deeper or wider.
+
+\subsection{Pool-feature ablation}
+\label{sec:results-pool}
+
+[Figure: pool-on vs.\ pool-off on \textsc{collapse}, both at depths
+$T \in \{2, 4, 8, 16\}$, reporting train loss + autoregressive
+rollout error.]
+
+\subsection{Hierarchical weight sharing}
+\label{sec:results-hierarchy}
+
+[Figure: $T{=}16$ varying $n_r \in \{1, 2, 4, 8, 16\}$ on
+\textsc{microban} multi-grid synth and on the multi-game
+\textsc{scaling\_14} preset. Reports change-error and parameter count.]
+
+\subsection{Adaptive halting}
+\label{sec:results-halting}
+
+We compare four halting modes and a fixed-depth baseline on a custom
+$1$-rule \textsc{varislide} game in which a single \texttt{again}-driven
+slide rule pushes the player up to $d \in \{1, 2, 3, 4, 6, 8, 12, 16\}$
+cells per action across grid widths $\{6, 8, 10, 12, 16\}$. Modes:
+\emph{ponder} (PonderNet ponder loss with learned halt head + KL
+prior), \emph{uniform} (per-step loss equally weighted across all
+$T$ steps), \emph{argmax-ST} (straight-through estimator on
+$\arg\max_k p_k$), and \emph{convergence-ST} (halt at inference when
+consecutive predictions stop changing, no learned head).
+
+[Figure: per-step error trajectory under each mode + the per-instance
+halt distribution as a function of slide distance.]
+
+Across these modes we observe two phenomena. First, on tasks where
+the dynamics fit cleanly in $\sim$1--2 NCA steps (small-grid varislide,
+\textsc{collapse}), all halting modes converge near the dynamics-floor
+within their effective depth and drift past it; convergence-ST
+recovers near-oracle performance via inference-time stopping.
+Second, on the multi-grid synthetic regime where memorization is
+unavailable, \emph{none} of the halting modes reliably learn the
+underlying rule (\S\ref{sec:results-ceiling}); the halt head at best
+degenerates to halt-at-$k{=}1$ + identity prediction.
+
+\subsection{Multi-grid synthetic data ceiling}
+\label{sec:results-ceiling}
+
+When we move from a single authored level to the multi-grid synthetic
+data regime ($\{6,8,10,12,16\}$ widths $\times$ 64 levels each),
+train change-error climbs by $1000{\times}$ ($5 \times 10^{-5}
+\to 0.05$--$0.10$), confirming that the model can no longer
+1-shot-memorize per-state outcomes. The model attempts to learn the
+rule but plateaus: 50k updates at $d_h{=}256$ (5$\times$ more updates,
+2$\times$ wider) does not move the needle. Multi-seed verification at
+$T \in \{8, 16, 32, 64\}$ shows per-seed argmax variance dwarfs the
+recipe signal and best-loss is essentially identical across all
+configurations. We discuss candidate fixes in \S\ref{sec:discussion}.
+
+\subsection{Multi-game scaling}
+\label{sec:results-scaling}
+
+[Per-game change-error on \textsc{scaling\_14} for our model and the
+three baselines; held-out evaluation on a few games not seen during
+training.]

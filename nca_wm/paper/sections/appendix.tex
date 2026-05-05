@@ -1,0 +1,29 @@
+\section{Implementation details}
+\label{app:impl}
+
+\subsection{Model construction}
+
+All models are implemented in JAX/Flax with the Adam optimizer. The
+slot encoder is identical across architectures (see
+\S\ref{sec:method}). The hidden grid dimension $d_h$, the cell
+update structure, and the readout heads are also shared. A single
+\texttt{--architecture} flag selects the spatial-update body
+($\texttt{rule\_attn}$, $\texttt{cnn}$, $\texttt{unet}$, $\texttt{vit}$).
+
+\subsection{Tokenization}
+
+Each game's tokenized representation is a sequence of integers from
+a $\sim$140-symbol vocabulary covering: object names, layer
+references, rule operators, action types, the 5$\times$5 sprite RGBA
+values when sprite tokens are enabled, and per-rule kernel
+separators. A single token sequence per game serves as the encoder
+input.
+
+\subsection{Reproducibility}
+
+The codebase, dataset caches, training launchers, and result
+aggregators are released alongside the paper. Each run is reproduced
+end-to-end by re-running its launcher (\texttt{nca\_wm/scripts/run\_*.sh})
+on the same hardware (single 24~GB consumer GPU). The full
+experimental log is in \texttt{nca\_wm/SCALING\_RESULTS.md} and
+\texttt{nca\_wm/ARCHITECTURE\_REPORT.md} in the released code.

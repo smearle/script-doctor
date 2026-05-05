@@ -1,0 +1,82 @@
+\section{Experimental setup}
+\label{sec:experiments}
+
+\subsection{Data}
+
+We collect $(s_t, a_t, s_{t+1}, w_{t+1})$ transitions for each game by
+running the C++ PuzzleScript engine under bounded A* search from each
+authored level. Each transition is cached on disk (bit-packed for
+roughly 8$\times$ compression) and re-used across runs. For
+multi-game training we draw batches with one share per game per step
+(\emph{balanced sampling}), which compensates for per-game dataset-size
+imbalance.
+
+\paragraph{Synthetic levels.}
+For ablations and held-out evaluations we additionally generate
+synthetic levels by sampling tile-pattern distributions from each
+game's authored levels and validating each candidate by running the
+engine to confirm the level is solvable and exposes a non-trivial
+state space (more details in the appendix). The validated synthetic
+recipe (per-game sizes, fallback dynamics, multi-grid widths) is what
+allowed our model to match the authored-data baseline on the
+\textsc{nekopuzzle} game without overfitting to grid-size artifacts.
+
+\subsection{Game suites}
+
+We evaluate on three suites of increasing breadth:
+
+\begin{itemize}
+  \item \textbf{Single-game} (\textsc{microban}, 10 authored levels):
+    classic chained Sokoban pushing on small grids. Used for
+    architecture ablations where dynamics complexity is fully
+    controlled.
+  \item \textbf{Single-game / synthetic-multi-grid}
+    (\textsc{sokoban\_basic}): a controlled stress test in which the
+    model is trained on synthetic levels of multiple grid sizes
+    $\{5{\times}5, 6{\times}6, 7{\times}7, 8{\times}8\}$ and evaluated
+    on the same. The diversity prevents per-state memorization and
+    forces the model to learn the underlying rule.
+  \item \textbf{Multi-game} (\textsc{scaling\_14}): a fourteen-game
+    benchmark including chained pushing, gravity, light beams,
+    multi-character control, and several \texttt{again}-driven
+    simulations. Per-game grid sizes range from $4{\times}4$ to
+    $32{\times}24$.
+\end{itemize}
+
+\subsection{Architectures and hyper-parameters}
+
+All models share the same input embedding (Dense over
+$(s_t \,\|\, \mathrm{onehot}(a_t))$) and readout heads. The slot
+encoder is identical across architectures: $K{=}16$ slots, $d{=}64$
+slot dim, two self-attention layers over tokens, four heads.
+
+The NCA uses $T{=}4$ NCA steps with $n_r{=}T$ (single shared layer
+applied $T$ times), $d_h{=}256$, full pool features, input-skip on,
+optional padding mask for multi-grid. The CNN baseline uses
+$n_b{=}4$ residual blocks; the U-Net uses 2 levels of down/up
+sampling with bottleneck FiLM; the ViT uses $n_v{=}4$ layers, four
+heads. We report parameter count alongside every metric so the
+comparison is honest.
+
+Training: Adam, learning rate $3 \times 10^{-4}$ with cosine decay
+to $10^{-7}$, gradient clipping at global norm $0.5$, batch size 32,
+\emph{change-loss-weight} $5.0$ (per-cell BCE upweighted on cells
+that change between $t$ and $t+1$), and patience-based early stop on
+the change-accuracy metric. Each run is replicated with three random
+seeds.
+
+\subsection{Evaluation}
+
+We report two complementary metrics:
+\begin{itemize}
+  \item \textbf{One-step change-error}: the per-cell BCE-thresholded
+    error rate on the cells that change between $s_t$ and $s_{t+1}$,
+    measured under teacher forcing on the held-out portion of each
+    cache.
+  \item \textbf{Autoregressive rollout error}: the same per-cell error
+    averaged over a 50-step rollout from each level's start state,
+    under three policies: random actions, BFS-optimal, and A*-optimal.
+\end{itemize}
+Per finding F3 in our architecture report~(\S\ref{sec:results}), train
+loss decouples from autoregressive rollout error in the
+over-capacity regime; reporting both is essential.

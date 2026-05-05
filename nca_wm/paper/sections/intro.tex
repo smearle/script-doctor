@@ -1,0 +1,72 @@
+\section{Introduction}
+\label{sec:intro}
+
+Learned world models have been studied across pixel-based video-game
+benchmarks (Atari, ALE, MuJoCo image observations) and procedurally
+generated environments. The standard recipe pairs a high-capacity
+encoder--decoder---typically a CNN, U-Net, or recently a video
+Transformer---with an action-conditioned dynamics module that predicts
+the next observation given the current observation and an action. These
+architectures excel when the underlying state is high-dimensional and
+the dynamics are smooth in pixel space.
+
+PuzzleScript games are a different regime. Each game is fully
+specified by a short text file describing object kinds, layered grid
+levels, and a list of declarative rules of the form
+\texttt{[ Player | Crate ] -> [ | Player Crate ]}. The engine evaluates
+these rules in order on the grid at every tick, with \texttt{again}
+rules causing the rule list to be re-evaluated until the state stops
+changing. The state is therefore a \emph{discrete multi-channel grid},
+the dynamics are \emph{deterministic and combinatorial}, and the
+``hard'' computation per tick is a sequence of small local updates
+applied repeatedly. Pixel-style world models do not match this
+substrate well: they spend capacity modeling continuous-valued tile
+appearance, lack any inductive bias toward local rule application, and
+cannot easily share parameters across the engine's outer
+\texttt{again} loop.
+
+We propose a different architecture: a \emph{rule-conditioned Neural
+Cellular Automaton} (NCA) world model. A perceiver-style encoder maps
+the tokenized game spec to $K$ slot vectors representing rule
+embeddings; the dynamics body is a single local update layer applied
+for $T$ iterations on a hidden grid, with cells cross-attending to
+those slots at every step. The same body parameters are reused across
+iterations, mirroring the engine's outer loop, while the slot encoder
+provides per-game conditioning that makes the model game-agnostic.
+
+\paragraph{Contributions.}
+\begin{enumerate}
+  \item A rule-conditioned NCA world model that learns multi-game
+        dynamics for PuzzleScript with a single shared local update
+        rule, conditioned via cross-attention on perceiver-style slots
+        encoding the game's rule set.
+  \item A controlled comparison against non-NCA baselines (CNN, U-Net,
+        ViT) that share the rule-slot encoder but differ in the
+        spatial-update body. The comparison isolates the contribution
+        of the iterated-local-update inductive bias.
+  \item Empirical analyses of three architectural axes that the NCA
+        couples by design but which can be ablated independently:
+        global pooling features (axial / cumulative max / global max),
+        weight sharing across NCA steps (a hierarchical
+        $n_{\text{layers}} \times n_{\text{repeats}}$ factorization),
+        and adaptive halting (PonderNet-style learned halt vs.\
+        convergence-based stopping).
+  \item A characterization of an architectural ceiling on the
+        multi-grid synthetic-data regime, where the model loses the
+        per-state memorization shortcut and is forced to learn
+        transferable rule application. Our experiments suggest current
+        rule-conditioned NCAs do not reliably escape this ceiling
+        without additional supervision; we discuss candidate
+        interventions.
+\end{enumerate}
+
+\paragraph{Why baselines from a different family.}
+Reviewers of NCA papers often (rightly) ask whether the same task could
+be solved by an off-the-shelf grid-to-grid architecture without the
+recurrence. Our baselines are designed to answer exactly that: each
+shares the rule-slot encoder verbatim with our model, so the
+comparison isolates the spatial-update body, not the conditioner. The
+CNN baseline tests whether iteration is necessary at all; the U-Net
+baseline tests whether multi-scale hierarchy with skips is a better
+substitute for repeated local updates; the ViT baseline tests whether
+unrestricted global attention beats locality plus iteration.
