@@ -19,6 +19,41 @@ values when sprite tokens are enabled, and per-rule kernel
 separators. A single token sequence per game serves as the encoder
 input.
 
+\subsection{Per-game \textsc{scaling\_14} breakdown}
+\label{app:per-game}
+
+Figure~\ref{fig:per-game-heatmap} shows the per-game BFS final
+cell-error on \textsc{scaling\_14}, averaged over each game's authored
+levels. Three observations beyond the aggregate numbers in
+Table~\ref{tab:baselines-scaling14}:
+
+\begin{itemize}
+  \item \textsc{Travelling\_salesman} is hardest for every architecture
+    (NCA-perstep best at 38\%); the rule set encodes an NP-hard
+    combinatorial problem that no single-step world model is
+    expected to solve perfectly.
+  \item Several games (\textsc{nekopuzzle}, \textsc{notsnake},
+    \textsc{sokoban\_basic}, \textsc{blocks}) are fit to zero error
+    by the NCA family but fail badly for U-Net (10--25\%) and ViT
+    (1--33\%). The architecture gap is consistent across diverse
+    rule sets, not an averaged-out artifact.
+  \item \textsc{scriptcross} is a clean ViT-failure case (71\% error
+    vs.\ 11--15\% for the rest), illustrating the structural
+    mismatch we discussed in \S\ref{sec:results-scaling}.
+\end{itemize}
+
+\begin{figure}[t]
+  \centering
+  \includegraphics[width=0.95\linewidth]{../figures/baseline_comparison/scaling_14_per_game_heatmap.pdf}
+  \caption{\textbf{Per-game BFS final cell-error on
+    \textsc{scaling\_14}.} Rows are games (sorted by NCA-shared error,
+    ascending); columns are architectures. Single seed at 20k updates.
+    Both NCA variants beat the three non-NCA baselines on the vast
+    majority of games; ViT is the only architecture with a
+    catastrophic failure on a small game (\textsc{scriptcross}).}
+  \label{fig:per-game-heatmap}
+\end{figure}
+
 \subsection{Reproducibility}
 
 The codebase, dataset caches, training launchers, and result
