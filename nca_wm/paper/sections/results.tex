@@ -99,9 +99,9 @@ We decompose the NCA-shared advantage on the multi-grid synth setting
 (Table~\ref{tab:baselines-synth}) by individually disabling each
 component of the pool stack and the input-skip connection. Every
 NCA step in the full recipe sees three flavours of broadcast
-non-local features --- axis max-pool (row + column max), axis
+non-local features---axis max-pool (row + column max), axis
 cumulative max (directional prefix-max in each of four directions),
-and grid-wide global max --- plus a re-injection of the embedded
+and grid-wide global max---plus a re-injection of the embedded
 $(s_t, a_t)$ at every step.
 
 \begin{table}[t]
@@ -135,9 +135,9 @@ $(s_t, a_t)$ at every step.
 it alone is as bad as removing all three pool flavours combined
 ($+145\%$ relative BFS error in both cases), indicating that
 grid-wide presence-of-X signals are doing all the non-local work on
-this task. \emph{Axis-cummax} --- the directional prefix-max designed
+this task. \emph{Axis-cummax}---the directional prefix-max designed
 for axis-aligned ``rule fires once X is in the same row/column as
-Y'' patterns --- contributes nothing measurable on
+Y'' patterns---contributes nothing measurable on
 \textsc{sokoban\_basic}: the Sokoban push rule
 \texttt{[ > Player | Crate ] -> [ > Player | > Crate ]} depends only
 on the immediate $3{\times}3$ neighbourhood, not on a directional
@@ -244,8 +244,8 @@ diversity, not the encoder alone.} On \textsc{Heldout-30} the Train-14
 conditional model still fails catastrophically ($16.4\%$ step-1
 cell-error, $7\times$ worse than identity), barely better than
 unconditional ($19.6\%$). With $14\times$ more rule diversity the
-\textsc{Train-199} conditional model drops to $4.8\%$ at step 1 ---
-within $2.5$pp of the identity baseline --- and matches or beats
+\textsc{Train-199} conditional model drops to $4.8\%$ at step 1---%
+within $2.5$pp of the identity baseline---and matches or beats
 identity on $9 / 29$ held-out games. The headline rule-conditional
 contribution to OOD generalization is \emph{driven primarily by
 broad-corpus rule diversity} rather than by the encoder architecture

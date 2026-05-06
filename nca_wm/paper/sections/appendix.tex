@@ -92,7 +92,7 @@ the released code.
 
 To check how architecture choice interacts with game type, we train
 one model per (game, architecture-bucket) cell on five games covering
-distinct mechanic classes ---
+distinct mechanic classes---%
 \textsc{Microban} (single-step Sokoban-style box pushing: PuzzleScript's
 basic push rule applies force to the cell directly in front of the
 player, so a row of two boxes is \emph{not} chained-pushed by a single
@@ -101,7 +101,7 @@ action),
 projectile travel),
 \textsc{Bouncers} (non-axis-aligned looping projectile),
 \textsc{nekopuzzle} (restricted-orientation movement), and
-\textsc{Travelling\_salesman} (multi-bracket all-pairs) --- against
+\textsc{Travelling\_salesman} (multi-bracket all-pairs)---against
 four architecture buckets at $T{=}8$:
 (A) pool ON, shared ($n_r{=}T$);
 (B) pool ON, per-step ($n_r{=}1$);
@@ -145,7 +145,7 @@ buckets converge to within $1\%$ of the same train loss
 ($1.70\times 10^{-3}$ to $1.72\times 10^{-3}$), yet L0 BFS cell-error
 splits $0\% / 0\% / 26.9\% / 45.1\%$ across buckets D / C / B / A.
 Bucket~A's L0 rollout is in fact \emph{worse} at 50k than at 15k
-($45.1\%$ vs.\ $24.0\%$) despite a $68\times$ lower train loss ---
+($45.1\%$ vs.\ $24.0\%$) despite a $68\times$ lower train loss---%
 additional optimisation on a per-step minimum that compounds
 destructively under autoregressive feedback. Buckets~C and D, which
 replace global pool features with input-skip re-injection, converge to
@@ -156,7 +156,7 @@ auto-regressive feedback.
 \paragraph{Held-out gap and the synth-data prediction.}
 Held-out cell-error (right panel of Fig.~\ref{fig:per-game-arch-heatmap})
 remains substantial across every cell ($7.3\%$--$56.8\%$). This is the
-\emph{within-game} OOD-levels axis --- a complementary, lesser form of
+\emph{within-game} OOD-levels axis---a complementary, lesser form of
 generalization than the OOD-rules / latent-sampling / inverse-fit
 results in Appendix~\ref{app:ood}. Prior single-game work strongly
 predicts that synthetic levels close most of this gap: training
@@ -214,7 +214,7 @@ weighting, no union-greedy selection) as a side-by-side ablation
 column in Table~\ref{tab:within-game-synth}. The pre-registered
 prediction follows in \S\ref{app:within-game-prediction}. If pure
 synth fails on a game we fall back to seeding from one or a handful
-of authored levels alongside synth --- a lesser form of within-game
+of authored levels alongside synth---a lesser form of within-game
 generalization that still tests few-shot extrapolation.
 % Internal pointers (paths kept as comments for the reproducibility
 % supplement; they reference deanonymised tooling, so they should not
@@ -375,8 +375,8 @@ information. The per-feature ablation in
 Table~\ref{tab:ablation-pool} isolates which pool flavour does the
 work: removing global-pool alone is as costly as removing all three
 ($+145\%$ relative BFS error), while removing axis-cummax has no
-measurable effect on \textsc{sokoban\_basic} (its target patterns ---
-axis-aligned \texttt{[X | ... | Y]} matches --- do not appear in
+measurable effect on \textsc{sokoban\_basic} (its target patterns---%
+axis-aligned \texttt{[X | ... | Y]} matches---do not appear in
 that game's rule set). On a 19-game gallery preset and a controlled
 \textsc{collapse} no-pool ablation, turning pool off costs both
 convergence speed and final loss, with the no-pool model collapsing
@@ -473,7 +473,7 @@ observed transitions.
 
 For each held-out game we encode its tokens through the trained
 encoder, compute cosine distance to every training game's encoded
-slot, and report the smallest of those distances --- the distance
+slot, and report the smallest of those distances---the distance
 to the held-out game's \emph{nearest training-game neighbour} in
 slot space. We use the flattened
 $K \cdot d_{\text{slot}} = 1024$-dim slot vector, and the median
@@ -484,12 +484,12 @@ We treat this as a \emph{diagnostic}, not a quality metric. A
 distance of zero is collapse, not perfect transfer (the held-out
 game has been mapped onto an existing training point). A large
 distance is off-manifold, also bad. The number is also naturally
-expected to shrink as the training preset grows --- with more
+expected to shrink as the training preset grows---with more
 games the chance that some training game lies near any given
 held-out target rises mechanically, independent of representation
-quality. Predictive OoD performance --- per-cell error of the dynamics model
+quality. Predictive OoD performance---per-cell error of the dynamics model
 on the held-out set's authored-level transitions, against an
-identity baseline --- is the load-bearing claim for unseen-game
+identity baseline---is the load-bearing claim for unseen-game
 generalization; the geometry numbers below are reported only for
 context.
 
@@ -524,7 +524,7 @@ because of the diagnostic caveats above we do not read this as
 evidence the decoder objective improves transfer; it could equally
 indicate decoder-induced collapse onto training neighbours.
 Whether those neighbours are \emph{mechanically} related to the
-held-out target is a separate question --- two example matches in
+held-out target is a separate question---two example matches in
 \S\ref{app:inverse-fit} suggest the geometry is not pure
 collapse, but we have not enumerated the relation across the full
 held-out set.
@@ -579,7 +579,7 @@ transitions, for 2{,}000 Adam steps at $\text{lr} = 5 \times 10^{-3}$
 with batch size 32. Targets are drawn from the deduped pool and
 verified disjoint from training by name and by token-hash. After
 fitting, we report the cosine distance from the recovered $z$ to
-its nearest training-game slot --- ``nearest train'' in
+its nearest training-game slot---``nearest train'' in
 Table~\ref{tab:inverse-fit} means the closest training-game slot in
 the flattened-slot space, not a comparison against a held-out
 reference encoding of the target.
