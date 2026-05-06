@@ -97,7 +97,11 @@ def _build_model(cfg: dict, game_infos: list[dict]):
     if not cfg.get("conditional", False):
         return NCAWorldModel(
             n_hid=cfg["n_hid"], n_steps=cfg["n_nca_steps"],
-            n_out=max_C, **pool_kwargs,
+            n_out=max_C,
+            use_layernorm=cfg.get("use_layernorm", False),
+            input_skip=cfg.get("input_skip", True),
+            n_repeats=cfg.get("n_nca_repeats", 1),
+            **pool_kwargs,
         )
     arch = cfg.get("architecture", "film")
     if arch == "rule_attn":

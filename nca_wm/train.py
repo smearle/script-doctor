@@ -1491,16 +1491,27 @@ def _pool_features(h, *, axis_pool: bool, axis_cummax: bool, global_pool: bool):
 
 
 class NCAWorldModel(nn.Module):
-    """Neural Cellular Automaton world model.
+    """Neural Cellular Automaton world model (unconditional).
 
-    Given multihot state (C, H, W) and a one-hot action (5,), predicts the
-    next multihot state. The action is broadcast spatially and concatenated
-    as extra input channels.
+    Mirrors :class:`RuleAttnNCAWorldModel`'s body structure exactly,
+    minus the slot encoder + cross-attention path. This makes the
+    cond-vs-uncond comparison apples-to-apples on body architecture:
+    both run the same conv → pool-projection → residual-update structure,
+    use the same Dense embed, GELU activation, optional LayerNorm
+    pre-step, and per-step (or weight-shared) layer pattern. The only
+    architectural differences are the encoder and cross-attention.
 
-    The NCA applies `n_steps` shared-weight local update rules (3x3 conv),
-    with skip connections from the input at each step. Optional global-
-    context flags (axis_pool, axis_cummax, global_pool) inject pooled hidden
-    features as extra conv inputs at each step (see ``_pool_features``).
+    Pool features (``axis_pool`` / ``axis_cummax`` / ``global_pool``) are
+    computed from ``h`` and concatenated to the *output* of the 3×3 conv,
+    then projected back to ``n_hid`` via a Dense layer — this is rule_attn's
+    pattern, not the older "concat into conv input" approach. The latter
+    inflates conv input width by ~6× and made gallery-scale grids OOM
+    on 24 GiB cards at param counts that the cond body fits at.
+
+    Padding cells (introduced by per-bucket batching of mixed-size levels)
+    are always masked from the hidden state and the win-pool — the mask
+    is derived from the input itself (real cells have ≥1 channel set;
+    bucket padding is all-zero).
     """
     n_hid: int = 128
     n_steps: int = 4
@@ -1509,10 +1520,17 @@ class NCAWorldModel(nn.Module):
     axis_pool: bool = False
     axis_cummax: bool = False
     global_pool: bool = False
-    # LayerNorm on h between NCA steps. Off by default to keep existing
-    # checkpoints loadable and runs consistent; enable when running deeper
-    # (large n_nca_steps) models to stabilize training.
+    # LayerNorm on h pre-step (mirrors rule_attn). Off by default — enable
+    # when running deeper (large n_nca_steps) models to stabilize training.
     use_layernorm: bool = False
+    # Re-inject the embedded (state, action) at every NCA step. Mirrors
+    # rule_attn's input_skip; consistently helpful at depth ≥ 8 per
+    # ARCHITECTURE_REPORT F4.
+    input_skip: bool = True
+    # Factor `n_steps` into (n_layers × n_repeats) — n_layers distinct
+    # weight sets, each applied n_repeats times. Default n_repeats=1 mirrors
+    # the cond model's per-step body (no weight sharing across steps).
+    n_repeats: int = 1
 
     @nn.compact
     def __call__(self, state, action_onehot):
@@ -1521,83 +1539,114 @@ class NCAWorldModel(nn.Module):
             state: (B, C, H, W) float32 multihot level.
             action_onehot: (B, 5) float32 one-hot action.
         Returns:
-            If return_intermediates is False:
-                (logits, win_logit) where
-                    logits: (B, C, H, W) next-state logits
-                    win_logit: (B,) scalar logit for P(next_state is winning)
-            If return_intermediates is True:
-                (logits, win_logit, intermediates) with per-step hidden / readouts.
+            (logits, win_logit, sprite_logits) where
+              logits: (B, C, H, W) next-state logits
+              win_logit: (B,) scalar logit for P(next_state is winning)
+              sprite_logits: zeros placeholder for tuple-shape parity
+                with ConditionalNCAWorldModel / RuleAttnNCAWorldModel.
         """
         B, C, H, W = state.shape
+        if self.n_steps % self.n_repeats != 0:
+            raise ValueError(
+                f"n_steps ({self.n_steps}) must be divisible by n_repeats "
+                f"({self.n_repeats})"
+            )
+        n_layers = self.n_steps // self.n_repeats
+
         # NHWC for Flax convolutions
         x = state.transpose(0, 2, 3, 1)  # (B, H, W, C)
-
-        # Broadcast action to spatial dims: (B, 5) -> (B, H, W, 5)
         act = action_onehot[:, None, None, :]
         act = jnp.broadcast_to(act, (B, H, W, N_ACTIONS))
-
-        # Input = state channels + action channels
         inp = jnp.concatenate([x, act], axis=-1)  # (B, H, W, C+5)
 
-        # Embed to hidden
-        h = nn.Conv(self.n_hid, (1, 1), padding="SAME", name="embed")(inp)
-        h = nn.relu(h)
+        # 1. Dense embed (mirrors rule_attn)
+        h_inp = nn.Dense(self.n_hid, name="embed")(inp)
+        h = h_inp
 
-        # Shared-weight NCA update steps
-        nca_conv = nn.Conv(self.n_hid, (3, 3), padding="SAME", name="nca_conv")
-        nca_gate = nn.Conv(self.n_hid, (1, 1), padding="SAME", name="nca_gate")
-        readout_conv = nn.Conv(self.n_out, (1, 1), padding="SAME", name="readout")
-        # LayerNorm is shared across NCA steps (one weight set); applied to h
-        # *after* the residual update. Standard trick for stabilising deep
-        # shared-weight RNN-style models.
-        nca_norm = nn.LayerNorm(name="nca_norm") if self.use_layernorm else None
+        # 2. Mask: real cells have ≥1 channel set; padding is all-zero.
+        mask_bcast = (x.sum(axis=-1, keepdims=True) > 0).astype(jnp.float32)
+        h = h * mask_bcast
+
+        # 3. Per-layer modules (n_layers distinct sets, applied n_repeats
+        # times). Mirrors rule_attn's pre-instantiation pattern.
+        step_norm = nn.LayerNorm(name="step_ln") if self.use_layernorm else None
+        convs = [
+            nn.Conv(self.n_hid, kernel_size=(3, 3), padding="SAME",
+                    name=f"conv_{i}")
+            for i in range(n_layers)
+        ]
+        has_pool = self.axis_pool or self.axis_cummax or self.global_pool
+        pool_projs = (
+            [nn.Dense(self.n_hid, name=f"pool_proj_{i}")
+             for i in range(n_layers)]
+            if has_pool else [None] * n_layers
+        )
+        outs = [nn.Dense(self.n_hid, name=f"out_{i}")
+                for i in range(n_layers)]
+
+        readout_layer = nn.Dense(self.n_out, name="readout")
+        win_ln = nn.LayerNorm(name="win_ln")
+        win_out = nn.Dense(1, name="win_out")
 
         hidden_steps = []
         readout_steps = []
 
-        for _ in range(self.n_steps):
-            parts = [h, inp]  # skip connection
-            pool_feats = _pool_features(
-                h,
-                axis_pool=self.axis_pool,
-                axis_cummax=self.axis_cummax,
-                global_pool=self.global_pool,
-            )
-            if pool_feats is not None:
-                parts.append(pool_feats)
-            h_in = jnp.concatenate(parts, axis=-1)
-            dh = nca_conv(h_in)
-            dh = nn.relu(dh)
-            dh = nca_gate(dh)
-            h = h + dh  # residual update
-            h = nn.relu(h)
-            if nca_norm is not None:
-                h = nca_norm(h)
+        for r in range(self.n_repeats):
+            for i in range(n_layers):
+                h_step = step_norm(h) if step_norm is not None else h
+                # (a) Conv on h alone (or [h, h_inp] with input_skip).
+                conv_in = (jnp.concatenate([h_step, h_inp], axis=-1)
+                           if self.input_skip else h_step)
+                h_conv = convs[i](conv_in)
 
-            if self.return_intermediates:
-                hidden_steps.append(h)
-                step_logits = readout_conv(h).transpose(0, 3, 1, 2)
-                readout_steps.append(step_logits)
+                # (b) Pool features from h, concat to conv output, Dense
+                # project back to n_hid (mirrors rule_attn).
+                pool_feats = []
+                if self.axis_pool:
+                    row_max = h.max(axis=2, keepdims=True)
+                    col_max = h.max(axis=1, keepdims=True)
+                    pool_feats.append(jnp.broadcast_to(row_max, h.shape))
+                    pool_feats.append(jnp.broadcast_to(col_max, h.shape))
+                if self.axis_cummax:
+                    row_cummax = jnp.maximum.accumulate(h, axis=2)
+                    col_cummax = jnp.maximum.accumulate(h, axis=1)
+                    pool_feats.append(row_cummax)
+                    pool_feats.append(col_cummax)
+                if self.global_pool:
+                    global_max = h.max(axis=(1, 2), keepdims=True)
+                    pool_feats.append(jnp.broadcast_to(global_max, h.shape))
+                if pool_feats:
+                    pool_cat = jnp.concatenate([h_conv] + pool_feats, axis=-1)
+                    h_conv = pool_projs[i](pool_cat)
 
-        # Final state readout
-        logits = readout_conv(h)
-        logits = logits.transpose(0, 3, 1, 2)
+                # (c) Residual update. No cross-attention path (vs rule_attn).
+                delta = nn.gelu(h_conv)
+                delta = outs[i](delta)
+                h = h + delta
+                h = h * mask_bcast
 
-        # Win-condition head: 1x1 conv -> global mean pool -> MLP -> 1 logit
-        win_feat = nn.Conv(self.n_hid, (1, 1), padding="SAME", name="win_conv")(h)
-        win_feat = nn.relu(win_feat)
-        win_feat = jnp.mean(win_feat, axis=(1, 2))  # (B, n_hid)
-        win_feat = nn.Dense(self.n_hid, name="win_dense")(win_feat)
-        win_feat = nn.relu(win_feat)
-        win_logit = nn.Dense(1, name="win_out")(win_feat)[:, 0]  # (B,)
+                if self.return_intermediates:
+                    hidden_steps.append(h)
+                    step_logits = readout_layer(h).transpose(0, 3, 1, 2)
+                    readout_steps.append(step_logits)
 
-        # No sprite decoder on the unconditional model (no z to condition on).
-        # Return a zeros placeholder to keep the output tuple shape symmetric
-        # with ConditionalNCAWorldModel.
+        # 4. Readout: per-cell next-state logits.
+        logits = readout_layer(h).transpose(0, 3, 1, 2)
+
+        # 5. Win head: mask-weighted pool over real cells, LN, Dense.
+        pooled = (h * mask_bcast).sum(axis=(1, 2)) / jnp.maximum(
+            mask_bcast.sum(axis=(1, 2)), 1.0
+        )
+        pooled = win_ln(pooled)
+        win_logit = win_out(pooled).squeeze(-1)
+
+        # Sprite placeholder for tuple-shape parity.
         sprite_logits = jnp.zeros((B, self.n_out, 5, 5, 4), dtype=jnp.float32)
 
         if self.return_intermediates:
-            return logits, win_logit, sprite_logits, {"hidden": hidden_steps, "readouts": readout_steps}
+            return logits, win_logit, sprite_logits, {
+                "hidden": hidden_steps, "readouts": readout_steps,
+            }
         return logits, win_logit, sprite_logits
 
 
@@ -1944,8 +1993,13 @@ def visualize_nca_step(
       - Final predicted state (rendered)
     """
     # Create model variant that returns intermediates
-    model_viz = NCAWorldModel(n_hid=model.n_hid, n_steps=model.n_steps,
-                              n_out=model.n_out, return_intermediates=True)
+    model_viz = NCAWorldModel(
+        n_hid=model.n_hid, n_steps=model.n_steps, n_out=model.n_out,
+        axis_pool=model.axis_pool, axis_cummax=model.axis_cummax,
+        global_pool=model.global_pool, use_layernorm=model.use_layernorm,
+        input_skip=model.input_skip, n_repeats=model.n_repeats,
+        return_intermediates=True,
+    )
     state_jnp = jnp.array(state_obs[None], dtype=jnp.float32)
     a_oh = jnp.array(np.eye(N_ACTIONS, dtype=np.float32)[action][None])
     logits, _win_logit, _sprite_logits, intermediates = model_viz.apply(params, state_jnp, a_oh)
@@ -3833,9 +3887,12 @@ def _render_rollout_frames(
             return_intermediates=True, **pool_kwargs,
         )
     else:
-        model_viz = NCAWorldModel(n_hid=model.n_hid, n_steps=model.n_steps,
-                                  n_out=model.n_out, return_intermediates=True,
-                                  **pool_kwargs)
+        model_viz = NCAWorldModel(
+            n_hid=model.n_hid, n_steps=model.n_steps, n_out=model.n_out,
+            input_skip=model.input_skip, n_repeats=model.n_repeats,
+            use_layernorm=model.use_layernorm,
+            return_intermediates=True, **pool_kwargs,
+        )
     viz_fn = jax.jit(model_viz.apply)
 
     # Object names for labeling channels (pad with generic names for extra channels)
@@ -5125,8 +5182,12 @@ def main():
                     **pool_kwargs,
                 )
         else:
-            model = NCAWorldModel(n_hid=args.n_hid, n_steps=args.n_nca_steps,
-                                   n_out=max_C, **pool_kwargs)
+            model = NCAWorldModel(
+                n_hid=args.n_hid, n_steps=args.n_nca_steps, n_out=max_C,
+                input_skip=args.input_skip,
+                n_repeats=args.n_nca_repeats,
+                **pool_kwargs,
+            )
 
         if needs_training:
             params, losses, accs, change_accs, final_step = train(
