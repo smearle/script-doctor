@@ -810,12 +810,11 @@ def _dataset_cache_key(
     encode_sprites: bool = False,
     max_transitions_per_game: int | None = None,
     train_levels: list[int] | None = None,
-    use_eos: bool = True,
 ) -> str:
     """Deterministic hash of all args that affect dataset contents."""
     import hashlib
     blob = json.dumps({
-        "format_version": 15,  # v15: optional EOS token at sequence tail
+        "format_version": 16,  # v16: EOS token at sequence tail is mandatory
         "games": sorted(game_names),
         "level": level_i,
         "train_levels": sorted(train_levels) if train_levels is not None else None,
@@ -823,7 +822,6 @@ def _dataset_cache_key(
         "n_search_steps": n_search_steps,
         "search_timeout_ms": search_timeout_ms,
         "encode_sprites": encode_sprites,
-        "use_eos": use_eos,
         "max_transitions_per_game": max_transitions_per_game,
     }, sort_keys=True)
     return hashlib.sha256(blob.encode()).hexdigest()[:16]
@@ -839,7 +837,6 @@ def collect_multigame_dataset(
     encode_sprites: bool = False,
     max_transitions_per_game: int | None = None,
     train_levels: list[int] | None = None,
-    use_eos: bool = True,
 ) -> tuple[dict, list[dict]]:
     """Collect padded transitions from multiple games via search-based unique-transition exploration.
 
@@ -858,7 +855,6 @@ def collect_multigame_dataset(
         encode_sprites=encode_sprites,
         max_transitions_per_game=max_transitions_per_game,
         train_levels=train_levels,
-        use_eos=use_eos,
     )
     merged_cache_dir = os.path.join(ROLLOUT_CACHE_DIR, "_merged")
     dataset_cache = os.path.join(merged_cache_dir, f"dataset_{cache_hash}.npz")
@@ -910,8 +906,7 @@ def collect_multigame_dataset(
         try:
             tree, canonical_ids = get_game_tree_from_js(ps_parser, name)
             token_ids = tokenize_game(tree, canonical_ids,
-                                       encode_sprites=encode_sprites,
-                                       append_eos=use_eos)
+                                       encode_sprites=encode_sprites)
         except Exception as e:
             print(f"  WARNING: tokenization failed ({e}), using empty tokens")
             tree, canonical_ids = None, None
@@ -1175,7 +1170,6 @@ def collect_multigame_dataset_synthetic(
     track_rules_fired: bool = False,
     rule_coverage_weight: float = 0.0,
     coverage_select_topk: bool = False,
-    use_eos: bool = True,
 ) -> tuple[dict, list[dict]]:
     """Synthetic-level variant of collect_multigame_dataset.
 
@@ -1239,7 +1233,6 @@ def collect_multigame_dataset_synthetic(
             token_ids = tokenize_game(
                 tree, canonical_ids,
                 encode_sprites=encode_sprites,
-                append_eos=use_eos,
             )
         except Exception as e:
             print(f"  WARNING: tokenization failed ({e}), using empty tokens")
@@ -4623,12 +4616,6 @@ def main():
                         "game-spec token sequence (uses VOCAB_SIZE_EXT and a "
                         "larger max_seq_len). Required to decode visual games "
                         "from the latent space.")
-    p.add_argument("--use_eos", action=argparse.BooleanOptionalAction, default=True,
-                   help="Append an EOS token at the end of each game's token "
-                        "sequence. The autoregressive decoder gets gradient on "
-                        "predicting EOS at the natural end of content; sampling "
-                        "stops at the first emitted EOS. Without this the "
-                        "decoder rambles past valid content into garbage.")
     p.add_argument("--sprite_loss_weight", type=float, default=0.0,
                    help="Weight on a sprite-decoder MSE loss term. When >0, "
                         "adds a Dense head on z predicting each channel's "
@@ -5067,7 +5054,6 @@ def main():
                     encode_sprites=args.encode_sprites,
                     kernel_sep=getattr(args, "kernel_sep", False),
                     max_transitions_per_game=(args.max_transitions_per_game or None),
-                    use_eos=args.use_eos,
                 )
             else:
                 dataset, game_infos = collect_multigame_dataset(
@@ -5079,7 +5065,6 @@ def main():
                     encode_sprites=args.encode_sprites,
                     max_transitions_per_game=(args.max_transitions_per_game or None),
                     train_levels=parsed_train_levels,
-                    use_eos=args.use_eos,
                 )
             with open(infos_path, "wb") as f:
                 pickle.dump(game_infos, f)

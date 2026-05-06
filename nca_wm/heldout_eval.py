@@ -144,7 +144,6 @@ def _build_model(cfg: dict, game_infos: list[dict]):
 def _build_heldout_game_info(
     name: str, ps_parser, *,
     encode_sprites: bool, kernel_sep: bool,
-    use_eos: bool = False,
 ) -> dict | None:
     backend = CppPuzzleScriptBackend()
     try:
@@ -174,7 +173,6 @@ def _build_heldout_game_info(
         token_ids = tokenize_game(
             tree, canonical_ids,
             encode_sprites=encode_sprites,
-            append_eos=use_eos,
         )
     except Exception as e:
         print(f"  SKIP {name}: tokenize failed ({e})")
@@ -393,7 +391,6 @@ def evaluate_heldout(
     skipped = []
     encode_sprites = cfg.get("encode_sprites", False)
     kernel_sep = cfg.get("kernel_sep", False)
-    use_eos = cfg.get("use_eos", False)
     for name in heldout_games:
         if name in train_game_names and not allow_training_games:
             print(f"  SKIP {name}: in training set, not held-out")
@@ -404,7 +401,6 @@ def evaluate_heldout(
         info = _build_heldout_game_info(
             name, ps_parser,
             encode_sprites=encode_sprites, kernel_sep=kernel_sep,
-            use_eos=use_eos,
         )
         if info is None:
             skipped.append((name, "build_failed"))

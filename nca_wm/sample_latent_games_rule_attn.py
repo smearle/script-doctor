@@ -255,13 +255,10 @@ def main():
     def _decoder_logits(slots, tokens_in):
         return decoder.apply(dec_params, tokens_in, slots, deterministic=True)
 
-    # If the checkpoint was trained with --use_eos, stop AR generation at the
-    # first emitted EOS. Older checkpoints (use_eos absent or False) decode
-    # the full max_len and the caller cleans the tail.
-    eos_id_for_sampling = None
-    if cfg.get("use_eos", False):
-        from nca_wm.tokenize_game import EOS_ID
-        eos_id_for_sampling = EOS_ID
+    # EOS is unconditional in tokenization, so the decoder always learns it
+    # and we always stop AR generation at the first emitted EOS.
+    from nca_wm.tokenize_game import EOS_ID
+    eos_id_for_sampling = EOS_ID
 
     def _decode_batch(slots_batch, max_len):
         # Autoregressive sampling for novel-sample mode (slow, only used on

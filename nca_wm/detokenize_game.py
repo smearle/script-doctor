@@ -635,13 +635,14 @@ def detokenize(
     grammar; it is not guaranteed to be playable (e.g. levels are
     synthetic, sprite palettes are quantized).
     """
-    # Strip BOS/PAD/EOS if present.
+    # Strip BOS/PAD/EOS if present. EOS is mandatory at the tokenized tail,
+    # but tokens may have been further trimmed/cleaned by callers, so handle
+    # PAD trailing too.
     pad = VOCAB["PAD"]
-    eos = VOCAB.get("EOS")
+    eos = VOCAB["EOS"]
     while token_ids and token_ids[0] == pad:
         token_ids = token_ids[1:]
-    while token_ids and (token_ids[-1] == pad
-                         or (eos is not None and token_ids[-1] == eos)):
+    while token_ids and (token_ids[-1] == pad or token_ids[-1] == eos):
         token_ids = token_ids[:-1]
 
     chunks = _split_sections(token_ids)

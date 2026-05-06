@@ -170,9 +170,10 @@ def sample_tokens_from_slots(decoder, params, slots, max_len: int,
         params: trained decoder params.
         slots: (B, K, d_slot) float32.
         eos_id: if given, truncate each row at the first emitted EOS
-            (inclusive) and zero out the rest. Use this when the decoder
-            was trained with `--use_eos`. If None, no truncation is
-            applied — the caller must clean up the trailing tokens.
+            (inclusive) and zero out the rest. EOS is now mandatory in
+            tokenization, so callers normally pass `EOS_ID`. The `None`
+            branch is retained only for diagnostics that want to inspect
+            the decoder's full untruncated output.
     Returns:
         (B, max_len) int32 token sequence.
     """

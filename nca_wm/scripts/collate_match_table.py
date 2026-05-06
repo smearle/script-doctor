@@ -209,7 +209,6 @@ def collate(runs: list[dict]) -> tuple[list[dict], dict, dict]:
             "n_nca_steps": cfg.get("n_nca_steps"),
             "input_skip": cfg.get("input_skip"),
             "encode_sprites": cfg.get("encode_sprites"),
-            "use_eos": cfg.get("use_eos"),
             "token_decoder_loss_weight": cfg.get("token_decoder_loss_weight"),
             "indist_random_n_games": indist.get("random", {}).get("n_games"),
             "indist_random_mean": indist.get("random", {}).get("mean"),
