@@ -3,20 +3,18 @@
 
 \begin{figure}[t]
   \centering
-  \includegraphics[width=\linewidth]{figures/architecture/arch_overview.pdf}
-  \caption{\textbf{Architecture and joint training objective.}
+  \includegraphics[width=\linewidth]{nca_arch_v1.pdf}
+  \caption{\textbf{Rule-conditioned NCA dynamics.}
     A perceiver-style encoder $\mathrm{Enc}_\phi$ maps the tokenized
     PuzzleScript spec to $K{=}16$ slot vectors $z$. The dynamics body
-    is a Neural Cellular Automaton applied for $T{=}20$ shared-weight
-    steps to the embedded state--action $(s_t, a_t)$, with cells
-    cross-attending to $z$ at every step. A causal token decoder
-    $\mathrm{Dec}_\psi$ reconstructs the spec from the same $z$.
-    Training jointly minimizes a per-cell BCE on $s_{t+1}$, a binary
-    win-bit loss, and a token cross-entropy on the decoded spec
-    (see \S\ref{sec:method} for details). Freezing
-    $(\theta, \mathrm{Dec}_\psi)$ and optimizing only $z$ on observed
-    transitions of an unknown game (\S\ref{sec:method-inverse})
-    yields a fitted latent that decodes back to symbolic game code.}
+    embeds the state--action $(s_t, a_t)$ and applies $n_\text{layers}$
+    convolutional layers, with cells cross-attending to $z$ at every
+    layer; this stack is iterated for $n_\text{repeats}$ shared-weight
+    passes to produce $s_{t+1}$ ($T = n_\text{layers} \cdot
+    n_\text{repeats}$). The token decoder used for joint training and
+    inverse fitting (\S\ref{sec:method-inverse}) is omitted from this
+    figure to keep the focus on the per-game and multi-game dynamics
+    modeling that drives our main results.}
   \label{fig:arch-overview}
 \end{figure}
 

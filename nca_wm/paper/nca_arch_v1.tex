@@ -99,7 +99,7 @@ all Crate on Target};
 \node[canvas is zy plane at x=-1.7] (sin) at (0,0)
     {\includegraphics[width=3.6cm,height=3.6cm]{figures/architecture/state_in.png}};
 \path let \p1=(embed-south) in
-    node[font=\large, anchor=north] at (\x1, -2.5cm) {$s_t$};
+    node[font=\large, anchor=north] at (\x1, -2.9cm) {$s_t$};
 
 % --- NCA body: a single RightBandedBox with n_layers bands;
 %     the whole body is iterated n_repeats times (loop arrow below).
@@ -118,7 +118,7 @@ all Crate on Target};
         }
     };
 \path let \p1=(nca-south) in
-    node[font=\small, anchor=north] at (\x1-0.3cm, -2.9cm) {convolutions};
+    node[font=\small\itshape, anchor=north] at (\x1-0.5cm, -2.9cm) {Convolutions};
 
 % Brace + label for n_layers. Mirrored so the apex points UP. Label
 % nudged to the right end of the brace so it does not collide with the
@@ -147,7 +147,7 @@ all Crate on Target};
 \node[canvas is zy plane at x=4.5] (sout) at (0,0)
     {\includegraphics[width=3.6cm,height=3.6cm]{figures/architecture/state_out.png}};
 \path let \p1=(readout-south) in
-    node[font=\large, anchor=north] at (\x1, -2.5cm) {$s_{t+1}$};
+    node[font=\large, anchor=north] at (\x1, -2.9cm) {$s_{t+1}$};
 
 % --- forward connections through dynamics row ---
 % Use -Stealth so the arrowhead lands AT the destination (nca-west /
