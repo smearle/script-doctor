@@ -162,12 +162,24 @@ right-panel gap here is data scarcity, not an architectural ceiling.
 \paragraph{Synth-only $\to$ all-authored generalization (running).}
 \label{app:synth-only}
 The headline within-game-generalization probe replaces each cell's
-authored training set with $K{=}64$ synthetic levels at the game's
-authored max-dim and evaluates on \emph{every} authored level (no L0
-/ heldout split: all authored levels are out of distribution to the
-training set). Recipe (validated post-1fa557d on single-game Sokoban
-$\to$ Microban):
-\texttt{--synthetic\_levels 64 --synthetic\_per\_game\_size
+authored training set with $K{=}128$ synthetic levels generated across
+\emph{all unique authored sizes} of the target game (multi-grid synth)
+and evaluates on \emph{every} authored level (no L0 / heldout split:
+all authored levels are out of distribution to the training set).
+We use \texttt{--synthetic\_multi\_grid} in place of the
+auto-bounding-box \texttt{--synthetic\_per\_game\_size} flag because
+authored sizes are heterogeneous (Microban: 8 unique sizes from
+$6{\times}7$ to $12{\times}12$; Heroes: 12 sizes from $7{\times}7$ to
+$13{\times}13$; TSP: 5 sizes spanning $5{\times}5$ to $20{\times}19$),
+and the bounding-box auto-flag picks a size that few or no authored
+levels actually have, leaving most of the authored distribution
+unrepresented in training; an early Microban smoke at $12{\times}12$
+plateaued at $\sim 8\%$ BFS heldout vs.\ $\sim 1.6\%$ at fixed $w{=}7$
+even with rule-coverage on. Multi-grid splits the $K$ budget evenly
+across authored sizes ($K // n_{\text{sizes}}$ per size) and
+concatenates the per-size synth pools at training time. Recipe
+(validated post-1fa557d on single-game Sokoban $\to$ Microban):
+\texttt{--synthetic\_levels 128 --synthetic\_multi\_grid
 --synthetic\_fallback\_dynamics --synthetic\_no\_a\_count\_max 5
 --synthetic\_mode evolve
 --token\_decoder\_loss\_weight 0.1}, with the same four architecture
@@ -184,7 +196,9 @@ the \emph{union} of rules covered (rather than top-K by individual
 fitness). For small-rule-set games (e.g.\ Sokoban-class) this is a
 no-op; for multi-bracket games (Heroes\_of\_Sokoban,
 Travelling\_salesman) it materially changes which $K$ levels enter
-training. Launcher:
+training. We also report the iterations-only baseline
+($w{=}0$, no \texttt{coverage\_select\_topk}) as a side-by-side
+ablation column in Table~\ref{tab:within-game-synth}. Launcher:
 \texttt{nca\_wm/scripts/run\_per\_game\_arch\_synth\_grid.sh};
 summary via \texttt{summarize\_per\_game\_arch\_grid.py
 --all\_authored\_as\_heldout}; logs land in

@@ -10,10 +10,21 @@
 # held-out for evaluation purposes (use summarize_per_game_arch_grid.py
 # --all-authored-as-heldout).
 #
-# Recipe matches project_synth_recipe.md (validated post-1fa557d), plus
-# rule-coverage-driven evolution (newly wired through train.py CLI):
-#   --synthetic_levels 64
-#   --synthetic_per_game_size
+# Recipe matches project_synth_recipe.md (validated post-1fa557d), plus:
+# (a) --synthetic_multi_grid in place of --synthetic_per_game_size — the
+#     bounding-box max picks a synth size that few authored levels actually
+#     have (e.g. Microban 12×12 vs typical 6–9 wide), causing an ~8% BFS
+#     floor on Microban synth-only training that drops to ~1.6% at fixed
+#     w=7 and is expected to drop further at multi-grid. See
+#     feedback_per_game_size_pitfall.md.
+# (b) Rule-coverage-driven evolution (newly wired through train.py CLI):
+#   --synthetic_track_rules_fired                                  # log + enable below
+#   --synthetic_rule_coverage_weight 100                           # GA fitness += 100 * |new rules fired|
+#   --synthetic_coverage_select_topk                               # greedy union pick at end
+#
+# Full recipe used:
+#   --synthetic_levels 128                  # split as K // n_sizes per cell
+#   --synthetic_multi_grid
 #   --synthetic_fallback_dynamics
 #   --synthetic_no_a_count_max 5
 #   --synthetic_mode evolve --synthetic_evolve_pop_size 24
@@ -21,16 +32,12 @@
 #   --synthetic_require_solvable --synthetic_min_states 5
 #   --synthetic_max_iters_search 1500 --synthetic_timeout_ms_search 400
 #   --token_decoder_loss_weight 0.1
-#   --synthetic_track_rules_fired                                  # log + enable below
-#   --synthetic_rule_coverage_weight 100                           # GA fitness += 100 * |new rules fired|
-#   --synthetic_coverage_select_topk                               # greedy union pick at end
 #
-# The coverage knobs matter most when K (--synthetic_levels) is small
-# relative to the rule-set size — the GA's iterations-only fitness can
-# otherwise pick K near-duplicates of the easiest mechanic. 100 is on
-# the high side; lower it (e.g. 25–50) if you observe the GA losing
-# solvability rate. Cache key encodes the weight, so existing iterations-
-# only caches are not clobbered.
+# The coverage knobs matter most when K-per-size is small relative to the
+# rule-set size — iterations-only fitness can otherwise pick K near-duplicates
+# of the easiest mechanic. Cache key encodes the weight + n_levels, so the
+# baseline-recipe (rc_weight=0) caches written by prewarm_synth_caches.py
+# are kept side-by-side for the appendix comparison.
 #
 # Buckets at fixed n_nca_steps=8 (rule_attn defaults: h=256, K=16, batch=16):
 #   A: pool ON,            shared (n_repeats=8)
@@ -56,7 +63,9 @@ BUCKETS="${BUCKETS:-A B C D}"
 DEPTH="${DEPTH:-8}"
 N_UPDATES="${N_UPDATES:-30000}"
 SEED="${SEED:-0}"
-N_SYNTH="${N_SYNTH:-64}"
+# K=128 gives ≥10 levels per unique authored size on the worst game (Heroes,
+# 12 unique sizes); single-size sokoban_basic-style work used K=64 just fine.
+N_SYNTH="${N_SYNTH:-128}"
 
 COMMON=(
     --conditional --architecture rule_attn
@@ -71,7 +80,7 @@ COMMON=(
     --seed "$SEED"
     # Synth-only training set (no authored level is fed to the model).
     --synthetic_levels "$N_SYNTH"
-    --synthetic_per_game_size
+    --synthetic_multi_grid
     --synthetic_fallback_dynamics
     --synthetic_no_a_count_max 5
     --synthetic_mode evolve
