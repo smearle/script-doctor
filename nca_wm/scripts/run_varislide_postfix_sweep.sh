@@ -28,13 +28,12 @@ mkdir -p "$LOGDIR"
 export JAX_COMPILATION_CACHE_DIR=$REPO/.jax_compile_cache
 mkdir -p "$JAX_COMPILATION_CACHE_DIR"
 
-# Common flags. Keep mask_hidden / mask_padded_loss explicit for clarity even
-# though those are the post-1f59070 defaults.
+# Common flags.
 COMMON=(
     --games varislide
     --conditional --architecture rule_attn
     --n_hid 128 --n_slots 16
-    --mask_hidden --mask_padded_loss
+    
     --change_loss_weight 5.0 --grad_clip 0.5
     --balanced_sampling
     --synthetic_levels 64 --synthetic_multi_grid

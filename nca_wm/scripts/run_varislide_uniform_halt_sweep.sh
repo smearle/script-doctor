@@ -27,7 +27,7 @@ COMMON=(
     --games varislide
     --conditional --architecture rule_attn
     --n_hid 128 --n_slots 16
-    --mask_hidden --mask_padded_loss
+    
     --change_loss_weight 5.0 --grad_clip 0.5
     --balanced_sampling
     --synthetic_levels 64 --synthetic_multi_grid

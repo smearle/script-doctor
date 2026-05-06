@@ -106,12 +106,12 @@ if [ "$WHICH" = "single" ] || [ "$WHICH" = "all" ]; then
         SYNTH="--synthetic_levels 256 --synthetic_per_game_size --synthetic_multi_grid \
             --synthetic_grid_sizes 5x5,6x6,7x7,8x8 \
             --synthetic_fallback_dynamics --synthetic_no_a_count_max 5 \
-            --token_decoder_loss_weight 0.1 --mask_hidden"
+            --token_decoder_loss_weight 0.1 "
     else
         games_tag="microban_authored"
         GAMES="microban"
         N_UPDATES=${N_UPDATES_SINGLE:-10000}
-        SYNTH="--mask_hidden"
+        SYNTH=""
     fi
 
     for seed in $(seq 0 $((N_SEEDS - 1))); do
@@ -152,21 +152,21 @@ if [ "$WHICH" = "multi" ] || [ "$WHICH" = "all" ]; then
     for seed in $(seq 0 $((N_SEEDS - 1))); do
         run_arch "nca_shared" "$seed" "$GAMES" "$N_UPDATES" "$SYNTH" \
             --architecture rule_attn --n_nca_steps 4 --n_nca_repeats 4 --input_skip \
-            --axis_pool --axis_cummax --global_pool --mask_hidden
+            --axis_pool --axis_cummax --global_pool 
 
         run_arch "nca_perstep" "$seed" "$GAMES" "$N_UPDATES" "$SYNTH" \
             --architecture rule_attn --n_nca_steps 4 --n_nca_repeats 1 --input_skip \
-            --axis_pool --axis_cummax --global_pool --mask_hidden
+            --axis_pool --axis_cummax --global_pool 
 
         run_arch "cnn_d4" "$seed" "$GAMES" "$N_UPDATES" "$SYNTH" \
             --architecture cnn --baseline_n_blocks 4 \
-            --axis_pool --axis_cummax --global_pool --mask_hidden
+            --axis_pool --axis_cummax --global_pool 
 
         run_arch "unet_l2" "$seed" "$GAMES" "$N_UPDATES" "$SYNTH" \
-            --architecture unet --baseline_n_levels 2 --mask_hidden
+            --architecture unet --baseline_n_levels 2 
 
         run_arch "vit_l4" "$seed" "$GAMES" "$N_UPDATES" "$SYNTH" \
-            --architecture vit --baseline_n_layers 4 --mask_hidden
+            --architecture vit --baseline_n_layers 4 
     done
     echo "[multi] launched ${N_SEEDS} seeds × 5 architectures = $((N_SEEDS * 5)) runs"
 fi

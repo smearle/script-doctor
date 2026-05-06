@@ -28,8 +28,8 @@ import sys, json, shlex
 cfg = json.load(open(sys.argv[1] + "/config.json"))
 out = []
 # BooleanOptionalAction flags accept --no-X. store_true flags only accept --X.
-BOA = {"conditional","vq_codebook","balanced_sampling","mask_padded_loss",
-       "mask_hidden","axis_pool","axis_cummax","global_pool",
+BOA = {"conditional","vq_codebook","balanced_sampling",
+       "axis_pool","axis_cummax","global_pool",
        "synthetic_require_solvable"}
 ST = {"encode_sprites","use_layernorm","input_skip","adaptive_halt",
       "synthetic_per_game_size","synthetic_multi_grid",
@@ -58,7 +58,7 @@ keys = [
     "n_hid","n_nca_steps","n_nca_repeats","n_slots","n_app_slots","d_slot",
     "d_model","n_enc_layers","n_heads","d_z",
     "axis_pool","axis_cummax","global_pool",
-    "use_layernorm","input_skip","mask_hidden","mask_padded_loss",
+    "use_layernorm","input_skip",
     "adaptive_halt","halt_prior_p","halt_kl_weight","halt_mode",
     "vq_codebook","vq_codebook_size","vq_commitment_weight","vq_loss_weight",
     "token_decoder_loss_weight","decoder_d_model","decoder_n_layers","decoder_n_heads",

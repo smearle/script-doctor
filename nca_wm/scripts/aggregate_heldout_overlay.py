@@ -40,7 +40,6 @@ def load_run_meta(run_dir):
         "arch": cfg.get("architecture", "?"),
         "n_games": n_games,
         "n_updates": cfg.get("n_updates", "?"),
-        "mask_hidden": cfg.get("mask_hidden", False),
         "n_nca_steps": cfg.get("n_nca_steps", "?"),
         "n_nca_repeats": cfg.get("n_nca_repeats", 1),
     }
@@ -84,8 +83,7 @@ def main():
         print("No rows aggregated.", file=sys.stderr)
         sys.exit(1)
 
-    # Sort by n_games then by mask_hidden (False first)
-    rows.sort(key=lambda r: (r["n_games"] or 0, r["mask_hidden"]))
+    rows.sort(key=lambda r: (r["n_games"] or 0))
 
     out_dir = os.path.join(REPO, args.out_dir)
     os.makedirs(out_dir, exist_ok=True)
@@ -96,36 +94,27 @@ def main():
         f.write(f"# Held-out overlay scaling table (reduce={args.reduce})\n\n")
         f.write(f"All runs evaluated on the same {rows[0]['n_heldout']}-game "
                 f"held-out set.\n\n")
-        f.write("| run | n_games | mask_hidden | n_updates | nca_steps | "
+        f.write("| run | n_games | n_updates | nca_steps | "
                 "median 1-NN | mean 1-NN | min | max |\n")
-        f.write("|---|---:|:---:|---:|---:|---:|---:|---:|---:|\n")
+        f.write("|---|---:|---:|---:|---:|---:|---:|---:|\n")
         for r in rows:
-            f.write(f"| `{r['run']}` | {r['n_games']} | {r['mask_hidden']} | "
+            f.write(f"| `{r['run']}` | {r['n_games']} | "
                     f"{r['n_updates']} | {r['n_nca_steps']} | "
                     f"{r['median_1nn']:.3f} | {r['mean_1nn']:.3f} | "
                     f"{r['min_1nn']:.3f} | {r['max_1nn']:.3f} |\n")
     print(f"Wrote {md_path}")
 
-    # Plot: median 1-NN vs n_games, with mask_hidden as a separate series
+    # Plot: median 1-NN vs n_games
     fig, ax = plt.subplots(figsize=(8, 5))
-    by_mask = {True: [], False: []}
-    for r in rows:
-        if r["n_games"] is None:
-            continue
-        by_mask[bool(r["mask_hidden"])].append((r["n_games"], r["median_1nn"],
-                                                  r["run"]))
-    for mh, pts in by_mask.items():
-        if not pts:
-            continue
-        pts.sort()
+    pts = [(r["n_games"], r["median_1nn"], r["run"])
+           for r in rows if r["n_games"] is not None]
+    pts.sort()
+    if pts:
         xs = [p[0] for p in pts]
         ys = [p[1] for p in pts]
         names = [p[2] for p in pts]
-        marker = "s" if mh else "o"
-        color = "#1f77b4" if mh else "#d62728"
-        label = f"mask_hidden={mh}"
-        ax.plot(xs, ys, marker=marker, markersize=10, linewidth=1.5,
-                color=color, label=label)
+        ax.plot(xs, ys, marker="o", markersize=10, linewidth=1.5,
+                color="#1f77b4")
         for x, y, n in zip(xs, ys, names):
             ax.annotate(n, (x, y), fontsize=7, xytext=(5, 5),
                         textcoords="offset points")
@@ -136,7 +125,6 @@ def main():
                  f"(N_held={rows[0]['n_heldout']}, reduce={args.reduce})")
     ax.set_xscale("log")
     ax.grid(True, alpha=0.3)
-    ax.legend(loc="best")
     fig.tight_layout()
     base = os.path.join(out_dir, f"median_1nn_vs_n_games_{args.reduce}")
     fig.savefig(base + ".png", dpi=150)

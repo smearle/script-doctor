@@ -11,9 +11,9 @@ casing apart from model construction at `--architecture {cnn, unet, vit}`.
 The baselines reuse `RuleSlotEncoder` from `rule_attn_model` verbatim, so the
 comparison isolates the spatial-update body, not the conditioner. They share
 a `_SharedHeads` readout (Dense for next-state logits, LN+Dense for win
-logit) and the same `mask_hidden` semantics as the NCA: when on, padded
-cells (all-zero across channels) are zeroed throughout the body and excluded
-from the win-pool average.
+logit). Padded cells (all-zero across channels) are unconditionally zeroed
+throughout the body and excluded from the win-pool average — the same
+treatment as the NCA model.
 
 `adaptive_halt` and `vq_codebook` are not supported by the baselines —
 adaptive_halt has no analog in non-iterative models, and VQ on the slot
@@ -52,12 +52,9 @@ def _padding_mask(state):
 def _heads(h, n_out, mask_bcast):
     """Shared readout + win pooling. Match RuleAttnNCAWorldModel exactly."""
     logits = nn.Dense(n_out, name="readout")(h).transpose(0, 3, 1, 2)
-    if mask_bcast is not None:
-        pooled = (h * mask_bcast).sum(axis=(1, 2)) / jnp.maximum(
-            mask_bcast.sum(axis=(1, 2)), 1.0
-        )
-    else:
-        pooled = h.mean(axis=(1, 2))
+    pooled = (h * mask_bcast).sum(axis=(1, 2)) / jnp.maximum(
+        mask_bcast.sum(axis=(1, 2)), 1.0
+    )
     pooled = nn.LayerNorm(name="win_ln")(pooled)
     win_logit = nn.Dense(1, name="win_out")(pooled).squeeze(-1)
     return logits, win_logit
@@ -113,7 +110,6 @@ class CNNWorldModel(nn.Module):
     axis_pool: bool = False
     axis_cummax: bool = False
     global_pool: bool = False
-    mask_hidden: bool = False
 
     @nn.compact
     def __call__(self, state, action_onehot, game_tokens, game_mask,
@@ -124,11 +120,8 @@ class CNNWorldModel(nn.Module):
         slots_dyn = slots[:, :n_dyn, :]
 
         h, _x = _embed_input(state, action_onehot, self.n_hid, name="embed")
-        if self.mask_hidden:
-            _, mb = _padding_mask(state)
-            h = h * mb
-        else:
-            mb = None
+        _, mb = _padding_mask(state)
+        h = h * mb
 
         has_pool = self.axis_pool or self.axis_cummax or self.global_pool
         for i in range(self.n_blocks):
@@ -155,8 +148,7 @@ class CNNWorldModel(nn.Module):
             attn = attn.reshape(B, H, W, self.n_hid)
             delta = nn.Dense(self.n_hid, name=f"out_{i}")(nn.gelu(h_conv + attn))
             h = h + delta
-            if mb is not None:
-                h = h * mb
+            h = h * mb
 
         logits, win_logit = _heads(h, self.n_out, mb)
         sprite_logits = jnp.zeros((B, self.n_out, 5, 5, 4))
@@ -185,8 +177,6 @@ class UNetWorldModel(nn.Module):
     d_slot: int = 64
     n_attn_heads: int = 4
 
-    mask_hidden: bool = False
-
     @nn.compact
     def __call__(self, state, action_onehot, game_tokens, game_mask,
                  return_slots: bool = False, return_vq_aux: bool = False):
@@ -196,11 +186,8 @@ class UNetWorldModel(nn.Module):
         slots_dyn = slots[:, :n_dyn, :]
 
         h, _x = _embed_input(state, action_onehot, self.n_hid, name="embed")
-        if self.mask_hidden:
-            _, mb = _padding_mask(state)
-            h = h * mb
-        else:
-            mb = None
+        _, mb = _padding_mask(state)
+        h = h * mb
 
         skips = []
         cur = h
@@ -231,8 +218,7 @@ class UNetWorldModel(nn.Module):
             cur = nn.gelu(nn.Conv(self.n_hid, (3, 3), padding="SAME",
                                     name=f"up_conv_{lvl}")(cur))
 
-        if mb is not None:
-            cur = cur * mb
+        cur = cur * mb
 
         logits, win_logit = _heads(cur, self.n_out, mb)
         sprite_logits = jnp.zeros((B, self.n_out, 5, 5, 4))
@@ -263,8 +249,6 @@ class ViTWorldModel(nn.Module):
     d_slot: int = 64
     n_attn_heads: int = 4
 
-    mask_hidden: bool = False
-
     @nn.compact
     def __call__(self, state, action_onehot, game_tokens, game_mask,
                  return_slots: bool = False, return_vq_aux: bool = False):
@@ -274,11 +258,8 @@ class ViTWorldModel(nn.Module):
         slots_dyn = slots[:, :n_dyn, :]
 
         h, _x = _embed_input(state, action_onehot, self.n_hid, name="embed")
-        if self.mask_hidden:
-            mask2, mb = _padding_mask(state)
-            h = h * mb
-        else:
-            mask2, mb = None, None
+        mask2, mb = _padding_mask(state)
+        h = h * mb
 
         row_pos = self.param("row_pos", nn.initializers.normal(stddev=0.02),
                               (self.max_grid, self.n_hid))
@@ -288,11 +269,8 @@ class ViTWorldModel(nn.Module):
         h = h + pos[None]
 
         seq = h.reshape(B, H * W, self.n_hid)
-        if mask2 is not None:
-            keep = mask2.reshape(B, H * W).astype(bool)
-            sa_mask = keep[:, None, None, :]
-        else:
-            sa_mask = None
+        keep = mask2.reshape(B, H * W).astype(bool)
+        sa_mask = keep[:, None, None, :]
 
         for i in range(self.n_layers):
             sn = nn.LayerNorm(name=f"sa_ln_{i}")(seq)
@@ -315,8 +293,7 @@ class ViTWorldModel(nn.Module):
             seq = seq + ff
 
         h = seq.reshape(B, H, W, self.n_hid)
-        if mb is not None:
-            h = h * mb
+        h = h * mb
 
         logits, win_logit = _heads(h, self.n_out, mb)
         sprite_logits = jnp.zeros((B, self.n_out, 5, 5, 4))

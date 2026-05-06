@@ -59,3 +59,38 @@ nca_wm/logs
 nca_wm/sweep_launch_logs
 rollout_data
 generated_games
+
+# LaTeX compilation artifacts (paper builds locally)
+**/*.aux
+**/*.bbl
+**/*.blg
+**/*.fdb_latexmk
+**/*.fls
+**/*.synctex.gz
+nca_wm/paper/main.pdf
+nca_wm/paper/main.log
+nca_wm/paper/main.out
+nca_wm/paper/nca_arch_v1.log
+nca_wm/paper/figures/architecture/arch_overview.log
+nca_wm/paper/figures/architecture/arch_overview.pdf
+
+# Top-level data / scratch
+/embeddings.npz
+/embeddings_increpare.npz
+/mechanic_similarity.npz
+/umap_coords_increpare.npz
+/scratch_test.txt
+
+# External analysis project (separate codebase, not script-doctor source)
+/puzzlescript-analysis/
+
+# Generated figure outputs (regenerable from logs; don't sync results)
+nca_wm/figures/curriculum_gifs/
+nca_wm/figures/heroes_l07_transfer/
+nca_wm/figures/rule_gp_compare/
+nca_wm/figures/rule_gp_evo/
+nca_wm/figures/rule_gp_evo_wins/
+nca_wm/figures/heldout_scaling/median_1nn_*
+nca_wm/figures/neko_arch/all_metrics_grouped.*
+nca_wm/figures/neko_arch/by_depth_*
+nca_wm/figures/varislide_depth_extrap/fig_*

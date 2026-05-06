@@ -77,7 +77,6 @@ def _summarize_run(run_dir):
         "axis_pool": cfg.get("axis_pool", True),
         "global_pool": cfg.get("global_pool", True),
         "input_skip": cfg.get("input_skip", False),
-        "mask_hidden": cfg.get("mask_hidden", False),
         "seed": cfg.get("seed", 0),
     }
     if ev is None:

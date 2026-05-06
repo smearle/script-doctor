@@ -28,7 +28,7 @@ else
         --n_hid 256 --n_nca_steps 8 --n_nca_repeats 1 \
         --n_slots 16 --n_app_slots 1 \
         --axis_pool --axis_cummax --global_pool \
-        --mask_hidden --mask_padded_loss \
+        \
         --change_loss_weight 5.0 --grad_clip 0.5 \
         --balanced_sampling \
         --n_search_steps 100000 --search_timeout_ms 60000 \

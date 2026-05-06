@@ -119,7 +119,6 @@ def _build_model(cfg, gtoks_len, n_objs, *, n_steps_override: int):
         vq_commitment_weight=cfg.get("vq_commitment_weight", 0.25),
         use_layernorm=cfg.get("use_layernorm", False),
         input_skip=cfg.get("input_skip", False),
-        mask_hidden=cfg.get("mask_hidden", False),
         adaptive_halt=cfg.get("adaptive_halt", False),
     )
 
@@ -145,7 +144,7 @@ def _evaluate_run(run_dir: str, depths, slide_ds, batch_size: int = 1):
         "run_dir": run_dir,
         "config": {k: cfg.get(k) for k in [
             "n_nca_steps", "n_nca_repeats", "n_hid", "axis_pool", "axis_cummax",
-            "global_pool", "input_skip", "mask_hidden",
+            "global_pool", "input_skip",
         ]},
         "depths": [],
     }

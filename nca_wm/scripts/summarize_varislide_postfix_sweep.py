@@ -63,7 +63,6 @@ def _build_model(cfg, gtoks_len, n_objs):
         input_skip=cfg.get("input_skip", False),
         n_repeats=n_repeats,
         adaptive_halt=cfg.get("adaptive_halt", False),
-        mask_hidden=cfg.get("mask_hidden", False),
     )
 
 
@@ -188,7 +187,6 @@ def _summarize_run(run_dir):
         "axis_cummax": cfg.get("axis_cummax", True),
         "global_pool": cfg.get("global_pool", True),
         "input_skip": cfg.get("input_skip", False),
-        "mask_hidden": cfg.get("mask_hidden", False),
         "seed": cfg.get("seed", 0),
         "n_total": n_total,
         "argmax_overall": overall,

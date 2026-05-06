@@ -118,7 +118,7 @@ all Crate on Target};
         }
     };
 \path let \p1=(nca-south) in
-    node[font=\small, anchor=north] at (\x1, -2.7cm) {$3{\times}3$ conv};
+    node[font=\small, anchor=north] at (\x1-0.3cm, -2.9cm) {convolutions};
 
 % Brace + label for n_layers. Mirrored so the apex points UP. Label
 % nudged to the right end of the brace so it does not collide with the
@@ -163,8 +163,8 @@ all Crate on Target};
 \path let \p1 = (nca-east), \p2 = (nca-west) in
     coordinate (loopOutR)  at (\x1+0.4cm, \y1)
     coordinate (loopOutRD) at (\x1+0.4cm, -4.0cm)
-    coordinate (loopInLD)  at (\x2-0.6cm, -4.0cm)
-    coordinate (loopInL)   at (\x2-0.6cm, \y2);
+    coordinate (loopInLD)  at (\x2-1.1cm, -4.0cm)
+    coordinate (loopInL)   at (\x2-1.1cm, \y2);
 \draw[-Stealth, line width=0.7mm, opacity=0.32, rounded corners=10pt]
     (nca-east) -- (loopOutR) -- (loopOutRD) -- (loopInLD) -- (loopInL) -- (nca-west);
 \node[font=\small\itshape, opacity=0.7]

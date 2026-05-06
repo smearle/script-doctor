@@ -66,7 +66,6 @@ def _build_model(cfg, gtoks_len, n_objs, *, n_steps_override: int):
         vq_commitment_weight=cfg.get("vq_commitment_weight", 0.25),
         use_layernorm=cfg.get("use_layernorm", False),
         input_skip=cfg.get("input_skip", False),
-        mask_hidden=cfg.get("mask_hidden", False),
         adaptive_halt=cfg.get("adaptive_halt", False),
     )
 
@@ -147,7 +146,7 @@ def _evaluate_run(run_dir: str, depths: list[int], train_seed: int,
         "config": {k: cfg.get(k) for k in [
             "n_nca_steps", "n_nca_repeats", "n_hid", "n_slots", "n_app_slots",
             "axis_pool", "axis_cummax", "global_pool", "input_skip",
-            "mask_hidden", "synthetic_grid_sizes",
+            "synthetic_grid_sizes",
         ]},
         "train_seed": train_seed,
         "eval_widths": eval_widths,

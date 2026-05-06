@@ -171,7 +171,6 @@ def main():
         input_skip=cfg.get("input_skip", False),
         n_repeats=cfg.get("n_nca_repeats", 1),
         adaptive_halt=cfg.get("adaptive_halt", False),
-        mask_hidden=cfg.get("mask_hidden", True),
         **pool_kwargs,
     )
 

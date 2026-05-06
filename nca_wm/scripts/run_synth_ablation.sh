@@ -26,7 +26,7 @@ GAMES=sokoban_basic
 SYNTH=(--synthetic_levels 256 --synthetic_per_game_size --synthetic_multi_grid
        --synthetic_grid_sizes 5x5,6x6,7x7,8x8
        --synthetic_fallback_dynamics --synthetic_no_a_count_max 5
-       --token_decoder_loss_weight 0.1 --mask_hidden)
+       --token_decoder_loss_weight 0.1 )
 
 SHARED=(--n_hid 256 --n_slots 16 --d_slot 64
         --d_model 64 --n_enc_layers 2 --n_heads 4

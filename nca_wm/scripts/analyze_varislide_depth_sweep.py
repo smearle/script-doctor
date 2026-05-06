@@ -60,7 +60,6 @@ def _build(cfg, gtoks_len, n_objs):
         use_layernorm=cfg.get("use_layernorm", False),
         input_skip=cfg.get("input_skip", False),
         n_repeats=cfg["n_nca_repeats"],
-        mask_hidden=cfg.get("mask_hidden", False),
         adaptive_halt=cfg.get("adaptive_halt", False),
     )
 

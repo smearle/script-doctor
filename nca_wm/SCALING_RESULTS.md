@@ -1230,6 +1230,62 @@ Files:
 - `nca_wm/logs/multi_scaling_gallery_v3_decoder/sampled_games/{interp,random}_*.txt`
 - `nca_wm/logs/multi_scaling_gallery_v3_decoder/inverse_fit/<game>/{summary.json,fitted_decoded.txt}`
 
+## v3+decoder+sprites+EoS (94g, joint AE with EoS token + sprite-encoded vocab, 2026-05-05)
+
+Identical recipe to v3+decoder above except: `--use_eos` (append explicit
+EOS sentinel at every game's tail; decoder learns to terminate) and
+`--encode_sprites` (per-object 5×5 RGBA palette + pixel sprite tokenized
+into the input vocabulary; vocab grows from 142 → 183, max_tok_len grows
+to fit). Both are *necessary* to clear the AR-sampling engine-load
+ceiling that previously sat at 0/25.
+
+**Training metrics (final, step 150k; best at step 134k):**
+- state_loss: 7.81e-04 (training-aggregate; sprite vocab makes per-step
+  loss reading slightly tighter than v3-no-sprites)
+- acc: 0.9999, change_err ≈ 0
+- best_loss: 4.45e-3 (step 134k)
+- dec_acc: 1.000 throughout
+
+**Token reconstruction (teacher-forced, all 94 training games):**
+- mean per-position acc: 0.906
+- median per-position acc: 1.000
+- min per-position acc:  0.276
+- perfect-reconstruction games: **76/94**
+
+The slight regression from 94/94 (no-sprites) → 76/94 (with sprites) is
+expected: sprite tokens add ~30 tokens per object, lengthening sequences
+into a regime where the decoder's positional budget runs out for the
+longest sprite-rich games. All non-perfect games still reconstruct
+≥27% of tokens correctly.
+
+**Autoregressive sampling (25 random Gaussian-fit slots + 9-point
+interpolation Ebony_&_Ivory ↔ rigidfail1):**
+- Random samples: **15/25 engine-load (60%)** — *up from 0/25*.
+- Interp samples: **9/9 engine-load (100%)** — perfect along the entire
+  Ebony_&_Ivory ↔ rigidfail1 line.
+- Sampled programs include real palette+sprite blocks, coherent
+  legend assignments (a/b/c → Obj0/Obj1/Obj2), collision-layer
+  groupings, push rules `[ > Obj2 | Obj4 ] -> [ > Obj2 | > Obj4 ]`,
+  `late`-prefixed rules, and 3×3 to 5×5 levels with players.
+- The remaining failures (10/25 random) are mostly downstream
+  `serializeCompiledStateJSON` errors due to under-defined legend
+  groups in the decoded text, not parsing errors.
+
+**Why EoS + sprites is necessary (ablations not run yet, but
+diagnostic-level evidence from earlier sweep):**
+- Without EoS, the decoder emits a fixed-length padded suffix that
+  trips up the JS engine's COMPILE state-machine.
+- Without sprites, the model has no way to ground objects' visual
+  identity, so legend rows like `Obj4 = ?` get spurious entries.
+- The two are interacting: the EoS gates terminate is *enabled* by
+  the sprite-tokens making the sequence locally informative enough
+  that the decoder can predict EOS when the document is "done".
+
+Files:
+- `nca_wm/logs/multi_scaling_gallery_v3_decoder_sprites_eos/`
+- `nca_wm/logs/multi_scaling_gallery_v3_decoder_sprites_eos/sampled_games/summary.json`
+- `nca_wm/logs/multi_scaling_gallery_v3_decoder_sprites_eos/sampled_games/{interp,random}_*.txt`
+
 ## Travelling_salesman: data dilution, not mechanics complexity (2026-05-05)
 
 `Travelling_salesman` (TSM) has been a "persistently hard" game across

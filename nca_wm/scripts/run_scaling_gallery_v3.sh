@@ -40,7 +40,7 @@ exec .venv/bin/python3 -m nca_wm.train \
     --max_transitions_per_game 200000 \
     --search_timeout_ms 60000 \
     --n_search_steps 100000 \
-    --mask_hidden \
+    \
     --conditional \
     --grad_clip 0.5 \
     --ckpt_interval 2500 \

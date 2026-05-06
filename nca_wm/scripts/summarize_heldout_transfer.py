@@ -38,7 +38,6 @@ def _summarize(run_dir):
         "preset": cfg.get("games"),
         "n_nca_steps": cfg.get("n_nca_steps"),
         "n_nca_repeats": cfg.get("n_nca_repeats"),
-        "mask_hidden": cfg.get("mask_hidden"),
         "n_updates": cfg.get("n_updates"),
         "skipped": r.get("skipped", []),
     }
@@ -83,12 +82,12 @@ def main():
     )
     # Per-checkpoint header
     lines.append("## Checkpoints\n")
-    lines.append("| run | preset | n_steps | n_repeats | mask_hidden | n_updates |")
-    lines.append("|---|---|---|---|---|---|")
+    lines.append("| run | preset | n_steps | n_repeats | n_updates |")
+    lines.append("|---|---|---|---|---|")
     for s in summaries:
         lines.append(
             f"| {s['name']} | {s['preset']} | {s['n_nca_steps']} | "
-            f"{s['n_nca_repeats']} | {s['mask_hidden']} | {s['n_updates']} |"
+            f"{s['n_nca_repeats']} | {s['n_updates']} |"
         )
 
     lines.append("\n## AR step-1 cell error (model / identity)\n")

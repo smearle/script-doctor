@@ -175,7 +175,6 @@ def main():
         input_skip=cfg["input_skip"],
         n_repeats=cfg["n_nca_repeats"],
         adaptive_halt=cfg["adaptive_halt"],
-        mask_hidden=cfg["mask_hidden"],
     )
 
     ckpt_path = run_dir / "params_best.pkl"
