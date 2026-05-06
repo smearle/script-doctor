@@ -26,7 +26,10 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 LOGS_ROOT = REPO_ROOT / "nca_wm" / "logs"
 OUT_DIR = REPO_ROOT / "nca_wm" / "paper" / "figures" / "cond_vs_uncond_match"
 
-# Order matters: rows in the table follow this order.
+# Order matters: rows in the table follow this order. The collator
+# silently skips any run dir whose results.json or eval_multigame.npz
+# is missing, so adding a row before it lands is fine — re-run after
+# the experiment finishes and the row populates.
 RUNS = [
     {
         "run_dir": "multi_scaling_14_uncond_match_s0",
@@ -38,12 +41,27 @@ RUNS = [
         "label": "Rule-conditional, Train-14",
         "kind": "cond",
     },
-    # v4 = scaling_gallery_v4 (199 games). Older recipe (no input_skip)
-    # but huge dataset diversity. Tests scaling axis vs the matched pair
-    # above, which only differ in the encoder.
+    {
+        "run_dir": "multi_scaling_gallery_v2_uncond_match_s0",
+        "label": "Unconditional, Train-59",
+        "kind": "uncond",
+    },
+    {
+        "run_dir": "multi_scaling_gallery_v2_cond_match_s0",
+        "label": "Rule-conditional, Train-59",
+        "kind": "cond",
+    },
+    {
+        "run_dir": "multi_scaling_gallery_v4_cond_match_s0",
+        "label": "Rule-conditional, Train-199 (matched recipe)",
+        "kind": "cond",
+    },
+    # Original v4 = scaling_gallery_v4 (199 games), older recipe (no
+    # input_skip) and predates the matched-recipe runs above. Reported
+    # as a recipe-ablation reference at the same scale.
     {
         "run_dir": "multi_scaling_gallery_v4_decoder_sprites_eos",
-        "label": "Rule-conditional, Train-199",
+        "label": "Rule-conditional, Train-199 (legacy recipe)",
         "kind": "cond",
     },
 ]
@@ -175,6 +193,10 @@ def collate(runs: list[dict]) -> tuple[list[dict], dict, dict]:
     identity_per_game: dict[str, float] = {}
     for spec in runs:
         run_dir = LOGS_ROOT / spec["run_dir"]
+        if not (run_dir / "config.json").exists():
+            print(f"[collate] skip {spec['label']}: run dir not present yet "
+                  f"({run_dir})")
+            continue
         cfg = _load_config(run_dir)
         indist = _aggregate_indist(run_dir / "eval_multigame.npz")
         ho = _aggregate_heldout(run_dir / "heldout_v4_n30" / "results.json")
@@ -250,6 +272,7 @@ def write_latex(rows: list[dict], out_path: Path) -> None:
     out_path.parent.mkdir(parents=True, exist_ok=True)
     fmt_pct = lambda x: ("--" if x is None or (isinstance(x, float) and np.isnan(x))
                          else f"{100*x:.2f}\\%")
+    fmt_wins = lambda w, n: ("--" if w is None or n is None else f"{w}/{n}")
     body = []
     for r in rows:
         body.append(
@@ -259,7 +282,7 @@ def write_latex(rows: list[dict], out_path: Path) -> None:
                 fmt_pct(r["indist_random_mean"]),
                 fmt_pct(r["ood_step1_model_mean"]),
                 fmt_pct(r["ood_ar30_model_mean"]),
-                f"{r['ood_wins']}/{r['ood_n_games']}",
+                fmt_wins(r["ood_wins"], r["ood_n_games"]),
             ])
             + r" \\"
         )
