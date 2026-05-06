@@ -42,55 +42,19 @@ bounded-A* transitions from authored levels, yielding $\sim$15M
 transitions; held-out evaluation uses a 30-game stratified sample
 disjoint from training by name and token-sequence hash.
 
-On the 94-game broad-corpus training preset, the trained NCA achieves
-a median per-cell teacher-forced one-step error of $0.15\%$ and a
-median 50-step random-action autoregressive rollout error of
-$2.5\%$ across all 94 games and all authored levels.
-% We use ``near-perfect'' to mean a one-step teacher-forced cell-error rate below $1\%$ on the broad corpus, with the multi-step rollout numbers quantifying the drift caused by autoregressive compounding.
-To rule out per-state memorization, we also report a
-within-game OOD-levels probe (\S\ref{sec:results-within-game}) in
-which every authored level is held out from training and only
-purely-synthetic rollouts at the same grid size enter the training
-set; the same rule-conditioned NCA recovers near-zero rollout error
-on all authored levels of Sokoban-class games and non-trivial
-transfer on three further mechanic classes, evidencing that the
-high-precision regime reflects learned rule structure rather than
-authored-state lookup.
-
-\paragraph{Contributions.}
+We make the following contributions:
 \begin{enumerate}
-  \item \textbf{NCA dynamics over discrete state.}
-        Modeling the engine's native discrete grid with a shared,
-        iteratively-applied local update body matches the reference
-        dynamics with median 1-step teacher-forced cell-error of
-        $0.15\%$ across the 94-game broad-corpus preset. A controlled
-        comparison that holds the rule encoder fixed and varies only
-        the spatial body shows the iterated-local-update bias
-        outperforms non-iterative architectures (CNN, U-Net, ViT) on
-        rollout fidelity at matched or smaller parameter counts.
-        Within-game OOD-levels probes (\S\ref{sec:results-within-game})
-        confirm the model is learning rule structure rather than
-        memorizing authored states.
+  \item \textbf{NCA dynamics over discrete state.} A shared,
+        iteratively-applied local update body, operating on the
+        engine's native discrete grid, outperforms non-iterative
+        baselines (CNN, U-Net, ViT) on rollout fidelity in a
+        controlled comparison that varies only the spatial body.
   \item \textbf{Rule-conditioning for multi-game simulation.}
-        A single model simulates dozens of mechanically diverse games
-        by cross-attending to slot embeddings produced by an encoder
-        over each game's tokenized rule text. Trained jointly with a
-        slot-token decoder, the same latent drives forward dynamics
-        and decodes back to program text: $76/94$ training games
-        reconstruct perfectly under teacher forcing, $15/25$ samples
-        from the empirical slot prior decode to engine-loadable
-        PuzzleScript, and slot-space interpolation between two games
-        is engine-loadable at $9/9$ points along the line.
-        The same latent is also recoverable by inverse-fitting through
-        the frozen NCA, driving per-cell BCE 2--3 orders of magnitude
-        down on held-out targets and snapping the optimised slot to
-        mechanically-related training games.
-  \item \textbf{Generalization to unseen games.}
+        A single set of weights simulates many games by
+        cross-attending to slot embeddings of each game's tokenized
+        rule text.
+  \item \textbf{Evaluation on unseen games.}
         On a 30-game held-out set disjoint from training by name and
-        token-sequence hash, we evaluate two axes of engine-level
-        transfer: \emph{geometric} placement of held-out latents
-        relative to training-game latents, and \emph{predictive}
-        accuracy of the dynamics model on novel rule combinations.
-        The results delineate where the rule-conditioned NCA
-        generalizes today and where further work is needed.
+        token-sequence hash, we report where the rule-conditioned NCA
+        transfers and where it does not.
 \end{enumerate}
