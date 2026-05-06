@@ -37,7 +37,7 @@
 % --- input game spec ---
 \node[draw, rounded corners=2pt, fill={gray!8},
       font=\footnotesize\ttfamily, align=left, inner sep=4pt,
-      text width=3.6cm, anchor=east] (spec) at (-10.5,0)
+      text width=3.6cm, anchor=east] (spec) at (-8.5,0)
 {title sokoban\\
 =========\\
 objects\\
@@ -52,7 +52,7 @@ rules\\
 \node[font=\small\itshape, anchor=south] at (spec.north) {game spec};
 
 % --- Encoder block: 2 self-attn + 1 cross-attn ---
-\node[tflayer, fill=EncColor]   (encS1) at (-8.8, 0) {};
+\node[tflayer, fill=EncColor]   (encS1) at (-6.8, 0) {};
 \node[tflayer, fill=EncColor, right=0.08cm of encS1] (encS2) {};
 \node[tflayer, fill=EncBandColor, right=0.08cm of encS2] (encX)  {};
 \node[font=\scriptsize, rotate=90, inner sep=0pt] at (encS1) {self-attn};
@@ -67,7 +67,7 @@ rules\\
 % --- Slots ---
 \node[draw, rounded corners=1.5pt, fill=SlotColor, line width=0.4pt,
       minimum width=1.1cm, minimum height=2.6cm, anchor=center]
-      (slots) at (-6.4, 0) {};
+      (slots) at (-4.4, 0) {};
 \foreach \y in {-1.05,-0.85,-0.65,-0.45,-0.25,-0.05,0.15,0.35,0.55,0.75,0.95,1.15} {
   \draw[gray!60, line width=0.2pt]
       ($(slots.west)+(0.07, \y)$) -- ($(slots.east)+(-0.07, \y)$);
@@ -84,64 +84,71 @@ rules\\
 % =============================================================
 
 % --- s_t (was 'embed' box, with state image projected on its face) ---
-\pic[shift={(-3.5,0,0)}] at (0,0,0)
+\pic[shift={(-2.2,0,0)}] at (0,0,0)
     {Box={
         name=embed,
         caption= ,
         xlabel={{9, }},
         zlabel=16,
         fill=\OnehotColor,
-        height=40,
+        height=20,
         width=2.5,
-        depth=40
+        depth=20
         }
     };
-\node[canvas is zy plane at x=0] (sin) at (-3.5,0,0)
+\node[canvas is zy plane at x=0] (sin) at (-2.2,0,0)
     {\includegraphics[width=3.6cm,height=3.6cm]{figures/architecture/state_in.png}};
-\node[font=\large, anchor=north] at ($(embed-south)+(0,-0.4)$) {$s_t$};
+\path let \p1=(embed-south) in
+    node[font=\large, anchor=north] at (\x1, -3.2cm) {$s_t$};
 
 % --- NCA body: a handful of layers (n_layers); whole body repeats n_repeats times ---
 \pic[shift={(0,0,0)}] at (0,0,0)
     {RightBandedBox={
         name=ncal1,
-        caption=3$\times$3---ReLu,
+        caption= ,
         xlabel={{32, }},
         zlabel=16,
         fill=\ConvColor,
         bandfill=\ConvReluColor,
-        height=40,
+        height=20,
         width=4,
-        depth=40
+        depth=20
         }
     };
+\path let \p1=(ncal1-south) in
+    node[font=\small, anchor=north] at (\x1, -3.2cm) {3$\times$3 ReLU};
 
-\pic[shift={(2.6,0,0)}] at (0,0,0)
+\pic[shift={(2.4,0,0)}] at (0,0,0)
     {RightBandedBox={
         name=ncal2,
-        caption=1$\times$1---ReLu,
+        caption= ,
         xlabel={{32, }},
         zlabel=16,
         fill=\ConvColor,
         bandfill=\ConvReluColor,
-        height=40,
+        height=20,
         width=4,
-        depth=40
+        depth=20
         }
     };
+\path let \p1=(ncal2-south) in
+    node[font=\small, anchor=north] at (\x1, -3.2cm) {1$\times$1 ReLU};
 
-\pic[shift={(5.2,0,0)}] at (0,0,0)
+\pic[shift={(4.8,0,0)}] at (0,0,0)
     {RightBandedBox={
         name=ncal3,
-        caption=1$\times$1---Sigmoid,
+        caption= ,
         xlabel={{9, }},
         zlabel=16,
         fill=\ConvColor,
         bandfill=\ConvSigmoidColor,
-        height=40,
-        width=2.5,
-        depth=40
+        height=20,
+        width=4,
+        depth=20
         }
     };
+\path let \p1=(ncal3-south) in
+    node[font=\small, anchor=north] at (\x1, -3.2cm) {1$\times$1 Sigmoid};
 
 % Brace + label for n_layers (just above the body, label nudged right
 % so it doesn't collide with the cross-attn arrow that descends onto ncal1).
@@ -154,21 +161,22 @@ rules\\
     at ($(braceLeft)!0.65!(braceRight)+(0,0.40cm)$) {$n_\text{layers}$};
 
 % --- s_{t+1} (was 'readout' box, with state image projected on its face) ---
-\pic[shift={(8.5,0,0)}] at (0,0,0)
+\pic[shift={(7.0,0,0)}] at (0,0,0)
     {Box={
         name=readout,
         caption= ,
         xlabel={{9, }},
         zlabel=16,
         fill=\OnehotColor,
-        height=40,
+        height=20,
         width=2.5,
-        depth=40
+        depth=20
         }
     };
-\node[canvas is zy plane at x=0] (sout) at (8.5,0,0)
+\node[canvas is zy plane at x=0] (sout) at (7.0,0,0)
     {\includegraphics[width=3.6cm,height=3.6cm]{figures/architecture/state_out.png}};
-\node[font=\large, anchor=north] at ($(readout-south)+(0,-0.4)$) {$s_{t+1}$};
+\path let \p1=(readout-south) in
+    node[font=\large, anchor=north] at (\x1, -3.2cm) {$s_{t+1}$};
 
 % --- forward connections through dynamics row ---
 \draw[connection] (embed-east)  -- node {\midarrow} (ncal1-west);
@@ -181,14 +189,14 @@ rules\\
 %     adding plain offsets to pic-anchored 3D coordinates does not give
 %     a clean vertical translation.
 \path let \p1 = (ncal3-east), \p2 = (ncal1-west) in
-    coordinate (loopOutR)  at (\x1+0.6cm, \y1)
-    coordinate (loopOutRD) at (\x1+0.6cm, -7.5cm)
-    coordinate (loopInLD)  at (\x2-0.6cm, -7.5cm)
-    coordinate (loopInL)   at (\x2-0.6cm, \y2);
-\draw[-Stealth, line width=0.9mm, opacity=0.32, rounded corners=16pt]
+    coordinate (loopOutR)  at (\x1+0.4cm, \y1)
+    coordinate (loopOutRD) at (\x1+0.4cm, -5.0cm)
+    coordinate (loopInLD)  at (\x2-0.4cm, -5.0cm)
+    coordinate (loopInL)   at (\x2-0.4cm, \y2);
+\draw[-Stealth, line width=0.7mm, opacity=0.32, rounded corners=10pt]
     (ncal3-east) -- (loopOutR) -- (loopOutRD) -- (loopInLD) -- (loopInL) -- (ncal1-west);
-\node[font=\large\itshape, opacity=0.7]
-    at ($(loopOutRD)!0.5!(loopInLD)+(0,0.55)$) {$\times\, n_\text{repeats}$};
+\node[font=\small\itshape, opacity=0.7]
+    at ($(loopOutRD)!0.5!(loopInLD)+(0,0.30)$) {$\times\, n_\text{repeats}$};
 
 % =============================================================
 % Cross-attention: slots -> NCA body, routed above the figure.
@@ -197,15 +205,15 @@ rules\\
 % =============================================================
 \path let \p1 = (slots.north), \p2 = (ncal1-north) in
     coordinate (slotsTop)   at (\x1, \y1)
-    coordinate (overslots)  at (\x1, 6.5cm)
-    coordinate (overnca)    at (\x2-0.7cm, 6.5cm)
-    coordinate (ncaTopLin)  at (\x2-0.7cm, \y2+0.10cm);
+    coordinate (overslots)  at (\x1, 4.0cm)
+    coordinate (overnca)    at (\x2-0.5cm, 4.0cm)
+    coordinate (ncaTopLin)  at (\x2-0.5cm, \y2+0.10cm);
 
-\draw[condarrow, rounded corners=10pt, line width=0.6mm]
+\draw[condarrow, rounded corners=8pt, line width=0.5mm]
     (slotsTop) -- (overslots) -- (overnca) -- (ncaTopLin);
 
 \node[font=\footnotesize, text=blue!55!black, anchor=south, align=center]
-    at ($(overslots)!0.5!(overnca)+(0,0.15cm)$)
+    at ($(overslots)!0.5!(overnca)+(0,0.10cm)$)
     {keys, values \textit{(rule cross-attn, every step)}};
 
 \end{tikzpicture}
