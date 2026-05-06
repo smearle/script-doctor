@@ -77,8 +77,10 @@ encoder is identical across architectures: $K{=}16$ slots, $d{=}64$
 slot dim, two self-attention layers over tokens, four heads.
 
 The NCA uses $T{=}4$ NCA steps with $n_r{=}T$ (single shared layer
-applied $T$ times), $d_h{=}256$, full pool features, input-skip on,
-optional padding mask for multi-grid. The CNN baseline uses
+applied $T$ times), $d_h{=}256$, full pool features, and input-skip
+on. Padding cells (introduced by per-bucket batching of mixed-size
+levels) are always masked from both the hidden state and the loss
+to avoid leakage across off-grid regions. The CNN baseline uses
 $n_b{=}4$ residual blocks; the U-Net uses 2 levels of down/up
 sampling with bottleneck FiLM; the ViT uses $n_v{=}4$ layers, four
 heads. We report parameter count alongside every metric so the
