@@ -61,7 +61,12 @@ case "$slot" in
     done
 
     echo "launch_slot: ssh 210 GPU 0, sha=$sha (branch=$branch)" >&2
-    ssh 210 "cd ~/script-doctor && \
+    # Source .profile so nvm-managed node (required by puzzlescript_jax via the
+    # backends.nodejs JS bridge at module load) is on PATH; non-interactive
+    # ssh doesn't pick it up otherwise. Use ; not && — .profile may exit nonzero.
+    ssh 210 "cd ~/script-doctor; \
+      source ~/.profile 2>/dev/null; \
+      set -e; \
       git fetch --quiet origin && \
       git checkout --quiet '$sha' && \
       CUDA_VISIBLE_DEVICES=0 PYTHONUNBUFFERED=1$quoted"
