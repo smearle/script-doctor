@@ -40,11 +40,14 @@ transition model is conditioned on the program defining the dynamics.
 Our
 problem domain---fully discrete grid observations,
 authored rule sets, dozens of related games sharing a substrate---is
-closer to procedural-content benchmarks like NetHack and CHAI than to
-Atari. Compared to MuZero-style models that learn an abstract latent
-dynamics, our model commits to predicting the engine's next state in
-its native grid representation, which makes ground-truth supervision
-exact and lets us compare to the engine cell-by-cell.
+closer to procedurally-generated grid benchmarks like
+NetHack~\cite{kuettler2020nethack} and its
+descendants~\cite{samvelyan2021minihack,hafner2021crafter,matthews2024craftax}
+than to pixel-based Atari~\cite{bellemare2013arcade}. Compared to
+MuZero-style models~\cite{schrittwieser2020muzero} that learn an
+abstract latent dynamics, our model commits to predicting the engine's
+next state in its native grid representation, which makes ground-truth
+supervision exact and lets us compare to the engine cell-by-cell.
 
 \paragraph{Learned grid-game engines.}
 Closest to our setting, Bamford and Lucas introduce a Neural Game
