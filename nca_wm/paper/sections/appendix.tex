@@ -159,23 +159,56 @@ aspect ratio (see \texttt{nca\_wm/RUNNING\_REPORT.md} and
 \texttt{nca\_wm/SCALING\_RESULTS.md}). Both signals suggest the
 right-panel gap here is data scarcity, not an architectural ceiling.
 
-\papertodo{\textbf{Synth-only $\to$ all-authored generalization
-(headline goal of this experiment line).} Replace each cell's authored
-training set with $K$ synthetic levels at the game's authored grid
-size(s) and evaluate on \emph{every} authored level (no L0 / heldout
-split --- all authored levels are out of distribution). Recipe:
-\texttt{--synthetic\_per\_game\_size --synthetic\_fallback\_dynamics
---synthetic\_no\_a\_count\_max 5 --token\_decoder\_loss\_weight 0.1};
-launcher: \texttt{nca\_wm/scripts/run\_per\_game\_arch\_grid.sh} (add
-synth flags). Target: $\sim 0\%$ cell-error on Sokoban-class games,
-non-trivial transfer on the rest. If pure synth fails on a game, fall
-back to seeding from one or a handful of authored levels in addition
-to synth --- this is a lesser form of within-game generalization but
-still informative about whether the architecture can extrapolate
-mechanics from few demonstrations. Prediction: the held-out errors
-in Fig.~\ref{fig:per-game-arch-heatmap} fall sharply on every game,
-and the F3 sharpening on \textsc{Travelling\_salesman} (same loss,
-$40{+}$pp rollout split) either persists or widens.}
+\paragraph{Synth-only $\to$ all-authored generalization (running).}
+\label{app:synth-only}
+The headline within-game-generalization probe replaces each cell's
+authored training set with $K{=}64$ synthetic levels at the game's
+authored max-dim and evaluates on \emph{every} authored level (no L0
+/ heldout split: all authored levels are out of distribution to the
+training set). Recipe (validated post-1fa557d on single-game Sokoban
+$\to$ Microban):
+\texttt{--synthetic\_levels 64 --synthetic\_per\_game\_size
+--synthetic\_fallback\_dynamics --synthetic\_no\_a\_count\_max 5
+--synthetic\_mode evolve
+--token\_decoder\_loss\_weight 0.1}, with the same four architecture
+buckets at $T{=}8$. To force the GA to spread the $K$-level budget
+across the game's rule set rather than collapsing onto a single
+easy mechanic, we additionally enable rule-coverage-driven evolution:
+\texttt{--synthetic\_track\_rules\_fired
+--synthetic\_rule\_coverage\_weight 100
+--synthetic\_coverage\_select\_topk}. The first collects per-step
+rule-firing telemetry; the second biases GA fitness to
+\texttt{BFS\_iterations + 100 * |unique rules fired|}; the third,
+at the end of evolution, greedily picks the $K$ levels that maximize
+the \emph{union} of rules covered (rather than top-K by individual
+fitness). For small-rule-set games (e.g.\ Sokoban-class) this is a
+no-op; for multi-bracket games (Heroes\_of\_Sokoban,
+Travelling\_salesman) it materially changes which $K$ levels enter
+training. Launcher:
+\texttt{nca\_wm/scripts/run\_per\_game\_arch\_synth\_grid.sh};
+summary via \texttt{summarize\_per\_game\_arch\_grid.py
+--all\_authored\_as\_heldout}; logs land in
+\texttt{nca\_wm/logs\_per\_game\_arch\_synth/}. The pre-registered
+prediction is in \S\ref{sec:results-within-game}. If pure synth
+fails on a game we fall back to seeding from one or a handful of
+authored levels alongside synth --- a lesser form of within-game
+generalization that still tests few-shot extrapolation.
+
+\papertodo{Fill the synth-only column once
+\texttt{logs\_per\_game\_arch\_synth/} completes: regenerate
+\texttt{figures/per\_game\_arch/heatmap\_bfs.pdf} as a 4-panel figure
+(L0 authored vs.\ heldout authored vs.\ synth-only all-authored, with
+synth-train-loss as the bonus panel) and update Table~\ref{tab:within-game-synth}.}
+
+\papertodo{If synth-only beats authored-L0-only on \textsc{Microban}
+held-out (Sokoban prior says yes), Heroes\_of\_Sokoban (multi-bracket
+char-swap; less certain), and Bouncers (looping projectile; uncertain),
+that closes the within-game OOD-levels claim across three distinct
+mechanic classes. \textsc{Travelling\_salesman} is the canonical hard
+case: if the synth-only run reproduces the F3 sharpening (same train
+loss, $40{+}$pp rollout split between buckets) it is the cleanest
+demonstration of the per-step-vs-AR decoupling we report, since no
+authored memorization remains to confound the comparison.}
 
 \papertodo{\textbf{Extensions.} (i) Add a depth axis $T \in \{4, 16, 32\}$
 to test whether bucket A's pool-driven AR-rollout failure shrinks at

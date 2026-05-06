@@ -48,7 +48,16 @@ median 50-step random-action autoregressive rollout error of
 $2.5\%$ across all 94 games and all authored levels. We use
 ``near-perfect'' to mean a one-step teacher-forced cell-error rate
 below $1\%$ on the broad corpus, with the multi-step rollout numbers
-quantifying the drift caused by autoregressive compounding.
+quantifying the drift caused by autoregressive compounding. To
+separate this from per-state memorization, we also report a
+within-game OOD-levels probe (\S\ref{sec:results-within-game}) in
+which every authored level is held out from training and only
+purely-synthetic rollouts at the same grid size enter the training
+set; the same rule-conditioned NCA recovers near-zero rollout error
+on all authored levels of Sokoban-class games and non-trivial
+transfer on three further mechanic classes, evidencing that the
+high-precision regime reflects learned rule structure rather than
+authored-state lookup.
 
 \paragraph{Contributions.}
 \begin{enumerate}
@@ -68,6 +77,12 @@ quantifying the drift caused by autoregressive compounding.
         for engine-like dynamics: non-local pool features, weight
         sharing across NCA steps, adaptive halting, and the transition
         from single-game modeling to many-game engine modeling.
+  \item A within-game OOD-levels protocol (\S\ref{sec:results-within-game})
+        that trains exclusively on synthesized levels of a target game
+        and evaluates on every authored level. This isolates rule
+        learning from per-state memorization and provides the
+        non-trivial generalization counterpart to the headline
+        teacher-forced fidelity numbers.
 \end{enumerate}
 
 The symbolic-AE component of contribution 3 is partial: the

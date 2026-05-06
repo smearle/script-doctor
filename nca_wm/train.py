@@ -1172,6 +1172,9 @@ def collect_multigame_dataset_synthetic(
     grid_sizes: list[tuple[int, int]] | None = None,
     fallback_dynamics: bool = False,
     no_a_count_max: int = 3,
+    track_rules_fired: bool = False,
+    rule_coverage_weight: float = 0.0,
+    coverage_select_topk: bool = False,
     use_eos: bool = True,
 ) -> tuple[dict, list[dict]]:
     """Synthetic-level variant of collect_multigame_dataset.
@@ -1272,6 +1275,9 @@ def collect_multigame_dataset_synthetic(
                 evolve_n_mutations_max=evolve_n_mutations_max,
                 fallback_dynamics=fallback_dynamics,
                 no_a_count_max=no_a_count_max,
+                track_rules_fired=track_rules_fired,
+                rule_coverage_weight=rule_coverage_weight,
+                coverage_select_topk=coverage_select_topk,
                 verbose=True,
             )
             s_states = np.asarray(synth["states"], dtype=np.uint8)
@@ -4736,6 +4742,23 @@ def main():
     p.add_argument("--synthetic_evolve_max_generations", type=int, default=200)
     p.add_argument("--synthetic_evolve_n_mutations_min", type=int, default=1)
     p.add_argument("--synthetic_evolve_n_mutations_max", type=int, default=3)
+    p.add_argument("--synthetic_track_rules_fired", action="store_true",
+                   help="Collect per-step rule-firing telemetry from the engine while "
+                        "evolving levels. Required to activate either of the two "
+                        "rule-coverage knobs below; cheap on its own (just adds "
+                        "rules_fired_union to each cached level's payload).")
+    p.add_argument("--synthetic_rule_coverage_weight", type=float, default=0.0,
+                   help="GA fitness becomes `BFS_iterations + w * unique_rules_fired`. "
+                        "Default 0 keeps the validated iterations-only fitness; set to "
+                        "~50–100 to bias the GA toward levels that exercise more distinct "
+                        "rules. Implies --synthetic_track_rules_fired.")
+    p.add_argument("--synthetic_coverage_select_topk", action="store_true",
+                   help="At the end of evolution, greedily pick the n_target levels "
+                        "that maximize the *union* of rules fired across the dataset, "
+                        "rather than the top-K individuals by fitness. Best at small "
+                        "K (e.g. K=64) on multi-bracket games where individual-best "
+                        "selection can pick up many copies of one mechanic. Implies "
+                        "--synthetic_track_rules_fired.")
     p.add_argument("--synthetic_require_solvable", action=argparse.BooleanOptionalAction, default=True,
                    help="Reject levels with no winning transition observed within BFS budget. "
                         "Default True so the wons head sees positives; pass --no-synthetic_require_solvable "
@@ -4973,6 +4996,13 @@ def main():
                     ),
                     fallback_dynamics=args.synthetic_fallback_dynamics,
                     no_a_count_max=args.synthetic_no_a_count_max,
+                    track_rules_fired=(
+                        args.synthetic_track_rules_fired
+                        or args.synthetic_rule_coverage_weight != 0.0
+                        or args.synthetic_coverage_select_topk
+                    ),
+                    rule_coverage_weight=args.synthetic_rule_coverage_weight,
+                    coverage_select_topk=args.synthetic_coverage_select_topk,
                     evolve_pop_size=args.synthetic_evolve_pop_size,
                     evolve_max_generations=args.synthetic_evolve_max_generations,
                     evolve_n_mutations_min=args.synthetic_evolve_n_mutations_min,

@@ -61,8 +61,15 @@ def _final_train_metrics(run_dir):
     return out
 
 
-def _rollout_err(run_dir):
-    """Read per-cell rollout cell-error npz and aggregate by kind/level-split."""
+def _rollout_err(run_dir, all_authored_as_heldout=False):
+    """Read per-cell rollout cell-error npz and aggregate by kind/level-split.
+
+    When ``all_authored_as_heldout`` is True (synth-only training mode), L0 is
+    not the trained level — synthetic levels were the training set — so every
+    authored level is a held-out generalization probe. We mirror the same
+    value to both bfs_err_l0 and bfs_err_heldout so downstream plotting code
+    can render the same heatmap layout without special-casing this run.
+    """
     p = None
     for cand in ("eval_multigame_tlfix.npz", "eval_multigame.npz"):
         cp = os.path.join(run_dir, cand)
@@ -87,7 +94,9 @@ def _rollout_err(run_dir):
             continue
         mean_v = float(np.nanmean(v))
         by_kind_all[kind].append(mean_v)
-        if lvl == 0:
+        if all_authored_as_heldout:
+            by_kind_held[kind].append(mean_v)
+        elif lvl == 0:
             by_kind_l0[kind].append(mean_v)
         else:
             by_kind_held[kind].append(mean_v)
@@ -117,7 +126,7 @@ def _parse_run_name(name):
     }
 
 
-def _summarize_run(run_dir):
+def _summarize_run(run_dir, all_authored_as_heldout=False):
     name = os.path.basename(run_dir)
     parsed = _parse_run_name(name)
     if parsed is None:
@@ -130,7 +139,7 @@ def _summarize_run(run_dir):
         except Exception:
             pass
     train = _final_train_metrics(run_dir)
-    ev = _rollout_err(run_dir)
+    ev = _rollout_err(run_dir, all_authored_as_heldout=all_authored_as_heldout)
     row = dict(parsed)
     row.update({
         "n_steps": cfg.get("n_nca_steps"),
@@ -179,6 +188,11 @@ def main():
     ap.add_argument("--logs", default="nca_wm/logs_per_game_arch")
     ap.add_argument("--out_csv", default="nca_wm/figures/per_game_arch/summary.csv")
     ap.add_argument("--out_md", default="nca_wm/figures/per_game_arch/summary.md")
+    ap.add_argument(
+        "--all_authored_as_heldout", action="store_true",
+        help="Treat every authored level as held-out (use for synth-only "
+        "training: the training set was synthetic, so no authored level is L0).",
+    )
     args = ap.parse_args()
 
     runs = sorted(glob.glob(os.path.join(_REPO, args.logs, "*")))
@@ -192,7 +206,7 @@ def main():
 
     rows = []
     for r in runs:
-        s = _summarize_run(r)
+        s = _summarize_run(r, all_authored_as_heldout=args.all_authored_as_heldout)
         if s is not None:
             rows.append(s)
     rows.sort(key=lambda r: (r["game"], r["bucket"]))
