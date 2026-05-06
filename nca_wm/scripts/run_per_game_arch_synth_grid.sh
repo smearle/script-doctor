@@ -93,14 +93,28 @@ COMMON=(
     --synthetic_min_states 5
     --synthetic_max_iters_search 1500
     --synthetic_timeout_ms_search 400
-    # Rule-coverage-driven evolution: tracks rule firings, biases GA fitness
-    # toward coverage, and greedy-union-picks the final K. Override at launch
-    # with COVERAGE_WEIGHT=0 to disable.
-    --synthetic_track_rules_fired
-    --synthetic_rule_coverage_weight "${COVERAGE_WEIGHT:-100}"
-    --synthetic_coverage_select_topk
     --token_decoder_loss_weight 0.1
 )
+
+# Rule-coverage-driven evolution. ON by default. Set COVERAGE=0 (or
+# RECIPE=baseline) to disable all three coverage knobs in unison —
+# this hits the appendix's iterations-only baseline cache. The cache
+# key encodes the coverage state, so coverage and baseline runs do not
+# share caches.
+COVERAGE="${COVERAGE:-1}"
+if [ "${RECIPE:-}" = "baseline" ]; then
+    COVERAGE=0
+fi
+if [ "$COVERAGE" = "1" ]; then
+    COMMON+=(
+        --synthetic_track_rules_fired
+        --synthetic_rule_coverage_weight "${COVERAGE_WEIGHT:-100}"
+        --synthetic_coverage_select_topk
+    )
+    RECIPE_TAG="rc100_cstop"
+else
+    RECIPE_TAG="baseline"
+fi
 
 flags_for_bucket() {
     case "$1" in
@@ -140,6 +154,11 @@ PYEOF
 run_one() {
     local gpu=$1; local game=$2; local bucket=$3
     local tag="${game}__${bucket}_d${DEPTH}"
+    # Baseline runs land in a parallel set of save dirs so they don't
+    # overwrite the coverage runs from the canonical sweep.
+    if [ "$RECIPE_TAG" != "rc100_cstop" ]; then
+        tag="${tag}__${RECIPE_TAG}"
+    fi
     local save_dir="$LOGDIR/$tag"
     local log="$LOGDIR/$tag.out"
     if [ -f "$save_dir/params.pkl" ] && [ -f "$save_dir/train_meta.json" ]; then

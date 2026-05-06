@@ -24,6 +24,7 @@ script-doctor-nodejs
 src - Kopie
 node_modules/
 __pycache__
+.jax_compile_cache
 
 data/*
 gallery_games/*
