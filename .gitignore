@@ -68,6 +68,7 @@ generated_games
 **/*.fdb_latexmk
 **/*.fls
 **/*.synctex.gz
+*.dvi
 nca_wm/paper/main.pdf
 nca_wm/paper/main.log
 nca_wm/paper/main.out
