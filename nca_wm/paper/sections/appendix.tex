@@ -6,9 +6,8 @@
 All models are implemented in JAX/Flax with the Adam optimizer. The
 slot encoder is identical across architectures (see
 \S\ref{sec:method}). The hidden grid dimension $d_h$, the cell
-update structure, and the readout heads are also shared. A single
-\texttt{--architecture} flag selects the spatial-update body
-($\texttt{rule\_attn}$, $\texttt{cnn}$, $\texttt{unet}$, $\texttt{vit}$).
+update structure, and the readout heads are also shared; only the
+spatial-update body (rule-attention NCA, CNN, U-Net, or ViT) varies.
 
 \subsection{Tokenization}
 
@@ -22,28 +21,25 @@ input.
 \subsection{Dataset provenance and training suites}
 \label{app:data-provenance}
 
-The main text uses the PuzzleJax collection names at a high level:
-our \texttt{Gallery} corresponds to its Gallery,
-\texttt{scraped\_games} to its Archive, and
-\texttt{scraped\_games\_increpare} to its gists. After filename and
-token-hash deduplication, all training and held-out splits are defined
-by explicit game-name lists.
+After filename and token-hash deduplication, all training and held-out
+splits are defined by explicit game-name lists.
 
-The 14-game ablation suite is:
+The \textsc{Train-14} ablation suite is:
 \textsc{nekopuzzle}, \textsc{notsnake}, \textsc{blocks},
 \textsc{sokoban\_basic}, \textsc{sokoban\_match3},
 \textsc{Zen\_Puzzle\_Garden}, \textsc{Multi-word\_Dictionary\_Game},
 \textsc{kettle}, \textsc{Travelling\_salesman},
 \textsc{Collapsable\_Sokoban}, \textsc{Love\_and\_Pieces},
 \textsc{actiontest}, \textsc{scriptcross}, and \textsc{Modality}.
-The broader 59-, 94-, and 199-game presets are nested supersets; their
-full lists are included in the released configuration files.
+\textsc{Train-59}, \textsc{Train-94}, and \textsc{Train-199} are
+nested supersets; their full lists are included in the released
+configuration files.
 
-\subsection{Per-game \textsc{scaling\_14} breakdown}
+\subsection{Per-game \textsc{Train-14} breakdown}
 \label{app:per-game}
 
 Figure~\ref{fig:per-game-heatmap} shows the per-game BFS final
-cell-error on \textsc{scaling\_14}, averaged over each game's authored
+cell-error on \textsc{Train-14}, averaged over each game's authored
 levels. Three observations beyond the aggregate numbers in
 Table~\ref{tab:baselines-scaling14}:
 
@@ -66,7 +62,7 @@ Table~\ref{tab:baselines-scaling14}:
   \centering
   \includegraphics[width=0.95\linewidth]{../figures/baseline_comparison/scaling_14_per_game_heatmap.pdf}
   \caption{\textbf{Per-game BFS final cell-error on
-    \textsc{scaling\_14}.} Rows are games (sorted by NCA-shared error,
+    \textsc{Train-14}.} Rows are games (sorted by NCA-shared error,
     ascending); columns are architectures. Single seed at 20k updates.
     Both NCA variants beat the three non-NCA baselines on the vast
     majority of games; ViT is the only architecture with a
@@ -78,10 +74,18 @@ Table~\ref{tab:baselines-scaling14}:
 
 The codebase, dataset caches, training launchers, and result
 aggregators are released alongside the paper. Each run is reproduced
-end-to-end by re-running its launcher (\texttt{nca\_wm/scripts/run\_*.sh})
-on the same hardware (single 24~GB consumer GPU). The full
-experimental log is in \texttt{nca\_wm/SCALING\_RESULTS.md} and
-\texttt{nca\_wm/ARCHITECTURE\_REPORT.md} in the released code.
+end-to-end by re-running its launcher on the same hardware
+(single 24~GB consumer GPU). The full experimental log accompanies
+the released code.
+% Internal notes (deanonymised paths kept as comments for the
+% camera-ready / reproducibility supplement):
+%   - Launchers: nca_wm/scripts/run_*.sh
+%   - Per-game/per-arch synth grid: nca_wm/scripts/run_per_game_arch_synth_grid.sh
+%     summarised via summarize_per_game_arch_grid.py --all_authored_as_heldout
+%     and figures via nca_wm/scripts/make_within_game_synth_artifacts.py
+%     (logs land in nca_wm/logs_per_game_arch_synth/)
+%   - Running-state docs: nca_wm/SCALING_RESULTS.md, nca_wm/ARCHITECTURE_REPORT.md,
+%     nca_wm/RUNNING_REPORT.md, project_synth_recipe.md
 
 \section{Per-game $\times$ per-architecture grid}
 \label{app:per-game-arch}
@@ -149,78 +153,85 @@ Held-out cell-error (right panel of Fig.~\ref{fig:per-game-arch-heatmap})
 remains substantial across every cell ($7.3\%$--$56.8\%$). This is the
 \emph{within-game} OOD-levels axis --- a complementary, lesser form of
 generalization than the OOD-rules / latent-sampling / inverse-fit
-claims that the main paper targets. Prior single-game work in this
-codebase strongly predicts that synthetic levels close most of this
-gap: training synth-only \textsc{sokoban\_basic} (w=7) reached $0\%$
-cell-error on the 155 held-out \textsc{Microban} / \textsc{Microban\_I}
-authored levels, and multi-grid synth on \textsc{nekopuzzle} closed a
+claims that the main paper targets. Prior single-game work strongly
+predicts that synthetic levels close most of this gap: training
+synth-only \textsc{sokoban\_basic} ($w{=}7$) reached $0\%$ cell-error
+on the 155 held-out \textsc{Microban} / \textsc{Microban\_I} authored
+levels, and multi-grid synth on \textsc{nekopuzzle} closed a
 $3$--$8\%$ gap to $0.3\%$ once the synth widths included the authored
-aspect ratio (see \texttt{nca\_wm/RUNNING\_REPORT.md} and
-\texttt{nca\_wm/SCALING\_RESULTS.md}). Both signals suggest the
-right-panel gap here is data scarcity, not an architectural ceiling.
+aspect ratio. Both signals suggest the right-panel gap here is data
+scarcity, not an architectural ceiling.
+% Prior-work pointers (deanonymised; kept as comments):
+%   - nca_wm/RUNNING_REPORT.md (single-game synth-only Sokoban run)
+%   - nca_wm/SCALING_RESULTS.md (multi-grid nekopuzzle synth run)
 
 \paragraph{Synth-only $\to$ all-authored generalization (running).}
 \label{app:synth-only}
-The within-game-generalization probe replaces each cell's
-authored training set with $K{=}128$ synthetic levels generated at the
+The within-game-generalization probe replaces each cell's authored
+training set with $K{=}128$ synthetic levels generated at the
 \emph{smallest-by-area} authored size of the target game and evaluates
 on \emph{every} authored level (no L0 / heldout split: all authored
 levels are out of distribution to the training set). We anchor on the
 smallest authored size because (i) size-up generalization carries
-synthetic small-grid training to bigger authored levels (validated
-prior in \texttt{project\_synth\_recipe.md}: Sokoban $w{=}7 \to 0\%$
-on 155 \textsc{Microban}/\textsc{Microban\_I} authored levels) while
-size-down does not; (ii) using a single size keeps the per-size data
-density at $K{=}128$, which empirically matters: an early multi-grid
-variant ($K // n_{\text{sizes}}$ per size, $\sim 16$ levels per size
-for Microban) plateaued at $\sim 8\%$ BFS heldout while the same recipe
-at fixed $K{=}128$ on a single small size reached $0.60\%$ BFS, $0.02\%$
-1-step. The earlier auto-bounding-box choice
-(\texttt{--synthetic\_per\_game\_size}, which picks $\max W \times \max H$)
-was also tried and failed at $\sim 9\%$ BFS — many authored levels are
-much smaller than the bounding box and the synth distribution missed
-them; we document the failure in
-\S\ref{app:synth-only-failed-attempts}. Smallest-by-area (rather than
-per-axis $\min W \times \min H$) is used so the chosen size is an
-actually-existing authored level shape rather than a per-axis composite
-(\textsc{Microban} per-axis min is $6{\times}6$ but no authored level is
-$6{\times}6$; smallest-by-area picks $6{\times}7$, which appears in
-three authored levels). Recipe (validated post-1fa557d on
-\textsc{Microban}, bucket D, $30{,}000$ updates):
-\texttt{--synthetic\_levels 128 --synthetic\_w <min\_W>
---synthetic\_h <min\_H> --synthetic\_fallback\_dynamics
---synthetic\_no\_a\_count\_max 5 --synthetic\_mode evolve
---token\_decoder\_loss\_weight 0.1}, with the same four architecture
-buckets at $T{=}8$. To force the GA to spread the $K$-level budget
-across the game's rule set rather than collapsing onto a single
-easy mechanic, we additionally enable rule-coverage-driven evolution:
-\texttt{--synthetic\_track\_rules\_fired
---synthetic\_rule\_coverage\_weight 100
---synthetic\_coverage\_select\_topk}. The first collects per-step
-rule-firing telemetry; the second biases GA fitness to
-\texttt{BFS\_iterations + 100 * |unique rules fired|}; the third,
-at the end of evolution, greedily picks the $K$ levels that maximize
-the \emph{union} of rules covered (rather than top-K by individual
+synthetic small-grid training to bigger authored levels (Sokoban
+$w{=}7 \to 0\%$ on 155 \textsc{Microban}/\textsc{Microban\_I}
+authored levels in prior work) while size-down does not; (ii) using
+a single size keeps the per-size data density at $K{=}128$, which
+empirically matters: an early multi-grid variant
+($K / n_{\text{sizes}}$ per size, $\sim 16$ levels per size for
+Microban) plateaued at $\sim 8\%$ BFS heldout while the same recipe
+at fixed $K{=}128$ on a single small size reached $0.60\%$ BFS,
+$0.02\%$ 1-step. We also tried an auto-bounding-box variant that
+picks $\max W \times \max H$ for each game; it failed at $\sim 9\%$
+BFS because many authored levels are much smaller than the bounding
+box, and the synth distribution missed them. Smallest-by-area (rather
+than per-axis $\min W \times \min H$) is used so the chosen size is
+an actually-existing authored shape rather than a per-axis composite
+(\textsc{Microban}'s per-axis minimum is $6{\times}6$, but no authored
+level is $6{\times}6$; smallest-by-area picks $6{\times}7$, which
+appears in three authored levels).
+
+The recipe trains on $K{=}128$ synthetic levels at the chosen size for
+$30{,}000$ updates with the same four architecture buckets at $T{=}8$,
+with synthetic-level generation in \emph{evolve} mode and a small
+auxiliary token-decoder loss. To force the GA to spread the $K$-level
+budget across the game's rule set rather than collapsing onto a single
+easy mechanic, we enable rule-coverage-driven evolution: per-step
+rule-firing telemetry biases the fitness to
+$\text{BFS-iterations} + 100 \cdot |\text{unique rules fired}|$, and
+at the end of evolution we greedily pick the $K$ levels that maximize
+the \emph{union} of rules covered (rather than top-$K$ by individual
 fitness). For small-rule-set games (e.g.\ Sokoban-class) this is a
 no-op; for multi-bracket games (Heroes\_of\_Sokoban,
 Travelling\_salesman) it materially changes which $K$ levels enter
-training. We also report the iterations-only baseline
-($w{=}0$, no \texttt{coverage\_select\_topk}) as a side-by-side
-ablation column in Table~\ref{tab:within-game-synth}. Launcher:
-\texttt{nca\_wm/scripts/run\_per\_game\_arch\_synth\_grid.sh};
-summary via \texttt{summarize\_per\_game\_arch\_grid.py
---all\_authored\_as\_heldout}; logs land in
-\texttt{nca\_wm/logs\_per\_game\_arch\_synth/}. The pre-registered
-prediction is in \S\ref{sec:results-within-game}. If pure synth
-fails on a game we fall back to seeding from one or a handful of
-authored levels alongside synth --- a lesser form of within-game
-generalization that still tests few-shot extrapolation.
+training. We also report the iterations-only baseline (no coverage
+weighting, no union-greedy selection) as a side-by-side ablation
+column in Table~\ref{tab:within-game-synth}. The pre-registered
+prediction is in \S\ref{sec:results-within-game}. If pure synth fails
+on a game we fall back to seeding from one or a handful of authored
+levels alongside synth --- a lesser form of within-game generalization
+that still tests few-shot extrapolation.
+% Internal pointers (paths kept as comments for the reproducibility
+% supplement; they reference deanonymised tooling, so they should not
+% appear in the submission body):
+%   - Launcher: nca_wm/scripts/run_per_game_arch_synth_grid.sh
+%   - Summariser: nca_wm/scripts/summarize_per_game_arch_grid.py
+%       --all_authored_as_heldout
+%   - Logs land in nca_wm/logs_per_game_arch_synth/
+%   - Validated post-1fa557d on Microban, bucket D, 30k updates;
+%     see project_synth_recipe.md for full validation history.
+%   - Recipe flags:
+%     --synthetic_levels 128 --synthetic_w <min_W> --synthetic_h <min_H>
+%     --synthetic_fallback_dynamics --synthetic_no_a_count_max 5
+%     --synthetic_mode evolve --token_decoder_loss_weight 0.1
+%     --synthetic_track_rules_fired --synthetic_rule_coverage_weight 100
+%     --synthetic_coverage_select_topk
 
-\papertodo{Fill the synth-only column once
-\texttt{logs\_per\_game\_arch\_synth/} completes: regenerate
-\texttt{figures/per\_game\_arch/heatmap\_bfs.pdf} as a 4-panel figure
+\papertodo{Fill the synth-only column once the sweep completes:
+regenerate the per-game/per-architecture heatmap as a 4-panel figure
 (L0 authored vs.\ heldout authored vs.\ synth-only all-authored, with
-synth-train-loss as the bonus panel) and update Table~\ref{tab:within-game-synth}.}
+synth-train-loss as the bonus panel) and update
+Table~\ref{tab:within-game-synth}.}
 
 \papertodo{If synth-only beats authored-L0-only on \textsc{Microban}
 held-out (Sokoban prior says yes), Heroes\_of\_Sokoban (multi-bracket

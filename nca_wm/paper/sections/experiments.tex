@@ -12,11 +12,8 @@ multi-game training we draw batches with one share per game per step
 imbalance.
 
 \paragraph{Corpus.}
-Our corpus follows the PuzzleJax collection
-structure~\cite{anonymous2026puzzlejax}: Gallery, Archive, and gists
-correspond here to \texttt{Gallery}, \texttt{scraped\_games}, and
-\texttt{scraped\_games\_increpare}. We also include a small set of
-curated custom games.
+Our corpus draws from the PuzzleJax collections~\cite{anonymous2026puzzlejax}
+(Gallery, Archive, and gists) plus a small set of curated custom games.
 After (a) deduplicating by lowercased filename across collections and
 (b) collapsing structural near-duplicates by hashing the canonical
 name-invariant token sequence produced by our tokenizer, the pool
@@ -29,17 +26,16 @@ because the encoder cannot otherwise be expected to produce distinct
 slot embeddings for token-identical inputs. Median rule count is 6
 (min 1, max 20), median level count is 3 (max 30), and grid sizes
 range from $1{\times}3$ to $30{\times}40$. We use four nested presets
-spanning the dataset-size axis: $\textsc{scaling\_14}$ (14 curated
-games for ablations), $\textsc{scaling\_gallery\_v2}$ (59 gallery
-games),
-$\textsc{scaling\_gallery\_v3}$ (94 games), and
-$\textsc{scaling\_gallery\_v4}$ (199 games extending into the
-scrape pool). For each game we run bounded A* from each authored
-level (60 s wallclock and 100k iteration budget per level) and cache
-the resulting unique transitions on disk under bit-packing, with a
-per-game cap of 200k transitions. Held-out evaluation games are
-drawn from the deduped pool and verified disjoint from the training
-set both by name and by token-sequence hash.
+spanning the dataset-size axis: $\textsc{Train-14}$ (14 curated games
+for ablations), $\textsc{Train-59}$ (59 Gallery games),
+$\textsc{Train-94}$ (94 Gallery games), and
+$\textsc{Train-199}$ (199 games extending into the Archive). For each
+game we run bounded A* from each authored level (60 s wallclock and
+100k iteration budget per level) and cache the resulting unique
+transitions on disk under bit-packing, with a per-game cap of 200k
+transitions. Held-out evaluation games are drawn from the deduped pool
+and verified disjoint from the training set both by name and by
+token-sequence hash.
 
 \paragraph{Synthetic levels.}
 For ablations and held-out evaluations we additionally generate
@@ -66,17 +62,17 @@ We evaluate on four suites of increasing breadth:
     $\{5{\times}5, 6{\times}6, 7{\times}7, 8{\times}8\}$ and evaluated
     on the same. The diversity prevents per-state memorization and
     forces the model to learn the underlying rule.
-  \item \textbf{Multi-game} (\textsc{scaling\_14}): a fourteen-game
+  \item \textbf{Multi-game} (\textsc{Train-14}): a fourteen-game
     benchmark including chained pushing, gravity, light beams,
     multi-character control, and several \texttt{again}-driven
     simulations. Per-game grid sizes range from $4{\times}4$ to
     $32{\times}24$.
-  \item \textbf{Broad-corpus} ($\textsc{scaling\_gallery\_v3}$ and
-    $\textsc{scaling\_gallery\_v4}$): 94 and 199 games respectively,
-    all drawn from the deduped pool described above. Used for the
-    multi-game scaling curve and for held-out-game evaluation. The
-    held-out set is a 30-game stratified sample from the same pool,
-    disjoint from both presets by name and by token-hash.
+  \item \textbf{Broad-corpus} (\textsc{Train-94} and \textsc{Train-199}):
+    94 and 199 games respectively, all drawn from the deduped pool
+    described above. Used for the multi-game scaling curve and for
+    held-out-game evaluation. The held-out set is a 30-game stratified
+    sample from the same pool, disjoint from both presets by name and
+    by token-hash.
 \end{itemize}
 
 \subsection{Architectures and hyper-parameters}

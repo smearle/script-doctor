@@ -69,12 +69,11 @@ share both a tokenization scheme (the engine source) and a common
 state encoding, making the family a natural multi-game benchmark for
 world models. PuzzleJax~\cite{anonymous2026puzzlejax} introduced a
 PuzzleScript reasoning-and-learning benchmark with a JAX engine and
-three game collections: a curated Gallery, a larger Archive of scraped
-community games, and gists. We use the same high-level collections
-(our Gallery, \texttt{scraped\_games}, and
-\texttt{scraped\_games\_increpare}, respectively) but extend the
-tooling with a C++ engine backend, cached transition datasets, and
-rule-conditioned learned forward models.
+three game collections: a curated Gallery, a larger Archive of
+community games, and a long-tail collection of gists. We draw from
+the same three collections and extend the tooling with a C++ engine
+backend, cached transition datasets, and rule-conditioned learned
+forward models.
 
 \paragraph{Adaptive computation.}
 PonderNet~\cite{banino2021pondernet} learns a per-input halting

@@ -5,7 +5,7 @@
 \label{sec:results-fidelity}
 
 Table~\ref{tab:fidelity} reports per-cell error rates on the
-94-game broad-corpus training preset $\textsc{scaling\_gallery\_v3}$,
+94-game broad-corpus training preset \textsc{Train-94},
 averaged across all 94 games and all authored levels per game, under
 four rollout regimes: random actions (autoregressive),
 random-action teacher-forced (one step at a time), BFS-optimal
@@ -77,9 +77,9 @@ has memorized authored states cannot succeed here.
     No authored level enters training. Best architecture bucket per
     game is bolded. Cells marked ``—'' are pending the full sweep;
     the displayed Microban-D number is the anchor result described
-    below. Auto-regenerated from
-    \texttt{nca\_wm/logs\_per\_game\_arch\_synth/} by
-    \texttt{nca\_wm/scripts/make\_within\_game\_synth\_artifacts.py}.}
+    below.}
+  % Auto-regenerated from nca_wm/logs_per_game_arch_synth/ by
+  % nca_wm/scripts/make_within_game_synth_artifacts.py
   \label{tab:within-game-synth}
   \small
   \input{figures/per_game_arch_synth/within_game_synth_table.tex}
@@ -106,9 +106,10 @@ per-authored-state outcomes.
   \centering
   \caption{\textbf{Anchor run for the synth-only recipe.} Mean per-cell
     error across all 10 authored \textsc{Microban} levels (no level
-    enters training). Auto-regenerated from
-    \texttt{nca\_wm/logs\_per\_game\_arch\_synth/Microban\_\_D\_d8\_w7\_k128\_30k}
-    by \texttt{make\_within\_game\_synth\_artifacts.py}.}
+    enters training).}
+  % Auto-regenerated from
+  %   nca_wm/logs_per_game_arch_synth/Microban__D_d8_w7_k128_30k
+  % by nca_wm/scripts/make_within_game_synth_artifacts.py
   \label{tab:within-game-synth-anchor}
   \small
   \input{figures/per_game_arch_synth/anchor_microban_d.tex}
@@ -154,22 +155,21 @@ training-game slot in the 1024-dim flattened slot space.
 \begin{table}[t]
   \centering
   \caption{\textbf{Held-out latent geometry as we scale games.} All
-    runs use \texttt{rule\_attn} body, $K{=}16$ slots,
+    runs use the rule-attention NCA body, $K{=}16$ slots,
     $d_{\text{slot}}{=}64$, $T{=}8$ NCA steps, batch 32, 150k Adam
-    updates. The held-out set is the
-    same 30-game stratified sample for every row. Median 1-NN
-    distance is computed on the subset of held-outs whose tokens fit
-    within the smallest training preset's
-    \texttt{max\_seq\_len} (21 of 30 games).}
+    updates. The held-out set is the same 30-game stratified sample
+    for every row. Median 1-NN distance is computed on the subset of
+    held-outs whose tokens fit within the smallest training preset's
+    maximum sequence length (21 of 30 games).}
   \label{tab:scaling-curve}
   \small
   \begin{tabular}{l r l r}
     \toprule
     preset & $n_{\text{games}}$ & decoder & median 1-NN cos dist \\
     \midrule
-    \textsc{scaling\_14}             & 14 & off & $0.077$ \\
-    \textsc{scaling\_gallery\_v3}    & 94 & off & $0.215$ \\
-    \textsc{scaling\_gallery\_v3+dec}& 94 & on  & $\mathbf{0.153}$ \\
+    \textsc{Train-14}             & 14 & off & $0.077$ \\
+    \textsc{Train-94}             & 94 & off & $0.215$ \\
+    \textsc{Train-94+dec}         & 94 & on  & $\mathbf{0.153}$ \\
     \bottomrule
   \end{tabular}
 \end{table}
@@ -179,9 +179,9 @@ At 94 training games the encoder-only run loosens relative to the
 model wider mechanical diversity, and the joint decoder constraint
 pulls it back down by 29\% ($0.215 \to 0.153$).
 
-\papertodo{Add the completed 199-game \textsc{scaling\_gallery\_v4}
-geometry row, or remove discussion of v4 from the scaling table if the
-run is not ready for submission.}
+\papertodo{Add the completed 199-game \textsc{Train-199} geometry row,
+or remove discussion of \textsc{Train-199} from the scaling table if
+the run is not ready for submission.}
 
 The take-home is that the \emph{geometric} side of engine-level
 modelling --- placing held-out games near mechanically-similar
@@ -195,7 +195,7 @@ complementary axis.
 
 We train the joint encoder + NCA + slot-token decoder
 (\S\ref{sec:method}) on the 94-game broad-corpus preset
-$\textsc{scaling\_gallery\_v3}$ for 150k updates with
+\textsc{Train-94} for 150k updates with
 $\beta = 1.0$ on the decoder loss. The decoder converges to per-token
 cross-entropy $\approx 2 \times 10^{-9}$ within the first 5k updates
 and holds there throughout. The world-model losses track the
@@ -394,11 +394,10 @@ work: removing global-pool alone is as costly as removing all three
 ($+145\%$ relative BFS error), while removing axis-cummax has no
 measurable effect on \textsc{sokoban\_basic} (its target patterns ---
 axis-aligned \texttt{[X | ... | Y]} matches --- do not appear in
-that game's rule set). On the 19-game \textsc{scaling\_large} preset
-and a controlled \textsc{collapse} no-pool ablation, turning pool
-off costs both convergence speed and final loss, with the no-pool
-model collapsing into the identity-prediction minimum even at
-$4{\times}$ the depth.
+that game's rule set). On a 19-game gallery preset and a controlled
+\textsc{collapse} no-pool ablation, turning pool off costs both
+convergence speed and final loss, with the no-pool model collapsing
+into the identity-prediction minimum even at $4{\times}$ the depth.
 
 \paragraph{(F2) Shared NCA-body weights are the right inductive bias.}
 The PuzzleScript engine has two natural levels of iteration: an
@@ -496,7 +495,7 @@ error --- yet another instance of F3 (\S\ref{sec:results-F3}).
 \papertodo{Add hierarchy figure/table: $T{=}16$ varying
 $n_r \in \{1, 2, 4, 8, 16\}$ on
 \textsc{microban} multi-grid synth and on the multi-game
-\textsc{scaling\_14} preset, reporting change-error and parameter
+\textsc{Train-14} preset, reporting change-error and parameter
 count.}
 
 \subsection{Adaptive halting}
@@ -544,7 +543,7 @@ configurations. We discuss candidate fixes in \S\ref{sec:discussion}.
 \label{sec:results-scaling}
 
 Table~\ref{tab:baselines-scaling14} reports the head-to-head comparison
-on the \textsc{scaling\_14} benchmark: 14 PuzzleScript games sharing
+on the \textsc{Train-14} benchmark: 14 PuzzleScript games sharing
 the rule-slot encoder, with grid sizes from $4{\times}4$ to
 $32{\times}24$ and rule counts from a handful (basic Sokoban) to
 $\sim$30 (\texttt{Heroes\_of\_Sokoban}, \texttt{Sokoboros}). Single
@@ -552,7 +551,7 @@ seed, 20k updates, $d_h = 256$.
 
 \begin{table}[t]
   \centering
-  \caption{\textbf{Multi-game baselines on \textsc{scaling\_14}.}
+  \caption{\textbf{Multi-game baselines on \textsc{Train-14}.}
     Mean $\pm$ std over 3 seeds at 20k updates. Cell-error rate
     averaged across games and levels. Both NCA variants beat all
     three non-NCA baselines; within the NCA family, the per-step
