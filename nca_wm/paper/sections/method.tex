@@ -201,17 +201,3 @@ observed transitions, (ii) cell-error on held-out transitions of the
 target game, (iii) cosine distance to the 1-NN training slot, and
 (iv) whether the decoded text parses + compiles via the JS engine.
 
-\subsection{Adaptive halting (optional)}
-\label{sec:method-halt}
-
-A fixed $T$ is wasteful for easy transitions and insufficient for
-hard ones. We add an optional halting head: at each NCA step $k$, a
-small dense layer reads the spatially pooled $h^{(k)}$ and emits a
-halt logit $\lambda_k$. The induced halt distribution
-$p_k = \mathrm{sigmoid}(\lambda_k) \prod_{j<k}(1 - \mathrm{sigmoid}(\lambda_j))$
-weights the per-step loss
-$\mathcal{L}_{\text{rec}} = \sum_k p_k \mathcal{L}_k$
-plus a KL-to-geometric-prior regularizer
-$\mathrm{KL}(p \,\|\, \mathrm{Geom}(p_0))$. We additionally study a
-\emph{convergence-stopping} baseline that halts at inference when
-consecutive predictions stop changing, with no learned halt head.

@@ -1,17 +1,228 @@
 \section{Results}
 \label{sec:results}
 
-\subsection{Dynamics fidelity on the broad corpus}
+We organise the results around the three contributions in
+\S\ref{sec:intro}. \S\ref{sec:results-baselines} compares the
+rule-conditioned NCA body against three non-iterative baselines on
+single-game and multi-grid-synthetic suites; \S\ref{sec:results-pool}
+decomposes that comparison via a per-feature pool/input-skip ablation;
+\S\ref{sec:results-scaling} extends the comparison to a 14-game
+multi-game preset. \S\ref{sec:results-fidelity} reports
+in-distribution dynamics fidelity on the 94-game broad-corpus preset.
+\S\ref{sec:results-ood} reports generalization to unseen games via
+held-out latent geometry, symbolic decoder reconstruction / sampling,
+and frozen-NCA inverse fitting from OOD transitions. Findings on
+within-game OOD levels, the hierarchical weight-sharing knob, the
+adaptive-halting head, and the multi-grid synth-data ceiling are
+deferred to the appendix.
+
+\subsection{Architecture comparison: NCA vs.\ non-iterative baselines}
+\label{sec:results-baselines}
+
+Table~\ref{tab:baselines-microban} reports the head-to-head comparison
+on \textsc{microban} (10 authored levels), trained for 10k updates per
+seed at $d_h = 256$ with the canonical recipe (\S\ref{sec:experiments}).
+We measure best train cross-entropy loss, end-of-rollout cell-error
+rate under three policies (random, BFS-optimal, A*-optimal), and final
+parameter count.
+
+\begin{table}[t]
+  \centering
+  \caption{\textbf{Baselines vs.\ rule-conditioned NCA on
+    \textsc{microban} (authored levels).} Mean $\pm$ std over 3 seeds
+    at 10k updates. Lower is better for loss and cell-error; A* first-
+    divergence step is higher-is-better. Param count in millions;
+    architectures sorted by BFS final cell-error.}
+  \label{tab:baselines-microban}
+  \small
+  \begin{tabular}{l c c c c}
+    \toprule
+    Architecture & params (M) & best loss & BFS final-err & A* first-div \\
+    \midrule
+    \textbf{NCA (shared, $T{=}4, n_r{=}T$)} & \textbf{1.94} & $0.107 \pm 0.002$ & $\mathbf{0.11\% \pm 0.16\%}$ & $64$ \\
+    CNN (4-block ResNet)                    & 5.00          & $0.107 \pm 0.002$ & $0.32\% \pm 0.24\%$         & $89$ \\
+    NCA (per-step, $T{=}4, n_r{=}1$)        & 7.36          & $0.107 \pm 0.002$ & $0.47\% \pm 0.66\%$         & $35$ \\
+    U-Net (2 levels)                        & 6.07          & $0.108 \pm 0.002$ & $4.84\% \pm 1.03\%$         & $14$ \\
+    ViT (4 layers)                          & 3.99          & $0.107 \pm 0.002$ & $10.96\% \pm 0.50\%$        & $<1$ \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+The NCA with shared weights wins on BFS rollout
+($0.11\% \pm 0.16\%$) at the fewest parameters (1.94M),
+$2.9\times$ better than the same-depth feed-forward CNN
+($0.32\% \pm 0.24\%$) at $2.6\times$ fewer params and
+$4.3\times$ better than the per-step NCA ($0.47\% \pm 0.66\%$).
+U-Net's 2-level downsampling loses fine-grained player position on
+small grids; ViT's global self-attention diverges before the first
+rollout step (mean first-divergence step under $1$). Best train loss
+is essentially identical ($0.107 \pm 0.002$) across all five
+architectures despite the $\geq 100\times$ swing in autoregressive
+rollout error; we report both metrics throughout because the per-step
+training objective is invisible to compounding rollout drift.
+
+The single-game setting allows the model to memorize per-state
+outcomes via cross-attention over slot embeddings. To force the model
+to actually learn the rule, Table~\ref{tab:baselines-synth} repeats
+the comparison on the multi-grid synthetic regime: four widths
+$\{5,6,7,8\}^2$ $\times$ 256 synthetic levels per width, sharing one
+\textsc{sokoban\_basic} rule set. Per-state memorization is
+unavailable (1024 distinct levels share one rule); the model has to
+learn the slide rule across grid sizes.
+
+\begin{table}[t]
+  \centering
+  \caption{\textbf{Baselines vs.\ rule-conditioned NCA on
+    \textsc{sokoban\_basic} (multi-grid synthetic).} Mean $\pm$ std
+    over 3 seeds at 10k updates; widths
+    $\{5{\times}5, 6{\times}6, 7{\times}7, 8{\times}8\}$ with 256
+    synthetic levels per width.}
+  \label{tab:baselines-synth}
+  \small
+  \begin{tabular}{l c c c c}
+    \toprule
+    Architecture & params (M) & best loss & BFS final-err & A* first-div \\
+    \midrule
+    \textbf{NCA (shared, $T{=}4, n_r{=}T$)} & \textbf{3.07} & $0.069 \pm 0.003$ & $\mathbf{4.37\% \pm 2.02\%}$ & $9.2$ \\
+    CNN (4-block ResNet)                    & 5.00          & $0.069 \pm 0.003$ & $5.56\% \pm 3.12\%$         & $7.0$ \\
+    NCA (per-step, $T{=}4, n_r{=}1$)        & 8.49          & $0.070 \pm 0.003$ & $5.95\% \pm 3.50\%$         & $13.8$ \\
+    U-Net (2 levels)                        & 6.07          & $0.071 \pm 0.003$ & $8.33\% \pm 0.97\%$         & $0.5$ \\
+    ViT (4 layers)                          & 3.99          & $0.084 \pm 0.002$ & $12.70\% \pm 1.12\%$        & $0.7$ \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+The shared-weights NCA again wins on BFS rollout
+($4.37\% \pm 2.02\%$) at the fewest parameters, with the per-step
+variant $1.4\times$ behind despite $2.8\times$ more parameters. ViT
+fails to fit the train loss
+($0.084 \pm 0.002$ vs.\ $0.069 \pm 0.003$ for the rest), confirming
+the structural mismatch we saw in the single-game setting:
+unrestricted global attention does not fit grid-rule dynamics well.
+The seed-to-seed variance on this task is large
+($\sigma > 2\%$ on BFS error for all NCA / CNN variants) but the
+gap to U-Net and ViT is robust to it. We expand on the role of pool
+features (and \emph{which} pool flavour does the work) in the next
+subsection; longer-form architecture findings (per-game grid,
+hierarchical weight sharing) are in
+Appendix~\ref{app:per-game-arch}.
+
+\subsection{Per-feature pool and input-skip ablation}
+\label{sec:results-pool}
+
+We decompose the NCA-shared advantage on the multi-grid synth setting
+(Table~\ref{tab:baselines-synth}) by individually disabling each
+component of the pool stack and the input-skip connection. Every
+NCA step in the full recipe sees three flavours of broadcast
+non-local features --- axis max-pool (row + column max), axis
+cumulative max (directional prefix-max in each of four directions),
+and grid-wide global max --- plus a re-injection of the embedded
+$(s_t, a_t)$ at every step.
+
+\begin{table}[t]
+  \centering
+  \caption{\textbf{Per-feature ablation of the NCA-shared recipe on
+    multi-grid synth \textsc{sokoban\_basic}.} Mean $\pm$ std over 3
+    seeds at 10k updates. $\Delta$BFS reports the absolute increase
+    in BFS final cell-error vs.\ the full recipe; relative figures
+    in parentheses. Train loss is essentially constant across all
+    configurations.}
+  \label{tab:ablation-pool}
+  \small
+  \resizebox{\linewidth}{!}{%
+  \begin{tabular}{l c c c c}
+    \toprule
+    Recipe & params (M) & best loss & BFS final-err & $\Delta$BFS vs.\ full \\
+    \midrule
+    \textbf{Full (axis + cummax + global + input-skip)} & 3.07 & $0.098 \pm 0.004$ & $\mathbf{4.37\% \pm 2.02\%}$ & --- \\
+    \midrule
+    no axis-cummax    & 2.94 & $0.098 \pm 0.003$ & $4.37\% \pm 2.24\%$  & $+0.00$ ($+0\%$) \\
+    no input-skip     & 2.48 & $0.098 \pm 0.004$ & $5.95\% \pm 4.24\%$  & $+1.58$ ($+36\%$) \\
+    no axis-pool      & 2.94 & $0.100 \pm 0.004$ & $6.75\% \pm 0.56\%$  & $+2.38$ ($+55\%$) \\
+    no global-pool    & 3.01 & $0.098 \pm 0.005$ & $10.71\% \pm 2.57\%$ & $+6.35$ ($+145\%$) \\
+    no pool at all    & 2.68 & $0.100 \pm 0.005$ & $10.71\% \pm 3.89\%$ & $+6.35$ ($+145\%$) \\
+    \bottomrule
+  \end{tabular}
+  }
+\end{table}
+
+\emph{Global-pool} is the single most important pool feature: removing
+it alone is as bad as removing all three pool flavours combined
+($+145\%$ relative BFS error in both cases), indicating that
+grid-wide presence-of-X signals are doing all the non-local work on
+this task. \emph{Axis-cummax} --- the directional prefix-max designed
+for axis-aligned ``rule fires once X is in the same row/column as
+Y'' patterns --- contributes nothing measurable on
+\textsc{sokoban\_basic}: Sokoban chained-pushing rules look like
+\texttt{[ Crate | Crate ] -> [\,| Crate Crate\,]}, which depends on
+the immediate $3{\times}3$ neighbourhood, not a directional axial
+lookup. We expect the cummax feature to recover its load-bearing role
+on games whose rule sets do reference far-apart same-axis cells
+(e.g.\ \textsc{collapse}, \textsc{varislide}). \emph{Input-skip}
+contributes a modest $+36\%$ but with the highest variance across
+configurations ($\sigma = 4.24\%$), suggesting it is a stability
+mechanism rather than an information-carrying feature.
+
+\subsection{Multi-game scaling}
+\label{sec:results-scaling}
+
+Table~\ref{tab:baselines-scaling14} extends the head-to-head to the
+\textsc{Train-14} preset: 14 PuzzleScript games sharing the rule-slot
+encoder, with grid sizes from $4{\times}4$ to $32{\times}24$ and rule
+counts from a handful (basic Sokoban) to $\sim$30
+(\texttt{Heroes\_of\_Sokoban}, \texttt{Sokoboros}). 20k updates per
+seed, $d_h = 256$.
+
+\begin{table}[t]
+  \centering
+  \caption{\textbf{Multi-game baselines on \textsc{Train-14}.}
+    Mean $\pm$ std over 3 seeds at 20k updates. Cell-error rate
+    averaged across games and levels. Both NCA variants beat all
+    three non-NCA baselines; within the NCA family, the per-step
+    body wins on BFS rollout while the shared body wins on train loss
+    (parameter-efficient) and has notably lower seed-to-seed variance.}
+  \label{tab:baselines-scaling14}
+  \small
+  \begin{tabular}{l c c c c}
+    \toprule
+    Architecture & params (M) & best loss & BFS final-err & A* final-err \\
+    \midrule
+    \textbf{NCA (per-step, $T{=}4, n_r{=}1$)} & 7.37 & $\sim$$0$ & $\mathbf{12.39\% \pm 1.82\%}$ & $13.57\% \pm 1.76\%$ \\
+    NCA (shared, $T{=}4, n_r{=}T$)            & \textbf{1.96} & $\sim$$0$ & $13.12\% \pm \mathbf{0.24\%}$ & $14.68\% \pm 0.08\%$ \\
+    CNN (4-block ResNet)                      & 5.01 & $\sim$$0$ & $13.56\% \pm 1.08\%$ & $14.71\% \pm 1.42\%$ \\
+    U-Net (2 levels)                          & 6.09 & $1.0 \times 10^{-4}$ & $21.03\% \pm 0.29\%$ & $23.15\% \pm 0.40\%$ \\
+    ViT (4 layers)                            & 4.01 & $7.7 \times 10^{-4}$ & $23.14\% \pm 2.40\%$ & $24.67\% \pm 1.87\%$ \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+Both NCA variants outperform all three non-NCA baselines on
+autoregressive rollout, with U-Net at $1.6\times$ and ViT at
+$\sim$$1.9\times$ NCA-perstep's BFS error; the NCA / non-NCA gap is
+robust to seed (no overlap of $\pm 1\sigma$ intervals). Within the
+NCA family the per-step body has the lowest mean BFS error
+($12.39\% \pm 1.82\%$) while the shared body has $7.6\times$ lower
+seed-to-seed variance and $3.8\times$ better parameter efficiency;
+at $\pm 1\sigma$ the two NCA variants overlap on aggregate BFS
+rollout, so we cannot distinguish them on this metric. ViT's train
+loss is $\sim$$10^{4}$ times higher than the NCA / CNN family
+($\sim$$8 \times 10^{-4}$ vs.\ $\sim$$0$), confirming the structural
+mismatch from the single-game setting. Per-game breakdowns are in
+Appendix~\ref{app:per-game}.
+
+\subsection{In-distribution mastery on the broad corpus}
 \label{sec:results-fidelity}
 
-Table~\ref{tab:fidelity} reports per-cell error rates on the
-94-game broad-corpus training preset \textsc{Train-94},
-averaged across all 94 games and all authored levels per game, under
-four rollout regimes: random actions (autoregressive),
+Rule-conditioning lets a single set of weights master many games at
+once. Table~\ref{tab:fidelity} reports per-cell rollout error on the
+94-game broad-corpus preset \textsc{Train-94}, averaged across all
+94 games and all authored levels per game, under four rollout
+regimes: random actions (autoregressive),
 random-action teacher-forced (one step at a time), BFS-optimal
 oracle actions, and A*-optimal oracle actions. We compare the
-encoder-only run ($\beta = 0$) and the joint decoder run
-($\beta = 1.0$).
+encoder-only run ($\beta = 0$) and the joint-decoder run
+($\beta = 1.0$), where $\beta$ controls the weight of the symbolic
+token-decoder loss in the training objective.
 
 \begin{table}[t]
   \centering
@@ -36,121 +247,37 @@ encoder-only run ($\beta = 0$) and the joint decoder run
 \end{table}
 
 The 1-step teacher-forced cell-error of $\sim 0.15\%$ across 94 games
-quantifies on-distribution fidelity in a single number. Multi-step
-rollout error climbs to $\sim 5{-}8\%$ across regimes, with the median
-game still under $3\%$ on every regime. The mean is pulled up by a
-small set of persistently-hard games whose state spaces are large or
-whose rule structures involve cascading \texttt{again} loops; we
-discuss this distribution in \S\ref{sec:discussion}.
+quantifies on-distribution fidelity in a single number: a single
+rule-conditioned NCA, fed only the tokenized rule text and the
+current state, predicts the next state of any of 94 different
+authored games at $\geq 99.85\%$ per-cell accuracy median.
+Multi-step rollout error climbs to $\sim 5{-}8\%$ across regimes,
+with the median game still under $3\%$ on every regime. The mean is
+pulled up by a small set of persistently-hard games whose state
+spaces are large or whose rule structures involve cascading
+\texttt{again} loops; we discuss this distribution in
+\S\ref{sec:discussion}. Adding the joint symbolic-decoder objective
+($\beta = 1.0$) ties the encoder-only run within $0.5$pp on every
+regime, so the dynamics-fidelity claim is robust to that auxiliary
+loss.
 
-\subsection{Within-game generalization from synthetic levels}
-\label{sec:results-within-game}
+\subsection{Generalization to unseen games}
+\label{sec:results-ood}
 
-The fidelity numbers in
-Table~\ref{tab:fidelity} measure cell-error on the same
-authored levels the model trained on. To probe whether the
-rule-conditioned NCA learns rule structure rather than per-state
-outcomes, we strip every authored level out of the training set and
-substitute $K{=}64$ purely-synthetic levels per game generated by an
-evolutionary search at the game's authored max-dim. Evaluation is
-unchanged: BFS / A* / random-action rollouts on \emph{every} authored
-level. Five games span distinct mechanic classes
-(\textsc{Microban}, \textsc{Heroes\_of\_Sokoban}, \textsc{Bouncers},
-\textsc{nekopuzzle}, \textsc{Travelling\_salesman}); each game is
-trained four times to cover the architecture buckets in
-Appendix~\ref{app:per-game-arch} (pool $\times$ weight-sharing at
-$T{=}8$). The recipe and launcher are documented in
-Appendix~\ref{app:synth-only}.
+We evaluate generalization to a 30-game stratified held-out set,
+disjoint from every training preset by name and by token-sequence
+hash, along three complementary axes: held-out latent geometry,
+symbolic-decoder reconstruction and sampling, and frozen-NCA
+inverse-fitting from observed transitions.
 
-Pure-synthetic supervision is the strongest available within-game
-OOD-levels probe: every authored level is genuinely held-out from
-training; the only signal the model has about the rule set is the
-tokenized rule text plus rollouts on synthesized grids. A model that
-has memorized authored states cannot succeed here.
-
-\begin{table}[t]
-  \centering
-  \caption{\textbf{Synth-only $\to$ all-authored generalization (running).}
-    Each cell is the mean BFS rollout cell-error across every authored
-    level of the game, after training on $K{=}128$ purely-synthetic
-    levels at the smallest-by-area authored size of the game.
-    No authored level enters training. Best architecture bucket per
-    game is bolded. Cells marked ``—'' are pending the full sweep;
-    the displayed Microban-D number is the anchor result described
-    below.}
-  % Auto-regenerated from nca_wm/logs_per_game_arch_synth/ by
-  % nca_wm/scripts/make_within_game_synth_artifacts.py
-  \label{tab:within-game-synth}
-  \small
-  \input{figures/per_game_arch_synth/within_game_synth_table.tex}
-\end{table}
-
-\paragraph{Anchor result.}
-A pilot run of the validated recipe (\S\ref{app:synth-only}) on
-\textsc{Microban}, bucket D ($T{=}8$, no-pool $+$ input-skip,
-per-step), at the smallest-by-area authored size, $K{=}128$,
-$30{,}000$ updates produces the rich-metric numbers in
-Table~\ref{tab:within-game-synth-anchor}. Five of the ten authored
-levels land at $0\%$ BFS exactly. The $0.02\%$ teacher-forced figure
-is in fact $5{\times}$ \emph{lower} than the authored-only baseline
-of $0.11\%$ at $10{,}000$ updates
-(Table~\ref{tab:baselines-microban}), demonstrating that synth-only
-training with a coverage-driven GA produces a \emph{more accurate}
-per-step rule predictor than authored-only training, with the BFS
-rollout still close to authored (within $5{\times}$). This is the
-within-game OOD-levels evidence the section advertises: the
-rule-conditioned NCA does learn rule structure rather than
-per-authored-state outcomes.
-
-\begin{table}[t]
-  \centering
-  \caption{\textbf{Anchor run for the synth-only recipe.} Mean per-cell
-    error across all 10 authored \textsc{Microban} levels (no level
-    enters training).}
-  % Auto-regenerated from
-  %   nca_wm/logs_per_game_arch_synth/Microban__D_d8_w7_k128_30k
-  % by nca_wm/scripts/make_within_game_synth_artifacts.py
-  \label{tab:within-game-synth-anchor}
-  \small
-  \input{figures/per_game_arch_synth/anchor_microban_d.tex}
-\end{table}
-
-\paragraph{Pre-registered prediction for the remaining cells.}
-Prior single-game evidence is sharp on at least the
-Sokoban-class subset (cf.\ the Sokoban $w{=}7 \to 0\%$ on 155
-\textsc{Microban}/\textsc{Microban\_I} levels prior;
-\textsc{nekopuzzle} multi-grid closing a $3{-}8\%$ authored gap
-to $0.3\%$). We expect (i) Sokoban-class games (\textsc{Microban})
-to land at $\leq 1\%$ BFS across all four buckets, replicating the
-\textsc{Microban}-D anchor; (ii) \textsc{Bouncers} and
-\textsc{Heroes\_of\_Sokoban} to show non-trivial transfer with the
-architecture gap (D vs.\ A) at least as large as in the authored case;
-(iii) \textsc{Travelling\_salesman} to fail under pure synth
-supervision at $5{\times}5$ and require the authored-seeded fallback,
-since the all-pairs combinatorial structure of larger TSP grids is
-not present in the small-grid synth distribution.
-
-\paragraph{F3 reprise without memorization.}
-On \textsc{Travelling\_salesman}, the per-game grid in
-Appendix~\ref{app:per-game-arch} already showed all four
-architecture buckets converging to within $1\%$ of the same
-synthetic-style train loss while their L0 BFS cell-error split
-$0\% / 0\% / 26.9\% / 45.1\%$. The synth-only setup pushes that
-test further: with no authored memorization available, any train-loss
-parity across buckets is forced to come from learning rule structure,
-so an even larger AR-rollout split would be the cleanest available
-signal that pool-driven over-fitting on per-step prediction
-destabilizes auto-regressive feedback.
-
-\subsection{Scaling curve: held-out latent geometry vs training games}
+\paragraph{Latent geometry as we scale games.}
 \label{sec:results-scaling-curve}
-
 We train the same rule-conditioned NCA architecture on nested
-training presets and evaluate held-out latent geometry on a fixed
-30-game stratified held-out set (disjoint from every training preset
-by name and by token-hash). The metric is the median 1-NN cosine
-distance from each held-out game's encoded slot to the nearest
-training-game slot in the 1024-dim flattened slot space.
+training presets and measure each held-out game's 1-NN cosine
+distance to the nearest training-game slot in the 1024-dim flattened
+slot space. Table~\ref{tab:scaling-curve} reports the median across
+the 21 of 30 held-outs whose tokens fit within the smallest training
+preset's maximum sequence length.
 
 \begin{table}[t]
   \centering
@@ -158,9 +285,7 @@ training-game slot in the 1024-dim flattened slot space.
     runs use the rule-attention NCA body, $K{=}16$ slots,
     $d_{\text{slot}}{=}64$, $T{=}8$ NCA steps, batch 32, 150k Adam
     updates. The held-out set is the same 30-game stratified sample
-    for every row. Median 1-NN distance is computed on the subset of
-    held-outs whose tokens fit within the smallest training preset's
-    maximum sequence length (21 of 30 games).}
+    for every row.}
   \label{tab:scaling-curve}
   \small
   \begin{tabular}{l r l r}
@@ -175,77 +300,49 @@ training-game slot in the 1024-dim flattened slot space.
 \end{table}
 
 At 94 training games the encoder-only run loosens relative to the
-14-game mark ($0.215$ vs.\ $0.077$) because the encoder now has to
-model wider mechanical diversity, and the joint decoder constraint
-pulls it back down by 29\% ($0.215 \to 0.153$).
+14-game mark ($0.215$ vs.\ $0.077$) because the encoder has to model
+wider mechanical diversity, and the joint decoder constraint pulls
+it back down by 29\% ($0.215 \to 0.153$). The decoder constraint
+appears to organise the slot space so that mechanically-similar
+games sit closer.
+% papertodo: add the completed 199-game Train-199 geometry row, or
+% remove discussion of Train-199 from the scaling table if the run
+% is not ready for submission.
 
-\papertodo{Add the completed 199-game \textsc{Train-199} geometry row,
-or remove discussion of \textsc{Train-199} from the scaling table if
-the run is not ready for submission.}
-
-The take-home is that the \emph{geometric} side of engine-level
-modelling --- placing held-out games near mechanically-similar
-training games in the slot space --- is real and is improved by
-the joint decoder objective.
-Predictive-accuracy on held-out games (the next subsection) is the
-complementary axis.
-
-\subsection{Symbolic autoencoder}
+\paragraph{Symbolic decoder: reconstruction and sampling.}
 \label{sec:results-autoencoder}
-
-We train the joint encoder + NCA + slot-token decoder
-(\S\ref{sec:method}) on the 94-game broad-corpus preset
-\textsc{Train-94} for 150k updates with
-$\beta = 1.0$ on the decoder loss. The decoder converges to per-token
+The joint encoder + NCA + slot-token decoder
+(\S\ref{sec:method}) is trained on \textsc{Train-94} for 150k updates
+with $\beta = 1.0$. The decoder converges to per-token
 cross-entropy $\approx 2 \times 10^{-9}$ within the first 5k updates
-and holds there throughout. The world-model losses track the
-encoder-only ablation ($\beta = 0$) within noise: final state-loss
-$0.0049$ vs.\ $0.0049$, final change-error $0.013$ vs.\ $0.015$. The
-decoder constraint is therefore essentially \emph{free} on prediction
-quality at this scale, adding 1.18M parameters on top of the 9.89M
-world-model parameters and roughly 20\% to per-step wall-clock.
-
-\paragraph{Token reconstruction.}
-Under teacher forcing the decoder achieves perfect reconstruction on
-$76/94$ training games and a median per-position match of $1.000$
-(mean $0.906$, min $0.276$). The slot bottleneck retains the
-information needed to recover the full symbolic specification on the
-majority of the corpus; the imperfect mean is dominated by a small
-tail of long, sprite-rich games that exhaust the decoder's
-positional budget.
-
-\paragraph{Held-out latent geometry.}
-We encode a 30-game held-out set (disjoint from training by name and
-by token-hash) through the trained encoder and measure each held-out
-game's 1-NN cosine distance to the nearest training-game slot. With
-$\beta = 1.0$ the median 1-NN distance falls from $0.215$ to $0.153$
-(29\% tighter) versus the matched encoder-only run, holding all other
-hyper-parameters fixed. The decoder objective appears to organise the
-slot space so that mechanically-similar games sit closer.
-
-\paragraph{Autoregressive sampling.}
-Greedy autoregressive decoding from random Gaussian-fit slots
-($N = 25$) yields $15/25$ engine-loadable PuzzleScript programs
-(60\%); 9-point linear interpolations between two endpoint games
-(\textsc{Ebony\_\&\_Ivory} $\rightarrow$ \textsc{rigidfail1}) yield
-$9/9$ engine-loadable programs along the line (100\%). The
-generations contain plausible push rules of the form
-\verb"[ > Obj2 | Obj4 ] -> [ > Obj2 | > Obj4 ]",
+and holds there throughout, adding 1.18M parameters on top of the
+9.89M world-model parameters and roughly 20\% to per-step
+wall-clock. Under teacher forcing the decoder achieves perfect
+reconstruction on $76/94$ training games and a median per-position
+match of $1.000$ (mean $0.906$, min $0.276$); the imperfect mean is
+dominated by a small tail of long, sprite-rich games that exhaust
+the decoder's positional budget. Greedy autoregressive decoding from
+random Gaussian-fit slots ($N = 25$) yields $15/25$ engine-loadable
+PuzzleScript programs (60\%); 9-point linear interpolations between
+two endpoint games (\textsc{Ebony\_\&\_Ivory} $\rightarrow$
+\textsc{rigidfail1}) yield $9/9$ engine-loadable programs along the
+line (100\%). The generations contain plausible push rules of the
+form \verb"[ > Obj2 | Obj4 ] -> [ > Obj2 | > Obj4 ]",
 \texttt{late}-prefixed rules, and per-object $5{\times}5$ pixel
 sprites with palettes consistent across the legend, the collision
 layers, and the rule body.
 
-\subsection{Latent inverse-fitting from OOD transitions}
+\paragraph{Inverse-fitting unobserved games from transitions.}
 \label{sec:results-inverse-fit}
-
 To test whether an unobserved game's latent program can be recovered
-from observed transitions, we freeze the
-trained NCA $\theta$ and decoder $\psi$ and optimise the slot
+from observed transitions, we freeze the trained NCA $\theta$ and
+decoder $\psi$ and optimise the slot
 $z \in \mathbb{R}^{K \times d_{\text{slot}}}$ via 2{,}000 Adam steps
-at $\text{lr} = 5 \times 10^{-3}$ on the same per-cell next-state BCE
-used for training (\S\ref{sec:method-inverse}), holding model
-parameters fixed. The held-out target games are drawn from the deduped
-pool and verified disjoint from training by name and by token-hash.
+at $\text{lr} = 5 \times 10^{-3}$ on the same per-cell next-state
+BCE used for training (\S\ref{sec:method-inverse}), holding model
+parameters fixed. The held-out target games are drawn from the
+deduped pool and verified disjoint from training by name and by
+token-hash.
 
 \begin{table}[t]
   \centering
@@ -271,325 +368,9 @@ pool and verified disjoint from training by name and by token-hash.
   \end{tabular}
 \end{table}
 
-Two findings: (i) the optimisation drives BCE down two-to-three orders
-of magnitude on every target, demonstrating that the frozen NCA can
-fit OOD dynamics through the latent variable; (ii) the recovered slots
-land near \emph{mechanically} related training games rather than
-arbitrary ones, suggesting the latent space carries dynamics-relevant
-structure that nearest-neighbour retrieval can use as a prior. The per-cell BCE
-remains the cleanest figure of merit for the dynamics fit.
-
-\subsection{Baselines vs.\ rule-conditioned NCA}
-\label{sec:results-baselines}
-
-Table~\ref{tab:baselines-microban} reports the head-to-head comparison
-on \textsc{microban} (10 authored levels), trained for 10k updates per
-seed at $d_h = 256$ with the canonical recipe (\S\ref{sec:experiments}).
-We measure best train cross-entropy loss, end-of-rollout cell-error
-rate under three policies (random, BFS-optimal, A*-optimal), and final
-parameter count. The table reports a single seed; the multi-seed
-synthetic-data comparison is reported in
-Table~\ref{tab:baselines-synth}.
-
-\begin{table}[t]
-  \centering
-  \caption{\textbf{Baselines vs.\ rule-conditioned NCA on
-    \textsc{microban} (authored levels).} Mean $\pm$ std over 3 seeds
-    at 10k updates. Lower is better for loss and cell-error; A* first-
-    divergence step is higher-is-better. Param count in millions;
-    architectures sorted by BFS final cell-error.}
-  \label{tab:baselines-microban}
-  \small
-  \begin{tabular}{l c c c c}
-    \toprule
-    Architecture & params (M) & best loss & BFS final-err & A* first-div \\
-    \midrule
-    \textbf{NCA (shared, $T{=}4, n_r{=}T$)} & \textbf{1.94} & $0.107 \pm 0.002$ & $\mathbf{0.11\% \pm 0.16\%}$ & $64$ \\
-    CNN (4-block ResNet)                    & 5.00          & $0.107 \pm 0.002$ & $0.32\% \pm 0.24\%$         & $89$ \\
-    NCA (per-step, $T{=}4, n_r{=}1$)        & 7.36          & $0.107 \pm 0.002$ & $0.47\% \pm 0.66\%$         & $35$ \\
-    U-Net (2 levels)                        & 6.07          & $0.108 \pm 0.002$ & $4.84\% \pm 1.03\%$         & $14$ \\
-    ViT (4 layers)                          & 3.99          & $0.107 \pm 0.002$ & $10.96\% \pm 0.50\%$        & $<1$ \\
-    \bottomrule
-  \end{tabular}
-\end{table}
-
-Three findings on this controlled, memorizable single-game setting:
-\textbf{(i)} the NCA with shared weights wins on BFS rollout
-($0.11\% \pm 0.16\%$) at the fewest parameters (1.94M),
-$2.9\times$ better than the same-depth feed-forward CNN
-($0.32\% \pm 0.24\%$) at $2.6\times$ fewer params and
-$4.3\times$ better than the per-step NCA ($0.47\% \pm 0.66\%$);
-\textbf{(ii)} U-Net and ViT both actively underperform here despite
-parameter counts comparable to or exceeding NCA-shared --- U-Net's
-2-level downsampling loses fine-grained player position on small
-grids, and ViT's global self-attention diverges before the first
-rollout step (mean first-divergence step under $1$), suggesting
-locality plus iteration is a stronger inductive bias for grid-rule
-dynamics than unrestricted global attention; \textbf{(iii)} best
-train loss is essentially identical ($0.107 \pm 0.002$) across all
-five architectures, illustrating finding F3
-(\S\ref{sec:results-F3}): train loss is invisible to a $\geq 100\times$
-swing in autoregressive rollout error ($0.11\%$ vs.\ $10.96\%$).
-
-\medskip\noindent
-The full comparison on the multi-grid synthetic data
-regime---where memorization is unavailable and rule learning is
-required---is reported in Table~\ref{tab:baselines-synth} and
-analyzed in \S\ref{sec:results-ceiling}.
-
-\begin{table}[t]
-  \centering
-  \caption{\textbf{Baselines vs.\ rule-conditioned NCA on
-    \textsc{sokoban\_basic} (multi-grid synthetic).} Mean $\pm$ std
-    over 3 seeds at 10k updates; widths
-    $\{5{\times}5, 6{\times}6, 7{\times}7, 8{\times}8\}$ with 256
-    synthetic levels per width. Memorization is unavailable; the model
-    has to learn the slide rule across grid sizes. Architectures
-    sorted by BFS final cell-error.}
-  \label{tab:baselines-synth}
-  \small
-  \begin{tabular}{l c c c c}
-    \toprule
-    Architecture & params (M) & best loss & BFS final-err & A* first-div \\
-    \midrule
-    \textbf{NCA (shared, $T{=}4, n_r{=}T$)} & \textbf{3.07} & $0.069 \pm 0.003$ & $\mathbf{4.37\% \pm 2.02\%}$ & $9.2$ \\
-    CNN (4-block ResNet)                    & 5.00          & $0.069 \pm 0.003$ & $5.56\% \pm 3.12\%$         & $7.0$ \\
-    NCA (per-step, $T{=}4, n_r{=}1$)        & 8.49          & $0.070 \pm 0.003$ & $5.95\% \pm 3.50\%$         & $13.8$ \\
-    U-Net (2 levels)                        & 6.07          & $0.071 \pm 0.003$ & $8.33\% \pm 0.97\%$         & $0.5$ \\
-    ViT (4 layers)                          & 3.99          & $0.084 \pm 0.002$ & $12.70\% \pm 1.12\%$        & $0.7$ \\
-    \bottomrule
-  \end{tabular}
-\end{table}
-
-The synthetic-multi-grid setting is the decisive comparison: per-state
-memorization is unavailable (4 widths $\times$ 256 synthetic levels
-per width $=$ 1024 distinct levels share one rule set), so the model
-must \emph{learn the rule that maps state plus action to the next
-state}. Three observations: \textbf{(i)} the NCA with shared weights
-again wins on BFS rollout ($4.37\% \pm 2.02\%$) at the fewest
-parameters (3.07M), beating the matched-depth CNN
-($5.56\% \pm 3.12\%$) and the per-step NCA
-($5.95\% \pm 3.50\%$); the $2.8\times$ parameter advantage over
-NCA-per-step suggests the shared-weights inductive bias is doing real
-work, not just compressing capacity; \textbf{(ii)} U-Net
-($8.33\% \pm 0.97\%$) and ViT ($12.70\% \pm 1.12\%$) underperform
-here as well, with ViT also failing to fit the train loss
-($0.084 \pm 0.002$ vs.\ $0.069 \pm 0.003$ for the other four);
-\textbf{(iii)} the seed-to-seed variance on this task is large
-($\sigma > 2\%$ on BFS error for all NCA / CNN variants), reflecting
-the multiple-basin optimization landscape we previously characterized
-on the closely related \textsc{varislide} task (F8); the large gap
-to U-Net and ViT is robust to that variance.
-
-\paragraph{(F1) Global pool is load-bearing; axis-cummax targets a
-narrower rule class.}
-A bare $3{\times}3$ convolution can only propagate one cell of context
-per NCA step. Several PuzzleScript rule patterns reference cells
-arbitrarily far apart along an axis or anywhere on the level
-(\texttt{[X | ... | Y]}, \texttt{[X][Y]}). Without pool features the
-NCA needs $\Omega(\max(H,W))$ steps just to surface non-local
-information. The per-feature ablation in
-Table~\ref{tab:ablation-pool} isolates which pool flavour does the
-work: removing global-pool alone is as costly as removing all three
-($+145\%$ relative BFS error), while removing axis-cummax has no
-measurable effect on \textsc{sokoban\_basic} (its target patterns ---
-axis-aligned \texttt{[X | ... | Y]} matches --- do not appear in
-that game's rule set). On a 19-game gallery preset and a controlled
-\textsc{collapse} no-pool ablation, turning pool off costs both
-convergence speed and final loss, with the no-pool model collapsing
-into the identity-prediction minimum even at $4{\times}$ the depth.
-
-\paragraph{(F2) Shared NCA-body weights are the right inductive bias.}
-The PuzzleScript engine has two natural levels of iteration: an
-inner ordered list of rules applied once each per tick, and an outer
-\texttt{again} loop that re-runs the rule list until the state stops
-changing. We factor $T = n_\ell \cdot n_r$ accordingly. On a single-game
-depth sweep ($T \in \{2, 4, 8, 16\}$), shared $T{=}8$ reaches
-$5.5{\times}$ lower train loss with $7{\times}$ fewer parameters than
-the per-step body at the same depth; shared $T{=}2$ at 14$\times$
-fewer parameters than the deepest per-step variant matches it on
-oracle-action rollouts. Hierarchical $n_r > 1$ sits between these
-extremes.
-
-\paragraph{(F3) Train loss decouples from autoregressive rollout error.}
-\label{sec:results-F3}
-A model with the lowest train (per-step) loss is not the model with
-the lowest autoregressive rollout error. Concretely, in the
-over-capacity regime we observe per-step models with
-$5{\times}$ lower train loss but $3{-}4{\times}$ higher 50-step
-rollout error. The mechanism is small but systematic per-step errors
-compounding destructively under autoregression. Reporting only
-best-loss hides the rollout-drift cost of going deeper or wider.
-Appendix~\ref{app:per-game-arch} reports a sharpened version of this
-finding on a per-game $\times$ per-architecture grid: on
-\textsc{Travelling\_salesman} all four buckets converge to within
-$1\%$ of the same train loss but split $0\% / 0\% / 26.9\% / 45.1\%$
-on L0 BFS cell-error.
-
-\subsection{Pool-feature and input-skip ablation}
-\label{sec:results-pool}
-
-We decompose the NCA-shared advantage on the multi-grid synth setting
-(Table~\ref{tab:baselines-synth}) by individually disabling each
-component of the pool stack and the input-skip connection. Every
-NCA step in the full recipe sees three flavours of broadcast
-non-local features --- axis max-pool (row + column max), axis
-cumulative max (directional prefix-max in each of four directions),
-and grid-wide global max --- plus a re-injection of the embedded
-$(s_t, a_t)$ at every step. Results in Table~\ref{tab:ablation-pool}.
-
-\begin{table}[t]
-  \centering
-  \caption{\textbf{Per-feature ablation of the NCA-shared recipe on
-    multi-grid synth \textsc{sokoban\_basic}.} Mean $\pm$ std over 3
-    seeds at 10k updates. $\Delta$BFS reports the absolute increase
-    in BFS final cell-error vs.\ the full recipe; relative figures
-    in parentheses. Train loss is essentially constant across all
-    configurations (F3 still applies).}
-  \label{tab:ablation-pool}
-  \small
-  \resizebox{\linewidth}{!}{%
-  \begin{tabular}{l c c c c}
-    \toprule
-    Recipe & params (M) & best loss & BFS final-err & $\Delta$BFS vs.\ full \\
-    \midrule
-    \textbf{Full (axis + cummax + global + input-skip)} & 3.07 & $0.098 \pm 0.004$ & $\mathbf{4.37\% \pm 2.02\%}$ & --- \\
-    \midrule
-    no axis-cummax    & 2.94 & $0.098 \pm 0.003$ & $4.37\% \pm 2.24\%$  & $+0.00$ ($+0\%$) \\
-    no input-skip     & 2.48 & $0.098 \pm 0.004$ & $5.95\% \pm 4.24\%$  & $+1.58$ ($+36\%$) \\
-    no axis-pool      & 2.94 & $0.100 \pm 0.004$ & $6.75\% \pm 0.56\%$  & $+2.38$ ($+55\%$) \\
-    no global-pool    & 3.01 & $0.098 \pm 0.005$ & $10.71\% \pm 2.57\%$ & $+6.35$ ($+145\%$) \\
-    no pool at all    & 2.68 & $0.100 \pm 0.005$ & $10.71\% \pm 3.89\%$ & $+6.35$ ($+145\%$) \\
-    \bottomrule
-  \end{tabular}
-  }
-\end{table}
-
-Three observations:
-\textbf{(i)} \emph{global-pool} is the single most important pool
-feature. Removing it alone is as bad as removing all three pool
-flavours combined ($+145\%$ relative BFS error in both cases),
-indicating that grid-wide presence-of-X signals are doing all the
-non-local work on this task; \textbf{(ii)} \emph{axis-cummax} ---
-the directional prefix-max designed for axis-aligned ``rule fires
-once X is in the same row/column as Y'' patterns --- contributes
-nothing measurable on \textsc{sokoban\_basic} ($+0\%$). Sokoban
-chained-pushing rules look like
-\texttt{[ Crate | Crate ] -> [\,| Crate Crate\,]}, which depends
-on the immediate $3{\times}3$ neighbourhood, not a directional axial
-lookup. We expect the cummax feature to recover its load-bearing
-role on games whose rule sets do reference far-apart same-axis cells
-(e.g.\ \textsc{collapse}, \textsc{varislide});
-\textbf{(iii)} \emph{input-skip} contributes a modest $+36\%$ but
-with the highest variance across configurations
-($\sigma = 4.24\%$), suggesting it is a stability mechanism rather
-than an information-carrying feature: when training lands in a good
-basin it isn't strictly needed, but it cuts the bad-basin tail.
-Train loss is essentially identical ($0.098 \pm 0.004$) across all
-six configurations despite a $2.5\times$ swing in BFS rollout
-error --- yet another instance of F3 (\S\ref{sec:results-F3}).
-
-\subsection{Hierarchical weight sharing}
-\label{sec:results-hierarchy}
-
-\papertodo{Add hierarchy figure/table: $T{=}16$ varying
-$n_r \in \{1, 2, 4, 8, 16\}$ on
-\textsc{microban} multi-grid synth and on the multi-game
-\textsc{Train-14} preset, reporting change-error and parameter
-count.}
-
-\subsection{Adaptive halting}
-\label{sec:results-halting}
-
-We compare four halting modes and a fixed-depth baseline on a custom
-$1$-rule \textsc{varislide} game in which a single \texttt{again}-driven
-slide rule pushes the player up to $d \in \{1, 2, 3, 4, 6, 8, 12, 16\}$
-cells per action across grid widths $\{6, 8, 10, 12, 16\}$. Modes:
-\emph{ponder} (PonderNet ponder loss with learned halt head + KL
-prior), \emph{uniform} (per-step loss equally weighted across all
-$T$ steps), \emph{argmax-ST} (straight-through estimator on
-$\arg\max_k p_k$), and \emph{convergence-ST} (halt at inference when
-consecutive predictions stop changing, no learned head).
-
-\papertodo{Add halting figure: per-step error trajectory under each
-mode plus per-instance halt distribution as a function of slide
-distance.}
-
-Across these modes we observe two phenomena. First, on tasks where
-the dynamics fit cleanly in $\sim$1--2 NCA steps (small-grid varislide,
-\textsc{collapse}), all halting modes converge near the dynamics-floor
-within their effective depth and drift past it; convergence-ST
-recovers near-oracle performance via inference-time stopping.
-Second, on the multi-grid synthetic regime where memorization is
-unavailable, \emph{none} of the halting modes reliably learn the
-underlying rule (\S\ref{sec:results-ceiling}); the halt head at best
-degenerates to halt-at-$k{=}1$ + identity prediction.
-
-\subsection{Multi-grid synthetic data ceiling}
-\label{sec:results-ceiling}
-
-When we move from a single authored level to the multi-grid synthetic
-data regime ($\{6,8,10,12,16\}$ widths $\times$ 64 levels each),
-train change-error climbs by $1000{\times}$ ($5 \times 10^{-5}
-\to 0.05$--$0.10$), confirming that the model can no longer
-1-shot-memorize per-state outcomes. The model attempts to learn the
-rule but plateaus: 50k updates at $d_h{=}256$ (5$\times$ more updates,
-2$\times$ wider) does not move the needle. Multi-seed verification at
-$T \in \{8, 16, 32, 64\}$ shows per-seed argmax variance dwarfs the
-recipe signal and best-loss is essentially identical across all
-configurations. We discuss candidate fixes in \S\ref{sec:discussion}.
-
-\subsection{Multi-game scaling}
-\label{sec:results-scaling}
-
-Table~\ref{tab:baselines-scaling14} reports the head-to-head comparison
-on the \textsc{Train-14} benchmark: 14 PuzzleScript games sharing
-the rule-slot encoder, with grid sizes from $4{\times}4$ to
-$32{\times}24$ and rule counts from a handful (basic Sokoban) to
-$\sim$30 (\texttt{Heroes\_of\_Sokoban}, \texttt{Sokoboros}). Single
-seed, 20k updates, $d_h = 256$.
-
-\begin{table}[t]
-  \centering
-  \caption{\textbf{Multi-game baselines on \textsc{Train-14}.}
-    Mean $\pm$ std over 3 seeds at 20k updates. Cell-error rate
-    averaged across games and levels. Both NCA variants beat all
-    three non-NCA baselines; within the NCA family, the per-step
-    body wins on BFS rollout while the shared body wins on train loss
-    (parameter-efficient) and has notably lower seed-to-seed variance.}
-  \label{tab:baselines-scaling14}
-  \small
-  \begin{tabular}{l c c c c}
-    \toprule
-    Architecture & params (M) & best loss & BFS final-err & A* final-err \\
-    \midrule
-    \textbf{NCA (per-step, $T{=}4, n_r{=}1$)} & 7.37 & $\sim$$0$ & $\mathbf{12.39\% \pm 1.82\%}$ & $13.57\% \pm 1.76\%$ \\
-    NCA (shared, $T{=}4, n_r{=}T$)            & \textbf{1.96} & $\sim$$0$ & $13.12\% \pm \mathbf{0.24\%}$ & $14.68\% \pm 0.08\%$ \\
-    CNN (4-block ResNet)                      & 5.01 & $\sim$$0$ & $13.56\% \pm 1.08\%$ & $14.71\% \pm 1.42\%$ \\
-    U-Net (2 levels)                          & 6.09 & $1.0 \times 10^{-4}$ & $21.03\% \pm 0.29\%$ & $23.15\% \pm 0.40\%$ \\
-    ViT (4 layers)                            & 4.01 & $7.7 \times 10^{-4}$ & $23.14\% \pm 2.40\%$ & $24.67\% \pm 1.87\%$ \\
-    \bottomrule
-  \end{tabular}
-\end{table}
-
-The multi-game story is more nuanced than the single-game one.
-\textbf{(i)} Both NCA variants outperform all three non-NCA baselines
-on autoregressive rollout, with U-Net at $1.6\times$ and ViT at
-$\sim$$1.9\times$ NCA-perstep's BFS error; the NCA / non-NCA gap is
-robust to seed (no overlap of $\pm 1\sigma$ intervals).
-\textbf{(ii)} Within the NCA family, the per-step body has the
-lowest mean BFS error ($12.39\% \pm 1.82\%$) but the shared body
-has notably lower seed-to-seed variance ($\pm 0.24\%$ vs.\
-$\pm 1.82\%$); the per-step's higher capacity helps the model encode
-the joint distribution of 14 distinct rule sets, while the shared
-body's compactness yields a more constrained optimization landscape.
-At $\pm 1\sigma$ NCA-shared and NCA-perstep overlap, so we cannot
-distinguish them on aggregate BFS rollout, but NCA-shared wins
-parameter efficiency by $3.8\times$.
-\textbf{(iii)} ViT's train loss is $\sim$$10^{4}$ times higher than
-the NCA / CNN family ($\sim$$8 \times 10^{-4}$ vs.\ $\sim$$0$),
-confirming the structural mismatch we observed on the synthetic
-single-game setting (\S\ref{sec:results-baselines}): unrestricted
-global attention does not fit grid-rule dynamics well even at modest
-scale. \textbf{(iv)} Per-game breakdowns and held-out cross-game
-generalization are deferred to the appendix.
+The optimisation drives BCE down two-to-three orders of magnitude on
+every target, demonstrating that the frozen NCA can fit OOD dynamics
+through the latent variable; the recovered slots land near
+\emph{mechanically} related training games rather than arbitrary
+ones, suggesting the latent space carries dynamics-relevant
+structure that nearest-neighbour retrieval can use as a prior.

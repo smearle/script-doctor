@@ -55,14 +55,14 @@ weights with $T \cdot n_\ell$ effective depth use the same parameters
 as a one-step model.
 
 \paragraph{Memorization as a confound.}
-A key observation in \S\ref{sec:results-ceiling} is that the
+A key observation in \S\ref{app:ceiling} is that the
 single-level / single-grid setting allows the model to learn a
 per-state lookup table via cross-attention over rich slot
 representations. ``Pool features substitute for depth'' is the
 single-level reading; ``the model memorizes per-state outcomes'' is
 the multi-level reading of the same architectural configuration.
 Both are real, and disentangling them required the multi-grid
-synthetic-data regime that we describe in \S\ref{sec:results-ceiling}.
+synthetic-data regime that we describe in \S\ref{app:ceiling}.
 We recommend the multi-grid synth setup as a default check for
 future PuzzleScript world-model work: if your model only succeeds at
 the single-grid setting, you may not be learning the dynamics.
