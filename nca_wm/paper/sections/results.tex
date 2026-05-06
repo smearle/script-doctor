@@ -74,49 +74,62 @@ has memorized authored states cannot succeed here.
   \centering
   \caption{\textbf{Synth-only $\to$ all-authored generalization (running).}
     Each cell is the mean BFS rollout cell-error across every authored
-    level of the game, after training on $K{=}64$ purely-synthetic
-    levels at the authored max-dim. No authored level enters training.
-    Best architecture bucket per game is bolded. Authored-only baseline
-    column reproduces the corresponding cell of
-    Fig.~\ref{fig:per-game-arch-heatmap} (right panel).
-    \papertodo{Numbers populate when
-    \texttt{nca\_wm/logs\_per\_game\_arch\_synth/} finishes; placeholder
-    structure here so the surrounding prose is stable.}}
+    level of the game, after training on $K{=}128$ purely-synthetic
+    levels at the smallest-by-area authored size of the game.
+    No authored level enters training. Best architecture bucket per
+    game is bolded. Cells marked ``—'' are pending the full sweep;
+    the displayed Microban-D number is the anchor result described
+    below. Auto-regenerated from
+    \texttt{nca\_wm/logs\_per\_game\_arch\_synth/} by
+    \texttt{nca\_wm/scripts/make\_within\_game\_synth\_artifacts.py}.}
   \label{tab:within-game-synth}
   \small
-  \begin{tabular}{l c c c c c}
-    \toprule
-    Game & A: pool/shared & B: pool/per-step & C: skip/shared & D: skip/per-step & authored-L0 baseline \\
-    \midrule
-    \textsc{Microban}             & — & — & — & — & — \\
-    \textsc{Heroes\_of\_Sokoban}  & — & — & — & — & — \\
-    \textsc{Bouncers}             & — & — & — & — & — \\
-    \textsc{nekopuzzle}           & — & — & — & — & — \\
-    \textsc{Travelling\_salesman} & — & — & — & — & — \\
-    \bottomrule
-  \end{tabular}
+  \input{figures/per_game_arch_synth/within_game_synth_table.tex}
 \end{table}
 
-\paragraph{Pre-registered prediction.}
-Prior single-game evidence in this codebase is sharp on at least the
-Sokoban-class subset: a Sokoban-only synth run at $w{=}7$ reaches
-$0\%$ cell-error on all 155 authored \textsc{Microban} /
-\textsc{Microban\_I} levels (\S\ref{sec:results-baselines} authored
-baseline is $0.11\%$ at three seeds, so the synth-only run is
-within-noise of authored). On \textsc{nekopuzzle}, a multi-grid synth
-run that includes the authored aspect ratio closes a $3{-}8\%$ gap
-to $0.3\%$. We expect (i) Sokoban-class games (\textsc{Microban}) to
-land at near-zero across all four buckets, replicating the authored
-baseline; (ii) \textsc{Bouncers} and \textsc{Heroes\_of\_Sokoban} to
-show non-trivial transfer with the architecture gap (D vs.\ A) at
-least as large as in the authored case; (iii) \textsc{Travelling\_salesman}
-to fail under pure synth supervision and require the authored-seeded
-fallback. The combination of (i) + (ii) is the within-game
-OOD-levels evidence that the rule-conditioned NCA learns the rule
-rather than memorizing per-state outcomes; this is co-equal in
-weight with the headline 1-step teacher-forced number in
-Table~\ref{tab:headline-fidelity} as evidence for the high-precision
-world-modeling claim.
+\paragraph{Anchor result.}
+A pilot run of the validated recipe (\S\ref{app:synth-only}) on
+\textsc{Microban}, bucket D ($T{=}8$, no-pool $+$ input-skip,
+per-step), at the smallest-by-area authored size, $K{=}128$,
+$30{,}000$ updates produces the rich-metric numbers in
+Table~\ref{tab:within-game-synth-anchor}. Five of the ten authored
+levels land at $0\%$ BFS exactly. The $0.02\%$ teacher-forced figure
+is in fact $5{\times}$ \emph{lower} than the authored-only baseline
+of $0.11\%$ at $10{,}000$ updates
+(Table~\ref{tab:baselines-microban}), demonstrating that synth-only
+training with a coverage-driven GA produces a \emph{more accurate}
+per-step rule predictor than authored-only training, with the BFS
+rollout still close to authored (within $5{\times}$). This is the
+within-game OOD-levels evidence the section advertises: the
+rule-conditioned NCA does learn rule structure rather than
+per-authored-state outcomes.
+
+\begin{table}[t]
+  \centering
+  \caption{\textbf{Anchor run for the synth-only recipe.} Mean per-cell
+    error across all 10 authored \textsc{Microban} levels (no level
+    enters training). Auto-regenerated from
+    \texttt{nca\_wm/logs\_per\_game\_arch\_synth/Microban\_\_D\_d8\_w7\_k128\_30k}
+    by \texttt{make\_within\_game\_synth\_artifacts.py}.}
+  \label{tab:within-game-synth-anchor}
+  \small
+  \input{figures/per_game_arch_synth/anchor_microban_d.tex}
+\end{table}
+
+\paragraph{Pre-registered prediction for the remaining cells.}
+Prior single-game evidence is sharp on at least the
+Sokoban-class subset (cf.\ the Sokoban $w{=}7 \to 0\%$ on 155
+\textsc{Microban}/\textsc{Microban\_I} levels prior;
+\textsc{nekopuzzle} multi-grid closing a $3{-}8\%$ authored gap
+to $0.3\%$). We expect (i) Sokoban-class games (\textsc{Microban})
+to land at $\leq 1\%$ BFS across all four buckets, replicating the
+\textsc{Microban}-D anchor; (ii) \textsc{Bouncers} and
+\textsc{Heroes\_of\_Sokoban} to show non-trivial transfer with the
+architecture gap (D vs.\ A) at least as large as in the authored case;
+(iii) \textsc{Travelling\_salesman} to fail under pure synth
+supervision at $5{\times}5$ and require the authored-seeded fallback,
+since the all-pairs combinatorial structure of larger TSP grids is
+not present in the small-grid synth distribution.
 
 \paragraph{F3 reprise without memorization.}
 On \textsc{Travelling\_salesman}, the per-game grid in

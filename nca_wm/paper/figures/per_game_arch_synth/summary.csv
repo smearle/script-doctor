@@ -1,0 +1,2 @@
+game,bucket,run,bfs_mean,astar_mean,random_mean,random_tf_mean,best_loss,loss_ratio_q3_to_q4,n_train_steps
+Microban,D,Microban__D_d8_w7_k128_30k (anchor),0.006014241379857751,0.0046267310052356785,0.004959361471861471,0.00020396825396825396,5.766518640371032e-08,242.9981910455303,30000

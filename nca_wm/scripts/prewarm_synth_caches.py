@@ -132,16 +132,29 @@ def main():
     )
     ap.add_argument("--workers", type=int, default=8,
                     help="Parallel processes; each does its own GA + engine.")
+    ap.add_argument(
+        "--size_mode",
+        choices=("min_area", "all_sizes"),
+        default="min_area",
+        help="min_area (default): generate one cache per game at the smallest-"
+        "by-area authored size, K=n_levels — matches the validated launcher "
+        "recipe. all_sizes: generate one cache per (game, unique_authored_size) "
+        "at K // n_sizes per cache — matches --synthetic_multi_grid; useful "
+        "for the appendix multi-grid comparison.",
+    )
     args = ap.parse_args()
 
-    # Build per-(game, size, recipe) jobs, mirroring train.py's multi_grid
-    # cache layout. Each cache file is indexed on (game, w, h, rc); train.py
-    # reads them via collect_synthetic_dataset(game, w, h, ...) per size.
+    # Build per-(game, size, recipe) jobs to match the requested size_mode.
     jobs: list[dict] = []
     for g in args.games:
-        sizes = _authored_sizes(g)
-        per_size_n = max(1, args.n_levels // max(1, len(sizes)))
-        for (w, h) in sizes:
+        all_sizes = _authored_sizes(g)
+        if args.size_mode == "min_area":
+            sizes_for_g = [min(set(all_sizes), key=lambda wh: (wh[0] * wh[1], wh[0] + wh[1], wh))]
+            per_size_n = args.n_levels
+        else:
+            sizes_for_g = all_sizes
+            per_size_n = max(1, args.n_levels // max(1, len(all_sizes)))
+        for (w, h) in sizes_for_g:
             common = {
                 "game": g, "w": w, "h": h, "seed": args.seed,
                 "n_levels": per_size_n,

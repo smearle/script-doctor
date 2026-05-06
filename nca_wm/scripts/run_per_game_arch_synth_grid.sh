@@ -11,20 +11,23 @@
 # --all-authored-as-heldout).
 #
 # Recipe matches project_synth_recipe.md (validated post-1fa557d), plus:
-# (a) --synthetic_multi_grid in place of --synthetic_per_game_size — the
-#     bounding-box max picks a synth size that few authored levels actually
-#     have (e.g. Microban 12×12 vs typical 6–9 wide), causing an ~8% BFS
-#     floor on Microban synth-only training that drops to ~1.6% at fixed
-#     w=7 and is expected to drop further at multi-grid. See
-#     feedback_per_game_size_pitfall.md.
+# (a) Per-game *smallest* authored size — picked from the union of authored
+#     observation_shapes — instead of either the bounding-box max
+#     (--synthetic_per_game_size, which picks a size few authored levels
+#     actually have) or multi_grid (which dilutes per-size data density).
+#     Validated 2026-05-05: Microban w=7 K=128 30k → 0.60% BFS / 0.02%
+#     1-step on all 10 authored levels (1-step beats the authored-only
+#     baseline of 0.11%). Size-up generalization carries the smaller
+#     synth grid to bigger authored levels per project_synth_recipe.md.
+#     See feedback_per_game_size_pitfall.md.
 # (b) Rule-coverage-driven evolution (newly wired through train.py CLI):
 #   --synthetic_track_rules_fired                                  # log + enable below
 #   --synthetic_rule_coverage_weight 100                           # GA fitness += 100 * |new rules fired|
 #   --synthetic_coverage_select_topk                               # greedy union pick at end
 #
 # Full recipe used:
-#   --synthetic_levels 128                  # split as K // n_sizes per cell
-#   --synthetic_multi_grid
+#   --synthetic_levels 128
+#   --synthetic_w <min_W>  --synthetic_h <min_H>     # per-game lookup at launch
 #   --synthetic_fallback_dynamics
 #   --synthetic_no_a_count_max 5
 #   --synthetic_mode evolve --synthetic_evolve_pop_size 24
@@ -33,11 +36,11 @@
 #   --synthetic_max_iters_search 1500 --synthetic_timeout_ms_search 400
 #   --token_decoder_loss_weight 0.1
 #
-# The coverage knobs matter most when K-per-size is small relative to the
-# rule-set size — iterations-only fitness can otherwise pick K near-duplicates
-# of the easiest mechanic. Cache key encodes the weight + n_levels, so the
-# baseline-recipe (rc_weight=0) caches written by prewarm_synth_caches.py
-# are kept side-by-side for the appendix comparison.
+# The coverage knobs matter most when K is small relative to the rule-set
+# size — iterations-only fitness can otherwise pick K near-duplicates of
+# the easiest mechanic. Cache key encodes the weight, so the baseline-
+# recipe (rc_weight=0) caches written by prewarm_synth_caches.py are kept
+# side-by-side for the appendix comparison.
 #
 # Buckets at fixed n_nca_steps=8 (rule_attn defaults: h=256, K=16, batch=16):
 #   A: pool ON,            shared (n_repeats=8)
@@ -80,7 +83,7 @@ COMMON=(
     --seed "$SEED"
     # Synth-only training set (no authored level is fed to the model).
     --synthetic_levels "$N_SYNTH"
-    --synthetic_multi_grid
+    # synthetic_w/h are filled in per-game by min_size_for() inside run_one
     --synthetic_fallback_dynamics
     --synthetic_no_a_count_max 5
     --synthetic_mode evolve
@@ -109,6 +112,31 @@ flags_for_bucket() {
     esac
 }
 
+# Pick the smallest-by-area authored size for this game (echoes "<W> <H>").
+# Using an actual authored size (not a per-axis composite min) avoids picking
+# a (min_W, min_H) that no real level has — for Microban that would be 6x6
+# while no authored level is 6x6. Size-up generalization is the validated
+# direction (project_synth_recipe.md); size-down is not.
+min_size_for() {
+    local game=$1
+    "$PY" - <<PYEOF
+from puzzlescript_cpp import CppPuzzleScriptBackend, CppPuzzleScriptEnv
+from puzzlescript_jax.utils import init_ps_lark_parser
+parser = init_ps_lark_parser()
+backend = CppPuzzleScriptBackend()
+js = backend.compile_and_serialize(parser, "$game")
+env0 = CppPuzzleScriptEnv(js, level_i=0, max_episode_steps=10)
+sizes = []
+for li in range(int(env0.num_levels)):
+    e = CppPuzzleScriptEnv(js, level_i=li, max_episode_steps=10)
+    _, h, w = e.observation_shape
+    sizes.append((int(w), int(h)))
+# Smallest-by-area authored size; tiebreak by sum, then by (w, h)
+mw, mh = min(set(sizes), key=lambda wh: (wh[0]*wh[1], wh[0]+wh[1], wh))
+print(f"{mw} {mh}")
+PYEOF
+}
+
 run_one() {
     local gpu=$1; local game=$2; local bucket=$3
     local tag="${game}__${bucket}_d${DEPTH}"
@@ -118,11 +146,19 @@ run_one() {
         echo "  [GPU $gpu] skip $tag (already done)"
         return
     fi
-    local extra
+    local extra wh
     extra=$(flags_for_bucket "$bucket")
-    echo "  [GPU $gpu] start $tag"
+    wh=$(min_size_for "$game" 2>>"$LOGDIR/min_size.err" | tail -1)
+    if [ -z "$wh" ]; then
+        echo "  [GPU $gpu] FAILED $tag — could not resolve min synth size for $game"
+        return
+    fi
+    local mw mh
+    mw=${wh%% *}; mh=${wh##* }
+    echo "  [GPU $gpu] start $tag  (synth ${mw}x${mh})"
     CUDA_VISIBLE_DEVICES=$gpu PYTHONUNBUFFERED=1 "$PY" "$REPO/nca_wm/train.py" \
         --games "$game" \
+        --synthetic_w "$mw" --synthetic_h "$mh" \
         "${COMMON[@]}" $extra \
         --save_dir "$save_dir" \
         > "$log" 2>&1

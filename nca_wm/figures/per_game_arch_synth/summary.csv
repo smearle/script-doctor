@@ -1,0 +1,3 @@
+run,game,bucket,depth,n_steps,n_repeats,axis_pool,global_pool,axis_cummax,input_skip,best_loss,final_loss,final_change_acc,loss_ratio_q3_to_q4,n_train_steps,bfs_err_mean,bfs_err_l0,bfs_err_heldout,astar_err_mean,astar_err_l0,astar_err_heldout,random_err_mean,random_tf_err_mean
+Microban__A_d8,Microban,A,8,8,8,True,True,True,False,0.05480215325951576,0.06524460762739182,1.0,1.2140685099441653,15000,0.09156894812953807,,0.09156894812953807,0.09340198336943736,,0.09340198336943736,0.05933203162578162,0.011942830086580088
+Microban__D_d8,Microban,D,8,8,1,False,False,False,True,0.05827588587999344,0.06895406544208527,0.875,1.2059400626370593,15000,0.08378119757179514,,0.08378119757179514,0.08171454241635648,,0.08171454241635648,0.052000958994709,0.00961138468013468
