@@ -63,14 +63,15 @@ all Crate on Target};
     at (encX) {$K$-query x-attn};
 \node[draw, rounded corners=2pt, line width=0.45pt, fit=(encS1)(encX),
       inner sep=3pt] (enc) {};
-\node[font=\small\bfseries, anchor=south] at (enc.north)
-    {Encoder $\mathrm{Enc}_\phi$};
+\node[font=\small\itshape, anchor=south] at (enc.north) {Encoder};
+\node[font=\small, anchor=north] at (enc.south) {$\mathrm{Enc}_\phi$};
 
 % --- Latent (slot/FiLM/VQ-agnostic) ---
 \node[draw, rounded corners=1.5pt, fill=SlotColor, line width=0.4pt,
       minimum width=0.55cm, minimum height=2.6cm, anchor=center]
       (slots) at (-4.4, 0) {};
-\node[font=\small\bfseries, anchor=south] at (slots.north) {latent $z$};
+\node[font=\small\itshape, anchor=south] at (slots.north) {latent};
+\node[font=\small, anchor=north] at (slots.south) {$z$};
 
 % --- spec -> enc -> latent ---
 \draw[flowarrow] (spec.east) -- (enc.west);
@@ -149,8 +150,11 @@ all Crate on Target};
     node[font=\large, anchor=north] at (\x1, -2.5cm) {$s_{t+1}$};
 
 % --- forward connections through dynamics row ---
-\draw[connection] (embed-east) -- node {\midarrow} (nca-west);
-\draw[connection] (nca-east)   -- node {\midarrow} (readout-west);
+% Use -Stealth so the arrowhead lands AT the destination (nca-west /
+% readout-west). The first arrow's head then coincides with the
+% n_repeats loop's head at nca-west.
+\draw[connection, -Stealth] (embed-east) -- (nca-west);
+\draw[connection, -Stealth] (nca-east)   -- (readout-west);
 
 % --- Loop arrow below the body (n_repeats). Tail at the right end of
 %     the body (output of last band). Head ends just outside the left
