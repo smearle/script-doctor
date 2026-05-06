@@ -10,14 +10,14 @@
 \usetikzlibrary{3d}
 \usetikzlibrary{decorations.pathreplacing}
 
-\def\ConvColor{rgb:yellow,5;red,2.5;white,5}
-\def\ConvReluColor{rgb:yellow,5;red,5;white,5}
-\def\ConvSigmoidColor{rgb:blue,5;green,15}
-\def\OnehotColor{rgb:white,5;blue,1}
-
+% --- arch_overview color palette ---
 \colorlet{EncColor}{blue!18}
 \colorlet{EncBandColor}{blue!50}
 \colorlet{SlotColor}{yellow!75}
+\colorlet{NCAColor}{green!35}
+\colorlet{NCABandColor}{green!70}
+\colorlet{EmbedColor}{green!12}
+\colorlet{ReadoutColor}{red!18}
 
 \newcommand{\copymidarrow}{\tikz \draw[-Stealth,line width=0.8mm,draw={rgb:blue,4;red,1;green,1;black,3}] (-0.3,0) -- ++(0.3,0);}
 
@@ -31,16 +31,14 @@
     minimum width=0.4cm, minimum height=2.4cm, inner sep=1pt]
 
 % =============================================================
-% LEFT: spec -> encoder -> slots (non-spatial)
+% LEFT: spec -> encoder -> latent (non-spatial)
 % =============================================================
 
 % --- input game spec ---
 \node[draw, rounded corners=2pt, fill={gray!8},
       font=\footnotesize\ttfamily, align=left, inner sep=4pt,
       text width=3.6cm, anchor=east] (spec) at (-8.5,0)
-{title sokoban\\
-=========\\
-objects\\
+{objects\\
 =========\\
 \textbf{Player} \textbf{Crate}\\
 \textbf{Wall} \textbf{Target}\\
@@ -48,7 +46,11 @@ objects\\
 rules\\
 =========\\
 {[}\textbf{>} Player | Crate{]}\\
-~->{[}|\textbf{>}P. \textbf{>}Cr.{]}};
+~->{[}|\textbf{>}P. \textbf{>}Cr.{]}\\
+=========\\
+winconditions\\
+=========\\
+all Crate on Target};
 \node[font=\small\itshape, anchor=south] at (spec.north) {game spec};
 
 % --- Encoder block: 2 self-attn + 1 cross-attn ---
@@ -64,157 +66,117 @@ rules\\
 \node[font=\small\bfseries, anchor=south] at (enc.north)
     {Encoder $\mathrm{Enc}_\phi$};
 
-% --- Slots ---
+% --- Latent (slot/FiLM/VQ-agnostic) ---
 \node[draw, rounded corners=1.5pt, fill=SlotColor, line width=0.4pt,
-      minimum width=1.1cm, minimum height=2.6cm, anchor=center]
+      minimum width=0.55cm, minimum height=2.6cm, anchor=center]
       (slots) at (-4.4, 0) {};
-\foreach \y in {-1.05,-0.85,-0.65,-0.45,-0.25,-0.05,0.15,0.35,0.55,0.75,0.95,1.15} {
-  \draw[gray!60, line width=0.2pt]
-      ($(slots.west)+(0.07, \y)$) -- ($(slots.east)+(-0.07, \y)$);
-}
-\node[font=\small\bfseries, anchor=south] at (slots.north) {slots $z$};
+\node[font=\small\bfseries, anchor=south] at (slots.north) {latent $z$};
 
-% --- spec -> enc -> slots ---
+% --- spec -> enc -> latent ---
 \draw[flowarrow] (spec.east) -- (enc.west);
 \draw[flowarrow] (enc.east)  -- (slots.west);
 
 % =============================================================
-% RIGHT: dynamics row (s_t -> NCA body -> s_{t+1})
-% Box height=40, scale=0.2  =>  vertical extent y in [-4, +4]
+% RIGHT: dynamics row (s_t/embed -> NCA body -> readout/s_{t+1})
+% Box height=20, depth=20, scale=0.2 => visible y-z face is 4cm x 4cm,
+% sized to the 3.6cm sokoban level images.
 % =============================================================
 
-% --- s_t (was 'embed' box, with state image projected on its face) ---
+% --- s_t (embed box, image projected on the east/front face) ---
 \pic[shift={(-2.2,0,0)}] at (0,0,0)
     {Box={
         name=embed,
         caption= ,
-        xlabel={{9, }},
-        zlabel=16,
-        fill=\OnehotColor,
+        xlabel={{,}},
+        zlabel={},
+        fill=EmbedColor,
         height=20,
         width=2.5,
         depth=20
         }
     };
-\node[canvas is zy plane at x=0] (sin) at (-2.2,0,0)
+\node[canvas is zy plane at x=-1.7] (sin) at (0,0)
     {\includegraphics[width=3.6cm,height=3.6cm]{figures/architecture/state_in.png}};
 \path let \p1=(embed-south) in
-    node[font=\large, anchor=north] at (\x1, -3.2cm) {$s_t$};
+    node[font=\large, anchor=north] at (\x1, -2.5cm) {$s_t$};
 
-% --- NCA body: a handful of layers (n_layers); whole body repeats n_repeats times ---
-\pic[shift={(0,0,0)}] at (0,0,0)
+% --- NCA body: a single RightBandedBox with n_layers bands;
+%     the whole body is iterated n_repeats times (loop arrow below).
+\pic[shift={(0.4,0,0)}] at (0,0,0)
     {RightBandedBox={
-        name=ncal1,
+        name=nca,
         caption= ,
-        xlabel={{32, }},
-        zlabel=16,
-        fill=\ConvColor,
-        bandfill=\ConvReluColor,
+        xlabel={{,,}},
+        zlabel={},
+        fill=NCAColor,
+        bandfill=NCABandColor,
         height=20,
-        width=4,
+        width={1.6,1.6,1.6},
         depth=20
         }
     };
-\path let \p1=(ncal1-south) in
-    node[font=\small, anchor=north] at (\x1, -3.2cm) {3$\times$3 ReLU};
+\path let \p1=(nca-south) in
+    node[font=\small, anchor=north] at (\x1, -2.7cm) {$3{\times}3$ conv (per layer)};
 
-\pic[shift={(2.4,0,0)}] at (0,0,0)
-    {RightBandedBox={
-        name=ncal2,
-        caption= ,
-        xlabel={{32, }},
-        zlabel=16,
-        fill=\ConvColor,
-        bandfill=\ConvReluColor,
-        height=20,
-        width=4,
-        depth=20
-        }
-    };
-\path let \p1=(ncal2-south) in
-    node[font=\small, anchor=north] at (\x1, -3.2cm) {1$\times$1 ReLU};
-
-\pic[shift={(4.8,0,0)}] at (0,0,0)
-    {RightBandedBox={
-        name=ncal3,
-        caption= ,
-        xlabel={{9, }},
-        zlabel=16,
-        fill=\ConvColor,
-        bandfill=\ConvSigmoidColor,
-        height=20,
-        width=4,
-        depth=20
-        }
-    };
-\path let \p1=(ncal3-south) in
-    node[font=\small, anchor=north] at (\x1, -3.2cm) {1$\times$1 Sigmoid};
-
-% Brace + label for n_layers (just above the body, label nudged right
-% so it doesn't collide with the cross-attn arrow that descends onto ncal1).
-\path let \p1 = (ncal1-north), \p2 = (ncal3-north) in
-    coordinate (braceLeft)  at (\x1-0.20cm, \y1+0.10cm)
-    coordinate (braceRight) at (\x2+0.20cm, \y2+0.10cm);
-\draw[decorate, decoration={brace, amplitude=6pt, raise=4pt}, line width=0.4pt]
+% Brace + label for n_layers (just above body). Mirrored so the apex
+% points UP at the label.
+\path let \p1 = (nca-west), \p2 = (nca-east) in
+    coordinate (braceLeft)  at (\x1-0.05cm, 2.20cm)
+    coordinate (braceRight) at (\x2+0.05cm, 2.20cm);
+\draw[decorate, decoration={brace, amplitude=6pt, raise=4pt, mirror}, line width=0.4pt]
     (braceRight) -- (braceLeft);
 \node[font=\small\itshape, anchor=south]
-    at ($(braceLeft)!0.65!(braceRight)+(0,0.40cm)$) {$n_\text{layers}$};
+    at ($(braceLeft)!0.5!(braceRight)+(0,0.45cm)$) {$n_\text{layers}$};
 
-% --- s_{t+1} (was 'readout' box, with state image projected on its face) ---
-\pic[shift={(7.0,0,0)}] at (0,0,0)
+% --- s_{t+1} (readout box, image projected on east/front face) ---
+\pic[shift={(5.6,0,0)}] at (0,0,0)
     {Box={
         name=readout,
         caption= ,
-        xlabel={{9, }},
-        zlabel=16,
-        fill=\OnehotColor,
+        xlabel={{,}},
+        zlabel={},
+        fill=ReadoutColor,
         height=20,
         width=2.5,
         depth=20
         }
     };
-\node[canvas is zy plane at x=0] (sout) at (7.0,0,0)
+\node[canvas is zy plane at x=6.1] (sout) at (0,0)
     {\includegraphics[width=3.6cm,height=3.6cm]{figures/architecture/state_out.png}};
 \path let \p1=(readout-south) in
-    node[font=\large, anchor=north] at (\x1, -3.2cm) {$s_{t+1}$};
+    node[font=\large, anchor=north] at (\x1, -2.5cm) {$s_{t+1}$};
 
 % --- forward connections through dynamics row ---
-\draw[connection] (embed-east)  -- node {\midarrow} (ncal1-west);
-\draw[connection] (ncal1-east)  -- node {\midarrow} (ncal2-west);
-\draw[connection] (ncal2-east)  -- node {\midarrow} (ncal3-west);
-\draw[connection] (ncal3-east)  -- node {\midarrow} (readout-west);
+\draw[connection] (embed-east) -- node {\midarrow} (nca-west);
+\draw[connection] (nca-east)   -- node {\midarrow} (readout-west);
 
-% --- Loop arrow below the body (n_repeats), routed well below box bottoms.
-%     Use \p1/\p2 to pin the descent to absolute screen-y values, since
-%     adding plain offsets to pic-anchored 3D coordinates does not give
-%     a clean vertical translation.
-\path let \p1 = (ncal3-east), \p2 = (ncal1-west) in
+% --- Loop arrow below the body (n_repeats), routed below caption text.
+\path let \p1 = (nca-east), \p2 = (nca-west) in
     coordinate (loopOutR)  at (\x1+0.4cm, \y1)
-    coordinate (loopOutRD) at (\x1+0.4cm, -5.0cm)
-    coordinate (loopInLD)  at (\x2-0.4cm, -5.0cm)
+    coordinate (loopOutRD) at (\x1+0.4cm, -4.0cm)
+    coordinate (loopInLD)  at (\x2-0.4cm, -4.0cm)
     coordinate (loopInL)   at (\x2-0.4cm, \y2);
 \draw[-Stealth, line width=0.7mm, opacity=0.32, rounded corners=10pt]
-    (ncal3-east) -- (loopOutR) -- (loopOutRD) -- (loopInLD) -- (loopInL) -- (ncal1-west);
+    (nca-east) -- (loopOutR) -- (loopOutRD) -- (loopInLD) -- (loopInL) -- (nca-west);
 \node[font=\small\itshape, opacity=0.7]
-    at ($(loopOutRD)!0.5!(loopInLD)+(0,0.30)$) {$\times\, n_\text{repeats}$};
+    at ($(loopOutRD)!0.5!(loopInLD)+(0,-0.40)$) {$\times\, n_\text{repeats}$};
 
 % =============================================================
-% Cross-attention: slots -> NCA body, routed above the figure.
-% Land just left of ncal1's top edge so the descent does not pass
-% through the n_layers brace label.
+% Cross-attention: latent -> NCA body, routed above the figure.
+% Apply at every layer (every step inside the loop).
 % =============================================================
-\path let \p1 = (slots.north), \p2 = (ncal1-north) in
+\path let \p1 = (slots.north), \p2 = (nca-north) in
     coordinate (slotsTop)   at (\x1, \y1)
-    coordinate (overslots)  at (\x1, 4.0cm)
-    coordinate (overnca)    at (\x2-0.5cm, 4.0cm)
-    coordinate (ncaTopLin)  at (\x2-0.5cm, \y2+0.10cm);
+    coordinate (overslots)  at (\x1, 4.5cm)
+    coordinate (overnca)    at (\x2, 4.5cm)
+    coordinate (ncaTopIn)   at (\x2, \y2+0.10cm);
 
 \draw[condarrow, rounded corners=8pt, line width=0.5mm]
-    (slotsTop) -- (overslots) -- (overnca) -- (ncaTopLin);
+    (slotsTop) -- (overslots) -- (overnca) -- (ncaTopIn);
 
 \node[font=\footnotesize, text=blue!55!black, anchor=south, align=center]
     at ($(overslots)!0.5!(overnca)+(0,0.10cm)$)
-    {keys, values \textit{(rule cross-attn, every step)}};
+    {keys, values \textit{(every layer)}};
 
 \end{tikzpicture}
 \end{document}
