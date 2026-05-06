@@ -331,6 +331,11 @@ $5{\times}$ lower train loss but $3{-}4{\times}$ higher 50-step
 rollout error. The mechanism is small but systematic per-step errors
 compounding destructively under autoregression. Reporting only
 best-loss hides the rollout-drift cost of going deeper or wider.
+Appendix~\ref{app:per-game-arch} reports a sharpened version of this
+finding on a per-game $\times$ per-architecture grid: on
+\textsc{Travelling\_salesman} all four buckets converge to within
+$1\%$ of the same train loss but split $0\% / 0\% / 26.9\% / 45.1\%$
+on L0 BFS cell-error.
 
 \subsection{Pool-feature and input-skip ablation}
 \label{sec:results-pool}
