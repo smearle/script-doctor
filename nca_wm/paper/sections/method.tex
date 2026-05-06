@@ -12,7 +12,7 @@
     layer; this stack is iterated for $n_\text{repeats}$ shared-weight
     passes to produce $s_{t+1}$ ($T = n_\text{layers} \cdot
     n_\text{repeats}$). The token decoder used for joint training and
-    inverse fitting (\S\ref{sec:method-inverse}) is omitted from this
+    inverse fitting (Appendix~\ref{app:inverse-fit}) is omitted from this
     figure to keep the focus on the per-game and multi-game dynamics
     modeling that drives our main results.}
   \label{fig:arch-overview}
@@ -166,38 +166,4 @@ spatial-update body.
 All baselines accept the same input $(s_t, a_t, g)$ and
 produce the same $(\widehat{s}_{t+1}, \widehat{w}_{t+1})$ outputs as
 the NCA, allowing identical training and evaluation pipelines.
-
-\subsection{Fitting unknown games from transitions}
-\label{sec:method-inverse}
-
-Because the dynamics model is conditioned on a continuous game
-representation, we can freeze the NCA parameters and infer an
-unobserved game embedding from transition data. Given observations
-$\mathcal{D}=\{(s_t,a_t,s_{t+1})\}$ from an unknown game, we optimize
-the latent game variable $g$ to minimize the same next-state loss
-used during training while holding $\theta$ fixed. If $g$ lives in
-the autoencoder latent space, the fitted embedding can then be
-decoded to symbolic game code.
-
-\paragraph{Inverse-fit setup.}
-We freeze the world model and decoder parameters $(\theta, \psi)$ and
-treat $z \in \mathbb{R}^{K \times d_{\text{slot}}}$ as the only free
-variable. The encoder $\mathrm{Enc}_\phi$ is bypassed entirely; we
-inject the optimized $z$ into the world model via a slot-override
-path. We initialize $z$ from one of three schemes: \emph{random}
-(small Gaussian around the empirical training-slot mean),
-\emph{mean} (the centroid of training slots), or \emph{knn}
-(the slot of the training game whose token-sequence is closest to
-the OOD target by some heuristic --- when the target's tokens are
-unobserved, this falls back to random). The objective is the same
-per-cell next-state BCE used during training, summed over the
-observed transitions; we run 2,000 Adam steps at learning rate
-$5 \times 10^{-3}$ with mini-batch size 32. The held-out games are
-drawn from the deduped scrape pool and verified disjoint from the
-training set both by name and by token-sequence hash, so the slot
-optimization is genuinely fitting OOD dynamics. After fitting, we
-decode $z$ to a token sequence and report (i) final fit BCE on
-observed transitions, (ii) cell-error on held-out transitions of the
-target game, (iii) cosine distance to the 1-NN training slot, and
-(iv) whether the decoded text parses + compiles via the JS engine.
 

@@ -25,54 +25,48 @@ same token sequence under our tokenizer; this dedup step is essential
 because the encoder cannot otherwise be expected to produce distinct
 slot embeddings for token-identical inputs. Median rule count is 6
 (min 1, max 20), median level count is 3 (max 30), and grid sizes
-range from $1{\times}3$ to $30{\times}40$. We use four nested presets
-spanning the dataset-size axis: $\textsc{Train-14}$ (14 curated games
-for ablations), $\textsc{Train-59}$ (59 Gallery games),
-$\textsc{Train-94}$ (94 Gallery games), and
-$\textsc{Train-199}$ (199 games extending into the Archive). For each
-game we run bounded A* from each authored level (60 s wallclock and
-100k iteration budget per level) and cache the resulting unique
+range from $1{\times}3$ to $30{\times}40$. We use two training
+presets: \textsc{Train-14} (14 curated games used for the multi-game
+baseline comparison in Table~\ref{tab:baselines-scaling14}) and
+\textsc{Train-94} (94 Gallery games used for the broad-corpus
+fidelity result in Table~\ref{tab:fidelity}). For each game we run
+bounded A* from each authored level (60 s wallclock and 100k
+iteration budget per level) and cache the resulting unique
 transitions on disk under bit-packing, with a per-game cap of 200k
-transitions. Held-out evaluation games are drawn from the deduped pool
-and verified disjoint from the training set both by name and by
-token-sequence hash.
+transitions.
 
 \paragraph{Synthetic levels.}
-For ablations and held-out evaluations we additionally generate
-synthetic levels by sampling tile-pattern distributions from each
-game's authored levels and validating each candidate by running the
-engine to confirm the level is solvable and exposes a non-trivial
-state space (more details in the appendix). The validated synthetic
-recipe (per-game sizes, fallback dynamics, multi-grid widths) is what
-allowed our model to match the authored-data baseline on the
-\textsc{nekopuzzle} game without overfitting to grid-size artifacts.
+The single-game multi-grid suite (\S\ref{sec:results-baselines},
+Table~\ref{tab:baselines-synth}) trains on \emph{evolved} synthetic
+levels: a genetic algorithm proposes candidate grids and the engine
+checks each candidate is solvable and reaches a non-trivial state
+space; surviving levels are kept. Generation details and the
+within-game OOD-levels probe that uses the same generator are in
+Appendix~\ref{app:synth-only}.
 
 \subsection{Game suites}
 
-We evaluate on four suites of increasing breadth:
-
 \begin{itemize}
-  \item \textbf{Single-game} (\textsc{microban}, 10 authored levels):
-    classic chained Sokoban pushing on small grids. Used for
-    architecture ablations where dynamics complexity is fully
+  \item \textbf{Single-game Sokoban authored levels} (10 levels, from
+    Microban; Table~\ref{tab:baselines-microban}): used for the
+    single-game architecture comparison where dynamics are fully
     controlled.
-  \item \textbf{Single-game / synthetic-multi-grid}
-    (\textsc{sokoban\_basic}): a controlled stress test in which the
-    model is trained on synthetic levels of multiple grid sizes
-    $\{5{\times}5, 6{\times}6, 7{\times}7, 8{\times}8\}$ and evaluated
-    on the same. The diversity prevents per-state memorization and
-    forces the model to learn the underlying rule.
-  \item \textbf{Multi-game} (\textsc{Train-14}): a fourteen-game
-    benchmark including chained pushing, gravity, light beams,
-    multi-character control, and several \texttt{again}-driven
-    simulations. Per-game grid sizes range from $4{\times}4$ to
-    $32{\times}24$.
-  \item \textbf{Broad-corpus} (\textsc{Train-94} and \textsc{Train-199}):
-    94 and 199 games respectively, all drawn from the deduped pool
-    described above. Used for the multi-game scaling curve and for
-    held-out-game evaluation. The held-out set is a 30-game stratified
-    sample from the same pool, disjoint from both presets by name and
-    by token-hash.
+  \item \textbf{Single-game multi-grid synth}
+    (\textsc{sokoban\_basic}; widths
+    $\{5,6,7,8\}^2$ with 256 evolved levels per width;
+    Tables~\ref{tab:baselines-synth} and \ref{tab:ablation-pool}):
+    256 synthetic levels per width share one rule set, so per-state
+    memorization is unavailable and the model has to learn the rule.
+  \item \textbf{Multi-game} (\textsc{Train-14};
+    Table~\ref{tab:baselines-scaling14}): 14 PuzzleScript games
+    spanning gravity, light beams, multi-character control, and
+    several \texttt{again}-driven simulations. Per-game grid sizes
+    range from $4{\times}4$ to $32{\times}24$.
+  \item \textbf{Broad-corpus} (\textsc{Train-94};
+    Table~\ref{tab:fidelity}): 94 Gallery games drawn from the
+    deduped pool. A 30-game held-out set, disjoint from training by
+    name and token-hash, is used for the unseen-game evaluations
+    deferred to the appendix.
 \end{itemize}
 
 \subsection{Architectures and hyper-parameters}
@@ -112,20 +106,10 @@ We report two complementary metrics:
 Train loss decouples from autoregressive rollout error in the
 over-capacity regime (\S\ref{app:F3}), so reporting both is essential.
 
-\paragraph{Symbolic-game-modeling metrics.}
-For experiments involving the joint token decoder we additionally
-report:
-\begin{itemize}
-  \item \textbf{Token reconstruction accuracy}: per-position match
-    rate between the decoder's argmax prediction and the target token,
-    under teacher forcing on training games. We report mean and the
-    fraction of games at perfect reconstruction.
-  \item \textbf{Engine-load success rate}: fraction of decoded token
-    sequences that, after detokenization to PuzzleScript source, parse
-    and compile via the JS engine. Reported separately for training-
-    reconstruction, latent-interpolation, and Gaussian-sample inputs.
-  \item \textbf{Latent-fit quality} (inverse-fitting): final per-cell
-    BCE on observed OOD transitions, cell-error on held-out transitions
-    of the target game, cosine distance to the 1-NN training slot, and
-    whether the recovered code engine-loads.
-\end{itemize}
+% Symbolic-game-modeling metrics (token reconstruction accuracy,
+% engine-load success rate, inverse-fit BCE) are explained inline
+% next to the appendix tables that report them
+% (Appendix~\ref{app:autoencoder}, \ref{app:inverse-fit}).
+% Unreported metrics (cell-error on held-out transitions of the
+% inverse-fit target; engine-loadability of inverse-fit decoded code)
+% are not currently in the paper.

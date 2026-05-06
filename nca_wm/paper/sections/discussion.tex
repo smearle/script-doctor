@@ -11,19 +11,19 @@ engine-model claim additionally requires smooth scaling with the
 number of games, held-out rule-system generalization, meaningful
 symbolic decoding, and inverse fitting from transitions.
 
-The broad-corpus and joint-AE results in
-\S\ref{sec:results-autoencoder} and \S\ref{sec:results-inverse-fit}
-take partial steps in each direction: training on 94 deduped human
-games delivers median 1-step teacher-forced cell-error of $0.15\%$
-with a tighter held-out 1-NN slot neighbourhood under the joint
-decoder objective; inverse-fitting recovers OOD games' dynamics
-through the latent variable to $\sim 10^{-3}$ BCE and lands the
-recovered slot near a mechanically related training game.
-Autoregressive sampling from the empirical slot prior clears the
-engine validator at $15/25$ random draws ($60\%$) and at $9/9$
-slot-space interpolation points ($100\%$). The remaining gap in the
-engine-modelling story is breaking the multi-grid synthetic-data
-ceiling described below.
+The broad-corpus and joint-AE results
+(Appendices~\ref{app:scaling-curve}, \ref{app:autoencoder},
+\ref{app:inverse-fit}) take partial steps in each direction:
+training on 94 deduped human games delivers median 1-step
+teacher-forced cell-error of $0.15\%$
+(Table~\ref{tab:fidelity}); the joint decoder objective tightens
+held-out games' nearest-training-neighbour distance in slot space;
+inverse-fitting recovers OOD games' dynamics through the latent
+variable to $\sim 10^{-3}$ BCE; and autoregressive sampling from the
+empirical slot prior clears the engine validator at $15/25$ random
+draws ($60\%$) and at $9/9$ slot-space interpolation points
+($100\%$). The remaining gap in the engine-modelling story is
+breaking the multi-grid synthetic-data ceiling described below.
 
 \paragraph{Toward latent world coders.}
 Inverse-fitting a continuous game latent from transitions and decoding

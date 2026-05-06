@@ -158,7 +158,7 @@ Held-out cell-error (right panel of Fig.~\ref{fig:per-game-arch-heatmap})
 remains substantial across every cell ($7.3\%$--$56.8\%$). This is the
 \emph{within-game} OOD-levels axis --- a complementary, lesser form of
 generalization than the OOD-rules / latent-sampling / inverse-fit
-claims that the main paper targets. Prior single-game work strongly
+results in Appendix~\ref{app:ood}. Prior single-game work strongly
 predicts that synthetic levels close most of this gap: training
 synth-only \textsc{sokoban\_basic} ($w{=}7$) reached $0\%$ cell-error
 on the 155 held-out \textsc{Microban} / \textsc{Microban\_I} authored
@@ -359,7 +359,7 @@ prediction destabilizes auto-regressive feedback.
 \section{Architecture findings}
 \label{app:arch-findings}
 
-The main-body comparison in \S\ref{sec:results-baselines} reports a
+The architecture comparison in \S\ref{sec:results-baselines} reports a
 single number per architecture; this appendix expands the underlying
 architectural findings. We label the findings F1--F3 to align with
 the running architecture report released alongside the code.
@@ -458,3 +458,147 @@ verification at $T \in \{8, 16, 32, 64\}$ shows per-seed argmax
 variance dwarfs the recipe signal and best-loss is essentially
 identical across all configurations. We discuss candidate fixes in
 \S\ref{sec:discussion}.
+
+\section{Generalization to unseen games}
+\label{app:ood}
+
+The 30-game stratified held-out set is disjoint from every training
+preset by name and by token-sequence hash. We probe generalization
+along three axes: held-out latent geometry, symbolic decoder
+reconstruction and sampling, and frozen-NCA inverse fitting from
+observed transitions.
+
+\subsection{Held-out latent geometry as we scale games}
+\label{app:scaling-curve}
+
+For each held-out game we encode its tokens through the trained
+encoder, compute cosine distance to every training game's encoded
+slot, and report the smallest of those distances --- that is, the
+distance to the held-out game's \emph{nearest training-game
+neighbour} in slot space. Smaller means the held-out game's encoded
+slot lands closer to the training cluster. We use the flattened
+$K \cdot d_{\text{slot}} = 1024$-dim slot vector, and the median
+across the 21 of 30 held-outs whose tokens fit within the smallest
+training preset's maximum sequence length.
+
+\begin{table}[t]
+  \centering
+  \caption{\textbf{Held-out latent geometry as we scale training
+    games.} Cosine distance, in flattened-slot space, from each
+    held-out game's encoded slot to its nearest training-game
+    neighbour. All runs use the rule-attention NCA body, $K{=}16$
+    slots, $d_{\text{slot}}{=}64$, $T{=}8$ NCA steps, batch 32, 150k
+    Adam updates. The held-out set is the same 30-game stratified
+    sample for every row.}
+  \label{tab:scaling-curve}
+  \small
+  \begin{tabular}{l r l r}
+    \toprule
+    preset & $n_{\text{games}}$ & decoder & median distance to NN train game \\
+    \midrule
+    \textsc{Train-14}             & 14 & off & $0.077$ \\
+    \textsc{Train-94}             & 94 & off & $0.215$ \\
+    \textsc{Train-94+dec}         & 94 & on  & $\mathbf{0.153}$ \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+At 94 training games the encoder-only run loosens relative to the
+14-game mark ($0.215$ vs.\ $0.077$): the encoder has to model wider
+mechanical diversity, so held-out games sit further from any single
+training game in slot space. Adding the joint decoder objective
+pulls the median back down by 29\% ($0.215 \to 0.153$), so the
+decoder constraint pulls held-out games closer to some training
+neighbour. Whether those neighbours are \emph{mechanically} related
+to the held-out target is a separate claim and is examined in the
+inverse-fit results (\S\ref{app:inverse-fit}); we have surfaced two
+example matches there but have not yet enumerated the relation
+across the full held-out set.
+
+\subsection{Symbolic decoder: reconstruction and sampling}
+\label{app:autoencoder}
+
+The joint encoder + NCA + slot-token decoder is trained on
+\textsc{Train-94} for 150k updates with $\beta = 1.0$ on the decoder
+loss. The decoder converges to per-token cross-entropy
+$\approx 2 \times 10^{-9}$ within the first 5k updates and holds
+there throughout, adding 1.18M parameters on top of the 9.89M
+world-model parameters and roughly 20\% to per-step wall-clock.
+
+\paragraph{Token reconstruction accuracy} (per-position match rate
+between the decoder's argmax prediction and the target token under
+teacher forcing on training games): perfect reconstruction on
+$76/94$ training games and a median per-position match of $1.000$
+(mean $0.906$, min $0.276$). The slot bottleneck retains the
+information needed to recover the full symbolic specification on the
+majority of the corpus; the imperfect mean is dominated by a small
+tail of long, sprite-rich games that exhaust the decoder's
+positional budget.
+
+\paragraph{Engine-load success rate} (fraction of decoded token
+sequences that, after detokenization to PuzzleScript source, parse
+and compile via the JS engine): $15/25$ engine-loadable PuzzleScript
+programs ($60\%$) from greedy autoregressive decoding from random
+Gaussian-fit slots; $9/9$ engine-loadable programs along a 9-point
+linear interpolation between two endpoint training games
+(\textsc{Ebony\_\&\_Ivory} $\rightarrow$ \textsc{rigidfail1};
+$100\%$). The generations contain plausible push rules of the form
+\verb"[ > Obj2 | Obj4 ] -> [ > Obj2 | > Obj4 ]",
+\texttt{late}-prefixed rules, and per-object $5{\times}5$ pixel
+sprites with palettes consistent across the legend, the collision
+layers, and the rule body.
+
+\subsection{Inverse-fitting unobserved games from transitions}
+\label{app:inverse-fit}
+
+Because the dynamics model is conditioned on a continuous game
+representation, we can freeze the NCA parameters and infer an
+unobserved game embedding from transition data. Concretely, we
+freeze the world model and decoder $(\theta, \psi)$ and treat
+$z \in \mathbb{R}^{K \times d_{\text{slot}}}$ as the only free
+variable: the encoder $\mathrm{Enc}_\phi$ is bypassed entirely and
+the optimised $z$ enters the world model through a slot-override
+path. We initialise $z$ from a small Gaussian around the empirical
+training-slot mean and optimise the per-cell next-state BCE used
+during training, summed over the held-out target's observed
+transitions, for 2{,}000 Adam steps at $\text{lr} = 5 \times 10^{-3}$
+with batch size 32. Targets are drawn from the deduped pool and
+verified disjoint from training by name and by token-hash. After
+fitting, we report the cosine distance from the recovered $z$ to
+its nearest training-game slot --- ``nearest train'' in
+Table~\ref{tab:inverse-fit} means the closest training-game slot in
+the flattened-slot space, not a comparison against a held-out
+reference encoding of the target.
+
+\begin{table}[t]
+  \centering
+  \caption{\textbf{Inverse-fit recovery from OOD transitions.}
+    Final per-cell BCE on the observed transitions of three
+    held-out games, and the cosine distance from the optimised slot
+    to its nearest training-game neighbour (with that neighbour's
+    name).}
+  \label{tab:inverse-fit}
+  \small
+  \begin{tabular}{l c c l}
+    \toprule
+    held-out target & final BCE & dist.\ to NN train & nearest train game \\
+    \midrule
+    \texttt{monophobic\_multiban} & $\mathbf{8.4 \times 10^{-4}}$ & $0.389$ & \texttt{run\_em\_over} \\
+    \texttt{cat\_adventure\_2}    & $\mathbf{8.4 \times 10^{-4}}$ & $0.394$ & \texttt{neko\_puzzle\_by\_increpare} \\
+    \texttt{in\_the\_way}         & $7.2 \times 10^{-3}$         & $0.477$ & \texttt{run\_em\_over} \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+The optimisation drives BCE down two-to-three orders of magnitude on
+every target, so the frozen NCA can fit OOD dynamics through the
+latent variable. On two of three targets the recovered slot's
+nearest training-game neighbour matches a plausible mechanical
+sibling: \texttt{cat\_adventure\_2} (a push-puzzle) lands closest to
+\texttt{neko\_puzzle\_by\_increpare} (also a push-puzzle), and
+\texttt{monophobic\_multiban} (a multi-character chase mechanic)
+lands closest to \texttt{run\_em\_over} (also multi-character /
+chase). We do not yet have a systematic enumeration of how often
+the nearest neighbour is mechanically related across the full
+held-out set; the two matches above are illustrative rather than a
+distributional claim.
