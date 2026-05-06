@@ -63,9 +63,10 @@ case "$slot" in
     echo "launch_slot: ssh 210 GPU 0, sha=$sha (branch=$branch)" >&2
     # Source .profile so nvm-managed node (required by puzzlescript_jax via the
     # backends.nodejs JS bridge at module load) is on PATH; non-interactive
-    # ssh doesn't pick it up otherwise. Use ; not && — .profile may exit nonzero.
+    # ssh doesn't pick it up otherwise. Use POSIX `.` not `source` — 210's
+    # default non-interactive shell is dash, which has no `source`.
     ssh 210 "cd ~/script-doctor; \
-      source ~/.profile 2>/dev/null; \
+      . ~/.profile 2>/dev/null; \
       set -e; \
       git fetch --quiet origin && \
       git checkout --quiet '$sha' && \
