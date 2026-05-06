@@ -30,12 +30,20 @@ OUT_DIR = REPO_ROOT / "nca_wm" / "paper" / "figures" / "cond_vs_uncond_match"
 RUNS = [
     {
         "run_dir": "multi_scaling_14_uncond_match_s0",
-        "label": "Unconditional",
+        "label": "Unconditional, Train-14",
         "kind": "uncond",
     },
     {
         "run_dir": "multi_scaling_14_cond_match_s0",
-        "label": "Rule-conditional",
+        "label": "Rule-conditional, Train-14",
+        "kind": "cond",
+    },
+    # v4 = scaling_gallery_v4 (199 games). Older recipe (no input_skip)
+    # but huge dataset diversity. Tests scaling axis vs the matched pair
+    # above, which only differ in the encoder.
+    {
+        "run_dir": "multi_scaling_gallery_v4_decoder_sprites_eos",
+        "label": "Rule-conditional, Train-199",
         "kind": "cond",
     },
 ]
@@ -293,12 +301,13 @@ def main() -> None:
     write_per_game_csv(per_game, identity, OUT_DIR / "per_game_step1.csv")
     write_latex(rows, OUT_DIR / "match_table.tex")
     # Stdout summary so we can inspect at a glance.
+    fmt = lambda x: f"{x:.4f}" if isinstance(x, (int, float)) and x is not None else "  --  "
     for r in rows:
         print(
-            f"{r['label']:<20s}  "
-            f"ID random mean={r['indist_random_mean']:.4f}  "
-            f"OOD step-1={r['ood_step1_model_mean']:.4f}  "
-            f"OOD AR-30={r['ood_ar30_model_mean']:.4f}  "
+            f"{r['label']:<32s}  "
+            f"ID random mean={fmt(r['indist_random_mean'])}  "
+            f"OOD step-1={fmt(r['ood_step1_model_mean'])}  "
+            f"OOD AR-30={fmt(r['ood_ar30_model_mean'])}  "
             f"wins={r['ood_wins']}/{r['ood_n_games']}"
         )
     print(f"\nWrote: {OUT_DIR}/summary.csv")
