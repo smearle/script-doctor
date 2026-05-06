@@ -473,13 +473,25 @@ observed transitions.
 
 For each held-out game we encode its tokens through the trained
 encoder, compute cosine distance to every training game's encoded
-slot, and report the smallest of those distances --- that is, the
-distance to the held-out game's \emph{nearest training-game
-neighbour} in slot space. Smaller means the held-out game's encoded
-slot lands closer to the training cluster. We use the flattened
+slot, and report the smallest of those distances --- the distance
+to the held-out game's \emph{nearest training-game neighbour} in
+slot space. We use the flattened
 $K \cdot d_{\text{slot}} = 1024$-dim slot vector, and the median
 across the 21 of 30 held-outs whose tokens fit within the smallest
 training preset's maximum sequence length.
+
+We treat this as a \emph{diagnostic}, not a quality metric. A
+distance of zero is collapse, not perfect transfer (the held-out
+game has been mapped onto an existing training point). A large
+distance is off-manifold, also bad. The number is also naturally
+expected to shrink as the training preset grows --- with more
+games the chance that some training game lies near any given
+held-out target rises mechanically, independent of representation
+quality. Predictive OoD performance --- per-cell error of the dynamics model
+on the held-out set's authored-level transitions, against an
+identity baseline --- is the load-bearing claim for unseen-game
+generalization; the geometry numbers below are reported only for
+context.
 
 \begin{table}[t]
   \centering
@@ -503,17 +515,19 @@ training preset's maximum sequence length.
   \end{tabular}
 \end{table}
 
-At 94 training games the encoder-only run loosens relative to the
-14-game mark ($0.215$ vs.\ $0.077$): the encoder has to model wider
-mechanical diversity, so held-out games sit further from any single
-training game in slot space. Adding the joint decoder objective
-pulls the median back down by 29\% ($0.215 \to 0.153$), so the
-decoder constraint pulls held-out games closer to some training
-neighbour. Whether those neighbours are \emph{mechanically} related
-to the held-out target is a separate claim and is examined in the
-inverse-fit results (\S\ref{app:inverse-fit}); we have surfaced two
-example matches there but have not yet enumerated the relation
-across the full held-out set.
+At 94 training games the encoder-only median is larger than at
+$14$ ($0.215$ vs.\ $0.077$); the 14-game number is partly a
+consequence of the held-out games being homogeneous push-puzzles
+that sit close to any of several push-puzzle training games at
+that scale. The 94-game decoder-on row drops to $0.153$, but
+because of the diagnostic caveats above we do not read this as
+evidence the decoder objective improves transfer; it could equally
+indicate decoder-induced collapse onto training neighbours.
+Whether those neighbours are \emph{mechanically} related to the
+held-out target is a separate question --- two example matches in
+\S\ref{app:inverse-fit} suggest the geometry is not pure
+collapse, but we have not enumerated the relation across the full
+held-out set.
 
 \subsection{Symbolic decoder: reconstruction and sampling}
 \label{app:autoencoder}
@@ -591,14 +605,20 @@ reference encoding of the target.
 \end{table}
 
 The optimisation drives BCE down two-to-three orders of magnitude on
-every target, so the frozen NCA can fit OOD dynamics through the
-latent variable. On two of three targets the recovered slot's
-nearest training-game neighbour matches a plausible mechanical
-sibling: \texttt{cat\_adventure\_2} (a push-puzzle) lands closest to
+every target, so the frozen NCA can fit OoD dynamics through the
+latent variable. The reported BCE is on the same transition tape
+the slot was optimised against, however, so it measures the
+expressive capacity of $(\theta, \psi)$ plus the optimisation
+landscape, not held-out generalisation; an honest upgrade would
+hold out a fraction of the tape, fit on the rest, and report
+test-tape BCE.
+
+On two of three targets the recovered slot's nearest training-game
+neighbour matches a plausible mechanical sibling:
+\texttt{cat\_adventure\_2} (a push-puzzle) lands closest to
 \texttt{neko\_puzzle\_by\_increpare} (also a push-puzzle), and
 \texttt{monophobic\_multiban} (a multi-character chase mechanic)
 lands closest to \texttt{run\_em\_over} (also multi-character /
 chase). We do not yet have a systematic enumeration of how often
 the nearest neighbour is mechanically related across the full
-held-out set; the two matches above are illustrative rather than a
-distributional claim.
+held-out set; the two matches above are illustrative.
