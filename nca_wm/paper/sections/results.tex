@@ -1,15 +1,28 @@
 \section{Results}
 \label{sec:results}
 
-\subsection{Architecture comparison: NCA vs.\ non-iterative baselines}
+\subsection{NCA architecture for per-game world models}
 \label{sec:results-baselines}
 
+We first fix a single rule family (Sokoban) and ask which architecture
+best predicts per-step dynamics. Two scopes: (i) 10 authored Microban
+levels, where the model can in principle memorize per-state outcomes
+via cross-attention over slot embeddings, and (ii) a multi-grid
+synthetic regime (four widths $\{5,6,7,8\}^2$ $\times$ 256 levels per
+width, sharing one \textsc{sokoban\_basic} rule set) where per-state
+memorization is unavailable (1024 distinct levels share one rule) and
+the model has to learn the slide rule across grid sizes. We then
+ablate the NCA's pool stack and input-skip on the multi-grid synth
+preset to identify which features carry the architecture's advantage.
+
+All runs use the canonical recipe (\S\ref{sec:experiments}) at
+$d_h = 256$, trained for 10k updates per seed. We report best train
+cross-entropy, end-of-rollout cell-error rate under three policies
+(random, BFS-optimal, A*-optimal), and final parameter count.
+
+\paragraph{Single-game (Microban).}
 Table~\ref{tab:baselines-microban} reports the head-to-head
-comparison on Sokoban (10 authored Microban levels), trained for 10k
-updates per seed at $d_h = 256$ with the canonical recipe
-(\S\ref{sec:experiments}). We measure best train cross-entropy loss,
-end-of-rollout cell-error rate under three policies (random,
-BFS-optimal, A*-optimal), and final parameter count.
+comparison on the 10 authored Microban levels.
 
 \begin{table}[t]
   \centering
@@ -46,14 +59,10 @@ architectures despite the $\geq 100\times$ swing in autoregressive
 rollout error; we report both metrics throughout because the per-step
 training objective is invisible to compounding rollout drift.
 
-The single-game setting allows the model to memorize per-state
-outcomes via cross-attention over slot embeddings. To force the model
-to actually learn the rule, Table~\ref{tab:baselines-synth} repeats
-the comparison on the multi-grid synthetic regime: four widths
-$\{5,6,7,8\}^2$ $\times$ 256 synthetic levels per width, sharing one
-\textsc{sokoban\_basic} rule set. Per-state memorization is
-unavailable (1024 distinct levels share one rule); the model has to
-learn the slide rule across grid sizes.
+\paragraph{Multi-grid synthetic (memorization-free).}
+To force the model to actually learn the rule,
+Table~\ref{tab:baselines-synth} repeats the comparison on the
+multi-grid synthetic regime.
 
 \begin{table}[t]
   \centering
@@ -86,15 +95,11 @@ the structural mismatch we saw in the single-game setting:
 unrestricted global attention does not fit grid-rule dynamics well.
 The seed-to-seed variance on this task is large
 ($\sigma > 2\%$ on BFS error for all NCA / CNN variants) but the
-gap to U-Net and ViT is robust to it. We expand on the role of pool
-features (and \emph{which} pool flavour does the work) in the next
-subsection; longer-form architecture findings (per-game grid,
-hierarchical weight sharing) are in
+gap to U-Net and ViT is robust to it. Longer-form architecture
+findings (per-game grid, hierarchical weight sharing) are in
 Appendix~\ref{app:per-game-arch}.
 
-\subsection{Per-feature pool and input-skip ablation}
-\label{sec:results-pool}
-
+\paragraph{Per-feature pool and input-skip ablation.}
 We decompose the NCA-shared advantage on the multi-grid synth setting
 (Table~\ref{tab:baselines-synth}) by individually disabling each
 component of the pool stack and the input-skip connection. Every
@@ -143,14 +148,33 @@ Y'' patterns---contributes nothing measurable on
 on the immediate $3{\times}3$ neighbourhood, not on a directional
 axial lookup. We expect the cummax feature to recover its
 load-bearing role on games whose rule sets do reference far-apart
-same-axis cells (e.g.\ \textsc{collapse}, \textsc{varislide}).
-\emph{Input-skip} contributes a modest $+36\%$ but with the highest
-variance across configurations ($\sigma = 4.24\%$), suggesting it is
-a stability mechanism rather than an information-carrying feature.
+same-axis cells (e.g.\ \textsc{collapse}, \textsc{varislide}); a
+multi-game version of this ablation on \textsc{Train-14} is left to
+future work. \emph{Input-skip} contributes a modest $+36\%$ but with
+the highest variance across configurations ($\sigma = 4.24\%$),
+suggesting it is a stability mechanism rather than an
+information-carrying feature.
 
-\subsection{Multi-game scaling}
+% TODO: rerun per-feature pool ablation on Train-14 (multi-game) to
+% verify that global-pool dominance and axis-cummax irrelevance
+% generalize beyond the single Sokoban rule. Expected: axis-cummax
+% recovers a measurable role on rules that reference far-apart
+% same-axis cells (e.g. collapse, varislide).
+
+The architecture-axis findings here are derived from a single rule
+family. We turn next to whether the shared-weights NCA continues to
+win when the model must master many rule sets simultaneously, which
+also serves as a partial robustness check on the architecture
+ranking.
+
+\subsection{Scaling to multiple games (in-distribution)}
 \label{sec:results-scaling}
 
+We extend the head-to-head architecture comparison to multi-game
+training, then push to a 94-game broad corpus to quantify the
+in-distribution fidelity ceiling of a single rule-conditioned NCA.
+
+\paragraph{\textsc{Train-14} multi-game baselines.}
 Table~\ref{tab:baselines-scaling14} extends the head-to-head to the
 \textsc{Train-14} preset: 14 PuzzleScript games sharing the rule-slot
 encoder, with grid sizes from $4{\times}4$ to $32{\times}24$ and rule
@@ -195,68 +219,7 @@ loss is $\approx 10^{4}$ times higher than the NCA / CNN family
 mismatch from the single-game setting. Per-game breakdowns are in
 Appendix~\ref{app:per-game}.
 
-\subsection{Rule-conditioning vs.\ unconditional NCA}
-\label{sec:results-encoder-ablation}
-
-The Train-14 baselines above all share the rule-slot encoder. To
-isolate the encoder's contribution we compare a parameter-matched
-unconditional NCA against the rule-conditional NCA on the same
-preset, holding the recipe (Section~\ref{sec:experiments}) constant.
-The unconditional model receives only the current state and action;
-the rule-conditional model adds the encoded rule slots as cross-
-attention context, plus a jointly-trained symbolic decoder
-($\beta = 1.0$). Parameter counts are matched within $2\%$
-($n_h{=}448$ for unconditional vs.\ $n_h{=}256$ + slot encoder for
-conditional), and both train for 150k updates. To measure how this
-gap evolves with rule diversity, we also include a 199-game
-broad-corpus run (\textsc{Train-199}) under the same conditional
-recipe.
-Table~\ref{tab:cond-vs-uncond-match} reports
-in-distribution training-game rollout error and out-of-distribution
-held-out cell-error on \textsc{Heldout-30} (30 games disjoint by name
-and token hash), against the trivial \emph{identity} baseline that
-predicts $\hat{s}_{t+1}{=}s_t$.
-
-\begin{table}[t]
-  \centering
-  \caption{\textbf{Rule-conditioning, parameter-matched.} \textsc{Train-14}
-  rows trained for 150k updates with the same recipe; \textsc{Train-199}
-  is the broad-corpus run under the same conditional recipe. ID rollout =
-  mean per-game cell-error on training games, random-action autoregressive.
-  OOD step-1 / AR-30 = mean cell-error on \textsc{Heldout-30}; the identity
-  baseline lower-bounds it at the per-step state-change rate. OOD wins
-  counts games where the model's step-1 cell-error beats identity.}
-  \label{tab:cond-vs-uncond-match}
-  \small
-  \input{figures/cond_vs_uncond_match/match_table}
-\end{table}
-
-\textbf{Encoder isolates a clean in-distribution signal.}
-At Train-14 scale the rule-conditional model nearly triples the
-unconditional model's per-cell accuracy ($1.6\%$ vs.\ $4.9\%$
-cell-error), confirming that the encoder is doing real work and not
-merely inflating parameter count. Per-game it beats the unconditional
-model on $18 / 29$ held-out games. The encoder is at minimum learning
-to disambiguate which rule set is in play.
-
-\textbf{Out-of-distribution generalization is a function of rule
-diversity, not the encoder alone.} On \textsc{Heldout-30} the Train-14
-conditional model still fails catastrophically ($16.4\%$ step-1
-cell-error, $7\times$ worse than identity), barely better than
-unconditional ($19.6\%$). With $14\times$ more rule diversity the
-\textsc{Train-199} conditional model drops to $4.8\%$ at step 1---%
-within $2.5$pp of the identity baseline---and matches or beats
-identity on $9 / 29$ held-out games. The headline rule-conditional
-contribution to OOD generalization is \emph{driven primarily by
-broad-corpus rule diversity} rather than by the encoder architecture
-in isolation. We discuss the implications, including the fraction of
-games on which even \textsc{Train-199} fails (e.g.\ pseudo-random
-spawn games, deeply cascaded \texttt{again} rules), in
-\S\ref{sec:discussion}.
-
-\subsection{In-distribution mastery on the broad corpus}
-\label{sec:results-fidelity}
-
+\paragraph{In-distribution mastery on the broad corpus.}
 Rule-conditioning lets a single set of weights master many games at
 once. Table~\ref{tab:fidelity} reports per-cell rollout error on the
 94-game broad-corpus preset \textsc{Train-94}, averaged across all
@@ -304,6 +267,69 @@ spaces are large or whose rule structures involve cascading
 ($\beta = 1.0$) ties the encoder-only run within $0.5$pp on every
 regime, so the dynamics-fidelity claim is robust to that auxiliary
 loss.
+
+\subsection{Effect of scaling on out-of-distribution performance}
+\label{sec:results-encoder-ablation}
+
+The in-distribution results above all rely on the rule-slot encoder.
+We now isolate two questions about the encoder: (i) is it doing real
+work in-distribution, or merely inflating parameter count? and (ii)
+does its output transfer to \emph{unseen} games, and if so, how does
+that depend on the diversity of the training corpus?
+
+To answer (i) we compare a parameter-matched unconditional NCA
+against the rule-conditional NCA on \textsc{Train-14}, holding the
+recipe (Section~\ref{sec:experiments}) constant. The unconditional
+model receives only the current state and action; the rule-conditional
+model adds the encoded rule slots as cross-attention context, plus a
+jointly-trained symbolic decoder ($\beta = 1.0$). Parameter counts
+are matched within $2\%$ ($n_h{=}448$ for unconditional vs.\
+$n_h{=}256$ + slot encoder for conditional), and both train for 150k
+updates. To answer (ii) we add a 199-game broad-corpus run
+(\textsc{Train-199}) under the same conditional recipe, and measure
+how the cond-vs-uncond gap and the cond-vs-identity gap evolve with
+rule diversity. Table~\ref{tab:cond-vs-uncond-match} reports
+in-distribution training-game rollout error \emph{and}
+out-of-distribution held-out cell-error on \textsc{Heldout-30}
+(30 games disjoint by name and token hash), against the trivial
+\emph{identity} baseline that predicts $\hat{s}_{t+1}{=}s_t$.
+
+\begin{table}[t]
+  \centering
+  \caption{\textbf{Rule-conditioning, parameter-matched.} \textsc{Train-14}
+  rows trained for 150k updates with the same recipe; \textsc{Train-199}
+  is the broad-corpus run under the same conditional recipe. ID rollout =
+  mean per-game cell-error on training games, random-action autoregressive.
+  OOD step-1 / AR-30 = mean cell-error on \textsc{Heldout-30}; the identity
+  baseline lower-bounds it at the per-step state-change rate. OOD wins
+  counts games where the model's step-1 cell-error beats identity.}
+  \label{tab:cond-vs-uncond-match}
+  \small
+  \input{figures/cond_vs_uncond_match/match_table}
+\end{table}
+
+\textbf{Encoder isolates a clean in-distribution signal.}
+At Train-14 scale the rule-conditional model nearly triples the
+unconditional model's per-cell accuracy ($1.6\%$ vs.\ $4.9\%$
+cell-error), confirming that the encoder is doing real work and not
+merely inflating parameter count. Per-game it beats the unconditional
+model on $18 / 29$ held-out games. The encoder is at minimum learning
+to disambiguate which rule set is in play.
+
+\textbf{Out-of-distribution generalization is a function of rule
+diversity, not the encoder alone.} On \textsc{Heldout-30} the Train-14
+conditional model still fails catastrophically ($16.4\%$ step-1
+cell-error, $7\times$ worse than identity), barely better than
+unconditional ($19.6\%$). With $14\times$ more rule diversity the
+\textsc{Train-199} conditional model drops to $4.8\%$ at step 1---%
+within $2.5$pp of the identity baseline---and matches or beats
+identity on $9 / 29$ held-out games. The headline rule-conditional
+contribution to OOD generalization is \emph{driven primarily by
+broad-corpus rule diversity} rather than by the encoder architecture
+in isolation. We discuss the implications, including the fraction of
+games on which even \textsc{Train-199} fails (e.g.\ pseudo-random
+spawn games, deeply cascaded \texttt{again} rules), in
+\S\ref{sec:discussion}.
 
 % Generalization-to-unseen-games results (held-out latent geometry,
 % symbolic decoder reconstruction + sampling, frozen-NCA inverse fit
