@@ -15,17 +15,14 @@ PuzzleScript games are such a regime. Each game is fully specified by
 a short text file describing object kinds, layered grid levels, and a
 list of declarative rewrite rules, e.g.
 \texttt{[ > Player | Crate ] -> [ > Player | > Crate ]}. The engine
-evaluates these rules in order on the grid at every tick, with
-\texttt{again} rules causing the rule list to be re-evaluated until
-the state stops changing. The state is a \emph{discrete multi-channel
-grid}, the dynamics are \emph{deterministic and combinatorial}, and
+evaluates these rules in order on the grid at every tick, applying each rule until the state converges, with \texttt{again} rules causing the entire rule block to fire again. The state can be represented as a discrete multi-channel
+grid, the dynamics are deterministic and combinatorial, and
 the hard computation per tick is a sequence of atomic local updates
-applied repeatedly. Foregoing pixels lets us model the environment in
-its native state representation and measure fidelity cell-by-cell
-against the original engine.
+applied repeatedly.
 
-We propose a different architecture: a \emph{rule-conditioned Neural
-Cellular Automaton} (NCA) world model. A perceiver-style encoder maps
+To capture this symbolic mechanical complexity, we propose a \emph{rule-conditioned Neural
+Cellular Automaton} (NCA) world model.
+A perceiver-style encoder maps
 the tokenized game description to $K$ latent slots; the dynamics body
 is a local update rule applied for $T$ iterations on a hidden grid,
 with cells cross-attending to those slots at every step. The same body
@@ -34,8 +31,11 @@ outer loop, while the conditioner makes the dynamics model portable
 across games. In the full version of the model, these slots are tied
 to a symbolic-game autoencoder so that game latents can both condition
 dynamics and decode back into program text.
+Foregoing pixels lets us model the environment in
+its native state representation and measure fidelity cell-by-cell
+against the original engine.
 
-Our deduplicated corpus contains 3{,}474 token-distinct
+Our corpus contains 3{,}474 token-distinct
 human-authored games (one to twenty rules each), of which up to 199
 are used in the largest training preset. Across these games we cache
 bounded-A* transitions from authored levels, yielding $\sim$15M
@@ -45,11 +45,9 @@ disjoint from training by name and token-sequence hash.
 On the 94-game broad-corpus training preset, the trained NCA achieves
 a median per-cell teacher-forced one-step error of $0.15\%$ and a
 median 50-step random-action autoregressive rollout error of
-$2.5\%$ across all 94 games and all authored levels. We use
-``near-perfect'' to mean a one-step teacher-forced cell-error rate
-below $1\%$ on the broad corpus, with the multi-step rollout numbers
-quantifying the drift caused by autoregressive compounding. To
-separate this from per-state memorization, we also report a
+$2.5\%$ across all 94 games and all authored levels.
+% We use ``near-perfect'' to mean a one-step teacher-forced cell-error rate below $1\%$ on the broad corpus, with the multi-step rollout numbers quantifying the drift caused by autoregressive compounding.
+To rule out per-state memorization, we also report a
 within-game OOD-levels probe (\S\ref{sec:results-within-game}) in
 which every authored level is held out from training and only
 purely-synthetic rollouts at the same grid size enter the training
@@ -85,17 +83,18 @@ authored-state lookup.
         teacher-forced fidelity numbers.
 \end{enumerate}
 
-The symbolic-AE component of contribution 3 is partial: the
-joint encoder + slot-token decoder achieves perfect teacher-forced
-reconstruction on every training game (\S\ref{sec:results-autoencoder});
-inverse fitting from OOD transitions drives per-cell BCE down 2--3
-orders of magnitude on three held-out games and recovers 1-NN
-training-game neighbours that match the target's mechanics
-(\S\ref{sec:results-inverse-fit}). Autoregressive sampling of novel
-games into engine-loadable PuzzleScript is not yet reliable at
-$0/25$ samples engine-loading; the decoded text is structurally
-valid PuzzleScript syntax but suffers a teacher-forcing-vs-
-autoregressive gap that we leave to future work.
+The symbolic-AE component of contribution 3 is functional: the
+joint encoder + slot-token decoder achieves teacher-forced
+reconstruction with median per-token accuracy of $1.0$ and
+$76/94$ perfectly reconstructed games across the 94-game preset
+(\S\ref{sec:results-autoencoder}). Autoregressive sampling from the
+empirical slot prior produces engine-loadable PuzzleScript at
+$15/25$ random samples (60\%), and slot-space interpolation between
+two training games hits $9/9$ engine-loadable points (100\%) along
+the line. Inverse fitting from OOD transitions drives per-cell BCE
+down 2--3 orders of magnitude on three held-out games and recovers
+1-NN training-game neighbours that match the target's mechanics
+(\S\ref{sec:results-inverse-fit}).
 
 Our broad-corpus presets ($\textsc{scaling\_gallery\_v3}$ at 94 games
 and $\textsc{scaling\_gallery\_v4}$ at 199 games) come paired with a

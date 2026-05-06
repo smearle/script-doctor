@@ -1,7 +1,7 @@
 \section{Discussion}
 \label{sec:discussion}
 
-\paragraph{From forward model to engine model.}
+\paragraph{Modeling the game engine.}
 Our goal is to move from modeling one game to modeling a space of
 games organized by dynamics. The present results support the first
 half of that goal: a rule-conditioned, iterated local-update model is
@@ -18,12 +18,30 @@ games delivers median 1-step teacher-forced cell-error of $0.15\%$
 with a tighter held-out 1-NN slot neighbourhood under the joint
 decoder objective; inverse-fitting recovers OOD games' dynamics
 through the latent variable to $\sim 10^{-3}$ BCE and lands the
-recovered slot near a mechanically related training game. The two
-remaining gaps in the engine-modelling story are
-(i) autoregressive sampling of new playable games (which currently
-generates structurally valid but engine-load-failing PuzzleScript)
-and (ii) breaking the multi-grid synthetic-data ceiling described
-below.
+recovered slot near a mechanically related training game.
+Autoregressive sampling from the empirical slot prior clears the
+engine validator at $15/25$ random draws ($60\%$) and at $9/9$
+slot-space interpolation points ($100\%$). The remaining gap in the
+engine-modelling story is breaking the multi-grid synthetic-data
+ceiling described below.
+
+\paragraph{Toward latent world coders.}
+Inverse-fitting a continuous game latent from transitions and decoding
+it back to source code suggests a ``latent world coder'' direction:
+use a learned dynamics manifold as the search space, then project
+successful latent hypotheses into executable symbolic programs. This
+is complementary to program-synthesis world-model agents such as
+WorldCoder and TheoryCoder, which synthesize Python transition models
+from interaction for planning~\cite{tang2024worldcoder,ahmed2025theorycoder},
+and to DreamCoder-style systems that grow reusable symbolic libraries
+for program induction~\cite{ellis2021dreamcoder}. Our current decoder
+does not yet reliably emit engine-loadable programs from optimized
+slots, but a mature version would make PuzzleScript-style engines a
+natural bridge between neural world models and symbolic program
+learning. Interactive world-model benchmarks such as WorldTest /
+AutumnBench~\cite{warrier2025benchmarking} and
+ARC-AGI-3~\cite{arcprize2026arcagi3} are natural testbeds for such
+agents, because acting in novel rule systems after limited interaction with the environment can benefit from the inference of a fast forward model, enabling the use of e.g. search and RL to generate agent policies.
 
 \paragraph{What the iterated local update buys.}
 The architecture comparison in \S\ref{sec:results-baselines}

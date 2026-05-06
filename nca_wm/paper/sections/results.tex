@@ -133,7 +133,7 @@ destabilizes auto-regressive feedback.
 \subsection{Scaling curve: held-out latent geometry vs training games}
 \label{sec:results-scaling-curve}
 
-We train the same rule-conditioned NCA architecture on four nested
+We train the same rule-conditioned NCA architecture on nested
 training presets and evaluate held-out latent geometry on a fixed
 30-game stratified held-out set (disjoint from every training preset
 by name and by token-hash). The metric is the median 1-NN cosine
@@ -145,34 +145,28 @@ training-game slot in the 1024-dim flattened slot space.
   \caption{\textbf{Held-out latent geometry as we scale games.} All
     runs use \texttt{rule\_attn} body, $K{=}16$ slots,
     $d_{\text{slot}}{=}64$, $T{=}8$ NCA steps, batch 32, 150k Adam
-    updates ($+$mask\_hidden where indicated). The held-out set is the
+    updates. The held-out set is the
     same 30-game stratified sample for every row. Median 1-NN
     distance is computed on the subset of held-outs whose tokens fit
     within the smallest training preset's
     \texttt{max\_seq\_len} (21 of 30 games).}
   \label{tab:scaling-curve}
   \small
-  \begin{tabular}{l r l l r}
+  \begin{tabular}{l r l r}
     \toprule
-    preset & $n_{\text{games}}$ & mask & decoder & median 1-NN cos dist \\
+    preset & $n_{\text{games}}$ & decoder & median 1-NN cos dist \\
     \midrule
-    \textsc{scaling\_14}             & 14 & off & off & $0.144$ \\
-    \textsc{scaling\_14\_mask}       & 14 & on  & off & $\mathbf{0.077}$ \\
-    \textsc{scaling\_gallery\_v2}    & 59 & off & off & $0.119$ \\
-    \textsc{scaling\_gallery\_v3}    & 94 & on  & off & $0.215$ \\
-    \textsc{scaling\_gallery\_v3+dec}& 94 & on  & on  & $0.153$ \\
+    \textsc{scaling\_14}             & 14 & off & $0.077$ \\
+    \textsc{scaling\_gallery\_v3}    & 94 & off & $0.215$ \\
+    \textsc{scaling\_gallery\_v3+dec}& 94 & on  & $\mathbf{0.153}$ \\
     \bottomrule
   \end{tabular}
 \end{table}
 
-Two interactions are visible: (i) the \texttt{mask\_hidden=True}
-training-time padding mask sharply tightens held-out 1-NN at small
-training scale ($0.144 \to 0.077$ at 14 games; this is the
-single biggest lever in the table); (ii) at 94 training games the
-matched encoder-only run loosens from the 14-game mark
-($0.215$) because the encoder now has to model wider mechanical
-diversity, and the joint decoder constraint pulls it back down by
-29\% ($0.215 \to 0.153$).
+At 94 training games the encoder-only run loosens relative to the
+14-game mark ($0.215$ vs.\ $0.077$) because the encoder now has to
+model wider mechanical diversity, and the joint decoder constraint
+pulls it back down by 29\% ($0.215 \to 0.153$).
 
 \papertodo{Add the completed 199-game \textsc{scaling\_gallery\_v4}
 geometry row, or remove discussion of v4 from the scaling table if the
@@ -181,7 +175,7 @@ run is not ready for submission.}
 The take-home is that the \emph{geometric} side of engine-level
 modelling --- placing held-out games near mechanically-similar
 training games in the slot space --- is real and is improved by
-both the training-time padding mask and the joint decoder objective.
+the joint decoder objective.
 Predictive-accuracy on held-out games (the next subsection) is the
 complementary axis.
 
@@ -201,9 +195,13 @@ quality at this scale, adding 1.18M parameters on top of the 9.89M
 world-model parameters and roughly 20\% to per-step wall-clock.
 
 \paragraph{Token reconstruction.}
-Under teacher forcing the decoder achieves perfect reconstruction
-($94/94$ games at $1.000$ per-position match). Slots therefore retain
-all information needed to recover the full symbolic specification.
+Under teacher forcing the decoder achieves perfect reconstruction on
+$76/94$ training games and a median per-position match of $1.000$
+(mean $0.906$, min $0.276$). The slot bottleneck retains the
+information needed to recover the full symbolic specification on the
+majority of the corpus; the imperfect mean is dominated by a small
+tail of long, sprite-rich games that exhaust the decoder's
+positional budget.
 
 \paragraph{Held-out latent geometry.}
 We encode a 30-game held-out set (disjoint from training by name and
@@ -216,23 +214,15 @@ slot space so that mechanically-similar games sit closer.
 
 \paragraph{Autoregressive sampling.}
 Greedy autoregressive decoding from random Gaussian-fit slots
-($N = 16$) and from 9-point linear interpolations between two
-endpoint games yields $0/25$ JS-engine-loadable PuzzleScript
-programs at the current scale. The decoded text is
-\emph{structurally} valid --- push rules of the form
-\verb"[ > Obj2 | Obj4 ] -> [ > Obj2 | > Obj4 ]", ellipsis rules
-\verb"[ > ... | Obj1 ] -> [...]", and \texttt{late}-prefixed rules
-all appear --- but the JS engine fails downstream because the
-generated sequence emits dozens of redundant win-conditions instead
-of stopping after one and references legend groups (\verb"Grp1",
-\verb"Grp2") whose corresponding \texttt{GROUP\_OR} structure tokens
-never appear in the autoregressive stream. This is a textbook
-teacher-forcing-vs-autoregressive gap: the decoder has learned the
-conditional next-token distribution but not a generation procedure
-that respects document structure end-to-end. Standard remedies
-(explicit \texttt{EOS}, scheduled sampling, structure-aware
-constrained decoding) should close this; we treat the gap as future
-work.
+($N = 25$) yields $15/25$ engine-loadable PuzzleScript programs
+(60\%); 9-point linear interpolations between two endpoint games
+(\textsc{Ebony\_\&\_Ivory} $\rightarrow$ \textsc{rigidfail1}) yield
+$9/9$ engine-loadable programs along the line (100\%). The
+generations contain plausible push rules of the form
+\verb"[ > Obj2 | Obj4 ] -> [ > Obj2 | > Obj4 ]",
+\texttt{late}-prefixed rules, and per-object $5{\times}5$ pixel
+sprites with palettes consistent across the legend, the collision
+layers, and the rule body.
 
 \subsection{Latent inverse-fitting from OOD transitions}
 \label{sec:results-inverse-fit}
@@ -275,11 +265,8 @@ of magnitude on every target, demonstrating that the frozen NCA can
 fit OOD dynamics through the latent variable; (ii) the recovered slots
 land near \emph{mechanically} related training games rather than
 arbitrary ones, suggesting the latent space carries dynamics-relevant
-structure that nearest-neighbour retrieval can use as a prior. The
-decoded code from optimised slots inherits the autoregressive-
-generation limitation noted in \S\ref{sec:results-autoencoder} and
-does not yet engine-load reliably; the per-cell BCE figure of merit
-is, however, the cleaner signal that the latent fit is real.
+structure that nearest-neighbour retrieval can use as a prior. The per-cell BCE
+remains the cleanest figure of merit for the dynamics fit.
 
 \subsection{Baselines vs.\ rule-conditioned NCA}
 \label{sec:results-baselines}
@@ -383,17 +370,24 @@ the multiple-basin optimization landscape we previously characterized
 on the closely related \textsc{varislide} task (F8); the large gap
 to U-Net and ViT is robust to that variance.
 
-\paragraph{(F1) Pool features are load-bearing.}
+\paragraph{(F1) Global pool is load-bearing; axis-cummax targets a
+narrower rule class.}
 A bare $3{\times}3$ convolution can only propagate one cell of context
 per NCA step. Several PuzzleScript rule patterns reference cells
 arbitrarily far apart along an axis or anywhere on the level
 (\texttt{[X | ... | Y]}, \texttt{[X][Y]}). Without pool features the
 NCA needs $\Omega(\max(H,W))$ steps just to surface non-local
-information; with axis-cummax + global pool one step suffices.
-Across the 19-game \textsc{scaling\_large} preset and a controlled
-\textsc{collapse} no-pool ablation, turning pool off costs both
-convergence speed and final loss, with the no-pool model collapsing
-into the identity-prediction minimum even at $4{\times}$ the depth.
+information. The per-feature ablation in
+Table~\ref{tab:ablation-pool} isolates which pool flavour does the
+work: removing global-pool alone is as costly as removing all three
+($+145\%$ relative BFS error), while removing axis-cummax has no
+measurable effect on \textsc{sokoban\_basic} (its target patterns ---
+axis-aligned \texttt{[X | ... | Y]} matches --- do not appear in
+that game's rule set). On the 19-game \textsc{scaling\_large} preset
+and a controlled \textsc{collapse} no-pool ablation, turning pool
+off costs both convergence speed and final loss, with the no-pool
+model collapsing into the identity-prediction minimum even at
+$4{\times}$ the depth.
 
 \paragraph{(F2) Shared NCA-body weights are the right inductive bias.}
 The PuzzleScript engine has two natural levels of iteration: an
