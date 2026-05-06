@@ -19,6 +19,26 @@ values when sprite tokens are enabled, and per-rule kernel
 separators. A single token sequence per game serves as the encoder
 input.
 
+\subsection{Dataset provenance and training suites}
+\label{app:data-provenance}
+
+The main text uses the PuzzleJax collection names at a high level:
+our \texttt{Gallery} corresponds to its Gallery,
+\texttt{scraped\_games} to its Archive, and
+\texttt{scraped\_games\_increpare} to its gists. After filename and
+token-hash deduplication, all training and held-out splits are defined
+by explicit game-name lists.
+
+The 14-game ablation suite is:
+\textsc{nekopuzzle}, \textsc{notsnake}, \textsc{blocks},
+\textsc{sokoban\_basic}, \textsc{sokoban\_match3},
+\textsc{Zen\_Puzzle\_Garden}, \textsc{Multi-word\_Dictionary\_Game},
+\textsc{kettle}, \textsc{Travelling\_salesman},
+\textsc{Collapsable\_Sokoban}, \textsc{Love\_and\_Pieces},
+\textsc{actiontest}, \textsc{scriptcross}, and \textsc{Modality}.
+The broader 59-, 94-, and 199-game presets are nested supersets; their
+full lists are included in the released configuration files.
+
 \subsection{Per-game \textsc{scaling\_14} breakdown}
 \label{app:per-game}
 

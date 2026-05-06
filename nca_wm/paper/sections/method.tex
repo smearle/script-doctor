@@ -1,13 +1,32 @@
 \section{Method}
 \label{sec:method}
 
+\begin{figure}[t]
+  \centering
+  \includegraphics[width=\linewidth]{figures/architecture/arch_overview.pdf}
+  \caption{\textbf{Architecture and joint training objective.}
+    A perceiver-style encoder $\mathrm{Enc}_\phi$ maps the tokenized
+    PuzzleScript spec to $K{=}16$ slot vectors $z$. The dynamics body
+    is a Neural Cellular Automaton applied for $T{=}20$ shared-weight
+    steps to the embedded state--action $(s_t, a_t)$, with cells
+    cross-attending to $z$ at every step. A causal token decoder
+    $\mathrm{Dec}_\psi$ reconstructs the spec from the same $z$.
+    Training jointly minimizes a per-cell BCE on $s_{t+1}$, a binary
+    win-bit loss, and a token cross-entropy on the decoded spec
+    (see \S\ref{sec:method} for details). Freezing
+    $(\theta, \mathrm{Dec}_\psi)$ and optimizing only $z$ on observed
+    transitions of an unknown game (\S\ref{sec:method-inverse})
+    yields a fitted latent that decodes back to symbolic game code.}
+  \label{fig:arch-overview}
+\end{figure}
+
 \subsection{Problem setup}
 
 A PuzzleScript game is a tuple $(\mathcal{O}, R, \{L_i\})$ where
 $\mathcal{O}$ is an ordered list of object kinds, $R$ is a list of
 rewrite rules, and $\{L_i\}$ are authored levels. Each level is a
 multi-channel grid $s \in \{0,1\}^{C \times H \times W}$ where channel
-$c$ is the indicator of object kind $c$ at each cell. An action $a \in
+$c$ is the indicator of object kind $c$ at each cell ($C = \lvert \mathcal{O} \rvert$). An action $a \in
 \{\texttt{up}, \texttt{down}, \texttt{left}, \texttt{right},
 \texttt{action}\}$ together with the current state $s_t$
 deterministically yields a next state $s_{t+1}$ via the engine. The

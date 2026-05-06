@@ -36,8 +36,8 @@ encoder-only run ($\beta = 0$) and the joint decoder run
 \end{table}
 
 The 1-step teacher-forced cell-error of $\sim 0.15\%$ across 94 games
-is the strongest single-number support for the abstract's
-``near-perfect fidelity'' phrasing in the on-distribution regime.
+is the strongest single-number evidence for near-perfect
+on-distribution fidelity.
 Multi-step rollout error climbs to $\sim 5{-}8\%$ across regimes,
 with the median game still under $3\%$ on every regime. The mean is
 pulled up by a small set of persistently-hard games whose state
@@ -84,11 +84,14 @@ Two interactions are visible: (i) the \texttt{mask\_hidden=True}
 training-time padding mask sharply tightens held-out 1-NN at small
 training scale ($0.144 \to 0.077$ at 14 games; this is the
 single biggest lever in the table); (ii) at 94 training games the
-matching encoder-only run loosens from the 14-game mark
+matched encoder-only run loosens from the 14-game mark
 ($0.215$) because the encoder now has to model wider mechanical
 diversity, and the joint decoder constraint pulls it back down by
-29\% ($0.215 \to 0.153$). The 200-game training point is in
-progress and will be added.
+29\% ($0.215 \to 0.153$).
+
+\papertodo{Add the completed 199-game \textsc{scaling\_gallery\_v4}
+geometry row, or remove discussion of v4 from the scaling table if the
+run is not ready for submission.}
 
 The take-home is that the \emph{geometric} side of engine-level
 modelling --- placing held-out games near mechanically-similar
@@ -149,8 +152,8 @@ work.
 \subsection{Latent inverse-fitting from OOD transitions}
 \label{sec:results-inverse-fit}
 
-To test the abstract's strongest claim --- that an unobserved game's
-program can be recovered from observed transitions --- we freeze the
+To test whether an unobserved game's latent program can be recovered
+from observed transitions, we freeze the
 trained NCA $\theta$ and decoder $\psi$ and optimise the slot
 $z \in \mathbb{R}^{K \times d_{\text{slot}}}$ via 2{,}000 Adam steps
 at $\text{lr} = 5 \times 10^{-3}$ on the same per-cell next-state BCE
@@ -317,8 +320,7 @@ $5.5{\times}$ lower train loss with $7{\times}$ fewer parameters than
 the per-step body at the same depth; shared $T{=}2$ at 14$\times$
 fewer parameters than the deepest per-step variant matches it on
 oracle-action rollouts. Hierarchical $n_r > 1$ sits between these
-extremes and is the subject of an ongoing ablation
-(\S\ref{sec:results-hierarchy}).
+extremes.
 
 \paragraph{(F3) Train loss decouples from autoregressive rollout error.}
 \label{sec:results-F3}
@@ -352,6 +354,7 @@ $(s_t, a_t)$ at every step. Results in Table~\ref{tab:ablation-pool}.
     configurations (F3 still applies).}
   \label{tab:ablation-pool}
   \small
+  \resizebox{\linewidth}{!}{%
   \begin{tabular}{l c c c c}
     \toprule
     Recipe & params (M) & best loss & BFS final-err & $\Delta$BFS vs.\ full \\
@@ -365,6 +368,7 @@ $(s_t, a_t)$ at every step. Results in Table~\ref{tab:ablation-pool}.
     no pool at all    & 2.68 & $0.100 \pm 0.005$ & $10.71\% \pm 3.89\%$ & $+6.35$ ($+145\%$) \\
     \bottomrule
   \end{tabular}
+  }
 \end{table}
 
 Three observations:
@@ -394,9 +398,11 @@ error --- yet another instance of F3 (\S\ref{sec:results-F3}).
 \subsection{Hierarchical weight sharing}
 \label{sec:results-hierarchy}
 
-[Figure: $T{=}16$ varying $n_r \in \{1, 2, 4, 8, 16\}$ on
+\papertodo{Add hierarchy figure/table: $T{=}16$ varying
+$n_r \in \{1, 2, 4, 8, 16\}$ on
 \textsc{microban} multi-grid synth and on the multi-game
-\textsc{scaling\_14} preset. Reports change-error and parameter count.]
+\textsc{scaling\_14} preset, reporting change-error and parameter
+count.}
 
 \subsection{Adaptive halting}
 \label{sec:results-halting}
@@ -411,8 +417,9 @@ $T$ steps), \emph{argmax-ST} (straight-through estimator on
 $\arg\max_k p_k$), and \emph{convergence-ST} (halt at inference when
 consecutive predictions stop changing, no learned head).
 
-[Figure: per-step error trajectory under each mode + the per-instance
-halt distribution as a function of slide distance.]
+\papertodo{Add halting figure: per-step error trajectory under each
+mode plus per-instance halt distribution as a function of slide
+distance.}
 
 Across these modes we observe two phenomena. First, on tasks where
 the dynamics fit cleanly in $\sim$1--2 NCA steps (small-grid varislide,

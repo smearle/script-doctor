@@ -14,7 +14,7 @@ in a large space of symbolic rule systems.
 PuzzleScript games are such a regime. Each game is fully specified by
 a short text file describing object kinds, layered grid levels, and a
 list of declarative rewrite rules, e.g.
-\texttt{[ Player | Crate ] -> [ | Player Crate ]}. The engine
+\texttt{[ > Player | Crate ] -> [ > Player | > Crate ]}. The engine
 evaluates these rules in order on the grid at every tick, with
 \texttt{again} rules causing the rule list to be re-evaluated until
 the state stops changing. The state is a \emph{discrete multi-channel
@@ -35,14 +35,12 @@ across games. In the full version of the model, these slots are tied
 to a symbolic-game autoencoder so that game latents can both condition
 dynamics and decode back into program text.
 
-Concretely, the deduplicated candidate corpus contains 3{,}474
-token-distinct human-authored games (ranging from one to twenty rules
-each), of which up to 199 are used in our largest training preset.
-Across these 199 games we collect roughly 23{,}500 transitions per
-game on average from authored levels via bounded A* search, for a
-total training set of $\sim$15M transitions; held-out evaluation uses
-a 30-game stratified sample from the same pool that is disjoint from
-the training set both by name and by token-sequence hash.
+Our deduplicated corpus contains 3{,}474 token-distinct
+human-authored games (one to twenty rules each), of which up to 199
+are used in the largest training preset. Across these games we cache
+bounded-A* transitions from authored levels, yielding $\sim$15M
+transitions; held-out evaluation uses a 30-game stratified sample
+disjoint from training by name and token-sequence hash.
 
 On the 94-game broad-corpus training preset, the trained NCA achieves
 a median per-cell teacher-forced one-step error of $0.15\%$ and a
@@ -72,7 +70,7 @@ quantifying the drift caused by autoregressive compounding.
         from single-game modeling to many-game engine modeling.
 \end{enumerate}
 
-The symbolic-AE component of contribution 3 is partially landed: the
+The symbolic-AE component of contribution 3 is partial: the
 joint encoder + slot-token decoder achieves perfect teacher-forced
 reconstruction on every training game (\S\ref{sec:results-autoencoder});
 inverse fitting from OOD transitions drives per-cell BCE down 2--3
@@ -98,14 +96,3 @@ an identity baseline. The first measures whether the encoder
 \emph{places} held-out games near mechanically-similar training games;
 the second measures whether the dynamics model \emph{behaves}
 correctly on those novel rule combinations.
-
-\paragraph{Why baselines from a different family.}
-Reviewers of NCA papers often (rightly) ask whether the same task could
-be solved by an off-the-shelf grid-to-grid architecture without the
-recurrence. Our baselines are designed to answer exactly that: each
-shares the rule-slot encoder verbatim with our model, so the
-comparison isolates the spatial-update body, not the conditioner. The
-CNN baseline tests whether iteration is necessary at all; the U-Net
-baseline tests whether multi-scale hierarchy with skips is a better
-substitute for repeated local updates; the ViT baseline tests whether
-unrestricted global attention beats locality plus iteration.

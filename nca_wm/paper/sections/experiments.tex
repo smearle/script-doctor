@@ -12,9 +12,11 @@ multi-game training we draw batches with one share per game per step
 imbalance.
 
 \paragraph{Corpus.}
-Our corpus is the union of four PuzzleScript collections: the official
-PuzzleScript.net gallery, a community scrape of the same site, an
-increpare-author scrape, and a small set of curated custom games.
+Our corpus follows the PuzzleJax collection
+structure~\cite{anonymous2026puzzlejax}: Gallery, Archive, and gists
+correspond here to \texttt{Gallery}, \texttt{scraped\_games}, and
+\texttt{scraped\_games\_increpare}. We also include a small set of
+curated custom games.
 After (a) deduplicating by lowercased filename across collections and
 (b) collapsing structural near-duplicates by hashing the canonical
 name-invariant token sequence produced by our tokenizer, the pool
@@ -29,7 +31,7 @@ slot embeddings for token-identical inputs. Median rule count is 6
 range from $1{\times}3$ to $30{\times}40$. We use four nested presets
 spanning the dataset-size axis: $\textsc{scaling\_14}$ (14 curated
 games for ablations), $\textsc{scaling\_gallery\_v2}$ (59 gallery
-games for a within-source scaling point),
+games),
 $\textsc{scaling\_gallery\_v3}$ (94 games), and
 $\textsc{scaling\_gallery\_v4}$ (199 games extending into the
 scrape pool). For each game we run bounded A* from each authored

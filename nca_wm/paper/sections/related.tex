@@ -23,13 +23,40 @@ Ha and Schmidhuber~\cite{ha2018world}. Recent transformer-based
 world models~\cite{micheli2022iris,robine2023transformer} compress
 images to discrete tokens and roll out dynamics autoregressively over
 those tokens; PWM-style methods integrate planning into a learned
-model. Our problem domain---fully discrete grid observations,
+model. Recent dynamics-centric video work makes a related point from
+the opposite direction: dense appearance prediction can spend model
+capacity on visual detail rather than on the sparse trajectories that
+drive future scene evolution~\cite{baumann2026envisioning}. Recent
+interactive video world models push toward game-like simulation from
+pixels~\cite{valevski2025gamengen,parkerholder2025genie3,savva2026solaris},
+while related methods add scaffolding for long-horizon consistency:
+self-rollout training and rolling caches~\cite{huang2025selfforcing},
+causal diffusion noise schedules~\cite{chen2024diffusionforcing}, and
+external memory or retrieval over revisited
+views~\cite{xiao2025worldmem,oshima2025worldpack}. These mechanisms
+encourage latent state to persist despite dense visual prediction. Our
+separation is direct: the predicted state is the engine state, and the
+transition model is conditioned on the program defining the dynamics.
+Our
+problem domain---fully discrete grid observations,
 authored rule sets, dozens of related games sharing a substrate---is
 closer to procedural-content benchmarks like NetHack and CHAI than to
 Atari. Compared to MuZero-style models that learn an abstract latent
 dynamics, our model commits to predicting the engine's next state in
 its native grid representation, which makes ground-truth supervision
 exact and lets us compare to the engine cell-by-cell.
+
+\paragraph{Learned grid-game engines.}
+Closest to our setting, Bamford and Lucas introduce a Neural Game
+Engine for deterministic GVGAI grid games~\cite{bamford2020neural}.
+Their model is effectively NCA-like: it adapts the Neural GPU into a
+2D recurrent local-update system with shared convolutional gated
+updates applied repeatedly over a grid, and it conditions each step on
+the player action. The key distinction is scope. Neural Game Engine
+learns directly from pixels and trains a separate forward model for
+each game. We instead train one rule-conditioned model across many
+games, predict the engine's symbolic object-channel state directly,
+and condition the shared dynamics on the tokenized game program.
 
 \paragraph{PuzzleScript and rule-based puzzle games.}
 PuzzleScript~\cite{lavelle2013puzzlescript} is a domain-specific
@@ -40,10 +67,14 @@ trajectories, light beams), multi-character control, and rule
 priorities. Several hundred community games are publicly available and
 share both a tokenization scheme (the engine source) and a common
 state encoding, making the family a natural multi-game benchmark for
-world models. Prior work has studied PuzzleScript primarily for
-procedural content generation and human play; to our knowledge, ours
-is the first systematic study of learned forward models on a broad
-PuzzleScript gallery.
+world models. PuzzleJax~\cite{anonymous2026puzzlejax} introduced a
+PuzzleScript reasoning-and-learning benchmark with a JAX engine and
+three game collections: a curated Gallery, a larger Archive of scraped
+community games, and gists. We use the same high-level collections
+(our Gallery, \texttt{scraped\_games}, and
+\texttt{scraped\_games\_increpare}, respectively) but extend the
+tooling with a C++ engine backend, cached transition datasets, and
+rule-conditioned learned forward models.
 
 \paragraph{Adaptive computation.}
 PonderNet~\cite{banino2021pondernet} learns a per-input halting
