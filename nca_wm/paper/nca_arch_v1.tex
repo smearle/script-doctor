@@ -123,15 +123,15 @@ all Crate on Target};
 % nudged to the right end of the brace so it does not collide with the
 % cross-attn descent branches.
 \path let \p1 = (nca-west), \p2 = (nca-east) in
-    coordinate (braceLeft)  at (\x1-0.05cm, 2.20cm)
-    coordinate (braceRight) at (\x2+0.05cm, 2.20cm);
+    coordinate (braceLeft)  at (\x1+0.90cm, 2.90cm)
+    coordinate (braceRight) at (\x2+0.90cm, 2.90cm);
 \draw[decorate, decoration={brace, amplitude=6pt, raise=4pt, mirror}, line width=0.4pt]
     (braceRight) -- (braceLeft);
 \node[font=\small\itshape, anchor=west]
-    at ($(braceRight)+(0.18cm,0.20cm)$) {$n_\text{layers}$};
+    at ($(braceRight)+(-0.8cm,0.70cm)$) {$n_\text{layers}$};
 
 % --- s_{t+1} (readout box, image projected on east/front face) ---
-\pic[shift={(3.4,0,0)}] at (0,0,0)
+\pic[shift={(4.0,0,0)}] at (0,0,0)
     {Box={
         name=readout,
         caption= ,
@@ -143,7 +143,7 @@ all Crate on Target};
         depth=20
         }
     };
-\node[canvas is zy plane at x=3.9] (sout) at (0,0)
+\node[canvas is zy plane at x=4.5] (sout) at (0,0)
     {\includegraphics[width=3.6cm,height=3.6cm]{figures/architecture/state_out.png}};
 \path let \p1=(readout-south) in
     node[font=\large, anchor=north] at (\x1, -2.5cm) {$s_{t+1}$};
@@ -160,10 +160,9 @@ all Crate on Target};
     coordinate (loopOutR)  at (\x1+0.4cm, \y1)
     coordinate (loopOutRD) at (\x1+0.4cm, -4.0cm)
     coordinate (loopInLD)  at (\x2-0.6cm, -4.0cm)
-    coordinate (loopInL)   at (\x2-0.6cm, \y2)
-    coordinate (loopHead)  at (\x2-0.10cm, \y2);
+    coordinate (loopInL)   at (\x2-0.6cm, \y2);
 \draw[-Stealth, line width=0.7mm, opacity=0.32, rounded corners=10pt]
-    (nca-east) -- (loopOutR) -- (loopOutRD) -- (loopInLD) -- (loopInL) -- (loopHead);
+    (nca-east) -- (loopOutR) -- (loopOutRD) -- (loopInLD) -- (loopInL) -- (nca-west);
 \node[font=\small\itshape, opacity=0.7]
     at ($(loopOutRD)!0.5!(loopInLD)+(0,-0.40)$) {$\times\, n_\text{repeats}$};
 
