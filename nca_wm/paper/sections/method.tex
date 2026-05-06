@@ -7,7 +7,7 @@
   \caption{\textbf{Rule-conditioned NCA dynamics.}
     A perceiver-style encoder $\mathrm{Enc}_\phi$ maps the tokenized
     PuzzleScript spec to $K{=}16$ slot vectors $z$. The dynamics body
-    embeds the state--action $(s_t, a_t)$ and applies $n_\text{layers}$
+    embeds the state-action $(s_t, a_t)$ and applies $n_\text{layers}$
     convolutional layers, with cells cross-attending to $z$ at every
     layer; this stack is iterated for $n_\text{repeats}$ shared-weight
     passes to produce $s_{t+1}$ ($T = n_\text{layers} \cdot
@@ -35,7 +35,7 @@ We train a model $f_\theta(s_t, a_t, g) \mapsto
 \widehat{s}_{t+1}$ where $g$ is a latent representation of the
 game's symbolic source. In the experiments below, $g$ is produced
 from the tokenized game source (a sequence of integers from a shared
-$\sim$140-symbol vocabulary that covers the engine grammar plus
+$\approx 140$-symbol vocabulary that covers the engine grammar plus
 per-game object names and 5$\times$5 sprite RGBA values when sprite
 tokens are enabled). At evaluation we roll the model out
 autoregressively and compare cell-by-cell against the engine.
@@ -73,7 +73,7 @@ shared across cells and remain fixed throughout the rollout.
 
 \paragraph{Symbolic token decoder.}
 $\mathrm{Dec}_\psi$ is a four-layer causal Transformer over the same
-$\sim$140-symbol vocabulary used by the encoder. Each token position
+$\approx 140$-symbol vocabulary used by the encoder. Each token position
 self-attends causally to prior positions and cross-attends to the
 $K$ slots at every layer. We train under teacher forcing: the input
 sequence is the right-shifted target tokens with a learned BOS, and
@@ -152,7 +152,7 @@ spatial-update body.
     residual gate as one NCA layer, but with \emph{distinct}
     weights per block and applied once. Tests whether iteration with
     weight sharing matters at all.
-  \item \textbf{U-Net}: a 2-level encoder--decoder with skip
+  \item \textbf{U-Net}: a 2-level encoder-decoder with skip
     connections and a FiLM bottleneck that reads pooled slots. Tests
     whether multi-scale hierarchy substitutes for repeated local
     updates.

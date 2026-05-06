@@ -4,7 +4,7 @@
 Learned world models have been studied primarily in settings where
 the environment is observed as pixels and the task is to predict the
 next frame or latent video token. The standard recipe pairs a
-high-capacity visual encoder--decoder---typically a CNN, U-Net, or
+high-capacity visual encoder-decoder---typically a CNN, U-Net, or
 video Transformer---with an action-conditioned dynamics module. This
 is a natural fit when the observation is visually rich and the
 underlying mechanics are comparatively smooth or uniform. It is a
@@ -38,7 +38,7 @@ against the original engine.
 Our corpus contains 3{,}474 token-distinct
 human-authored games (one to twenty rules each), of which up to 199
 are used in the largest training preset. Across these games we cache
-bounded-A* transitions from authored levels, yielding $\sim$15M
+bounded-A* transitions from authored levels, yielding $\approx 15$M
 transitions; held-out evaluation uses a 30-game stratified sample
 disjoint from training by name and token-sequence hash.
 

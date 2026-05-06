@@ -12,7 +12,7 @@ spatial-update body (rule-attention NCA, CNN, U-Net, or ViT) varies.
 \subsection{Tokenization}
 
 Each game's tokenized representation is a sequence of integers from
-a $\sim$140-symbol vocabulary covering: object names, layer
+a $\approx 140$-symbol vocabulary covering: object names, layer
 references, rule operators, action types, the 5$\times$5 sprite RGBA
 values when sprite tokens are enabled, and per-rule kernel
 separators. A single token sequence per game serves as the encoder
@@ -137,7 +137,7 @@ double-counting the same mechanic.
 A model with the lowest per-step train loss is not the model with the
 lowest autoregressive rollout error. Concretely, in the over-capacity
 regime we observe per-step models with $5\times$ lower train loss but
-$3{-}4\times$ higher 50-step rollout error: small but systematic
+$3$--$4\times$ higher 50-step rollout error: small but systematic
 per-step errors compound destructively under autoregression. The
 per-game grid pushes the gap to its loudest form yet.
 On \textsc{Travelling\_salesman} at 50k updates all four architecture
@@ -183,11 +183,11 @@ $w{=}7 \to 0\%$ on 155 \textsc{Microban}/\textsc{Microban\_I}
 authored levels in prior work) while size-down does not; (ii) using
 a single size keeps the per-size data density at $K{=}128$, which
 empirically matters: an early multi-grid variant
-($K / n_{\text{sizes}}$ per size, $\sim 16$ levels per size for
-Microban) plateaued at $\sim 8\%$ BFS heldout while the same recipe
+($K / n_{\text{sizes}}$ per size, $\approx 16$ levels per size for
+Microban) plateaued at $\approx 8\%$ BFS heldout while the same recipe
 at fixed $K{=}128$ on a single small size reached $0.60\%$ BFS,
 $0.02\%$ 1-step. We also tried an auto-bounding-box variant that
-picks $\max W \times \max H$ for each game; it failed at $\sim 9\%$
+picks $\max W \times \max H$ for each game; it failed at $\approx 9\%$
 BFS because many authored levels are much smaller than the bounding
 box, and the synth distribution missed them. Smallest-by-area (rather
 than per-axis $\min W \times \min H$) is used so the chosen size is
@@ -333,7 +333,7 @@ per-authored-state outcomes within a single game.
 Prior single-game evidence is sharp on at least the Sokoban-class
 subset (cf.\ the Sokoban $w{=}7 \to 0\%$ on 155
 \textsc{Microban}/\textsc{Microban\_I} levels prior;
-\textsc{nekopuzzle} multi-grid closing a $3{-}8\%$ authored gap to
+\textsc{nekopuzzle} multi-grid closing a $3$--$8\%$ authored gap to
 $0.3\%$). We expect (i) Sokoban-class games (\textsc{Microban}) to
 land at $\leq 1\%$ BFS across all four buckets, replicating the
 \textsc{Microban}-D anchor; (ii) \textsc{Bouncers} and
@@ -399,7 +399,7 @@ between these extremes (\S\ref{app:hierarchy}).
 A model with the lowest train (per-step) loss is not the model with
 the lowest autoregressive rollout error. Concretely, in the
 over-capacity regime we observe per-step models with $5\times$ lower
-train loss but $3{-}4\times$ higher 50-step rollout error. The
+train loss but $3$--$4\times$ higher 50-step rollout error. The
 mechanism is small but systematic per-step errors compounding
 destructively under autoregression. Reporting only best-loss hides
 the rollout-drift cost of going deeper or wider.
@@ -435,7 +435,7 @@ mode plus per-instance halt distribution as a function of slide
 distance.}
 
 Across these modes we observe two phenomena. First, on tasks where
-the dynamics fit cleanly in $\sim$1--2 NCA steps (small-grid
+the dynamics fit cleanly in $\approx 1$--$2$ NCA steps (small-grid
 varislide, \textsc{collapse}), all halting modes converge near the
 dynamics-floor within their effective depth and drift past it;
 convergence-ST recovers near-oracle performance via inference-time

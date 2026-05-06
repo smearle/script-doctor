@@ -154,7 +154,7 @@ a stability mechanism rather than an information-carrying feature.
 Table~\ref{tab:baselines-scaling14} extends the head-to-head to the
 \textsc{Train-14} preset: 14 PuzzleScript games sharing the rule-slot
 encoder, with grid sizes from $4{\times}4$ to $32{\times}24$ and rule
-counts from a handful (basic Sokoban) to $\sim$30
+counts from a handful (basic Sokoban) to $\approx 30$
 (\texttt{Heroes\_of\_Sokoban}, \texttt{Sokoboros}). 20k updates per
 seed, $d_h = 256$.
 
@@ -172,9 +172,9 @@ seed, $d_h = 256$.
     \toprule
     Architecture & params (M) & best loss & BFS final-err & A* final-err \\
     \midrule
-    \textbf{NCA (per-step, $T{=}4, n_r{=}1$)} & 7.37 & $\sim$$0$ & $\mathbf{12.39\% \pm 1.82\%}$ & $13.57\% \pm 1.76\%$ \\
-    NCA (shared, $T{=}4, n_r{=}T$)            & \textbf{1.96} & $\sim$$0$ & $13.12\% \pm \mathbf{0.24\%}$ & $14.68\% \pm 0.08\%$ \\
-    CNN (4-block ResNet)                      & 5.01 & $\sim$$0$ & $13.56\% \pm 1.08\%$ & $14.71\% \pm 1.42\%$ \\
+    \textbf{NCA (per-step, $T{=}4, n_r{=}1$)} & 7.37 & $\approx 0$ & $\mathbf{12.39\% \pm 1.82\%}$ & $13.57\% \pm 1.76\%$ \\
+    NCA (shared, $T{=}4, n_r{=}T$)            & \textbf{1.96} & $\approx 0$ & $13.12\% \pm \mathbf{0.24\%}$ & $14.68\% \pm 0.08\%$ \\
+    CNN (4-block ResNet)                      & 5.01 & $\approx 0$ & $13.56\% \pm 1.08\%$ & $14.71\% \pm 1.42\%$ \\
     U-Net (2 levels)                          & 6.09 & $1.0 \times 10^{-4}$ & $21.03\% \pm 0.29\%$ & $23.15\% \pm 0.40\%$ \\
     ViT (4 layers)                            & 4.01 & $7.7 \times 10^{-4}$ & $23.14\% \pm 2.40\%$ & $24.67\% \pm 1.87\%$ \\
     \bottomrule
@@ -183,15 +183,15 @@ seed, $d_h = 256$.
 
 Both NCA variants outperform all three non-NCA baselines on
 autoregressive rollout, with U-Net at $1.6\times$ and ViT at
-$\sim$$1.9\times$ NCA-perstep's BFS error; the NCA / non-NCA gap is
+$\approx 1.9\times$ NCA-perstep's BFS error; the NCA / non-NCA gap is
 robust to seed (no overlap of $\pm 1\sigma$ intervals). Within the
 NCA family the per-step body has the lowest mean BFS error
 ($12.39\% \pm 1.82\%$) while the shared body has $7.6\times$ lower
 seed-to-seed variance and $3.8\times$ better parameter efficiency;
 at $\pm 1\sigma$ the two NCA variants overlap on aggregate BFS
 rollout, so we cannot distinguish them on this metric. ViT's train
-loss is $\sim$$10^{4}$ times higher than the NCA / CNN family
-($\sim$$8 \times 10^{-4}$ vs.\ $\sim$$0$), confirming the structural
+loss is $\approx 10^{4}$ times higher than the NCA / CNN family
+($\approx 8 \times 10^{-4}$ vs.\ $\approx 0$), confirming the structural
 mismatch from the single-game setting. Per-game breakdowns are in
 Appendix~\ref{app:per-game}.
 
@@ -290,12 +290,12 @@ token-decoder loss in the training objective.
   \end{tabular}
 \end{table}
 
-The 1-step teacher-forced cell-error of $\sim 0.15\%$ across 94 games
+The 1-step teacher-forced cell-error of $\approx 0.15\%$ across 94 games
 quantifies on-distribution fidelity in a single number: a single
 rule-conditioned NCA, fed only the tokenized rule text and the
 current state, predicts the next state of any of 94 different
 authored games at $\geq 99.85\%$ per-cell accuracy median.
-Multi-step rollout error climbs to $\sim 5{-}8\%$ across regimes,
+Multi-step rollout error climbs to $\approx 5$--$8\%$ across regimes,
 with the median game still under $3\%$ on every regime. The mean is
 pulled up by a small set of persistently-hard games whose state
 spaces are large or whose rule structures involve cascading
