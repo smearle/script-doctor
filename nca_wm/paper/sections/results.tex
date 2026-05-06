@@ -1,10 +1,10 @@
 \section{Results}
 \label{sec:results}
 
-\subsection{Headline dynamics fidelity}
-\label{sec:results-headline}
+\subsection{Dynamics fidelity on the broad corpus}
+\label{sec:results-fidelity}
 
-Table~\ref{tab:headline-fidelity} reports per-cell error rates on the
+Table~\ref{tab:fidelity} reports per-cell error rates on the
 94-game broad-corpus training preset $\textsc{scaling\_gallery\_v3}$,
 averaged across all 94 games and all authored levels per game, under
 four rollout regimes: random actions (autoregressive),
@@ -21,7 +21,7 @@ encoder-only run ($\beta = 0$) and the joint decoder run
   50 steps for autoregressive regimes / level-length for BFS / A*).
   Adding the joint decoder objective is essentially \emph{free} on
   rollout fidelity: every regime ties within 0.5pp.}
-  \label{tab:headline-fidelity}
+  \label{tab:fidelity}
   \small
   \begin{tabular}{l c c c c}
     \toprule
@@ -36,20 +36,18 @@ encoder-only run ($\beta = 0$) and the joint decoder run
 \end{table}
 
 The 1-step teacher-forced cell-error of $\sim 0.15\%$ across 94 games
-is the strongest single-number evidence for near-perfect
-on-distribution fidelity.
-Multi-step rollout error climbs to $\sim 5{-}8\%$ across regimes,
-with the median game still under $3\%$ on every regime. The mean is
-pulled up by a small set of persistently-hard games whose state
-spaces are large or whose rule structures involve cascading
-\texttt{again} loops; we discuss this distribution in
-\S\ref{sec:discussion}.
+quantifies on-distribution fidelity in a single number. Multi-step
+rollout error climbs to $\sim 5{-}8\%$ across regimes, with the median
+game still under $3\%$ on every regime. The mean is pulled up by a
+small set of persistently-hard games whose state spaces are large or
+whose rule structures involve cascading \texttt{again} loops; we
+discuss this distribution in \S\ref{sec:discussion}.
 
 \subsection{Within-game generalization from synthetic levels}
 \label{sec:results-within-game}
 
-The headline-fidelity numbers in
-Table~\ref{tab:headline-fidelity} measure cell-error on the same
+The fidelity numbers in
+Table~\ref{tab:fidelity} measure cell-error on the same
 authored levels the model trained on. To probe whether the
 rule-conditioned NCA learns rule structure rather than per-state
 outcomes, we strip every authored level out of the training set and
@@ -363,7 +361,7 @@ analyzed in \S\ref{sec:results-ceiling}.
   \end{tabular}
 \end{table}
 
-The synthetic-multi-grid setting is the headline comparison: per-state
+The synthetic-multi-grid setting is the decisive comparison: per-state
 memorization is unavailable (4 widths $\times$ 256 synthetic levels
 per width $=$ 1024 distinct levels share one rule set), so the model
 must \emph{learn the rule that maps state plus action to the next

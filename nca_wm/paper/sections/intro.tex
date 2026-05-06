@@ -59,54 +59,38 @@ authored-state lookup.
 
 \paragraph{Contributions.}
 \begin{enumerate}
-  \item A rule-conditioned NCA world model that learns PuzzleScript
-        dynamics with a shared local update rule, conditioned via
-        cross-attention on latent slots encoding the game's symbolic
-        rule description.
-  \item A controlled comparison against non-NCA baselines (CNN, U-Net,
-        ViT) that share the rule-slot encoder but differ in the
-        spatial-update body. The comparison isolates the contribution
-        of the iterated-local-update inductive bias.
-  \item A symbolic-game latent space that is jointly optimized with
-        the dynamics model, allowing the same game embedding to
-        support forward simulation, decoding to program text, and
-        inverse fitting of unknown rules from observed transitions.
-  \item Empirical analyses of the architectural choices that matter
-        for engine-like dynamics: non-local pool features, weight
-        sharing across NCA steps, adaptive halting, and the transition
-        from single-game modeling to many-game engine modeling.
-  \item A within-game OOD-levels protocol (\S\ref{sec:results-within-game})
-        that trains exclusively on synthesized levels of a target game
-        and evaluates on every authored level. This isolates rule
-        learning from per-state memorization and provides the
-        non-trivial generalization counterpart to the headline
-        teacher-forced fidelity numbers.
+  \item \textbf{NCA dynamics over discrete state.}
+        Modeling the engine's native discrete grid with a shared,
+        iteratively-applied local update body matches the reference
+        dynamics with median 1-step teacher-forced cell-error of
+        $0.15\%$ across the 94-game broad-corpus preset. A controlled
+        comparison that holds the rule encoder fixed and varies only
+        the spatial body shows the iterated-local-update bias
+        outperforms non-iterative architectures (CNN, U-Net, ViT) on
+        rollout fidelity at matched or smaller parameter counts.
+        Within-game OOD-levels probes (\S\ref{sec:results-within-game})
+        confirm the model is learning rule structure rather than
+        memorizing authored states.
+  \item \textbf{Rule-conditioning for multi-game simulation.}
+        A single model simulates dozens of mechanically diverse games
+        by cross-attending to slot embeddings produced by an encoder
+        over each game's tokenized rule text. Trained jointly with a
+        slot-token decoder, the same latent drives forward dynamics
+        and decodes back to program text: $76/94$ training games
+        reconstruct perfectly under teacher forcing, $15/25$ samples
+        from the empirical slot prior decode to engine-loadable
+        PuzzleScript, and slot-space interpolation between two games
+        is engine-loadable at $9/9$ points along the line.
+        The same latent is also recoverable by inverse-fitting through
+        the frozen NCA, driving per-cell BCE 2--3 orders of magnitude
+        down on held-out targets and snapping the optimised slot to
+        mechanically-related training games.
+  \item \textbf{Generalization to unseen games.}
+        On a 30-game held-out set disjoint from training by name and
+        token-sequence hash, we evaluate two axes of engine-level
+        transfer: \emph{geometric} placement of held-out latents
+        relative to training-game latents, and \emph{predictive}
+        accuracy of the dynamics model on novel rule combinations.
+        The results delineate where the rule-conditioned NCA
+        generalizes today and where further work is needed.
 \end{enumerate}
-
-The symbolic-AE component of contribution 3 is functional: the
-joint encoder + slot-token decoder achieves teacher-forced
-reconstruction with median per-token accuracy of $1.0$ and
-$76/94$ perfectly reconstructed games across the 94-game preset
-(\S\ref{sec:results-autoencoder}). Autoregressive sampling from the
-empirical slot prior produces engine-loadable PuzzleScript at
-$15/25$ random samples (60\%), and slot-space interpolation between
-two training games hits $9/9$ engine-loadable points (100\%) along
-the line. Inverse fitting from OOD transitions drives per-cell BCE
-down 2--3 orders of magnitude on three held-out games and recovers
-1-NN training-game neighbours that match the target's mechanics
-(\S\ref{sec:results-inverse-fit}).
-
-Our broad-corpus presets ($\textsc{scaling\_gallery\_v3}$ at 94 games
-and $\textsc{scaling\_gallery\_v4}$ at 199 games) come paired with a
-30-game held-out set that is disjoint from any training preset both
-by name and by token-sequence hash. We measure engine-level
-generalization along two complementary axes:
-(i) \emph{geometric}, by encoding the held-out games' tokens through
-the trained encoder and reporting their 1-NN cosine distance to the
-nearest training-game slot, and (ii) \emph{predictive}, by running
-the autoregressive next-state prediction conditioned on the held-out
-encoding and comparing per-cell to the engine's ground truth, against
-an identity baseline. The first measures whether the encoder
-\emph{places} held-out games near mechanically-similar training games;
-the second measures whether the dynamics model \emph{behaves}
-correctly on those novel rule combinations.
