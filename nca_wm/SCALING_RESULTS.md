@@ -1286,6 +1286,44 @@ Files:
 - `nca_wm/logs/multi_scaling_gallery_v3_decoder_sprites_eos/sampled_games/summary.json`
 - `nca_wm/logs/multi_scaling_gallery_v3_decoder_sprites_eos/sampled_games/{interp,random}_*.txt`
 
+## v4+decoder+sprites+EoS (199g, 2026-05-06)
+
+Same recipe as v3+decoder+sprites+eos, scaled to the 199-game preset
+(`scaling_gallery_v4`). Launched after killing the obsolete
+no-EoS-no-sprites v4_decoder run.
+
+**Training (final, step 150k; best at step 148,250):**
+- best_loss: 3.68e-3
+- early_stopped: False
+- dec_acc: 1.000
+
+**Token reconstruction (TF, all 199 training games):**
+- mean per-position acc: 0.886
+- median per-position acc: 1.000
+- min per-position acc:  0.332
+- perfect-reconstruction games: **147/199**
+
+**AR sampling (25 random + 9-point interp `herding_cats!` ↔ `blocks`):**
+- random AR engine-load: **4/25 (16%)** — *down from 15/25 at 94g*
+- interp AR engine-load: **9/9 (100%)** — same as 94g
+- Interpolation between two training endpoints stays robust at scale,
+  but random Gaussian-fit slot draws degrade. Reading: the empirical
+  slot prior becomes a poorer match to the manifold as games crowd it
+  (slots are denser, off-manifold draws more frequent). Interp's
+  invariance is consistent with that: a line whose endpoints are
+  on-manifold stays close enough to the manifold along its length.
+
+**Postrun multi-game eval crashed mid-Smother (L12 of 13).** No
+traceback in train.log; process just disappeared. Smother L8 had
+3,300 tiles; suspect kernel OOM-kill on long-W cumulative JAX
+allocations. Workaround: re-run `eval_multigame` as a standalone
+pass with subprocess-per-game isolation (TODO).
+
+Files:
+- `nca_wm/logs/multi_scaling_gallery_v4_decoder_sprites_eos/`
+- `nca_wm/logs/multi_scaling_gallery_v4_decoder_sprites_eos/sampled_games/summary.json`
+- `nca_wm/logs/multi_scaling_gallery_v4_decoder_sprites_eos/sampled_games/{interp,random}_*.txt`
+
 ## Travelling_salesman: data dilution, not mechanics complexity (2026-05-05)
 
 `Travelling_salesman` (TSM) has been a "persistently hard" game across

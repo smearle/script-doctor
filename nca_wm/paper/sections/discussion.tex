@@ -20,10 +20,16 @@ teacher-forced cell-error of $0.15\%$
 held-out games' nearest-training-neighbour distance in slot space;
 inverse-fitting recovers OOD games' dynamics through the latent
 variable to $\sim 10^{-3}$ BCE; and autoregressive sampling from the
-empirical slot prior clears the engine validator at $15/25$ random
-draws ($60\%$) and at $9/9$ slot-space interpolation points
-($100\%$). The remaining gap in the engine-modelling story is
-breaking the multi-grid synthetic-data ceiling described below.
+empirical slot prior at the 94-game scale clears the engine
+validator at $15/25$ random draws and at $9/9$ slot-space
+interpolation points. Slot-space interpolation between two training
+games stays at $9/9$ engine-loadable when scaled to 199 games,
+suggesting the latent line carries enough structure for the decoder
+to track; random sampling under the same checkpoint drops to
+$4/25$, consistent with the empirical slot prior becoming a poorer
+match to the manifold as more games crowd it. The remaining gap in
+the engine-modelling story is breaking the multi-grid synthetic-data
+ceiling described below.
 
 \paragraph{Toward latent world coders.}
 Inverse-fitting a continuous game latent from transitions and decoding
