@@ -3,7 +3,7 @@
 \usepackage{amsmath}
 \usepackage{amssymb}
 \usepackage{import}
-\subimport{figures/architecture/}{init}
+\subimport{./}{init}
 \usetikzlibrary{positioning}
 \usetikzlibrary{calc}
 \usetikzlibrary{fit}
@@ -97,7 +97,7 @@ all Crate on Target};
         }
     };
 \node[canvas is zy plane at x=-1.7] (sin) at (0,0)
-    {\includegraphics[width=3.6cm,height=3.6cm]{figures/architecture/state_in.png}};
+    {\includegraphics[width=3.6cm,height=3.6cm]{state_in.png}};
 \path let \p1=(embed-south) in
     node[font=\large, anchor=north] at (\x1, -2.9cm) {$s_t$};
 
@@ -145,7 +145,7 @@ all Crate on Target};
         }
     };
 \node[canvas is zy plane at x=4.5] (sout) at (0,0)
-    {\includegraphics[width=3.6cm,height=3.6cm]{figures/architecture/state_out.png}};
+    {\includegraphics[width=3.6cm,height=3.6cm]{state_out.png}};
 \path let \p1=(readout-south) in
     node[font=\large, anchor=north] at (\x1, -2.9cm) {$s_{t+1}$};
 

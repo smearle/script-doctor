@@ -1,0 +1,119 @@
+% Unlabeled boxes-and-edges-only sketch of the rule-conditioned NCA WM
+% dynamics block, intended as a small inset (e.g. inside the ID/OOD
+% teaser figure) where the full architecture diagram in nca_arch_v1.tex
+% would be too busy.
+%
+% Includes (left-to-right): an "embed" box (s_t input), a banded NCA body
+% with three convolution bands, and a "readout" box (s_{t+1} output).
+% Above the body: a slot column + dashed conditioning trunk that
+% touches each band. Below the body: a thick rounded loop arrow
+% denoting the iterated-application schedule. No text labels.
+%
+% Build:  pdflatex -output-directory=. nca_wm_mini.tex
+\documentclass[border=4pt, multi, tikz]{standalone}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{import}
+\subimport{./}{init}
+\usetikzlibrary{positioning}
+\usetikzlibrary{calc}
+\usetikzlibrary{fit}
+\usetikzlibrary{3d}
+
+\colorlet{SlotColor}{yellow!75}
+\colorlet{NCAColor}{green!35}
+\colorlet{NCABandColor}{green!70}
+\colorlet{EmbedColor}{green!12}
+\colorlet{ReadoutColor}{red!18}
+
+\begin{document}
+\begin{tikzpicture}
+\tikzstyle{connection}=[ultra thick,every node/.style={sloped,allow upside down},draw=\edgecolor,opacity=0.7]
+
+% ---- s_t embed box ----
+\pic[shift={(-2.2,0,0)}] at (0,0,0)
+    {Box={
+        name=embed,
+        caption= ,
+        xlabel={{,}},
+        zlabel={},
+        fill=EmbedColor,
+        height=20,
+        width=2.5,
+        depth=20
+        }
+    };
+
+% ---- NCA body: 3 bands, no labels ----
+\pic[shift={(0.4,0,0)}] at (0,0,0)
+    {RightBandedBox={
+        name=nca,
+        caption= ,
+        xlabel={{,,}},
+        zlabel={},
+        fill=NCAColor,
+        bandfill=NCABandColor,
+        height=20,
+        width={2.5,2.5,2.5},
+        depth=20
+        }
+    };
+
+% ---- s_{t+1} readout box ----
+\pic[shift={(4.0,0,0)}] at (0,0,0)
+    {Box={
+        name=readout,
+        caption= ,
+        xlabel={{,}},
+        zlabel={},
+        fill=ReadoutColor,
+        height=20,
+        width=2.5,
+        depth=20
+        }
+    };
+
+% ---- forward edges ----
+\draw[connection, -Stealth] (embed-east) -- (nca-west);
+\draw[connection, -Stealth] (nca-east)   -- (readout-west);
+
+% ---- iteration loop arrow under the body ----
+\path let \p1 = (nca-east), \p2 = (nca-west) in
+    coordinate (loopOutR)  at (\x1+0.4cm, \y1)
+    coordinate (loopOutRD) at (\x1+0.4cm, -3.4cm)
+    coordinate (loopInLD)  at (\x2-0.6cm, -3.4cm)
+    coordinate (loopInL)   at (\x2-0.6cm, \y2);
+\draw[-Stealth, line width=0.7mm, opacity=0.32, rounded corners=10pt]
+    (nca-east) -- (loopOutR) -- (loopOutRD) -- (loopInLD) -- (loopInL) -- (nca-west);
+
+% ---- latent slot column above the body, with dashed conditioning trunk
+%      that touches every band ----
+\node[draw, rounded corners=1.5pt, fill=SlotColor, line width=0.4pt,
+      minimum width=0.55cm, minimum height=1.6cm, anchor=south]
+      (slots) at (-2.0, 3.6) {};
+
+\tikzstyle{condtrunk}=[line width=0.5mm, dashed,
+    draw={rgb:blue,5;magenta,2;black,2}, opacity=0.9]
+\tikzstyle{condarrow}=[-Stealth, line width=0.5mm, dashed,
+    draw={rgb:blue,5;magenta,2;black,2}, opacity=0.9]
+
+\path let \p1 = (slots.south) in
+    coordinate (slotsBot) at (\x1, \y1)
+    coordinate (overslots) at (\x1, 3.0cm);
+
+\path let \p1 = (nca-west) in
+    coordinate (band1Top) at (\x1+0.25cm, 2.10cm)
+    coordinate (band2Top) at (\x1+0.75cm, 2.10cm)
+    coordinate (band3Top) at (\x1+1.25cm, 2.10cm)
+    coordinate (over1)    at (\x1+0.25cm, 3.0cm)
+    coordinate (over2)    at (\x1+0.75cm, 3.0cm)
+    coordinate (over3)    at (\x1+1.25cm, 3.0cm);
+
+\draw[condtrunk, rounded corners=8pt]
+    (slotsBot) -- (overslots) -- (over3);
+\draw[condarrow] (over1) -- (band1Top);
+\draw[condarrow] (over2) -- (band2Top);
+\draw[condarrow] (over3) -- (band3Top);
+
+\end{tikzpicture}
+\end{document}

@@ -51,6 +51,7 @@ N_OOD_FRAMES = 4   # s_0, ŝ_1, ŝ_2, ŝ_3
 PAPER_DIR = _REPO_ROOT / "nca_wm" / "paper"
 OUT_DIR = PAPER_DIR / "figures" / "id_ood_teaser"
 ROLLOUT_DIR = OUT_DIR / "rollouts"
+NCA_MINI_PNG = PAPER_DIR / "figures" / "architecture" / "nca_wm_mini.png"
 OUT_DIR.mkdir(parents=True, exist_ok=True)
 
 
@@ -169,7 +170,8 @@ def build_figure():
 
     id_color = "#2A6FB7"  # blue
     ood_color = "#C0463E"  # red
-    nca_color = "#E5B800"  # gold
+    nca_color = "#E5B800"  # gold (legacy; mini diagram now used in its place)
+    nca_mini_img = imageio.imread(NCA_MINI_PNG)
 
     # Section vertical extents (figure fraction).
     title_h = 0.04
@@ -228,27 +230,25 @@ def build_figure():
         id_rows_top - (i + 0.5) * id_row_h for i in range(n_id)
     ]
 
-    # NCA WM box for ID: spans the rows.
-    nca_w = 0.13
-    nca_h = (n_id) * id_row_h * 0.92
+    # NCA WM mini diagram for ID: a TikZ-rendered boxes-and-edges sketch
+    # of the dynamics block (embed -> NCA body -> readout, with a slot
+    # column conditioning above and an iteration loop below). Sized to
+    # span the section vertically.
+    nca_w = 0.18
+    nca_h = (n_id) * id_row_h * 0.95
     nca_y_center = (id_rows_top + id_rows_bot) / 2
-    nca_box_id = mpatches.FancyBboxPatch(
-        (nca_x - nca_w/2, nca_y_center - nca_h/2),
-        nca_w, nca_h,
-        boxstyle="round,pad=0.005,rounding_size=0.012",
-        linewidth=1.4, edgecolor="black",
-        facecolor=nca_color, alpha=0.85,
-        transform=fig.transFigure, zorder=1,
+    ax_nca_id = fig.add_axes(
+        [nca_x - nca_w/2, nca_y_center - nca_h/2, nca_w, nca_h],
     )
-    fig.patches.append(nca_box_id)
-    fig.text(nca_x, nca_y_center + 0.012,
-             "NCA-WM",
-             ha="center", va="center", fontsize=10, fontweight="bold",
-             color="black", zorder=2)
-    fig.text(nca_x, nca_y_center - 0.012,
-             r"params $\theta$",
-             ha="center", va="center", fontsize=8, style="italic",
-             color="black", zorder=2)
+    ax_nca_id.imshow(nca_mini_img, interpolation="bilinear",
+                     aspect="auto")
+    ax_nca_id.set_xticks([]); ax_nca_id.set_yticks([])
+    for s in ax_nca_id.spines.values():
+        s.set_visible(False)
+    fig.text(nca_x, nca_y_center - nca_h/2 - 0.005,
+             r"NCA-WM ($\theta$)",
+             ha="center", va="top", fontsize=9, fontweight="bold",
+             color="black")
 
     # Per-row ID content.
     for i, ((name, level, label), (f0, f1)) in enumerate(zip(ID_GAMES, id_frames)):
@@ -356,26 +356,21 @@ def build_figure():
         ood_rows_top - (i + 0.5) * ood_row_h for i in range(n_ood)
     ]
 
-    nca_h_ood = n_ood * ood_row_h * 0.92
+    nca_h_ood = n_ood * ood_row_h * 0.95
     nca_y_ood = (ood_rows_top + ood_rows_bot) / 2
 
-    nca_box_ood = mpatches.FancyBboxPatch(
-        (nca_x - nca_w/2, nca_y_ood - nca_h_ood/2),
-        nca_w, nca_h_ood,
-        boxstyle="round,pad=0.005,rounding_size=0.012",
-        linewidth=1.4, edgecolor="black",
-        facecolor=nca_color, alpha=0.85,
-        transform=fig.transFigure, zorder=1,
+    ax_nca_ood = fig.add_axes(
+        [nca_x - nca_w/2, nca_y_ood - nca_h_ood/2, nca_w, nca_h_ood],
     )
-    fig.patches.append(nca_box_ood)
-    fig.text(nca_x, nca_y_ood + 0.012,
-             "NCA-WM",
-             ha="center", va="center", fontsize=10, fontweight="bold",
-             color="black", zorder=2)
-    fig.text(nca_x, nca_y_ood - 0.012,
-             r"trained $\theta^{*}$",
-             ha="center", va="center", fontsize=8, style="italic",
-             color="black", zorder=2)
+    ax_nca_ood.imshow(nca_mini_img, interpolation="bilinear",
+                      aspect="auto")
+    ax_nca_ood.set_xticks([]); ax_nca_ood.set_yticks([])
+    for s in ax_nca_ood.spines.values():
+        s.set_visible(False)
+    fig.text(nca_x, nca_y_ood - nca_h_ood/2 - 0.005,
+             r"NCA-WM ($\theta^{*}$, trained)",
+             ha="center", va="top", fontsize=9, fontweight="bold",
+             color="black")
 
     # OOD predicted-frame x-positions (after NCA box)
     # We have N_OOD_FRAMES=4 frames; place s_0 left of NCA, then ŝ_1..ŝ_3 right.
