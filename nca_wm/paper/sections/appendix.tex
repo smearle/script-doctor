@@ -791,23 +791,27 @@ of the two limits binds first; we leave that to future work.
 Bucketing the 199 \textsc{Train-199} games by coarse rule-section
 features (regex over each game's RULES block in the source
 \texttt{.txt}) and averaging the conditional / unconditional 1-step
-(TF) cell-error within each bucket gives
-Table~\ref{tab:rule-type}. Three patterns stand out, all consistent
-with the per-cell story of the heatmap
-(Figure~\ref{fig:intersection-heatmap}). \emph{Random rules} (14
-games) are the worst bucket by a wide margin and the only feature
-where unconditional \emph{beats} conditional ($10.48\%$ vs.\
+(TF) cell-error within each bucket gives Table~\ref{tab:rule-type}.
+Four patterns stand out, all consistent with the per-cell story of
+the heatmap (Figure~\ref{fig:intersection-heatmap}). \emph{Random
+rules} (14 games) are the worst bucket by a wide margin and the only
+feature where unconditional \emph{beats} conditional ($10.48\%$ vs.\
 $12.65\%$): when the next state has an irreducible random component
-the encoder cannot help, while uncond degenerates closer to
-identity which is the noise-floor optimum. \emph{\texttt{again}-loop
-rules} (21 games) push both models to ${\sim}3\times$ the corpus
-mean, consistent with the per-step prediction objective being a poor
-fit for engine ticks that fire many rule passes before settling.
-\emph{Ellipsis rules} (33 games), which span an entire row or
-column, widen the cond/uncond gap to $+1.67$pp vs.\ $+0.23$pp on
-the rest of the corpus---supporting the long-range axis-context
-reading already used to explain \textit{neko puzzle}'s 1-step
-catastrophe in Figure~\ref{fig:intersection-heatmap}. Across all
+the encoder cannot help, while uncond degenerates closer to identity
+which is the noise-floor optimum. \emph{\texttt{again}-loop rules}
+(21 games) push both models to ${\sim}3\times$ the corpus mean,
+consistent with the per-step prediction objective being a poor fit
+for engine ticks that fire many rule passes before settling.
+\emph{Ellipsis rules} (33 games), which span an entire row or column,
+widen the cond/uncond gap to $+1.67$pp vs.\ $+0.23$pp on the rest of
+the corpus---supporting the long-range axis-context reading already
+used to explain \textit{neko puzzle}'s 1-step catastrophe in
+Figure~\ref{fig:intersection-heatmap}. \emph{Multi-kernel rules} (57
+games, e.g.\ \texttt{[Player] [Cat] -> [Player] [DeadCat]} matched
+at any pair of cells) collapse the cond/uncond gap to $+0.02$pp vs.\
+$+0.65$pp on non-multi-kernel games---non-local pattern matching is
+the binding constraint, and rule conditioning does not help when the
+local update body cannot see the relevant context. Across all
 features, raw rule count remains a poor predictor: 1--3, 4--7, 8--12,
 and 13+ rule buckets give cond means $1.38, 1.12, 4.17, 6.77$\% with
 the cond/uncond ordering even \emph{flipping} on the higher-count

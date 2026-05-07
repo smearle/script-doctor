@@ -64,12 +64,21 @@ def rule_features(path: Path) -> dict[str, bool] | None:
         if 0 < j < nxt:
             nxt = j
     rules = s[r_start:nxt]
+    multi_kernel = False
+    for ln in rules.split("\n"):
+        if "->" not in ln:
+            continue
+        lhs = ln.split("->", 1)[0]
+        if lhs.count("[") >= 2:
+            multi_kernel = True
+            break
     return {
-        "has_again":    bool(re.search(r"\bagain\b",  rules, re.IGNORECASE)),
-        "has_ellipsis": "..." in rules,
-        "has_late":     bool(re.search(r"\blate\b",   rules, re.IGNORECASE)),
-        "has_random":   bool(re.search(r"\brandom\b", rules, re.IGNORECASE)),
-        "has_dir":      bool(re.search(r"\[\s*[<>^v]", rules, re.IGNORECASE)),
+        "has_again":        bool(re.search(r"\bagain\b",  rules, re.IGNORECASE)),
+        "has_ellipsis":     "..." in rules,
+        "has_late":         bool(re.search(r"\blate\b",   rules, re.IGNORECASE)),
+        "has_random":       bool(re.search(r"\brandom\b", rules, re.IGNORECASE)),
+        "has_dir":          bool(re.search(r"\[\s*[<>^v]", rules, re.IGNORECASE)),
+        "has_multi_kernel": multi_kernel,
     }
 
 
@@ -123,11 +132,12 @@ def _emit_tex(rows: list[tuple[str, str, int, float, float]]) -> None:
 
 
 FEATURE_LABEL = {
-    "has_again":    r"again",
-    "has_ellipsis": r"...",
-    "has_late":     r"late",
-    "has_random":   r"random",
-    "has_dir":      r"dir-prefix",
+    "has_again":        r"again",
+    "has_ellipsis":     r"...",
+    "has_late":         r"late",
+    "has_random":       r"random",
+    "has_dir":          r"dir-prefix",
+    "has_multi_kernel": r"multi-kernel",
 }
 
 
@@ -152,7 +162,11 @@ def _emit_heatmap(rows: list[tuple[str, str, int, float, float]]) -> None:
         "font.size": 12, "axes.titlesize": 13, "axes.labelsize": 12,
         "xtick.labelsize": 11, "ytick.labelsize": 11, "legend.fontsize": 9,
     })
-    fig, ax = plt.subplots(figsize=(3.6, 3.4))
+    # Tuned so that, when scaled to ~0.40 \linewidth in the paper, the
+    # heatmap's vertical extent matches the per-game intersection heatmap
+    # at ~0.55 \linewidth (intersection figsize 6.4x5.6 → h/w 0.875;
+    # target h/w here 1.20 → 3.6 wide × 4.3 tall).
+    fig, ax = plt.subplots(figsize=(3.6, 4.3))
     floor = 1e-3
     matrix_log = np.log10(np.clip(matp, floor, None))
     im = ax.imshow(matrix_log, aspect="auto", cmap="magma_r",
@@ -207,7 +221,8 @@ def main() -> None:
                 return int(meta[cand].get("n_rules", -1))
         return -1
 
-    feature_keys = ["has_again", "has_ellipsis", "has_late", "has_random", "has_dir"]
+    feature_keys = ["has_again", "has_ellipsis", "has_late", "has_random",
+                    "has_dir", "has_multi_kernel"]
     print()
     print(f"{'feature':<14} {'group':<6} {'n':>4} {'cond':>10} {'uncond':>10} {'Δ':>10}")
     print("-" * 60)
