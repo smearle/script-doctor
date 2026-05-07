@@ -23,13 +23,15 @@ if [ ! -f "$HELDOUT_FILE" ]; then
     exit 1
 fi
 
-# Extract heldout names from JSON
+# Extract heldout names from JSON.
+# Use ';' as separator: heldout_eval.py deliberately doesn't split on ','
+# because some PuzzleScript filenames contain commas (commit d5ddd82).
 NAMES=$(.venv/bin/python3 -c "
 import json
 d = json.load(open('$HELDOUT_FILE'))
-print(','.join(g['name'] for g in d['heldout']))
+print(';'.join(g['name'] for g in d['heldout']))
 ")
-N=$(echo "$NAMES" | tr ',' '\n' | wc -l)
+N=$(echo "$NAMES" | tr ';' '\n' | wc -l)
 LOG=/tmp/heldout_rollout_$(basename "$RUN_DIR").log
 echo "Running heldout AR rollout eval on $N games -> log $LOG"
 
