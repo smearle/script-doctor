@@ -55,12 +55,9 @@ $2.6\times$ more params) and two orders below the per-step NCA
 loses fine-grained player position on small grids ($3.13\%$), and ViT
 fails to fit the data ($9.32\%$ BFS-AR; one-step $1.49\%$ vs.\
 $\approx 0$ for the rest).
-A single-grid win does not, however, establish learned dynamics, since
-slot cross-attention can in principle memorize per-state outcomes; we
-return to this caveat in \S\ref{sec:discussion}.
 
-Removing the per-state memorization crutch (\textsc{Sokoban-Evolved},
-1024 levels sharing one rule set) ties shared and per-step NCAs ($2.08\%$
+On \textsc{Sokoban-Evolved} (1024 levels sharing one rule set),
+shared and per-step NCAs tie ($2.08\%$
 vs.\ $2.09\%$ BFS-AR) but the shared variant gets there with
 $2.8\times$ fewer parameters; CNN trails both at $2.82\%$ despite
 roughly twice the depth.
@@ -92,15 +89,10 @@ input-skip individually on \textsc{Sokoban-Evolved}
 increase): pool features carry most of the non-local
 handling---dropping all three ($+316\%$) costs roughly twice removing
 \emph{global-pool} alone ($+182\%$), with \emph{axis-pool} next
-($+123\%$) and \emph{axis-cummax} a smaller $+48\%$.
-The axis-cummax contribution is surprising given that Sokoban's push rule
-\texttt{[ > Player | Crate ] -> [ > Player | > Crate ]} only references its $3{\times}3$ neighborhood and should not need directional prefix-max at all; the seed std on the no-axis-cummax row is large (1.30\% absolute on a 3.07\% mean), so part of the gap is plausibly noise.
-We expect a cleaner axis-cummax win on games like \textit{neko puzzle}, whose rule \texttt{[ > Player | ... | Fruit ] -> [ | ... | Player ]} reaches across the row.
+($+123\%$) and \emph{axis-cummax} a smaller $+48\%$ (with seed std
+$1.30\%$ absolute on the no-axis-cummax row).
 \emph{Input-skip} raises BFS-AR by $+54\%$ when removed but
-\emph{lowers} one-step (TF) error ($0.168\%$ vs.\ $0.274\%$):
-re-injecting $(s_t, a_t)$ at every step anchors the body to its input,
-trading per-step fit for AR robustness when the rollout feeds back
-slightly-off predictions.
+\emph{lowers} one-step (TF) error ($0.168\%$ vs.\ $0.274\%$).
 
 Scaling up to multi-game \textsc{Train-14}, both NCA variants
 outperform all three non-NCA baselines on BFS-AR (U-Net at $1.8\times$,
@@ -112,8 +104,8 @@ the shared body has $5.8\times$ lower seed-to-seed variance and
 $3.8\times$ better parameter efficiency; at $\pm 1\sigma$ the two
 overlap on aggregate BFS-AR.
 ViT is the only architecture failing to fit the per-step objective
-(best loss $\approx 8 \times 10^{-4}$ vs.\ $\approx 0$), confirming the
-structural mismatch (per-game breakdowns in Appendix~\ref{app:per-game}).
+(best loss $\approx 8 \times 10^{-4}$ vs.\ $\approx 0$; per-game
+breakdowns in Appendix~\ref{app:per-game}).
 Longer-form architecture findings (per-game grid, hierarchical weight
 sharing) are in Appendix~\ref{app:per-game-arch}.
 
@@ -134,8 +126,7 @@ subset of the 30-game stratified held-out set. We isolate the encoder's contribu
 training a matched unconditional variant (no encoded slots) at every
 scale, and report against the identity baseline
 $\hat s_{t+1}{=}s_t$, which scores zero error on every cell the rules
-leave untouched and is therefore non-trivial to match on a game whose
-rules the model has never seen. Conditional and unconditional models tie in-distribution at
+leave untouched. Conditional and unconditional models tie in-distribution at
 \textsc{Train-14} (Table~\ref{tab:indist-scaling}: $1.63 / 0.11$
 vs.\ $1.98 / 0.08$ random-AR mean / median; within $0.4$pp on every
 regime), with the encoder's ID benefit emerging only at larger
@@ -192,25 +183,22 @@ corpora.
 \end{figure}
 
 In-distribution (Figure~\ref{fig:intersection-slope-id}), both models
-degrade on the shared 14 games as the corpus widens---data dilution at
-fixed capacity---but rule-conditioning slows that dilution by roughly
-an order of magnitude. Unconditional 1-step (TF) mean jumps from
-$0.087\%$ (\textsc{Train-14}) to $2.20\%$ (\textsc{Train-59}), $\approx
-25\times$, while conditional grows only $\approx 5\times$ over the
-same range and is roughly flat to \textsc{Train-199} ($0.27\% \to
-0.37\%$ mean; $0.021\% \to 0.157\%$ median). At \textsc{Train-199} the
-unconditional baseline is $1.88\% / 0.46\%$, still $\approx 5\times$
-the conditional mean and $\approx 3\times$ the median; per-game swings
-can be dramatic (\textit{neko puzzle} goes from $0.000\%$ to $24.4\%$
-when the encoder is removed; per-game cells in
-Figure~\ref{fig:intersection-heatmap}). The encoder amortizes shared
-dynamics across games at fixed capacity, but its advantage is
-unevenly distributed across rule types
-(Figure~\ref{fig:rule-type-heatmap}, Appendix~\ref{app:rule-type}):
-\texttt{random} rules are the only bucket where uncond \emph{beats}
-cond, \texttt{again} and \texttt{...} push errors to multiples of the
-corpus mean, and on \texttt{multi-kernel} rules the cond/uncond gap
-collapses entirely.
+degrade on the shared 14 games as the corpus widens, but the
+unconditional 1-step (TF) mean grows much faster than the conditional:
+unconditional jumps from $0.087\%$ (\textsc{Train-14}) to $2.20\%$
+(\textsc{Train-59}), $\approx 25\times$, while conditional grows only
+$\approx 5\times$ over the same range and is roughly flat to
+\textsc{Train-199} ($0.27\% \to 0.37\%$ mean; $0.021\% \to 0.157\%$
+median). At \textsc{Train-199} the unconditional baseline is
+$1.88\% / 0.46\%$, still $\approx 5\times$ the conditional mean and
+$\approx 3\times$ the median; per-game swings can be dramatic
+(\textit{neko puzzle} goes from $0.000\%$ to $24.4\%$ when the encoder
+is removed; per-game cells in Figure~\ref{fig:intersection-heatmap}).
+Rule-feature buckets at \textsc{Train-199}
+(Figure~\ref{fig:rule-type-heatmap}) span more than an order of
+magnitude in cell-error: \texttt{again} and \texttt{...} buckets sit
+several times above the no-flagged-feature baseline, and rule count
+alone is a poor predictor of difficulty.
 
 \begin{figure}[t]
   \centering
@@ -239,17 +227,14 @@ collapses entirely.
     $24.4\%$, \textit{Notsnake}@\textsc{Train-199} $13.1\%$) drive
     Figure~\ref{fig:intersection-slope-id}'s aggregate, and rule
     count is a poor predictor (catastrophic uncond at $n{=}2$,
-    \textit{kettle} at $n{=}14$ stays $<1\%$). \emph{(b)} Bucketing
-    \textsc{Train-199} by rule feature isolates what drives residual
-    difficulty: \texttt{random} is the only feature where uncond
-    beats cond (irreducible-noise next-state, identity-like
-    predictions are optimal); \texttt{again} and \texttt{...} push
-    errors to multiples of the corpus mean; on \texttt{multi-kernel}
-    rules (any-pair-of-cells matches) the encoder advantage
-    essentially vanishes ($+0.02$pp vs.\ $+0.65$pp elsewhere), since
-    local-update bodies struggle with non-local pattern matching
-    regardless of conditioning. Per-bucket numbers in
-    Appendix~\ref{app:rule-type}.}
+    \textit{kettle} at $n{=}14$ stays $<1\%$). \emph{(b)} Per-feature
+    cell-error spans more than an order of magnitude across buckets:
+    \texttt{again} and \texttt{...} sit several times above the
+    no-flagged-feature baseline, while \texttt{multi-kernel} rules
+    cluster near the corpus mean. Cond and uncond columns shown for
+    reference; per-bucket sample sizes are small and we draw no
+    cond-vs-uncond conclusions from this view (per-bucket numbers in
+    Appendix~\ref{app:rule-type}).}
   \label{fig:id-heatmaps}
 \end{figure}
 
@@ -259,10 +244,7 @@ Appendix~\ref{app:cond-vs-uncond}, Table~\ref{tab:cond-vs-uncond-match}),
 (TF) $14.8\%$, $\approx 7\times$ identity's $2.13\%$); with $14\times$
 more rule diversity, \textsc{Train-199} conditional drops to $2.44\% /
 2.00\%$, matching identity's mean, beating its median, and winning on
-$13/26$ heldout games at 1-step (TF)---non-trivial given that
-identity gets the static majority of cells right for free, so beating
-it requires correctly predicting the cells that the rules change on a
-game whose rules the model has never seen. Conditional and unconditional
+$13/26$ heldout games at 1-step (TF). Conditional and unconditional
 are roughly tied OOD at every training scale, with the per-metric
 ordering shifting between corpora: at
 \textsc{Train-14} (uncond averaged over 3 seeds, cond 1 seed) cond
@@ -273,15 +255,14 @@ $4.52\%$); at \textsc{Train-199} uncond has the lower median ($1.52\%$
 vs.\ $2.00\%$) and one more win vs.\ identity ($14$ vs.\ $13$).
 The per-game OOD scatter (Appendix~\ref{app:ood-per-game-scatter},
 Figure~\ref{fig:ood-per-game-scatter}) shows that cond and uncond
-beat identity on largely disjoint subsets at \textsc{Train-199}, so
-the encoder is not a strict superset of the unconditional baseline
-on this set; we return to what the unconditional model is exploiting
-in \S\ref{sec:discussion}.
+beat identity on largely disjoint subsets at \textsc{Train-199}; we
+return to what the unconditional model is exploiting in
+\S\ref{sec:discussion}.
 On random-action AR rollout
 (Appendix~\ref{app:rollout-ar}), where errors compound over 30 steps,
-identity ($\approx 2\%$ mean) is a much stronger baseline: every model
-drifts to $7$--$27\%$ and no current checkpoint beats identity over
-the full rollout on more than a single game.
+every model drifts to $7$--$27\%$ cell-error and no current
+checkpoint beats identity ($\approx 2\%$ mean) over the full rollout
+on more than a single game.
 
 % Generalization-to-unseen-games results (held-out latent geometry,
 % symbolic decoder reconstruction + sampling, frozen-NCA inverse fit
