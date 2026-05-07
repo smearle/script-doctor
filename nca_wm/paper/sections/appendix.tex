@@ -822,6 +822,34 @@ held-out latent geometry, symbolic decoder
 reconstruction and sampling, and frozen-NCA inverse fitting from
 observed transitions.
 
+\subsection{Per-cell rollout error breakdown on \textsc{Heldout-26}}
+\label{app:cond-vs-uncond}
+
+Table~\ref{tab:cond-vs-uncond-match} accompanies
+Figure~\ref{fig:intersection-slope-ood} with the four error regimes
+broken out per training preset, including BFS / A* oracle-action
+rollout where those refreshes have completed and the wins-vs-identity
+count summarized in
+\S\ref{sec:results-encoder-ablation}.
+
+\begin{table}[t]
+  \centering
+  \caption{\textbf{Out-of-distribution per-cell rollout error on
+    \textsc{Heldout-26}.} \textsc{Heldout-26} drops the four
+    \textsc{Heldout-30} games whose tokenized rules exceed the
+    conditional encoder's 657-token limit, avoiding rule truncation at
+    evaluation time. Mean / median are across the 26 retained games.
+    The four error columns mirror Table~\ref{tab:indist-scaling};
+    BFS / A* cells are shown when that refresh has completed for a
+    row. The final column counts games where the model's 1-step (TF)
+    mean error is lower than identity's; identity predicts
+    $\hat{s}_{t+1}{=}s_t$ and lower-bounds the per-step state-change
+    rate.}
+  \label{tab:cond-vs-uncond-match}
+  \small
+  \input{figures/cond_vs_uncond_match/match_table}
+\end{table}
+
 \subsection{Held-out latent geometry as we scale games}
 \label{app:scaling-curve}
 

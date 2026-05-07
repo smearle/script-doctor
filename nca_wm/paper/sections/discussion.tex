@@ -22,6 +22,30 @@ claim additionally requires smoother scaling with the number of games,
 held-out rule-system generalization, and inverse-fitting from
 transitions.
 
+\paragraph{Unconditional improvement OOD: inferring mechanics from
+level layouts.}
+The encoder's clean OOD advantage holds only at \textsc{Train-14}; at
+\textsc{Train-59} and \textsc{Train-199} the unconditional baseline
+catches up and on some summaries overtakes it
+(\S\ref{sec:results-encoder-ablation}, Figure~\ref{fig:intersection-slope-ood}).
+The unconditional model has no rule encoding---it only consumes
+state and action grids---so its scale-driven OOD improvement must
+come from features it extracts from the level layout itself: object
+identities and counts, wall topology, win-condition cues, character
+positions. We read this as evidence that broad-corpus training
+induces an implicit ability to infer game mechanics from layout,
+making the explicit rule channel partially redundant on unseen games
+once the corpus is wide enough. This is consistent with our
+deliberately level-independent slot encoder leaving layout
+information unused; perceiver-IO-style attention from slots back
+into the grid (cf.\ Limitations) is a natural way for a conditional
+model to combine the explicit rule channel with the grid-derived
+signal that the unconditional baseline already exploits implicitly.
+The encoder's load-bearing claim, then, is in-distribution: it slows
+per-game capacity dilution by an order of magnitude on the shared
+14-game intersection, where data dilution---not rule disambiguation---is
+the binding constraint.
+
 \paragraph{The memorization confound and the multi-grid ceiling.}
 The single-level/single-grid setting (Sokoban authored block,
 Table~\ref{tab:baselines-arch}) leaves room for the slot
