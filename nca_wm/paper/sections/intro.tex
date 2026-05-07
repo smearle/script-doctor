@@ -16,12 +16,14 @@
   \label{fig:arch-overview}
 \end{figure}
 
-Learned world models are typically trained on pixel observations, with
-a high-capacity CNN, U-Net, or video Transformer paired to an
-action-conditioned dynamics module. This is a natural fit for visually
-rich, mechanically uniform environments, but a less natural one for
-games whose difficulty lies in a large space of symbolic rule systems
-rather than in rendering.
+Learned world models are typically trained on pixel
+observations~\cite{ha2018world,kaiser2020simple,hafner2019planet,hafner2021dreamerv2,hafner2023dreamerv3,wu2022daydreamer},
+with a high-capacity convolutional, U-Net, or video Transformer body
+paired to an action-conditioned dynamics
+module~\cite{micheli2022iris,robine2023transformer,valevski2025gamengen,alonso2024diamond,bruce2024genie,yang2024unisim,parkerholder2025genie3,savva2026solaris}.
+This is a natural fit for visually rich, mechanically uniform
+environments, but a less natural one for games whose difficulty lies
+in a large space of symbolic rule systems rather than in rendering.
 
 PuzzleScript games are such a regime. Each game is specified by a short
 text file of object kinds, layered grid levels, and declarative rewrite
@@ -40,11 +42,12 @@ engine's outer loop; the conditioner makes the dynamics portable across
 games. Predicting the engine state directly (rather than pixels) lets
 us measure fidelity cell-by-cell against the engine.
 
-Our corpus contains 3{,}474 token-distinct human-authored games (1--20
-rules each), with up to 199 used in the largest training preset. We
-cache bounded-A* transitions from authored levels ($\approx 15$M
-transitions); held-out evaluation uses a 30-game stratified sample
-disjoint from training by name and token-sequence hash.
+% Our corpus contains 3{,}474 token-distinct human-authored games (1--20
+% rules each), with
+We train on up to 199 token-distinct human-authored games with between 1-20 rules each.
+For each level of each game, we collect bounded A* transition ($\approx 15$M transitions); held-out evaluation uses the 26 non-truncated games
+from a 30-game stratified sample disjoint from training by name and
+token-sequence hash.
 
 \begin{figure}[t]
   \centering
@@ -81,6 +84,8 @@ We make the following contributions:
   \item \textbf{An evaluation protocol for unseen-rule generalization.}
         We construct \textsc{Heldout-30}, a 30-game stratified set
         disjoint from every training preset by filename and by
-        token-sequence hash, and report against an identity baseline
-        that lower-bounds the per-step state-change rate.
+        token-sequence hash, and report on the 26 games whose
+        tokenized rules fit the encoder without truncation against an
+        identity baseline that lower-bounds the per-step state-change
+        rate.
 \end{enumerate}
