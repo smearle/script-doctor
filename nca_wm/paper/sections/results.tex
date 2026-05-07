@@ -1,8 +1,8 @@
 \section{Results}
 \label{sec:results}
 
-% User: This is true at the moment, but let's 
-% We lead with our headline result---scaling rule diversity in a single
+% User: This is true at the moment, but let's
+% We lead with the scaling result---scaling rule diversity in a single
 % rule-conditional NCA improves both in-distribution fidelity and
 % transfer to unseen games (\S\ref{sec:results-scaling})---then work
 % backwards through the architectural choices that make it possible.
@@ -134,9 +134,10 @@ a single game.
 \label{sec:results-baselines}
 \label{sec:results-multigame}
 
-The headline result fixes a single architecture---a shared-weights
-NCA with $n_h{=}256$. We now ask whether that choice survives
-head-to-head against stronger spatial bodies on three corpora that
+The preceding scaling experiment fixed a single architecture---a
+shared-weights NCA with $n_h{=}256$.
+We now ask whether that choice survives head-to-head against stronger
+spatial bodies on three corpora that
 probe different facets of the problem: \textsc{Train-14} (14 games,
 $4{\times}4$ to $32{\times}24$ grids, rule counts 1--14) for
 multi-game capacity sharing, \textsc{Sokoban-Authored} (10

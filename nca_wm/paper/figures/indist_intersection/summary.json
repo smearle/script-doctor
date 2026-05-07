@@ -15,7 +15,7 @@
     "sokoban_basic",
     "sokoban_match3"
   ],
-  "headline_regime": "random_tf",
+  "primary_regime": "random_tf",
   "runs": {
     "multi_scaling_14_cond_match_s0": {
       "preset": "Train-14",
