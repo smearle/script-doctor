@@ -236,44 +236,40 @@ work in-distribution, or merely inflating parameter count? and (ii)
 does its output transfer to \emph{unseen} games, and if so, how does
 that depend on the diversity of the training corpus?
 
-To answer (i) we compare a parameter-matched unconditional NCA
-against the rule-conditional NCA on \textsc{Train-14}. The
-unconditional model receives only the current state and action; the
-rule-conditional model adds the encoded rule slots as cross-attention
-context. Parameter counts are matched within $2\%$ ($n_h{=}448$ for
-unconditional vs.\ $n_h{=}256$ + slot encoder for conditional). To
+To answer (i) we compare an unconditional NCA against the
+rule-conditional NCA on \textsc{Train-14}. The unconditional model
+receives only the current state and action; the rule-conditional
+model adds the encoded rule slots as cross-attention context. To
 answer (ii) we add a 199-game broad-corpus run (\textsc{Train-199})
 and measure how the cond-vs-uncond gap and the cond-vs-identity gap
 evolve with rule diversity. Table~\ref{tab:cond-vs-uncond-match}
-reports in-distribution training-game rollout error \emph{and}
-out-of-distribution held-out cell-error on \textsc{Heldout-30}
-(30 games disjoint by name and token hash), against the trivial
-\emph{identity} baseline that predicts $\hat{s}_{t+1}{=}s_t$.
+reports per-cell rollout error on \textsc{Heldout-30}---30 games
+disjoint from training by name and token hash---under the same
+random-action regimes as Table~\ref{tab:indist-scaling}, against the
+trivial \emph{identity} baseline that predicts
+$\hat{s}_{t+1}{=}s_t$.
 
 \begin{table}[t]
   \centering
-  \caption{\textbf{Rule-conditioning, parameter-matched.} ID rollout =
-  mean per-game cell-error on training games, random-action autoregressive.
-  OOD step-1 / AR-30 = mean cell-error on \textsc{Heldout-30}; the identity
-  baseline lower-bounds it at the per-step state-change rate. OOD wins
-  counts games where the model's step-1 cell-error beats identity.}
+  \caption{\textbf{Out-of-distribution per-cell rollout error on
+    \textsc{Heldout-30}.} Mean / median across 29 held-out games
+    that the model produced rollouts for. Columns mirror
+    Table~\ref{tab:indist-scaling}; the BFS / A* oracle columns are
+    pending an oracle-action heldout eval pass. The identity
+    baseline predicts $\hat{s}_{t+1}{=}s_t$ and lower-bounds the
+    per-step state-change rate under random actions.}
   \label{tab:cond-vs-uncond-match}
   \small
   \input{figures/cond_vs_uncond_match/match_table}
 \end{table}
 
-\textbf{Encoder isolates a clean in-distribution signal.}
-% TODO(\\href{}{}): the $1.6\\%$ vs.\\ $4.9\\%$ contrast and the $18/29$
-% per-game wins are from the legacy parameter-matched unconditional
-% Train-14 run ($n_h{=}448$ with the older \texttt{pool\_in\_conv}
-% topology). Refresh once the $n_h{=}448$ relaunch under the current
-% pool topology lands.
-At Train-14 scale the rule-conditional model nearly triples the
-unconditional model's per-cell accuracy ($1.6\%$ vs.\ $4.9\%$
-cell-error), confirming that the encoder is doing real work and not
-merely inflating parameter count. Per-game it beats the unconditional
-model on $18 / 29$ held-out games. The encoder is at minimum learning
-to disambiguate which rule set is in play.
+% TODO: the cond-vs-uncond contrast at \textsc{Train-14} (Section 3.2,
+% Table 5) and the per-game step-1 wins claim are pending the in-flight
+% Train-14 / Train-199 unconditional evaluations and a planned
+% parameter-matched ($n_h{=}448$) uncond relaunch under the current
+% pool topology. Once those land, refresh both this section's
+% "encoder isolates a signal" paragraph and the matching wording in
+% the discussion.
 
 \textbf{Out-of-distribution generalization is a function of rule
 diversity, not the encoder alone.} On \textsc{Heldout-30} the
@@ -282,10 +278,16 @@ diversity, not the encoder alone.} On \textsc{Heldout-30} the
 $14\times$ more rule diversity the \textsc{Train-199} conditional
 model drops to $3.17\%$ at step 1---within $1$pp of the identity
 baseline---and matches or beats identity on $15 / 29$ held-out games.
-The headline rule-conditional contribution to OOD generalization is
-\emph{driven primarily by broad-corpus rule diversity} rather than by
-the encoder architecture in isolation. We discuss the implications,
-including the fraction of games on which even \textsc{Train-199}
+At \textsc{Train-59} the conditional model and its same-recipe
+unconditional counterpart sit nearly on top of each other ($6.19\%$
+vs.\ $5.50\%$ step-1; the unconditional baseline is in fact slightly
+better at this scale), reinforcing that the diversity sweep, not the
+encoder per se, is what closes the heldout gap. The headline
+rule-conditional contribution to OOD generalization is therefore
+\emph{driven primarily by broad-corpus rule diversity} rather than
+by the encoder architecture in isolation. We discuss the
+implications, including the fraction of games on which even
+\textsc{Train-199}
 fails (e.g.\ pseudo-random spawn games, deeply cascaded
 \texttt{again} rules), in \S\ref{sec:discussion}.
 
