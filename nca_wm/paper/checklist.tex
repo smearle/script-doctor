@@ -5,7 +5,7 @@
 \item {\bf Claims}
     \item[] Question: Do the main claims made in the abstract and introduction accurately reflect the paper's contributions and scope?
     \item[] Answer: \answerYes{}
-    \item[] Justification: The abstract claims a rule-conditioned NCA world model that (a) outperforms non-iterative baselines on PuzzleScript dynamics and (b) achieves high on-distribution fidelity at the multi-game scale; both are quantified in \S\ref{sec:results-baselines} (Tables~\ref{tab:baselines-sokoban}--\ref{tab:baselines-synth}) and \S\ref{sec:results-scaling} (Tables~\ref{tab:baselines-scaling14},~\ref{tab:indist-scaling}; median 1-step teacher-forced cell-error in the $0.01$--$0.45\%$ range across the \textsc{Train-14}, \textsc{Train-59}, and \textsc{Train-199} checkpoints). Held-out and multi-grid synthetic limitations are flagged in \S\ref{sec:discussion}.
+    \item[] Justification: The abstract claims a rule-conditioned NCA world model that (a) outperforms non-iterative baselines on PuzzleScript dynamics and (b) achieves high on-distribution fidelity at the multi-game scale; both are quantified in \S\ref{sec:results-baselines} (Table~\ref{tab:baselines-arch}) and \S\ref{sec:results-scaling} (Table~\ref{tab:indist-scaling}; median 1-step teacher-forced cell-error in the $0.01$--$0.45\%$ range across the \textsc{Train-14}, \textsc{Train-59}, and \textsc{Train-199} checkpoints). Held-out and multi-grid synthetic limitations are flagged in \S\ref{sec:discussion}.
     \item[] Guidelines:
     \begin{itemize}
         \item The answer \answerNA{} means that the abstract and introduction do not include the claims made in the paper.
@@ -17,7 +17,7 @@
 \item {\bf Limitations}
     \item[] Question: Does the paper discuss the limitations of the work performed by the authors?
     \item[] Answer: \answerYes{}
-    \item[] Justification: \S\ref{sec:discussion} contains an explicit ``Limitations'' paragraph (level-independent slot encoder; single-step training only) plus the ``What the iterated local update buys, and the memorization confound'' paragraph that scopes the headline fidelity claim and flags the multi-grid synthetic-data ceiling (quantified by Table~\ref{tab:baselines-synth} and characterized in Appendix~\ref{app:ceiling}) as an unresolved gap. \S\ref{sec:results-encoder-ablation} discusses where rule-conditioning fails to transfer out of distribution at small training scale.
+    \item[] Justification: \S\ref{sec:discussion} contains an explicit ``Limitations'' paragraph (level-independent slot encoder; single-step training only) plus the ``What the iterated local update buys, and the memorization confound'' paragraph that scopes the headline fidelity claim and flags the multi-grid synthetic-data ceiling (quantified by the Sokoban synth block in Table~\ref{tab:baselines-arch} and characterized in Appendix~\ref{app:ceiling}) as an unresolved gap. \S\ref{sec:results-encoder-ablation} discusses where rule-conditioning fails to transfer out of distribution at small training scale.
     \item[] Guidelines:
     \begin{itemize}
         \item The answer \answerNA{} means that the paper has no limitation while the answer \answerNo{} means that the paper has limitations, but those are not discussed in the paper.
@@ -84,7 +84,7 @@
 \item {\bf Experimental setting/details}
     \item[] Question: Does the paper specify all the training and test details (e.g., data splits, hyperparameters, how they were chosen, type of optimizer) necessary to understand the results?
     \item[] Answer: \answerYes{}
-    \item[] Justification: \S\ref{sec:experiments} (``Architectures and hyper-parameters'' and ``Evaluation'') specifies the optimizer (Adam), learning-rate schedule (cosine $3 \times 10^{-4} \to 10^{-7}$), batch size, gradient-clipping norm, change-loss weight, slot dimensions, and per-architecture depth/width. Train/test splits are specified per preset: held-out transitions per game for cell-error, full-rollout evaluation under random / BFS / A* policies, and the 30-game token-hash-disjoint heldout set for unseen-game generalization (\S\ref{sec:results-encoder-ablation}, Appendix~\ref{app:ood}).
+    \item[] Justification: \S\ref{sec:experiments} (``Architectures and hyper-parameters'' and ``Evaluation'') specifies the optimizer (Adam), learning-rate schedule (cosine $3 \times 10^{-4} \to 10^{-7}$), batch size, gradient-clipping norm, change-loss weight, slot dimensions, and per-architecture depth/width. Train/test splits are specified per preset: held-out transitions per game for cell-error, full-rollout evaluation under random / BFS / A* policies, and the 30-game token-hash-disjoint heldout set with a 26-game non-truncated reported subset for unseen-game generalization (\S\ref{sec:results-encoder-ablation}, Appendix~\ref{app:ood}).
     \item[] Guidelines:
     \begin{itemize}
         \item The answer \answerNA{} means that the paper does not include experiments.
@@ -95,7 +95,7 @@
 \item {\bf Experiment statistical significance}
     \item[] Question: Does the paper report error bars suitably and correctly defined or other appropriate information about the statistical significance of the experiments?
     \item[] Answer: \answerYes{}
-    \item[] Justification: All architecture-comparison and ablation tables (Tables~\ref{tab:baselines-sokoban}, \ref{tab:baselines-synth}, \ref{tab:baselines-scaling14}, \ref{tab:ablation-pool}) report mean $\pm$ standard deviation over 3 random seeds, with the variability source (random seed at fixed data and recipe) stated in \S\ref{sec:experiments}. The text discusses overlap of $\pm 1\sigma$ intervals when interpreting close comparisons (\S\ref{sec:results-baselines}, \S\ref{sec:results-scaling}). Broad-corpus results in Table~\ref{tab:fidelity} additionally report median across 94 games to characterize the per-game distribution.
+    \item[] Justification: All architecture-comparison and ablation tables (Tables~\ref{tab:baselines-arch}, \ref{tab:ablation-pool}) report mean $\pm$ standard deviation over 3 random seeds, with the variability source (random seed at fixed data and recipe) stated in \S\ref{sec:experiments}. The text discusses overlap of $\pm 1\sigma$ intervals when interpreting close comparisons (\S\ref{sec:results-baselines}, \S\ref{sec:results-scaling}). Broad-corpus results in Table~\ref{tab:fidelity} additionally report median across 94 games to characterize the per-game distribution.
     \item[] Guidelines:
     \begin{itemize}
         \item The answer \answerNA{} means that the paper does not include experiments.

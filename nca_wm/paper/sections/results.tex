@@ -41,27 +41,40 @@ corpora.
   \begin{subfigure}[b]{0.49\linewidth}
     \centering
     \includegraphics[width=\linewidth]{figures/indist_intersection/intersection_slope_id.pdf}
-    \caption{In-distribution (14-game intersection).}
+    \caption{ID 1-step (TF).}
     \label{fig:intersection-slope-id}
   \end{subfigure}\hfill
   \begin{subfigure}[b]{0.49\linewidth}
     \centering
     \includegraphics[width=\linewidth]{figures/indist_intersection/intersection_slope_ood.pdf}
-    \caption{Out-of-distribution (\textsc{Heldout-26}).}
+    \caption{OOD 1-step (TF).}
     \label{fig:intersection-slope-ood}
   \end{subfigure}
-  \caption{\textbf{1-step (TF) cell-error as the training corpus
-    grows from 14 to 199 games}, on a numeric (log) corpus axis.
-    \emph{(a) In-distribution:} aggregate over the 14 games shared
+  \begin{subfigure}[b]{0.49\linewidth}
+    \centering
+    \includegraphics[width=\linewidth]{figures/indist_intersection/intersection_slope_id_ar.pdf}
+    \caption{ID random-action AR.}
+    \label{fig:intersection-slope-id-ar}
+  \end{subfigure}\hfill
+  \begin{subfigure}[b]{0.49\linewidth}
+    \centering
+    \includegraphics[width=\linewidth]{figures/indist_intersection/intersection_slope_ood_ar.pdf}
+    \caption{OOD random-action AR.}
+    \label{fig:intersection-slope-ood-ar}
+  \end{subfigure}
+  \caption{\textbf{Cell-error as the training corpus grows from 14
+    to 199 games}, on a numeric (log) corpus axis.
+    \emph{In-distribution panels:} aggregate over the 14 games shared
     by every preset (the same game set evaluated against every
-    checkpoint). The unconditional model degrades $\approx 25\times$
+    checkpoint). In 1-step (TF), the unconditional model degrades $\approx 25\times$
     from \textsc{Train-14} to \textsc{Train-59}; the rule-conditional
     model degrades $\approx 5\times$ over the same range and barely
     moves to \textsc{Train-199}---rule-conditioning slows per-game
-    dilution by an order of magnitude at fixed capacity.
-    \emph{(b) Out-of-distribution:} aggregate on
+    dilution by an order of magnitude at fixed capacity. The AR panel
+    shows the corresponding random-action rollout aggregate.
+    \emph{Out-of-distribution panels:} aggregate on
     \textsc{Heldout-26} (the same data as
-    Table~\ref{tab:cond-vs-uncond-match}); the dotted black line is
+    Table~\ref{tab:cond-vs-uncond-match}); dotted black lines show
     the trivial identity baseline $\hat s_{t+1}{=}s_t$. Broadening
     the training corpus drops the conditional 1-step error
     $\approx 6\times$ from \textsc{Train-14} to \textsc{Train-199}
@@ -158,133 +171,87 @@ in \S\ref{sec:discussion}.
 % from OOD transitions) live in Appendix~\ref{app:scaling-curve},
 % \ref{app:autoencoder}, \ref{app:inverse-fit}.
 
-\subsection{Multi-game architecture baselines on \textsc{Train-14}}
+\subsection{Architecture baselines}
+\label{sec:results-baselines}
 \label{sec:results-multigame}
 
 The headline result fixes a single architecture---a shared-weights
-NCA with $n_h{=}256$. We now ask whether that choice survives a
-head-to-head with stronger spatial bodies on the same multi-game
-corpus.
-Table~\ref{tab:baselines-scaling14} compares the shared-weights NCA
-against a per-step NCA (independent weights per iteration) and three
-non-iterative baselines (CNN, U-Net, ViT) on \textsc{Train-14}: 14
-PuzzleScript games with grid sizes from $4{\times}4$ to
-$32{\times}24$ and rule counts from one (basic Sokoban) to 14
-(\textit{Kettle}). All five share the slot encoder and readout heads
-and differ only in the spatial body. 20k updates per seed,
-$d_h = 256$.
+NCA with $n_h{=}256$. We now ask whether that choice survives
+head-to-head against stronger spatial bodies on three corpora that
+probe different facets of the problem: \textsc{Train-14} (14 games,
+$4{\times}4$ to $32{\times}24$ grids, rule counts 1--14) for
+multi-game capacity sharing, single-game Sokoban on 10 authored
+\textit{Microban} levels for the per-rule fitting limit (where slot
+cross-attention can in principle memorize per-state outcomes), and
+multi-grid synth Sokoban (widths $\{5,6,7,8\}^2$ $\times$ 256
+evolved levels each; 1024 distinct levels share one rule set) where
+that memorization crutch is removed. The per-step NCA uses
+independent weights per iteration; CNN, U-Net, and ViT replace the
+iterated local update with a non-iterative spatial body. All five
+share the slot encoder and readout heads. Single-game runs train for
+10k updates per seed, \textsc{Train-14} for 20k, $d_h=256$;
+the per-step training objective does not separate architectures
+(all five fit train cross-entropy within $\approx 2\%$ except ViT on
+multi-grid synth, best loss $0.084 \pm 0.002$ vs.\
+$0.069 \pm 0.003$ for the rest).
 
 \begin{table}[t]
   \centering
-  \caption{\textbf{Multi-game baselines on \textsc{Train-14}.}
-    Mean $\pm$ std over 3 seeds at 20k updates. All three error
-    columns are per-cell, averaged across rollout steps and aggregated
-    across games and levels. Both NCA variants beat all three non-NCA
-    baselines; within the NCA family the per-step body has the lowest
-    mean BFS-AR error, while the shared body has notably lower
-    seed-to-seed variance and $3.8\times$ better parameter efficiency.}
-  \label{tab:baselines-scaling14}
+  \caption{\textbf{Architecture baselines across three corpora.}
+    Mean $\pm$ std over 3 seeds. All three error columns are
+    per-cell, averaged across rollout steps and aggregated across
+    games/levels; lower is better. Within each block, rows are
+    sorted by BFS-AR ascending and the per-block BFS winner / fewest
+    parameters are bolded. Params (M) drift across blocks because the
+    slot encoder/heads scale with the preset's vocabulary.}
+  \label{tab:baselines-arch}
   \small
   \resizebox{\linewidth}{!}{%
-  \input{figures/baselines/scaling_14}%
+  \input{figures/baselines/architectures}%
   }
 \end{table}
 
+\paragraph{Multi-game \textsc{Train-14}.}
 Both NCA variants outperform all three non-NCA baselines on
 autoregressive rollout (U-Net at $1.8\times$, ViT at $2.3\times$
 NCA-perstep's BFS-AR error); the NCA/non-NCA gap is robust to seed.
 Within the NCA family the per-step body has the lowest BFS-AR error
 ($7.05\% \pm 0.87\%$) and one-step error ($0.25\% \pm 0.04\%$), while
 the shared body has $5.8\times$ lower seed-to-seed variance and
-$3.8\times$ better parameter efficiency; at $\pm 1\sigma$ the two NCA
-variants overlap on aggregate BFS-AR. ViT is again the only
-architecture failing to fit the per-step objective (best loss
-$\approx 8 \times 10^{-4}$ vs.\ $\approx 0$), confirming the
-structural mismatch. Per-game breakdowns: Appendix~\ref{app:per-game}.
+$3.8\times$ better parameter efficiency; at $\pm 1\sigma$ the two
+overlap on aggregate BFS-AR. ViT is again the only architecture
+failing to fit the per-step objective (best loss $\approx 8 \times
+10^{-4}$ vs.\ $\approx 0$), confirming the structural mismatch.
+Per-game breakdowns: Appendix~\ref{app:per-game}.
 
-\subsection{Per-game NCA architecture and pool ablation}
-\label{sec:results-baselines}
-
-To expose the same architectural contrast in a memorization-free
-regime---and decompose what the NCA recipe is doing internally---we
-zoom in to a single rule family (Sokoban) under two scopes:
-(i) 10 authored levels, where the model can in principle memorize
-per-state outcomes via slot cross-attention; and (ii) a multi-grid
-synthetic regime (widths $\{5,6,7,8\}^2$ $\times$ 256 levels each;
-1024 distinct levels share one rule set) where memorization is
-unavailable. We then ablate the NCA's pool stack and input-skip on
-the multi-grid synth preset.
-
-All runs train for 10k updates per seed; metrics are averaged over
-50-step rollouts. The per-step training objective does not separate
-architectures: all five fit train cross-entropy within $\approx 2\%$
-of each other on every preset except ViT on multi-grid synth (best
-loss $0.084 \pm 0.002$ vs.\ $0.069 \pm 0.003$ for the rest).
-
-\paragraph{Single-game (Sokoban).}
-Table~\ref{tab:baselines-sokoban} reports the head-to-head
-comparison on 10 authored Sokoban levels.
-
-\begin{table}[t]
-  \centering
-  \caption{\textbf{Baselines vs.\ rule-conditioned NCA on Sokoban
-    (10 authored levels).} Mean $\pm$ std over 3 seeds at 10k
-    updates. All three error columns are per-cell, averaged across
-    rollout steps; lower is better. Param count in millions;
-    architectures sorted by BFS-AR cell-error.}
-  \label{tab:baselines-sokoban}
-  \small
-  \resizebox{\linewidth}{!}{%
-  \input{figures/baselines/sokoban_authored}%
-  }
-\end{table}
-
-The NCA with shared weights wins on BFS-AR cell-error
+\paragraph{Single-game Sokoban.}
+The shared-weights NCA wins on BFS-AR cell-error
 ($0.003\% \pm 0.004\%$) at the fewest parameters (1.94M), an order
 of magnitude below the same-depth feed-forward CNN
 ($0.055\% \pm 0.075\%$, $2.6\times$ more params) and roughly two
 orders of magnitude below the per-step NCA ($0.283\% \pm 0.400\%$,
 $3.8\times$ more params). U-Net's 2-level downsampling loses
 fine-grained player position on small grids ($3.13\%$); ViT's global
-self-attention is the only architecture that fails to fit the data
-even on this single-game preset ($9.32\%$ BFS-AR; one-step $1.49\%$
-vs.\ $\approx 0$ for the rest), confirming that unrestricted global
-attention does not match grid-rule dynamics.
+self-attention fails to fit the data even on this single-game
+preset ($9.32\%$ BFS-AR; one-step $1.49\%$ vs.\ $\approx 0$ for the
+rest), confirming that unrestricted global attention does not match
+grid-rule dynamics.
 
 \paragraph{Multi-grid synthetic (memorization-free).}
-To force the model to actually learn the rule,
-Table~\ref{tab:baselines-synth} repeats the comparison on the
-multi-grid synthetic regime.
-
-\begin{table}[t]
-  \centering
-  \caption{\textbf{Baselines vs.\ rule-conditioned NCA on Sokoban
-    (multi-grid synthetic).} Mean $\pm$ std
-    over 3 seeds at 10k updates; widths
-    $\{5{\times}5, 6{\times}6, 7{\times}7, 8{\times}8\}$ with 256
-    synthetic levels per width.}
-  \label{tab:baselines-synth}
-  \small
-  \resizebox{\linewidth}{!}{%
-  \input{figures/baselines/sokoban_synth}%
-  }
-\end{table}
-
-The shared-weights and per-step NCAs are statistically tied on this
-task ($2.08\% \pm 0.47\%$ vs.\ $2.09\% \pm 1.75\%$ BFS-AR
-cell-error), but the shared variant matches that performance with
-$2.8\times$ fewer parameters; CNN trails both at $2.82\% \pm 1.97\%$
-despite roughly twice the depth. ViT fails to fit the multi-grid
-synth data on the per-step training objective itself (best loss
-$0.084 \pm 0.002$ vs.\ $0.069 \pm 0.003$ for the rest, the only
-preset where any architecture leaves an order-of-magnitude gap on
-train loss), and that gap shows up downstream as a $\geq 4\times$
-worse BFS-AR cell-error vs.\ the NCA family. Seed-to-seed variance on
-this task is large ($\sigma > 1.5\%$ on BFS-AR for the per-step NCA,
-CNN, and the input-skip-disabled ablation row) but the gap to U-Net
-and ViT remains robust at $\pm 1\sigma$. Longer-form architecture
-findings (per-game grid, hierarchical weight sharing) are in
-Appendix~\ref{app:per-game-arch}.
+With the per-state lookup removed, the shared-weights and per-step
+NCAs are statistically tied ($2.08\% \pm 0.47\%$ vs.\
+$2.09\% \pm 1.75\%$ BFS-AR), but the shared variant matches that
+performance with $2.8\times$ fewer parameters; CNN trails both at
+$2.82\% \pm 1.97\%$ despite roughly twice the depth. ViT fails to
+fit the multi-grid synth data on the per-step training objective
+itself (the only preset where any architecture leaves an
+order-of-magnitude gap on train loss), and that gap shows up
+downstream as a $\geq 4\times$ worse BFS-AR cell-error. Seed-to-seed
+variance on this task is large ($\sigma > 1.5\%$ on BFS-AR for the
+per-step NCA, CNN, and the input-skip-disabled ablation row) but the
+gap to U-Net and ViT remains robust at $\pm 1\sigma$. Longer-form
+architecture findings (per-game grid, hierarchical weight sharing)
+are in Appendix~\ref{app:per-game-arch}.
 
 \paragraph{Per-feature pool and input-skip ablation.}
 We decompose the NCA-shared advantage by individually disabling each

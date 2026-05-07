@@ -29,7 +29,7 @@ Median rule count is 6 (min 1, max 20), median level count is 3
 games extending Train-14 by 45 more), and \textsc{Train-199} (199
 broad-corpus games extending Train-14 by 185 more) feed the
 multi-game in-distribution scaling and OOD generalization
-results (Tables~\ref{tab:baselines-scaling14},
+results (Tables~\ref{tab:baselines-arch},
 \ref{tab:indist-scaling}, \ref{tab:cond-vs-uncond-match}). An
 intermediate \textsc{Train-94} (94 Gallery games sharing the same
 57-game gallery base as Train-199) is used for the appendix-level
@@ -40,30 +40,30 @@ Appendix~\ref{app:data-provenance}.
 
 \paragraph{Synthetic levels.}
 The single-game multi-grid suite (\S\ref{sec:results-baselines},
-Table~\ref{tab:baselines-synth}) trains on \emph{evolved} synthetic
+synth block in Table~\ref{tab:baselines-arch}) trains on \emph{evolved} synthetic
 levels: a GA proposes candidate grids and the engine retains
 solvable, non-trivial ones. Details and the within-game OOD-levels
 probe in Appendix~\ref{app:synth-only}.
 
 \subsection{Game suites}
 
-\textbf{Single-game Sokoban authored} (10 levels;
-Table~\ref{tab:baselines-sokoban}) supports the single-game
-architecture comparison.
+The three architecture-baseline corpora share Table~\ref{tab:baselines-arch}.
+\textbf{Single-game Sokoban authored} (10 levels) supports the
+single-game architecture comparison.
 \textbf{Single-game multi-grid synth} (Sokoban; widths
-$\{5,6,7,8\}^2$, 256 evolved levels per width; Tables~\ref{tab:baselines-synth},
-\ref{tab:ablation-pool}) shares one rule set across 1024 synthetic
-levels, removing per-state memorization.
-\textbf{Multi-game \textsc{Train-14}} (Table~\ref{tab:baselines-scaling14})
+$\{5,6,7,8\}^2$, 256 evolved levels per width; also feeds
+Table~\ref{tab:ablation-pool}) shares one rule set across 1024
+synthetic levels, removing per-state memorization.
+\textbf{Multi-game \textsc{Train-14}}
 covers 14 games spanning gravity, light beams, multi-character control,
 and \texttt{again}-driven simulations, with grid sizes from
 $4{\times}4$ to $32{\times}24$.
 \textbf{Broad-corpus} (\textsc{Train-59}, \textsc{Train-199};
 Tables~\ref{tab:indist-scaling}, \ref{tab:cond-vs-uncond-match})
 adds breadth.
-\textbf{Held-out} \textsc{Heldout-30}: 30 games disjoint from every
-preset by filename and token-sequence hash, used for unseen-game
-evaluation.
+\textbf{Held-out} \textsc{Heldout-26}: the 26 games from
+\textsc{Heldout-30} whose tokenized rules fit the conditional
+encoder without truncation, used for unseen-game evaluation.
 
 \subsection{Architectures and hyper-parameters}
 

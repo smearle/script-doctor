@@ -1,15 +1,14 @@
 #!/usr/bin/env python3
-r"""Generate the architecture-baseline LaTeX tables (paper Tables 1-4).
+r"""Generate the architecture-baseline LaTeX tables.
 
 Reads nca_wm/paper/figures/baselines/summary.csv (a snapshot of the
 aggregator output from logs_baselines/, currently produced on box 210
 by nca_wm/scripts/aggregate_baseline_comparison.py) and emits one
 LaTeX fragment per table:
 
-  * sokoban_authored.tex   - Table 1 (single-game Sokoban / Microban)
-  * sokoban_synth.tex      - Table 2 (multi-grid synth Sokoban)
-  * ablation_pool.tex      - Table 3 (per-feature pool / input-skip)
-  * scaling_14.tex         - Table 4 (multi-game Train-14)
+  * architectures.tex      - Combined multi-preset architecture table
+                             (Train-14, Sokoban authored, Sokoban synth)
+  * ablation_pool.tex      - Per-feature pool / input-skip ablation
 
 To refresh the CSV from box 210:
 
@@ -114,62 +113,86 @@ def _fmt_params(n_params: int | None) -> str:
     return f"{n_params/1e6:.2f}"
 
 
-def _table_baseline(
+def _arch_block(
     rows: list[dict],
     games: str,
     arch_order: list[str],
-    out_path: Path,
-) -> None:
-    """Emit a 5-architecture table sorted by BFS-AR cell-error ascending.
-
-    Columns: arch | params (M) | random (AR) | one-step (TF) | BFS (AR).
-    All three error columns are per-cell, averaged across rollout steps; matches
-    the metric definitions in \\S 4.4 and the indist / cond-vs-uncond tables.
-    """
+) -> tuple[list[str], dict[str, dict]] | None:
+    """Aggregate one (games, archs) block. Returns (sorted_archs, aggs) or None."""
     aggs = {a: _aggregate(rows, games, a) for a in arch_order}
     aggs = {a: v for a, v in aggs.items() if v}
     if not aggs:
-        print(f"[baselines] no data for games={games}; skipped {out_path.name}")
-        return
-    # Sort by BFS rollout cell-err ascending; missing → infinity.
+        return None
     def _bfs(a: str) -> float:
         s = aggs[a].get("bfs_rollout_cellerr")
         return s[0] if s else float("inf")
-
     sorted_archs = sorted(aggs.keys(), key=_bfs)
-    best_arch = sorted_archs[0]
-    least_params = min(
-        (aggs[a]["n_params"] for a in sorted_archs if aggs[a].get("n_params")),
-        default=None,
-    )
+    return sorted_archs, aggs
 
-    body = []
-    for a in sorted_archs:
-        agg = aggs[a]
-        is_best_bfs = a == best_arch
-        is_least_params = (
-            least_params is not None
-            and agg.get("n_params") == least_params
+
+def _table_combined(
+    rows: list[dict],
+    blocks: list[tuple[str, str]],  # (caption, games_key)
+    arch_order: list[str],
+    out_path: Path,
+) -> None:
+    """Emit one combined architecture table with one row-block per preset.
+
+    Columns: arch | params (M) | random (AR) | one-step (TF) | BFS (AR).
+    Within each block, rows are sorted by BFS-AR ascending; per-block BFS
+    winner is bolded; per-block min param count is bolded.
+    """
+    block_data = []
+    for caption, games in blocks:
+        b = _arch_block(rows, games, arch_order)
+        if b is None:
+            print(f"[baselines] no data for games={games}; skipping block")
+            continue
+        block_data.append((caption, *b))
+
+    if not block_data:
+        print(f"[baselines] no data for any block; skipped {out_path.name}")
+        return
+
+    body_lines = []
+    for i, (caption, sorted_archs, aggs) in enumerate(block_data):
+        if i > 0:
+            body_lines.append("  \\midrule")
+        body_lines.append(
+            f"  \\multicolumn{{5}}{{l}}{{\\emph{{{caption}}}}} \\\\"
         )
-        params_str = _fmt_params(agg.get("n_params"))
-        if is_least_params:
-            params_str = f"\\textbf{{{params_str}}}"
-        body.append(
-            "  " + " & ".join([
-                ARCH_DISPLAY.get(a, a),
-                params_str,
-                _fmt_pct(agg.get("random_rollout_cellerr")),
-                _fmt_pct(agg.get("random_tf_rollout_cellerr")),
-                _fmt_pct(agg.get("bfs_rollout_cellerr"), bold=is_best_bfs),
-            ]) + r" \\"
+        best_arch = sorted_archs[0]
+        least_params = min(
+            (aggs[a]["n_params"] for a in sorted_archs if aggs[a].get("n_params")),
+            default=None,
         )
+        for a in sorted_archs:
+            agg = aggs[a]
+            is_best_bfs = a == best_arch
+            is_least_params = (
+                least_params is not None
+                and agg.get("n_params") == least_params
+            )
+            params_str = _fmt_params(agg.get("n_params"))
+            if is_least_params:
+                params_str = f"\\textbf{{{params_str}}}"
+            body_lines.append(
+                "  " + " & ".join([
+                    ARCH_DISPLAY.get(a, a),
+                    params_str,
+                    _fmt_pct(agg.get("random_rollout_cellerr")),
+                    _fmt_pct(agg.get("random_tf_rollout_cellerr")),
+                    _fmt_pct(agg.get("bfs_rollout_cellerr"), bold=is_best_bfs),
+                ]) + r" \\"
+            )
+
     table = (
         "% AUTOGENERATED by nca_wm/scripts/collate_baseline_tables.py — do not edit.\n"
         "\\begin{tabular}{l c c c c}\n"
         "  \\toprule\n"
         "  Architecture & params (M) & random (AR) & one-step (TF) & BFS (AR) \\\\\n"
         "  \\midrule\n"
-        + "\n".join(body)
+        + "\n".join(body_lines)
         + "\n"
         "  \\bottomrule\n"
         "\\end{tabular}\n"
@@ -245,23 +268,15 @@ def main() -> None:
 
     arch_order = ["nca_shared", "nca_perstep", "cnn_d4", "unet_l2", "vit_l4"]
 
-    _table_baseline(
+    _table_combined(
         rows,
-        games="microban_authored",
+        blocks=[
+            (r"\textsc{Train-14} (multi-game, 14 PuzzleScript games, 20k updates)", "scaling_14"),
+            (r"Sokoban authored (single-game, 10 \textit{Microban} levels, 10k updates)", "microban_authored"),
+            (r"Sokoban multi-grid synth (single-rule, 1024 evolved levels, 10k updates)", "sokoban_basic_synth"),
+        ],
         arch_order=arch_order,
-        out_path=OUT_DIR / "sokoban_authored.tex",
-    )
-    _table_baseline(
-        rows,
-        games="sokoban_basic_synth",
-        arch_order=arch_order,
-        out_path=OUT_DIR / "sokoban_synth.tex",
-    )
-    _table_baseline(
-        rows,
-        games="scaling_14",
-        arch_order=arch_order,
-        out_path=OUT_DIR / "scaling_14.tex",
+        out_path=OUT_DIR / "architectures.tex",
     )
     _table_ablation(rows, OUT_DIR / "ablation_pool.tex")
 
