@@ -252,11 +252,13 @@ $\hat{s}_{t+1}{=}s_t$.
   \centering
   \caption{\textbf{Out-of-distribution per-cell rollout error on
     \textsc{Heldout-30}.} Mean / median across 29 held-out games
-    that the model produced rollouts for. Columns mirror
-    Table~\ref{tab:indist-scaling}; the BFS / A* oracle columns are
-    pending an oracle-action heldout eval pass. The identity
-    baseline predicts $\hat{s}_{t+1}{=}s_t$ and lower-bounds the
-    per-step state-change rate under random actions.}
+    that the model produced rollouts for. The four error columns
+    mirror Table~\ref{tab:indist-scaling}; the BFS / A* oracle
+    columns are pending an oracle-action heldout eval pass. The
+    final column counts games where the model's mean error over the
+    30-step random-action rollout is lower than identity's; the
+    identity baseline predicts $\hat{s}_{t+1}{=}s_t$ and lower-bounds
+    the per-step state-change rate.}
   \label{tab:cond-vs-uncond-match}
   \small
   \input{figures/cond_vs_uncond_match/match_table}
@@ -270,23 +272,47 @@ $\hat{s}_{t+1}{=}s_t$.
 % "encoder isolates a signal" paragraph and the matching wording in
 % the discussion.
 
-\textbf{Out-of-distribution generalization is a function of rule
-diversity, not the encoder alone.} On \textsc{Heldout-30} the
-\textsc{Train-14} conditional model fails catastrophically
-($16.4\%$ step-1 cell-error, $7\times$ worse than identity). With
-$14\times$ more rule diversity the \textsc{Train-199} conditional
-model drops to $3.17\%$ at step 1---within $1$pp of the identity
-baseline---and matches or beats identity on $15 / 29$ held-out games.
-At \textsc{Train-59} the conditional model and its same-recipe
-unconditional counterpart sit nearly on top of each other ($6.19\%$
-vs.\ $5.50\%$ step-1; the unconditional baseline is in fact slightly
-better at this scale), reinforcing that the diversity sweep, not the
-encoder per se, is what closes the heldout gap. The headline
-rule-conditional contribution to OOD generalization is therefore
-\emph{driven primarily by broad-corpus rule diversity} rather than
-by the encoder architecture in isolation. We discuss the
-implications, including the fraction of games on which even
-\textsc{Train-199}
+\textbf{Out-of-distribution generalization improves with rule
+diversity.} On \textsc{Heldout-30} the \textsc{Train-14} conditional
+model fails catastrophically (median step-1 cell-error $4.3\%$;
+mean $16.4\%$, $7\times$ worse than identity). With $14\times$ more
+rule diversity the \textsc{Train-199} conditional model drops to
+$1.96\%$ median (mean $3.17\%$, within $1$pp of identity at the
+mean), and beats identity on $15 / 29$ heldout games at step 1.
+
+\textbf{Reading mean vs.\ median at \textsc{Train-59}.} The two
+\textsc{Train-59} rows are noteworthy: on the mean the unconditional
+baseline edges out the conditional model ($5.50\%$ vs.\ $6.19\%$
+step-1), but on the median---a more robust per-game signal---the
+ordering reverses ($4.12\%$ vs.\ $3.03\%$ step-1, and the
+conditional model wins on $18$ of $29$ heldout games at step 1
+versus the unconditional model's $10$). The mean inversion is
+driven by a small number of games where the conditional model
+produces wildly off predictions (e.g.\ a single heldout game where
+its step-1 cell-error is $40.7\%$, against identity's $2.3\%$ on
+that game). One reading is that the rule encoder occasionally lands
+the dynamics body on an off-manifold slot embedding for rule sets
+that look different from anything in training, and the body fires
+rules incorrectly across most cells; the unconditional baseline,
+having no encoder to mislead, falls back to a near-identity
+predictor on unfamiliar inputs (its per-game error correlates more
+strongly with the identity baseline: $0.45$ vs.\ $0.24$). The
+typical-game median is therefore the more informative summary of
+encoder benefit; we report both.
+
+\textbf{Wins vs.\ identity over the full rollout.} Identity is a
+strong baseline as soon as the rollout is long enough for model
+drift to compound: on the random-action AR-30 rollout, identity's
+mean per-cell error (the per-step state-change rate, $\approx 2\%$)
+holds steady while every model accumulates drift to $9$--$24\%$.
+None of the matched checkpoints currently average below identity
+across all $30$ steps on more than a single game (last column of
+Table~\ref{tab:cond-vs-uncond-match}). This makes the step-$1$
+contrast the load-bearing OOD signal: at $1$-step prediction the
+conditional model meaningfully closes the identity gap as the
+training corpus grows, but multi-step rollouts under random actions
+remain dominated by drift. We discuss the implications, including
+the fraction of games on which even \textsc{Train-199}
 fails (e.g.\ pseudo-random spawn games, deeply cascaded
 \texttt{again} rules), in \S\ref{sec:discussion}.
 
