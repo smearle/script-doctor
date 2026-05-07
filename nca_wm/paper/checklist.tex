@@ -5,7 +5,11 @@
 \item {\bf Claims}
     \item[] Question: Do the main claims made in the abstract and introduction accurately reflect the paper's contributions and scope?
     \item[] Answer: \answerYes{}
-    \item[] Justification: The abstract claims a rule-conditioned NCA world model that (a) outperforms non-iterative baselines on PuzzleScript dynamics and (b) achieves high on-distribution fidelity at the multi-game scale; both are quantified in \S\ref{sec:results-baselines} (Table~\ref{tab:baselines-arch}) and \S\ref{sec:results-scaling} (Table~\ref{tab:indist-scaling}; median 1-step teacher-forced cell-error in the $0.01$--$0.45\%$ range across the \textsc{Train-14}, \textsc{Train-59}, and \textsc{Train-199} checkpoints). Held-out and multi-grid synthetic limitations are flagged in \S\ref{sec:discussion}.
+    \item[] Justification: \S\ref{sec:intro} states three findings, each grounded in a quantitative result.
+    (i) The shared-weight NCA body outperforms non-iterative CNN, U-Net, and ViT baselines on autoregressive rollout (\S\ref{sec:results-baselines}, Table~\ref{tab:baselines-arch}).
+    (ii) Rule-conditioning amortizes shared dynamics across games and slows per-game capacity dilution by roughly an order of magnitude as the corpus grows from \textsc{Train-14} to \textsc{Train-199} (\S\ref{sec:results-scaling}, Table~\ref{tab:indist-scaling}; conditional 1-step teacher-forced median cell-error stays in the $\approx 0.02$--$0.16\%$ band on the 14-game intersection while the unconditional baseline grows $\approx 25\times$).
+    (iii) Out-of-distribution generalization to \textsc{Heldout-26} is weak, and rule-conditioning does not measurably help over an unconditional baseline at any tested training scale (\S\ref{sec:results-encoder-ablation}, Figure~\ref{fig:ood-per-game-scatter}).
+    Held-out limitations and the multi-grid synthetic-data ceiling (\textsc{Sokoban-Evolved}) are flagged in \S\ref{sec:discussion}.
     \item[] Guidelines:
     \begin{itemize}
         \item The answer \answerNA{} means that the abstract and introduction do not include the claims made in the paper.
@@ -17,7 +21,7 @@
 \item {\bf Limitations}
     \item[] Question: Does the paper discuss the limitations of the work performed by the authors?
     \item[] Answer: \answerYes{}
-    \item[] Justification: \S\ref{sec:discussion} contains an explicit ``Limitations'' paragraph (level-independent slot encoder; single-step training only) plus the ``What the iterated local update buys, and the memorization confound'' paragraph that scopes the main fidelity claim and flags the multi-grid synthetic-data ceiling (quantified by the \textsc{Sokoban-Evolved} block in Table~\ref{tab:baselines-arch} and characterized in Appendix~\ref{app:ceiling}) as an unresolved gap. \S\ref{sec:results-encoder-ablation} discusses where rule-conditioning fails to transfer out of distribution at small training scale.
+    \item[] Justification: \S\ref{sec:discussion} scopes the main fidelity claim by separating single-grid memorization from learned dynamics, and uses the \textsc{Sokoban-Evolved} preset (1024 levels at four widths sharing one rule set; \textsc{Sokoban-Evolved} block in Table~\ref{tab:baselines-arch}, characterized in Appendix~\ref{app:ceiling}) to set a ceiling on what the recipe extracts from the rule alone---a $\approx 40\times$ jump in BFS final-error vs.\ \textsc{Sokoban-Authored}. The same section flags that conditional and unconditional baselines are roughly tied OOD at every tested training scale, with the encoder's load-bearing claim restricted to in-distribution. \S\ref{sec:conclusion} explicitly notes the level-independent slot encoder and single-step training as design restrictions, and points to multi-step training as unexplored.
     \item[] Guidelines:
     \begin{itemize}
         \item The answer \answerNA{} means that the paper has no limitation while the answer \answerNo{} means that the paper has limitations, but those are not discussed in the paper.
@@ -47,7 +51,7 @@
     \item {\bf Experimental result reproducibility}
     \item[] Question: Does the paper fully disclose all the information needed to reproduce the main experimental results of the paper to the extent that it affects the main claims and/or conclusions of the paper (regardless of whether the code and data are provided or not)?
     \item[] Answer: \answerYes{}
-    \item[] Justification: \S\ref{sec:method} fully specifies the architecture (encoder, NCA body update equation, pool features, heads) and all baselines. \S\ref{sec:experiments} specifies the optimizer, learning-rate schedule, batch size, gradient clipping, change-loss weight, training-step budgets, seed counts, training presets (\textsc{Train-14}, \textsc{Train-94}, \textsc{Train-199}), and the evaluation protocol. Appendix~\ref{app:reproducibility} (in \S A.5) describes the dataset-caching pipeline and notes that launchers and aggregators are released with the paper; per-game preset membership and hyper-parameters are listed in the appendix.
+    \item[] Justification: \S\ref{sec:method} fully specifies the architecture (encoder, NCA body update equation, pool features, heads) and all baselines. \S\ref{sec:experiments} specifies the optimizer, learning-rate schedule, batch size, gradient clipping, change-loss weight, training-step budgets, seed counts, training presets (\textsc{Train-14}, \textsc{Train-59}, \textsc{Train-199}, plus \textsc{Train-94} for appendix-level decoder/latent analyses), and the evaluation protocol. Appendix~\ref{app:reproducibility} describes the dataset-caching pipeline and notes that launchers and aggregators are released with the paper; per-game preset membership and hyper-parameters are listed in the appendix.
     \item[] Guidelines:
     \begin{itemize}
         \item The answer \answerNA{} means that the paper does not include experiments.
@@ -84,7 +88,7 @@
 \item {\bf Experimental setting/details}
     \item[] Question: Does the paper specify all the training and test details (e.g., data splits, hyperparameters, how they were chosen, type of optimizer) necessary to understand the results?
     \item[] Answer: \answerYes{}
-    \item[] Justification: \S\ref{sec:experiments} (``Architectures and hyper-parameters'' and ``Evaluation'') specifies the optimizer (Adam), learning-rate schedule (cosine $3 \times 10^{-4} \to 10^{-7}$), batch size, gradient-clipping norm, change-loss weight, slot dimensions, and per-architecture depth/width. Train/test splits are specified per preset: held-out transitions per game for cell-error, full-rollout evaluation under random / BFS / A* policies, and the 26-game token-hash-disjoint \textsc{Heldout-26} set for unseen-game generalization (\S\ref{sec:results-encoder-ablation}, Appendix~\ref{app:ood}).
+    \item[] Justification: \S\ref{sec:experiments} (``Architectures and hyper-parameters'' and ``Evaluation'') specifies the optimizer (Adam), learning-rate schedule (cosine $3 \times 10^{-4} \to 10^{-7}$), batch size $32$, gradient-clipping global norm $0.5$, change-loss weight $5.0$, slot dimensions ($K{=}16$, $d{=}64$), and per-architecture depth/width ($T{=}4$ NCA, $n_b{=}4$ CNN, 2-level U-Net, $n_v{=}4$ ViT; $d_h{=}256$). Three seeds per run. Train/test splits are specified per preset: per-step authored transitions for in-distribution cell-error, autoregressive rollout under random / BFS / A* policies, and the 26-game token-hash-disjoint \textsc{Heldout-26} set for unseen-game generalization (\S\ref{sec:results-encoder-ablation}, Appendix~\ref{app:ood}).
     \item[] Guidelines:
     \begin{itemize}
         \item The answer \answerNA{} means that the paper does not include experiments.
@@ -95,7 +99,7 @@
 \item {\bf Experiment statistical significance}
     \item[] Question: Does the paper report error bars suitably and correctly defined or other appropriate information about the statistical significance of the experiments?
     \item[] Answer: \answerYes{}
-    \item[] Justification: All architecture-comparison and ablation tables (Tables~\ref{tab:baselines-arch}, \ref{tab:ablation-pool}) report mean $\pm$ standard deviation over 3 random seeds, with the variability source (random seed at fixed data and recipe) stated in \S\ref{sec:experiments}. The text discusses overlap of $\pm 1\sigma$ intervals when interpreting close comparisons (\S\ref{sec:results-baselines}, \S\ref{sec:results-scaling}). \textsc{Train-94} results in Table~\ref{tab:fidelity} additionally report median across 94 games to characterize the per-game distribution.
+    \item[] Justification: All architecture-comparison and ablation tables (Tables~\ref{tab:baselines-arch}, \ref{tab:ablation-pool}) report mean $\pm$ standard deviation over 3 random seeds, with the variability source (random seed at fixed data and recipe) stated in \S\ref{sec:experiments}. The text discusses overlap of $\pm 1\sigma$ intervals when interpreting close comparisons (\S\ref{sec:results-baselines}, \S\ref{sec:results-scaling}). The \textsc{Train-94} comparison in Table~\ref{tab:fidelity} (Appendix~\ref{app:joint-decoder}) additionally reports mean and median across 94 games to characterize the per-game distribution. Single-seed entries in scaling sweeps are flagged in figure captions where they appear.
     \item[] Guidelines:
     \begin{itemize}
         \item The answer \answerNA{} means that the paper does not include experiments.
@@ -112,7 +116,7 @@
 \item {\bf Experiments compute resources}
     \item[] Question: For each experiment, does the paper provide sufficient information on the computer resources (type of compute workers, memory, time of execution) needed to reproduce the experiments?
     \item[] Answer: \answerYes{}
-    \item[] Justification: All training and evaluation reported in this paper was run on a small local cluster of three NVIDIA RTX 4090 (24~GB) consumer GPUs; each individual run fits on a single GPU. Per-experiment training-step budgets (10k / 15k / 20k / 50k / 150k updates, depending on table) are specified at every table, and the full research project required additional compute beyond the reported runs for ablations and failed configurations.
+    \item[] Justification: All training and evaluation reported in this paper was run on consumer 24~GB GPUs (single GPU per run); Appendix~\ref{app:reproducibility} states this hardware footprint. Per-experiment training-step budgets (10k--150k updates, depending on the run; e.g.\ 10k for the single-game architecture comparison, 20k for \textsc{Train-14}, 150k for the \textsc{Train-14}/\textsc{Train-59}/\textsc{Train-199} scaling sweep) are reported with each result, and the full research project required additional compute beyond the reported runs for ablations and failed configurations.
     \item[] Guidelines:
     \begin{itemize}
         \item The answer \answerNA{} means that the paper does not include experiments.
