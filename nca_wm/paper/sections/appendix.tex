@@ -885,33 +885,51 @@ context.
   \caption{\textbf{Held-out latent geometry as we scale training
     games.} Cosine distance, in flattened-slot space, from each
     held-out game's encoded slot to its nearest training-game
-    neighbor. All runs use the rule-attention NCA body, $K{=}16$
-    slots, $d_{\text{slot}}{=}64$, $T{=}8$ NCA steps, batch 32, 150k
-    Adam updates. The held-out set is the same 30-game stratified
-    sample for every row.}
+    neighbor. We also report the same nearest-neighbour distance
+    among the training games themselves (each training game vs.\
+    its nearest \emph{other} training game) and the ratio
+    $d_{\text{he}\rightarrow\text{tr}} / d_{\text{tr}\rightarrow\text{tr}}$,
+    which is closer to 1 when held-outs are mapped into the same
+    neighbourhood density as the training set. All runs use the
+    rule-attention NCA body, $K{=}16$ slots, $d_{\text{slot}}{=}64$,
+    $T{=}8$ NCA steps, batch 32, 150k Adam updates. The held-out
+    set is the same 30-game stratified sample for every row.}
   \label{tab:scaling-curve}
   \small
-  \begin{tabular}{l r l r}
+  \begin{tabular}{l r l r r r r r}
     \toprule
-    preset & $n_{\text{games}}$ & decoder & median distance to NN train game \\
+    preset & $n_{\text{games}}$ & decoder
+      & \multicolumn{2}{c}{he$\rightarrow$tr nearest dist}
+      & \multicolumn{2}{c}{tr$\rightarrow$tr nearest dist}
+      & ratio (mean) \\
+    \cmidrule(lr){4-5} \cmidrule(lr){6-7}
+      &  &  & mean & median & mean & median
+      & he/tr \\
     \midrule
-    \textsc{Train-14}             & 14 & off & $0.077$ \\
-    \textsc{Train-94}             & 94 & off & $0.215$ \\
-    \textsc{Train-94}             & 94 & on  & $\mathbf{0.153}$ \\
+    \textsc{Train-14}             & 14 & off & $0.093$ & $0.077$ & $0.232$ & $0.134$ & $0.40$ \\
+    \textsc{Train-94}             & 94 & off & $0.210$ & $0.215$ & $0.194$ & $0.185$ & $1.08$ \\
+    \textsc{Train-94}             & 94 & on  & $0.175$ & $\mathbf{0.153}$ & $0.225$ & $0.216$ & $\mathbf{0.78}$ \\
     \bottomrule
   \end{tabular}
 \end{table}
 
-At 94 training games the encoder-only median is larger than at
-$14$ ($0.215$ vs.\ $0.077$); the 14-game number is partly a
-consequence of the held-out games being homogeneous push-puzzles
-that sit close to any of several push-puzzle training games at
-that scale. The 94-game decoder-on row drops to $0.153$, but
+At 94 training games the held-out median is larger than at $14$
+($0.215$ vs.\ $0.077$); the 14-game number is partly a consequence
+of the held-out games being homogeneous push-puzzles that sit close
+to any of several push-puzzle training games at that scale. The
+ratio column is the more direct readout for whether the encoder
+puts held-outs into the same neighbourhood density as the training
+set: at \textsc{Train-94} (no decoder) it is $1.08$---held-outs
+sit only $\approx 8\%$ further from their nearest training game
+than training games sit from each other, suggesting the encoder
+populates the latent volume rather than pushing held-outs off-
+manifold. The decoder-on row drops to $0.78$ (held-outs even
+\emph{closer} to training than train$\rightarrow$train), but
 because of the diagnostic caveats above we do not read this as
 evidence the decoder objective improves transfer; it could equally
-indicate decoder-induced collapse onto training neighbors.
-Whether those neighbors are \emph{mechanically} related to the
-held-out target is a separate question---two example matches in
+indicate decoder-induced collapse onto training neighbours. Whether
+those neighbours are \emph{mechanically} related to the held-out
+target is a separate question---two example matches in
 \S\ref{app:inverse-fit} suggest the geometry is not pure
 collapse, but we have not enumerated the relation across the full
 held-out set.

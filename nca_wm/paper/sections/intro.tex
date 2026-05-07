@@ -48,21 +48,20 @@ For each level of each game, we collect bounded A* transition ($\approx 15$M tra
 \begin{figure}[t]
   \centering
   \includegraphics[width=\linewidth]{figures/id_ood_teaser/teaser.pdf}
-  \caption{\textbf{Engine state frames feed the rule-conditioned NCA
-    world model under two regimes.} \emph{Top (blue, in-distribution
-    training):} for each game $g$, the engine state $s_0$ enters the
-    NCA-WM (parameters $\theta$); the model emits $\hat s_1$, the
-    engine emits ground-truth $s_1$, and the per-cell loss
-    $\|\hat s_1 - s_1\|$ supervises a back-prop update on $\theta$.
-    \emph{Bottom (red, held-out evaluation):} after training
-    ($\theta \!\rightarrow\! \theta^{*}$), only $s_0$ of an unseen
-    held-out game is provided; the NCA-WM rolls forward
-    autoregressively, feeding each $\hat s_t$ back as input to
-    produce $\hat s_{t+1}$ with no further supervision. Predicted OOD
-    frames come from the trained \textsc{Train-199} conditional
-    checkpoint and the per-frame "$k/N$ cells off" caption is the
-    cell-level disagreement vs.\ the engine ground truth. The dashed
-    border separates the two regimes.}
+  \caption{\textbf{We propose to learn a latent space of games
+    conditioned on dynamics, implemented as a rule-conditioned NCA
+    world model.} \emph{Left (training):} for each PuzzleScript game
+    $g$, the engine produces $(s_0, s_1)$ pairs that the NCA-WM is
+    fit to under a per-cell loss; the encoder maps the game's spec
+    text to a latent $z$ that conditions the dynamics. \emph{Right
+    (evaluation, held-out):} on a game the NCA-WM has never seen,
+    only $s_0$ is provided and the trained model is rolled out
+    autoregressively. The PuzzleScript engine (bottom, JavaScript)
+    is the data source for both regimes. The latent-space scatters
+    on top show where each training game (gray) and held-out game
+    (red $\bigstar$) lands in the encoder's slot space; mapping
+    held-outs into the same neighbourhood as training games is the
+    aspirational goal.}
   \label{fig:id-ood-teaser}
 \end{figure}
 
