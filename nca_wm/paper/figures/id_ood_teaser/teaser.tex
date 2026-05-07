@@ -51,28 +51,31 @@
       {\includegraphics[width=0.8cm,height=0.8cm]{#4}};%
 }
 
-% --- "Card pair": state Box at front, code Box flush with its back.
-%     Both share x,y but the code box is offset in -z so its near face
-%     meets the state box's far face. Image lives on the state box's
-%     east face; code text lives on the code box's near face (z+),
-%     which is the back-of-card surface and is exposed by the iso
-%     projection's z shift.
+% --- "Card pair": code Box on the LEFT of the state Box in the
+%     reading direction (not depth-wise behind). Code text is
+%     projected on the code box's east face — the same plane as the
+%     state box's west face. Code box is offset slightly back in z so
+%     its east face peeks out behind the state box in iso projection.
 %
-%     Anchors: <name>g (game/state box) and <name>c (code box).
+%     Anchors: <name>g (state box) and <name>c (code box).
 %     #1 = name base, #2 = x, #3 = y,
 %     #4 = state image path, #5 = code text body
 \newcommand{\StateOnCode}[5]{%
-  % code box behind, flush at z = -0.4 (game far face); centered at z=-0.8
-  \pic[shift={(#2, #3, -0.8)}] at (0,0,0)
+  % Code box: glued to the LEFT of the state box (state-west = code-east),
+  % same depth, slightly larger height so the top edge of the code box
+  % peeks above the state box and the east face has visible area there.
+  \pic[shift={({#2 - 0.2}, #3, 0)}] at (0,0,0)
       {Box={name=#1c, caption=, xlabel={{,}}, zlabel={},
             fill=CodeFill, opacity=1.0,
-            height=4, width=1.0, depth=4}};%
-  % code text on the back card's east face — projects up-and-left of
-  % the game card's east face under the iso z shift, so it peeks out.
-  \node[canvas is zy plane at x={#2 + 0.2}, font=\tiny\ttfamily,
-        align=left, inner sep=0.4pt, text width=0.8cm]
-        at (0, #3, -0.8) {#5};%
-  % state box in front
+            height=5, width=1.0, depth=4}};%
+  % Code text on the east face of the code box, offset forward in z so
+  % it lands in the visible front portion of that face (the front-strip
+  % that the state box doesn't occlude in iso projection).
+  \node[canvas is zy plane at x={#2}, font=\tiny\ttfamily,
+        align=left, inner sep=0.5pt, text width=1.0cm,
+        anchor=center]
+        at (-0.6, #3) {#5};%
+  % state box on the right
   \pic[shift={(#2, #3, 0)}] at (0,0,0)
       {Box={name=#1g, caption=, xlabel={{,}}, zlabel={},
             fill=PSFrameFill, height=4, width=1.0, depth=4}};%
