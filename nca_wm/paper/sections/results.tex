@@ -139,10 +139,10 @@ NCA with $n_h{=}256$. We now ask whether that choice survives
 head-to-head against stronger spatial bodies on three corpora that
 probe different facets of the problem: \textsc{Train-14} (14 games,
 $4{\times}4$ to $32{\times}24$ grids, rule counts 1--14) for
-multi-game capacity sharing, single-game Sokoban on 10 authored
-\textit{Microban} levels for the per-rule fitting limit (where slot
+multi-game capacity sharing, \textsc{Sokoban-Authored} (10
+\textit{Microban} levels) for the per-rule fitting limit (where slot
 cross-attention can in principle memorize per-state outcomes), and
-multi-grid synth Sokoban (widths $\{5,6,7,8\}^2$ $\times$ 256
+\textsc{Sokoban-Evolved} (widths $\{5,6,7,8\}^2$ $\times$ 256
 evolved levels each; 1024 distinct levels share one rule set) where
 that memorization crutch is removed. The per-step NCA uses
 independent weights per iteration; CNN, U-Net, and ViT replace the
@@ -151,7 +151,7 @@ share the slot encoder and readout heads. Single-game runs train for
 10k updates per seed, \textsc{Train-14} for 20k, $d_h=256$;
 the per-step training objective does not separate architectures
 (all five fit train cross-entropy within $\approx 2\%$ except ViT on
-multi-grid synth, best loss $0.084 \pm 0.002$ vs.\
+\textsc{Sokoban-Evolved}, best loss $0.084 \pm 0.002$ vs.\
 $0.069 \pm 0.003$ for the rest).
 
 \begin{table}[t]
@@ -182,7 +182,7 @@ BFS-AR. ViT is the only architecture failing to fit the per-step
 objective (best loss $\approx 8 \times 10^{-4}$ vs.\ $\approx 0$),
 confirming the structural mismatch (per-game breakdowns in
 Appendix~\ref{app:per-game}).
-On single-game Sokoban authored levels the shared-weights NCA wins
+On \textsc{Sokoban-Authored} levels the shared-weights NCA wins
 outright on BFS-AR ($0.003\% \pm 0.004\%$) at the fewest parameters
 (1.94M)---an order of magnitude below the same-depth CNN ($0.055\%$,
 $2.6\times$ more params) and two orders below the per-step NCA
@@ -190,8 +190,8 @@ $2.6\times$ more params) and two orders below the per-step NCA
 loses fine-grained player position on small grids ($3.13\%$), and ViT
 fails to fit the data ($9.32\%$ BFS-AR; one-step $1.49\%$ vs.\
 $\approx 0$ for the rest).
-Removing the per-state memorisation crutch (multi-grid synth, 1024
-levels sharing one rule set) ties shared and per-step NCAs ($2.08\%$
+Removing the per-state memorisation crutch (\textsc{Sokoban-Evolved},
+1024 levels sharing one rule set) ties shared and per-step NCAs ($2.08\%$
 vs.\ $2.09\%$ BFS-AR) but the shared variant gets there with
 $2.8\times$ fewer parameters; CNN trails both at $2.82\%$ despite
 roughly twice the depth. This is the only preset where any
@@ -205,7 +205,7 @@ hierarchical weight sharing) are in Appendix~\ref{app:per-game-arch}.
 \begin{table}[t]
   \centering
   \caption{\textbf{Per-feature ablation of the NCA-shared recipe on
-    multi-grid synth Sokoban.} Mean $\pm$ std over 3
+    \textsc{Sokoban-Evolved}.} Mean $\pm$ std over 3
     seeds at 10k updates. $\Delta$BFS reports the absolute increase
     in BFS-AR cell-error vs.\ the full recipe (relative figures in
     parentheses); both error columns are per-cell, averaged across

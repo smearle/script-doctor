@@ -24,9 +24,9 @@ input.
 After filename and token-hash deduplication, all training and held-out
 splits are defined by explicit game-name lists.
 
-\paragraph{Single-game Sokoban level provenance.}
+\paragraph{Sokoban-Authored level provenance.}
 The 10 authored Sokoban levels used for the single-game evaluation
-(Sokoban authored block, Table~\ref{tab:baselines-arch}) are drawn from the
+(\textsc{Sokoban-Authored} block, Table~\ref{tab:baselines-arch}) are drawn from the
 \textit{Microban} level pack, a community-authored set of Sokoban
 puzzles. \textit{Microban} shares its rule set 1-to-1 with
 PuzzleScript's basic Sokoban game (the \textit{Simple Block Pushing
@@ -533,7 +533,7 @@ $30{,}000$ updates produces the rich-metric numbers in
 Table~\ref{tab:within-game-synth-anchor}. Five of the ten authored
 levels land at $0\%$ BFS exactly. The $0.02\%$ teacher-forced figure
 is in fact $5\times$ \emph{lower} than the authored-only baseline
-of $0.11\%$ at $10{,}000$ updates (Sokoban authored block,
+of $0.11\%$ at $10{,}000$ updates (\textsc{Sokoban-Authored} block,
 Table~\ref{tab:baselines-arch}), demonstrating that synth-only
 training with a coverage-driven GA produces a \emph{more accurate}
 per-step rule predictor than authored-only training, with the BFS

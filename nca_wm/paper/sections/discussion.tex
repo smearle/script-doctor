@@ -12,8 +12,8 @@ Rule-conditioning amortises shared dynamics across games: on the
 14-game intersection, conditional 1-step (TF) error grows $\approx
 5\times$ from \textsc{Train-14} to \textsc{Train-59} while
 unconditional grows $\approx 25\times$ (Appendix~\ref{app:dilution});
-on unseen games, broad-corpus training closes most of the gap to the
-identity baseline at \textsc{Train-199}
+on unseen games, scaling to \textsc{Train-199} closes most of the gap
+to the identity baseline
 (\S\ref{sec:results-encoder-ablation}). Inverse-fitting from observed
 transitions recovers OOD dynamics through the latent variable to
 $\approx 10^{-3}$ BCE (Appendix~\ref{app:inverse-fit}). Together these
@@ -32,8 +32,8 @@ Figure~\ref{fig:intersection-slope-ood}). With no rule encoding the
 unconditional model only consumes state and action grids, so any gain
 on unseen games must come from features it extracts from the level
 layout itself---object identities and counts, wall topology,
-win-condition cues, character positions. Broad-corpus training
-therefore appears to induce an implicit ability to infer mechanics
+win-condition cues, character positions. Scaling beyond
+\textsc{Train-14} therefore appears to induce an implicit ability to infer mechanics
 from layout, making the explicit rule channel partially redundant on
 unseen games once the corpus is wide enough. This is consistent with
 our deliberately level-independent slot encoder leaving layout
@@ -48,11 +48,11 @@ binding constraint.
 
 A single-grid win does not establish that the model has learned the
 dynamics, because slot cross-attention can in principle memorize
-per-state outcomes (Sokoban authored block,
+per-state outcomes (\textsc{Sokoban-Authored} block,
 Table~\ref{tab:baselines-arch}). Once that crutch is removed---one
 rule set across 1024 levels at four widths---the same shared-NCA
 architecture climbs from $0.11\%$ BFS final-error on authored to
-$4.37\%$ on multi-grid synth (same table, synth block), $\approx
+$4.37\%$ on \textsc{Sokoban-Evolved} (same table), $\approx
 40\times$ higher and setting a ceiling on what the recipe extracts
 from the rule alone. Wider grids, capacity scans, and adaptive-halting
 probes are in Appendix~\ref{app:ceiling}. We propose this preset as a

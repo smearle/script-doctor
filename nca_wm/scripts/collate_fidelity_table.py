@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-r"""Generate the broad-corpus fidelity LaTeX table (paper Table~5).
+r"""Generate the Train-94 fidelity LaTeX table (paper Table~5).
 
 Reads eval_multigame.npz from the v3 (encoder-only) and v3+dec
 (joint-decoder) Train-94 runs, computes mean / median per-cell rollout
