@@ -111,7 +111,7 @@
 \StateOnCode{mod} {-7}{-2.2}{rollouts/Modality/engine_t0.png}
     {;modality\\{}[>PW|B]\\->CANCEL}
 
-\EncLatent{id}{-5.4}{3.6}
+\EncLatent{id}{-5.4}{4.4}
 
 % Single ID NCA, vertically centered (y=0).
 \NCAstep{idn}{-3}{0}
@@ -139,20 +139,20 @@
 \draw[condarrow] (slots_id.south) to[out=-90,in=90] (nidn-north);
 
 % Latent scatter ABOVE the encoder, takes up almost half the page width
-\node[anchor=south, inner sep=1pt] (latent_id) at (-4.0, 4.9)
+\node[anchor=south, inner sep=1pt] (latent_id) at (-4.0, 5.7)
     {\includegraphics[width=8cm]{latent_train_only.pdf}};
 \node[font=\footnotesize\itshape, color=IDColor, anchor=south]
-    at (-4.0, 11.15) {encoder latent space};
+    at (-4.0, 11.95) {encoder latent space};
 \draw[condline] (slots_id.north) -- (latent_id.south);
 
 \node[font=\bfseries, color=IDColor, anchor=south, align=center]
-    at (-4.0, 11.65) {Training (in-distribution)};
+    at (-4.0, 12.45) {Training (in-distribution)};
 
 % =============================================================
 %  VERTICAL DASHED BORDER between train and eval
 % =============================================================
 \draw[dashed, line width=0.3mm, color=black!70]
-    (1.6, -3.4) -- (1.6,  11.85);
+    (1.6, -3.7) -- (1.6,  12.65);
 \node[font=\itshape\tiny, color=black!50, anchor=south, rotate=90]
     at (1.85, 0.4) {trained $\theta \rightarrow \theta^{*}$};
 
@@ -174,13 +174,13 @@
 \tikzstyle{datafl}=[-Stealth, line width=0.25mm, color=black!45,
     opacity=0.85]
 
-% s_0 → engine (south of each state box)
+% s_0 → engine (south of each state box; state height=10 ⇒ -1.0 from y).
 \coordinate (s0_neko_s) at (-6.9,  1.2);
-\coordinate (s0_soko_s) at (-6.9, -0.5);
-\coordinate (s0_mod_s)  at (-6.9, -2.2);
+\coordinate (s0_soko_s) at (-6.9, -1.0);
+\coordinate (s0_mod_s)  at (-6.9, -3.2);
 \coordinate (s0_inway_s) at (2.5,  1.2);
-\coordinate (s0_nana_s)  at (2.5, -0.5);
-\coordinate (s0_ham_s)   at (2.5, -2.2);
+\coordinate (s0_nana_s)  at (2.5, -1.0);
+\coordinate (s0_ham_s)   at (2.5, -3.2);
 \draw[datafl] (s0_neko_s)  to[out=-90,in=160] (engine.west);
 \draw[datafl] (s0_soko_s)  to[out=-90,in=170] (engine.west);
 \draw[datafl] (s0_mod_s)   to[out=-90,in=180] (engine.west);
@@ -190,8 +190,8 @@
 
 % engine → train s_1 (south of each train s_1 box)
 \coordinate (s1_neko_s) at (-1.4,  1.2);
-\coordinate (s1_soko_s) at (-1.4, -0.5);
-\coordinate (s1_mod_s)  at (-1.4, -2.2);
+\coordinate (s1_soko_s) at (-1.4, -1.0);
+\coordinate (s1_mod_s)  at (-1.4, -3.2);
 \draw[datafl] (engine.north) to[out= 60, in=-90] (s1_neko_s);
 \draw[datafl] (engine.north) to[out= 70, in=-90] (s1_soko_s);
 \draw[datafl] (engine.north) to[out= 80, in=-90] (s1_mod_s);
@@ -218,7 +218,7 @@
     {rollouts/Hamiltwo/pred_t0.png}
     {;hamiltwo\\{}[>L|noW]\\->[>L+|noW]}
 
-\EncLatent{ood}{3.4}{3.6}
+\EncLatent{ood}{3.4}{4.4}
 
 % Three NCA timesteps, vertically centered.
 \NCAstep{oodn1}{4.7}{0}
@@ -275,14 +275,14 @@
 \draw[condarrow] (slots_ood.south) to[out=-90,in=90] (noodn3-north);
 
 % Latent scatter ABOVE the encoder, takes up almost half the page width
-\node[anchor=south, inner sep=1pt] (latent_ood) at (6.5, 4.9)
+\node[anchor=south, inner sep=1pt] (latent_ood) at (6.5, 5.7)
     {\includegraphics[width=8cm]{latent_with_ood.pdf}};
 \node[font=\footnotesize\itshape, color=OODColor, anchor=south]
-    at (6.5, 11.15) {encoder latent space + OOD ($\bigstar$)};
+    at (6.5, 11.95) {encoder latent space + OOD ($\bigstar$)};
 \draw[condline] (slots_ood.north) -- (latent_ood.south);
 
 \node[font=\bfseries, color=OODColor, anchor=south, align=center]
-    at (6.5, 11.65) {Evaluation (held-out / OOD)};
+    at (6.5, 12.45) {Evaluation (held-out / OOD)};
 
 \end{tikzpicture}
 
