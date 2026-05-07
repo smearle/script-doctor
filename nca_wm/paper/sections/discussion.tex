@@ -22,65 +22,66 @@ claim additionally requires smoother scaling with the number of games,
 held-out rule-system generalization, and inverse-fitting from
 transitions.
 
-\paragraph{Unconditional improvement OOD: inferring mechanics from
-level layouts.}
-The encoder's clean OOD advantage holds only at \textsc{Train-14}; at
+The unconditional model's scale-driven OOD improvement suggests it
+is learning to infer game mechanics from level layouts. The encoder's
+clean OOD advantage holds only at \textsc{Train-14}; at
 \textsc{Train-59} and \textsc{Train-199} the unconditional baseline
 catches up and on some summaries overtakes it
-(\S\ref{sec:results-encoder-ablation}, Figure~\ref{fig:intersection-slope-ood}).
-The unconditional model has no rule encoding---it only consumes
-state and action grids---so its scale-driven OOD improvement must
-come from features it extracts from the level layout itself: object
-identities and counts, wall topology, win-condition cues, character
-positions. We read this as evidence that broad-corpus training
-induces an implicit ability to infer game mechanics from layout,
-making the explicit rule channel partially redundant on unseen games
-once the corpus is wide enough. This is consistent with our
-deliberately level-independent slot encoder leaving layout
-information unused; perceiver-IO-style attention from slots back
-into the grid (cf.\ Limitations) is a natural way for a conditional
-model to combine the explicit rule channel with the grid-derived
-signal that the unconditional baseline already exploits implicitly.
-The encoder's load-bearing claim, then, is in-distribution: it slows
-per-game capacity dilution by an order of magnitude on the shared
-14-game intersection, where data dilution---not rule disambiguation---is
-the binding constraint.
+(\S\ref{sec:results-encoder-ablation},
+Figure~\ref{fig:intersection-slope-ood}). With no rule encoding the
+unconditional model only consumes state and action grids, so any gain
+on unseen games must come from features it extracts from the level
+layout itself---object identities and counts, wall topology,
+win-condition cues, character positions. Broad-corpus training
+therefore appears to induce an implicit ability to infer mechanics
+from layout, making the explicit rule channel partially redundant on
+unseen games once the corpus is wide enough. This is consistent with
+our deliberately level-independent slot encoder leaving layout
+information on the table; perceiver-IO-style attention from slots
+back into the grid is a natural way for a conditional model to
+combine the explicit rule channel with the grid-derived signal that
+the unconditional baseline already exploits implicitly. The encoder's
+load-bearing claim, then, is in-distribution: it slows per-game
+capacity dilution by an order of magnitude on the shared 14-game
+intersection, where data dilution---not rule disambiguation---is the
+binding constraint.
 
-\paragraph{The memorization confound and the multi-grid ceiling.}
-The single-level/single-grid setting (Sokoban authored block,
-Table~\ref{tab:baselines-arch}) leaves room for the slot
-cross-attention to learn a per-state lookup, so a single-grid win
-does not establish that the model learned the dynamics. Once that
-crutch is removed---one rule set across 1024 levels at four
-widths---the same shared-NCA architecture climbs from $0.11\%$ BFS
-final-error on authored to $4.37\%$ on multi-grid synth (same table,
-synth block), $\approx 40\times$ higher and setting
-a ceiling on what the recipe extracts from the rule alone. Wider grids,
-capacity scans, and adaptive-halting probes are in
-Appendix~\ref{app:ceiling}. We propose this preset as a default check
-for future PuzzleScript world-model work: if a model only succeeds at
-the single-grid setting, it may not be learning the dynamics.
+A single-grid win does not establish that the model has learned the
+dynamics, because slot cross-attention can in principle memorize
+per-state outcomes (Sokoban authored block,
+Table~\ref{tab:baselines-arch}). Once that crutch is removed---one
+rule set across 1024 levels at four widths---the same shared-NCA
+architecture climbs from $0.11\%$ BFS final-error on authored to
+$4.37\%$ on multi-grid synth (same table, synth block), $\approx
+40\times$ higher and setting a ceiling on what the recipe extracts
+from the rule alone. Wider grids, capacity scans, and adaptive-halting
+probes are in Appendix~\ref{app:ceiling}. We propose this preset as a
+default check for future PuzzleScript world-model work: if a model
+only succeeds at the single-grid setting, it may not be learning the
+dynamics.
 
-\paragraph{Future work and limitations.}
-Inverse-fitting (Appendix~\ref{app:inverse-fit}) points toward a
-``latent world coder'' direction: search a learned dynamics manifold
-for novel rule systems and project successful hypotheses back into
-executable PuzzleScript through the mapping in
-Appendix~\ref{app:autoencoder}. This complements program-synthesis approaches to world modeling and symbolic-library induction~\cite{tang2024worldcoder,ahmed2025theorycoder,ellis2021dreamcoder}; pairing inverse-fit slots with engine-loadable reconstructions remains an open thread.
-Interactive benchmarks such as
+Inverse-fitting (Appendix~\ref{app:inverse-fit}) opens a ``latent
+world coder'' direction in which the learned dynamics manifold
+becomes a search space for novel rule systems, with successful
+hypotheses projected back into executable PuzzleScript through the
+symbolic decoder (Appendix~\ref{app:autoencoder}). This complements
+program-synthesis approaches to world modeling and symbolic-library
+induction~\cite{tang2024worldcoder,ahmed2025theorycoder,ellis2021dreamcoder};
+pairing inverse-fit slots with engine-loadable reconstructions
+remains an open thread. Interactive benchmarks such as
 AutumnBench~\cite{warrier2025benchmarking} and
 ARC-AGI-3~\cite{arcprize2026arcagi3} are natural downstream targets,
-since rule inference from limited interaction benefits directly from a
-fast forward model. The architecture is not PuzzleScript-specific:
+since rule inference from limited interaction benefits directly from
+a fast forward model. The architecture is not PuzzleScript-specific:
 any deterministic discrete-grid simulator with declarative rules
 (Conway's Game of Life, lattice-gas CAs, reaction-diffusion CAs)
-admits the same pattern, and we expect the non-iterative gap to widen
-as the engine's outer-loop iteration count grows.
+admits the same pattern, and we expect the non-iterative gap to
+widen as the engine's outer-loop iteration count grows.
 
-\emph{Limitations.} Our encoder is level-independent: slots depend
-only on rule tokens, not on the level's spatial state. This is
-intentional (one encoded game $\Rightarrow$ many levels) but caps
-slot capacity; perceiver-IO-style attention back into the grid is a
-natural extension. We also restrict to single-step prediction;
-multi-step training ($s_{t+k}$ for $k > 1$) is straightforward but
-unexplored.
+Two design choices bound what we report. Our slot encoder is
+intentionally level-independent---slots depend only on rule tokens,
+not on the level's spatial state---so one encoded game corresponds to
+many levels but slot capacity is capped; perceiver-IO-style attention
+back into the grid is a natural extension. We also restrict to
+single-step prediction; multi-step training ($s_{t+k}$ for $k > 1$)
+is straightforward but unexplored.
