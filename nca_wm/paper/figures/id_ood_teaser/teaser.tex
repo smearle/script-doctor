@@ -43,9 +43,9 @@
   \pic[shift={(#2, #3, 0)}] at (0,0,0)
       {Box={name=#1, caption=, xlabel={{,}}, zlabel={},
             fill=PSFrameFill, opacity=0.35,
-            height=5, width=1.0, depth=5}};%
+            height=8, width=1.0, depth=8}};%
   \node[canvas is zy plane at x={#2 + 0.2}] at (0, #3)
-      {\includegraphics[width=1.0cm,height=1.0cm]{#4}};%
+      {\includegraphics[width=1.6cm,height=1.6cm]{#4}};%
 }
 
 % --- Card pair: code box LEFT of state box, both transparent.
@@ -54,17 +54,17 @@
   \pic[shift={({#2 - 0.2}, #3, 0)}] at (0,0,0)
       {Box={name=#1c, caption=, xlabel={{,}}, zlabel={},
             fill=CodeFill, opacity=0.35,
-            height=5, width=1.0, depth=5}};%
-  \node[canvas is zy plane at x={#2}, font=\tiny\ttfamily,
-        align=left, inner sep=0pt, text width=0.95cm,
+            height=8, width=1.0, depth=8}};%
+  \node[canvas is zy plane at x={#2}, font=\scriptsize\ttfamily,
+        align=left, inner sep=0pt, text width=1.5cm,
         anchor=center]
         at (0, #3) {#5};%
   \pic[shift={(#2, #3, 0)}] at (0,0,0)
       {Box={name=#1g, caption=, xlabel={{,}}, zlabel={},
             fill=PSFrameFill, opacity=0.35,
-            height=5, width=1.0, depth=5}};%
+            height=8, width=1.0, depth=8}};%
   \node[canvas is zy plane at x={#2 + 0.2}] at (0, #3)
-      {\includegraphics[width=1.0cm,height=1.0cm]{#4}};%
+      {\includegraphics[width=1.6cm,height=1.6cm]{#4}};%
 }
 
 % --- NCA "step": just the 3 green bands at (x, y).
@@ -155,20 +155,22 @@
 \node[font=\itshape\tiny, color=black!50, anchor=south, rotate=90]
     at (1.85, 0.4) {trained $\theta \rightarrow \theta^{*}$};
 
-% PuzzleScript engine mascot + JavaScript logo at bottom-center.
+% PuzzleScript engine mascot + JavaScript logo at bottom-center,
+% joined in one invisible "engine" node so the data-flow arrows can
+% target the pair as a single entity.
 \node[anchor=center, inner sep=0pt] (mascot)
     at (0.5, -5.0) {\includegraphics[width=1.6cm]{ps_mascot.png}};
-% Clean inline "JS" logo: yellow rounded square with "JS" in the
-% bottom-right corner (matches the canonical JavaScript logo).
 \node[draw=black, fill=yellow!85, rounded corners=1pt, line width=0.6pt,
       minimum width=1.4cm, minimum height=1.4cm, anchor=center]
       (js_box) at (2.7, -5.0) {};
 \node[font=\bfseries\Large, anchor=south east, text=black, inner sep=2.5pt]
       at (js_box.south east) {JS};
+% Invisible bounding-box node grouping the two logos as one engine.
+\node[fit=(mascot)(js_box), inner sep=1pt, draw=none] (engine) {};
 
 \node[font=\footnotesize\itshape, color=black!70, anchor=north,
       align=center]
-    at ($(mascot.south)!0.5!(js_box.south)$)
+    at (engine.south)
     {PuzzleScript engine \\ \scriptsize (JavaScript)};
 
 % Per-frame data-flow arrows (gray): each s_0 → PS engine (INPUT to
@@ -184,20 +186,20 @@
 \coordinate (s0_inway_s) at (2.5,  1.2);
 \coordinate (s0_nana_s)  at (2.5, -0.5);
 \coordinate (s0_ham_s)   at (2.5, -2.2);
-\draw[datafl] (s0_neko_s)  to[out=-90,in=160] (mascot.west);
-\draw[datafl] (s0_soko_s)  to[out=-90,in=170] (mascot.west);
-\draw[datafl] (s0_mod_s)   to[out=-90,in=180] (mascot.west);
-\draw[datafl] (s0_inway_s) to[out=-90,in= 20] (mascot.east);
-\draw[datafl] (s0_nana_s)  to[out=-90,in= 10] (mascot.east);
-\draw[datafl] (s0_ham_s)   to[out=-90,in=  0] (mascot.east);
+\draw[datafl] (s0_neko_s)  to[out=-90,in=160] (engine.west);
+\draw[datafl] (s0_soko_s)  to[out=-90,in=170] (engine.west);
+\draw[datafl] (s0_mod_s)   to[out=-90,in=180] (engine.west);
+\draw[datafl] (s0_inway_s) to[out=-90,in= 20] (engine.east);
+\draw[datafl] (s0_nana_s)  to[out=-90,in= 10] (engine.east);
+\draw[datafl] (s0_ham_s)   to[out=-90,in=  0] (engine.east);
 
 % engine → train s_1 (south of each train s_1 box)
 \coordinate (s1_neko_s) at (-1.4,  1.2);
 \coordinate (s1_soko_s) at (-1.4, -0.5);
 \coordinate (s1_mod_s)  at (-1.4, -2.2);
-\draw[datafl] (mascot.north) to[out= 60, in=-90] (s1_neko_s);
-\draw[datafl] (mascot.north) to[out= 70, in=-90] (s1_soko_s);
-\draw[datafl] (mascot.north) to[out= 80, in=-90] (s1_mod_s);
+\draw[datafl] (engine.north) to[out= 60, in=-90] (s1_neko_s);
+\draw[datafl] (engine.north) to[out= 70, in=-90] (s1_soko_s);
+\draw[datafl] (engine.north) to[out= 80, in=-90] (s1_mod_s);
 
 % Tiny labels on the data-flow groups
 \node[font=\scriptsize\itshape, color=black!55]
