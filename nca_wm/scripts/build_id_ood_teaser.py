@@ -125,51 +125,63 @@ def _load_ood_rollout(name: str, n_frames: int) -> tuple[list[np.ndarray], list[
     return frames, meta["diffs"][:n_frames]
 
 
+DEPTH_RATIO = 0.12  # isometric depth of the 3D box, as a fraction of the
+                    # front face's width/height. Same r used everywhere so
+                    # PS-frame boxes match the embed/readout boxes inside
+                    # nca_wm_mini.tex.
+
+
 def _show_image(ax, img, edge_color, edge_lw=0.8):
     """Project the PuzzleScript frame onto the front face of a 3D box,
-    matching the embed/readout look in nca_wm_mini.tex (same isometric
-    offset, light-fill side/top faces).
-    """
-    H, W = img.shape[:2]
-    # Isometric depth offset for the slanted top/right faces.
-    dx = max(2, int(round(0.18 * W)))
-    dy = max(2, int(round(0.18 * H)))
+    matching the embed/readout look in nca_wm_mini.tex.
 
-    # y-up coordinates. Front face occupies x=[0,W], y=[0,H]; the top
-    # face is above (y > H) and the right face is to the right (x > W),
-    # both receding in the (+dx, +dy) direction.
-    ax.set_xlim(0, W + dx)
-    ax.set_ylim(0, H + dy)
-    ax.set_aspect("equal")
+    The axes is laid out so the FRONT FACE occupies axis coords
+    (0,0)-(1,1); the top + right depth faces extend into (1+r, 1+r),
+    where r = ``DEPTH_RATIO``. The caller is responsible for sizing the
+    axes so that the front face's footprint in figure coords matches
+    where the connecting edges expect it (i.e., front-face center at
+    (cx, cy)).
+    """
+    r = DEPTH_RATIO
+    ax.set_xlim(0, 1 + r)
+    ax.set_ylim(0, 1 + r)
+    ax.set_aspect("auto")
     ax.set_xticks([]); ax.set_yticks([])
     for s in ax.spines.values():
         s.set_visible(False)
 
-    # Front-face image. extent=(left, right, bottom, top); origin='upper'
-    # places image[0,0] at the top of the extent, which is what we want.
-    ax.imshow(img, interpolation="nearest",
-              extent=(0, W, 0, H), origin="upper", zorder=2)
-
-    # Top face (parallelogram receding to upper-right).
-    top = mpatches.Polygon(
-        [(0, H), (W, H), (W + dx, H + dy), (dx, H + dy)],
+    # Top face (parallelogram receding to upper-right of the front face).
+    ax.add_patch(mpatches.Polygon(
+        [(0, 1), (1, 1), (1 + r, 1 + r), (r, 1 + r)],
         closed=True, facecolor="#F2F2F2", edgecolor=edge_color,
         linewidth=edge_lw, joinstyle="miter", zorder=1,
-    )
-    # Right face (parallelogram receding to upper-right from the right edge).
-    right = mpatches.Polygon(
-        [(W, 0), (W + dx, dy), (W + dx, H + dy), (W, H)],
+    ))
+    # Right face (parallelogram receding to upper-right of the right edge).
+    ax.add_patch(mpatches.Polygon(
+        [(1, 0), (1 + r, r), (1 + r, 1 + r), (1, 1)],
         closed=True, facecolor="#E5E5E5", edgecolor=edge_color,
         linewidth=edge_lw, joinstyle="miter", zorder=1,
-    )
-    ax.add_patch(top)
-    ax.add_patch(right)
-    # Crisp front-face outline drawn last.
-    front = mpatches.Rectangle(
-        (0, 0), W, H, fill=False, edgecolor=edge_color,
+    ))
+    # Front face image, drawn last so it lands on top of the box outline.
+    ax.imshow(img, interpolation="nearest",
+              extent=(0, 1, 0, 1), origin="upper", zorder=2)
+    ax.add_patch(mpatches.Rectangle(
+        (0, 0), 1, 1, fill=False, edgecolor=edge_color,
         linewidth=edge_lw, zorder=3,
+    ))
+
+
+def _add_box_axes(fig, cx, cy, w, h):
+    """Place a 3D-box axes whose FRONT FACE has center at figure coords
+    (cx, cy) and width/height (w, h). The depth extends into the
+    upper-right of the axes box, outside the front-face footprint, so
+    arrows targeting (cx ± w/2, cy) hit the front-face left/right
+    centers.
+    """
+    r = DEPTH_RATIO
+    return fig.add_axes(
+        [cx - w/2, cy - h/2, w * (1 + r), h * (1 + r)],
     )
-    ax.add_patch(front)
 
 
 def _arrow(ax, x0, y0, x1, y1, *, color="black", lw=1.0, mutation=12,
@@ -229,8 +241,8 @@ def build_figure():
     loss_x = 0.83
 
     frame_w = 0.085
-    frame_h_id = 0.10
-    frame_h_ood = 0.10
+    frame_h_id = 0.085
+    frame_h_ood = 0.085
 
     # ---- Banners ----
     fig.text(
@@ -296,24 +308,22 @@ def build_figure():
         # Name label
         fig.text(label_x, cy, label, ha="left", va="center",
                  fontsize=8, color="black")
-        # s_0 frame
-        ax_s0 = fig.add_axes([s0_x - frame_w/2, cy - frame_h_id/2,
-                              frame_w, frame_h_id])
+        # s_0 frame (3D box, front face centered at (s0_x, cy)).
+        ax_s0 = _add_box_axes(fig, s0_x, cy, frame_w, frame_h_id)
         _show_image(ax_s0, f0, edge_color=id_color)
         if i == 0:
             ax_s0.set_title("$s_0$", fontsize=9, color=id_color, pad=2)
-        # ŝ_1 frame (here we display the engine's s_1 since this is the
-        # supervision target — model and engine agree at training optimum).
-        ax_s1 = fig.add_axes([out_x_id - frame_w/2, cy - frame_h_id/2,
-                              frame_w, frame_h_id])
+        # ŝ_1 frame; we draw the engine's s_1 since model agrees at the
+        # training optimum.
+        ax_s1 = _add_box_axes(fig, out_x_id, cy, frame_w, frame_h_id)
         _show_image(ax_s1, f1, edge_color=id_color)
         if i == 0:
             ax_s1.set_title("$\\hat s_1\\;\\;(\\!\\approx\\! s_1)$",
                             fontsize=9, color=id_color, pad=2)
 
-        # Forward arrow: s_0 -> NCA box (blue, rightward)
+        # Forward arrow: s_0 front-face right-center -> NCA left edge.
         fig.add_artist(Line2D(
-            [s0_x + frame_w/2 + 0.005, nca_x - nca_w/2 - 0.003],
+            [s0_x + frame_w/2, nca_x - nca_w/2 - 0.003],
             [cy, cy],
             transform=fig.transFigure,
             color=id_color, lw=1.0,
@@ -323,9 +333,9 @@ def build_figure():
             transform=fig.transFigure, marker=">", color=id_color,
             markersize=5, lw=0,
         ))
-        # Loss arrow: ŝ_1 -> NCA output (dark orange, leftward).
+        # Loss arrow: ŝ_1 front-face left-center -> NCA right edge.
         fig.add_artist(Line2D(
-            [nca_x + nca_w/2 + 0.003, out_x_id - frame_w/2 - 0.005],
+            [nca_x + nca_w/2 + 0.003, out_x_id - frame_w/2],
             [cy, cy],
             transform=fig.transFigure,
             color=loss_color, lw=1.2,
@@ -340,7 +350,7 @@ def build_figure():
     cy_mid = (id_centers[0] + id_centers[-1]) / 2
     fig.text(
         (nca_x + nca_w/2 + out_x_id - frame_w/2) / 2,
-        id_centers[0] + frame_h_id/2 + 0.012,
+        id_centers[0] + frame_h_id/2 + frame_h_id * DEPTH_RATIO + 0.018,
         r"loss  $\|\hat s_1 - s_1\|$  $\rightarrow$  back-prop $\nabla_\theta$",
         ha="center", va="bottom", fontsize=8.5, fontweight="bold",
         color=loss_color,
@@ -382,15 +392,14 @@ def build_figure():
                  fontsize=8, color="black")
 
         # s_0 frame on left
-        ax_s0 = fig.add_axes([s0_x - frame_w/2, cy - frame_h_ood/2,
-                              frame_w, frame_h_ood])
+        ax_s0 = _add_box_axes(fig, s0_x, cy, frame_w, frame_h_ood)
         _show_image(ax_s0, frames[0], edge_color=ood_color)
         if i == 0:
             ax_s0.set_title("$s_0$", fontsize=9, color=ood_color, pad=2)
 
-        # arrow into NCA
+        # arrow into NCA: front-face right-center -> NCA left edge
         fig.add_artist(Line2D(
-            [s0_x + frame_w/2 + 0.005, nca_x - nca_w/2 - 0.003],
+            [s0_x + frame_w/2, nca_x - nca_w/2 - 0.003],
             [cy, cy],
             transform=fig.transFigure, color=ood_color, lw=1.0,
         ))
@@ -400,22 +409,21 @@ def build_figure():
             markersize=5, lw=0,
         ))
 
-        # arrow out of NCA to first predicted frame
+        # arrow out of NCA to first predicted frame's left-center
         fig.add_artist(Line2D(
-            [nca_x + nca_w/2 + 0.003, pred_xs[0] - frame_w/2 - 0.003],
+            [nca_x + nca_w/2 + 0.003, pred_xs[0] - frame_w/2],
             [cy, cy],
             transform=fig.transFigure, color=ood_color, lw=1.0,
         ))
         fig.add_artist(plt.matplotlib.lines.Line2D(
-            [pred_xs[0] - frame_w/2 - 0.003], [cy],
+            [pred_xs[0] - frame_w/2], [cy],
             transform=fig.transFigure, marker=">", color=ood_color,
             markersize=5, lw=0,
         ))
 
         # predicted frames + chained arrows
         for j, x in enumerate(pred_xs):
-            ax = fig.add_axes([x - frame_w/2, cy - frame_h_ood/2,
-                               frame_w, frame_h_ood])
+            ax = _add_box_axes(fig, x, cy, frame_w, frame_h_ood)
             _show_image(ax, frames[j + 1], edge_color=ood_color)
             if i == 0:
                 ax.set_title(f"$\\hat s_{{{j+1}}}$", fontsize=9,
@@ -429,16 +437,17 @@ def build_figure():
                 color="#993333",
             )
             if j > 0:
-                # arrow from previous predicted frame to this one
+                # arrow from previous predicted frame's right-center to
+                # this frame's left-center
                 xprev = pred_xs[j - 1]
                 fig.add_artist(Line2D(
-                    [xprev + frame_w/2 + 0.003, x - frame_w/2 - 0.003],
+                    [xprev + frame_w/2, x - frame_w/2],
                     [cy, cy],
                     transform=fig.transFigure, color=ood_color,
                     lw=1.0, linestyle=(0, (2, 2)),
                 ))
                 fig.add_artist(plt.matplotlib.lines.Line2D(
-                    [x - frame_w/2 - 0.003], [cy],
+                    [x - frame_w/2], [cy],
                     transform=fig.transFigure, marker=">",
                     color=ood_color, markersize=5, lw=0,
                 ))
