@@ -46,15 +46,15 @@ program induction~\cite{ellis2021dreamcoder}. The decoder already
 emits engine-loadable PuzzleScript programs from random slot
 samples and along slot-space interpolations, but pairing inverse-fit
 slots with engine-loadable decoded code is still an open thread that
-we report as an early exploratory signal rather than a finished
-result. Interactive world-model benchmarks such as
+we report as an early exploratory signal. Interactive world-model benchmarks such as
 AutumnBench~\cite{warrier2025benchmarking} and
 ARC-AGI-3~\cite{arcprize2026arcagi3} are natural targets, because
 acting in novel rule systems after limited interaction benefits
 directly from inferring a fast forward model that downstream search
 or RL can plan against.
 
-\paragraph{What the iterated local update buys.}
+\paragraph{What the iterated local update buys, and the
+memorization confound.}
 The architecture comparison in \S\ref{sec:results-baselines}
 isolates one question: holding the conditioner constant, does the
 NCA's iterated-local-update body outperform a non-iterative body?
@@ -63,12 +63,9 @@ Our findings suggest the answer is yes on tasks where the engine's
 a wash on tasks where one tick of dynamics resolves in a single rule
 firing. The NCA's parameter efficiency is also striking: shared
 weights with $T \cdot n_\ell$ effective depth use the same parameters
-as a one-step model.
-
-\paragraph{Memorization as a confound.}
-A key observation in \S\ref{app:ceiling} is that the
-single-level / single-grid setting allows the model to learn a
-per-state lookup table via cross-attention over rich slot
+as a one-step model. A key caveat---raised in \S\ref{app:ceiling}---is
+that the single-level / single-grid setting allows the model to learn
+a per-state lookup table via cross-attention over rich slot
 representations. ``Pool features substitute for depth'' is the
 single-level reading; ``the model memorizes per-state outcomes'' is
 the multi-level reading of the same architectural configuration.

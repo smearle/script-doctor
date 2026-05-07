@@ -57,7 +57,7 @@ abstract latent dynamics, our model commits to predicting the engine's
 next state in its native grid representation, which makes ground-truth
 supervision exact and lets us compare to the engine cell-by-cell.
 
-\paragraph{Learned grid-game engines.}
+\paragraph{Learned grid-engine and local-update models.}
 Closest to our setting, Bamford and Lucas introduce a Neural Game
 Engine for deterministic GVGAI grid games~\cite{bamford2020neural}.
 Their model is effectively NCA-like: it adapts the Neural GPU into a
@@ -68,6 +68,14 @@ learns directly from pixels and trains a separate forward model for
 each game. We instead train one rule-conditioned model across many
 games, predict the engine's symbolic object-channel state directly,
 and condition the shared dynamics on the tokenized game program.
+More broadly,
+ConvLSTMs~\cite{shi2015convlstm}, graph neural networks, and
+diffusion-style iterative refinement all share with NCAs the
+high-level idea of repeated local computation; NCAs differ in
+committing to a \emph{shared} (across iterations) update rule on a
+fixed grid, which matches the PuzzleScript engine's outer-loop
+semantics. A detailed comparison to procedural / engine-aligned NCA
+work is deferred to the appendix.
 
 \paragraph{PuzzleScript and rule-based puzzle games.}
 PuzzleScript~\cite{lavelle2013puzzlescript} is a domain-specific
@@ -86,11 +94,3 @@ the same three collections and extend the tooling with a C++ engine
 backend, cached transition datasets, and rule-conditioned learned
 forward models.
 
-\paragraph{Learned local-update grids more broadly.}
-ConvLSTMs~\cite{shi2015convlstm}, graph neural networks, and
-diffusion-style iterative refinement all share with NCAs the high-level
-idea of repeated local computation. NCAs differ in committing to a
-\emph{shared} (across iterations) update rule on a fixed grid, which
-matches the PuzzleScript engine's outer-loop semantics. A detailed
-comparison to procedural / engine-aligned NCA work is deferred to
-the appendix.
