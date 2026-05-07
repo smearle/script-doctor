@@ -185,7 +185,13 @@ the conditional mean and $\approx 3\times$ the median; per-game swings
 can be dramatic (\textit{neko puzzle} goes from $0.000\%$ to $24.4\%$
 when the encoder is removed; per-game cells in
 Figure~\ref{fig:intersection-heatmap}). The encoder amortizes shared
-dynamics across games at fixed capacity.
+dynamics across games at fixed capacity. Bucketing the 199 training
+games by rule-section features (Appendix~\ref{app:rule-type})
+sharpens what drives the residual difficulty: \texttt{again}-loop
+and \texttt{...}-spanning rules push both models to multiples of the
+corpus mean, and the only bucket where uncond \emph{beats} cond is
+\texttt{random} rules (since the next state has an irreducible
+random component, identity-like predictions are optimal).
 
 \begin{figure}[t]
   \centering
@@ -199,7 +205,10 @@ dynamics across games at fixed capacity.
       throughout; the dark uncond cells (\textit{neko
       puzzle}@\textsc{Train-59} $24.4\%$,
       \textit{Notsnake}@\textsc{Train-199} $13.1\%$) drive the
-      aggregate gap in Figure~\ref{fig:intersection-slope-id}.}
+      aggregate gap in Figure~\ref{fig:intersection-slope-id}.
+      Rule count $n$ is a poor predictor of difficulty---the
+      catastrophic uncond cells sit at $n{=}2$ while
+      \textit{kettle} at $n{=}14$ stays $<1\%$.}
     \label{fig:intersection-heatmap}
   \end{subfigure}\hfill
   \begin{subfigure}[b]{0.42\linewidth}
