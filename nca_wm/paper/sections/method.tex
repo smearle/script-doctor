@@ -4,9 +4,9 @@
 \subsection{Problem setup}
 
 A PuzzleScript game is a tuple $(\mathcal{O}, R, \{L_i\})$ of object
-kinds, rewrite rules, and authored levels. Each level is a
+types, rewrite rules, and authored levels. Each level is a
 multi-channel grid $s \in \{0,1\}^{C \times H \times W}$ with
-$C = |\mathcal{O}|$ and channel $c$ indicating object kind $c$. An
+$C = |\mathcal{O}|$ and channel $c$ indicating object type. An
 action $a \in \{\texttt{up}, \texttt{down}, \texttt{left}, \texttt{right},
 \texttt{action}\}$ and current state $s_t$ deterministically yield
 $s_{t+1}$ via the engine; the state also carries a terminal \emph{won}
