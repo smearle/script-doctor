@@ -214,42 +214,40 @@ collapses entirely.
 
 \begin{figure}[t]
   \centering
-  \begin{subfigure}[t]{0.49\linewidth}
+  \begin{subfigure}[t]{0.55\linewidth}
     \centering
-    \includegraphics[width=\linewidth]{figures/indist_intersection/intersection_heatmap.pdf}
-    \caption{14 intersection games, rows ordered by rule count $n$.}
+    \includegraphics[height=5.5cm]{figures/indist_intersection/intersection_heatmap.pdf}
+    \caption{14 intersection games, rows ordered by rule count $n$;
+      columns: cond / uncond at \textsc{Train-14} / \textsc{Train-59}
+      / \textsc{Train-199}.}
     \label{fig:intersection-heatmap}
   \end{subfigure}\hfill
-  \begin{subfigure}[t]{0.49\linewidth}
+  \begin{subfigure}[t]{0.40\linewidth}
     \centering
-    \includegraphics[width=\linewidth]{figures/rule_type_analysis/rule_type_heatmap.pdf}
-    \caption{\textsc{Train-X} training games bucketed by
-      rule-section feature; $n$ is the bucket size at
-      \textsc{Train-199}, dashed cells are empty buckets.}
+    \includegraphics[height=5.5cm]{figures/rule_type_analysis/rule_type_heatmap.pdf}
+    \caption{\textsc{Train-199} games bucketed by rule-section
+      feature; $n$ is the bucket size, rows ordered by
+      $\max(\text{cond},\text{uncond})$ descending.}
     \label{fig:rule-type-heatmap}
   \end{subfigure}
   \caption{\textbf{ID 1-step (TF) cell-error (\%) on a shared
-    log-color scale; columns: cond / uncond at \textsc{Train-14} /
-    \textsc{Train-59} / \textsc{Train-199}.} \emph{(a)} On the
-    14-game intersection, cond columns stay an order of magnitude
-    below uncond throughout; the dark uncond cells (\textit{neko
-    puzzle}@\textsc{Train-59} $24.4\%$,
-    \textit{Notsnake}@\textsc{Train-199} $13.1\%$) drive
+    log-color scale.} \emph{(a)} On the 14-game intersection, cond
+    columns stay an order of magnitude below uncond throughout;
+    the dark uncond cells (\textit{neko puzzle}@\textsc{Train-59}
+    $24.4\%$, \textit{Notsnake}@\textsc{Train-199} $13.1\%$) drive
     Figure~\ref{fig:intersection-slope-id}'s aggregate, and rule
     count is a poor predictor (catastrophic uncond at $n{=}2$,
     \textit{kettle} at $n{=}14$ stays $<1\%$). \emph{(b)} Bucketing
-    each preset's training games by rule feature isolates what drives
-    residual difficulty and how it scales with corpus size.
-    \texttt{random} rules are the only feature where uncond beats
-    cond at \textsc{Train-199} (irreducible-noise next-state,
-    identity-like predictions are optimal); \texttt{again} and
-    \texttt{...} push errors to multiples of the corpus mean; on
-    \texttt{multi-kernel} rules (any-pair-of-cells matches) the
-    encoder advantage essentially vanishes ($+0.02$pp vs.\ $+0.65$pp
-    elsewhere), since local-update bodies struggle with non-local
-    pattern matching regardless of conditioning. Three of the six
-    feature buckets are empty at \textsc{Train-14}.
-    Per-bucket numbers in Appendix~\ref{app:rule-type}.}
+    \textsc{Train-199} by rule feature isolates what drives residual
+    difficulty: \texttt{random} is the only feature where uncond
+    beats cond (irreducible-noise next-state, identity-like
+    predictions are optimal); \texttt{again} and \texttt{...} push
+    errors to multiples of the corpus mean; on \texttt{multi-kernel}
+    rules (any-pair-of-cells matches) the encoder advantage
+    essentially vanishes ($+0.02$pp vs.\ $+0.65$pp elsewhere), since
+    local-update bodies struggle with non-local pattern matching
+    regardless of conditioning. Per-bucket numbers in
+    Appendix~\ref{app:rule-type}.}
   \label{fig:id-heatmaps}
 \end{figure}
 

@@ -36,13 +36,12 @@ LOG_DIRS = {
     "uncond": REPO_ROOT / "nca_wm" / "logs" / "multi_scaling_gallery_v4_uncond_match_s0",
 }
 
-# Per-preset run dirs for the 6-column heatmap.
-PRESETS = ["Train-14", "Train-59", "Train-199"]
+# The heatmap shows only Train-199 cond/uncond. The earlier 6-column
+# variant (cond/uncond × {Train-14, Train-59, Train-199}) was visually
+# noisy because Train-14 has no `random` / `again` / `multi-kernel`
+# games at all, leaving half the rows half-empty.
+PRESETS = ["Train-199"]
 RUN_BY_PRESET = {
-    ("Train-14",  "cond"):   "multi_scaling_14_cond_match_s0",
-    ("Train-14",  "uncond"): "multi_scaling_14_uncond_match_s0",
-    ("Train-59",  "cond"):   "multi_scaling_gallery_v2_cond_match_s0",
-    ("Train-59",  "uncond"): "multi_scaling_gallery_v2_uncond_match_s0",
     ("Train-199", "cond"):   "multi_scaling_gallery_v4_cond_match_s0",
     ("Train-199", "uncond"): "multi_scaling_gallery_v4_uncond_match_s0",
 }
@@ -207,9 +206,12 @@ def _emit_heatmap(feats: dict[str, dict[str, bool] | None]) -> None:
 
     plt.rcParams.update({
         "font.size": 12, "axes.titlesize": 13, "axes.labelsize": 12,
-        "xtick.labelsize": 10, "ytick.labelsize": 11, "legend.fontsize": 9,
+        "xtick.labelsize": 11, "ytick.labelsize": 11, "legend.fontsize": 9,
     })
-    fig, ax = plt.subplots(figsize=(6.4, 5.6))
+    # 2 columns × 6 rows; figsize tuned so the heatmap renders at the
+    # same height as the per-game intersection heatmap (figsize 6.4×5.6,
+    # h/w 0.875) when both are placed in 0.49 \linewidth subfigures.
+    fig, ax = plt.subplots(figsize=(3.6, 4.3))
     floor = 1e-3
     matrix_log = np.log10(np.clip(matp, floor, None))
     # Mask NaN cells so they render as the imshow `bad` color (light gray).
@@ -231,9 +233,7 @@ def _emit_heatmap(feats: dict[str, dict[str, bool] | None]) -> None:
     ax.set_xticklabels(col_labels, rotation=45,
                        ha="right", rotation_mode="anchor")
 
-    # White separators between presets, matching the intersection heatmap.
-    for sep in (1.5, 3.5):
-        ax.axvline(sep, color="white", linewidth=1.5)
+    # No preset separators needed when only Train-199 is shown.
 
     for ri in range(matp.shape[0]):
         for ci in range(matp.shape[1]):
