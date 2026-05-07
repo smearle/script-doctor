@@ -36,6 +36,17 @@ LOG_DIRS = {
     "uncond": REPO_ROOT / "nca_wm" / "logs" / "multi_scaling_gallery_v4_uncond_match_s0",
 }
 
+# Per-preset run dirs for the 6-column heatmap.
+PRESETS = ["Train-14", "Train-59", "Train-199"]
+RUN_BY_PRESET = {
+    ("Train-14",  "cond"):   "multi_scaling_14_cond_match_s0",
+    ("Train-14",  "uncond"): "multi_scaling_14_uncond_match_s0",
+    ("Train-59",  "cond"):   "multi_scaling_gallery_v2_cond_match_s0",
+    ("Train-59",  "uncond"): "multi_scaling_gallery_v2_uncond_match_s0",
+    ("Train-199", "cond"):   "multi_scaling_gallery_v4_cond_match_s0",
+    ("Train-199", "uncond"): "multi_scaling_gallery_v4_uncond_match_s0",
+}
+
 
 def find_game_txt(game: str) -> Path | None:
     for d in GAME_DIRS:
@@ -141,51 +152,101 @@ FEATURE_LABEL = {
 }
 
 
-def _emit_heatmap(rows: list[tuple[str, str, int, float, float]]) -> None:
-    """5x2 heatmap of yes-bucket cell-error per feature, cond / uncond cols.
+def _per_preset_means(feats: dict[str, dict[str, bool] | None]
+                      ) -> dict[tuple[str, str, str], tuple[float, int]]:
+    """For every (preset, model, feature_yes_only), mean cell-error and bucket size.
+
+    Returns {(preset, model, feature_key) -> (mean_in_[0,1], n_games)}.
+    """
+    out: dict[tuple[str, str, str], tuple[float, int]] = {}
+    for (preset, model), run_dir in RUN_BY_PRESET.items():
+        npz_path = REPO_ROOT / "nca_wm" / "logs" / run_dir / "eval_multigame.npz"
+        err = per_game_tf(npz_path)
+        for fk in FEATURE_LABEL:
+            sub = [g for g, e in err.items() if feats.get(g) and feats[g][fk]]
+            if sub:
+                out[(preset, model, fk)] = (
+                    float(np.mean([err[g] for g in sub])), len(sub),
+                )
+    return out
+
+
+def _emit_heatmap(feats: dict[str, dict[str, bool] | None]) -> None:
+    """6x6 heatmap: feature rows × {Train-14, Train-59, Train-199} × cond/uncond.
 
     Same log-color idiom as the intersection heatmap so the two read as a
-    pair when placed side-by-side in the main body.
+    pair when placed side-by-side in the main body. Empty buckets (e.g.
+    Train-14 has no games with `again` rules) are masked as NaN cells.
     """
     OUT_DIR.mkdir(parents=True, exist_ok=True)
-    yes_rows = [(feat, n, cm, um) for (feat, group, n, cm, um) in rows
-                if group == "yes"]
-    # Sort by max(cond, uncond) descending so the worst feature is at top.
-    yes_rows.sort(key=lambda r: -max(r[2], r[3]))
+    means = _per_preset_means(feats)
 
-    feats = [r[0] for r in yes_rows]
-    ns    = [r[1] for r in yes_rows]
-    mat   = np.array([[r[2], r[3]] for r in yes_rows])  # in [0,1]
-    matp  = 100 * mat  # percent
+    # Sort features by max cell value at Train-199, descending.
+    feature_keys = list(FEATURE_LABEL.keys())
+    def _row_key(fk: str) -> float:
+        cells = []
+        for model in ("cond", "uncond"):
+            v = means.get(("Train-199", model, fk))
+            if v is not None:
+                cells.append(v[0])
+        return -max(cells) if cells else 0.0
+    feature_keys.sort(key=_row_key)
+
+    n_rows = len(feature_keys)
+    n_cols = 2 * len(PRESETS)
+    matp = np.full((n_rows, n_cols), np.nan, dtype=float)
+    col_labels = []
+    for ci, preset in enumerate(PRESETS):
+        for cj, model in enumerate(("cond", "uncond")):
+            col = 2 * ci + cj
+            col_labels.append(f"{preset} {model}")
+            for ri, fk in enumerate(feature_keys):
+                v = means.get((preset, model, fk))
+                if v is not None:
+                    matp[ri, col] = 100 * v[0]
 
     plt.rcParams.update({
         "font.size": 12, "axes.titlesize": 13, "axes.labelsize": 12,
-        "xtick.labelsize": 11, "ytick.labelsize": 11, "legend.fontsize": 9,
+        "xtick.labelsize": 10, "ytick.labelsize": 11, "legend.fontsize": 9,
     })
-    # Tuned so that, when scaled to ~0.40 \linewidth in the paper, the
-    # heatmap's vertical extent matches the per-game intersection heatmap
-    # at ~0.55 \linewidth (intersection figsize 6.4x5.6 → h/w 0.875;
-    # target h/w here 1.20 → 3.6 wide × 4.3 tall).
-    fig, ax = plt.subplots(figsize=(3.6, 4.3))
+    fig, ax = plt.subplots(figsize=(6.4, 5.6))
     floor = 1e-3
     matrix_log = np.log10(np.clip(matp, floor, None))
-    im = ax.imshow(matrix_log, aspect="auto", cmap="magma_r",
+    # Mask NaN cells so they render as the imshow `bad` color (light gray).
+    masked = np.ma.array(matrix_log, mask=~np.isfinite(matrix_log))
+    cmap = plt.cm.magma_r.copy()
+    cmap.set_bad(color="#e8e8e8")
+    im = ax.imshow(masked, aspect="auto", cmap=cmap,
                    vmin=np.log10(floor), vmax=np.log10(30.0))
 
-    ax.set_yticks(range(len(feats)))
-    ax.set_yticklabels([f"{FEATURE_LABEL[f]} (n={n})" for f, n in zip(feats, ns)])
-    ax.set_xticks([0, 1])
-    ax.set_xticklabels(["cond", "uncond"], rotation=45,
+    # Use Train-199 bucket size for the n=X label (the corpus reference).
+    ylabels = []
+    for fk in feature_keys:
+        v = means.get(("Train-199", "cond", fk))
+        n = v[1] if v else 0
+        ylabels.append(f"{FEATURE_LABEL[fk]} (n={n})")
+    ax.set_yticks(range(n_rows))
+    ax.set_yticklabels(ylabels)
+    ax.set_xticks(range(n_cols))
+    ax.set_xticklabels(col_labels, rotation=45,
                        ha="right", rotation_mode="anchor")
+
+    # White separators between presets, matching the intersection heatmap.
+    for sep in (1.5, 3.5):
+        ax.axvline(sep, color="white", linewidth=1.5)
 
     for ri in range(matp.shape[0]):
         for ci in range(matp.shape[1]):
             v = matp[ri, ci]
+            if not np.isfinite(v):
+                ax.text(ci, ri, "—", ha="center", va="center",
+                        fontsize=10, color="#666666")
+                continue
             text_color = "white" if matrix_log[ri, ci] > np.log10(0.3) else "black"
             ax.text(ci, ri, f"{v:.2f}", ha="center", va="center",
                     fontsize=9, color=text_color)
 
-    cbar = fig.colorbar(im, ax=ax, fraction=0.06, pad=0.03)
+    cbar = fig.colorbar(im, ax=ax, fraction=0.045, pad=0.02)
     cbar.set_label("cell-error (\\%, log)", fontsize=10)
     log_ticks = [-2, -1, 0, 1]
     cbar.set_ticks(log_ticks)
@@ -244,7 +305,7 @@ def main() -> None:
         print()
     _emit_tex(tex_rows)
     print(f"\nWrote: {OUT_TEX}", file=sys.stderr)
-    _emit_heatmap(tex_rows)
+    _emit_heatmap(feats)
     print(f"Wrote: {OUT_PDF}", file=sys.stderr)
     print(f"Wrote: {OUT_PNG}", file=sys.stderr)
 
