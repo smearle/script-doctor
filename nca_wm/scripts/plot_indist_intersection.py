@@ -4,11 +4,14 @@
 Emits two PDFs:
 
   intersection_slope.pdf
-    Two-panel slope plot. Left: aggregate mean / median over the 14
-    games shared by every training preset. Right: aggregate mean /
-    median over each preset's full training set (the same data as
-    Table tab:indist-scaling). Both panels share axes and styling so
-    the two views can be compared at a glance.
+    Two-panel slope plot. Left: in-distribution aggregate mean / median
+    on the 14 games shared by every training preset (rule-conditioning
+    slows per-game dilution). Right: out-of-distribution aggregate
+    mean / median on Heldout-30 (the same data as
+    Table tab:cond-vs-uncond-match), with the identity baseline as a
+    reference. Both panels share log axes (numeric x at 14/59/199) and
+    line styling so the in-dist and OOD trends can be compared at a
+    glance.
 
   intersection_heatmap.pdf
     Per-game heatmap on the 14-game intersection (rows: games sorted
@@ -17,7 +20,7 @@ Emits two PDFs:
 
 Reads:
   - nca_wm/paper/figures/indist_intersection/summary.json   (intersection)
-  - nca_wm/paper/figures/indist_scaling/summary.json        (full corpus)
+  - nca_wm/paper/figures/cond_vs_uncond_match/summary.csv   (OOD aggregate)
   - per-run nca_wm/logs/<run>/eval_multigame.npz            (per-game)
 
 Usage:
@@ -34,12 +37,13 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 REPO_ROOT      = Path(__file__).resolve().parents[2]
-INTER_SUMMARY  = REPO_ROOT / "nca_wm" / "paper" / "figures" / "indist_intersection" / "summary.json"
-FULL_SUMMARY   = REPO_ROOT / "nca_wm" / "paper" / "figures" / "indist_scaling"     / "summary.json"
+INTER_SUMMARY  = REPO_ROOT / "nca_wm" / "paper" / "figures" / "indist_intersection"  / "summary.json"
+OOD_SUMMARY    = REPO_ROOT / "nca_wm" / "paper" / "figures" / "cond_vs_uncond_match" / "summary.csv"
 OUT_DIR        = REPO_ROOT / "nca_wm" / "paper" / "figures" / "indist_intersection"
 
-SCALES = ["Train-14", "Train-59", "Train-199"]
-RUN_BY = {
+SCALES   = ["Train-14", "Train-59", "Train-199"]
+SCALE_N  = {"Train-14": 14, "Train-59": 59, "Train-199": 199}  # numeric x positions
+RUN_BY   = {
     ("Train-14",  "cond"):   "multi_scaling_14_cond_match_s0",
     ("Train-14",  "uncond"): "multi_scaling_14_uncond_match_s0",
     ("Train-59",  "cond"):   "multi_scaling_gallery_v2_cond_match_s0",
@@ -85,37 +89,39 @@ def _load_eval_per_game(run_dir: str, games: list[str]) -> dict[str, float]:
 def _slope_panel(ax, scale_to_mean: dict[tuple[str, str], float],
                  scale_to_median: dict[tuple[str, str], float],
                  title: str) -> dict[str, dict]:
-    """Plot a cond/uncond mean+median slope in one axes."""
-    x = np.arange(len(SCALES))
+    """Plot a cond/uncond mean+median slope on a numeric (log) x-axis."""
     fig_data = {}
     for model, label, color in SERIES:
-        means, medians, xs_present = [], [], []
-        for xi, scale in enumerate(SCALES):
+        xs, means, medians = [], [], []
+        for scale in SCALES:
             mu = scale_to_mean.get((scale, model))
             md = scale_to_median.get((scale, model))
             if mu is not None and md is not None:
+                xs.append(SCALE_N[scale])
                 means.append(100*mu)
                 medians.append(100*md)
-                xs_present.append(xi)
-        if xs_present:
-            ax.plot(xs_present, means, color=color, linewidth=2.6,
+        if xs:
+            ax.plot(xs, means, color=color, linewidth=2.6,
                     marker="o", markersize=8, zorder=3,
                     label=f"{label} (mean)")
-            ax.plot(xs_present, medians, color=color, linewidth=2.0,
+            ax.plot(xs, medians, color=color, linewidth=2.0,
                     marker="s", markersize=7, zorder=3, linestyle="--",
                     label=f"{label} (median)")
-            fig_data[model] = {"means": means, "medians": medians, "xs": xs_present}
+            fig_data[model] = {"xs": xs, "means": means, "medians": medians}
     ax.set_yscale("log")
-    ax.set_xticks(x)
+    ax.set_xscale("log")
+    ax.set_xticks([SCALE_N[s] for s in SCALES])
     ax.set_xticklabels(SCALES)
-    ax.set_xlabel("Training corpus")
+    ax.minorticks_off()  # don't decorate between 14/59/199 with auto minor ticks
+    ax.set_xlabel("Training corpus (games, log scale)")
     ax.set_title(title)
     ax.grid(True, which="both", alpha=0.25)
-    ax.set_xlim(-0.25, len(SCALES) - 0.75)
+    ax.set_xlim(11, 250)
     return fig_data
 
 
 def _annotate_t14_to_t59(ax, fig_data: dict[str, dict]) -> None:
+    """Multiplicative growth from the smallest to the next-smallest scale."""
     annotations = []
     for model, label, _color in SERIES:
         d = fig_data.get(model)
@@ -127,7 +133,7 @@ def _annotate_t14_to_t59(ax, fig_data: dict[str, dict]) -> None:
     if not annotations:
         return
     text_lines = [
-        rf"{lab}: $\approx{f:.0f}\times$ T14$\to$T59" for (lab, f) in annotations
+        rf"{lab}: $\approx{f:.0f}\times$ 14$\to$59" for (lab, f) in annotations
     ]
     ax.text(0.03, 0.97, "\n".join(text_lines),
             transform=ax.transAxes, ha="left", va="top",
@@ -136,17 +142,71 @@ def _annotate_t14_to_t59(ax, fig_data: dict[str, dict]) -> None:
                       ec="#666666", alpha=0.95))
 
 
+def _annotate_t14_to_t199(ax, fig_data: dict[str, dict]) -> None:
+    """Multiplicative shrinkage from the smallest to the largest scale (OOD)."""
+    annotations = []
+    for model, label, _color in SERIES:
+        d = fig_data.get(model)
+        if d is None or len(d["means"]) < 2:
+            continue
+        # Only annotate if we have both endpoints (xs should bracket 14 and 199).
+        if d["xs"][0] != SCALE_N["Train-14"] or d["xs"][-1] != SCALE_N["Train-199"]:
+            continue
+        m0, m_end = d["means"][0], d["means"][-1]
+        if m0 > 0 and m_end > 0:
+            annotations.append((label, m0 / m_end))
+    if not annotations:
+        return
+    text_lines = [
+        rf"{lab}: $\approx{f:.0f}\times$ better 14$\to$199"
+        for (lab, f) in annotations
+    ]
+    ax.text(0.03, 0.07, "\n".join(text_lines),
+            transform=ax.transAxes, ha="left", va="bottom",
+            fontsize=10,
+            bbox=dict(boxstyle="round,pad=0.3", fc="white",
+                      ec="#666666", alpha=0.95))
+
+
+def _load_ood_summary() -> tuple[dict[tuple[str, str], float],
+                                 dict[tuple[str, str], float],
+                                 float, float]:
+    """Read OOD aggregates from cond_vs_uncond_match/summary.csv.
+
+    Returns (mean_by_(scale,model), median_by_(scale,model), id_mean, id_median)
+    in [0,1] units (matching the indist summary)."""
+    import csv as _csv
+    means, medians = {}, {}
+    id_mean = id_median = float("nan")
+    with open(OOD_SUMMARY) as f:
+        for row in _csv.DictReader(f):
+            scale = row["preset"]
+            model = "cond" if row["kind"] == "cond" else "uncond"
+            try:
+                m  = float(row["ood_tf_model_mean"])
+                md = float(row["ood_tf_model_median"])
+                means[(scale, model)]   = m
+                medians[(scale, model)] = md
+            except ValueError:
+                continue
+            try:
+                id_mean   = float(row["ood_tf_identity_mean"])
+                id_median = float(row["ood_tf_identity_median"])
+            except (ValueError, KeyError):
+                pass
+    return means, medians, id_mean, id_median
+
+
 def _figure_slope(per_game: dict[tuple[str, str], dict[str, float]],
-                  games_intersection: list[str],
-                  full_summary: dict) -> plt.Figure:
-    """Two-panel slope: left = intersection, right = full-corpus aggregate."""
+                  games_intersection: list[str]) -> plt.Figure:
+    """Two-panel slope: left = in-dist intersection, right = OOD heldout."""
     plt.rcParams.update(RC_PARAMS)
     fig, (ax_left, ax_right) = plt.subplots(
-        1, 2, figsize=(11.0, 4.6), sharey=True,
+        1, 2, figsize=(11.0, 4.6),
         gridspec_kw={"width_ratios": [1.0, 1.0]},
     )
 
-    # Left panel: 14-game intersection.
+    # Left panel: in-distribution, 14-game intersection.
     inter_mean, inter_median = {}, {}
     for scale in SCALES:
         for model in ("cond", "uncond"):
@@ -157,27 +217,32 @@ def _figure_slope(per_game: dict[tuple[str, str], dict[str, float]],
                 inter_median[(scale, model)] = float(np.median(vals))
     fd_left = _slope_panel(
         ax_left, inter_mean, inter_median,
-        title="14-game intersection (fixed game set)",
+        title="In-distribution (14-game intersection)",
     )
     ax_left.set_ylabel("1-step (TF) cell-error (%)")
     _annotate_t14_to_t59(ax_left, fd_left)
     ax_left.legend(loc="lower right", framealpha=0.95)
 
-    # Right panel: full-corpus per-preset aggregate (the data behind
-    # tab:indist-scaling -- changing game set per scale).
-    full_mean, full_median = {}, {}
-    for run_dir, blob in full_summary.items():
-        scale = blob["preset"]
-        model = blob["model"]
-        head = blob["results"].get(HEADLINE) if blob["results"] else None
-        if head is not None:
-            full_mean[(scale, model)]   = float(head["mean"])
-            full_median[(scale, model)] = float(head["median"])
+    # Right panel: out-of-distribution on Heldout-30.
+    ood_mean, ood_median, id_mean, id_median = _load_ood_summary()
     fd_right = _slope_panel(
-        ax_right, full_mean, full_median,
-        title="Full training set (changing game set)",
+        ax_right, ood_mean, ood_median,
+        title="Out-of-distribution (Heldout-30)",
     )
-    _annotate_t14_to_t59(ax_right, fd_right)
+    ax_right.set_ylabel("1-step (TF) cell-error (%)")
+
+    # Identity baseline reference (constant over corpus size, since it
+    # depends only on the held-out games).
+    if np.isfinite(id_mean):
+        ax_right.axhline(100*id_mean, color="black", linewidth=1.4,
+                         linestyle=":", alpha=0.7,
+                         label=f"identity (mean)", zorder=2)
+    if np.isfinite(id_median):
+        ax_right.axhline(100*id_median, color="black", linewidth=1.0,
+                         linestyle=(0, (1, 2)), alpha=0.55,
+                         label=f"identity (median)", zorder=2)
+    _annotate_t14_to_t199(ax_right, fd_right)
+    ax_right.legend(loc="upper right", framealpha=0.95, fontsize=9)
 
     fig.tight_layout()
     return fig
@@ -248,14 +313,13 @@ def main() -> None:
 
     inter_summary = json.loads(INTER_SUMMARY.read_text())
     games_intersection = inter_summary["intersection_games"]
-    full_summary = json.loads(FULL_SUMMARY.read_text())
 
     per_game = {
         (scale, model): _load_eval_per_game(run_dir, games_intersection)
         for (scale, model), run_dir in RUN_BY.items()
     }
 
-    fig_slope = _figure_slope(per_game, games_intersection, full_summary)
+    fig_slope = _figure_slope(per_game, games_intersection)
     slope_pdf = OUT_DIR / "intersection_slope.pdf"
     slope_png = OUT_DIR / "intersection_slope.png"
     fig_slope.savefig(slope_pdf, bbox_inches="tight")
