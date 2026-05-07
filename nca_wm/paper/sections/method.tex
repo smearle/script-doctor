@@ -20,16 +20,6 @@ names, and 5$\times$5 sprite RGBA values when sprite tokens are
 enabled). At evaluation we roll the model out autoregressively and
 compare cell-by-cell against the engine.
 
-\paragraph{Conditioning interface.}
-The encoder $\mathrm{Enc}_\phi$ maps the token sequence to slots
-$z \in \mathbb{R}^{K \times d_{\text{slot}}}$, and the NCA produces
-$\widehat{s}_{t+1}$ from $(s_t, a_t)$ conditioned on $z$. Training
-loss is
-$\mathcal{L} = \mathcal{L}_{\text{state}}(\widehat{s}_{t+1}, s_{t+1})
-+ \alpha\,\mathcal{L}_{\text{win}}$.
-Defaults: $K=16$, $d_{\text{slot}}=64$, encoder $d_{\text{model}}=64$
-with two self-attention layers.
-
 \subsection{Rule-conditioned NCA world model}
 
 $\mathrm{Enc}_\phi$ maps the token sequence $\mathrm{spec} \in \mathbb{Z}^{S}$ (or the corresponding autoencoder latent) to slots $z \in \mathbb{R}^{K \times d}$ via $\ell$ self-attention layers followed by $K$ learned query vectors cross-attending into the contextualised tokens.
@@ -51,7 +41,7 @@ A $3{\times}3$ convolution propagates one cell of context per step, but several 
 We therefore augment each step with three optional pool stacks computed from $h^{(k)}$ and broadcast back per cell: axis max-pool (row+col), axis cumulative max (directional prefix-max in four directions), and global max-pool---surfacing non-local information that would otherwise require $\Omega(\max(H,W))$ NCA steps to reach.
 
 A shared \texttt{readout} dense maps $h^{(T)}$ cell-wise to next-state logits $\widehat{s}_{t+1}$, and a separate dense over spatially average-pooled $h^{(T)}$ produces a binary win logit.
-Training loss is per-cell BCE on the next-state, upweighting cells that change between $s_t$ and $s_{t+1}$, plus binary cross-entropy on the win head.
+Training loss is $\mathcal{L} = \mathcal{L}_{\text{state}}(\widehat{s}_{t+1}, s_{t+1}) + \alpha\,\mathcal{L}_{\text{win}}$, where $\mathcal{L}_{\text{state}}$ is per-cell BCE upweighting cells that change between $s_t$ and $s_{t+1}$ and $\mathcal{L}_{\text{win}}$ is binary cross-entropy on the win head.
 
 \subsection{Baselines}
 

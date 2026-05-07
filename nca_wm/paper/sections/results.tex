@@ -58,9 +58,10 @@ corpora.
     black line is the identity baseline $\hat s_{t+1}{=}s_t$.
     Conditional 1-step error drops $\approx 6\times$ from
     \textsc{Train-14} to \textsc{Train-199}, reaching identity-level
-    error. The cond/uncond OOD ordering at \textsc{Train-14}
-    partially reverses by \textsc{Train-199} (uncond lower median,
-    more wins vs.\ identity). Random-action AR companions in
+    error. Cond and uncond are roughly tied OOD at every training
+    scale (similar medians and wins-vs-identity counts; uncond
+    \textsc{Train-14} averaged across 3 seeds, all other rows 1
+    seed). Random-action AR companions in
     Appendix~\ref{app:rollout-ar}; per-cell totals (BFS / A*) in
     Appendix~\ref{app:cond-vs-uncond}, Table~\ref{tab:cond-vs-uncond-match};
     per-game ID heatmap in Appendix~\ref{app:dilution}.}
@@ -84,44 +85,50 @@ dynamics across games at fixed capacity.
 
 \begin{figure}[t]
   \centering
-  \includegraphics[width=0.78\linewidth]{figures/indist_intersection/intersection_heatmap.pdf}
+  \includegraphics[width=0.82\linewidth]{figures/indist_intersection/intersection_heatmap.pdf}
   \caption{\textbf{Per-game 1-step (TF) cell-error (\%) on the 14
-    intersection games}, log-color scale; rows ordered by rule
-    count $n$, columns grouped by preset with cond / uncond paired.
-    Rule count is a weak predictor of difficulty: the catastrophic
-    unconditional cells (\textit{neko puzzle}@\textsc{Train-59},
-    $24.4\%$; \textit{Notsnake}@\textsc{Train-199}, $13.1\%$) sit at
-    $n{=}2$, while \textit{kettle} at $n{=}14$ stays $<1\%$. The hard
-    cells correlate with rule \emph{patterns} (e.g.\ \textit{neko
-    puzzle}'s row-spanning \texttt{[> Player | ... | Fruit]} needs
-    long-range axis context); cond columns stay an order of
-    magnitude lower throughout.}
+    intersection games}, log-color scale; rows ordered by A* search
+    difficulty (mean iterations to solve a level, ascending), with
+    rule count $n$ and A* iterations annotated per row. Columns
+    grouped by preset with cond / uncond paired. \emph{Search
+    difficulty does not predict model difficulty:} the two
+    catastrophic unconditional cells sit at opposite ends of the
+    planning spectrum---\textit{neko puzzle} ($A^*{=}11$ iters,
+    trivially solvable) hits $24.4\%$ at \textsc{Train-59}, while
+    \textit{Notsnake} ($A^*{=}119k$) hits $13.1\%$ at
+    \textsc{Train-199}. The deepest planning games (\textit{Zen
+    Puzzle Garden} $519k$, \textit{kettle} $165k$) stay below $1\%$
+    throughout, and rule count is similarly uncorrelated with cell
+    error. The hard cells correlate instead with specific rule
+    \emph{patterns} (e.g.\ \textit{neko puzzle}'s row-spanning
+    \texttt{[> Player | ... | Fruit]} needs long-range axis context);
+    cond columns stay an order of magnitude lower throughout.}
   \label{fig:intersection-heatmap}
 \end{figure}
 
 Out-of-distribution (Figure~\ref{fig:intersection-slope-ood};
 Appendix~\ref{app:cond-vs-uncond}, Table~\ref{tab:cond-vs-uncond-match}),
 \textsc{Train-14} conditional fails on most heldout games (mean 1-step
-(TF) $14.8\%$, $\approx 7\times$ identity's $2.23\%$); with $14\times$
-more rule diversity, \textsc{Train-199} conditional drops to $2.30\% /
-1.55\%$, matching identity's mean, beating its median, and winning on
-$11/26$ heldout games at 1-step (TF). The encoder's clean OOD edge,
-however, holds only at the smallest training scale: at \textsc{Train-14}
-conditional beats unconditional ($14.8\% / 3.5\%$ vs.\ $19.6\% / 4.4\%$);
-at \textsc{Train-59} the ordering already wobbles (uncond lower mean
-$4.33\%$ vs.\ $5.73\%$, cond lower median $2.58\%$ vs.\ $2.95\%$ and
-closer to identity on $20/26$ games); and at \textsc{Train-199}
-unconditional has both the lower median and more wins vs.\ identity
-($14$ vs.\ $11$). At broader corpora unconditional and conditional are
-roughly tied on the held-out set; we return to what the unconditional
-model is exploiting in \S\ref{sec:discussion}. A per-game scatter
-showing that cond and uncond win on largely disjoint games at
-\textsc{Train-199} is in Appendix~\ref{app:ood-per-game-scatter}. On
-random-action AR rollout (Appendix~\ref{app:rollout-ar}), where
-errors compound over 30 steps, identity ($\approx 2\%$ mean) is a
-much stronger baseline: every model drifts to $7$--$27\%$ and no
-current checkpoint beats identity over the full rollout on more than
-a single game.
+(TF) $14.8\%$, $\approx 7\times$ identity's $2.13\%$); with $14\times$
+more rule diversity, \textsc{Train-199} conditional drops to $2.44\% /
+2.00\%$, matching identity's mean, beating its median, and winning on
+$13/26$ heldout games at 1-step (TF). Conditional and unconditional
+are roughly tied OOD at every training scale, with the per-metric
+ordering shifting between corpora and within seed variation: at
+\textsc{Train-14} (uncond averaged over 3 seeds, cond 1 seed) cond
+mean $14.8\%$ vs.\ uncond $16.9\%$ but with near-identical medians
+($3.45\%$ vs.\ $3.53\%$) and uncond winning on more games ($8$ vs.\
+$7$); at \textsc{Train-59} the means roughly match ($4.69\%$ vs.\
+$4.52\%$); at \textsc{Train-199} uncond has the lower median ($1.52\%$
+vs.\ $2.00\%$) and one more win vs.\ identity ($14$ vs.\ $13$). We
+return to what the unconditional model is exploiting in
+\S\ref{sec:discussion}. A per-game scatter showing that cond and
+uncond win on largely disjoint games at \textsc{Train-199} is in
+Appendix~\ref{app:ood-per-game-scatter}. On random-action AR rollout
+(Appendix~\ref{app:rollout-ar}), where errors compound over 30 steps,
+identity ($\approx 2\%$ mean) is a much stronger baseline: every model
+drifts to $7$--$27\%$ and no current checkpoint beats identity over
+the full rollout on more than a single game.
 
 % Generalization-to-unseen-games results (held-out latent geometry,
 % symbolic decoder reconstruction + sampling, frozen-NCA inverse fit

@@ -38,33 +38,34 @@
 \colorlet{LossColor}{red!75!black}
 \colorlet{CondColor}{violet!60!black}
 
-% --- PS state frame (transparent), bigger than before. ---
+% --- PS state frame (transparent), scaled up to 2.0×2.0 cm visible. ---
 \newcommand{\PSframe}[4]{%
   \pic[shift={(#2, #3, 0)}] at (0,0,0)
       {Box={name=#1, caption=, xlabel={{,}}, zlabel={},
             fill=PSFrameFill, opacity=0.35,
-            height=8, width=1.0, depth=8}};%
+            height=10, width=1.0, depth=10}};%
   \node[canvas is zy plane at x={#2 + 0.2}] at (0, #3)
-      {\includegraphics[width=1.6cm,height=1.6cm]{#4}};%
+      {\includegraphics[width=2.0cm,height=2.0cm]{#4}};%
 }
 
-% --- Card pair: code box LEFT of state box, both transparent.
-%     Bigger than before so the code text is more legible.
+% --- Card pair: code box LEFT of state box. State scaled up; code box
+%     made wider in x (so it extends further left on the page) and
+%     same height/depth as state.
 \newcommand{\StateOnCode}[5]{%
-  \pic[shift={({#2 - 0.2}, #3, 0)}] at (0,0,0)
+  \pic[shift={({#2 - 0.4}, #3, 0)}] at (0,0,0)
       {Box={name=#1c, caption=, xlabel={{,}}, zlabel={},
             fill=CodeFill, opacity=0.35,
-            height=8, width=1.0, depth=8}};%
+            height=10, width=2.0, depth=10}};%
   \node[canvas is zy plane at x={#2}, font=\scriptsize\ttfamily,
-        align=left, inner sep=0pt, text width=1.5cm,
+        align=left, inner sep=0pt, text width=1.9cm,
         anchor=center]
         at (0, #3) {#5};%
   \pic[shift={(#2, #3, 0)}] at (0,0,0)
       {Box={name=#1g, caption=, xlabel={{,}}, zlabel={},
             fill=PSFrameFill, opacity=0.35,
-            height=8, width=1.0, depth=8}};%
+            height=10, width=1.0, depth=10}};%
   \node[canvas is zy plane at x={#2 + 0.2}] at (0, #3)
-      {\includegraphics[width=1.6cm,height=1.6cm]{#4}};%
+      {\includegraphics[width=2.0cm,height=2.0cm]{#4}};%
 }
 
 % --- NCA "step": just the 3 green bands at (x, y).
@@ -103,11 +104,11 @@
 %  LEFT HALF: in-distribution training
 % =============================================================
 
-\StateOnCode{neko}{-7}{ 1.7}{rollouts/nekopuzzle/engine_t0.png}
+\StateOnCode{neko}{-7}{ 2.2}{rollouts/nekopuzzle/engine_t0.png}
     {;nekopuzzle\\{}[>P|...|F]\\->[|...|P]}
 \StateOnCode{soko}{-7}{ 0.0}{rollouts/sokoban_basic/engine_t0.png}
     {;sokoban\\{}[>P|C]\\->[>P|>C]}
-\StateOnCode{mod} {-7}{-1.7}{rollouts/Modality/engine_t0.png}
+\StateOnCode{mod} {-7}{-2.2}{rollouts/Modality/engine_t0.png}
     {;modality\\{}[>PW|B]\\->CANCEL}
 
 \EncLatent{id}{-5.4}{3.6}
@@ -115,9 +116,9 @@
 % Single ID NCA, vertically centered (y=0).
 \NCAstep{idn}{-3}{0}
 
-\PSframe{s1_neko}{-1.5}{ 1.7}{rollouts/nekopuzzle/engine_t1.png}
+\PSframe{s1_neko}{-1.5}{ 2.2}{rollouts/nekopuzzle/engine_t1.png}
 \PSframe{s1_soko}{-1.5}{ 0.0}{rollouts/sokoban_basic/engine_t1.png}
-\PSframe{s1_mod} {-1.5}{-1.7}{rollouts/Modality/engine_t1.png}
+\PSframe{s1_mod} {-1.5}{-2.2}{rollouts/Modality/engine_t1.png}
 
 % Forward (blue) state arrows: each row's state -> single NCA (fan-in).
 \draw[arrow, color=IDColor] (nekog-east) -- (nidn-west);
@@ -155,23 +156,17 @@
 \node[font=\itshape\tiny, color=black!50, anchor=south, rotate=90]
     at (1.85, 0.4) {trained $\theta \rightarrow \theta^{*}$};
 
-% PuzzleScript engine mascot + JavaScript logo at bottom-center,
-% joined in one invisible "engine" node so the data-flow arrows can
-% target the pair as a single entity.
+% PuzzleScript engine mascot at bottom-center. (The engine is
+% implemented in JavaScript — flagged in the caption.)
 \node[anchor=center, inner sep=0pt] (mascot)
-    at (0.5, -5.0) {\includegraphics[width=1.6cm]{ps_mascot.png}};
-\node[draw=black, fill=yellow!85, rounded corners=1pt, line width=0.6pt,
-      minimum width=1.4cm, minimum height=1.4cm, anchor=center]
-      (js_box) at (2.7, -5.0) {};
-\node[font=\bfseries\Large, anchor=south east, text=black, inner sep=2.5pt]
-      at (js_box.south east) {JS};
-% Invisible bounding-box node grouping the two logos as one engine.
-\node[fit=(mascot)(js_box), inner sep=1pt, draw=none] (engine) {};
+    at (1.6, -5.0) {\includegraphics[width=2.0cm]{ps_mascot.png}};
+% Invisible "engine" node so the data-flow arrows can target a single
+% logical entity (and we can swap PS+JS back in later if we want to).
+\node[fit=(mascot), inner sep=1pt, draw=none] (engine) {};
 
 \node[font=\footnotesize\itshape, color=black!70, anchor=north,
       align=center]
-    at (engine.south)
-    {PuzzleScript engine \\ \scriptsize (JavaScript)};
+    at (engine.south) {PuzzleScript engine};
 
 % Per-frame data-flow arrows (gray): each s_0 → PS engine (INPUT to
 % the engine); PS engine → each train s_1 (OUTPUT from the engine).
@@ -213,13 +208,13 @@
 %  RIGHT HALF: held-out eval — one NCA per TIMESTEP, all rows fan in
 % =============================================================
 
-\StateOnCode{inway}{ 2.4}{ 1.7}
+\StateOnCode{inway}{ 2.4}{ 2.2}
     {rollouts/in_the_way_by_giovanni_mota/pred_t0.png}
     {;in\_the\_way\\{}[>P|F]\\->[|P]}
 \StateOnCode{nana}{ 2.4}{ 0.0}
     {rollouts/my_nana_ate_my_kid_brother_by_ruth_williams/pred_t0.png}
     {;my\_nana\\late[G|.|P]\\->[T|.|G]}
-\StateOnCode{ham}{ 2.4}{-1.7}
+\StateOnCode{ham}{ 2.4}{-2.2}
     {rollouts/Hamiltwo/pred_t0.png}
     {;hamiltwo\\{}[>L|noW]\\->[>L+|noW]}
 
@@ -230,17 +225,17 @@
 \NCAstep{oodn2}{7.1}{0}
 \NCAstep{oodn3}{9.5}{0}
 
-\PSframe{h1_inway}{ 5.9}{ 1.7}{rollouts/in_the_way_by_giovanni_mota/pred_t1.png}
-\PSframe{h2_inway}{ 8.3}{ 1.7}{rollouts/in_the_way_by_giovanni_mota/pred_t2.png}
-\PSframe{h3_inway}{10.7}{ 1.7}{rollouts/in_the_way_by_giovanni_mota/pred_t3.png}
+\PSframe{h1_inway}{ 5.9}{ 2.2}{rollouts/in_the_way_by_giovanni_mota/pred_t1.png}
+\PSframe{h2_inway}{ 8.3}{ 2.2}{rollouts/in_the_way_by_giovanni_mota/pred_t2.png}
+\PSframe{h3_inway}{10.7}{ 2.2}{rollouts/in_the_way_by_giovanni_mota/pred_t3.png}
 
 \PSframe{h1_nana}{ 5.9}{ 0.0}{rollouts/my_nana_ate_my_kid_brother_by_ruth_williams/pred_t1.png}
 \PSframe{h2_nana}{ 8.3}{ 0.0}{rollouts/my_nana_ate_my_kid_brother_by_ruth_williams/pred_t2.png}
 \PSframe{h3_nana}{10.7}{ 0.0}{rollouts/my_nana_ate_my_kid_brother_by_ruth_williams/pred_t3.png}
 
-\PSframe{h1_ham}{ 5.9}{-1.7}{rollouts/Hamiltwo/pred_t1.png}
-\PSframe{h2_ham}{ 8.3}{-1.7}{rollouts/Hamiltwo/pred_t2.png}
-\PSframe{h3_ham}{10.7}{-1.7}{rollouts/Hamiltwo/pred_t3.png}
+\PSframe{h1_ham}{ 5.9}{-2.2}{rollouts/Hamiltwo/pred_t1.png}
+\PSframe{h2_ham}{ 8.3}{-2.2}{rollouts/Hamiltwo/pred_t2.png}
+\PSframe{h3_ham}{10.7}{-2.2}{rollouts/Hamiltwo/pred_t3.png}
 
 % Forward chain (BLUE everywhere in the eval part). Fan-in into each
 % NCA from all 3 rows, fan-out from each NCA to all 3 rows.

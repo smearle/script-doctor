@@ -41,45 +41,54 @@ EXCLUDE_HELDOUT_GAMES = {
 # Order matters: rows in the table follow this order. The collator
 # silently skips any run dir whose results.json or eval_multigame.npz
 # is missing, so adding a row before it lands is fine — re-run after
-# the experiment finishes and the row populates.
+# the experiment finishes and the row populates. `seed_dirs` lists all
+# completed seeds; per-row metrics are averaged across whichever seeds
+# evaluated successfully (no stds reported because seed counts are
+# uneven across rows). The first listed seed_dir supplies the in-distribution
+# `eval_multigame.npz` and `config.json` (those metrics are not currently
+# seed-averaged because Train-59/199 only have one ID-eval seed each).
 RUNS = [
     {
-        "run_dir": "multi_scaling_14_uncond_match_s0",
+        "seed_dirs": [
+            "multi_scaling_14_uncond_match_s0",
+            "multi_scaling_14_uncond_match_s1",
+            "multi_scaling_14_uncond_match_s2",
+        ],
         "preset": "Train-14",
         "n_games": 14,
         "kind": "uncond",
         "label": "Unconditional, Train-14",  # used for per-game CSV column header
     },
     {
-        "run_dir": "multi_scaling_14_cond_match_s0",
+        "seed_dirs": ["multi_scaling_14_cond_match_s0"],
         "preset": "Train-14",
         "n_games": 14,
         "kind": "cond",
         "label": "Rule-conditional, Train-14",
     },
     {
-        "run_dir": "multi_scaling_gallery_v2_uncond_match_s0",
+        "seed_dirs": ["multi_scaling_gallery_v2_uncond_match_s0"],
         "preset": "Train-59",
         "n_games": 59,
         "kind": "uncond",
         "label": "Unconditional, Train-59",
     },
     {
-        "run_dir": "multi_scaling_gallery_v2_cond_match_s0",
+        "seed_dirs": ["multi_scaling_gallery_v2_cond_match_s0"],
         "preset": "Train-59",
         "n_games": 59,
         "kind": "cond",
         "label": "Rule-conditional, Train-59",
     },
     {
-        "run_dir": "multi_scaling_gallery_v4_uncond_match_s0",
+        "seed_dirs": ["multi_scaling_gallery_v4_uncond_match_s0"],
         "preset": "Train-199",
         "n_games": 199,
         "kind": "uncond",
         "label": "Unconditional, Train-199",
     },
     {
-        "run_dir": "multi_scaling_gallery_v4_cond_match_s0",
+        "seed_dirs": ["multi_scaling_gallery_v4_cond_match_s0"],
         "preset": "Train-199",
         "n_games": 199,
         "kind": "cond",
@@ -153,7 +162,36 @@ def _aggregate_indist(eval_npz_path: Path) -> dict:
     }
 
 
-def _aggregate_heldout(results_json_path: Path) -> dict:
+def _load_heldout_dict(run_dir: Path) -> dict:
+    """Load `{game -> {level -> {kind -> metrics}}}` from a run dir,
+    accepting either the rolled-up `heldout_v4_n30/results.json` or
+    a per-game directory `heldout_v4_n30_per_game/<game>.json`. Returns
+    an empty dict if neither is present or populated."""
+    rj = run_dir / "heldout_v4_n30" / "results.json"
+    if rj.exists():
+        ho = json.loads(rj.read_text()).get("heldout", {})
+        if ho:
+            return ho
+    pgd = run_dir / "heldout_v4_n30_per_game"
+    if pgd.exists() and pgd.is_dir():
+        inner_rj = pgd / "results.json"
+        if inner_rj.exists():
+            ho = json.loads(inner_rj.read_text()).get("heldout", {})
+            if ho:
+                return ho
+        ho = {}
+        for f in sorted(pgd.glob("*.json")):
+            if f.name in ("results.json", "summary.md"):
+                continue
+            try:
+                ho[f.stem] = json.loads(f.read_text())
+            except Exception:
+                continue
+        return ho
+    return {}
+
+
+def _aggregate_heldout(ho: dict) -> dict:
     """Heldout metrics: 1-step (teacher-forced) and AR-30 (random) cell-error
     averaged across rollout steps and games, plus per-game wins-vs-identity
     counts.
@@ -167,10 +205,8 @@ def _aggregate_heldout(results_json_path: Path) -> dict:
     list is used. Games in EXCLUDE_HELDOUT_GAMES are skipped because their
     tokenized rules exceed the conditional encoder's max sequence length.
     """
-    if not results_json_path.exists():
+    if not ho:
         return {}
-    d = json.loads(results_json_path.read_text())
-    ho = d.get("heldout", {})
     # Per-game accumulators for each rollout kind. The four kinds we
     # currently support: random AR, random teacher-forced, BFS-optimal
     # AR, A*-optimal AR. BFS/A* keys only exist on JSONs produced by
@@ -269,29 +305,71 @@ def _aggregate_heldout(results_json_path: Path) -> dict:
     }
 
 
+def _seed_avg(seed_hos: list[dict], key: str) -> float | None:
+    """Mean across seeds of a top-level scalar metric (None if no seed
+    has it)."""
+    vals = [h.get(key) for h in seed_hos if h.get(key) is not None]
+    return float(np.mean(vals)) if vals else None
+
+
+def _seed_avg_per_game(seed_hos: list[dict], inner_key: str) -> dict[str, float]:
+    """Per-game seed-average for `per_game[g][inner_key]`."""
+    bag: dict[str, list[float]] = {}
+    for h in seed_hos:
+        for g, m in (h.get("per_game") or {}).items():
+            v = m.get(inner_key)
+            if v is not None:
+                bag.setdefault(g, []).append(float(v))
+    return {g: float(np.mean(v)) for g, v in bag.items()}
+
+
 def collate(runs: list[dict]) -> tuple[list[dict], dict, dict]:
     """Returns (rows, per_game_step1_table, identity_per_game).
 
     Rows are emitted for every spec in `runs`, even if the run dir
     isn't present yet (so the table keeps placeholder '--' cells in
-    the right slot order).
+    the right slot order). Per-row metrics are averaged across whichever
+    of `spec["seed_dirs"]` evaluated successfully; stds are not reported
+    because seed counts are uneven across rows.
     """
     rows: list[dict] = []
     per_game_step1: dict[str, dict[str, float]] = {}
     identity_per_game: dict[str, float] = {}
     for spec in runs:
-        run_dir = LOGS_ROOT / spec["run_dir"]
-        present = (run_dir / "config.json").exists()
-        if present:
-            cfg = _load_config(run_dir)
-            indist = _aggregate_indist(run_dir / "eval_multigame.npz")
-            ho = _aggregate_heldout(run_dir / "heldout_v4_n30" / "results.json")
-        else:
-            print(f"[collate] {spec['label']}: run dir not present, "
+        seed_dirs = spec.get("seed_dirs") or [spec["run_dir"]]
+        primary = LOGS_ROOT / seed_dirs[0]
+        cfg = _load_config(primary) if (primary / "config.json").exists() else {}
+        indist = _aggregate_indist(primary / "eval_multigame.npz")
+        seed_hos: list[dict] = []
+        used_seeds: list[str] = []
+        for sd in seed_dirs:
+            run_dir = LOGS_ROOT / sd
+            ho_dict = _load_heldout_dict(run_dir)
+            agg = _aggregate_heldout(ho_dict) if ho_dict else {}
+            if agg:
+                seed_hos.append(agg)
+                used_seeds.append(sd)
+        if not seed_hos:
+            print(f"[collate] {spec['label']}: no usable heldout results, "
                   f"emitting placeholder row")
-            cfg, indist, ho = {}, {}, {}
+        n_seeds = len(seed_hos)
+        # Wins is summed per-seed and averaged (rounded for table display).
+        ho_keys = [
+            "tf_model_mean", "tf_model_median",
+            "tf_identity_mean", "tf_identity_median", "tf_wins",
+            "ar30_model_mean", "ar30_model_median",
+            "ar30_identity_mean", "ar30_identity_median", "ar30_wins",
+            "bfs_model_mean", "bfs_model_median",
+            "bfs_identity_mean", "bfs_identity_median", "bfs_wins",
+            "bfs_n_games",
+            "astar_model_mean", "astar_model_median",
+            "astar_identity_mean", "astar_identity_median", "astar_wins",
+            "astar_n_games", "n_games",
+        ]
+        ho = {k: _seed_avg(seed_hos, k) for k in ho_keys}
         row = {
-            "run_dir": spec["run_dir"],
+            "run_dir": ",".join(used_seeds) or seed_dirs[0],
+            "n_seeds": n_seeds,
             "label": spec["label"],
             "preset": spec["preset"],
             "n_games": spec["n_games"],
@@ -331,12 +409,13 @@ def collate(runs: list[dict]) -> tuple[list[dict], dict, dict]:
             "ood_n_games": ho.get("n_games"),
         }
         rows.append(row)
-        for g, m in (ho.get("per_game") or {}).items():
-            if m.get("tf_model") is None:
-                continue
-            per_game_step1.setdefault(g, {})[spec["label"]] = m["tf_model"]
-            if m.get("tf_identity") is not None:
-                identity_per_game[g] = m["tf_identity"]
+        # Per-game step1 table: seed-average each game's metric.
+        per_game_tf = _seed_avg_per_game(seed_hos, "tf_model")
+        per_game_id_tf = _seed_avg_per_game(seed_hos, "tf_identity")
+        for g, m in per_game_tf.items():
+            per_game_step1.setdefault(g, {})[spec["label"]] = m
+        for g, v in per_game_id_tf.items():
+            identity_per_game[g] = v
     return rows, per_game_step1, identity_per_game
 
 
@@ -397,7 +476,10 @@ def write_latex(rows: list[dict], out_path: Path) -> None:
         return f"{100*mean_v:.2f} / {100*median_v:.2f}"
 
     def _wins(w, n):
-        return "--" if w is None or n is None else f"{w} / {n}"
+        if w is None or n is None:
+            return "--"
+        # Wins are seed-averages; round to integer for table display.
+        return f"{int(round(float(w)))} / {int(round(float(n)))}"
 
     # Group rows by preset so we can emit \multirow + a \midrule between
     # presets, matching the in-distribution scaling table.
