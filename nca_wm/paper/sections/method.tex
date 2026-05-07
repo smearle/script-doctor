@@ -22,20 +22,22 @@ compare cell-by-cell against the engine.
 
 \subsection{Rule-conditioned NCA world model}
 
-$\mathrm{Enc}_\phi$ maps the token sequence $\mathrm{spec} \in \mathbb{Z}^{S}$ (or the corresponding autoencoder latent) to latent vectors $z \in \mathbb{R}^{K \times d}$ via $\ell$ self-attention layers followed by $K$ learned query vectors cross-attending into the contextualized tokens.
+$\mathrm{Enc}_\phi$ maps the token sequence $\mathrm{spec} \in \mathbb{Z}^{S}$ to latent vectors $z \in \mathbb{R}^{K \times d}$ via $\ell$ self-attention layers followed by $K$ learned query vectors cross-attending into the contextualized tokens.
 The latent vectors are shared across cells and fixed for the rollout.
 
-A single dense layer embeds the per-cell concatenation of $s_t$ and the broadcast one-hot action into $h^{(0)} \in \mathbb{R}^{H \times W \times d_h}$, after which we apply $T$ NCA steps:
+A single dense layer embeds the per-cell concatenation of $s_t$ and the broadcast one-hot action into $h^{(0)} \in \mathbb{R}^{H \times W \times d_h}$, after which we apply $T$ NCA steps.
+Since PuzzleScript has two natural iteration levels (an inner ordered rule list, an outer \texttt{again} re-evaluation loop), we factor $T = n_\ell \cdot n_r$ with $n_\ell$ distinct inner layers indexed by $i \in \{0,\dots,n_\ell{-}1\}$ and $n_r$ shared-weight outer passes; $n_r = T$ recovers a single shared layer applied $T$ times, while $n_r = 1$ recovers a per-step body with $T$ distinct layers.
+At step $k$ with layer index $i = k \bmod n_\ell$,
 \begin{align}
-  h^{(k+1)} &= h^{(k)} + W_o \,\mathrm{GELU}\!\bigl(
-      W_c\, [\, h^{(k)} \,;\, h^{(0)} \,]_{3\times 3}
+  h^{(k+1)} &= h^{(k)} + W^{(i)}_o \,\mathrm{GELU}\!\bigl(
+      W^{(i)}_c \, [\, h^{(k)} \,;\, h^{(0)} \,]_{3\times 3}
       \;+\;
-      \mathrm{XAttn}(h^{(k)}, z)
+      \mathrm{XAttn}^{(i)}(h^{(k)}, z)
     \bigr) \, ,
 \end{align}
-where $[\,\cdot\,]_{3\times 3}$ is a $3{\times}3$ convolution per cell, $\mathrm{XAttn}$ is multi-head attention with each cell as a query and the $K$ latents as keys/values, and $W_o, W_c$ are shared across all $T$ steps.
-The \emph{input-skip} concatenation re-injects the embedded $(s_t, a_t)$ at every step to keep the unroll anchored to its input.
-Since PuzzleScript has two natural iteration levels (an inner ordered rule list, an outer \texttt{again} re-evaluation loop), we factor $T = n_\ell \cdot n_r$ with $n_\ell$ distinct inner layers and $n_r$ shared-weight outer passes; $n_r = T$ recovers a single shared layer applied $T$ times, while $n_r = 1$ recovers a per-step body with $T$ distinct layers.
+where $[\,\cdot\,]_{3\times 3}$ denotes the depth-wise concatenated $3{\times}3$ neighborhood patch around each cell, $W^{(i)}_c \in \mathbb{R}^{(9 \cdot 2 d_h) \times d_h}$ are the per-layer convolution weights that mix that patch into a $d_h$-dim hidden, $\mathrm{XAttn}^{(i)}$ is multi-head attention with each cell as a query and the $K$ latents as keys/values, and $W^{(i)}_o \in \mathbb{R}^{d_h \times d_h}$ is the per-layer output projection that produces the residual update.
+All three sets of weights are reused across the $n_r$ outer passes.
+The \emph{input-skip} concatenation $[h^{(k)}; h^{(0)}]$ re-injects the embedded $(s_t, a_t)$ at every step to keep the unroll anchored to its input.
 
 A $3{\times}3$ convolution propagates one cell of context per step, but several PuzzleScript patterns reference cells arbitrarily far apart.
 An ellipsis pattern \texttt{[ X | \ldots | Y ]} matches an X and a Y separated by any number of cells along a single row or column; for instance \textit{neko puzzle}'s \texttt{[ > Player | \ldots | Fruit ] -> [ | \ldots | Player ]} teleports a moving player onto the next fruit in its row of motion.
