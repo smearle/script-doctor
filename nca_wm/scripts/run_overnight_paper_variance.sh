@@ -4,15 +4,26 @@
 # (eval_multigame.npz auto-saved), then runs the heldout AR rollout
 # eval that populates heldout_v4_n30/results.json.
 #
-# Schedule (~6-7 hours total):
-#   1. Train-14 uncond @ n_hid=448 s0  — parameter-matched comparison
-#   2. Train-59 uncond @ n_hid=448 s0  — parameter-matched at intermediate
-#   3. Train-14 uncond @ n_hid=256 s1  — variance estimate for non-matched run
+# Focus is variance estimation across seeds for the Train-14 and
+# Train-59 cond / uncond cells. Box 210 is queued to handle Train-14
+# cond s1 once its current Train-199 uncond run finishes; this script
+# fills in the seeds local-side.
+#
+# Schedule (~8 hours total):
+#   1. Train-14 uncond s1 @ n_hid=256       — variance (~1.7h)
+#   2. Train-14 uncond s2 @ n_hid=256       — variance (~1.7h)
+#   3. Train-14 cond   s2 @ n_hid=256       — variance (~1.7h)
+#   4. Train-59 uncond s1 @ n_hid=256       — variance (~3h, partial OK)
+#
+# Param-matched (n_hid≈288 in current architecture) runs are deferred:
+# the current pool topology makes the n_hid=448 "param-matched" recipe
+# from the legacy paper text actually 2.5x oversized, so a fresh
+# parameter-matched comparison needs an n_hid sweep first.
 #
 # Usage:
 #   nohup nca_wm/scripts/run_overnight_paper_variance.sh \
 #     > /tmp/overnight_paper_variance.log 2>&1 &
-set -uo pipefail   # don't `-e`: a single training failure shouldn't kill the queue
+set -uo pipefail
 
 cd "$(dirname "$0")/../.."
 
@@ -94,25 +105,32 @@ stage() {
 }
 
 #------------------------------------------------------------------
-# Run 1: Train-14 uncond @ n_hid=448 (param-matched to cond at n_hid=256+slot encoder)
-stage "Train-14 uncond n_hid=448 s0" \
-    train scaling_14 uncond 448 0 nca_wm/logs/multi_scaling_14_uncond_match_n448_s0
-stage "Train-14 uncond n_hid=448 s0 heldout" \
-    heldout nca_wm/logs/multi_scaling_14_uncond_match_n448_s0
-
-#------------------------------------------------------------------
-# Run 2: Train-59 uncond @ n_hid=448 (param-matched)
-stage "Train-59 uncond n_hid=448 s0" \
-    train scaling_gallery_v2 uncond 448 0 nca_wm/logs/multi_scaling_gallery_v2_uncond_match_n448_s0
-stage "Train-59 uncond n_hid=448 s0 heldout" \
-    heldout nca_wm/logs/multi_scaling_gallery_v2_uncond_match_n448_s0
-
-#------------------------------------------------------------------
-# Run 3: Train-14 uncond @ n_hid=256 s1 (variance estimate)
-stage "Train-14 uncond n_hid=256 s1" \
+# Run 1: Train-14 uncond s1 (variance)
+stage "Train-14 uncond s1" \
     train scaling_14 uncond 256 1 nca_wm/logs/multi_scaling_14_uncond_match_s1
-stage "Train-14 uncond n_hid=256 s1 heldout" \
+stage "Train-14 uncond s1 heldout" \
     heldout nca_wm/logs/multi_scaling_14_uncond_match_s1
+
+#------------------------------------------------------------------
+# Run 2: Train-14 uncond s2 (variance)
+stage "Train-14 uncond s2" \
+    train scaling_14 uncond 256 2 nca_wm/logs/multi_scaling_14_uncond_match_s2
+stage "Train-14 uncond s2 heldout" \
+    heldout nca_wm/logs/multi_scaling_14_uncond_match_s2
+
+#------------------------------------------------------------------
+# Run 3: Train-14 cond s2 (variance)
+stage "Train-14 cond s2" \
+    train scaling_14 cond 256 2 nca_wm/logs/multi_scaling_14_cond_match_s2
+stage "Train-14 cond s2 heldout" \
+    heldout nca_wm/logs/multi_scaling_14_cond_match_s2
+
+#------------------------------------------------------------------
+# Run 4: Train-59 uncond s1 (variance, ~3h — may not finish in remaining budget)
+stage "Train-59 uncond s1" \
+    train scaling_gallery_v2 uncond 256 1 nca_wm/logs/multi_scaling_gallery_v2_uncond_match_s1
+stage "Train-59 uncond s1 heldout" \
+    heldout nca_wm/logs/multi_scaling_gallery_v2_uncond_match_s1
 
 echo
 echo "=== queue done at $(date '+%F %T') ==="
