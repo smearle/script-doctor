@@ -27,9 +27,10 @@ versus an unconditional baseline.
 markedly improves out-of-distribution performance on
 \textsc{Heldout-26}, closing most of the gap to the identity baseline
 and yielding wins on a non-trivial fraction of games
-(\S\ref{sec:results-encoder-ablation}). The OOD contribution is driven
-primarily by rule diversity in the training corpus rather than the
-encoder in isolation.
+(\S\ref{sec:results-encoder-ablation}).
+Interestingly, the rule encoder does not show notable improvement on
+OOD games, suggesting models instead learn to infer mechanics from
+level layouts; further scaling is necessary.
 
 % We develop a protocol for evaluating the generalization of a world model to complex, out-of-distribution dynamics.
 Downstream applications include sample-efficient policy learning and
