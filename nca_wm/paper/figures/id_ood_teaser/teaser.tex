@@ -137,23 +137,45 @@
 % Latent z conditions the ID NCA
 \draw[condarrow] (slots_id.south) to[out=-90,in=90] (nidn-north);
 
-% Latent scatter ABOVE the encoder
+% Latent scatter ABOVE the encoder, takes up almost half the page width
 \node[anchor=south, inner sep=1pt] (latent_id) at (-4.0, 4.9)
-    {\includegraphics[width=3.4cm]{latent_train_only.pdf}};
-\node[font=\tiny\itshape, color=IDColor, anchor=south]
-    at (-4.0, 7.55) {encoder latent space};
+    {\includegraphics[width=8cm]{latent_train_only.pdf}};
+\node[font=\footnotesize\itshape, color=IDColor, anchor=south]
+    at (-4.0, 11.15) {encoder latent space};
 \draw[condline] (slots_id.north) -- (latent_id.south);
 
-\node[font=\footnotesize\bfseries, color=IDColor, anchor=south, align=center]
-    at (-4.0, 7.95) {Training (in-distribution)};
+\node[font=\bfseries, color=IDColor, anchor=south, align=center]
+    at (-4.0, 11.65) {Training (in-distribution)};
 
 % =============================================================
 %  VERTICAL DASHED BORDER between train and eval
 % =============================================================
 \draw[dashed, line width=0.3mm, color=black!70]
-    (1.6, -2.6) -- (1.6,  8.2);
+    (1.6, -3.4) -- (1.6,  11.85);
 \node[font=\itshape\tiny, color=black!50, anchor=south, rotate=90]
     at (1.85, 0.4) {trained $\theta \rightarrow \theta^{*}$};
+
+% PuzzleScript engine mascot at bottom-center, generating both training
+% and eval data. Arrows fan up-left to the ID code column and up-right
+% to the OOD code column.
+\node[anchor=center, inner sep=0pt] (mascot)
+    at (1.6, -5.0) {\includegraphics[width=1.6cm]{ps_mascot.png}};
+\node[font=\footnotesize\itshape, color=black!70, anchor=north]
+    at (mascot.south) {PuzzleScript engine};
+
+% Land arrows at the bottom of the bottom-row code boxes. Coordinates
+% computed directly from the StateOnCode shifts (see those calls above).
+\coordinate (id_data_in)  at (-7.1, -2.2);
+\coordinate (ood_data_in) at ( 2.3, -2.2);
+
+\draw[-Stealth, line width=0.4mm, color=black!60]
+    (mascot.north) to[out=140, in=-80] node[midway, above, sloped,
+    font=\scriptsize\itshape, color=IDColor]{training data}
+    (id_data_in);
+\draw[-Stealth, line width=0.4mm, color=black!60]
+    (mascot.north) to[out=40, in=-100] node[midway, above, sloped,
+    font=\scriptsize\itshape, color=OODColor]{eval data}
+    (ood_data_in);
 
 % =============================================================
 %  RIGHT HALF: held-out eval — one NCA per TIMESTEP, all rows fan in
@@ -225,15 +247,15 @@
 \draw[condarrow] (slots_ood.south) to[out=-90,in=90] (noodn2-north);
 \draw[condarrow] (slots_ood.south) to[out=-90,in=90] (noodn3-north);
 
-% Latent scatter ABOVE the encoder
-\node[anchor=south, inner sep=1pt] (latent_ood) at (5.4, 4.9)
-    {\includegraphics[width=3.4cm]{latent_with_ood.pdf}};
-\node[font=\tiny\itshape, color=OODColor, anchor=south]
-    at (5.4, 7.55) {encoder latent space + OOD ($\bigstar$)};
+% Latent scatter ABOVE the encoder, takes up almost half the page width
+\node[anchor=south, inner sep=1pt] (latent_ood) at (6.5, 4.9)
+    {\includegraphics[width=8cm]{latent_with_ood.pdf}};
+\node[font=\footnotesize\itshape, color=OODColor, anchor=south]
+    at (6.5, 11.15) {encoder latent space + OOD ($\bigstar$)};
 \draw[condline] (slots_ood.north) -- (latent_ood.south);
 
-\node[font=\footnotesize\bfseries, color=OODColor, anchor=south, align=center]
-    at (5.4, 7.95) {Evaluation (held-out / OOD)};
+\node[font=\bfseries, color=OODColor, anchor=south, align=center]
+    at (6.5, 11.65) {Evaluation (held-out / OOD)};
 
 \end{tikzpicture}
 
