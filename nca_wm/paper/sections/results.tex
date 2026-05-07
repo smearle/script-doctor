@@ -41,52 +41,29 @@ corpora.
   \begin{subfigure}[b]{0.49\linewidth}
     \centering
     \includegraphics[width=\linewidth]{figures/indist_intersection/intersection_slope_id.pdf}
-    \caption{ID 1-step (TF).}
+    \caption{In-distribution (14-game intersection).}
     \label{fig:intersection-slope-id}
   \end{subfigure}\hfill
   \begin{subfigure}[b]{0.49\linewidth}
     \centering
     \includegraphics[width=\linewidth]{figures/indist_intersection/intersection_slope_ood.pdf}
-    \caption{OOD 1-step (TF).}
+    \caption{Out-of-distribution (\textsc{Heldout-26}).}
     \label{fig:intersection-slope-ood}
   \end{subfigure}
-  \begin{subfigure}[b]{0.49\linewidth}
-    \centering
-    \includegraphics[width=\linewidth]{figures/indist_intersection/intersection_slope_id_ar.pdf}
-    \caption{ID random-action AR.}
-    \label{fig:intersection-slope-id-ar}
-  \end{subfigure}\hfill
-  \begin{subfigure}[b]{0.49\linewidth}
-    \centering
-    \includegraphics[width=\linewidth]{figures/indist_intersection/intersection_slope_ood_ar.pdf}
-    \caption{OOD random-action AR.}
-    \label{fig:intersection-slope-ood-ar}
-  \end{subfigure}
-  \caption{\textbf{Cell-error as the training corpus grows from 14
-    to 199 games}, on a numeric (log) corpus axis.
-    \emph{In-distribution panels:} aggregate over the 14 games shared
-    by every preset (the same game set evaluated against every
-    checkpoint). In 1-step (TF), the unconditional model degrades $\approx 25\times$
-    from \textsc{Train-14} to \textsc{Train-59}; the rule-conditional
-    model degrades $\approx 5\times$ over the same range and barely
-    moves to \textsc{Train-199}---rule-conditioning slows per-game
-    dilution by an order of magnitude at fixed capacity. The AR panel
-    shows the corresponding random-action rollout aggregate.
-    \emph{Out-of-distribution panels:} aggregate on
-    \textsc{Heldout-26} (per-cell totals broken out by regime in
-    Appendix~\ref{app:cond-vs-uncond}, Table~\ref{tab:cond-vs-uncond-match});
-    dotted black lines show
-    the trivial identity baseline $\hat s_{t+1}{=}s_t$. Broadening
-    the training corpus drops the conditional 1-step error
-    $\approx 6\times$ from \textsc{Train-14} to \textsc{Train-199}
-    ($14.8\% \to 2.3\%$ mean; $3.5\% \to 1.5\%$ median, reaching
-    identity-level error). Both conditional and unconditional rows
-    are reported across every scale; the conditional row's lead at
-    \textsc{Train-14} erodes and partially reverses as the corpus
-    grows---at \textsc{Train-199} the unconditional row has both the
-    lower median and more wins vs.\ identity. Per-game cells and a
-    stand-alone heatmap of the in-distribution intersection are in
-    Appendix~\ref{app:dilution}.}
+  \caption{\textbf{1-step (TF) cell-error vs.\ training corpus size}
+    (numeric log axis at $14, 59, 199$ games). \emph{(a)} Aggregate
+    over the 14 games shared by every preset; rule-conditioning slows
+    per-game dilution by roughly an order of magnitude at fixed
+    capacity. \emph{(b)} Aggregate on \textsc{Heldout-26}; the dotted
+    black line is the identity baseline $\hat s_{t+1}{=}s_t$.
+    Conditional 1-step error drops $\approx 6\times$ from
+    \textsc{Train-14} to \textsc{Train-199}, reaching identity-level
+    error. The cond/uncond OOD ordering at \textsc{Train-14}
+    partially reverses by \textsc{Train-199} (uncond lower median,
+    more wins vs.\ identity). Random-action AR companions in
+    Appendix~\ref{app:rollout-ar}; per-cell totals (BFS / A*) in
+    Appendix~\ref{app:cond-vs-uncond}, Table~\ref{tab:cond-vs-uncond-match};
+    per-game ID heatmap in Appendix~\ref{app:dilution}.}
   \label{fig:intersection-slope}
 \end{figure}
 
@@ -101,8 +78,9 @@ same range and is roughly flat to \textsc{Train-199} ($0.27\% \to
 unconditional baseline is $1.88\% / 0.46\%$, still $\approx 5\times$
 the conditional mean and $\approx 3\times$ the median; per-game swings
 can be dramatic (\textit{neko puzzle} goes from $0.000\%$ to $24.4\%$
-when the encoder is removed). The encoder amortises shared dynamics
-across games at fixed capacity.
+when the encoder is removed; per-game cells in
+Figure~\ref{fig:intersection-heatmap}, Appendix~\ref{app:dilution}).
+The encoder amortises shared dynamics across games at fixed capacity.
 
 Out-of-distribution (Figure~\ref{fig:intersection-slope-ood};
 Appendix~\ref{app:cond-vs-uncond}, Table~\ref{tab:cond-vs-uncond-match}),
@@ -119,11 +97,30 @@ closer to identity on $20/26$ games); and at \textsc{Train-199}
 unconditional has both the lower median and more wins vs.\ identity
 ($14$ vs.\ $11$). At broader corpora unconditional and conditional are
 roughly tied on the held-out set; we return to what the unconditional
-model is exploiting in \S\ref{sec:discussion}. On random-action AR
-rollout, where errors compound over 30 steps, identity ($\approx 2\%$
-mean) is a much stronger baseline: every model drifts to $7$--$27\%$ and
-no current checkpoint beats identity over the full rollout on more than
-a single game.
+model is exploiting in \S\ref{sec:discussion}. The per-game scatter
+in Figure~\ref{fig:ood-per-game-scatter} shows where each model wins
+at \textsc{Train-199}: nine games where both beat identity, four
+where only conditional does, eight where only unconditional does,
+and five where neither does---roughly disjoint coverage rather than
+one model dominating. On random-action AR rollout
+(Appendix~\ref{app:rollout-ar}), where errors compound over 30 steps,
+identity ($\approx 2\%$ mean) is a much stronger baseline: every
+model drifts to $7$--$27\%$ and no current checkpoint beats identity
+over the full rollout on more than a single game.
+
+\begin{figure}[t]
+  \centering
+  \includegraphics[width=0.6\linewidth]{figures/cond_vs_uncond_match/ood_per_game_scatter.pdf}
+  \caption{\textbf{Per-game OOD 1-step (TF) cell-error at
+    \textsc{Train-199}}, conditional (x) vs.\ unconditional (y), one
+    point per held-out game. Colours partition games by which model
+    beats the per-game identity baseline. Roughly disjoint coverage
+    (cond-only $4$, uncond-only $8$, both $9$, neither $5$) at the
+    broadest training scale rather than one model dominating; the
+    per-cell aggregate of these points is what
+    Figure~\ref{fig:intersection-slope-ood} reports.}
+  \label{fig:ood-per-game-scatter}
+\end{figure}
 
 % Generalization-to-unseen-games results (held-out latent geometry,
 % symbolic decoder reconstruction + sampling, frozen-NCA inverse fit

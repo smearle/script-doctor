@@ -745,15 +745,15 @@ the training corpus differs.
   \centering
   \includegraphics[width=0.85\linewidth]{figures/indist_intersection/intersection_heatmap.pdf}
   \caption{\textbf{Per-game 1-step (TF) cell-error (\%) on the 14
-    intersection games, log-color scale.} Rows sorted by maximum
+    intersection games}, log-color scale. Rows sorted by maximum
     cell value, descending; columns grouped by preset (ascending
     corpus size) with conditional / unconditional paired at each
     scale. The catastrophic unconditional failures
-    (\textsc{nekopuzzle}@\textsc{Train-59}, $24.4\%$;
-    \textsc{notsnake}@\textsc{Train-199}, $13.1\%$) drive the
-    aggregate mean in Figure~\ref{fig:intersection-slope}'s left
-    panel; the rule-conditional columns at every scale stay an
-    order of magnitude lower across the board.}
+    (\textit{neko puzzle}@\textsc{Train-59}, $24.4\%$;
+    \textit{Notsnake}@\textsc{Train-199}, $13.1\%$) drive the
+    aggregate mean in Figure~\ref{fig:intersection-slope-id}; the
+    conditional columns at every scale stay an order of magnitude
+    lower across the board.}
   \label{fig:intersection-heatmap}
 \end{figure}
 
@@ -806,6 +806,41 @@ probe generalization
 along three axes: held-out latent geometry, symbolic decoder
 reconstruction and sampling, and frozen-NCA inverse fitting from
 observed transitions.
+
+\subsection{Random-action AR rollout: ID and OOD trajectories}
+\label{app:rollout-ar}
+
+Figure~\ref{fig:intersection-slope-ar} is the random-action AR
+companion to the 1-step (TF) main-body Figure~\ref{fig:intersection-slope}:
+the same six checkpoints evaluated on the same in-distribution
+intersection (left) and \textsc{Heldout-26} (right), but feeding the
+model's own predictions back at every step under random actions.
+Errors compound over 30 steps so the absolute scale is several times
+the TF view, and identity ($\approx 2\%$ mean OOD) becomes a much
+stronger baseline---every model drifts to the $7$--$27\%$ band and no
+current checkpoint beats identity over the full rollout on more than
+a single game.
+
+\begin{figure}[t]
+  \centering
+  \begin{subfigure}[b]{0.49\linewidth}
+    \centering
+    \includegraphics[width=\linewidth]{figures/indist_intersection/intersection_slope_id_ar.pdf}
+    \caption{In-distribution (14-game intersection).}
+    \label{fig:intersection-slope-id-ar}
+  \end{subfigure}\hfill
+  \begin{subfigure}[b]{0.49\linewidth}
+    \centering
+    \includegraphics[width=\linewidth]{figures/indist_intersection/intersection_slope_ood_ar.pdf}
+    \caption{Out-of-distribution (\textsc{Heldout-26}).}
+    \label{fig:intersection-slope-ood-ar}
+  \end{subfigure}
+  \caption{\textbf{Random-action AR cell-error vs.\ training corpus
+    size.} Companion to Figure~\ref{fig:intersection-slope}; same
+    layout under autoregressive rollout (the model's prediction is
+    fed back as the next input under random actions, 30 steps).}
+  \label{fig:intersection-slope-ar}
+\end{figure}
 
 \subsection{Per-cell rollout error breakdown on \textsc{Heldout-26}}
 \label{app:cond-vs-uncond}
