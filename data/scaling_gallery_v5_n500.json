@@ -1,0 +1,4125 @@
+{
+  "preset_name": "scaling_gallery_v3_n443",
+  "n_total": 500,
+  "gallery_v2_kept": [
+    "nekopuzzle",
+    "notsnake",
+    "blocks",
+    "sokoban_basic",
+    "sokoban_match3",
+    "Zen_Puzzle_Garden",
+    "Multi-word_Dictionary_Game",
+    "kettle",
+    "Travelling_salesman",
+    "sumo",
+    "the_undertaking",
+    "wrappingrecipe",
+    "Collapsable_Sokoban",
+    "Love_and_Pieces",
+    "actiontest",
+    "rigidfail1",
+    "scriptcross",
+    "Modality",
+    "constellationz",
+    "randomrobots",
+    "againexample",
+    "naughtysprite",
+    "randomspawner",
+    "twolittlecrates1",
+    "rigid_11",
+    "Long_Haul_Space_Flight",
+    "leftrightnpcs",
+    "twolittlecrates2",
+    "twolittlecrates3",
+    "octat",
+    "lunar_lockout",
+    "Stairways",
+    "the_art_of_cloning",
+    "rigid_scott1",
+    "rigid_one_unlimited",
+    "Some_lines_were_meant_to_be_crossed",
+    "blockfaker",
+    "Pushing_It",
+    "2D_Whale_World",
+    "MazezaM",
+    "Ebony_&_Ivory",
+    "Singleton_Traffic",
+    "mazetest",
+    "Slidings",
+    "Lime_Rick",
+    "riverpuzzle",
+    "Midas",
+    "rigid_parallel_many",
+    "Take_Heart_Lass",
+    "rigid_many_broken",
+    "Lightdown",
+    "The_observer's_paradox",
+    "rigid_parallel_unlimited",
+    "MC_Escher's_Equestrian_Armageddon",
+    "Smother",
+    "It_Dies_In_The_Light",
+    "Pushcat_Jr"
+  ],
+  "gallery_v2_dropped_redundant": [
+    {
+      "dropped": "blank",
+      "redundant_with": "sokoban_basic"
+    },
+    {
+      "dropped": "Microban",
+      "redundant_with": "sokoban_basic"
+    },
+    {
+      "dropped": "twolittlecrates4",
+      "redundant_with": "twolittlecrates2"
+    }
+  ],
+  "added_from_dedup_pool": [
+    {
+      "name": "lilifee_by_martinpi",
+      "source": "increpare",
+      "n_rules": 1,
+      "n_objects": 3,
+      "n_levels": 3,
+      "max_level_area": 7
+    },
+    {
+      "name": "Minimalist",
+      "source": "scraped",
+      "n_rules": 1,
+      "n_objects": 4,
+      "n_levels": 10,
+      "max_level_area": 9
+    },
+    {
+      "name": "blammo_by_superman",
+      "source": "increpare",
+      "n_rules": 1,
+      "n_objects": 5,
+      "n_levels": 2,
+      "max_level_area": 10
+    },
+    {
+      "name": "labyrinth_by_team_1",
+      "source": "increpare",
+      "n_rules": 1,
+      "n_objects": 5,
+      "n_levels": 2,
+      "max_level_area": 25
+    },
+    {
+      "name": "push_me_by_andrew_storms",
+      "source": "increpare",
+      "n_rules": 1,
+      "n_objects": 5,
+      "n_levels": 2,
+      "max_level_area": 7
+    },
+    {
+      "name": "sokoban_sticky",
+      "source": "gallery",
+      "n_rules": 1,
+      "n_objects": 5,
+      "n_levels": 2,
+      "max_level_area": 8
+    },
+    {
+      "name": "arrow_crossing_by_timmytheaverage",
+      "source": "increpare",
+      "n_rules": 1,
+      "n_objects": 5,
+      "n_levels": 3,
+      "max_level_area": 9
+    },
+    {
+      "name": "kais_game_by_kaibartolone",
+      "source": "increpare",
+      "n_rules": 1,
+      "n_objects": 5,
+      "n_levels": 3,
+      "max_level_area": 7
+    },
+    {
+      "name": "sokohell_by_odog8",
+      "source": "increpare",
+      "n_rules": 1,
+      "n_objects": 5,
+      "n_levels": 3,
+      "max_level_area": 10
+    },
+    {
+      "name": "build_a_snowman_v1.0_by_akaaekansh",
+      "source": "increpare",
+      "n_rules": 1,
+      "n_objects": 5,
+      "n_levels": 4,
+      "max_level_area": 29
+    },
+    {
+      "name": "phillip_smith_by_nuuup",
+      "source": "increpare",
+      "n_rules": 1,
+      "n_objects": 5,
+      "n_levels": 5,
+      "max_level_area": 12
+    },
+    {
+      "name": "nightmare_by_radiosoap",
+      "source": "increpare",
+      "n_rules": 1,
+      "n_objects": 5,
+      "n_levels": 7,
+      "max_level_area": 9
+    },
+    {
+      "name": "Swap_Sokoban",
+      "source": "scraped",
+      "n_rules": 1,
+      "n_objects": 5,
+      "n_levels": 10,
+      "max_level_area": 12
+    },
+    {
+      "name": "tumble_mazes!_by_barefootengineer1",
+      "source": "increpare",
+      "n_rules": 1,
+      "n_objects": 5,
+      "n_levels": 30,
+      "max_level_area": 8
+    },
+    {
+      "name": "entertainment_whale_by_wilbur_the_whale",
+      "source": "increpare",
+      "n_rules": 1,
+      "n_objects": 6,
+      "n_levels": 2,
+      "max_level_area": 7
+    },
+    {
+      "name": "stop_pushing_me_around!_by_$4@37",
+      "source": "increpare",
+      "n_rules": 1,
+      "n_objects": 6,
+      "n_levels": 2,
+      "max_level_area": 12
+    },
+    {
+      "name": "you_by_officially-official",
+      "source": "increpare",
+      "n_rules": 1,
+      "n_objects": 6,
+      "n_levels": 3,
+      "max_level_area": 7
+    },
+    {
+      "name": "c1_-_new_sokoban_level_by_matteomenapace",
+      "source": "increpare",
+      "n_rules": 1,
+      "n_objects": 6,
+      "n_levels": 5,
+      "max_level_area": 7
+    },
+    {
+      "name": "cowherding_by_christina",
+      "source": "increpare",
+      "n_rules": 1,
+      "n_objects": 6,
+      "n_levels": 6,
+      "max_level_area": 13
+    },
+    {
+      "name": "the_angry_eyeball_by_sammy_diaz",
+      "source": "increpare",
+      "n_rules": 1,
+      "n_objects": 6,
+      "n_levels": 10,
+      "max_level_area": 24
+    },
+    {
+      "name": "my_game_by_rotatingcow",
+      "source": "increpare",
+      "n_rules": 1,
+      "n_objects": 7,
+      "n_levels": 2,
+      "max_level_area": 7
+    },
+    {
+      "name": "find_the_picture_by_jason_kaufman",
+      "source": "increpare",
+      "n_rules": 1,
+      "n_objects": 7,
+      "n_levels": 5,
+      "max_level_area": 26
+    },
+    {
+      "name": "crate_swarp_by_increpare",
+      "source": "increpare",
+      "n_rules": 1,
+      "n_objects": 7,
+      "n_levels": 8,
+      "max_level_area": 7
+    },
+    {
+      "name": "Sokubunny_and_the_colored_Boxes",
+      "source": "scraped",
+      "n_rules": 1,
+      "n_objects": 7,
+      "n_levels": 23,
+      "max_level_area": 8
+    },
+    {
+      "name": "simple_pacman_game_by_isaac_d",
+      "source": "increpare",
+      "n_rules": 1,
+      "n_objects": 8,
+      "n_levels": 2,
+      "max_level_area": 7
+    },
+    {
+      "name": "Lis'_game_development_adventure",
+      "source": "scraped",
+      "n_rules": 1,
+      "n_objects": 8,
+      "n_levels": 9,
+      "max_level_area": 8
+    },
+    {
+      "name": "neekerimarkus_by_unknown_author",
+      "source": "increpare",
+      "n_rules": 2,
+      "n_objects": 3,
+      "n_levels": 10,
+      "max_level_area": 8
+    },
+    {
+      "name": "beta_versio_by_venla1",
+      "source": "increpare",
+      "n_rules": 2,
+      "n_objects": 4,
+      "n_levels": 4,
+      "max_level_area": 7
+    },
+    {
+      "name": "rachooooooooo_by_techythanh",
+      "source": "increpare",
+      "n_rules": 2,
+      "n_objects": 4,
+      "n_levels": 15,
+      "max_level_area": 8
+    },
+    {
+      "name": "green_labyrinth_by_uligabri",
+      "source": "increpare",
+      "n_rules": 2,
+      "n_objects": 5,
+      "n_levels": 2,
+      "max_level_area": 10
+    },
+    {
+      "name": "my_game_by_timofeycacti",
+      "source": "increpare",
+      "n_rules": 2,
+      "n_objects": 5,
+      "n_levels": 2,
+      "max_level_area": 7
+    },
+    {
+      "name": "the_dylans_become_jimmys_by_dylan_but_now_jimmy",
+      "source": "increpare",
+      "n_rules": 2,
+      "n_objects": 5,
+      "n_levels": 2,
+      "max_level_area": 10
+    },
+    {
+      "name": "ense\u00f1andole_al_nuevo_by_ysource42",
+      "source": "increpare",
+      "n_rules": 2,
+      "n_objects": 5,
+      "n_levels": 3,
+      "max_level_area": 7
+    },
+    {
+      "name": "simple_action_example_by_atupmok",
+      "source": "increpare",
+      "n_rules": 2,
+      "n_objects": 5,
+      "n_levels": 3,
+      "max_level_area": 13
+    },
+    {
+      "name": "hitman_by_unknown_author",
+      "source": "increpare",
+      "n_rules": 2,
+      "n_objects": 5,
+      "n_levels": 4,
+      "max_level_area": 8
+    },
+    {
+      "name": "bittle_bat_by_unknown_author",
+      "source": "increpare",
+      "n_rules": 2,
+      "n_objects": 5,
+      "n_levels": 5,
+      "max_level_area": 2
+    },
+    {
+      "name": "push!_by_josh_delson",
+      "source": "increpare",
+      "n_rules": 2,
+      "n_objects": 5,
+      "n_levels": 5,
+      "max_level_area": 11
+    },
+    {
+      "name": "Duplex",
+      "source": "scraped",
+      "n_rules": 2,
+      "n_objects": 5,
+      "n_levels": 6,
+      "max_level_area": 7
+    },
+    {
+      "name": "match_threekoban_by_ezra_szanton",
+      "source": "increpare",
+      "n_rules": 2,
+      "n_objects": 5,
+      "n_levels": 10,
+      "max_level_area": 9
+    },
+    {
+      "name": "pikkuruinen",
+      "source": "scraped",
+      "n_rules": 2,
+      "n_objects": 5,
+      "n_levels": 12,
+      "max_level_area": 10
+    },
+    {
+      "name": "game_log_3_level_by_chloe_roberts",
+      "source": "increpare",
+      "n_rules": 2,
+      "n_objects": 6,
+      "n_levels": 2,
+      "max_level_area": 11
+    },
+    {
+      "name": "manic_magellan_by_nonameghost",
+      "source": "increpare",
+      "n_rules": 2,
+      "n_objects": 6,
+      "n_levels": 2,
+      "max_level_area": 9
+    },
+    {
+      "name": "trails_by_officially-official",
+      "source": "increpare",
+      "n_rules": 2,
+      "n_objects": 6,
+      "n_levels": 2,
+      "max_level_area": 9
+    },
+    {
+      "name": "dont_overthink_by_gareth",
+      "source": "increpare",
+      "n_rules": 2,
+      "n_objects": 6,
+      "n_levels": 3,
+      "max_level_area": 28
+    },
+    {
+      "name": "push_pull_by_stephen_lavelle",
+      "source": "increpare",
+      "n_rules": 2,
+      "n_objects": 6,
+      "n_levels": 3,
+      "max_level_area": 7
+    },
+    {
+      "name": "dugeon_of_nabokos_by_the_wireframe_readership",
+      "source": "increpare",
+      "n_rules": 2,
+      "n_objects": 6,
+      "n_levels": 4,
+      "max_level_area": 7
+    },
+    {
+      "name": "crate_mover_5000_by_scott_grymkoski",
+      "source": "increpare",
+      "n_rules": 2,
+      "n_objects": 6,
+      "n_levels": 5,
+      "max_level_area": 13
+    },
+    {
+      "name": "mr._block_runs_hard_by_treverator",
+      "source": "increpare",
+      "n_rules": 2,
+      "n_objects": 6,
+      "n_levels": 5,
+      "max_level_area": 13
+    },
+    {
+      "name": "drill_sokoban_by_increpare",
+      "source": "increpare",
+      "n_rules": 2,
+      "n_objects": 6,
+      "n_levels": 6,
+      "max_level_area": 7
+    },
+    {
+      "name": "manuzzle_by_maan",
+      "source": "increpare",
+      "n_rules": 2,
+      "n_objects": 6,
+      "n_levels": 9,
+      "max_level_area": 9
+    },
+    {
+      "name": "ross_lowes_quim_whimsy_by_baked_bean_seduction_games",
+      "source": "increpare",
+      "n_rules": 2,
+      "n_objects": 6,
+      "n_levels": 14,
+      "max_level_area": 7
+    },
+    {
+      "name": "1030_by_james_houston",
+      "source": "increpare",
+      "n_rules": 2,
+      "n_objects": 7,
+      "n_levels": 2,
+      "max_level_area": 7
+    },
+    {
+      "name": "space_mission_by_unknown_author",
+      "source": "increpare",
+      "n_rules": 2,
+      "n_objects": 7,
+      "n_levels": 3,
+      "max_level_area": 8
+    },
+    {
+      "name": "bury_the_body!_by_travis_blumer",
+      "source": "increpare",
+      "n_rules": 2,
+      "n_objects": 7,
+      "n_levels": 5,
+      "max_level_area": 15
+    },
+    {
+      "name": "gender_and_a_block_pushing_game_by_stingby12",
+      "source": "increpare",
+      "n_rules": 2,
+      "n_objects": 7,
+      "n_levels": 5,
+      "max_level_area": 11
+    },
+    {
+      "name": "topple_everything_by_x_sheep",
+      "source": "increpare",
+      "n_rules": 2,
+      "n_objects": 7,
+      "n_levels": 6,
+      "max_level_area": 11
+    },
+    {
+      "name": "running_back_rush_by_sam_diaz",
+      "source": "increpare",
+      "n_rules": 2,
+      "n_objects": 7,
+      "n_levels": 26,
+      "max_level_area": 22
+    },
+    {
+      "name": "double_block_pushing_game_by_ali_keller",
+      "source": "increpare",
+      "n_rules": 2,
+      "n_objects": 8,
+      "n_levels": 4,
+      "max_level_area": 7
+    },
+    {
+      "name": "someone_there__by_ekirk10",
+      "source": "increpare",
+      "n_rules": 2,
+      "n_objects": 8,
+      "n_levels": 11,
+      "max_level_area": 7
+    },
+    {
+      "name": "well_eat_these_donuts_together_by_buffalocat",
+      "source": "increpare",
+      "n_rules": 3,
+      "n_objects": 4,
+      "n_levels": 5,
+      "max_level_area": 15
+    },
+    {
+      "name": "david_skinners_simple_block_pushing_ga_6bbbf8d6_by_zacharyabel",
+      "source": "increpare",
+      "n_rules": 3,
+      "n_objects": 5,
+      "n_levels": 2,
+      "max_level_area": 7
+    },
+    {
+      "name": "slenderpixel_by_dittoslash",
+      "source": "increpare",
+      "n_rules": 3,
+      "n_objects": 5,
+      "n_levels": 2,
+      "max_level_area": 9
+    },
+    {
+      "name": "herding_cats__by_nvhungphong",
+      "source": "increpare",
+      "n_rules": 3,
+      "n_objects": 5,
+      "n_levels": 3,
+      "max_level_area": 7
+    },
+    {
+      "name": "match_3_block_push_by_gentova007",
+      "source": "increpare",
+      "n_rules": 3,
+      "n_objects": 5,
+      "n_levels": 4,
+      "max_level_area": 9
+    },
+    {
+      "name": "nietzsche_by_nuuup",
+      "source": "increpare",
+      "n_rules": 3,
+      "n_objects": 5,
+      "n_levels": 5,
+      "max_level_area": 9
+    },
+    {
+      "name": "carls_puzzle_game_by_carl_haas",
+      "source": "increpare",
+      "n_rules": 3,
+      "n_objects": 5,
+      "n_levels": 7,
+      "max_level_area": 7
+    },
+    {
+      "name": "dual-wielding_plough_challenge_by_increpare",
+      "source": "increpare",
+      "n_rules": 3,
+      "n_objects": 5,
+      "n_levels": 25,
+      "max_level_area": 12
+    },
+    {
+      "name": "no_name_yet_by_dustin_lane",
+      "source": "increpare",
+      "n_rules": 3,
+      "n_objects": 6,
+      "n_levels": 2,
+      "max_level_area": 14
+    },
+    {
+      "name": "dans_game_by_stephen_lavelle",
+      "source": "increpare",
+      "n_rules": 3,
+      "n_objects": 6,
+      "n_levels": 3,
+      "max_level_area": 8
+    },
+    {
+      "name": "simple_block_pushing_game_by_schwinh",
+      "source": "increpare",
+      "n_rules": 3,
+      "n_objects": 6,
+      "n_levels": 4,
+      "max_level_area": 7
+    },
+    {
+      "name": "game1_by_ben",
+      "source": "increpare",
+      "n_rules": 3,
+      "n_objects": 6,
+      "n_levels": 5,
+      "max_level_area": 11
+    },
+    {
+      "name": "zen_puzzle_garden_by_increpare",
+      "source": "increpare",
+      "n_rules": 3,
+      "n_objects": 6,
+      "n_levels": 5,
+      "max_level_area": 12
+    },
+    {
+      "name": "the_poop_game_by_pontus_granstr\u00f6m",
+      "source": "increpare",
+      "n_rules": 3,
+      "n_objects": 6,
+      "n_levels": 8,
+      "max_level_area": 5
+    },
+    {
+      "name": "slime_finder_by_samoyedboi",
+      "source": "increpare",
+      "n_rules": 3,
+      "n_objects": 6,
+      "n_levels": 11,
+      "max_level_area": 19
+    },
+    {
+      "name": "jgkjgfskjfkdfjg_by_maeeelyyys",
+      "source": "increpare",
+      "n_rules": 3,
+      "n_objects": 7,
+      "n_levels": 2,
+      "max_level_area": 11
+    },
+    {
+      "name": "bit_treats_by_barefootengineer1",
+      "source": "increpare",
+      "n_rules": 3,
+      "n_objects": 7,
+      "n_levels": 3,
+      "max_level_area": 18
+    },
+    {
+      "name": "Bridge",
+      "source": "scraped",
+      "n_rules": 3,
+      "n_objects": 7,
+      "n_levels": 4,
+      "max_level_area": 13
+    },
+    {
+      "name": "block_game_by_emily_dresden",
+      "source": "increpare",
+      "n_rules": 3,
+      "n_objects": 7,
+      "n_levels": 5,
+      "max_level_area": 10
+    },
+    {
+      "name": "shit_by_samir_menon",
+      "source": "increpare",
+      "n_rules": 3,
+      "n_objects": 7,
+      "n_levels": 6,
+      "max_level_area": 3
+    },
+    {
+      "name": "swapping_shenanigans_by_galactictrapdoor",
+      "source": "increpare",
+      "n_rules": 3,
+      "n_objects": 7,
+      "n_levels": 8,
+      "max_level_area": 10
+    },
+    {
+      "name": "simple_block_pushing_game_by_zaydiscool777",
+      "source": "increpare",
+      "n_rules": 3,
+      "n_objects": 8,
+      "n_levels": 2,
+      "max_level_area": 7
+    },
+    {
+      "name": "wizard_world_by_unknown_author",
+      "source": "increpare",
+      "n_rules": 3,
+      "n_objects": 8,
+      "n_levels": 3,
+      "max_level_area": 8
+    },
+    {
+      "name": "build_a_snowman_v1.0_by_throwaway-github-visst",
+      "source": "increpare",
+      "n_rules": 3,
+      "n_objects": 8,
+      "n_levels": 7,
+      "max_level_area": 9
+    },
+    {
+      "name": "neko_puzzle_by_increpare",
+      "source": "increpare",
+      "n_rules": 4,
+      "n_objects": 3,
+      "n_levels": 5,
+      "max_level_area": 7
+    },
+    {
+      "name": "simple_slime_man_by_monakrom",
+      "source": "increpare",
+      "n_rules": 4,
+      "n_objects": 5,
+      "n_levels": 2,
+      "max_level_area": 7
+    },
+    {
+      "name": "find_the_cats!_by_iloveryujinandbingus",
+      "source": "increpare",
+      "n_rules": 4,
+      "n_objects": 5,
+      "n_levels": 4,
+      "max_level_area": 8
+    },
+    {
+      "name": "15_square_by_chris_hallberg",
+      "source": "increpare",
+      "n_rules": 4,
+      "n_objects": 5,
+      "n_levels": 6,
+      "max_level_area": 4
+    },
+    {
+      "name": "mannschaft-schieben-sokoban_by_increpare",
+      "source": "increpare",
+      "n_rules": 4,
+      "n_objects": 5,
+      "n_levels": 21,
+      "max_level_area": 12
+    },
+    {
+      "name": "my_game_by_geojax",
+      "source": "increpare",
+      "n_rules": 4,
+      "n_objects": 6,
+      "n_levels": 2,
+      "max_level_area": 9
+    },
+    {
+      "name": "cosechando_by_martinglazaroff",
+      "source": "increpare",
+      "n_rules": 4,
+      "n_objects": 6,
+      "n_levels": 3,
+      "max_level_area": 8
+    },
+    {
+      "name": "simple_block_rolling_game_by_asf",
+      "source": "increpare",
+      "n_rules": 4,
+      "n_objects": 6,
+      "n_levels": 3,
+      "max_level_area": 8
+    },
+    {
+      "name": "putta_kuberna_by_lage_linnarsson",
+      "source": "increpare",
+      "n_rules": 4,
+      "n_objects": 6,
+      "n_levels": 5,
+      "max_level_area": 7
+    },
+    {
+      "name": "players_by_ladace",
+      "source": "increpare",
+      "n_rules": 4,
+      "n_objects": 6,
+      "n_levels": 6,
+      "max_level_area": 8
+    },
+    {
+      "name": "pull_two_by_nmcsperry",
+      "source": "increpare",
+      "n_rules": 4,
+      "n_objects": 6,
+      "n_levels": 8,
+      "max_level_area": 7
+    },
+    {
+      "name": "recondite_star_sector_sigma_by_increpare",
+      "source": "increpare",
+      "n_rules": 4,
+      "n_objects": 6,
+      "n_levels": 10,
+      "max_level_area": 8
+    },
+    {
+      "name": "lampionnen_aansteken_by_jan-niestadt",
+      "source": "increpare",
+      "n_rules": 4,
+      "n_objects": 7,
+      "n_levels": 2,
+      "max_level_area": 11
+    },
+    {
+      "name": "catchem_bots_by_taylorjoslin",
+      "source": "increpare",
+      "n_rules": 4,
+      "n_objects": 7,
+      "n_levels": 4,
+      "max_level_area": 15
+    },
+    {
+      "name": "the_bully_by_the_duck",
+      "source": "increpare",
+      "n_rules": 4,
+      "n_objects": 7,
+      "n_levels": 4,
+      "max_level_area": 20
+    },
+    {
+      "name": "merge_by_srp",
+      "source": "increpare",
+      "n_rules": 4,
+      "n_objects": 7,
+      "n_levels": 5,
+      "max_level_area": 7
+    },
+    {
+      "name": "garden_path_puzzle_by_nicholascc",
+      "source": "increpare",
+      "n_rules": 4,
+      "n_objects": 7,
+      "n_levels": 8,
+      "max_level_area": 11
+    },
+    {
+      "name": "mo2261_by_rose",
+      "source": "increpare",
+      "n_rules": 4,
+      "n_objects": 8,
+      "n_levels": 2,
+      "max_level_area": 7
+    },
+    {
+      "name": "apple_picker_by_namtis",
+      "source": "increpare",
+      "n_rules": 4,
+      "n_objects": 8,
+      "n_levels": 3,
+      "max_level_area": 7
+    },
+    {
+      "name": "save_the_eggs_from_cats_by_annayeva",
+      "source": "increpare",
+      "n_rules": 4,
+      "n_objects": 8,
+      "n_levels": 3,
+      "max_level_area": 11
+    },
+    {
+      "name": "babas_tiny_adventure_by_nobozertas",
+      "source": "increpare",
+      "n_rules": 4,
+      "n_objects": 8,
+      "n_levels": 5,
+      "max_level_area": 5
+    },
+    {
+      "name": "Muddy_Sokoban_Level_Set_I",
+      "source": "scraped",
+      "n_rules": 4,
+      "n_objects": 8,
+      "n_levels": 7,
+      "max_level_area": 7
+    },
+    {
+      "name": "Snake_Crate",
+      "source": "scraped",
+      "n_rules": 4,
+      "n_objects": 8,
+      "n_levels": 11,
+      "max_level_area": 18
+    },
+    {
+      "name": "gdd301_demo_game_by_emma_hubbell",
+      "source": "increpare",
+      "n_rules": 4,
+      "n_objects": 9,
+      "n_levels": 2,
+      "max_level_area": 13
+    },
+    {
+      "name": "coin_collector_by_germ90",
+      "source": "increpare",
+      "n_rules": 4,
+      "n_objects": 9,
+      "n_levels": 3,
+      "max_level_area": 9
+    },
+    {
+      "name": "sokoban_remix_by_dani_emrich",
+      "source": "increpare",
+      "n_rules": 4,
+      "n_objects": 9,
+      "n_levels": 3,
+      "max_level_area": 8
+    },
+    {
+      "name": "lemons_by_jeffjeff123456",
+      "source": "increpare",
+      "n_rules": 4,
+      "n_objects": 9,
+      "n_levels": 9,
+      "max_level_area": 11
+    },
+    {
+      "name": "m1rr0r_by_nathaniel_jeffries",
+      "source": "increpare",
+      "n_rules": 4,
+      "n_objects": 10,
+      "n_levels": 2,
+      "max_level_area": 7
+    },
+    {
+      "name": "_simple__block_pushing_game_by_xligamer",
+      "source": "increpare",
+      "n_rules": 4,
+      "n_objects": 10,
+      "n_levels": 16,
+      "max_level_area": 28
+    },
+    {
+      "name": "\u00a1golosinas_para_max!_by_liberi",
+      "source": "increpare",
+      "n_rules": 4,
+      "n_objects": 11,
+      "n_levels": 3,
+      "max_level_area": 7
+    },
+    {
+      "name": "game_of_life_+_f_eli_golf_by_sarastrbjrk",
+      "source": "increpare",
+      "n_rules": 4,
+      "n_objects": 11,
+      "n_levels": 8,
+      "max_level_area": 12
+    },
+    {
+      "name": "let_me_survive_by_tianxiao_ren",
+      "source": "increpare",
+      "n_rules": 5,
+      "n_objects": 5,
+      "n_levels": 3,
+      "max_level_area": 13
+    },
+    {
+      "name": "make_way!_by_stephen_lavelle",
+      "source": "increpare",
+      "n_rules": 5,
+      "n_objects": 6,
+      "n_levels": 2,
+      "max_level_area": 10
+    },
+    {
+      "name": "cops_n_robbers_by_detective",
+      "source": "increpare",
+      "n_rules": 5,
+      "n_objects": 6,
+      "n_levels": 3,
+      "max_level_area": 16
+    },
+    {
+      "name": "crazy_dungeon_by_slatero",
+      "source": "increpare",
+      "n_rules": 5,
+      "n_objects": 6,
+      "n_levels": 5,
+      "max_level_area": 8
+    },
+    {
+      "name": "wormholeoban_by_increpare",
+      "source": "increpare",
+      "n_rules": 5,
+      "n_objects": 6,
+      "n_levels": 5,
+      "max_level_area": 7
+    },
+    {
+      "name": "magnet_test_cases_by_chz",
+      "source": "increpare",
+      "n_rules": 5,
+      "n_objects": 6,
+      "n_levels": 7,
+      "max_level_area": 7
+    },
+    {
+      "name": "all_green_to_blue_by_increpare",
+      "source": "increpare",
+      "n_rules": 5,
+      "n_objects": 6,
+      "n_levels": 11,
+      "max_level_area": 12
+    },
+    {
+      "name": "covid_vaccine_extraction_by_riley_harris,_ralph_cullom",
+      "source": "increpare",
+      "n_rules": 5,
+      "n_objects": 7,
+      "n_levels": 3,
+      "max_level_area": 11
+    },
+    {
+      "name": "switch_switcher_by_increpare",
+      "source": "increpare",
+      "n_rules": 5,
+      "n_objects": 7,
+      "n_levels": 3,
+      "max_level_area": 9
+    },
+    {
+      "name": "mirror_love_by_william,_akshat,_prasanna,_vishal",
+      "source": "increpare",
+      "n_rules": 5,
+      "n_objects": 7,
+      "n_levels": 4,
+      "max_level_area": 20
+    },
+    {
+      "name": "little_lizards_by_falconninja",
+      "source": "increpare",
+      "n_rules": 5,
+      "n_objects": 7,
+      "n_levels": 5,
+      "max_level_area": 10
+    },
+    {
+      "name": "patriot_game_by_sean_kearney",
+      "source": "increpare",
+      "n_rules": 5,
+      "n_objects": 7,
+      "n_levels": 11,
+      "max_level_area": 19
+    },
+    {
+      "name": "sheep_sim!_\ud83d\udc11\ud83d\udc0f\ud83d\udc11\ud83d\udc0f\ud83d\udc11\ud83d\udc0f_by_zacknattack",
+      "source": "increpare",
+      "n_rules": 5,
+      "n_objects": 8,
+      "n_levels": 2,
+      "max_level_area": 9
+    },
+    {
+      "name": "my_game_by_skyelinerss",
+      "source": "increpare",
+      "n_rules": 5,
+      "n_objects": 8,
+      "n_levels": 3,
+      "max_level_area": 8
+    },
+    {
+      "name": "viikin_peltoseikkailu_by_kristian_lindqvist",
+      "source": "increpare",
+      "n_rules": 5,
+      "n_objects": 8,
+      "n_levels": 3,
+      "max_level_area": 15
+    },
+    {
+      "name": "caixas_by_steinerkelvin",
+      "source": "increpare",
+      "n_rules": 5,
+      "n_objects": 8,
+      "n_levels": 4,
+      "max_level_area": 12
+    },
+    {
+      "name": "adventures_of_thestevewhotrollsyou_by_steve_balint",
+      "source": "increpare",
+      "n_rules": 5,
+      "n_objects": 8,
+      "n_levels": 5,
+      "max_level_area": 16
+    },
+    {
+      "name": "mirror_enemy_game_by_skinke3",
+      "source": "increpare",
+      "n_rules": 5,
+      "n_objects": 8,
+      "n_levels": 6,
+      "max_level_area": 7
+    },
+    {
+      "name": "snake_crate_by_jrigs-qu22",
+      "source": "increpare",
+      "n_rules": 5,
+      "n_objects": 8,
+      "n_levels": 11,
+      "max_level_area": 18
+    },
+    {
+      "name": "snake_n_orbs_by_aashish_kumar",
+      "source": "increpare",
+      "n_rules": 5,
+      "n_objects": 9,
+      "n_levels": 2,
+      "max_level_area": 7
+    },
+    {
+      "name": "pink_by_elitamasan",
+      "source": "increpare",
+      "n_rules": 5,
+      "n_objects": 9,
+      "n_levels": 4,
+      "max_level_area": 7
+    },
+    {
+      "name": "pushblock_by_keyband",
+      "source": "increpare",
+      "n_rules": 5,
+      "n_objects": 9,
+      "n_levels": 5,
+      "max_level_area": 7
+    },
+    {
+      "name": "soggy_bunny_by_jmorast",
+      "source": "increpare",
+      "n_rules": 5,
+      "n_objects": 9,
+      "n_levels": 9,
+      "max_level_area": 14
+    },
+    {
+      "name": "ogre_push!_[ver._1.2.2]_by_jdude104",
+      "source": "increpare",
+      "n_rules": 5,
+      "n_objects": 9,
+      "n_levels": 21,
+      "max_level_area": 8
+    },
+    {
+      "name": "zombie_survival_by_steve_co",
+      "source": "increpare",
+      "n_rules": 5,
+      "n_objects": 10,
+      "n_levels": 2,
+      "max_level_area": 15
+    },
+    {
+      "name": "Roots",
+      "source": "scraped",
+      "n_rules": 5,
+      "n_objects": 10,
+      "n_levels": 5,
+      "max_level_area": 10
+    },
+    {
+      "name": "el_fantasma_toca_huevos_by_redon_games",
+      "source": "increpare",
+      "n_rules": 5,
+      "n_objects": 11,
+      "n_levels": 3,
+      "max_level_area": 16
+    },
+    {
+      "name": "delineation_by_matthew_vandevander",
+      "source": "increpare",
+      "n_rules": 5,
+      "n_objects": 11,
+      "n_levels": 8,
+      "max_level_area": 4
+    },
+    {
+      "name": "boxes_&_spikes_by_jdavidson1100",
+      "source": "increpare",
+      "n_rules": 5,
+      "n_objects": 12,
+      "n_levels": 16,
+      "max_level_area": 11
+    },
+    {
+      "name": "zombies_by_josh",
+      "source": "increpare",
+      "n_rules": 6,
+      "n_objects": 5,
+      "n_levels": 10,
+      "max_level_area": 8
+    },
+    {
+      "name": "random_robots_by_molsal",
+      "source": "increpare",
+      "n_rules": 6,
+      "n_objects": 6,
+      "n_levels": 2,
+      "max_level_area": 9
+    },
+    {
+      "name": "usagi_puzzle_by_mojojojo99",
+      "source": "increpare",
+      "n_rules": 6,
+      "n_objects": 6,
+      "n_levels": 3,
+      "max_level_area": 8
+    },
+    {
+      "name": "push_block_party_by_anthony_lombardo",
+      "source": "increpare",
+      "n_rules": 6,
+      "n_objects": 6,
+      "n_levels": 5,
+      "max_level_area": 17
+    },
+    {
+      "name": "ayy_lmagnet_by_shembu9",
+      "source": "increpare",
+      "n_rules": 6,
+      "n_objects": 6,
+      "n_levels": 9,
+      "max_level_area": 16
+    },
+    {
+      "name": "deeper_&_deeper_by_johnicholas",
+      "source": "increpare",
+      "n_rules": 6,
+      "n_objects": 7,
+      "n_levels": 3,
+      "max_level_area": 8
+    },
+    {
+      "name": "weird_crates_by_sacredsheep",
+      "source": "increpare",
+      "n_rules": 6,
+      "n_objects": 7,
+      "n_levels": 4,
+      "max_level_area": 11
+    },
+    {
+      "name": "the_trick_to_baking_three_layer_cakes_by_buffalocat",
+      "source": "increpare",
+      "n_rules": 6,
+      "n_objects": 7,
+      "n_levels": 6,
+      "max_level_area": 13
+    },
+    {
+      "name": "gapfiller___lueckefueller_by_increpare",
+      "source": "increpare",
+      "n_rules": 6,
+      "n_objects": 7,
+      "n_levels": 9,
+      "max_level_area": 12
+    },
+    {
+      "name": "condensed_galaxy_by_stingby12",
+      "source": "increpare",
+      "n_rules": 6,
+      "n_objects": 7,
+      "n_levels": 17,
+      "max_level_area": 13
+    },
+    {
+      "name": "solidify_by_sydney_swartz",
+      "source": "increpare",
+      "n_rules": 6,
+      "n_objects": 8,
+      "n_levels": 2,
+      "max_level_area": 7
+    },
+    {
+      "name": "escape_by_shawn_martin",
+      "source": "increpare",
+      "n_rules": 6,
+      "n_objects": 8,
+      "n_levels": 4,
+      "max_level_area": 7
+    },
+    {
+      "name": "hat_travelleraw_by_maria-shchurova",
+      "source": "increpare",
+      "n_rules": 6,
+      "n_objects": 8,
+      "n_levels": 6,
+      "max_level_area": 25
+    },
+    {
+      "name": "crate_combiner_by_jeffjeff123456",
+      "source": "increpare",
+      "n_rules": 6,
+      "n_objects": 8,
+      "n_levels": 10,
+      "max_level_area": 10
+    },
+    {
+      "name": "build_a_snowman_v2.0_by_drewdrewsan",
+      "source": "increpare",
+      "n_rules": 6,
+      "n_objects": 9,
+      "n_levels": 2,
+      "max_level_area": 6
+    },
+    {
+      "name": "build_a_snowman_v3.0_by_solafson",
+      "source": "increpare",
+      "n_rules": 6,
+      "n_objects": 9,
+      "n_levels": 3,
+      "max_level_area": 8
+    },
+    {
+      "name": "build_a_snowman_v3.0_by_mgelbart",
+      "source": "increpare",
+      "n_rules": 6,
+      "n_objects": 9,
+      "n_levels": 4,
+      "max_level_area": 10
+    },
+    {
+      "name": "the_block_man_by_brian_eschenbrenner",
+      "source": "increpare",
+      "n_rules": 6,
+      "n_objects": 9,
+      "n_levels": 5,
+      "max_level_area": 8
+    },
+    {
+      "name": "window_hero_by_giles",
+      "source": "increpare",
+      "n_rules": 6,
+      "n_objects": 9,
+      "n_levels": 9,
+      "max_level_area": 11
+    },
+    {
+      "name": "push_em!_by_merfoso",
+      "source": "increpare",
+      "n_rules": 6,
+      "n_objects": 9,
+      "n_levels": 11,
+      "max_level_area": 9
+    },
+    {
+      "name": "build_a_snowman_1.0_by_puzzle00",
+      "source": "increpare",
+      "n_rules": 6,
+      "n_objects": 10,
+      "n_levels": 3,
+      "max_level_area": 7
+    },
+    {
+      "name": "el_laberinto_asesino_by_saksalksal",
+      "source": "increpare",
+      "n_rules": 6,
+      "n_objects": 10,
+      "n_levels": 5,
+      "max_level_area": 13
+    },
+    {
+      "name": "john_eats_cake_by_orsonhart",
+      "source": "increpare",
+      "n_rules": 6,
+      "n_objects": 10,
+      "n_levels": 8,
+      "max_level_area": 6
+    },
+    {
+      "name": "haberdashery_by_lee2sman",
+      "source": "increpare",
+      "n_rules": 6,
+      "n_objects": 11,
+      "n_levels": 7,
+      "max_level_area": 8
+    },
+    {
+      "name": "back_home_by_geralas",
+      "source": "increpare",
+      "n_rules": 6,
+      "n_objects": 12,
+      "n_levels": 4,
+      "max_level_area": 11
+    },
+    {
+      "name": "Isle_of_Sokoban",
+      "source": "scraped",
+      "n_rules": 6,
+      "n_objects": 12,
+      "n_levels": 8,
+      "max_level_area": 11
+    },
+    {
+      "name": "crate_and..._anticrate__by_noend455",
+      "source": "increpare",
+      "n_rules": 7,
+      "n_objects": 6,
+      "n_levels": 2,
+      "max_level_area": 10
+    },
+    {
+      "name": "b0mbz_by_matt_diebolt",
+      "source": "increpare",
+      "n_rules": 7,
+      "n_objects": 7,
+      "n_levels": 4,
+      "max_level_area": 7
+    },
+    {
+      "name": "super_mario_bros_by_steve_balint",
+      "source": "increpare",
+      "n_rules": 7,
+      "n_objects": 7,
+      "n_levels": 6,
+      "max_level_area": 4
+    },
+    {
+      "name": "nut_pull_by_jeffjeff123456",
+      "source": "increpare",
+      "n_rules": 7,
+      "n_objects": 7,
+      "n_levels": 12,
+      "max_level_area": 9
+    },
+    {
+      "name": "ladder_by_theboldedyellow",
+      "source": "increpare",
+      "n_rules": 7,
+      "n_objects": 8,
+      "n_levels": 3,
+      "max_level_area": 11
+    },
+    {
+      "name": "gravity_by_joe",
+      "source": "increpare",
+      "n_rules": 7,
+      "n_objects": 8,
+      "n_levels": 4,
+      "max_level_area": 11
+    },
+    {
+      "name": "Cancel",
+      "source": "scraped",
+      "n_rules": 7,
+      "n_objects": 8,
+      "n_levels": 8,
+      "max_level_area": 9
+    },
+    {
+      "name": "the_birthday_party_by_oscarjlouw",
+      "source": "increpare",
+      "n_rules": 7,
+      "n_objects": 9,
+      "n_levels": 2,
+      "max_level_area": 16
+    },
+    {
+      "name": "gifted_by_neeko",
+      "source": "increpare",
+      "n_rules": 7,
+      "n_objects": 9,
+      "n_levels": 3,
+      "max_level_area": 7
+    },
+    {
+      "name": "sokoban_variation_by_trbrc",
+      "source": "increpare",
+      "n_rules": 7,
+      "n_objects": 9,
+      "n_levels": 4,
+      "max_level_area": 10
+    },
+    {
+      "name": "screenwrap_simulator_by_monakrom",
+      "source": "increpare",
+      "n_rules": 7,
+      "n_objects": 9,
+      "n_levels": 6,
+      "max_level_area": 9
+    },
+    {
+      "name": "sticky_fingers_by_caurso99",
+      "source": "increpare",
+      "n_rules": 7,
+      "n_objects": 9,
+      "n_levels": 10,
+      "max_level_area": 11
+    },
+    {
+      "name": "trashcan_vs._banana_by_e_is_cool",
+      "source": "increpare",
+      "n_rules": 7,
+      "n_objects": 9,
+      "n_levels": 21,
+      "max_level_area": 10
+    },
+    {
+      "name": "simple_block_pushing_example_by_monakrom",
+      "source": "increpare",
+      "n_rules": 7,
+      "n_objects": 10,
+      "n_levels": 2,
+      "max_level_area": 7
+    },
+    {
+      "name": "build_a_snowman_v3.0_by_ylimes10",
+      "source": "increpare",
+      "n_rules": 7,
+      "n_objects": 10,
+      "n_levels": 4,
+      "max_level_area": 7
+    },
+    {
+      "name": "gravicrate_by_orcenhaze",
+      "source": "increpare",
+      "n_rules": 7,
+      "n_objects": 10,
+      "n_levels": 9,
+      "max_level_area": 12
+    },
+    {
+      "name": "doublo7_by_mirage-xel",
+      "source": "increpare",
+      "n_rules": 7,
+      "n_objects": 11,
+      "n_levels": 2,
+      "max_level_area": 7
+    },
+    {
+      "name": "highschool_survivors_by_gianca33",
+      "source": "increpare",
+      "n_rules": 7,
+      "n_objects": 11,
+      "n_levels": 3,
+      "max_level_area": 14
+    },
+    {
+      "name": "the_festival_game!_by_oscarjlouw",
+      "source": "increpare",
+      "n_rules": 7,
+      "n_objects": 12,
+      "n_levels": 7,
+      "max_level_area": 14
+    },
+    {
+      "name": "psychokinesis_by_aden_eldred",
+      "source": "increpare",
+      "n_rules": 8,
+      "n_objects": 6,
+      "n_levels": 3,
+      "max_level_area": 10
+    },
+    {
+      "name": "mirror_blocks_by_edalcmagal",
+      "source": "increpare",
+      "n_rules": 8,
+      "n_objects": 6,
+      "n_levels": 16,
+      "max_level_area": 7
+    },
+    {
+      "name": "Reap",
+      "source": "scraped",
+      "n_rules": 8,
+      "n_objects": 7,
+      "n_levels": 6,
+      "max_level_area": 11
+    },
+    {
+      "name": "microban_by_nickneim",
+      "source": "increpare",
+      "n_rules": 8,
+      "n_objects": 7,
+      "n_levels": 10,
+      "max_level_area": 12
+    },
+    {
+      "name": "re__starting_by_beekie18",
+      "source": "increpare",
+      "n_rules": 8,
+      "n_objects": 8,
+      "n_levels": 4,
+      "max_level_area": 7
+    },
+    {
+      "name": "colorcrate_by_evan_malmud__crychair_",
+      "source": "increpare",
+      "n_rules": 8,
+      "n_objects": 8,
+      "n_levels": 11,
+      "max_level_area": 9
+    },
+    {
+      "name": "untitled_by_testethetestcat",
+      "source": "increpare",
+      "n_rules": 8,
+      "n_objects": 9,
+      "n_levels": 2,
+      "max_level_area": 5
+    },
+    {
+      "name": "crate_push_by_brandon_dillard",
+      "source": "increpare",
+      "n_rules": 8,
+      "n_objects": 9,
+      "n_levels": 5,
+      "max_level_area": 8
+    },
+    {
+      "name": "snowman_game_by_jerry_liu",
+      "source": "increpare",
+      "n_rules": 8,
+      "n_objects": 9,
+      "n_levels": 6,
+      "max_level_area": 7
+    },
+    {
+      "name": "build_a_snowman_v2.0_by_alex_yuan",
+      "source": "increpare",
+      "n_rules": 8,
+      "n_objects": 10,
+      "n_levels": 3,
+      "max_level_area": 10
+    },
+    {
+      "name": "kyle_wrestling_by_john_valencia",
+      "source": "increpare",
+      "n_rules": 8,
+      "n_objects": 10,
+      "n_levels": 7,
+      "max_level_area": 10
+    },
+    {
+      "name": "slime_by_alex_washtell",
+      "source": "increpare",
+      "n_rules": 8,
+      "n_objects": 11,
+      "n_levels": 2,
+      "max_level_area": 10
+    },
+    {
+      "name": "subway_upholstry_snot_smearing_championship_by_increpare",
+      "source": "increpare",
+      "n_rules": 8,
+      "n_objects": 11,
+      "n_levels": 7,
+      "max_level_area": 9
+    },
+    {
+      "name": "se\u00f1or_con_sombrero_trabaja_en_la_carcel_by_tina2900",
+      "source": "increpare",
+      "n_rules": 8,
+      "n_objects": 11,
+      "n_levels": 8,
+      "max_level_area": 9
+    },
+    {
+      "name": "build_a_snowman_v1.0_by_mgelbart",
+      "source": "increpare",
+      "n_rules": 8,
+      "n_objects": 12,
+      "n_levels": 2,
+      "max_level_area": 6
+    },
+    {
+      "name": "boston_tea_party_by_conor_cadigan_and_co",
+      "source": "increpare",
+      "n_rules": 8,
+      "n_objects": 12,
+      "n_levels": 8,
+      "max_level_area": 11
+    },
+    {
+      "name": "Glue_Factory",
+      "source": "scraped",
+      "n_rules": 9,
+      "n_objects": 7,
+      "n_levels": 4,
+      "max_level_area": 10
+    },
+    {
+      "name": "Switcheroo",
+      "source": "scraped",
+      "n_rules": 9,
+      "n_objects": 7,
+      "n_levels": 8,
+      "max_level_area": 11
+    },
+    {
+      "name": "lamb_and_lamps_by_aygyusuf",
+      "source": "increpare",
+      "n_rules": 9,
+      "n_objects": 8,
+      "n_levels": 10,
+      "max_level_area": 23
+    },
+    {
+      "name": "build_a_snowman_v2.0_by_melinda_ji",
+      "source": "increpare",
+      "n_rules": 9,
+      "n_objects": 9,
+      "n_levels": 3,
+      "max_level_area": 7
+    },
+    {
+      "name": "build_a_snowman_by_cupcakegrb",
+      "source": "increpare",
+      "n_rules": 9,
+      "n_objects": 9,
+      "n_levels": 7,
+      "max_level_area": 13
+    },
+    {
+      "name": "simple_action_example_by_unknown_author",
+      "source": "increpare",
+      "n_rules": 9,
+      "n_objects": 10,
+      "n_levels": 2,
+      "max_level_area": 12
+    },
+    {
+      "name": "untitled_game_v0.7_by_rando2048",
+      "source": "increpare",
+      "n_rules": 9,
+      "n_objects": 10,
+      "n_levels": 12,
+      "max_level_area": 8
+    },
+    {
+      "name": "Absorb",
+      "source": "scraped",
+      "n_rules": 9,
+      "n_objects": 11,
+      "n_levels": 2,
+      "max_level_area": 12
+    },
+    {
+      "name": "lets_try_this_by_crimsondragon42",
+      "source": "increpare",
+      "n_rules": 9,
+      "n_objects": 11,
+      "n_levels": 12,
+      "max_level_area": 17
+    },
+    {
+      "name": "~~_pware_skeg_~~_by_brian_stottler______\u25a0",
+      "source": "increpare",
+      "n_rules": 9,
+      "n_objects": 12,
+      "n_levels": 4,
+      "max_level_area": 7
+    },
+    {
+      "name": "fill_them_with_crates_by_stingby12",
+      "source": "increpare",
+      "n_rules": 9,
+      "n_objects": 12,
+      "n_levels": 18,
+      "max_level_area": 9
+    },
+    {
+      "name": "untitled_by_benjy_bates",
+      "source": "increpare",
+      "n_rules": 9,
+      "n_objects": 13,
+      "n_levels": 2,
+      "max_level_area": 8
+    },
+    {
+      "name": "a_reindeer_game_by_ruggedmug",
+      "source": "increpare",
+      "n_rules": 9,
+      "n_objects": 13,
+      "n_levels": 12,
+      "max_level_area": 9
+    },
+    {
+      "name": "oneself_by_@mtrc",
+      "source": "increpare",
+      "n_rules": 9,
+      "n_objects": 14,
+      "n_levels": 9,
+      "max_level_area": 13
+    },
+    {
+      "name": "popcrushers_by_s_gibson",
+      "source": "increpare",
+      "n_rules": 10,
+      "n_objects": 8,
+      "n_levels": 10,
+      "max_level_area": 10
+    },
+    {
+      "name": "dispensing_boxes_by_qwaffles",
+      "source": "increpare",
+      "n_rules": 10,
+      "n_objects": 9,
+      "n_levels": 2,
+      "max_level_area": 7
+    },
+    {
+      "name": "build_a_snowman_v1.0_by_ofjdakl4",
+      "source": "increpare",
+      "n_rules": 10,
+      "n_objects": 9,
+      "n_levels": 7,
+      "max_level_area": 6
+    },
+    {
+      "name": "freys_cake_layering_nightmare_by_buffalocat",
+      "source": "increpare",
+      "n_rules": 10,
+      "n_objects": 10,
+      "n_levels": 5,
+      "max_level_area": 9
+    },
+    {
+      "name": "small_steps_by_rafaelrodriguezsanz",
+      "source": "increpare",
+      "n_rules": 10,
+      "n_objects": 11,
+      "n_levels": 2,
+      "max_level_area": 16
+    },
+    {
+      "name": "water_mine_by_kixthemix",
+      "source": "increpare",
+      "n_rules": 10,
+      "n_objects": 12,
+      "n_levels": 4,
+      "max_level_area": 9
+    },
+    {
+      "name": "a_snowballs_chance_in_hell_by_iznaut",
+      "source": "increpare",
+      "n_rules": 10,
+      "n_objects": 13,
+      "n_levels": 10,
+      "max_level_area": 11
+    },
+    {
+      "name": "in_the_mines_by_gavinleong08",
+      "source": "increpare",
+      "n_rules": 10,
+      "n_objects": 14,
+      "n_levels": 12,
+      "max_level_area": 11
+    },
+    {
+      "name": "get_3__by_unknown_author",
+      "source": "increpare",
+      "n_rules": 10,
+      "n_objects": 15,
+      "n_levels": 15,
+      "max_level_area": 10
+    },
+    {
+      "name": "biuld_a_snowman_by_uwuz2020",
+      "source": "increpare",
+      "n_rules": 11,
+      "n_objects": 9,
+      "n_levels": 4,
+      "max_level_area": 11
+    },
+    {
+      "name": "hook_by_mlipmanh",
+      "source": "increpare",
+      "n_rules": 11,
+      "n_objects": 9,
+      "n_levels": 8,
+      "max_level_area": 7
+    },
+    {
+      "name": "build_a_snowman_gogo\u2122_edition_[so_fun]_by_puzzle00",
+      "source": "increpare",
+      "n_rules": 11,
+      "n_objects": 10,
+      "n_levels": 4,
+      "max_level_area": 9
+    },
+    {
+      "name": "gurkeschieber_by_increpare",
+      "source": "increpare",
+      "n_rules": 11,
+      "n_objects": 10,
+      "n_levels": 20,
+      "max_level_area": 9
+    },
+    {
+      "name": "cash_burglar_by_daniel_merchell",
+      "source": "increpare",
+      "n_rules": 11,
+      "n_objects": 11,
+      "n_levels": 4,
+      "max_level_area": 16
+    },
+    {
+      "name": "repelo_by_syci-exe",
+      "source": "increpare",
+      "n_rules": 11,
+      "n_objects": 11,
+      "n_levels": 20,
+      "max_level_area": 9
+    },
+    {
+      "name": "Stand_III",
+      "source": "scraped",
+      "n_rules": 11,
+      "n_objects": 12,
+      "n_levels": 15,
+      "max_level_area": 11
+    },
+    {
+      "name": "Circuit_Breaker",
+      "source": "scraped",
+      "n_rules": 11,
+      "n_objects": 13,
+      "n_levels": 5,
+      "max_level_area": 9
+    },
+    {
+      "name": "walteri_\u0161okolaadimaa_by_tseik6",
+      "source": "increpare",
+      "n_rules": 11,
+      "n_objects": 13,
+      "n_levels": 15,
+      "max_level_area": 14
+    },
+    {
+      "name": "lawn_and_order_by_danflapjax",
+      "source": "increpare",
+      "n_rules": 11,
+      "n_objects": 14,
+      "n_levels": 11,
+      "max_level_area": 8
+    },
+    {
+      "name": "santoban_by_eckelito",
+      "source": "increpare",
+      "n_rules": 11,
+      "n_objects": 15,
+      "n_levels": 10,
+      "max_level_area": 12
+    },
+    {
+      "name": "naomis_challenge_4_game_winter_by_techythanh",
+      "source": "increpare",
+      "n_rules": 12,
+      "n_objects": 9,
+      "n_levels": 4,
+      "max_level_area": 7
+    },
+    {
+      "name": "lab2adventuregame_by_lucywambui",
+      "source": "increpare",
+      "n_rules": 12,
+      "n_objects": 10,
+      "n_levels": 4,
+      "max_level_area": 14
+    },
+    {
+      "name": "susto_felino_by_uligabri",
+      "source": "increpare",
+      "n_rules": 12,
+      "n_objects": 11,
+      "n_levels": 5,
+      "max_level_area": 12
+    },
+    {
+      "name": "Colorban",
+      "source": "scraped",
+      "n_rules": 12,
+      "n_objects": 12,
+      "n_levels": 23,
+      "max_level_area": 13
+    },
+    {
+      "name": "stackies_by_theboldedyellow",
+      "source": "increpare",
+      "n_rules": 12,
+      "n_objects": 13,
+      "n_levels": 14,
+      "max_level_area": 25
+    },
+    {
+      "name": "kitten_pushing_v5.0_by_natalie0217",
+      "source": "increpare",
+      "n_rules": 12,
+      "n_objects": 14,
+      "n_levels": 5,
+      "max_level_area": 14
+    },
+    {
+      "name": "slip_n_slide_by_luckofthedicehere",
+      "source": "increpare",
+      "n_rules": 12,
+      "n_objects": 15,
+      "n_levels": 5,
+      "max_level_area": 10
+    },
+    {
+      "name": "valeris_idea_by_necrothaum",
+      "source": "increpare",
+      "n_rules": 13,
+      "n_objects": 6,
+      "n_levels": 3,
+      "max_level_area": 8
+    },
+    {
+      "name": "water_and_fire_duality_by_paxxack",
+      "source": "increpare",
+      "n_rules": 13,
+      "n_objects": 8,
+      "n_levels": 4,
+      "max_level_area": 10
+    },
+    {
+      "name": "alport_by_mfaik",
+      "source": "increpare",
+      "n_rules": 13,
+      "n_objects": 10,
+      "n_levels": 17,
+      "max_level_area": 9
+    },
+    {
+      "name": "elemental_man_by_mikkelol",
+      "source": "increpare",
+      "n_rules": 13,
+      "n_objects": 11,
+      "n_levels": 8,
+      "max_level_area": 9
+    },
+    {
+      "name": "puzzle_shooter_by_shomaisshi",
+      "source": "increpare",
+      "n_rules": 13,
+      "n_objects": 12,
+      "n_levels": 3,
+      "max_level_area": 19
+    },
+    {
+      "name": "mazezam_by_malcolm_tyrrell",
+      "source": "increpare",
+      "n_rules": 13,
+      "n_objects": 13,
+      "n_levels": 30,
+      "max_level_area": 13
+    },
+    {
+      "name": "side_of_the_glass_by_eyagmurarslan",
+      "source": "increpare",
+      "n_rules": 13,
+      "n_objects": 14,
+      "n_levels": 11,
+      "max_level_area": 8
+    },
+    {
+      "name": "build_a_snowman_v1.0_by_randomguy0-0",
+      "source": "increpare",
+      "n_rules": 13,
+      "n_objects": 15,
+      "n_levels": 5,
+      "max_level_area": 14
+    },
+    {
+      "name": "machinarium_mini-game_14_by_panda",
+      "source": "increpare",
+      "n_rules": 13,
+      "n_objects": 16,
+      "n_levels": 7,
+      "max_level_area": 7
+    },
+    {
+      "name": "pontoluvian_straightjacket_puzzle_by_wayne_myers",
+      "source": "increpare",
+      "n_rules": 14,
+      "n_objects": 10,
+      "n_levels": 3,
+      "max_level_area": 20
+    },
+    {
+      "name": "protector_and_victim_by_steven_darragh_rach_conor_ricky",
+      "source": "increpare",
+      "n_rules": 14,
+      "n_objects": 11,
+      "n_levels": 3,
+      "max_level_area": 7
+    },
+    {
+      "name": "simple_by_wen1now",
+      "source": "increpare",
+      "n_rules": 14,
+      "n_objects": 12,
+      "n_levels": 13,
+      "max_level_area": 6
+    },
+    {
+      "name": "colorman_by_alexoland",
+      "source": "increpare",
+      "n_rules": 14,
+      "n_objects": 13,
+      "n_levels": 3,
+      "max_level_area": 7
+    },
+    {
+      "name": "hedgehogger_by_increpare",
+      "source": "increpare",
+      "n_rules": 14,
+      "n_objects": 14,
+      "n_levels": 12,
+      "max_level_area": 11
+    },
+    {
+      "name": "kitten_pushing_v6.0_by_natalie0217",
+      "source": "increpare",
+      "n_rules": 14,
+      "n_objects": 15,
+      "n_levels": 6,
+      "max_level_area": 14
+    },
+    {
+      "name": "follow_the_leader_by_henry-friedman",
+      "source": "increpare",
+      "n_rules": 15,
+      "n_objects": 8,
+      "n_levels": 22,
+      "max_level_area": 14
+    },
+    {
+      "name": "course_of_the_dragon_by_stephen_lavelle",
+      "source": "increpare",
+      "n_rules": 15,
+      "n_objects": 11,
+      "n_levels": 2,
+      "max_level_area": 17
+    },
+    {
+      "name": "weird_bug_modified_by_jonah_ostroff_and_augustin_cauchy__hey__65d0f366",
+      "source": "increpare",
+      "n_rules": 15,
+      "n_objects": 12,
+      "n_levels": 10,
+      "max_level_area": 11
+    },
+    {
+      "name": "two_games_in_one_by_unknown_author",
+      "source": "increpare",
+      "n_rules": 15,
+      "n_objects": 14,
+      "n_levels": 3,
+      "max_level_area": 13
+    },
+    {
+      "name": "flower_pushing_game____by_msomsouk25",
+      "source": "increpare",
+      "n_rules": 15,
+      "n_objects": 15,
+      "n_levels": 11,
+      "max_level_area": 11
+    },
+    {
+      "name": "Involuntary_Line_Force_Plus",
+      "source": "scraped",
+      "n_rules": 16,
+      "n_objects": 9,
+      "n_levels": 13,
+      "max_level_area": 12
+    },
+    {
+      "name": "1-2-3-ban_by_alan_hazelden",
+      "source": "increpare",
+      "n_rules": 16,
+      "n_objects": 10,
+      "n_levels": 7,
+      "max_level_area": 13
+    },
+    {
+      "name": "laundry_day_by_nmcsperry",
+      "source": "increpare",
+      "n_rules": 16,
+      "n_objects": 11,
+      "n_levels": 7,
+      "max_level_area": 8
+    },
+    {
+      "name": "remote_planets_by_zuza",
+      "source": "increpare",
+      "n_rules": 16,
+      "n_objects": 12,
+      "n_levels": 5,
+      "max_level_area": 9
+    },
+    {
+      "name": "make_it_go_away_by_mino_talen",
+      "source": "increpare",
+      "n_rules": 16,
+      "n_objects": 13,
+      "n_levels": 13,
+      "max_level_area": 7
+    },
+    {
+      "name": "idas_adventure_by_diathan",
+      "source": "increpare",
+      "n_rules": 16,
+      "n_objects": 14,
+      "n_levels": 5,
+      "max_level_area": 10
+    },
+    {
+      "name": "you_are_the_monster!_by_matt_lee",
+      "source": "increpare",
+      "n_rules": 16,
+      "n_objects": 15,
+      "n_levels": 5,
+      "max_level_area": 7
+    },
+    {
+      "name": "You're_Toast!",
+      "source": "scraped",
+      "n_rules": 16,
+      "n_objects": 16,
+      "n_levels": 4,
+      "max_level_area": 11
+    },
+    {
+      "name": "ice_world_by_scott_hughes",
+      "source": "increpare",
+      "n_rules": 16,
+      "n_objects": 17,
+      "n_levels": 2,
+      "max_level_area": 9
+    },
+    {
+      "name": "mr._charman_by_s0ra",
+      "source": "increpare",
+      "n_rules": 17,
+      "n_objects": 11,
+      "n_levels": 15,
+      "max_level_area": 9
+    },
+    {
+      "name": "spopy_gaem_by_spoop",
+      "source": "increpare",
+      "n_rules": 17,
+      "n_objects": 12,
+      "n_levels": 14,
+      "max_level_area": 13
+    },
+    {
+      "name": "weird_bug_by_jonah_ostroff_and_joel_fox",
+      "source": "increpare",
+      "n_rules": 17,
+      "n_objects": 13,
+      "n_levels": 28,
+      "max_level_area": 25
+    },
+    {
+      "name": "FACED",
+      "source": "scraped",
+      "n_rules": 17,
+      "n_objects": 14,
+      "n_levels": 26,
+      "max_level_area": 7
+    },
+    {
+      "name": "spooky_scary_skeletons_by_unknown_author",
+      "source": "increpare",
+      "n_rules": 17,
+      "n_objects": 16,
+      "n_levels": 10,
+      "max_level_area": 9
+    },
+    {
+      "name": "Clean_Up",
+      "source": "scraped",
+      "n_rules": 17,
+      "n_objects": 17,
+      "n_levels": 8,
+      "max_level_area": 9
+    },
+    {
+      "name": "Castle_Duck!",
+      "source": "scraped",
+      "n_rules": 17,
+      "n_objects": 20,
+      "n_levels": 5,
+      "max_level_area": 16
+    },
+    {
+      "name": "errorman,_the_snowman__game_basically_e_0dcb7bf0_by_tdsakajasonhan",
+      "source": "increpare",
+      "n_rules": 18,
+      "n_objects": 9,
+      "n_levels": 4,
+      "max_level_area": 26
+    },
+    {
+      "name": "buny_hoping_by_pickten",
+      "source": "increpare",
+      "n_rules": 18,
+      "n_objects": 10,
+      "n_levels": 5,
+      "max_level_area": 8
+    },
+    {
+      "name": "drop-o-tron_by_alxama",
+      "source": "increpare",
+      "n_rules": 18,
+      "n_objects": 11,
+      "n_levels": 9,
+      "max_level_area": 9
+    },
+    {
+      "name": "weird_bug_by_jonah_ostroff_and_lukas__hey_you_should_96b51c54",
+      "source": "increpare",
+      "n_rules": 18,
+      "n_objects": 12,
+      "n_levels": 12,
+      "max_level_area": 11
+    },
+    {
+      "name": "title_here_by_julietteamo",
+      "source": "increpare",
+      "n_rules": 18,
+      "n_objects": 14,
+      "n_levels": 8,
+      "max_level_area": 7
+    },
+    {
+      "name": "my_game_by_ro",
+      "source": "increpare",
+      "n_rules": 18,
+      "n_objects": 15,
+      "n_levels": 10,
+      "max_level_area": 11
+    },
+    {
+      "name": "i_would_like_my_dice_with_pips_please_by_monakrom",
+      "source": "increpare",
+      "n_rules": 18,
+      "n_objects": 18,
+      "n_levels": 10,
+      "max_level_area": 9
+    },
+    {
+      "name": "sokoban__by_thegreatescaper",
+      "source": "increpare",
+      "n_rules": 19,
+      "n_objects": 8,
+      "n_levels": 10,
+      "max_level_area": 9
+    },
+    {
+      "name": "weird_bug_by_jonah_ostroff_w__some_fooling_by_chz",
+      "source": "increpare",
+      "n_rules": 19,
+      "n_objects": 13,
+      "n_levels": 11,
+      "max_level_area": 13
+    },
+    {
+      "name": "4d_by_beekie",
+      "source": "increpare",
+      "n_rules": 19,
+      "n_objects": 16,
+      "n_levels": 5,
+      "max_level_area": 21
+    },
+    {
+      "name": "how_mazing_are_you__by_koenm9264",
+      "source": "increpare",
+      "n_rules": 19,
+      "n_objects": 17,
+      "n_levels": 10,
+      "max_level_area": 16
+    },
+    {
+      "name": "ss-tour_puzzles_by_angilbert",
+      "source": "increpare",
+      "n_rules": 19,
+      "n_objects": 18,
+      "n_levels": 8,
+      "max_level_area": 8
+    },
+    {
+      "name": "make_oo_by_beekie",
+      "source": "increpare",
+      "n_rules": 19,
+      "n_objects": 20,
+      "n_levels": 2,
+      "max_level_area": 16
+    },
+    {
+      "name": "No_Fault_of_My_Own",
+      "source": "scraped",
+      "n_rules": 20,
+      "n_objects": 12,
+      "n_levels": 3,
+      "max_level_area": 8
+    },
+    {
+      "name": "pnake_by_ladyleia001",
+      "source": "increpare",
+      "n_rules": 20,
+      "n_objects": 13,
+      "n_levels": 8,
+      "max_level_area": 16
+    },
+    {
+      "name": "XL-Up_Maze",
+      "source": "scraped",
+      "n_rules": 20,
+      "n_objects": 17,
+      "n_levels": 2,
+      "max_level_area": 10
+    },
+    {
+      "name": "mandy_crush_by_aaron_steed",
+      "source": "increpare",
+      "n_rules": 20,
+      "n_objects": 19,
+      "n_levels": 16,
+      "max_level_area": 7
+    },
+    {
+      "name": "Carnival_Shooter!",
+      "source": "scraped",
+      "n_rules": 1,
+      "n_objects": 3,
+      "n_levels": 1,
+      "max_level_area": 7
+    },
+    {
+      "name": "happy_birthday_nana_by_unknown_author",
+      "source": "increpare",
+      "n_rules": 1,
+      "n_objects": 4,
+      "n_levels": 1,
+      "max_level_area": 28
+    },
+    {
+      "name": "minecraft_v1.0.1_by_coconana9010",
+      "source": "increpare",
+      "n_rules": 1,
+      "n_objects": 4,
+      "n_levels": 1,
+      "max_level_area": 5
+    },
+    {
+      "name": "prototipo_#1_-_persecuci\u00f3n_del_jugador_by_sebastianbaladan98",
+      "source": "increpare",
+      "n_rules": 1,
+      "n_objects": 4,
+      "n_levels": 1,
+      "max_level_area": 7
+    },
+    {
+      "name": "untitled_by_octoconnors",
+      "source": "increpare",
+      "n_rules": 1,
+      "n_objects": 4,
+      "n_levels": 1,
+      "max_level_area": 21
+    },
+    {
+      "name": "blow_up_moon_by_jupitervenussng",
+      "source": "increpare",
+      "n_rules": 1,
+      "n_objects": 5,
+      "n_levels": 1,
+      "max_level_area": 8
+    },
+    {
+      "name": "escape_the_zombie_by_tomasdarracq",
+      "source": "increpare",
+      "n_rules": 1,
+      "n_objects": 5,
+      "n_levels": 1,
+      "max_level_area": 7
+    },
+    {
+      "name": "midas_by_riotkings",
+      "source": "increpare",
+      "n_rules": 1,
+      "n_objects": 5,
+      "n_levels": 1,
+      "max_level_area": 7
+    },
+    {
+      "name": "prueba_lazaroffiana_by_martinglazaroff",
+      "source": "increpare",
+      "n_rules": 1,
+      "n_objects": 5,
+      "n_levels": 1,
+      "max_level_area": 7
+    },
+    {
+      "name": "sokobee_simples_by_matteomenapace",
+      "source": "increpare",
+      "n_rules": 1,
+      "n_objects": 5,
+      "n_levels": 1,
+      "max_level_area": 7
+    },
+    {
+      "name": "brand_new_one_by_jon-jon",
+      "source": "increpare",
+      "n_rules": 1,
+      "n_objects": 6,
+      "n_levels": 1,
+      "max_level_area": 5
+    },
+    {
+      "name": "feed_the_cat_by_kim_cerna",
+      "source": "increpare",
+      "n_rules": 1,
+      "n_objects": 6,
+      "n_levels": 1,
+      "max_level_area": 6
+    },
+    {
+      "name": "microban_level_add_by_beekie18",
+      "source": "increpare",
+      "n_rules": 1,
+      "n_objects": 6,
+      "n_levels": 1,
+      "max_level_area": 15
+    },
+    {
+      "name": "soccer_by_charles_lee",
+      "source": "increpare",
+      "n_rules": 1,
+      "n_objects": 6,
+      "n_levels": 1,
+      "max_level_area": 11
+    },
+    {
+      "name": "test_game_1_by_jackbarinaga",
+      "source": "increpare",
+      "n_rules": 1,
+      "n_objects": 6,
+      "n_levels": 1,
+      "max_level_area": 18
+    },
+    {
+      "name": "clase_de_gerson_by_angenanoide",
+      "source": "increpare",
+      "n_rules": 1,
+      "n_objects": 7,
+      "n_levels": 1,
+      "max_level_area": 12
+    },
+    {
+      "name": "my_game_by_enzomiali",
+      "source": "increpare",
+      "n_rules": 1,
+      "n_objects": 7,
+      "n_levels": 1,
+      "max_level_area": 25
+    },
+    {
+      "name": "random_robots_by_masterhigure",
+      "source": "increpare",
+      "n_rules": 2,
+      "n_objects": 4,
+      "n_levels": 1,
+      "max_level_area": 9
+    },
+    {
+      "name": "the_worm_puzzle_by_bowlercaptain",
+      "source": "increpare",
+      "n_rules": 2,
+      "n_objects": 4,
+      "n_levels": 1,
+      "max_level_area": 5
+    },
+    {
+      "name": "block_game_by_quat1024",
+      "source": "increpare",
+      "n_rules": 2,
+      "n_objects": 5,
+      "n_levels": 1,
+      "max_level_area": 8
+    },
+    {
+      "name": "escape_the_zombie_by_cdogonza",
+      "source": "increpare",
+      "n_rules": 2,
+      "n_objects": 5,
+      "n_levels": 1,
+      "max_level_area": 8
+    },
+    {
+      "name": "i_am_a_gust_of_wind_by_increpare",
+      "source": "increpare",
+      "n_rules": 2,
+      "n_objects": 5,
+      "n_levels": 1,
+      "max_level_area": 5
+    },
+    {
+      "name": "magdalena_by_yayuz11",
+      "source": "increpare",
+      "n_rules": 2,
+      "n_objects": 5,
+      "n_levels": 1,
+      "max_level_area": 8
+    },
+    {
+      "name": "thanh_proto_-_lava_pits_by_techythanh",
+      "source": "increpare",
+      "n_rules": 2,
+      "n_objects": 5,
+      "n_levels": 1,
+      "max_level_area": 6
+    },
+    {
+      "name": "cocina_picante_by_martinglazaroff",
+      "source": "increpare",
+      "n_rules": 2,
+      "n_objects": 6,
+      "n_levels": 1,
+      "max_level_area": 7
+    },
+    {
+      "name": "iced_forest_by_arabella-jiang",
+      "source": "increpare",
+      "n_rules": 2,
+      "n_objects": 6,
+      "n_levels": 1,
+      "max_level_area": 7
+    },
+    {
+      "name": "mirrorer_by_\u2022ale\u2022",
+      "source": "increpare",
+      "n_rules": 2,
+      "n_objects": 6,
+      "n_levels": 1,
+      "max_level_area": 19
+    },
+    {
+      "name": "my_game_by_jorgyomendez",
+      "source": "increpare",
+      "n_rules": 2,
+      "n_objects": 6,
+      "n_levels": 1,
+      "max_level_area": 7
+    },
+    {
+      "name": "sapo_game_by_julilopezzz",
+      "source": "increpare",
+      "n_rules": 2,
+      "n_objects": 6,
+      "n_levels": 1,
+      "max_level_area": 7
+    },
+    {
+      "name": "time-reversed_minicosmos_by_s0ra",
+      "source": "increpare",
+      "n_rules": 2,
+      "n_objects": 6,
+      "n_levels": 1,
+      "max_level_area": 8
+    },
+    {
+      "name": "coordinations_by_spacemouse",
+      "source": "increpare",
+      "n_rules": 2,
+      "n_objects": 7,
+      "n_levels": 1,
+      "max_level_area": 7
+    },
+    {
+      "name": "my_game_by_starontop",
+      "source": "increpare",
+      "n_rules": 2,
+      "n_objects": 7,
+      "n_levels": 1,
+      "max_level_area": 13
+    },
+    {
+      "name": "sokoban_puzzle_game_by_cfields3",
+      "source": "increpare",
+      "n_rules": 2,
+      "n_objects": 7,
+      "n_levels": 1,
+      "max_level_area": 9
+    },
+    {
+      "name": "the_adventures_of_the_catfish_by_me",
+      "source": "increpare",
+      "n_rules": 2,
+      "n_objects": 8,
+      "n_levels": 1,
+      "max_level_area": 7
+    },
+    {
+      "name": "bugs_by_paul_moore",
+      "source": "increpare",
+      "n_rules": 3,
+      "n_objects": 4,
+      "n_levels": 1,
+      "max_level_area": 7
+    },
+    {
+      "name": "swapperban_by_thebigfive-381",
+      "source": "increpare",
+      "n_rules": 3,
+      "n_objects": 4,
+      "n_levels": 1,
+      "max_level_area": 7
+    },
+    {
+      "name": "cat_making_friends_by_wfykitty",
+      "source": "increpare",
+      "n_rules": 3,
+      "n_objects": 5,
+      "n_levels": 1,
+      "max_level_area": 7
+    },
+    {
+      "name": "herding_cats_by_torodem",
+      "source": "increpare",
+      "n_rules": 3,
+      "n_objects": 5,
+      "n_levels": 1,
+      "max_level_area": 5
+    },
+    {
+      "name": "my_game_by_jcmiller11",
+      "source": "increpare",
+      "n_rules": 3,
+      "n_objects": 5,
+      "n_levels": 1,
+      "max_level_area": 7
+    },
+    {
+      "name": "squares_by_tim_inman",
+      "source": "increpare",
+      "n_rules": 3,
+      "n_objects": 5,
+      "n_levels": 1,
+      "max_level_area": 7
+    },
+    {
+      "name": "laberinto_tramposo_by_skyemoure",
+      "source": "increpare",
+      "n_rules": 3,
+      "n_objects": 6,
+      "n_levels": 1,
+      "max_level_area": 13
+    },
+    {
+      "name": "my_game_by_norkn",
+      "source": "increpare",
+      "n_rules": 3,
+      "n_objects": 6,
+      "n_levels": 1,
+      "max_level_area": 7
+    },
+    {
+      "name": "rolling_ball_example_by_angilbert",
+      "source": "increpare",
+      "n_rules": 3,
+      "n_objects": 6,
+      "n_levels": 1,
+      "max_level_area": 8
+    },
+    {
+      "name": "simple_block_pushing_game_by_thatscar",
+      "source": "increpare",
+      "n_rules": 3,
+      "n_objects": 6,
+      "n_levels": 1,
+      "max_level_area": 7
+    },
+    {
+      "name": "crate_game_by_jp_memon",
+      "source": "increpare",
+      "n_rules": 3,
+      "n_objects": 7,
+      "n_levels": 1,
+      "max_level_area": 7
+    },
+    {
+      "name": "my_game_by_nahcirn",
+      "source": "increpare",
+      "n_rules": 3,
+      "n_objects": 7,
+      "n_levels": 1,
+      "max_level_area": 8
+    },
+    {
+      "name": "stazs_superior_game_with_sound_by_nahcirn",
+      "source": "increpare",
+      "n_rules": 3,
+      "n_objects": 7,
+      "n_levels": 1,
+      "max_level_area": 8
+    },
+    {
+      "name": "faulty_wincon_by_elwood_sharit",
+      "source": "increpare",
+      "n_rules": 3,
+      "n_objects": 8,
+      "n_levels": 1,
+      "max_level_area": 16
+    },
+    {
+      "name": "paul_bunyans_demade_island_adventure__by_edderiofer",
+      "source": "increpare",
+      "n_rules": 3,
+      "n_objects": 8,
+      "n_levels": 1,
+      "max_level_area": 11
+    },
+    {
+      "name": "unicode_test_by_egg-kun",
+      "source": "increpare",
+      "n_rules": 3,
+      "n_objects": 8,
+      "n_levels": 1,
+      "max_level_area": 5
+    },
+    {
+      "name": "random_maze_game_by_galactical1100",
+      "source": "increpare",
+      "n_rules": 4,
+      "n_objects": 5,
+      "n_levels": 1,
+      "max_level_area": 8
+    },
+    {
+      "name": "dogs_and_sheeps_by_alainbrobecker",
+      "source": "increpare",
+      "n_rules": 4,
+      "n_objects": 6,
+      "n_levels": 1,
+      "max_level_area": 9
+    },
+    {
+      "name": "key_seeker_by_sriharsha32484",
+      "source": "increpare",
+      "n_rules": 4,
+      "n_objects": 6,
+      "n_levels": 1,
+      "max_level_area": 7
+    },
+    {
+      "name": "prototipo_de_movimiento_de_enemigos_by_cotidib",
+      "source": "increpare",
+      "n_rules": 4,
+      "n_objects": 6,
+      "n_levels": 1,
+      "max_level_area": 10
+    },
+    {
+      "name": "slidn_ride_by_senzarimpianti",
+      "source": "increpare",
+      "n_rules": 4,
+      "n_objects": 6,
+      "n_levels": 1,
+      "max_level_area": 7
+    },
+    {
+      "name": "flame_dance_party_by_dog-cheese",
+      "source": "increpare",
+      "n_rules": 4,
+      "n_objects": 7,
+      "n_levels": 1,
+      "max_level_area": 6
+    },
+    {
+      "name": "Nom",
+      "source": "scraped",
+      "n_rules": 4,
+      "n_objects": 7,
+      "n_levels": 1,
+      "max_level_area": 6
+    },
+    {
+      "name": "vi-seth_starting_game_by_vi-seth_bak",
+      "source": "increpare",
+      "n_rules": 4,
+      "n_objects": 7,
+      "n_levels": 1,
+      "max_level_area": 7
+    },
+    {
+      "name": "big_boy_by_franklin_p._dyer",
+      "source": "increpare",
+      "n_rules": 4,
+      "n_objects": 8,
+      "n_levels": 1,
+      "max_level_area": 10
+    },
+    {
+      "name": "prison_escape_by_will_garrahan",
+      "source": "increpare",
+      "n_rules": 4,
+      "n_objects": 8,
+      "n_levels": 1,
+      "max_level_area": 17
+    },
+    {
+      "name": "close_shave_by_josh_eklow",
+      "source": "increpare",
+      "n_rules": 4,
+      "n_objects": 9,
+      "n_levels": 1,
+      "max_level_area": 7
+    },
+    {
+      "name": "[beta]_winter_adventure_by_techythanh",
+      "source": "increpare",
+      "n_rules": 4,
+      "n_objects": 10,
+      "n_levels": 1,
+      "max_level_area": 7
+    },
+    {
+      "name": "this_functions_for_sme_reason_by_turtellio",
+      "source": "increpare",
+      "n_rules": 4,
+      "n_objects": 10,
+      "n_levels": 1,
+      "max_level_area": 7
+    },
+    {
+      "name": "simple_block_pushing_game_by_francobarlocco",
+      "source": "increpare",
+      "n_rules": 4,
+      "n_objects": 12,
+      "n_levels": 1,
+      "max_level_area": 14
+    },
+    {
+      "name": "test_game_by_jonah_ostroff",
+      "source": "increpare",
+      "n_rules": 5,
+      "n_objects": 4,
+      "n_levels": 1,
+      "max_level_area": 12
+    },
+    {
+      "name": "escape_the_maze_by_dejamison",
+      "source": "increpare",
+      "n_rules": 5,
+      "n_objects": 5,
+      "n_levels": 1,
+      "max_level_area": 10
+    },
+    {
+      "name": "dogs_in_the_yard_by_mw-mg7",
+      "source": "increpare",
+      "n_rules": 5,
+      "n_objects": 6,
+      "n_levels": 1,
+      "max_level_area": 7
+    },
+    {
+      "name": "realtime_gravity_by_unknown_author",
+      "source": "increpare",
+      "n_rules": 5,
+      "n_objects": 6,
+      "n_levels": 1,
+      "max_level_area": 10
+    },
+    {
+      "name": "magische_drank_by_jan-niestadt",
+      "source": "increpare",
+      "n_rules": 5,
+      "n_objects": 7,
+      "n_levels": 1,
+      "max_level_area": 6
+    },
+    {
+      "name": "untitled_by_warbonate",
+      "source": "increpare",
+      "n_rules": 5,
+      "n_objects": 7,
+      "n_levels": 1,
+      "max_level_area": 7
+    },
+    {
+      "name": "CC2",
+      "source": "scraped",
+      "n_rules": 5,
+      "n_objects": 8,
+      "n_levels": 1,
+      "max_level_area": 6
+    },
+    {
+      "name": "my_game_by_npgiorgi",
+      "source": "increpare",
+      "n_rules": 5,
+      "n_objects": 8,
+      "n_levels": 1,
+      "max_level_area": 7
+    },
+    {
+      "name": "untitled_crate_game_by_matzieq",
+      "source": "increpare",
+      "n_rules": 5,
+      "n_objects": 8,
+      "n_levels": 1,
+      "max_level_area": 7
+    },
+    {
+      "name": "taco_grande_by_franklin_p._dyer",
+      "source": "increpare",
+      "n_rules": 5,
+      "n_objects": 9,
+      "n_levels": 1,
+      "max_level_area": 14
+    },
+    {
+      "name": "os1_puzzlescript_teht\u00e4v\u00e4_by_averageandy",
+      "source": "increpare",
+      "n_rules": 5,
+      "n_objects": 10,
+      "n_levels": 1,
+      "max_level_area": 6
+    },
+    {
+      "name": "halfoban_by_henry-friedman",
+      "source": "increpare",
+      "n_rules": 5,
+      "n_objects": 11,
+      "n_levels": 1,
+      "max_level_area": 6
+    },
+    {
+      "name": "minigame_prototype_by_rcmichaels",
+      "source": "increpare",
+      "n_rules": 5,
+      "n_objects": 12,
+      "n_levels": 1,
+      "max_level_area": 9
+    },
+    {
+      "name": "my_game_by_mokesmoe",
+      "source": "increpare",
+      "n_rules": 6,
+      "n_objects": 5,
+      "n_levels": 1,
+      "max_level_area": 7
+    },
+    {
+      "name": "lights_out_by_eric_zhang",
+      "source": "increpare",
+      "n_rules": 6,
+      "n_objects": 6,
+      "n_levels": 1,
+      "max_level_area": 5
+    },
+    {
+      "name": "realtime_gravity_by_increpare",
+      "source": "increpare",
+      "n_rules": 6,
+      "n_objects": 6,
+      "n_levels": 1,
+      "max_level_area": 10
+    },
+    {
+      "name": "magentism_by_rellik",
+      "source": "increpare",
+      "n_rules": 6,
+      "n_objects": 7,
+      "n_levels": 1,
+      "max_level_area": 14
+    },
+    {
+      "name": "untitled_by_milagrosvarela",
+      "source": "increpare",
+      "n_rules": 6,
+      "n_objects": 7,
+      "n_levels": 1,
+      "max_level_area": 8
+    },
+    {
+      "name": "Pac-Puzzler",
+      "source": "scraped",
+      "n_rules": 6,
+      "n_objects": 8,
+      "n_levels": 1,
+      "max_level_area": 6
+    },
+    {
+      "name": "Turing_Machine",
+      "source": "scraped",
+      "n_rules": 6,
+      "n_objects": 8,
+      "n_levels": 1,
+      "max_level_area": 9
+    },
+    {
+      "name": "make_snowman_by_chris768123",
+      "source": "increpare",
+      "n_rules": 6,
+      "n_objects": 9,
+      "n_levels": 1,
+      "max_level_area": 9
+    },
+    {
+      "name": "eventually_this_is_gonna_be_zelda_by_soolseem",
+      "source": "increpare",
+      "n_rules": 6,
+      "n_objects": 11,
+      "n_levels": 1,
+      "max_level_area": 8
+    },
+    {
+      "name": "rpg_by_waynetron",
+      "source": "increpare",
+      "n_rules": 6,
+      "n_objects": 11,
+      "n_levels": 1,
+      "max_level_area": 8
+    },
+    {
+      "name": "island_adrift_by_lee2sman",
+      "source": "increpare",
+      "n_rules": 7,
+      "n_objects": 5,
+      "n_levels": 1,
+      "max_level_area": 19
+    },
+    {
+      "name": "diagonal_sokoban_by_thebigfive-381",
+      "source": "increpare",
+      "n_rules": 7,
+      "n_objects": 6,
+      "n_levels": 1,
+      "max_level_area": 10
+    },
+    {
+      "name": "aoc2022-24_by_thatscar",
+      "source": "increpare",
+      "n_rules": 7,
+      "n_objects": 7,
+      "n_levels": 1,
+      "max_level_area": 6
+    },
+    {
+      "name": "no_forbidden_symbols_2_by_increpare",
+      "source": "increpare",
+      "n_rules": 7,
+      "n_objects": 7,
+      "n_levels": 1,
+      "max_level_area": 7
+    },
+    {
+      "name": "test_game_by_sean_massa",
+      "source": "increpare",
+      "n_rules": 7,
+      "n_objects": 7,
+      "n_levels": 1,
+      "max_level_area": 7
+    },
+    {
+      "name": "planko_by_thatscar",
+      "source": "increpare",
+      "n_rules": 7,
+      "n_objects": 8,
+      "n_levels": 1,
+      "max_level_area": 13
+    },
+    {
+      "name": "escape_the_zombie_by_valentinaribas",
+      "source": "increpare",
+      "n_rules": 7,
+      "n_objects": 9,
+      "n_levels": 1,
+      "max_level_area": 7
+    },
+    {
+      "name": "tedium_demake_by_kelly",
+      "source": "increpare",
+      "n_rules": 7,
+      "n_objects": 10,
+      "n_levels": 1,
+      "max_level_area": 9
+    },
+    {
+      "name": "my_game_by_nvh",
+      "source": "increpare",
+      "n_rules": 7,
+      "n_objects": 11,
+      "n_levels": 1,
+      "max_level_area": 7
+    },
+    {
+      "name": "rock_by_weights_by_nachlord996",
+      "source": "increpare",
+      "n_rules": 7,
+      "n_objects": 12,
+      "n_levels": 1,
+      "max_level_area": 10
+    },
+    {
+      "name": "happy_by_tebrown1011",
+      "source": "increpare",
+      "n_rules": 8,
+      "n_objects": 5,
+      "n_levels": 1,
+      "max_level_area": 9
+    },
+    {
+      "name": "iinan_harjoituspeli_by_iina",
+      "source": "increpare",
+      "n_rules": 8,
+      "n_objects": 6,
+      "n_levels": 1,
+      "max_level_area": 7
+    },
+    {
+      "name": "Stand_aside,_everyone!_I_take_large_steps!",
+      "source": "scraped",
+      "n_rules": 8,
+      "n_objects": 7,
+      "n_levels": 1,
+      "max_level_area": 11
+    },
+    {
+      "name": "mantis_demo_by_thesalamaderboy",
+      "source": "increpare",
+      "n_rules": 8,
+      "n_objects": 8,
+      "n_levels": 1,
+      "max_level_area": 15
+    },
+    {
+      "name": "lights_out!_by_n_a",
+      "source": "increpare",
+      "n_rules": 8,
+      "n_objects": 9,
+      "n_levels": 1,
+      "max_level_area": 7
+    },
+    {
+      "name": "tales_of_a_character_object!_by_unknown_author",
+      "source": "increpare",
+      "n_rules": 8,
+      "n_objects": 9,
+      "n_levels": 1,
+      "max_level_area": 11
+    },
+    {
+      "name": "move_the_ice_cube_to_the_goal_by_ladyleia001",
+      "source": "increpare",
+      "n_rules": 8,
+      "n_objects": 10,
+      "n_levels": 1,
+      "max_level_area": 7
+    },
+    {
+      "name": "spelprotoryping_3_vecka_4_by_acoolpotato",
+      "source": "increpare",
+      "n_rules": 8,
+      "n_objects": 11,
+      "n_levels": 1,
+      "max_level_area": 9
+    },
+    {
+      "name": "make_lines,_not_war!_by_zachary_williams",
+      "source": "increpare",
+      "n_rules": 8,
+      "n_objects": 12,
+      "n_levels": 1,
+      "max_level_area": 9
+    },
+    {
+      "name": "drunkard_walk_by_unknown_author",
+      "source": "increpare",
+      "n_rules": 9,
+      "n_objects": 5,
+      "n_levels": 1,
+      "max_level_area": 20
+    },
+    {
+      "name": "advent_of_code_2024_day_6_part_1_by_sponege",
+      "source": "increpare",
+      "n_rules": 9,
+      "n_objects": 7,
+      "n_levels": 1,
+      "max_level_area": 10
+    },
+    {
+      "name": "zombie_holocaust_by_heikki",
+      "source": "increpare",
+      "n_rules": 9,
+      "n_objects": 8,
+      "n_levels": 1,
+      "max_level_area": 18
+    },
+    {
+      "name": "numberrange_puzzle_prototype_by_puzzlescriptfan34",
+      "source": "increpare",
+      "n_rules": 9,
+      "n_objects": 16,
+      "n_levels": 1,
+      "max_level_area": 10
+    },
+    {
+      "name": "prototipo__movimiento_de_personaje_by_milagrosvarela",
+      "source": "increpare",
+      "n_rules": 10,
+      "n_objects": 7,
+      "n_levels": 1,
+      "max_level_area": 8
+    },
+    {
+      "name": "gondola_by_unknown_author",
+      "source": "increpare",
+      "n_rules": 10,
+      "n_objects": 8,
+      "n_levels": 1,
+      "max_level_area": 13
+    },
+    {
+      "name": "bloygizpo_by_increpare",
+      "source": "increpare",
+      "n_rules": 10,
+      "n_objects": 12,
+      "n_levels": 1,
+      "max_level_area": 10
+    },
+    {
+      "name": "pac_man_by_unknown_author",
+      "source": "increpare",
+      "n_rules": 11,
+      "n_objects": 6,
+      "n_levels": 1,
+      "max_level_area": 9
+    },
+    {
+      "name": "MATCH_3_PUZZLE",
+      "source": "scraped",
+      "n_rules": 11,
+      "n_objects": 8,
+      "n_levels": 1,
+      "max_level_area": 5
+    },
+    {
+      "name": "beekies_jacks_phis_sliders_by_beekie18",
+      "source": "increpare",
+      "n_rules": 11,
+      "n_objects": 9,
+      "n_levels": 1,
+      "max_level_area": 3
+    },
+    {
+      "name": "emergent_complexity_example_by_nneonesque",
+      "source": "increpare",
+      "n_rules": 12,
+      "n_objects": 6,
+      "n_levels": 1,
+      "max_level_area": 7
+    },
+    {
+      "name": "tie_game_by_jacoblevin0",
+      "source": "increpare",
+      "n_rules": 12,
+      "n_objects": 8,
+      "n_levels": 1,
+      "max_level_area": 9
+    },
+    {
+      "name": "i_like_stripes_by_mugla",
+      "source": "increpare",
+      "n_rules": 12,
+      "n_objects": 10,
+      "n_levels": 1,
+      "max_level_area": 11
+    },
+    {
+      "name": "annoying_skull_by_qwaffles",
+      "source": "increpare",
+      "n_rules": 12,
+      "n_objects": 11,
+      "n_levels": 1,
+      "max_level_area": 8
+    },
+    {
+      "name": "2d_by_unknown_author",
+      "source": "increpare",
+      "n_rules": 12,
+      "n_objects": 12,
+      "n_levels": 1,
+      "max_level_area": 5
+    },
+    {
+      "name": "watch_your_step_ex_by_just-kirb",
+      "source": "increpare",
+      "n_rules": 12,
+      "n_objects": 14,
+      "n_levels": 1,
+      "max_level_area": 9
+    },
+    {
+      "name": "wrapping_example_by_jcmiller11",
+      "source": "increpare",
+      "n_rules": 13,
+      "n_objects": 9,
+      "n_levels": 1,
+      "max_level_area": 5
+    },
+    {
+      "name": "portal_test_2_by_jcmiller11",
+      "source": "increpare",
+      "n_rules": 13,
+      "n_objects": 10,
+      "n_levels": 1,
+      "max_level_area": 7
+    },
+    {
+      "name": "outlines_by_thatscar",
+      "source": "increpare",
+      "n_rules": 13,
+      "n_objects": 13,
+      "n_levels": 1,
+      "max_level_area": 8
+    },
+    {
+      "name": "destroy_all_blocks_by_sfiera",
+      "source": "increpare",
+      "n_rules": 14,
+      "n_objects": 8,
+      "n_levels": 1,
+      "max_level_area": 5
+    },
+    {
+      "name": "test_by_jcmiller11",
+      "source": "increpare",
+      "n_rules": 14,
+      "n_objects": 9,
+      "n_levels": 1,
+      "max_level_area": 12
+    },
+    {
+      "name": "a_copy_subroutine_by_chris_pickel",
+      "source": "increpare",
+      "n_rules": 14,
+      "n_objects": 10,
+      "n_levels": 1,
+      "max_level_area": 1
+    },
+    {
+      "name": "game_by_norbel_zhou",
+      "source": "increpare",
+      "n_rules": 14,
+      "n_objects": 12,
+      "n_levels": 1,
+      "max_level_area": 7
+    },
+    {
+      "name": "superpower_sandbox_by_thesalamaderboy",
+      "source": "increpare",
+      "n_rules": 14,
+      "n_objects": 14,
+      "n_levels": 1,
+      "max_level_area": 9
+    },
+    {
+      "name": "step_counter_by_chaotic_iak",
+      "source": "increpare",
+      "n_rules": 14,
+      "n_objects": 16,
+      "n_levels": 1,
+      "max_level_area": 7
+    },
+    {
+      "name": "sokopawn_test_by_thebigfive-381",
+      "source": "increpare",
+      "n_rules": 15,
+      "n_objects": 7,
+      "n_levels": 1,
+      "max_level_area": 7
+    },
+    {
+      "name": "laser_ghost_tag_by_builder17",
+      "source": "increpare",
+      "n_rules": 15,
+      "n_objects": 10,
+      "n_levels": 1,
+      "max_level_area": 7
+    },
+    {
+      "name": "king_candy_saga_by_sean_mcdonald",
+      "source": "increpare",
+      "n_rules": 15,
+      "n_objects": 12,
+      "n_levels": 1,
+      "max_level_area": 8
+    },
+    {
+      "name": "the_master_zombie_by_seth_archambault",
+      "source": "increpare",
+      "n_rules": 16,
+      "n_objects": 7,
+      "n_levels": 1,
+      "max_level_area": 27
+    },
+    {
+      "name": "floaty_dress_fit_for_a_queen_&_three_hu_e32444a8_by_monakrom",
+      "source": "increpare",
+      "n_rules": 16,
+      "n_objects": 13,
+      "n_levels": 1,
+      "max_level_area": 11
+    },
+    {
+      "name": "spell_by_beekie18",
+      "source": "increpare",
+      "n_rules": 16,
+      "n_objects": 18,
+      "n_levels": 1,
+      "max_level_area": 9
+    },
+    {
+      "name": "fake_bloxorz_by_knexator",
+      "source": "increpare",
+      "n_rules": 17,
+      "n_objects": 6,
+      "n_levels": 1,
+      "max_level_area": 7
+    },
+    {
+      "name": "magicians_have_long_handkerchiefs_by_toomber",
+      "source": "increpare",
+      "n_rules": 17,
+      "n_objects": 10,
+      "n_levels": 1,
+      "max_level_area": 9
+    },
+    {
+      "name": "random_shortest_path_by_sfiera",
+      "source": "increpare",
+      "n_rules": 18,
+      "n_objects": 14,
+      "n_levels": 1,
+      "max_level_area": 13
+    },
+    {
+      "name": "lost_demo_by_thesalamaderboy",
+      "source": "increpare",
+      "n_rules": 18,
+      "n_objects": 17,
+      "n_levels": 1,
+      "max_level_area": 21
+    },
+    {
+      "name": "graviclear_by_rblazer",
+      "source": "increpare",
+      "n_rules": 19,
+      "n_objects": 12,
+      "n_levels": 1,
+      "max_level_area": 8
+    },
+    {
+      "name": "adventures_of_felix_by_franklin_p._dyer",
+      "source": "increpare",
+      "n_rules": 19,
+      "n_objects": 15,
+      "n_levels": 1,
+      "max_level_area": 21
+    },
+    {
+      "name": "nibbly_by_john_williams",
+      "source": "increpare",
+      "n_rules": 20,
+      "n_objects": 11,
+      "n_levels": 1,
+      "max_level_area": 11
+    },
+    {
+      "name": "dave_phillips_color_path_#3___puzzlesc_358f80cf_by_eduardo_alonso______\u00b7\u00b7",
+      "source": "increpare",
+      "n_rules": 20,
+      "n_objects": 15,
+      "n_levels": 1,
+      "max_level_area": 17
+    }
+  ],
+  "preset_for_train_py": [
+    "nekopuzzle",
+    "notsnake",
+    "blocks",
+    "sokoban_basic",
+    "sokoban_match3",
+    "Zen_Puzzle_Garden",
+    "Multi-word_Dictionary_Game",
+    "kettle",
+    "Travelling_salesman",
+    "sumo",
+    "the_undertaking",
+    "wrappingrecipe",
+    "Collapsable_Sokoban",
+    "Love_and_Pieces",
+    "actiontest",
+    "rigidfail1",
+    "scriptcross",
+    "Modality",
+    "constellationz",
+    "randomrobots",
+    "againexample",
+    "naughtysprite",
+    "randomspawner",
+    "twolittlecrates1",
+    "rigid_11",
+    "Long_Haul_Space_Flight",
+    "leftrightnpcs",
+    "twolittlecrates2",
+    "twolittlecrates3",
+    "octat",
+    "lunar_lockout",
+    "Stairways",
+    "the_art_of_cloning",
+    "rigid_scott1",
+    "rigid_one_unlimited",
+    "Some_lines_were_meant_to_be_crossed",
+    "blockfaker",
+    "Pushing_It",
+    "2D_Whale_World",
+    "MazezaM",
+    "Ebony_&_Ivory",
+    "Singleton_Traffic",
+    "mazetest",
+    "Slidings",
+    "Lime_Rick",
+    "riverpuzzle",
+    "Midas",
+    "rigid_parallel_many",
+    "Take_Heart_Lass",
+    "rigid_many_broken",
+    "Lightdown",
+    "The_observer's_paradox",
+    "rigid_parallel_unlimited",
+    "MC_Escher's_Equestrian_Armageddon",
+    "Smother",
+    "It_Dies_In_The_Light",
+    "Pushcat_Jr",
+    "lilifee_by_martinpi",
+    "Minimalist",
+    "blammo_by_superman",
+    "labyrinth_by_team_1",
+    "push_me_by_andrew_storms",
+    "sokoban_sticky",
+    "arrow_crossing_by_timmytheaverage",
+    "kais_game_by_kaibartolone",
+    "sokohell_by_odog8",
+    "build_a_snowman_v1.0_by_akaaekansh",
+    "phillip_smith_by_nuuup",
+    "nightmare_by_radiosoap",
+    "Swap_Sokoban",
+    "tumble_mazes!_by_barefootengineer1",
+    "entertainment_whale_by_wilbur_the_whale",
+    "stop_pushing_me_around!_by_$4@37",
+    "you_by_officially-official",
+    "c1_-_new_sokoban_level_by_matteomenapace",
+    "cowherding_by_christina",
+    "the_angry_eyeball_by_sammy_diaz",
+    "my_game_by_rotatingcow",
+    "find_the_picture_by_jason_kaufman",
+    "crate_swarp_by_increpare",
+    "Sokubunny_and_the_colored_Boxes",
+    "simple_pacman_game_by_isaac_d",
+    "Lis'_game_development_adventure",
+    "neekerimarkus_by_unknown_author",
+    "beta_versio_by_venla1",
+    "rachooooooooo_by_techythanh",
+    "green_labyrinth_by_uligabri",
+    "my_game_by_timofeycacti",
+    "the_dylans_become_jimmys_by_dylan_but_now_jimmy",
+    "ense\u00f1andole_al_nuevo_by_ysource42",
+    "simple_action_example_by_atupmok",
+    "hitman_by_unknown_author",
+    "bittle_bat_by_unknown_author",
+    "push!_by_josh_delson",
+    "Duplex",
+    "match_threekoban_by_ezra_szanton",
+    "pikkuruinen",
+    "game_log_3_level_by_chloe_roberts",
+    "manic_magellan_by_nonameghost",
+    "trails_by_officially-official",
+    "dont_overthink_by_gareth",
+    "push_pull_by_stephen_lavelle",
+    "dugeon_of_nabokos_by_the_wireframe_readership",
+    "crate_mover_5000_by_scott_grymkoski",
+    "mr._block_runs_hard_by_treverator",
+    "drill_sokoban_by_increpare",
+    "manuzzle_by_maan",
+    "ross_lowes_quim_whimsy_by_baked_bean_seduction_games",
+    "1030_by_james_houston",
+    "space_mission_by_unknown_author",
+    "bury_the_body!_by_travis_blumer",
+    "gender_and_a_block_pushing_game_by_stingby12",
+    "topple_everything_by_x_sheep",
+    "running_back_rush_by_sam_diaz",
+    "double_block_pushing_game_by_ali_keller",
+    "someone_there__by_ekirk10",
+    "well_eat_these_donuts_together_by_buffalocat",
+    "david_skinners_simple_block_pushing_ga_6bbbf8d6_by_zacharyabel",
+    "slenderpixel_by_dittoslash",
+    "herding_cats__by_nvhungphong",
+    "match_3_block_push_by_gentova007",
+    "nietzsche_by_nuuup",
+    "carls_puzzle_game_by_carl_haas",
+    "dual-wielding_plough_challenge_by_increpare",
+    "no_name_yet_by_dustin_lane",
+    "dans_game_by_stephen_lavelle",
+    "simple_block_pushing_game_by_schwinh",
+    "game1_by_ben",
+    "zen_puzzle_garden_by_increpare",
+    "the_poop_game_by_pontus_granstr\u00f6m",
+    "slime_finder_by_samoyedboi",
+    "jgkjgfskjfkdfjg_by_maeeelyyys",
+    "bit_treats_by_barefootengineer1",
+    "Bridge",
+    "block_game_by_emily_dresden",
+    "shit_by_samir_menon",
+    "swapping_shenanigans_by_galactictrapdoor",
+    "simple_block_pushing_game_by_zaydiscool777",
+    "wizard_world_by_unknown_author",
+    "build_a_snowman_v1.0_by_throwaway-github-visst",
+    "neko_puzzle_by_increpare",
+    "simple_slime_man_by_monakrom",
+    "find_the_cats!_by_iloveryujinandbingus",
+    "15_square_by_chris_hallberg",
+    "mannschaft-schieben-sokoban_by_increpare",
+    "my_game_by_geojax",
+    "cosechando_by_martinglazaroff",
+    "simple_block_rolling_game_by_asf",
+    "putta_kuberna_by_lage_linnarsson",
+    "players_by_ladace",
+    "pull_two_by_nmcsperry",
+    "recondite_star_sector_sigma_by_increpare",
+    "lampionnen_aansteken_by_jan-niestadt",
+    "catchem_bots_by_taylorjoslin",
+    "the_bully_by_the_duck",
+    "merge_by_srp",
+    "garden_path_puzzle_by_nicholascc",
+    "mo2261_by_rose",
+    "apple_picker_by_namtis",
+    "save_the_eggs_from_cats_by_annayeva",
+    "babas_tiny_adventure_by_nobozertas",
+    "Muddy_Sokoban_Level_Set_I",
+    "Snake_Crate",
+    "gdd301_demo_game_by_emma_hubbell",
+    "coin_collector_by_germ90",
+    "sokoban_remix_by_dani_emrich",
+    "lemons_by_jeffjeff123456",
+    "m1rr0r_by_nathaniel_jeffries",
+    "_simple__block_pushing_game_by_xligamer",
+    "\u00a1golosinas_para_max!_by_liberi",
+    "game_of_life_+_f_eli_golf_by_sarastrbjrk",
+    "let_me_survive_by_tianxiao_ren",
+    "make_way!_by_stephen_lavelle",
+    "cops_n_robbers_by_detective",
+    "crazy_dungeon_by_slatero",
+    "wormholeoban_by_increpare",
+    "magnet_test_cases_by_chz",
+    "all_green_to_blue_by_increpare",
+    "covid_vaccine_extraction_by_riley_harris,_ralph_cullom",
+    "switch_switcher_by_increpare",
+    "mirror_love_by_william,_akshat,_prasanna,_vishal",
+    "little_lizards_by_falconninja",
+    "patriot_game_by_sean_kearney",
+    "sheep_sim!_\ud83d\udc11\ud83d\udc0f\ud83d\udc11\ud83d\udc0f\ud83d\udc11\ud83d\udc0f_by_zacknattack",
+    "my_game_by_skyelinerss",
+    "viikin_peltoseikkailu_by_kristian_lindqvist",
+    "caixas_by_steinerkelvin",
+    "adventures_of_thestevewhotrollsyou_by_steve_balint",
+    "mirror_enemy_game_by_skinke3",
+    "snake_crate_by_jrigs-qu22",
+    "snake_n_orbs_by_aashish_kumar",
+    "pink_by_elitamasan",
+    "pushblock_by_keyband",
+    "soggy_bunny_by_jmorast",
+    "ogre_push!_[ver._1.2.2]_by_jdude104",
+    "zombie_survival_by_steve_co",
+    "Roots",
+    "el_fantasma_toca_huevos_by_redon_games",
+    "delineation_by_matthew_vandevander",
+    "boxes_&_spikes_by_jdavidson1100",
+    "zombies_by_josh",
+    "random_robots_by_molsal",
+    "usagi_puzzle_by_mojojojo99",
+    "push_block_party_by_anthony_lombardo",
+    "ayy_lmagnet_by_shembu9",
+    "deeper_&_deeper_by_johnicholas",
+    "weird_crates_by_sacredsheep",
+    "the_trick_to_baking_three_layer_cakes_by_buffalocat",
+    "gapfiller___lueckefueller_by_increpare",
+    "condensed_galaxy_by_stingby12",
+    "solidify_by_sydney_swartz",
+    "escape_by_shawn_martin",
+    "hat_travelleraw_by_maria-shchurova",
+    "crate_combiner_by_jeffjeff123456",
+    "build_a_snowman_v2.0_by_drewdrewsan",
+    "build_a_snowman_v3.0_by_solafson",
+    "build_a_snowman_v3.0_by_mgelbart",
+    "the_block_man_by_brian_eschenbrenner",
+    "window_hero_by_giles",
+    "push_em!_by_merfoso",
+    "build_a_snowman_1.0_by_puzzle00",
+    "el_laberinto_asesino_by_saksalksal",
+    "john_eats_cake_by_orsonhart",
+    "haberdashery_by_lee2sman",
+    "back_home_by_geralas",
+    "Isle_of_Sokoban",
+    "crate_and..._anticrate__by_noend455",
+    "b0mbz_by_matt_diebolt",
+    "super_mario_bros_by_steve_balint",
+    "nut_pull_by_jeffjeff123456",
+    "ladder_by_theboldedyellow",
+    "gravity_by_joe",
+    "Cancel",
+    "the_birthday_party_by_oscarjlouw",
+    "gifted_by_neeko",
+    "sokoban_variation_by_trbrc",
+    "screenwrap_simulator_by_monakrom",
+    "sticky_fingers_by_caurso99",
+    "trashcan_vs._banana_by_e_is_cool",
+    "simple_block_pushing_example_by_monakrom",
+    "build_a_snowman_v3.0_by_ylimes10",
+    "gravicrate_by_orcenhaze",
+    "doublo7_by_mirage-xel",
+    "highschool_survivors_by_gianca33",
+    "the_festival_game!_by_oscarjlouw",
+    "psychokinesis_by_aden_eldred",
+    "mirror_blocks_by_edalcmagal",
+    "Reap",
+    "microban_by_nickneim",
+    "re__starting_by_beekie18",
+    "colorcrate_by_evan_malmud__crychair_",
+    "untitled_by_testethetestcat",
+    "crate_push_by_brandon_dillard",
+    "snowman_game_by_jerry_liu",
+    "build_a_snowman_v2.0_by_alex_yuan",
+    "kyle_wrestling_by_john_valencia",
+    "slime_by_alex_washtell",
+    "subway_upholstry_snot_smearing_championship_by_increpare",
+    "se\u00f1or_con_sombrero_trabaja_en_la_carcel_by_tina2900",
+    "build_a_snowman_v1.0_by_mgelbart",
+    "boston_tea_party_by_conor_cadigan_and_co",
+    "Glue_Factory",
+    "Switcheroo",
+    "lamb_and_lamps_by_aygyusuf",
+    "build_a_snowman_v2.0_by_melinda_ji",
+    "build_a_snowman_by_cupcakegrb",
+    "simple_action_example_by_unknown_author",
+    "untitled_game_v0.7_by_rando2048",
+    "Absorb",
+    "lets_try_this_by_crimsondragon42",
+    "~~_pware_skeg_~~_by_brian_stottler______\u25a0",
+    "fill_them_with_crates_by_stingby12",
+    "untitled_by_benjy_bates",
+    "a_reindeer_game_by_ruggedmug",
+    "oneself_by_@mtrc",
+    "popcrushers_by_s_gibson",
+    "dispensing_boxes_by_qwaffles",
+    "build_a_snowman_v1.0_by_ofjdakl4",
+    "freys_cake_layering_nightmare_by_buffalocat",
+    "small_steps_by_rafaelrodriguezsanz",
+    "water_mine_by_kixthemix",
+    "a_snowballs_chance_in_hell_by_iznaut",
+    "in_the_mines_by_gavinleong08",
+    "get_3__by_unknown_author",
+    "biuld_a_snowman_by_uwuz2020",
+    "hook_by_mlipmanh",
+    "build_a_snowman_gogo\u2122_edition_[so_fun]_by_puzzle00",
+    "gurkeschieber_by_increpare",
+    "cash_burglar_by_daniel_merchell",
+    "repelo_by_syci-exe",
+    "Stand_III",
+    "Circuit_Breaker",
+    "walteri_\u0161okolaadimaa_by_tseik6",
+    "lawn_and_order_by_danflapjax",
+    "santoban_by_eckelito",
+    "naomis_challenge_4_game_winter_by_techythanh",
+    "lab2adventuregame_by_lucywambui",
+    "susto_felino_by_uligabri",
+    "Colorban",
+    "stackies_by_theboldedyellow",
+    "kitten_pushing_v5.0_by_natalie0217",
+    "slip_n_slide_by_luckofthedicehere",
+    "valeris_idea_by_necrothaum",
+    "water_and_fire_duality_by_paxxack",
+    "alport_by_mfaik",
+    "elemental_man_by_mikkelol",
+    "puzzle_shooter_by_shomaisshi",
+    "mazezam_by_malcolm_tyrrell",
+    "side_of_the_glass_by_eyagmurarslan",
+    "build_a_snowman_v1.0_by_randomguy0-0",
+    "machinarium_mini-game_14_by_panda",
+    "pontoluvian_straightjacket_puzzle_by_wayne_myers",
+    "protector_and_victim_by_steven_darragh_rach_conor_ricky",
+    "simple_by_wen1now",
+    "colorman_by_alexoland",
+    "hedgehogger_by_increpare",
+    "kitten_pushing_v6.0_by_natalie0217",
+    "follow_the_leader_by_henry-friedman",
+    "course_of_the_dragon_by_stephen_lavelle",
+    "weird_bug_modified_by_jonah_ostroff_and_augustin_cauchy__hey__65d0f366",
+    "two_games_in_one_by_unknown_author",
+    "flower_pushing_game____by_msomsouk25",
+    "Involuntary_Line_Force_Plus",
+    "1-2-3-ban_by_alan_hazelden",
+    "laundry_day_by_nmcsperry",
+    "remote_planets_by_zuza",
+    "make_it_go_away_by_mino_talen",
+    "idas_adventure_by_diathan",
+    "you_are_the_monster!_by_matt_lee",
+    "You're_Toast!",
+    "ice_world_by_scott_hughes",
+    "mr._charman_by_s0ra",
+    "spopy_gaem_by_spoop",
+    "weird_bug_by_jonah_ostroff_and_joel_fox",
+    "FACED",
+    "spooky_scary_skeletons_by_unknown_author",
+    "Clean_Up",
+    "Castle_Duck!",
+    "errorman,_the_snowman__game_basically_e_0dcb7bf0_by_tdsakajasonhan",
+    "buny_hoping_by_pickten",
+    "drop-o-tron_by_alxama",
+    "weird_bug_by_jonah_ostroff_and_lukas__hey_you_should_96b51c54",
+    "title_here_by_julietteamo",
+    "my_game_by_ro",
+    "i_would_like_my_dice_with_pips_please_by_monakrom",
+    "sokoban__by_thegreatescaper",
+    "weird_bug_by_jonah_ostroff_w__some_fooling_by_chz",
+    "4d_by_beekie",
+    "how_mazing_are_you__by_koenm9264",
+    "ss-tour_puzzles_by_angilbert",
+    "make_oo_by_beekie",
+    "No_Fault_of_My_Own",
+    "pnake_by_ladyleia001",
+    "XL-Up_Maze",
+    "mandy_crush_by_aaron_steed",
+    "Carnival_Shooter!",
+    "happy_birthday_nana_by_unknown_author",
+    "minecraft_v1.0.1_by_coconana9010",
+    "prototipo_#1_-_persecuci\u00f3n_del_jugador_by_sebastianbaladan98",
+    "untitled_by_octoconnors",
+    "blow_up_moon_by_jupitervenussng",
+    "escape_the_zombie_by_tomasdarracq",
+    "midas_by_riotkings",
+    "prueba_lazaroffiana_by_martinglazaroff",
+    "sokobee_simples_by_matteomenapace",
+    "brand_new_one_by_jon-jon",
+    "feed_the_cat_by_kim_cerna",
+    "microban_level_add_by_beekie18",
+    "soccer_by_charles_lee",
+    "test_game_1_by_jackbarinaga",
+    "clase_de_gerson_by_angenanoide",
+    "my_game_by_enzomiali",
+    "random_robots_by_masterhigure",
+    "the_worm_puzzle_by_bowlercaptain",
+    "block_game_by_quat1024",
+    "escape_the_zombie_by_cdogonza",
+    "i_am_a_gust_of_wind_by_increpare",
+    "magdalena_by_yayuz11",
+    "thanh_proto_-_lava_pits_by_techythanh",
+    "cocina_picante_by_martinglazaroff",
+    "iced_forest_by_arabella-jiang",
+    "mirrorer_by_\u2022ale\u2022",
+    "my_game_by_jorgyomendez",
+    "sapo_game_by_julilopezzz",
+    "time-reversed_minicosmos_by_s0ra",
+    "coordinations_by_spacemouse",
+    "my_game_by_starontop",
+    "sokoban_puzzle_game_by_cfields3",
+    "the_adventures_of_the_catfish_by_me",
+    "bugs_by_paul_moore",
+    "swapperban_by_thebigfive-381",
+    "cat_making_friends_by_wfykitty",
+    "herding_cats_by_torodem",
+    "my_game_by_jcmiller11",
+    "squares_by_tim_inman",
+    "laberinto_tramposo_by_skyemoure",
+    "my_game_by_norkn",
+    "rolling_ball_example_by_angilbert",
+    "simple_block_pushing_game_by_thatscar",
+    "crate_game_by_jp_memon",
+    "my_game_by_nahcirn",
+    "stazs_superior_game_with_sound_by_nahcirn",
+    "faulty_wincon_by_elwood_sharit",
+    "paul_bunyans_demade_island_adventure__by_edderiofer",
+    "unicode_test_by_egg-kun",
+    "random_maze_game_by_galactical1100",
+    "dogs_and_sheeps_by_alainbrobecker",
+    "key_seeker_by_sriharsha32484",
+    "prototipo_de_movimiento_de_enemigos_by_cotidib",
+    "slidn_ride_by_senzarimpianti",
+    "flame_dance_party_by_dog-cheese",
+    "Nom",
+    "vi-seth_starting_game_by_vi-seth_bak",
+    "big_boy_by_franklin_p._dyer",
+    "prison_escape_by_will_garrahan",
+    "close_shave_by_josh_eklow",
+    "[beta]_winter_adventure_by_techythanh",
+    "this_functions_for_sme_reason_by_turtellio",
+    "simple_block_pushing_game_by_francobarlocco",
+    "test_game_by_jonah_ostroff",
+    "escape_the_maze_by_dejamison",
+    "dogs_in_the_yard_by_mw-mg7",
+    "realtime_gravity_by_unknown_author",
+    "magische_drank_by_jan-niestadt",
+    "untitled_by_warbonate",
+    "CC2",
+    "my_game_by_npgiorgi",
+    "untitled_crate_game_by_matzieq",
+    "taco_grande_by_franklin_p._dyer",
+    "os1_puzzlescript_teht\u00e4v\u00e4_by_averageandy",
+    "halfoban_by_henry-friedman",
+    "minigame_prototype_by_rcmichaels",
+    "my_game_by_mokesmoe",
+    "lights_out_by_eric_zhang",
+    "realtime_gravity_by_increpare",
+    "magentism_by_rellik",
+    "untitled_by_milagrosvarela",
+    "Pac-Puzzler",
+    "Turing_Machine",
+    "make_snowman_by_chris768123",
+    "eventually_this_is_gonna_be_zelda_by_soolseem",
+    "rpg_by_waynetron",
+    "island_adrift_by_lee2sman",
+    "diagonal_sokoban_by_thebigfive-381",
+    "aoc2022-24_by_thatscar",
+    "no_forbidden_symbols_2_by_increpare",
+    "test_game_by_sean_massa",
+    "planko_by_thatscar",
+    "escape_the_zombie_by_valentinaribas",
+    "tedium_demake_by_kelly",
+    "my_game_by_nvh",
+    "rock_by_weights_by_nachlord996",
+    "happy_by_tebrown1011",
+    "iinan_harjoituspeli_by_iina",
+    "Stand_aside,_everyone!_I_take_large_steps!",
+    "mantis_demo_by_thesalamaderboy",
+    "lights_out!_by_n_a",
+    "tales_of_a_character_object!_by_unknown_author",
+    "move_the_ice_cube_to_the_goal_by_ladyleia001",
+    "spelprotoryping_3_vecka_4_by_acoolpotato",
+    "make_lines,_not_war!_by_zachary_williams",
+    "drunkard_walk_by_unknown_author",
+    "advent_of_code_2024_day_6_part_1_by_sponege",
+    "zombie_holocaust_by_heikki",
+    "numberrange_puzzle_prototype_by_puzzlescriptfan34",
+    "prototipo__movimiento_de_personaje_by_milagrosvarela",
+    "gondola_by_unknown_author",
+    "bloygizpo_by_increpare",
+    "pac_man_by_unknown_author",
+    "MATCH_3_PUZZLE",
+    "beekies_jacks_phis_sliders_by_beekie18",
+    "emergent_complexity_example_by_nneonesque",
+    "tie_game_by_jacoblevin0",
+    "i_like_stripes_by_mugla",
+    "annoying_skull_by_qwaffles",
+    "2d_by_unknown_author",
+    "watch_your_step_ex_by_just-kirb",
+    "wrapping_example_by_jcmiller11",
+    "portal_test_2_by_jcmiller11",
+    "outlines_by_thatscar",
+    "destroy_all_blocks_by_sfiera",
+    "test_by_jcmiller11",
+    "a_copy_subroutine_by_chris_pickel",
+    "game_by_norbel_zhou",
+    "superpower_sandbox_by_thesalamaderboy",
+    "step_counter_by_chaotic_iak",
+    "sokopawn_test_by_thebigfive-381",
+    "laser_ghost_tag_by_builder17",
+    "king_candy_saga_by_sean_mcdonald",
+    "the_master_zombie_by_seth_archambault",
+    "floaty_dress_fit_for_a_queen_&_three_hu_e32444a8_by_monakrom",
+    "spell_by_beekie18",
+    "fake_bloxorz_by_knexator",
+    "magicians_have_long_handkerchiefs_by_toomber",
+    "random_shortest_path_by_sfiera",
+    "lost_demo_by_thesalamaderboy",
+    "graviclear_by_rblazer",
+    "adventures_of_felix_by_franklin_p._dyer",
+    "nibbly_by_john_williams",
+    "dave_phillips_color_path_#3___puzzlesc_358f80cf_by_eduardo_alonso______\u00b7\u00b7"
+  ]
+}
