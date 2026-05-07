@@ -53,46 +53,60 @@ def main() -> None:
             c = float(r[cond_col]); u = float(r[uncond_col]); i = float(r["identity"])
         except (KeyError, ValueError):
             continue
+        if i <= 0:
+            continue
         games.append(r["game"])
         cond_e.append(c); unc_e.append(u); ident.append(i)
     cond_e = np.array(cond_e); unc_e = np.array(unc_e); ident = np.array(ident)
 
-    cond_wins = cond_e <  ident
-    unc_wins  = unc_e  <  ident
-    both = cond_wins &  unc_wins
-    only_c = cond_wins & ~unc_wins
-    only_u = ~cond_wins &  unc_wins
+    # Ratios to per-game identity baseline. <1 beats identity; >1 worse.
+    cond_r = cond_e / ident
+    unc_r  = unc_e  / ident
+
+    cond_wins = cond_r < 1
+    unc_wins  = unc_r  < 1
+    both    = cond_wins &  unc_wins
+    only_c  = cond_wins & ~unc_wins
+    only_u  = ~cond_wins &  unc_wins
     neither = ~cond_wins & ~unc_wins
 
     plt.rcParams.update(RC_PARAMS)
-    fig, ax = plt.subplots(figsize=(5.6, 5.2))
+    fig, ax = plt.subplots(figsize=(5.2, 5.0))
 
     spec = [
         (both,    "#2ca02c", "both beat identity"),
-        (only_c,  "#d62728", "cond only beats identity"),
-        (only_u,  "#1f77b4", "uncond only beats identity"),
-        (neither, "#7f7f7f", "neither beats identity"),
+        (only_c,  "#d62728", "cond only"),
+        (only_u,  "#1f77b4", "uncond only"),
+        (neither, "#7f7f7f", "neither"),
     ]
     for mask, color, label in spec:
         if mask.any():
-            ax.scatter(100*cond_e[mask], 100*unc_e[mask],
-                       s=42, c=color, alpha=0.85,
+            ax.scatter(cond_r[mask], unc_r[mask],
+                       s=46, c=color, alpha=0.9,
                        edgecolors="white", linewidths=0.6,
-                       label=f"{label} ({mask.sum()})", zorder=3)
+                       label=f"{label} ({mask.sum()})", zorder=4)
 
-    lo = max(1e-2, 100*float(min(cond_e.min(), unc_e.min(), 1e-4)))
-    hi = 100*float(max(cond_e.max(), unc_e.max(), 0.4)) * 1.2
-    diag = np.array([lo, hi])
-    ax.plot(diag, diag, color="black", linewidth=1.0, linestyle="--",
-            alpha=0.5, label="$y = x$", zorder=2)
+    # Tight log-log range around the points; pad ~25% on each end.
+    lo = float(min(cond_r.min(), unc_r.min())) / 1.25
+    hi = float(max(cond_r.max(), unc_r.max())) * 1.25
+    lo = max(lo, 1e-3); hi = min(hi, 1e2)
 
     ax.set_xscale("log")
     ax.set_yscale("log")
     ax.set_xlim(lo, hi); ax.set_ylim(lo, hi)
-    ax.set_xlabel(f"Rule-conditional 1-step (TF) cell-error (%) [{SCALE}]")
-    ax.set_ylabel(f"Unconditional 1-step (TF) cell-error (%) [{SCALE}]")
-    ax.set_title(f"Per-game OOD error on Heldout-26 ({SCALE})")
-    ax.grid(True, which="both", alpha=0.25)
+
+    # x=1 and y=1: per-game identity threshold for each model.
+    ax.axvline(1.0, color="black", linewidth=1.0, alpha=0.6, zorder=2)
+    ax.axhline(1.0, color="black", linewidth=1.0, alpha=0.6, zorder=2)
+    # y=x: cond and uncond equally far from identity on this game.
+    diag = np.array([lo, hi])
+    ax.plot(diag, diag, color="black", linewidth=0.9, linestyle="--",
+            alpha=0.5, zorder=2, label="$y = x$")
+
+    ax.set_xlabel("Cond error / identity error")
+    ax.set_ylabel("Uncond error / identity error")
+    ax.set_title(f"Per-game OOD error vs. identity ({SCALE})")
+    ax.grid(False)
     ax.legend(loc="lower right", framealpha=0.95)
 
     fig.tight_layout()

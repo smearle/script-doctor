@@ -101,12 +101,14 @@ dynamics across games at fixed capacity.
   \begin{subfigure}[b]{0.42\linewidth}
     \centering
     \includegraphics[width=\linewidth]{figures/cond_vs_uncond_match/ood_per_game_scatter.pdf}
-    \caption{\textbf{OOD per-game 1-step (TF) cell-error at
-      \textsc{Train-199}}, cond (x) vs.\ uncond (y), one point per
-      held-out game; colours partition by which model beats the
-      per-game identity baseline. Cond and uncond beat identity on
-      largely disjoint subsets---the encoder is not a strict
-      superset of the unconditional baseline OOD.}
+    \caption{\textbf{OOD per-game 1-step (TF) error / per-game
+      identity error at \textsc{Train-199}}, cond (x) vs.\ uncond
+      (y), log-log; one point per held-out game. Reference lines at
+      $x{=}1$ and $y{=}1$ split the plane into the four
+      identity-win quadrants (bottom-left both beat identity, etc.).
+      Cond and uncond beat identity on largely disjoint subsets:
+      the encoder is not a strict superset of the unconditional
+      baseline OOD.}
     \label{fig:ood-per-game-scatter}
   \end{subfigure}
 \end{figure}
