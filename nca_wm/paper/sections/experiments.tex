@@ -11,7 +11,6 @@ bit-packed ($\approx 8\times$ compression). Multi-game batches use
 \emph{balanced sampling} (one share per game per step) to compensate
 for dataset-size imbalance.
 
-\paragraph{Corpus.}
 We draw from the PuzzleJax collections~\cite{earle2025puzzlejax}
 (Gallery, Archive, gists) plus a few curated custom games. After
 filename dedup across collections and collapsing structural
@@ -24,7 +23,6 @@ the encoder cannot produce distinct slots for token-identical inputs.
 Median rule count is 6 (min 1, max 20), median level count is 3
 (max 30), grid sizes range from $1{\times}3$ to $30{\times}40$.
 
-\paragraph{Training presets.}
 \textsc{Train-14} (14 curated games), \textsc{Train-59} (59 Gallery
 games extending Train-14 by 45 more), and \textsc{Train-199} (199
 games extending Train-14 by 185 more) feed the multi-game
@@ -38,7 +36,6 @@ auxiliary-objective and latent-probe analyses
 \ref{app:inverse-fit}). Game lists are in
 Appendix~\ref{app:data-provenance}.
 
-\paragraph{Synthetic levels.}
 The single-game multi-grid suite (\S\ref{sec:results-baselines},
 synth block in Table~\ref{tab:baselines-arch}) trains on \emph{evolved} synthetic
 levels: a GA proposes candidate grids and the engine retains
