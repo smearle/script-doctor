@@ -20,6 +20,7 @@ import sys
 from pathlib import Path
 
 import numpy as np
+import matplotlib.pyplot as plt
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
@@ -90,7 +91,10 @@ def per_game_tf(npz_path: Path) -> dict[str, float]:
     return {g: float(np.mean(v)) for g, v in accum.items()}
 
 
-OUT_TEX = REPO_ROOT / "nca_wm" / "paper" / "figures" / "rule_type_analysis" / "table.tex"
+OUT_DIR = REPO_ROOT / "nca_wm" / "paper" / "figures" / "rule_type_analysis"
+OUT_TEX = OUT_DIR / "table.tex"
+OUT_PDF = OUT_DIR / "rule_type_heatmap.pdf"
+OUT_PNG = OUT_DIR / "rule_type_heatmap.png"
 
 
 def _emit_tex(rows: list[tuple[str, str, int, float, float]]) -> None:
@@ -116,6 +120,66 @@ def _emit_tex(rows: list[tuple[str, str, int, float, float]]) -> None:
     lines.append(r"\bottomrule")
     lines.append(r"\end{tabular}")
     OUT_TEX.write_text("\n".join(lines) + "\n")
+
+
+FEATURE_LABEL = {
+    "has_again":    r"again",
+    "has_ellipsis": r"...",
+    "has_late":     r"late",
+    "has_random":   r"random",
+    "has_dir":      r"dir-prefix",
+}
+
+
+def _emit_heatmap(rows: list[tuple[str, str, int, float, float]]) -> None:
+    """5x2 heatmap of yes-bucket cell-error per feature, cond / uncond cols.
+
+    Same log-color idiom as the intersection heatmap so the two read as a
+    pair when placed side-by-side in the main body.
+    """
+    OUT_DIR.mkdir(parents=True, exist_ok=True)
+    yes_rows = [(feat, n, cm, um) for (feat, group, n, cm, um) in rows
+                if group == "yes"]
+    # Sort by max(cond, uncond) descending so the worst feature is at top.
+    yes_rows.sort(key=lambda r: -max(r[2], r[3]))
+
+    feats = [r[0] for r in yes_rows]
+    ns    = [r[1] for r in yes_rows]
+    mat   = np.array([[r[2], r[3]] for r in yes_rows])  # in [0,1]
+    matp  = 100 * mat  # percent
+
+    plt.rcParams.update({
+        "font.size": 12, "axes.titlesize": 13, "axes.labelsize": 12,
+        "xtick.labelsize": 11, "ytick.labelsize": 11, "legend.fontsize": 9,
+    })
+    fig, ax = plt.subplots(figsize=(3.6, 3.4))
+    floor = 1e-3
+    matrix_log = np.log10(np.clip(matp, floor, None))
+    im = ax.imshow(matrix_log, aspect="auto", cmap="magma_r",
+                   vmin=np.log10(floor), vmax=np.log10(30.0))
+
+    ax.set_yticks(range(len(feats)))
+    ax.set_yticklabels([f"{FEATURE_LABEL[f]} (n={n})" for f, n in zip(feats, ns)])
+    ax.set_xticks([0, 1])
+    ax.set_xticklabels(["cond", "uncond"])
+
+    for ri in range(matp.shape[0]):
+        for ci in range(matp.shape[1]):
+            v = matp[ri, ci]
+            text_color = "white" if matrix_log[ri, ci] > np.log10(0.3) else "black"
+            ax.text(ci, ri, f"{v:.2f}", ha="center", va="center",
+                    fontsize=9, color=text_color)
+
+    cbar = fig.colorbar(im, ax=ax, fraction=0.06, pad=0.03)
+    cbar.set_label("cell-error (\\%, log)", fontsize=10)
+    log_ticks = [-2, -1, 0, 1]
+    cbar.set_ticks(log_ticks)
+    cbar.set_ticklabels([f"{10**t:g}" for t in log_ticks])
+
+    fig.tight_layout()
+    fig.savefig(OUT_PDF, bbox_inches="tight")
+    fig.savefig(OUT_PNG, bbox_inches="tight", dpi=160)
+    plt.close(fig)
 
 
 def main() -> None:
@@ -164,6 +228,9 @@ def main() -> None:
         print()
     _emit_tex(tex_rows)
     print(f"\nWrote: {OUT_TEX}", file=sys.stderr)
+    _emit_heatmap(tex_rows)
+    print(f"Wrote: {OUT_PDF}", file=sys.stderr)
+    print(f"Wrote: {OUT_PNG}", file=sys.stderr)
 
     # Rule-count buckets.
     buckets = [(0, 1, "0"), (1, 4, "1-3"), (4, 8, "4-7"), (8, 13, "8-12"), (13, 100, "13+")]

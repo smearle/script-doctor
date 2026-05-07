@@ -869,6 +869,35 @@ a single game.
   \label{fig:intersection-slope-ar}
 \end{figure}
 
+\subsection{Per-game OOD scatter at \textsc{Train-199}}
+\label{app:ood-per-game-scatter}
+
+Figure~\ref{fig:ood-per-game-scatter} unpacks the
+\textsc{Train-199} aggregate (Figure~\ref{fig:intersection-slope-ood})
+into one point per held-out game on the cond-ratio vs.\ uncond-ratio
+plane (each axis is the model's per-game error divided by the per-game
+identity error, so $x{<}1$ means cond beats identity and likewise for
+$y{<}1$). The four identity-win quadrants are then split by the
+$x{=}1$ and $y{=}1$ reference lines: bottom-left both beat identity,
+top-right neither, top-left cond only, bottom-right uncond only. The
+cond-only and uncond-only winners are separately ${\sim}$as large as
+each other ($4$ and $8$ games), with $9$ where both beat identity and
+$5$ where neither does, so the encoder is not a strict superset of the
+unconditional baseline OOD.
+
+\begin{figure}[t]
+  \centering
+  \includegraphics[width=0.5\linewidth]{figures/cond_vs_uncond_match/ood_per_game_scatter.pdf}
+  \caption{\textbf{Per-game OOD 1-step (TF) error / per-game identity
+    error at \textsc{Train-199}}, conditional (x) vs.\ unconditional
+    (y), log-log; one point per held-out game. Reference lines at
+    $x{=}1$ and $y{=}1$ split the plane into the four identity-win
+    quadrants; colors partition games consistently. The aggregate of
+    these points is the \textsc{Train-199} entry of
+    Figure~\ref{fig:intersection-slope-ood}.}
+  \label{fig:ood-per-game-scatter}
+\end{figure}
+
 \subsection{Per-cell rollout error breakdown on \textsc{Heldout-26}}
 \label{app:cond-vs-uncond}
 

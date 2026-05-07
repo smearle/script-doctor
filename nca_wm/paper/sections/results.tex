@@ -185,13 +185,15 @@ the conditional mean and $\approx 3\times$ the median; per-game swings
 can be dramatic (\textit{neko puzzle} goes from $0.000\%$ to $24.4\%$
 when the encoder is removed; per-game cells in
 Figure~\ref{fig:intersection-heatmap}). The encoder amortizes shared
-dynamics across games at fixed capacity. Bucketing the 199 training
-games by rule-section features (Appendix~\ref{app:rule-type})
-sharpens what drives the residual difficulty: \texttt{again}-loop
-and \texttt{...}-spanning rules push both models to multiples of the
-corpus mean, and the only bucket where uncond \emph{beats} cond is
-\texttt{random} rules (since the next state has an irreducible
-random component, identity-like predictions are optimal).
+dynamics across games at fixed capacity.
+Figure~\ref{fig:rule-type-heatmap} buckets the 199 training games by
+rule-section features and reads what drives the residual difficulty:
+\texttt{again}-loop and \texttt{...}-spanning rules push both models
+to multiples of the corpus mean, and the only bucket where uncond
+\emph{beats} cond is \texttt{random} rules (since the next state has
+an irreducible random component, identity-like predictions are
+optimal); per-bucket numbers and the \texttt{late} / \texttt{dir}
+features are in Appendix~\ref{app:rule-type}.
 
 \begin{figure}[t]
   \centering
@@ -211,18 +213,16 @@ random component, identity-like predictions are optimal).
       \textit{kettle} at $n{=}14$ stays $<1\%$.}
     \label{fig:intersection-heatmap}
   \end{subfigure}\hfill
-  \begin{subfigure}[b]{0.42\linewidth}
+  \begin{subfigure}[b]{0.40\linewidth}
     \centering
-    \includegraphics[width=\linewidth]{figures/cond_vs_uncond_match/ood_per_game_scatter.pdf}
-    \caption{\textbf{OOD per-game 1-step (TF) error / per-game
-      identity error at \textsc{Train-199}}, cond (x) vs.\ uncond
-      (y), log-log; one point per held-out game. Reference lines at
-      $x{=}1$ and $y{=}1$ split the plane into the four
-      identity-win quadrants (bottom-left both beat identity, etc.).
-      Cond and uncond beat identity on largely disjoint subsets:
-      the encoder is not a strict superset of the unconditional
-      baseline OOD.}
-    \label{fig:ood-per-game-scatter}
+    \includegraphics[width=\linewidth]{figures/rule_type_analysis/rule_type_heatmap.pdf}
+    \caption{\textbf{ID 1-step (TF) cell-error (\%) on
+      \textsc{Train-199}, bucketed by rule-section feature}; same
+      log-color scale, $n$ is the bucket size. \texttt{random} is
+      the only feature where uncond beats cond (random next-states
+      have an irreducible noise component); \texttt{again} and
+      \texttt{...} both push errors to multiples of the corpus mean.}
+    \label{fig:rule-type-heatmap}
   \end{subfigure}
 \end{figure}
 
@@ -241,11 +241,12 @@ mean $14.8\%$ vs.\ uncond $16.9\%$ but with near-identical medians
 $7$); at \textsc{Train-59} the means roughly match ($4.69\%$ vs.\
 $4.52\%$); at \textsc{Train-199} uncond has the lower median ($1.52\%$
 vs.\ $2.00\%$) and one more win vs.\ identity ($14$ vs.\ $13$).
-The per-game scatter (Figure~\ref{fig:ood-per-game-scatter}) shows
-that cond and uncond beat identity on largely disjoint subsets at
-\textsc{Train-199}, so the encoder is not a strict superset of the
-unconditional baseline on this set; we return to what the
-unconditional model is exploiting in \S\ref{sec:discussion}.
+The per-game OOD scatter (Appendix~\ref{app:ood-per-game-scatter},
+Figure~\ref{fig:ood-per-game-scatter}) shows that cond and uncond
+beat identity on largely disjoint subsets at \textsc{Train-199}, so
+the encoder is not a strict superset of the unconditional baseline
+on this set; we return to what the unconditional model is exploiting
+in \S\ref{sec:discussion}.
 On random-action AR rollout
 (Appendix~\ref{app:rollout-ar}), where errors compound over 30 steps,
 identity ($\approx 2\%$ mean) is a much stronger baseline: every model
