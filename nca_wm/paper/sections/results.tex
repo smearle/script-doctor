@@ -14,7 +14,7 @@ We compare the shared-weights NCA against three non-iterative spatial
 bodies (CNN, U-Net, ViT) and a per-step-weights NCA ablation on three
 corpora that probe different facets of the problem:
 \textsc{Sokoban-Authored} (10 \textit{Microban} levels) for the
-per-rule fitting limit (where slot cross-attention can in principle
+per-rule fitting limit (where latent cross-attention can in principle
 memorize per-state outcomes), \textsc{Sokoban-Evolved} (widths
 $\{5,6,7,8\}^2$ $\times$ 256 evolved levels each; 1024 distinct levels
 share one rule set) where that memorization crutch is removed, and
@@ -23,7 +23,7 @@ rule counts 1--14) for multi-game capacity sharing.
 The per-step NCA uses independent weights per iteration; CNN, U-Net,
 and ViT replace the iterated local update with a non-iterative spatial
 body.
-All five share the slot encoder and readout heads.
+All five share the latent encoder and readout heads.
 Single-game runs train for 10k updates per seed, \textsc{Train-14} for
 20k, $d_h=256$; the per-step training objective does not separate
 architectures (all five fit train cross-entropy within $\approx 2\%$
@@ -123,7 +123,7 @@ both on the same checkpoints by training the canonical recipe
 \textsc{Train-199} and evaluating each against (i) the 14 games
 shared across all three presets, and (ii) \textsc{Heldout-26}, the
 subset of the 30-game stratified held-out set. We isolate the encoder's contribution by
-training a matched unconditional variant (no encoded slots) at every
+training a matched unconditional variant (no encoded latents) at every
 scale, and report against the identity baseline
 $\hat s_{t+1}{=}s_t$, which scores zero error on every cell the rules
 leave untouched. Conditional and unconditional models tie in-distribution at
@@ -144,7 +144,7 @@ corpora.
     autoregressively. The PuzzleScript engine (bottom, JavaScript)
     is the data source for both regimes. The latent-space scatters
     on top show where each training game (gray) and held-out game
-    (red $\bigstar$) lands in the encoder's slot space; mapping
+    (red $\bigstar$) lands in the encoder's latent space; mapping
     held-outs into the same neighbourhood as training games is the
     aspirational goal.}
   \label{fig:id-ood-teaser}

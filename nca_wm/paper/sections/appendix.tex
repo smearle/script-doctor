@@ -4,7 +4,7 @@
 \subsection{Model construction}
 
 All models are implemented in JAX/Flax with the Adam optimizer. The
-slot encoder is identical across architectures (see
+latent encoder is identical across architectures (see
 \S\ref{sec:method}). The hidden grid dimension $d_h$, the cell
 update structure, and the readout heads are also shared; only the
 spatial-update body (rule-attention NCA, CNN, U-Net, or ViT) varies.
@@ -941,10 +941,10 @@ count summarized in
 
 For each held-out game we encode its tokens through the trained
 encoder, compute cosine distance to every training game's encoded
-slot, and report the smallest of those distances---the distance
+latent, and report the smallest of those distances---the distance
 to the held-out game's \emph{nearest training-game neighbor} in
-slot space. We use the flattened
-$K \cdot d_{\text{slot}} = 1024$-dim slot vector, and the median
+latent space. We use the flattened
+$K \cdot d_{\text{latent}} = 1024$-dim latent vector, and the median
 across the 21 of 30 held-outs whose tokens fit within the smallest
 training preset's maximum sequence length.
 
@@ -964,15 +964,15 @@ context.
 \begin{table}[t]
   \centering
   \caption{\textbf{Held-out latent geometry as we scale training
-    games.} Cosine distance, in flattened-slot space, from each
-    held-out game's encoded slot to its nearest training-game
+    games.} Cosine distance, in flattened-latent space, from each
+    held-out game's encoded latent to its nearest training-game
     neighbor. We also report the same nearest-neighbour distance
     among the training games themselves (each training game vs.\
     its nearest \emph{other} training game) and the ratio
     $d_{\text{he}\rightarrow\text{tr}} / d_{\text{tr}\rightarrow\text{tr}}$,
     which is closer to 1 when held-outs are mapped into the same
     neighbourhood density as the training set. All runs use the
-    rule-attention NCA body, $K{=}16$ slots, $d_{\text{slot}}{=}64$,
+    rule-attention NCA body, $K{=}16$ latents, $d_{\text{latent}}{=}64$,
     $T{=}8$ NCA steps, batch 32, 150k Adam updates. The held-out
     set is the same 30-game stratified sample for every row.}
   \label{tab:scaling-curve}
@@ -1024,16 +1024,16 @@ The main-body Conditioning interface paragraph
 $\mathcal{L} = \mathcal{L}_{\text{state}} + \alpha \mathcal{L}_{\text{win}}$.
 The actual training objective adds a third
 auxiliary term $\beta \mathcal{L}_{\text{tok}}$ whose role is purely
-to shape the slot space: the encoded slots $z$ are fed to a causal
+to shape the latent space: the encoded latents $z$ are fed to a causal
 token decoder $\mathrm{Dec}_\psi$ that is trained under teacher
 forcing to reconstruct the original token sequence (decoder
 architecture and reconstruction / sampling results in
 Appendix~\ref{app:autoencoder}). All conditional runs reported in
 the main body train with $\beta = 1.0$ by default; we never observed
 the auxiliary loss to harm world-model fidelity, and switching it on
-is what makes the slot-space probes in
+is what makes the latent-space probes in
 Appendices~\ref{app:autoencoder} and \ref{app:inverse-fit} possible
-(the decoder is what turns a slot back into program text).
+(the decoder is what turns a latent back into program text).
 
 A natural concern when adding this auxiliary loss is whether it
 costs anything on the world-model's primary job---predicting the
@@ -1071,7 +1071,7 @@ robust to the auxiliary loss.
 $\mathrm{Dec}_\psi$ is a four-layer causal Transformer over the same
 $\approx 140$-symbol vocabulary used by the encoder. Each token position
 self-attends causally to prior positions and cross-attends to the
-$K$ slots at every layer. We train under teacher forcing: the input
+$K$ latents at every layer. We train under teacher forcing: the input
 sequence is the right-shifted target tokens with a learned BOS, and
 the per-position loss is masked cross-entropy against the next
 target token. Object names and sprite-RGB tokens are vocab-extended
@@ -1082,7 +1082,7 @@ JS-engine-compilable) are reported as separate metrics below, since
 syntactic well-formedness and engine acceptance both diverge from
 exact-token reconstruction in the OOD-sample regime.
 
-The joint encoder + NCA + slot-token decoder is trained on
+The joint encoder + NCA + latent-token decoder is trained on
 \textsc{Train-94} for 150k updates with $\beta = 1.0$ on the decoder
 loss. The decoder converges to per-token cross-entropy
 $\approx 2 \times 10^{-9}$ within the first 5k updates and holds
@@ -1093,7 +1093,7 @@ world-model parameters and roughly 20\% to per-step wall-clock.
 between the decoder's argmax prediction and the target token under
 teacher forcing on training games): perfect reconstruction on
 $76/94$ training games and a median per-position match of $1.000$
-(mean $0.906$, min $0.276$). The slot bottleneck retains the
+(mean $0.906$, min $0.276$). The latent bottleneck retains the
 information needed to recover the full symbolic specification on the
 majority of the corpus; the imperfect mean is dominated by a small
 tail of long, sprite-rich games that exhaust the decoder's
@@ -1103,7 +1103,7 @@ positional budget.
 sequences that, after detokenization to PuzzleScript source, parse
 and compile via the JS engine): $15/25$ engine-loadable PuzzleScript
 programs ($60\%$) from greedy autoregressive decoding from random
-Gaussian-fit slots; $9/9$ engine-loadable programs along a 9-point
+Gaussian-fit latents; $9/9$ engine-loadable programs along a 9-point
 linear interpolation between two endpoint training games
 (\textit{Ebony \& Ivory} $\rightarrow$ \textit{BROKEN Naive Extended
 Bodies}; $100\%$). The generations contain plausible push rules of
@@ -1120,26 +1120,26 @@ Because the dynamics model is conditioned on a continuous game
 representation, we can freeze the NCA parameters and infer an
 unobserved game embedding from transition data. Concretely, we
 freeze the world model and decoder $(\theta, \psi)$ and treat
-$z \in \mathbb{R}^{K \times d_{\text{slot}}}$ as the only free
+$z \in \mathbb{R}^{K \times d_{\text{latent}}}$ as the only free
 variable: the encoder $\mathrm{Enc}_\phi$ is bypassed entirely and
-the optimized $z$ enters the world model through a slot-override
+the optimized $z$ enters the world model through a latent-override
 path. We initialize $z$ from a small Gaussian around the empirical
-training-slot mean and optimize the per-cell next-state BCE used
+training-latent mean and optimize the per-cell next-state BCE used
 during training, summed over the held-out target's observed
 transitions, for 2{,}000 Adam steps at $\text{lr} = 5 \times 10^{-3}$
 with batch size 32. Targets are drawn from the deduped pool and
 verified disjoint from training by name and by token-hash. After
 fitting, we report the cosine distance from the recovered $z$ to
-its nearest training-game slot---``nearest train'' in
-Table~\ref{tab:inverse-fit} means the closest training-game slot in
-the flattened-slot space, not a comparison against a held-out
+its nearest training-game latent---``nearest train'' in
+Table~\ref{tab:inverse-fit} means the closest training-game latent in
+the flattened-latent space, not a comparison against a held-out
 reference encoding of the target.
 
 \begin{table}[t]
   \centering
   \caption{\textbf{Inverse-fit recovery from OOD transitions.}
     Final per-cell BCE on the observed transitions of three
-    held-out games, and the cosine distance from the optimized slot
+    held-out games, and the cosine distance from the optimized latent
     to its nearest training-game neighbor (with that neighbor's
     name).}
   \label{tab:inverse-fit}
@@ -1158,13 +1158,13 @@ reference encoding of the target.
 The optimization drives BCE down two-to-three orders of magnitude on
 every target, so the frozen NCA can fit OoD dynamics through the
 latent variable. The reported BCE is on the same transition tape
-the slot was optimized against, however, so it measures the
+the latent was optimized against, however, so it measures the
 expressive capacity of $(\theta, \psi)$ plus the optimization
 landscape, not held-out generalization; an honest upgrade would
 hold out a fraction of the tape, fit on the rest, and report
 test-tape BCE.
 
-On two of three targets the recovered slot's nearest training-game
+On two of three targets the recovered latent's nearest training-game
 neighbor matches a plausible mechanical sibling:
 \textit{Cat Adventure 2} (a push-puzzle) lands closest to
 \textit{neko puzzle} (also a push-puzzle), and

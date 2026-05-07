@@ -22,8 +22,8 @@ compare cell-by-cell against the engine.
 
 \subsection{Rule-conditioned NCA world model}
 
-$\mathrm{Enc}_\phi$ maps the token sequence $\mathrm{spec} \in \mathbb{Z}^{S}$ (or the corresponding autoencoder latent) to slots $z \in \mathbb{R}^{K \times d}$ via $\ell$ self-attention layers followed by $K$ learned query vectors cross-attending into the contextualized tokens.
-Slots are shared across cells and fixed for the rollout.
+$\mathrm{Enc}_\phi$ maps the token sequence $\mathrm{spec} \in \mathbb{Z}^{S}$ (or the corresponding autoencoder latent) to latent vectors $z \in \mathbb{R}^{K \times d}$ via $\ell$ self-attention layers followed by $K$ learned query vectors cross-attending into the contextualized tokens.
+The latent vectors are shared across cells and fixed for the rollout.
 
 A single dense layer embeds the per-cell concatenation of $s_t$ and the broadcast one-hot action into $h^{(0)} \in \mathbb{R}^{H \times W \times d_h}$, after which we apply $T$ NCA steps:
 \begin{align}
@@ -33,7 +33,7 @@ A single dense layer embeds the per-cell concatenation of $s_t$ and the broadcas
       \mathrm{XAttn}(h^{(k)}, z)
     \bigr) \, ,
 \end{align}
-where $[\,\cdot\,]_{3\times 3}$ is a $3{\times}3$ convolution per cell, $\mathrm{XAttn}$ is multi-head attention with each cell as a query and the $K$ slots as keys/values, and $W_o, W_c$ are shared across all $T$ steps.
+where $[\,\cdot\,]_{3\times 3}$ is a $3{\times}3$ convolution per cell, $\mathrm{XAttn}$ is multi-head attention with each cell as a query and the $K$ latents as keys/values, and $W_o, W_c$ are shared across all $T$ steps.
 The \emph{input-skip} concatenation re-injects the embedded $(s_t, a_t)$ at every step to keep the unroll anchored to its input.
 Since PuzzleScript has two natural iteration levels (an inner ordered rule list, an outer \texttt{again} re-evaluation loop), we factor $T = n_\ell \cdot n_r$ with $n_\ell$ distinct inner layers and $n_r$ shared-weight outer passes; $n_r = T$ recovers a single shared layer applied $T$ times, while $n_r = 1$ recovers a per-step body with $T$ distinct layers.
 
@@ -50,13 +50,13 @@ Training loss is $\mathcal{L} = \mathcal{L}_{\text{state}}(\widehat{s}_{t+1}, s_
 Three non-NCA baselines share the encoder, input embedding, and
 readout heads, replacing only the NCA body so the comparison
 isolates the spatial-update body. The \textbf{CNN} stacks $n_b$
-residual blocks (conv + optional pool + slot-cross-attn + residual
+residual blocks (conv + optional pool + latent-cross-attn + residual
 gate) with distinct per-block weights, helping to isolate the effect of the NCA's weight-sharing. The \textbf{U-Net}
 is a 2-level encoder-decoder with skip connections and a FiLM
-bottleneck that reads pooled slots, testing whether multi-scale
+bottleneck that reads pooled latents, testing whether multi-scale
 hierarchy substitutes for repeated local updates. The \textbf{ViT}
 stacks $n_v$ Transformer encoder layers over flattened cells with
-learned 2D positional embeddings plus per-layer slot cross-attention,
+learned 2D positional embeddings plus per-layer latent cross-attention,
 testing whether unrestricted global attention beats locality plus
 iteration. All baselines accept $(s_t, a_t, g)$ and produce the same
 $(\widehat{s}_{t+1}, \widehat{w}_{t+1})$ outputs.

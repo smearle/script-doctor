@@ -19,7 +19,7 @@ pool contains 3{,}474 token-distinct games with rule counts
 $\{1,\ldots,20\}$, object counts $\le 20$, level counts $\le 30$, and
 grid areas $\le 30$. The largest collision group is 445 copies of
 the default PuzzleScript template; this dedup is essential because
-the encoder cannot produce distinct slots for token-identical inputs.
+the encoder cannot produce distinct latents for token-identical inputs.
 Median rule count is 6 (min 1, max 20), median level count is 3
 (max 30), grid sizes range from $1{\times}3$ to $30{\times}40$.
 
@@ -56,8 +56,8 @@ in Appendix~\ref{app:synth-only}.
 \subsection{Architectures and hyper-parameters}
 
 All conditional models share the input embedding (dense over
-$(s_t \,\|\, \mathrm{onehot}(a_t))$), readout heads, and slot encoder
-($K{=}16$ slots, $d{=}64$, two self-attention layers, four heads).
+$(s_t \,\|\, \mathrm{onehot}(a_t))$), readout heads, and latent encoder
+($K{=}16$ latents, $d{=}64$, two self-attention layers, four heads).
 The NCA uses $T{=}4$ steps with $n_r{=}T$ (one shared layer applied
 $T$ times), $d_h{=}256$, full pool features, and input-skip on.
 Padding cells (from per-bucket batching of mixed-size levels) are

@@ -2,7 +2,7 @@
 \label{sec:discussion}
 
 Holding the conditioner constant, the NCA's iterated-local-update body beats non-iterative CNN, U-Net, and ViT baselines on autoregressive rollout across every preset (Table~\ref{tab:baselines-arch}); within the NCA family the shared-weight body matches the per-step body at $\pm 1\sigma$ on \textsc{Train-14} with notably fewer parameters and lower seed variance.
-A single-grid win does not, however, establish learned dynamics, since slot cross-attention can in principle memorize per-state outcomes; \textsc{Sokoban-Evolved} (one rule set across 1024 levels) removes that crutch and sets a ceiling on what the recipe extracts from the rule alone.
+A single-grid win does not, however, establish learned dynamics, since latent cross-attention can in principle memorize per-state outcomes; \textsc{Sokoban-Evolved} (one rule set across 1024 levels) removes that crutch and sets a ceiling on what the recipe extracts from the rule alone.
 
 Within the recipe, axis-cummax contributes surprisingly on Sokoban given that its push rule only references a $3{\times}3$ neighborhood, though the seed std on that ablation row roughly matches the gap so part of the effect is plausibly noise; cleaner gains are expected on long-range patterns like \textit{neko puzzle}'s ellipsis-spanning rule.
 Input-skip cuts the other way: re-injecting $(s_t, a_t)$ at every step anchors the body to its input, trading per-step fit for AR robustness when the rollout feeds back slightly-off predictions.

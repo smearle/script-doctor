@@ -36,7 +36,7 @@
 \maketitle
 
 \begin{abstract}
-Learned world models distill environment dynamics into a neural substrate and act as differentiable surrogates for policy learning and planning. Most work to date trains one model per game on visually rich but mechanically uniform pixel observations. We instead train a single rule-conditioned world model across hundreds of mechanically diverse grid-based puzzle games, foregoing pixels for the full discrete game state. We propose to use a Neural Cellular Automaton (NCA) that mirrors a general-purpose symbolic game engine's repeated application of atomic local rewrites, cross-attending to slot embeddings produced by a jointly-trained autoencoder over symbolic game descriptions with the aim of enabling adaptation to unseen games at runtime. By scaling data in this regime we hope to shift from modeling a game to modeling an engine: a space of possible worlds organized by their dynamics.
+Learned world models distill environment dynamics into a neural substrate and act as differentiable surrogates for policy learning and planning. Most work to date trains one model per game on visually rich but mechanically uniform pixel observations. We instead train a single rule-conditioned world model across hundreds of mechanically diverse grid-based puzzle games, foregoing pixels for the full discrete game state. We propose to use a Neural Cellular Automaton (NCA) that mirrors a general-purpose symbolic game engine's repeated application of atomic local rewrites, cross-attending to latent vectors produced by a jointly-trained autoencoder over symbolic game descriptions with the aim of enabling adaptation to unseen games at runtime. By scaling data in this regime we hope to shift from modeling a game to modeling an engine: a space of possible worlds organized by their dynamics.
 
 % The resulting video-based world models suffer well-documented long-horizon drift, which a wave of follow-up work tries to patch externally with memory tokens, retrieval, or explicit latent state.
 
@@ -46,12 +46,12 @@ Learned world models distill environment dynamics into a neural substrate and ac
 % \texttt{again} loops, and dozens of distinct games sharing a common
 % substrate. We propose a \emph{rule-conditioned Neural Cellular Automaton}
 % (NCA) world model in which a perceiver-style encoder maps each game's
-% tokenized rule set to $K$ slot vectors, and a shared local update rule
-% applied for $T$ iterations cross-attends to those slots at every step.
+% tokenized rule set to $K$ latent vectors, and a shared local update rule
+% applied for $T$ iterations cross-attends to those latents at every step.
 % This architecture mirrors the engine's own two-level loop
 % (an ordered list of rules applied repeatedly until convergence) and
 % generalizes across games at modest scale. We benchmark this model
-% against three non-NCA baselines that share the slot encoder but replace
+% against three non-NCA baselines that share the latent encoder but replace
 % the iterated local update with a non-iterative spatial body: a deep
 % ResNet, a U-Net, and a ViT with global self-attention. The comparison
 % isolates the contribution of the iterated-local-update inductive bias

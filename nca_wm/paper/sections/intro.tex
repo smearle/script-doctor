@@ -7,7 +7,7 @@
   \includegraphics[width=\linewidth]{figures/architecture/nca_arch_v1.pdf}
   \caption{\textbf{Rule-conditioned NCA dynamics.}
     A perceiver-style encoder $\mathrm{Enc}_\phi$ maps the tokenized
-    PuzzleScript spec to $K{=}16$ slot vectors $z$. The dynamics body
+    PuzzleScript spec to $K{=}16$ latent vectors $z$. The dynamics body
     embeds the state-action $(s_t, a_t)$ and applies $n_\text{layers}$
     convolutional layers, with cells cross-attending to $z$ at every
     layer; this stack is iterated for $n_\text{repeats}$ shared-weight
@@ -32,9 +32,9 @@ State is a discrete multi-channel grid, dynamics are deterministic and combinato
 PuzzleScript source admits static and tutorial-trace analysis~\cite{julia2023scriptbutler,vet2024puzzle}, and {PuzzleJAX}~\cite{earle2025puzzlejax} reimplements the engine in JAX for large-scale learning.
 
 We propose a \emph{rule-conditioned Neural Cellular Automaton} (NCA)~\cite{mordvintsev2020growing}
-world model. A perceiver-style encoder maps the tokenized game spec to
-$K$ latent slots; the dynamics body is a local update rule applied for
-$T$ iterations on a hidden grid, cross-attending to those slots at
+world model. A perceiver-style encoder maps the tokenized game source code to
+$K$ latent vectors; the dynamics body is a local update rule applied for
+$T$ iterations on a hidden grid, cross-attending to those latents at
 every step. Sharing body parameters across iterations mirrors the
 engine's outer loop; the conditioner makes the dynamics portable across
 games. Predicting the engine state directly (rather than pixels) lets
@@ -43,14 +43,14 @@ us measure fidelity cell-by-cell against the engine.
 % Our corpus contains 3{,}474 token-distinct human-authored games (1--20
 % rules each), with
 We train on up to 199 token-distinct human-authored games with between 1-20 rules each.
-For each level of each game, we collect bounded A* transition ($\approx 15$M transitions); held-out evaluation uses \textsc{Heldout-26}, a 26-game stratified sample disjoint from training by token-sequence hash after structural canonicalization.
+For each level of each game, we collect bounded A* transition ($\approx 15$M transitions); held-out evaluation uses \textsc{Heldout-26}, a 26-game sample, stratified by number of rules (as a proxy for complexity), and disjoint from training by token-sequence hash after structural canonicalization.
 
 We find that:
 \begin{enumerate}
   \item \textbf{NCA dynamics effectively model discrete state transitions.}
         A shared, iteratively-applied local update body operating on the engine's native discrete grid outperforms non-iterative baselines (CNN, U-Net, ViT) on rollout fidelity.
   \item \textbf{Rule-conditioning allows learning multiple games more effectively.}
-        Cross-attending to slot embeddings of each game's tokenized rule text lets a single set of weights cover many games and slows per-game capacity dilution as the corpus grows.
+        Cross-attending to latent vectors of each game's tokenized rule text lets a single set of weights cover many games and slows per-game capacity dilution as the corpus grows.
   \item \textbf{Scaling training data helps OOD generalization, but the rule encoder does not.}
         Broadening the training corpus closes most of the 1-step gap to the identity baseline on \textsc{Heldout-26}, but the rule encoder shows little advantage over an unconditional baseline at any training scale.
         %---suggesting the model is inferring dynamics from level layouts rather than from the explicit rule channel.
