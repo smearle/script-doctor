@@ -200,10 +200,12 @@ once. Table~\ref{tab:indist-scaling} pairs each rule-conditional
 checkpoint (\textsc{Train-14}, \textsc{Train-59}, \textsc{Train-199};
 the same checkpoints whose held-out numbers anchor
 Table~\ref{tab:cond-vs-uncond-match}) with the unconditional baseline
-at the same preset. Each cell is averaged across games and levels
-under one of four rollout regimes: random actions (autoregressive
-over 50 steps), random-action teacher-forced (one step at a time),
-BFS-optimal oracle actions, and A*-optimal oracle actions.
+at the same preset. Each cell is averaged across games, levels, and
+rollout steps under one of four regimes: \emph{random (AR)},
+autoregressive over 50 steps with random actions; \emph{1-step (TF)},
+teacher-forced one-step prediction with random actions
+(\S\ref{sec:experiments}); and \emph{BFS} / \emph{A*} oracle-action
+autoregressive rollouts.
 
 \begin{table}[t]
   \centering
@@ -218,9 +220,9 @@ BFS-optimal oracle actions, and A*-optimal oracle actions.
   \input{figures/indist_scaling/table}
 \end{table}
 
-The conditional model's median 1-step teacher-forced cell-error is
-$0.01\%$ at \textsc{Train-14}, $0.10\%$ at \textsc{Train-59}, and
-$0.45\%$ at \textsc{Train-199}: even at the broadest preset a single
+The conditional model's median 1-step (TF) cell-error is $0.01\%$
+at \textsc{Train-14}, $0.10\%$ at \textsc{Train-59}, and $0.45\%$
+at \textsc{Train-199}: even at the broadest preset a single
 rule-conditioned NCA, fed only the tokenized rule text and the
 current state, predicts the next state of the median training game
 at $\geq 99.55\%$ per-cell accuracy. Multi-step rollout error climbs

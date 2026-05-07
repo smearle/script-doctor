@@ -130,60 +130,83 @@ def _aggregate_indist(eval_npz_path: Path) -> dict:
 
 
 def _aggregate_heldout(results_json_path: Path) -> dict:
-    """Mean step-1 + AR-30 cell-error vs identity baseline, plus per-game wins.
+    """Heldout metrics: 1-step (teacher-forced) and AR-30 (random) cell-error
+    averaged across rollout steps and games, plus per-game wins-vs-identity
+    counts.
 
-    Computes per-game first (averaging across that game's levels and
-    episodes), then averages across games. Symmetric across runs because
-    the same heldout list is used.
+    Both metrics follow the definitions in Section 4.4: teacher-forced
+    cell-error feeds real previous states at every step (so each step is
+    an independent 1-step prediction from a different real state) while
+    AR-30 feeds the model's own prediction back. We aggregate per-game
+    (averaging across that game's levels, episodes, and rollout steps),
+    then across games. Symmetric across runs because the same heldout
+    list is used.
     """
     if not results_json_path.exists():
         return {}
     d = json.loads(results_json_path.read_text())
     ho = d.get("heldout", {})
-    per_game_step1_m: dict[str, list[float]] = {}
-    per_game_step1_i: dict[str, list[float]] = {}
-    per_game_ar30_m: dict[str, list[float]] = {}
-    per_game_ar30_i: dict[str, list[float]] = {}
+    per_game_tf_m: dict[str, list[float]] = {}
+    per_game_tf_i: dict[str, list[float]] = {}
+    per_game_ar_m: dict[str, list[float]] = {}
+    per_game_ar_i: dict[str, list[float]] = {}
     for game, levels in ho.items():
         for li, kinds in levels.items():
-            rec = kinds.get("random") or {}
-            mp = rec.get("model_cell_err_per_step") or []
-            ip = rec.get("identity_cell_err_per_step") or []
-            if not mp or not ip:
-                continue
-            per_game_step1_m.setdefault(game, []).append(mp[0])
-            per_game_step1_i.setdefault(game, []).append(ip[0])
-            per_game_ar30_m.setdefault(game, []).append(float(np.mean(mp)))
-            per_game_ar30_i.setdefault(game, []).append(float(np.mean(ip)))
-    if not per_game_step1_m:
+            tf_rec = kinds.get("random_tf") or {}
+            tf_mp = tf_rec.get("model_cell_err_per_step") or []
+            tf_ip = tf_rec.get("identity_cell_err_per_step") or []
+            if tf_mp and tf_ip:
+                per_game_tf_m.setdefault(game, []).append(float(np.mean(tf_mp)))
+                per_game_tf_i.setdefault(game, []).append(float(np.mean(tf_ip)))
+            ar_rec = kinds.get("random") or {}
+            ar_mp = ar_rec.get("model_cell_err_per_step") or []
+            ar_ip = ar_rec.get("identity_cell_err_per_step") or []
+            if ar_mp and ar_ip:
+                per_game_ar_m.setdefault(game, []).append(float(np.mean(ar_mp)))
+                per_game_ar_i.setdefault(game, []).append(float(np.mean(ar_ip)))
+    if not per_game_tf_m and not per_game_ar_m:
         return {}
-    games = sorted(per_game_step1_m.keys())
-    s1m = [float(np.mean(per_game_step1_m[g])) for g in games]
-    s1i = [float(np.mean(per_game_step1_i[g])) for g in games]
-    arm = [float(np.mean(per_game_ar30_m[g])) for g in games]
-    ari = [float(np.mean(per_game_ar30_i[g])) for g in games]
-    wins_step1 = sum(1 for a, b in zip(s1m, s1i) if a < b)
-    wins_ar30 = sum(1 for a, b in zip(arm, ari) if a < b)
+    def _summarize(per_m, per_i):
+        if not per_m:
+            return None
+        games = sorted(per_m.keys())
+        m = [float(np.mean(per_m[g])) for g in games]
+        i_ = [float(np.mean(per_i[g])) for g in games]
+        wins = sum(1 for a, b in zip(m, i_) if a < b)
+        return {
+            "model_mean": float(np.mean(m)),
+            "model_median": float(np.median(m)),
+            "identity_mean": float(np.mean(i_)),
+            "identity_median": float(np.median(i_)),
+            "wins": wins,
+            "n_games": len(games),
+            "per_game_model": dict(zip(games, m)),
+            "per_game_identity": dict(zip(games, i_)),
+        }
+    tf = _summarize(per_game_tf_m, per_game_tf_i)
+    ar = _summarize(per_game_ar_m, per_game_ar_i)
+    games = sorted(set((tf or {}).get("per_game_model", {})) |
+                   set((ar or {}).get("per_game_model", {})))
     return {
-        "step1_model_mean": float(np.mean(s1m)),
-        "step1_model_median": float(np.median(s1m)),
-        "step1_identity_mean": float(np.mean(s1i)),
-        "step1_identity_median": float(np.median(s1i)),
-        "ar30_model_mean": float(np.mean(arm)),
-        "ar30_model_median": float(np.median(arm)),
-        "ar30_identity_mean": float(np.mean(ari)),
-        "ar30_identity_median": float(np.median(ari)),
-        "wins_step1": wins_step1,
-        "wins_ar30": wins_ar30,
-        "n_games": len(games),
+        "tf_model_mean": (tf or {}).get("model_mean"),
+        "tf_model_median": (tf or {}).get("model_median"),
+        "tf_identity_mean": (tf or {}).get("identity_mean"),
+        "tf_identity_median": (tf or {}).get("identity_median"),
+        "tf_wins": (tf or {}).get("wins"),
+        "ar30_model_mean": (ar or {}).get("model_mean"),
+        "ar30_model_median": (ar or {}).get("model_median"),
+        "ar30_identity_mean": (ar or {}).get("identity_mean"),
+        "ar30_identity_median": (ar or {}).get("identity_median"),
+        "ar30_wins": (ar or {}).get("wins"),
+        "n_games": (tf or ar or {}).get("n_games"),
         "per_game": {
             g: {
-                "step1_model": s1m[i],
-                "step1_identity": s1i[i],
-                "ar30_model": arm[i],
-                "ar30_identity": ari[i],
+                "tf_model": (tf or {}).get("per_game_model", {}).get(g),
+                "tf_identity": (tf or {}).get("per_game_identity", {}).get(g),
+                "ar30_model": (ar or {}).get("per_game_model", {}).get(g),
+                "ar30_identity": (ar or {}).get("per_game_identity", {}).get(g),
             }
-            for i, g in enumerate(games)
+            for g in games
         },
     }
 
@@ -217,22 +240,25 @@ def collate(runs: list[dict]) -> tuple[list[dict], dict, dict]:
             "indist_random_mean": indist.get("random", {}).get("mean"),
             "indist_random_median": indist.get("random", {}).get("median"),
             "indist_bfs_mean": indist.get("bfs", {}).get("mean"),
-            "ood_step1_model_mean": ho.get("step1_model_mean"),
-            "ood_step1_model_median": ho.get("step1_model_median"),
-            "ood_step1_identity_mean": ho.get("step1_identity_mean"),
-            "ood_step1_identity_median": ho.get("step1_identity_median"),
+            "ood_tf_model_mean": ho.get("tf_model_mean"),
+            "ood_tf_model_median": ho.get("tf_model_median"),
+            "ood_tf_identity_mean": ho.get("tf_identity_mean"),
+            "ood_tf_identity_median": ho.get("tf_identity_median"),
+            "ood_tf_wins": ho.get("tf_wins"),
             "ood_ar30_model_mean": ho.get("ar30_model_mean"),
             "ood_ar30_model_median": ho.get("ar30_model_median"),
             "ood_ar30_identity_mean": ho.get("ar30_identity_mean"),
             "ood_ar30_identity_median": ho.get("ar30_identity_median"),
-            "ood_wins_step1": ho.get("wins_step1"),
-            "ood_wins_ar30": ho.get("wins_ar30"),
+            "ood_ar30_wins": ho.get("ar30_wins"),
             "ood_n_games": ho.get("n_games"),
         }
         rows.append(row)
         for g, m in (ho.get("per_game") or {}).items():
-            per_game_step1.setdefault(g, {})[spec["label"]] = m["step1_model"]
-            identity_per_game[g] = m["step1_identity"]
+            if m.get("tf_model") is None:
+                continue
+            per_game_step1.setdefault(g, {})[spec["label"]] = m["tf_model"]
+            if m.get("tf_identity") is not None:
+                identity_per_game[g] = m["tf_identity"]
     return rows, per_game_step1, identity_per_game
 
 
@@ -303,10 +329,10 @@ def write_latex(rows: list[dict], out_path: Path) -> None:
             + " & ".join([
                 r["label"],
                 _cell(r.get("ood_ar30_model_mean"), r.get("ood_ar30_model_median")),
-                _cell(r.get("ood_step1_model_mean"), r.get("ood_step1_model_median")),
+                _cell(r.get("ood_tf_model_mean"), r.get("ood_tf_model_median")),
                 "--",  # BFS oracle on heldout: not yet evaluated
                 "--",  # A* oracle on heldout: not yet evaluated
-                _wins(r.get("ood_wins_ar30"), r.get("ood_n_games")),
+                _wins(r.get("ood_tf_wins"), r.get("ood_n_games")),
             ])
             + r" \\"
         )
@@ -319,17 +345,17 @@ def write_latex(rows: list[dict], out_path: Path) -> None:
             for r in rows
             if r.get("ood_ar30_identity_mean") is not None
         ), (None, None))
-        ident_s1 = next((
-            (r.get("ood_step1_identity_mean"), r.get("ood_step1_identity_median"))
+        ident_tf = next((
+            (r.get("ood_tf_identity_mean"), r.get("ood_tf_identity_median"))
             for r in rows
-            if r.get("ood_step1_identity_mean") is not None
+            if r.get("ood_tf_identity_mean") is not None
         ), (None, None))
         body.append(
             "  "
             + " & ".join([
                 "Identity baseline",
                 _cell(*ident_ar),
-                _cell(*ident_s1),
+                _cell(*ident_tf),
                 "--",
                 "--",
                 "--",
@@ -341,11 +367,11 @@ def write_latex(rows: list[dict], out_path: Path) -> None:
         "% AUTOGENERATED by nca_wm/scripts/collate_match_table.py — do not edit.\n"
         f"\\begin{{tabular}}{{{col_spec}}}\n"
         "  \\toprule\n"
-        "  Model & random (AR, 30-step) & random (TF, 1-step)"
+        "  Model & random (AR) & 1-step (TF)"
         " & BFS (oracle) & A* (oracle) & wins vs.\\ identity \\\\\n"
         "  & \\small mean / median (\\%) & \\small mean / median (\\%)"
         " & \\small mean / median (\\%) & \\small mean / median (\\%)"
-        " & \\small AR-30, games \\\\\n"
+        " & \\small TF, games \\\\\n"
         "  \\midrule\n"
         + "\n".join(body)
         + "\n"
@@ -369,10 +395,10 @@ def main() -> None:
         print(
             f"{r['label']:<32s}  "
             f"ID random mean={fmt(r['indist_random_mean'])}  "
-            f"OOD step-1={fmt(r['ood_step1_model_mean'])}  "
+            f"OOD TF mean={fmt(r['ood_tf_model_mean'])}  "
             f"OOD AR-30={fmt(r['ood_ar30_model_mean'])}  "
-            f"wins(s1)={r['ood_wins_step1']}/{r['ood_n_games']}  "
-            f"wins(AR-30)={r['ood_wins_ar30']}/{r['ood_n_games']}"
+            f"wins(TF)={r['ood_tf_wins']}/{r['ood_n_games']}  "
+            f"wins(AR-30)={r['ood_ar30_wins']}/{r['ood_n_games']}"
         )
     print(f"\nWrote: {OUT_DIR}/summary.csv")
     print(f"       {OUT_DIR}/per_game_step1.csv")

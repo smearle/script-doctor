@@ -35,7 +35,7 @@ RUNS = [
 # (algo key, display label) — columns in the output table.
 REGIMES = [
     ("random", "random (AR)"),
-    ("random_tf", "random (TF, 1-step)"),
+    ("random_tf", "1-step (TF)"),
     ("bfs", "BFS (oracle)"),
     ("astar", "A* (oracle)"),
 ]
