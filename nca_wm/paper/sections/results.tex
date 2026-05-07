@@ -179,12 +179,11 @@ Appendix~\ref{app:per-game}.
 
 \paragraph{In-distribution mastery as the corpus scales.}
 Rule-conditioning lets a single set of weights master many games at
-once. Table~\ref{tab:indist-scaling} reports per-cell rollout error
-on the training games for three rule-conditional checkpoints---%
-\textsc{Train-14}, \textsc{Train-59}, and the broad
-\textsc{Train-199} preset---trained for 150k updates. These are the
-same three parameter-matched checkpoints whose held-out numbers
-anchor Table~\ref{tab:cond-vs-uncond-match}. Each cell is averaged
+once. Table~\ref{tab:indist-scaling} pairs each rule-conditional
+checkpoint (\textsc{Train-14}, \textsc{Train-59}, \textsc{Train-199};
+the same checkpoints whose held-out numbers anchor
+Table~\ref{tab:cond-vs-uncond-match}) with the parameter-matched
+unconditional baseline at the same preset. Each cell is averaged
 across games and levels under one of four rollout regimes: random
 actions (autoregressive over 50 steps), random-action teacher-forced
 (one step at a time), BFS-optimal oracle actions, and A*-optimal
@@ -193,18 +192,19 @@ oracle actions.
 \begin{table}[t]
   \centering
   \caption{\textbf{In-distribution per-cell rollout error as the
-    training corpus scales.} Mean / median across all training games
+    training corpus scales, with the parameter-matched unconditional
+    baseline at each scale.} Mean / median across all training games
     (each game's number is the per-rollout-step mean across all
-    authored levels). The three rows differ only in the training
-    preset.}
+    authored levels). Cells marked ``--'' are pending evaluation; the
+    Train-14 and Train-199 unconditional runs are still in flight.}
   \label{tab:indist-scaling}
   \small
   \input{figures/indist_scaling/table}
 \end{table}
 
-The median game's 1-step teacher-forced cell-error is $0.01\%$ at
-\textsc{Train-14}, $0.10\%$ at \textsc{Train-59}, and $0.45\%$ at
-\textsc{Train-199}: even at the broadest preset a single
+The conditional model's median 1-step teacher-forced cell-error is
+$0.01\%$ at \textsc{Train-14}, $0.10\%$ at \textsc{Train-59}, and
+$0.45\%$ at \textsc{Train-199}: even at the broadest preset a single
 rule-conditioned NCA, fed only the tokenized rule text and the
 current state, predicts the next state of the median training game
 at $\geq 99.55\%$ per-cell accuracy. Multi-step rollout error climbs
@@ -213,6 +213,19 @@ with mean error rising as the corpus widens; the mean is pulled up
 by a tail of persistently-hard games whose state spaces are large or
 whose rule structures involve cascading \texttt{again} loops, which
 we discuss in \S\ref{sec:discussion}.
+
+% TODO: discuss the cond-vs-uncond gap once Train-14 and Train-199
+% uncond evals land. Train-59 alone shows a modest ~1.5pp AR-mean
+% gap (9.04 cond / 10.54 uncond), narrower than the prior
+% Train-14 contrast at $n_h{=}448$; the param-matched relaunch should
+% sharpen this and the comparison in \S\ref{sec:results-encoder-ablation}
+% jointly.
+The cond-vs-uncond contrast at \textsc{Train-59} is modest ($\approx
+1.5$pp on random-AR mean) compared to the larger gap reported under
+the parameter-matched comparison in \S\ref{sec:results-encoder-ablation};
+we read this together with \S\ref{sec:results-encoder-ablation} once
+the in-flight \textsc{Train-14} and \textsc{Train-199} unconditional
+evaluations land.
 
 \subsection{Effect of scaling on out-of-distribution performance}
 \label{sec:results-encoder-ablation}
@@ -250,6 +263,11 @@ out-of-distribution held-out cell-error on \textsc{Heldout-30}
 \end{table}
 
 \textbf{Encoder isolates a clean in-distribution signal.}
+% TODO(\\href{}{}): the $1.6\\%$ vs.\\ $4.9\\%$ contrast and the $18/29$
+% per-game wins are from the legacy parameter-matched unconditional
+% Train-14 run ($n_h{=}448$ with the older \texttt{pool\_in\_conv}
+% topology). Refresh once the $n_h{=}448$ relaunch under the current
+% pool topology lands.
 At Train-14 scale the rule-conditional model nearly triples the
 unconditional model's per-cell accuracy ($1.6\%$ vs.\ $4.9\%$
 cell-error), confirming that the encoder is doing real work and not

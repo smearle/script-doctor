@@ -25,13 +25,17 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 LOGS_ROOT = REPO_ROOT / "nca_wm" / "logs"
 OUT_DIR = REPO_ROOT / "nca_wm" / "paper" / "figures" / "indist_scaling"
 
-# (run_dir, latex_row_label) — rows follow this order. All three runs
-# share the canonical recipe (input_skip + sprite encoder + beta=1.0)
-# at 150k updates, differing only in their training preset.
+# (run_dir, latex_row_label) — rows follow this order. Conditional and
+# unconditional runs at each preset are paired so the rule-encoder
+# contribution reads down each column. Missing eval data renders as
+# "--" cells (the in-flight uncond runs land here once they finish).
 RUNS = [
-    ("multi_scaling_14_cond_match_s0",          r"\textsc{Train-14}"),
-    ("multi_scaling_gallery_v2_cond_match_s0",  r"\textsc{Train-59}"),
-    ("multi_scaling_gallery_v4_cond_match_s0",  r"\textsc{Train-199}"),
+    ("multi_scaling_14_cond_match_s0",          r"\textsc{Train-14}, cond"),
+    ("multi_scaling_14_uncond_match_s0",        r"\textsc{Train-14}, uncond"),
+    ("multi_scaling_gallery_v2_cond_match_s0",  r"\textsc{Train-59}, cond"),
+    ("multi_scaling_gallery_v2_uncond_match_s0", r"\textsc{Train-59}, uncond"),
+    ("multi_scaling_gallery_v4_cond_match_s0",  r"\textsc{Train-199}, cond"),
+    ("multi_scaling_gallery_v4_uncond_match_s0", r"\textsc{Train-199}, uncond"),
 ]
 
 REGIMES = [
@@ -109,7 +113,10 @@ def main() -> None:
     for run_dir, latex_label in RUNS:
         eval_npz = LOGS_ROOT / run_dir / "eval_multigame.npz"
         if not eval_npz.exists():
-            print(f"[indist-scaling] missing {eval_npz}; skipping {run_dir}")
+            # Keep the row order intact; render as placeholders.
+            print(f"[indist-scaling] missing {eval_npz}; rendering as '--'")
+            rows.append((latex_label, {a: None for a, _ in REGIMES}))
+            summary[run_dir] = {"latex_label": latex_label, "results": None}
             continue
         results = _aggregate(eval_npz)
         rows.append((latex_label, results))
