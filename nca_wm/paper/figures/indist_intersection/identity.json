@@ -1,0 +1,177 @@
+{
+  "games": [
+    "Collapsable_Sokoban",
+    "Love_and_Pieces",
+    "Modality",
+    "Multi-word_Dictionary_Game",
+    "Travelling_salesman",
+    "Zen_Puzzle_Garden",
+    "actiontest",
+    "blocks",
+    "kettle",
+    "nekopuzzle",
+    "notsnake",
+    "scriptcross",
+    "sokoban_basic",
+    "sokoban_match3"
+  ],
+  "n_random_episodes": 10,
+  "max_steps": 50,
+  "seed": 0,
+  "per_game": {
+    "Collapsable_Sokoban": {
+      "n_levels": 3,
+      "mean_per_step_cell_err": 0.010426666666666667,
+      "per_level_mean_cell_err": [
+        0.008440000000000001,
+        0.00674,
+        0.0161
+      ]
+    },
+    "Love_and_Pieces": {
+      "n_levels": 9,
+      "mean_per_step_cell_err": 0.024114880952380954,
+      "per_level_mean_cell_err": [
+        0.012493915343915345,
+        0.013233333333333335,
+        0.054023346560846564,
+        0.015266666666666666,
+        0.029699999999999997,
+        0.02363333333333333,
+        0.02146666666666667,
+        0.01655,
+        0.030666666666666665
+      ]
+    },
+    "Modality": {
+      "n_levels": 4,
+      "mean_per_step_cell_err": 0.036289752284752286,
+      "per_level_mean_cell_err": [
+        0.07366931216931218,
+        0.039520000000000007,
+        0.023000000000000003,
+        0.00896969696969697
+      ]
+    },
+    "Multi-word_Dictionary_Game": {
+      "n_levels": 1,
+      "mean_per_step_cell_err": 0.024222222222222214,
+      "per_level_mean_cell_err": [
+        0.024222222222222214
+      ]
+    },
+    "Travelling_salesman": {
+      "n_levels": 12,
+      "mean_per_step_cell_err": 0.010006789261513572,
+      "per_level_mean_cell_err": [
+        0.017013333333333335,
+        0.01469387755102041,
+        0.011755102040816328,
+        0.012870748299319728,
+        0.012857142857142859,
+        0.006240000000000001,
+        0.008518518518518517,
+        0.007851851851851851,
+        0.009629629629629629,
+        0.008962962962962963,
+        0.0077777777777777776,
+        0.0019105263157894736
+      ]
+    },
+    "Zen_Puzzle_Garden": {
+      "n_levels": 5,
+      "mean_per_step_cell_err": 0.009351515151515152,
+      "per_level_mean_cell_err": [
+        0.009583333333333334,
+        0.009611111111111112,
+        0.009166666666666667,
+        0.009757575757575757,
+        0.008638888888888889
+      ]
+    },
+    "actiontest": {
+      "n_levels": 1,
+      "mean_per_step_cell_err": 0.003433155080213904,
+      "per_level_mean_cell_err": [
+        0.003433155080213904
+      ]
+    },
+    "blocks": {
+      "n_levels": 1,
+      "mean_per_step_cell_err": 0.033398601398601395,
+      "per_level_mean_cell_err": [
+        0.033398601398601395
+      ]
+    },
+    "kettle": {
+      "n_levels": 11,
+      "mean_per_step_cell_err": 0.011663147963147963,
+      "per_level_mean_cell_err": [
+        0.0037299145299145298,
+        0.002096866096866097,
+        0.002666666666666667,
+        0.005442165242165242,
+        0.006902849002849003,
+        0.006502564102564104,
+        0.011558974358974359,
+        0.013302564102564102,
+        0.019533333333333333,
+        0.026647619047619045,
+        0.02991111111111111
+      ]
+    },
+    "nekopuzzle": {
+      "n_levels": 10,
+      "mean_per_step_cell_err": 0.005596049711972331,
+      "per_level_mean_cell_err": [
+        0.008903233010375867,
+        0.004798469387755102,
+        0.008032958553791887,
+        0.003484977324263039,
+        0.008671697845804988,
+        0.004719671201814059,
+        0.0037043650793650794,
+        0.004545351473922902,
+        0.0047743764172335605,
+        0.004325396825396826
+      ]
+    },
+    "notsnake": {
+      "n_levels": 1,
+      "mean_per_step_cell_err": 0.034699999999999995,
+      "per_level_mean_cell_err": [
+        0.034699999999999995
+      ]
+    },
+    "scriptcross": {
+      "n_levels": 4,
+      "mean_per_step_cell_err": 0.04666444069683538,
+      "per_level_mean_cell_err": [
+        0.1247530864197531,
+        0.029625,
+        0.024693877551020406,
+        0.007585798816568047
+      ]
+    },
+    "sokoban_basic": {
+      "n_levels": 2,
+      "mean_per_step_cell_err": 0.02514285714285714,
+      "per_level_mean_cell_err": [
+        0.02585714285714286,
+        0.02442857142857142
+      ]
+    },
+    "sokoban_match3": {
+      "n_levels": 2,
+      "mean_per_step_cell_err": 0.01963095238095238,
+      "per_level_mean_cell_err": [
+        0.021650793650793646,
+        0.017611111111111112
+      ]
+    }
+  },
+  "aggregate": {
+    "mean": 0.021045787922402238,
+    "median": 0.021872916666666666
+  }
+}

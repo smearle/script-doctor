@@ -46,6 +46,7 @@ import numpy as np
 
 REPO_ROOT      = Path(__file__).resolve().parents[2]
 INTER_SUMMARY  = REPO_ROOT / "nca_wm" / "paper" / "figures" / "indist_intersection"  / "summary.json"
+INTER_IDENTITY = REPO_ROOT / "nca_wm" / "paper" / "figures" / "indist_intersection"  / "identity.json"
 OOD_SUMMARY    = REPO_ROOT / "nca_wm" / "paper" / "figures" / "cond_vs_uncond_match" / "summary.csv"
 GAMES_META     = REPO_ROOT / "data" / "games_metadata.json"
 OUT_DIR        = REPO_ROOT / "nca_wm" / "paper" / "figures" / "indist_intersection"
@@ -53,12 +54,32 @@ OUT_DIR        = REPO_ROOT / "nca_wm" / "paper" / "figures" / "indist_intersecti
 SCALES   = ["Train-14", "Train-59", "Train-199"]
 SCALE_N  = {"Train-14": 14, "Train-59": 59, "Train-199": 199}  # numeric x positions
 RUN_BY   = {
-    ("Train-14",  "cond"):   "multi_scaling_14_cond_match_s0",
-    ("Train-14",  "uncond"): "multi_scaling_14_uncond_match_s0",
-    ("Train-59",  "cond"):   "multi_scaling_gallery_v2_cond_match_s0",
-    ("Train-59",  "uncond"): "multi_scaling_gallery_v2_uncond_match_s0",
-    ("Train-199", "cond"):   "multi_scaling_gallery_v4_cond_match_s0",
-    ("Train-199", "uncond"): "multi_scaling_gallery_v4_uncond_match_s0",
+    ("Train-14",  "cond"):   [
+        "multi_scaling_14_cond_match_s0",
+        "multi_scaling_14_cond_match_s2",
+    ],
+    ("Train-14",  "uncond"): [
+        "multi_scaling_14_uncond_match_s0",
+        "multi_scaling_14_uncond_match_s1",
+        "multi_scaling_14_uncond_match_s2",
+        "multi_scaling_14_uncond_match_s3",
+    ],
+    ("Train-59",  "cond"):   [
+        "multi_scaling_gallery_v2_cond_match_s0",
+        "multi_scaling_gallery_v2_cond_match_s1",
+    ],
+    ("Train-59",  "uncond"): [
+        "multi_scaling_gallery_v2_uncond_match_s0",
+        "multi_scaling_gallery_v2_uncond_match_s1",
+    ],
+    ("Train-199", "cond"):   [
+        "multi_scaling_gallery_v4_cond_match_s0",
+        "multi_scaling_gallery_v4_cond_match_s1",
+    ],
+    ("Train-199", "uncond"): [
+        "multi_scaling_gallery_v4_uncond_match_s0",
+        "multi_scaling_gallery_v4_uncond_match_s1",
+    ],
 }
 SERIES = [
     ("cond",   "Rule-conditioned", "#d62728"),
@@ -75,23 +96,38 @@ RC_PARAMS = {
 }
 
 
-def _load_eval_per_game(run_dir: str, games: list[str],
+def _load_eval_per_game(run_dirs: list[str] | str, games: list[str],
                         regime: str = "random_tf") -> dict[str, float]:
-    """Per-game headline-regime mean (over levels) for the listed games."""
-    npz_path = REPO_ROOT / "nca_wm" / "logs" / run_dir / "eval_multigame.npz"
-    if not npz_path.exists():
-        return {}
-    d = np.load(npz_path, allow_pickle=True)
+    """Per-game headline-regime mean (over levels) for the listed games,
+    averaged across seeds whose eval_multigame.npz exists. Accepts a
+    single run dir (legacy) or a list of seed dirs."""
+    if isinstance(run_dirs, str):
+        run_dirs = [run_dirs]
     pat = re.compile(rf"^(?P<game>.+?)_L\d+_{regime}_cell_error_rate$")
-    accum: dict[str, list[float]] = {}
-    for k in d.files:
-        m = pat.match(k)
-        if not m: continue
-        if m.group("game") not in games: continue
-        arr = np.asarray(d[k], dtype=np.float64).ravel()
-        if arr.size == 0: continue
-        accum.setdefault(m.group("game"), []).append(float(arr.mean()))
-    return {g: float(np.mean(v)) for g, v in accum.items()}
+    per_seed: list[dict[str, float]] = []
+    for rd in run_dirs:
+        npz_path = REPO_ROOT / "nca_wm" / "logs" / rd / "eval_multigame.npz"
+        if not npz_path.exists():
+            continue
+        d = np.load(npz_path, allow_pickle=True)
+        accum: dict[str, list[float]] = {}
+        for k in d.files:
+            m = pat.match(k)
+            if not m: continue
+            if m.group("game") not in games: continue
+            arr = np.asarray(d[k], dtype=np.float64).ravel()
+            if arr.size == 0: continue
+            accum.setdefault(m.group("game"), []).append(float(arr.mean()))
+        per_seed.append({g: float(np.mean(v)) for g, v in accum.items()})
+    if not per_seed:
+        return {}
+    games_seen = sorted(set().union(*[set(d.keys()) for d in per_seed]))
+    out: dict[str, float] = {}
+    for g in games_seen:
+        vs = [d[g] for d in per_seed if g in d]
+        if vs:
+            out[g] = float(np.mean(vs))
+    return out
 
 
 def _slope_panel(ax, scale_to_mean: dict[tuple[str, str], float],
@@ -227,15 +263,38 @@ def _intersection_aggregates(per_game: dict[tuple[str, str], dict[str, float]],
     return inter_mean, inter_median
 
 
+def _load_id_identity() -> tuple[float, float]:
+    """Read the in-distribution identity baseline (mean, median) from
+    identity.json, or (nan, nan) if the file isn't present."""
+    if not INTER_IDENTITY.exists():
+        return float("nan"), float("nan")
+    j = json.loads(INTER_IDENTITY.read_text())
+    agg = j.get("aggregate") or {}
+    return (
+        float(agg.get("mean",   float("nan"))),
+        float(agg.get("median", float("nan"))),
+    )
+
+
 def _draw_id_panel(ax, inter_mean, inter_median,
-                   *, title: str, ylabel: str) -> None:
+                   *, title: str, ylabel: str,
+                   id_mean: float = float("nan"),
+                   id_median: float = float("nan")) -> None:
     fd = _slope_panel(
         ax, inter_mean, inter_median,
         title=title,
     )
     ax.set_ylabel(ylabel)
+    if np.isfinite(id_mean):
+        ax.axhline(100*id_mean, color="black", linewidth=1.4,
+                   linestyle=":", alpha=0.7,
+                   label="identity (mean)", zorder=2)
+    if np.isfinite(id_median):
+        ax.axhline(100*id_median, color="black", linewidth=1.0,
+                   linestyle=(0, (1, 2)), alpha=0.55,
+                   label="identity (median)", zorder=2)
     _annotate_t14_to_t59(ax, fd)
-    ax.legend(loc="lower right", framealpha=0.95)
+    ax.legend(loc="lower right", framealpha=0.95, fontsize=9)
 
 
 def _draw_ood_panel(ax, ood_mean, ood_median, id_mean, id_median,
@@ -266,10 +325,12 @@ def _figure_slope(per_game: dict[tuple[str, str], dict[str, float]],
         gridspec_kw={"width_ratios": [1.0, 1.0]},
     )
     inter_mean, inter_median = _intersection_aggregates(per_game, games_intersection)
+    id_mean_id, id_median_id = _load_id_identity()
     _draw_id_panel(
         ax_left, inter_mean, inter_median,
         title="In-distribution (14-game intersection)",
         ylabel="1-step (TF) cell-error (%)",
+        id_mean=id_mean_id, id_median=id_median_id,
     )
     ood_mean, ood_median, id_mean, id_median = _load_ood_summary("tf")
     _draw_ood_panel(
@@ -288,7 +349,9 @@ def _figure_id(per_game: dict[tuple[str, str], dict[str, float]],
     plt.rcParams.update(RC_PARAMS)
     fig, ax = plt.subplots(figsize=(5.6, 4.6))
     inter_mean, inter_median = _intersection_aggregates(per_game, games_intersection)
-    _draw_id_panel(ax, inter_mean, inter_median, title=title, ylabel=ylabel)
+    id_mean, id_median = _load_id_identity()
+    _draw_id_panel(ax, inter_mean, inter_median, title=title, ylabel=ylabel,
+                   id_mean=id_mean, id_median=id_median)
     fig.tight_layout()
     return fig
 
