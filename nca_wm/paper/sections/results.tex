@@ -33,17 +33,7 @@ comparison on 10 authored Sokoban levels.
     architectures sorted by BFS final cell-error.}
   \label{tab:baselines-sokoban}
   \small
-  \begin{tabular}{l c c c c}
-    \toprule
-    Architecture & params (M) & best loss & BFS final-err & A* first-div \\
-    \midrule
-    \textbf{NCA (shared, $T{=}4, n_r{=}T$)} & \textbf{1.94} & $0.107 \pm 0.002$ & $\mathbf{0.11\% \pm 0.16\%}$ & $64$ \\
-    CNN (4-block ResNet)                    & 5.00          & $0.107 \pm 0.002$ & $0.32\% \pm 0.24\%$         & $89$ \\
-    NCA (per-step, $T{=}4, n_r{=}1$)        & 7.36          & $0.107 \pm 0.002$ & $0.47\% \pm 0.66\%$         & $35$ \\
-    U-Net (2 levels)                        & 6.07          & $0.108 \pm 0.002$ & $4.84\% \pm 1.03\%$         & $14$ \\
-    ViT (4 layers)                          & 3.99          & $0.107 \pm 0.002$ & $10.96\% \pm 0.50\%$        & $<1$ \\
-    \bottomrule
-  \end{tabular}
+  \input{figures/baselines/sokoban_authored}
 \end{table}
 
 The NCA with shared weights wins on BFS rollout
@@ -73,17 +63,7 @@ multi-grid synthetic regime.
     synthetic levels per width.}
   \label{tab:baselines-synth}
   \small
-  \begin{tabular}{l c c c c}
-    \toprule
-    Architecture & params (M) & best loss & BFS final-err & A* first-div \\
-    \midrule
-    \textbf{NCA (shared, $T{=}4, n_r{=}T$)} & \textbf{3.07} & $0.069 \pm 0.003$ & $\mathbf{4.37\% \pm 2.02\%}$ & $9.2$ \\
-    CNN (4-block ResNet)                    & 5.00          & $0.069 \pm 0.003$ & $5.56\% \pm 3.12\%$         & $7.0$ \\
-    NCA (per-step, $T{=}4, n_r{=}1$)        & 8.49          & $0.070 \pm 0.003$ & $5.95\% \pm 3.50\%$         & $13.8$ \\
-    U-Net (2 levels)                        & 6.07          & $0.071 \pm 0.003$ & $8.33\% \pm 0.97\%$         & $0.5$ \\
-    ViT (4 layers)                          & 3.99          & $0.084 \pm 0.002$ & $12.70\% \pm 1.12\%$        & $0.7$ \\
-    \bottomrule
-  \end{tabular}
+  \input{figures/baselines/sokoban_synth}
 \end{table}
 
 The shared-weights NCA again wins on BFS rollout
@@ -120,19 +100,7 @@ $(s_t, a_t)$ at every step.
   \label{tab:ablation-pool}
   \small
   \resizebox{\linewidth}{!}{%
-  \begin{tabular}{l c c c c}
-    \toprule
-    Recipe & params (M) & best loss & BFS final-err & $\Delta$BFS vs.\ full \\
-    \midrule
-    \textbf{Full (axis + cummax + global + input-skip)} & 3.07 & $0.098 \pm 0.004$ & $\mathbf{4.37\% \pm 2.02\%}$ & --- \\
-    \midrule
-    no axis-cummax    & 2.94 & $0.098 \pm 0.003$ & $4.37\% \pm 2.24\%$  & $+0.00$ ($+0\%$) \\
-    no input-skip     & 2.48 & $0.098 \pm 0.004$ & $5.95\% \pm 4.24\%$  & $+1.58$ ($+36\%$) \\
-    no axis-pool      & 2.94 & $0.100 \pm 0.004$ & $6.75\% \pm 0.56\%$  & $+2.38$ ($+55\%$) \\
-    no global-pool    & 3.01 & $0.098 \pm 0.005$ & $10.71\% \pm 2.57\%$ & $+6.35$ ($+145\%$) \\
-    no pool at all    & 2.68 & $0.100 \pm 0.005$ & $10.71\% \pm 3.89\%$ & $+6.35$ ($+145\%$) \\
-    \bottomrule
-  \end{tabular}
+  \input{figures/baselines/ablation_pool}%
   }
 \end{table}
 
@@ -192,17 +160,7 @@ seed, $d_h = 256$.
     (parameter-efficient) and has notably lower seed-to-seed variance.}
   \label{tab:baselines-scaling14}
   \small
-  \begin{tabular}{l c c c c}
-    \toprule
-    Architecture & params (M) & best loss & BFS final-err & A* final-err \\
-    \midrule
-    \textbf{NCA (per-step, $T{=}4, n_r{=}1$)} & 7.37 & $\approx 0$ & $\mathbf{12.39\% \pm 1.82\%}$ & $13.57\% \pm 1.76\%$ \\
-    NCA (shared, $T{=}4, n_r{=}T$)            & \textbf{1.96} & $\approx 0$ & $13.12\% \pm \mathbf{0.24\%}$ & $14.68\% \pm 0.08\%$ \\
-    CNN (4-block ResNet)                      & 5.01 & $\approx 0$ & $13.56\% \pm 1.08\%$ & $14.71\% \pm 1.42\%$ \\
-    U-Net (2 levels)                          & 6.09 & $1.0 \times 10^{-4}$ & $21.03\% \pm 0.29\%$ & $23.15\% \pm 0.40\%$ \\
-    ViT (4 layers)                            & 4.01 & $7.7 \times 10^{-4}$ & $23.14\% \pm 2.40\%$ & $24.67\% \pm 1.87\%$ \\
-    \bottomrule
-  \end{tabular}
+  \input{figures/baselines/scaling_14}
 \end{table}
 
 Both NCA variants outperform all three non-NCA baselines on
