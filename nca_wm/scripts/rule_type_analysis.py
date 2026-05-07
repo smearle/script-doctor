@@ -149,12 +149,17 @@ FEATURE_LABEL = {
     "has_dir":          r"dir-prefix",
     "has_multi_kernel": r"multi-kernel",
 }
+# Synthetic "no flagged feature" bucket; treated specially in the
+# heatmap so it sits at the bottom as a baseline reference.
+NONE_KEY   = "is_none"
+NONE_LABEL = "(none)"
 
 
 def _per_preset_means(feats: dict[str, dict[str, bool] | None]
                       ) -> dict[tuple[str, str, str], tuple[float, int]]:
-    """For every (preset, model, feature_yes_only), mean cell-error and bucket size.
+    """For every (preset, model, feature), mean cell-error and bucket size.
 
+    The synthetic key NONE_KEY refers to games with no flagged feature.
     Returns {(preset, model, feature_key) -> (mean_in_[0,1], n_games)}.
     """
     out: dict[tuple[str, str, str], tuple[float, int]] = {}
@@ -167,6 +172,13 @@ def _per_preset_means(feats: dict[str, dict[str, bool] | None]
                 out[(preset, model, fk)] = (
                     float(np.mean([err[g] for g in sub])), len(sub),
                 )
+        # Games with no flagged feature.
+        sub_none = [g for g, e in err.items()
+                    if feats.get(g) and not any(feats[g].values())]
+        if sub_none:
+            out[(preset, model, NONE_KEY)] = (
+                float(np.mean([err[g] for g in sub_none])), len(sub_none),
+            )
     return out
 
 
@@ -180,7 +192,8 @@ def _emit_heatmap(feats: dict[str, dict[str, bool] | None]) -> None:
     OUT_DIR.mkdir(parents=True, exist_ok=True)
     means = _per_preset_means(feats)
 
-    # Sort features by max cell value at Train-199, descending.
+    # Sort feature rows by max cell at Train-199 descending; pin the
+    # synthetic "(none)" baseline row at the bottom regardless of value.
     feature_keys = list(FEATURE_LABEL.keys())
     def _row_key(fk: str) -> float:
         cells = []
@@ -190,6 +203,7 @@ def _emit_heatmap(feats: dict[str, dict[str, bool] | None]) -> None:
                 cells.append(v[0])
         return -max(cells) if cells else 0.0
     feature_keys.sort(key=_row_key)
+    feature_keys.append(NONE_KEY)
 
     n_rows = len(feature_keys)
     n_cols = 2 * len(PRESETS)
@@ -226,7 +240,8 @@ def _emit_heatmap(feats: dict[str, dict[str, bool] | None]) -> None:
     for fk in feature_keys:
         v = means.get(("Train-199", "cond", fk))
         n = v[1] if v else 0
-        ylabels.append(f"{FEATURE_LABEL[fk]} (n={n})")
+        label = NONE_LABEL if fk == NONE_KEY else FEATURE_LABEL[fk]
+        ylabels.append(f"{label} (n={n})")
     ax.set_yticks(range(n_rows))
     ax.set_yticklabels(ylabels)
     ax.set_xticks(range(n_cols))

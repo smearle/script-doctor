@@ -819,7 +819,12 @@ local update body cannot see the relevant context. Across all
 features, raw rule count remains a poor predictor: 1--3, 4--7, 8--12,
 and 13+ rule buckets give cond means $1.38, 1.12, 4.17, 6.77$\% with
 the cond/uncond ordering even \emph{flipping} on the higher-count
-buckets ($n{\geq}8$).
+buckets ($n{\geq}8$). For comparison, the $13$ \textsc{Train-199}
+games with no flagged feature
+(Figure~\ref{fig:rule-type-heatmap}'s \texttt{(none)} row) average
+cond $2.31\%$ / uncond $2.98\%$, slightly below the corpus-wide
+$2.73\%$ / $3.19\%$ average---the flagged features really are
+picking out the harder cases.
 
 \begin{table}[t]
   \centering
