@@ -32,22 +32,27 @@ the engine-modelling story is breaking the multi-grid synthetic-data
 ceiling described below.
 
 \paragraph{Toward latent world coders.}
-Inverse-fitting a continuous game latent from transitions and decoding
-it back to source code suggests a ``latent world coder'' direction:
-use a learned dynamics manifold as the search space, then project
-successful latent hypotheses into executable symbolic programs. This
-is complementary to program-synthesis world-model agents such as
-WorldCoder and TheoryCoder, which synthesize Python transition models
-from interaction for planning~\cite{tang2024worldcoder,ahmed2025theorycoder},
-and to DreamCoder-style systems that grow reusable symbolic libraries
-for program induction~\cite{ellis2021dreamcoder}. Our current decoder
-does not yet reliably emit engine-loadable programs from optimized
-slots, but a mature version would make PuzzleScript-style engines a
-natural bridge between neural world models and symbolic program
-learning. Interactive world-model benchmarks such as WorldTest /
+The inverse-fit and slot-sampling probes
+(Appendices~\ref{app:autoencoder}, \ref{app:inverse-fit}) point
+toward a ``latent world coder'' direction: treat a learned dynamics
+manifold as the search space for novel rule systems, and project
+successful latent hypotheses back into executable symbolic
+programs. This is complementary to program-synthesis world-model
+agents such as WorldCoder and TheoryCoder, which synthesize Python
+transition models from
+interaction~\cite{tang2024worldcoder,ahmed2025theorycoder}, and to
+DreamCoder-style systems that grow reusable symbolic libraries for
+program induction~\cite{ellis2021dreamcoder}. The decoder already
+emits engine-loadable PuzzleScript programs from random slot
+samples and along slot-space interpolations, but pairing inverse-fit
+slots with engine-loadable decoded code is still an open thread that
+we report as an early exploratory signal rather than a finished
+result. Interactive world-model benchmarks such as
 AutumnBench~\cite{warrier2025benchmarking} and
-ARC-AGI-3~\cite{arcprize2026arcagi3} are natural testbeds for such
-agents, because acting in novel rule systems after limited interaction with the environment can benefit from the inference of a fast forward model, enabling the use of e.g. search and RL to generate agent policies.
+ARC-AGI-3~\cite{arcprize2026arcagi3} are natural targets, because
+acting in novel rule systems after limited interaction benefits
+directly from inferring a fast forward model that downstream search
+or RL can plan against.
 
 \paragraph{What the iterated local update buys.}
 The architecture comparison in \S\ref{sec:results-baselines}
@@ -73,17 +78,21 @@ We recommend the multi-grid synth setup as a default check for
 future PuzzleScript world-model work: if your model only succeeds at
 the single-grid setting, you may not be learning the dynamics.
 
-\paragraph{Open: escaping the multi-grid ceiling.}
-Our experiments characterize the ceiling but do not break it. The
-remaining candidate fixes that have not been ruled out are
-(a) hard / sparse rule-slot routing so the model cannot smear
-``fire-once'' across all slots, (b) per-cell halt mechanism so cells
-in their fixed point stop updating, (c) curriculum or replay-buffer
-training that selectively exposes the model to slide-distance
-$\geq 2$ instances, and (d) auxiliary ``is-changing'' mask head
-factoring ``where to fire'' from ``what to write.'' A successful
-break here would close the most important remaining gap between
-authored-data and synthetic-multi-grid performance.
+\paragraph{The multi-grid synthetic ceiling.}
+Our experiments characterize this ceiling rather than break it, and
+we read it as a probe finding. The setup is deliberately constructed
+so that per-state lookup is unavailable---one rule set is shared
+across $1024$ distinct levels at four widths---and once that crutch
+is removed, current recipes plateau well above the single-grid floor.
+Several mechanisms are consistent with the observation: soft rather
+than sparse routing across rule slots, cells continuing to update
+once they reach a fixed point, training distributions that are sparse
+in long-slide instances, and the absence of an explicit
+``where-to-fire'' factorization. Disentangling them is not the focus
+of this paper; we expect that scaling either model capacity or
+rule-coverage-driven synthetic diversity is the most likely route to
+closing the gap, and view this as the most important remaining
+milestone for an engine-modeling claim.
 
 ``Near-perfect fidelity'' refers to the on-distribution regime:
 training on authored levels of human-written games and evaluating on
