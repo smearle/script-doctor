@@ -85,25 +85,30 @@ dynamics across games at fixed capacity.
 
 \begin{figure}[t]
   \centering
-  \includegraphics[width=0.82\linewidth]{figures/indist_intersection/intersection_heatmap.pdf}
-  \caption{\textbf{Per-game 1-step (TF) cell-error (\%) on the 14
-    intersection games}, log-color scale; rows ordered by A* search
-    difficulty (mean iterations to solve a level, ascending), with
-    rule count $n$ and A* iterations annotated per row. Columns
-    grouped by preset with cond / uncond paired. \emph{Search
-    difficulty does not predict model difficulty:} the two
-    catastrophic unconditional cells sit at opposite ends of the
-    planning spectrum---\textit{neko puzzle} ($A^*{=}11$ iters,
-    trivially solvable) hits $24.4\%$ at \textsc{Train-59}, while
-    \textit{Notsnake} ($A^*{=}119k$) hits $13.1\%$ at
-    \textsc{Train-199}. The deepest planning games (\textit{Zen
-    Puzzle Garden} $519k$, \textit{kettle} $165k$) stay below $1\%$
-    throughout, and rule count is similarly uncorrelated with cell
-    error. The hard cells correlate instead with specific rule
-    \emph{patterns} (e.g.\ \textit{neko puzzle}'s row-spanning
-    \texttt{[> Player | ... | Fruit]} needs long-range axis context);
-    cond columns stay an order of magnitude lower throughout.}
-  \label{fig:intersection-heatmap}
+  \begin{subfigure}[b]{0.55\linewidth}
+    \centering
+    \includegraphics[width=\linewidth]{figures/indist_intersection/intersection_heatmap.pdf}
+    \caption{\textbf{ID per-game 1-step (TF) cell-error (\%)} on the
+      14 intersection games, log-color scale; rows ordered by rule
+      count $n$, columns grouped by preset with cond / uncond paired.
+      Cond columns stay an order of magnitude lower than uncond
+      throughout; the dark uncond cells (\textit{neko
+      puzzle}@\textsc{Train-59} $24.4\%$,
+      \textit{Notsnake}@\textsc{Train-199} $13.1\%$) drive the
+      aggregate gap in Figure~\ref{fig:intersection-slope-id}.}
+    \label{fig:intersection-heatmap}
+  \end{subfigure}\hfill
+  \begin{subfigure}[b]{0.42\linewidth}
+    \centering
+    \includegraphics[width=\linewidth]{figures/cond_vs_uncond_match/ood_per_game_scatter.pdf}
+    \caption{\textbf{OOD per-game 1-step (TF) cell-error at
+      \textsc{Train-199}}, cond (x) vs.\ uncond (y), one point per
+      held-out game; colours partition by which model beats the
+      per-game identity baseline. Cond and uncond beat identity on
+      largely disjoint subsets---the encoder is not a strict
+      superset of the unconditional baseline OOD.}
+    \label{fig:ood-per-game-scatter}
+  \end{subfigure}
 \end{figure}
 
 Out-of-distribution (Figure~\ref{fig:intersection-slope-ood};
@@ -120,11 +125,13 @@ mean $14.8\%$ vs.\ uncond $16.9\%$ but with near-identical medians
 ($3.45\%$ vs.\ $3.53\%$) and uncond winning on more games ($8$ vs.\
 $7$); at \textsc{Train-59} the means roughly match ($4.69\%$ vs.\
 $4.52\%$); at \textsc{Train-199} uncond has the lower median ($1.52\%$
-vs.\ $2.00\%$) and one more win vs.\ identity ($14$ vs.\ $13$). We
-return to what the unconditional model is exploiting in
-\S\ref{sec:discussion}. A per-game scatter showing that cond and
-uncond win on largely disjoint games at \textsc{Train-199} is in
-Appendix~\ref{app:ood-per-game-scatter}. On random-action AR rollout
+vs.\ $2.00\%$) and one more win vs.\ identity ($14$ vs.\ $13$).
+The per-game scatter (Figure~\ref{fig:ood-per-game-scatter}) shows
+that cond and uncond beat identity on largely disjoint subsets at
+\textsc{Train-199}, so the encoder is not a strict superset of the
+unconditional baseline on this set; we return to what the
+unconditional model is exploiting in \S\ref{sec:discussion}.
+On random-action AR rollout
 (Appendix~\ref{app:rollout-ar}), where errors compound over 30 steps,
 identity ($\approx 2\%$ mean) is a much stronger baseline: every model
 drifts to $7$--$27\%$ and no current checkpoint beats identity over

@@ -363,21 +363,15 @@ def _figure_heatmap(per_game: dict[tuple[str, str], dict[str, float]],
                     games: list[str]) -> plt.Figure:
     """Per-game heatmap on the 14-game intersection.
 
-    Rows are ordered by A*-search difficulty (mean iterations to solve
-    a level, ascending), so the reader can scan top-to-bottom for any
-    monotone relationship between planning hardness and the model's
-    next-step prediction error. Games with no solved levels (e.g.\
-    \\textit{actiontest}, which has no win condition) are appended at
-    the bottom. Cell values from per_game stay unchanged.
+    Rows are ordered by rule count (ascending), with the count
+    appended to each y-label. Cell values from per_game stay
+    unchanged.
     """
     plt.rcParams.update(RC_PARAMS)
 
     rule_counts = _load_rule_counts(games)
-    astar_iters = _load_astar_difficulty(games)
     def _row_key(g):
-        v = astar_iters.get(g, float("nan"))
-        # NaN sorts to the bottom under (is_nan, value).
-        return (np.isnan(v), v if not np.isnan(v) else 0.0, g.lower())
+        return (rule_counts.get(g, 99), g.lower())
     sorted_games = sorted(games, key=_row_key)
 
     col_labels = []
@@ -391,26 +385,17 @@ def _figure_heatmap(per_game: dict[tuple[str, str], dict[str, float]],
                 if v is not None:
                     matrix[ri, col] = 100*v
 
-    fig, ax = plt.subplots(figsize=(8.0, 5.6))
+    fig, ax = plt.subplots(figsize=(6.4, 5.6))
     floor = 1e-3
     matrix_log = np.log10(np.clip(matrix, floor, None))
     im = ax.imshow(matrix_log, aspect="auto", cmap="magma_r",
                    vmin=np.log10(floor), vmax=np.log10(30.0))
 
     ax.set_yticks(range(len(sorted_games)))
-
-    def _fmt_iters(v: float) -> str:
-        if np.isnan(v): return "n/a"
-        if v >= 1000: return f"{v/1000:.0f}k"
-        return f"{int(round(v))}"
-
     ylabels = []
     for g in sorted_games:
         rc = rule_counts.get(g)
-        it = astar_iters.get(g, float("nan"))
-        rc_part = f"n={rc}" if rc is not None else ""
-        it_part = f"A*={_fmt_iters(it)}"
-        suffix = f"  ({rc_part}, {it_part})" if rc_part else f"  ({it_part})"
+        suffix = f" (n={rc})" if rc is not None else ""
         ylabels.append(g.replace("_", " ") + suffix)
     ax.set_yticklabels(ylabels)
     ax.set_xticks(range(len(col_labels)))
