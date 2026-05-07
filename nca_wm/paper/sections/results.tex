@@ -54,10 +54,12 @@ corpora.
     the trivial identity baseline $\hat s_{t+1}{=}s_t$. Broadening
     the training corpus drops the conditional 1-step error
     $\approx 6\times$ from \textsc{Train-14} to \textsc{Train-199}
-    ($16.2\% \to 2.9\%$ mean; $3.7\% \to 2.1\%$ median, matching
-    identity to within $\approx 1$pp). The \textsc{Train-199}
-    unconditional held-out eval is in flight. Per-game cells and a
-    stand-alone heatmap of the in-distribution intersection are in
+    ($19.3\% \to 2.9\%$ mean; $3.9\% \to 2.1\%$ median, matching
+    identity's mean within $\approx 1$pp). Both conditional and
+    unconditional rows are now reported across every scale; cond
+    leads on median at \textsc{Train-199}, while uncond's mean
+    edges ahead by $\approx 0.4$pp. Per-game cells and a stand-alone
+    heatmap of the in-distribution intersection are in
     Appendix~\ref{app:dilution}.}
   \label{fig:intersection-slope}
 \end{figure}
