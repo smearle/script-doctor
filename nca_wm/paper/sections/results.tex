@@ -165,15 +165,17 @@ $d_h = 256$.
 \begin{table}[t]
   \centering
   \caption{\textbf{Multi-game baselines on \textsc{Train-14}.}
-    Mean $\pm$ std over 3 seeds at 20k updates. Both error columns
-    are per-cell, averaged across rollout steps and aggregated across
-    games and levels. Both NCA variants beat all three non-NCA
+    Mean $\pm$ std over 3 seeds at 20k updates. All three error
+    columns are per-cell, averaged across rollout steps and aggregated
+    across games and levels. Both NCA variants beat all three non-NCA
     baselines; within the NCA family the per-step body has the lowest
     mean BFS-AR error, while the shared body has notably lower
     seed-to-seed variance and $3.8\times$ better parameter efficiency.}
   \label{tab:baselines-scaling14}
   \small
-  \input{figures/baselines/scaling_14}
+  \resizebox{\linewidth}{!}{%
+  \input{figures/baselines/scaling_14}%
+  }
 \end{table}
 
 Both NCA variants outperform all three non-NCA baselines on
@@ -202,14 +204,10 @@ unavailable. We then ablate the NCA's pool stack and input-skip on
 the multi-grid synth preset.
 
 All runs train for 10k updates per seed; metrics are averaged over
-50-step rollouts. We report \emph{one-step (TF) cell-error}
-(teacher-forced, random actions) and \emph{BFS-AR cell-error}
-(autoregressive under BFS-optimal actions). All five architectures
-fit train cross-entropy within $\approx 2\%$ of each other on every
-preset except ViT on multi-grid synth (best loss
-$0.084 \pm 0.002$ vs.\ $0.069 \pm 0.003$); we omit the train-loss
-column from the main tables since the per-step objective is not
-sensitive enough to separate models.
+50-step rollouts. The per-step training objective does not separate
+architectures: all five fit train cross-entropy within $\approx 2\%$
+of each other on every preset except ViT on multi-grid synth (best
+loss $0.084 \pm 0.002$ vs.\ $0.069 \pm 0.003$ for the rest).
 
 \paragraph{Single-game (Sokoban).}
 Table~\ref{tab:baselines-sokoban} reports the head-to-head
@@ -219,12 +217,14 @@ comparison on 10 authored Sokoban levels.
   \centering
   \caption{\textbf{Baselines vs.\ rule-conditioned NCA on Sokoban
     (10 authored levels).} Mean $\pm$ std over 3 seeds at 10k
-    updates. Both error columns are per-cell, averaged across
+    updates. All three error columns are per-cell, averaged across
     rollout steps; lower is better. Param count in millions;
     architectures sorted by BFS-AR cell-error.}
   \label{tab:baselines-sokoban}
   \small
-  \input{figures/baselines/sokoban_authored}
+  \resizebox{\linewidth}{!}{%
+  \input{figures/baselines/sokoban_authored}%
+  }
 \end{table}
 
 The NCA with shared weights wins on BFS-AR cell-error
@@ -253,7 +253,9 @@ multi-grid synthetic regime.
     synthetic levels per width.}
   \label{tab:baselines-synth}
   \small
-  \input{figures/baselines/sokoban_synth}
+  \resizebox{\linewidth}{!}{%
+  \input{figures/baselines/sokoban_synth}%
+  }
 \end{table}
 
 The shared-weights and per-step NCAs are statistically tied on this
