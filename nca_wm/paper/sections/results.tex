@@ -1,16 +1,17 @@
 \section{Results}
 \label{sec:results}
 
-We lead with our headline result---scaling rule diversity in a single
-rule-conditional NCA improves both in-distribution fidelity and
-transfer to unseen games (\S\ref{sec:results-scaling})---then work
-backwards through the architectural choices that make it possible.
-\S\ref{sec:results-multigame} fixes \textsc{Train-14} and asks which
-spatial body wins under multi-game training, motivating the choice of
-shared-weights NCA. \S\ref{sec:results-baselines} drills down to a
-single rule family (Sokoban) to expose the same architectural
-contrast in a memorization-free regime, and decomposes the NCA's pool
-stack and input-skip contributions.
+% User: This is true at the moment, but let's 
+% We lead with our headline result---scaling rule diversity in a single
+% rule-conditional NCA improves both in-distribution fidelity and
+% transfer to unseen games (\S\ref{sec:results-scaling})---then work
+% backwards through the architectural choices that make it possible.
+% \S\ref{sec:results-multigame} fixes \textsc{Train-14} and asks which
+% spatial body wins under multi-game training, motivating the choice of
+% shared-weights NCA. \S\ref{sec:results-baselines} drills down to a
+% single rule family (Sokoban) to expose the same architectural
+% contrast in a memorization-free regime, and decomposes the NCA's pool
+% stack and input-skip contributions.
 
 \subsection{Scaling rule diversity: in-distribution and out-of-distribution}
 \label{sec:results-scaling}
@@ -24,9 +25,8 @@ both on the same checkpoints by training the canonical recipe
 (shared-weights NCA, $n_h{=}256$, 150k updates) on
 \textsc{Train-14} $\subset$ \textsc{Train-59} $\subset$
 \textsc{Train-199} and evaluating each against (i) the 14 games
-shared across all three presets, and (ii) \textsc{Heldout-30}, a
-30-game stratified set disjoint from every preset by filename and
-token-sequence hash. We isolate the encoder's contribution by
+shared across all three presets, and (ii) \textsc{Heldout-26}, the
+subset of the 30-game stratified held-out set. We isolate the encoder's contribution by
 training a matched unconditional variant (no encoded slots) at every
 scale, and report against the trivial identity baseline
 $\hat s_{t+1}{=}s_t$, which lower-bounds the per-step state-change
@@ -38,50 +38,62 @@ corpora.
 
 \begin{figure}[t]
   \centering
-  \includegraphics[width=\linewidth]{figures/indist_intersection/intersection_slope.pdf}
+  \begin{subfigure}[b]{0.49\linewidth}
+    \centering
+    \includegraphics[width=\linewidth]{figures/indist_intersection/intersection_slope_id.pdf}
+    \caption{In-distribution (14-game intersection).}
+    \label{fig:intersection-slope-id}
+  \end{subfigure}\hfill
+  \begin{subfigure}[b]{0.49\linewidth}
+    \centering
+    \includegraphics[width=\linewidth]{figures/indist_intersection/intersection_slope_ood.pdf}
+    \caption{Out-of-distribution (\textsc{Heldout-26}).}
+    \label{fig:intersection-slope-ood}
+  \end{subfigure}
   \caption{\textbf{1-step (TF) cell-error as the training corpus
     grows from 14 to 199 games}, on a numeric (log) corpus axis.
-    \emph{Left, in-distribution:} aggregate over the 14 games shared
+    \emph{(a) In-distribution:} aggregate over the 14 games shared
     by every preset (the same game set evaluated against every
     checkpoint). The unconditional model degrades $\approx 25\times$
     from \textsc{Train-14} to \textsc{Train-59}; the rule-conditional
     model degrades $\approx 5\times$ over the same range and barely
     moves to \textsc{Train-199}---rule-conditioning slows per-game
     dilution by an order of magnitude at fixed capacity.
-    \emph{Right, out-of-distribution:} aggregate on the 30-game
-    held-out set (the same data as
+    \emph{(b) Out-of-distribution:} aggregate on
+    \textsc{Heldout-26} (the same data as
     Table~\ref{tab:cond-vs-uncond-match}); the dotted black line is
     the trivial identity baseline $\hat s_{t+1}{=}s_t$. Broadening
     the training corpus drops the conditional 1-step error
     $\approx 6\times$ from \textsc{Train-14} to \textsc{Train-199}
-    ($19.3\% \to 2.9\%$ mean; $3.9\% \to 2.1\%$ median, matching
-    identity's mean within $\approx 1$pp). Both conditional and
-    unconditional rows are now reported across every scale; cond
-    leads on median at \textsc{Train-199}, while uncond's mean
-    edges ahead by $\approx 0.4$pp. Per-game cells and a stand-alone
-    heatmap of the in-distribution intersection are in
-    Appendix~\ref{app:dilution}.}
+    ($14.8\% \to 2.3\%$ mean; $3.5\% \to 1.5\%$ median, reaching
+    identity-level error). Both conditional and unconditional rows
+    are now reported across every scale; at \textsc{Train-199} the
+    conditional row has the lower mean while the unconditional row
+    has a slightly lower median and more wins vs.\ identity.
+    Per-game cells and a stand-alone heatmap of the in-distribution
+    intersection are in Appendix~\ref{app:dilution}.}
   \label{fig:intersection-slope}
 \end{figure}
 
 \begin{table}[t]
   \centering
   \caption{\textbf{Out-of-distribution per-cell rollout error on
-    \textsc{Heldout-30}.} Mean / median across 29 held-out games
-    that the model produced rollouts for. The four error columns
-    mirror Table~\ref{tab:indist-scaling}; oracle-action regimes
-    (BFS / A*) are not reported here. The
-    final column counts games where the model's mean error over the
-    30-step random-action rollout is lower than identity's; the
-    identity baseline predicts $\hat{s}_{t+1}{=}s_t$ and lower-bounds
-    the per-step state-change rate.}
+    \textsc{Heldout-26}.} \textsc{Heldout-26} drops the four
+    \textsc{Heldout-30} games whose tokenized rules exceed the
+    conditional encoder's 657-token limit, avoiding rule truncation at
+    evaluation time. Mean / median are across the 26 retained games.
+    The four error columns mirror Table~\ref{tab:indist-scaling};
+    BFS / A* cells are shown when that refresh has completed for a
+    row. The final column counts games where the model's 1-step (TF)
+    mean error is lower than identity's; identity predicts
+    $\hat{s}_{t+1}{=}s_t$ and lower-bounds the per-step state-change
+    rate.}
   \label{tab:cond-vs-uncond-match}
   \small
   \input{figures/cond_vs_uncond_match/match_table}
 \end{table}
 
-\textbf{ID: rule-conditioning slows per-game dilution by an order of
-magnitude.} (Figure~\ref{fig:intersection-slope}, left.)
+\textbf{ID: rule-conditioning slows per-game dilution.} (Figure~\ref{fig:intersection-slope-id}.)
 Both conditional and unconditional models degrade on the shared 14
 games as the corpus widens---data dilution at fixed capacity---but
 rule-conditioning slows that dilution by roughly an order of
@@ -97,29 +109,29 @@ $0.000\%$ to $24.4\%$ when the encoder is removed. The encoder
 amortises shared dynamics across games at fixed capacity.
 
 \textbf{OOD: encoder helps already at \textsc{Train-14}.}
-(Figure~\ref{fig:intersection-slope}, right;
+(Figure~\ref{fig:intersection-slope-ood};
 Table~\ref{tab:cond-vs-uncond-match}.)
-On \textsc{Heldout-30} the conditional model's 1-step (TF)
-cell-error is $16.2\% / 3.7\%$ vs.\ unconditional $22.3\% / 5.2\%$
-even at the smallest training scale---a $\approx 6$pp mean and
-$\approx 1.5$pp median gap. Without an encoder the unconditional
+On \textsc{Heldout-26} the conditional model's 1-step (TF)
+cell-error is $14.8\% / 3.5\%$ vs.\ unconditional $19.6\% / 4.4\%$
+even at the smallest training scale---a $\approx 5$pp mean and
+$\approx 1$pp median gap. Without an encoder the unconditional
 model has nothing to disambiguate which rule set is in play and pays
 for it on unseen rules even though it fits the training set fine.
 
 \textbf{OOD: improves with rule diversity.}
 The \textsc{Train-14} conditional model still fails on most heldout
-games (mean 1-step (TF) $16.2\%$, $\approx 8\times$ identity's
-$2.11\%$). With $14\times$ more rule diversity, \textsc{Train-199}
-conditional drops to $2.91\% / 2.11\%$, matching identity's mean
-within 1pp and beating identity on $11/29$ heldout games at 1-step
+games (mean 1-step (TF) $14.8\%$, $\approx 7\times$ identity's
+$2.23\%$). With $14\times$ more rule diversity, \textsc{Train-199}
+conditional drops to $2.30\% / 1.55\%$, matching identity's mean
+and beating identity's median while winning on $11/26$ heldout games at 1-step
 (TF). Aggregate per-preset cells
 (Appendix~\ref{app:indist-scaling-aggregate}) confirm the trend.
 
 \textbf{\textsc{Train-59} reverses on mean vs.\ median.}
 The unconditional row's mean edges out the conditional row's
-($4.65\%$ vs.\ $5.94\%$ 1-step (TF)) while the median reverses
-($3.19\%$ vs.\ $2.94\%$), and the conditional model is closer to
-identity on $18 / 29$ heldout games. The mean inversion is driven by
+($4.33\%$ vs.\ $5.73\%$ 1-step (TF)) while the median reverses
+($2.95\%$ vs.\ $2.58\%$), and the conditional model is closer to
+identity on $20 / 26$ heldout games. The mean inversion is driven by
 a few games where the conditional model produces wildly off
 predictions ($39.1\%$ on one game vs.\ $2.0\%$ identity); the
 unconditional baseline falls back to a near-identity predictor on
@@ -132,10 +144,10 @@ Table~\ref{tab:cond-vs-uncond-match} counts heldout games where the
 model beats identity on 1-step (TF). Conditional wins step up at the
 broad scale ($7 \to 6 \to 11$ across \textsc{Train-14},
 \textsc{Train-59}, \textsc{Train-199}); the unconditional baseline
-tracks within one game on the scales where it has been evaluated
-($6$ and $7$). On random-action AR rollout, where errors compound
+tracks nearby but is stronger by this count at \textsc{Train-199}
+($6 \to 7 \to 14$). On random-action AR rollout, where errors compound
 over 30 steps, identity ($\approx 2\%$ mean) is a much stronger
-baseline: every model drifts to $9$--$30\%$ and no current checkpoint
+baseline: every model drifts to $7$--$27\%$ and no current checkpoint
 beats identity over the full rollout on more than a single game.
 Implications---including the games where even \textsc{Train-199}
 fails (pseudo-random spawn, deeply cascaded \texttt{again})---are

@@ -1,17 +1,25 @@
 #!/usr/bin/env python3
 """Slope + heatmap figures for the in-distribution intersection finding.
 
-Emits two PDFs:
+Emits four PDFs:
 
   intersection_slope.pdf
     Two-panel slope plot. Left: in-distribution aggregate mean / median
     on the 14 games shared by every training preset (rule-conditioning
     slows per-game dilution). Right: out-of-distribution aggregate
-    mean / median on Heldout-30 (the same data as
+    mean / median on Heldout-26 (the non-truncated subset of
     Table tab:cond-vs-uncond-match), with the identity baseline as a
     reference. Both panels share log axes (numeric x at 14/59/199) and
     line styling so the in-dist and OOD trends can be compared at a
     glance.
+
+  intersection_slope_id.pdf
+    Single-panel version of the in-distribution (left) panel, for use
+    as a subfigure in the main paper.
+
+  intersection_slope_ood.pdf
+    Single-panel version of the out-of-distribution (right) panel, for
+    use as a subfigure in the main paper.
 
   intersection_heatmap.pdf
     Per-game heatmap on the 14-game intersection (rows: games sorted
@@ -197,16 +205,11 @@ def _load_ood_summary() -> tuple[dict[tuple[str, str], float],
     return means, medians, id_mean, id_median
 
 
-def _figure_slope(per_game: dict[tuple[str, str], dict[str, float]],
-                  games_intersection: list[str]) -> plt.Figure:
-    """Two-panel slope: left = in-dist intersection, right = OOD heldout."""
-    plt.rcParams.update(RC_PARAMS)
-    fig, (ax_left, ax_right) = plt.subplots(
-        1, 2, figsize=(11.0, 4.6),
-        gridspec_kw={"width_ratios": [1.0, 1.0]},
-    )
-
-    # Left panel: in-distribution, 14-game intersection.
+def _intersection_aggregates(per_game: dict[tuple[str, str], dict[str, float]],
+                             games_intersection: list[str]
+                             ) -> tuple[dict[tuple[str, str], float],
+                                         dict[tuple[str, str], float]]:
+    """Aggregate per-game ID errors to mean/median by (scale, model)."""
     inter_mean, inter_median = {}, {}
     for scale in SCALES:
         for model in ("cond", "uncond"):
@@ -215,35 +218,70 @@ def _figure_slope(per_game: dict[tuple[str, str], dict[str, float]],
             if len(vals) == len(games_intersection):
                 inter_mean[(scale, model)]   = float(np.mean(vals))
                 inter_median[(scale, model)] = float(np.median(vals))
-    fd_left = _slope_panel(
-        ax_left, inter_mean, inter_median,
+    return inter_mean, inter_median
+
+
+def _draw_id_panel(ax, inter_mean, inter_median) -> None:
+    fd = _slope_panel(
+        ax, inter_mean, inter_median,
         title="In-distribution (14-game intersection)",
     )
-    ax_left.set_ylabel("1-step (TF) cell-error (%)")
-    _annotate_t14_to_t59(ax_left, fd_left)
-    ax_left.legend(loc="lower right", framealpha=0.95)
+    ax.set_ylabel("1-step (TF) cell-error (%)")
+    _annotate_t14_to_t59(ax, fd)
+    ax.legend(loc="lower right", framealpha=0.95)
 
-    # Right panel: out-of-distribution on Heldout-30.
-    ood_mean, ood_median, id_mean, id_median = _load_ood_summary()
-    fd_right = _slope_panel(
-        ax_right, ood_mean, ood_median,
-        title="Out-of-distribution (Heldout-30)",
+
+def _draw_ood_panel(ax, ood_mean, ood_median, id_mean, id_median) -> None:
+    fd = _slope_panel(
+        ax, ood_mean, ood_median,
+        title="Out-of-distribution (Heldout-26)",
     )
-    ax_right.set_ylabel("1-step (TF) cell-error (%)")
-
-    # Identity baseline reference (constant over corpus size, since it
-    # depends only on the held-out games).
+    ax.set_ylabel("1-step (TF) cell-error (%)")
     if np.isfinite(id_mean):
-        ax_right.axhline(100*id_mean, color="black", linewidth=1.4,
-                         linestyle=":", alpha=0.7,
-                         label=f"identity (mean)", zorder=2)
+        ax.axhline(100*id_mean, color="black", linewidth=1.4,
+                   linestyle=":", alpha=0.7,
+                   label="identity (mean)", zorder=2)
     if np.isfinite(id_median):
-        ax_right.axhline(100*id_median, color="black", linewidth=1.0,
-                         linestyle=(0, (1, 2)), alpha=0.55,
-                         label=f"identity (median)", zorder=2)
-    _annotate_t14_to_t199(ax_right, fd_right)
-    ax_right.legend(loc="upper right", framealpha=0.95, fontsize=9)
+        ax.axhline(100*id_median, color="black", linewidth=1.0,
+                   linestyle=(0, (1, 2)), alpha=0.55,
+                   label="identity (median)", zorder=2)
+    _annotate_t14_to_t199(ax, fd)
+    ax.legend(loc="upper right", framealpha=0.95, fontsize=9)
 
+
+def _figure_slope(per_game: dict[tuple[str, str], dict[str, float]],
+                  games_intersection: list[str]) -> plt.Figure:
+    """Two-panel slope: left = in-dist intersection, right = OOD heldout."""
+    plt.rcParams.update(RC_PARAMS)
+    fig, (ax_left, ax_right) = plt.subplots(
+        1, 2, figsize=(11.0, 4.6),
+        gridspec_kw={"width_ratios": [1.0, 1.0]},
+    )
+    inter_mean, inter_median = _intersection_aggregates(per_game, games_intersection)
+    _draw_id_panel(ax_left, inter_mean, inter_median)
+    ood_mean, ood_median, id_mean, id_median = _load_ood_summary()
+    _draw_ood_panel(ax_right, ood_mean, ood_median, id_mean, id_median)
+    fig.tight_layout()
+    return fig
+
+
+def _figure_id(per_game: dict[tuple[str, str], dict[str, float]],
+               games_intersection: list[str]) -> plt.Figure:
+    """Single-panel ID slope, for use as a subfigure."""
+    plt.rcParams.update(RC_PARAMS)
+    fig, ax = plt.subplots(figsize=(5.6, 4.6))
+    inter_mean, inter_median = _intersection_aggregates(per_game, games_intersection)
+    _draw_id_panel(ax, inter_mean, inter_median)
+    fig.tight_layout()
+    return fig
+
+
+def _figure_ood() -> plt.Figure:
+    """Single-panel OOD slope, for use as a subfigure."""
+    plt.rcParams.update(RC_PARAMS)
+    fig, ax = plt.subplots(figsize=(5.6, 4.6))
+    ood_mean, ood_median, id_mean, id_median = _load_ood_summary()
+    _draw_ood_panel(ax, ood_mean, ood_median, id_mean, id_median)
     fig.tight_layout()
     return fig
 
@@ -326,6 +364,20 @@ def main() -> None:
     fig_slope.savefig(slope_png, bbox_inches="tight", dpi=160)
     plt.close(fig_slope)
 
+    fig_id = _figure_id(per_game, games_intersection)
+    id_pdf = OUT_DIR / "intersection_slope_id.pdf"
+    id_png = OUT_DIR / "intersection_slope_id.png"
+    fig_id.savefig(id_pdf, bbox_inches="tight")
+    fig_id.savefig(id_png, bbox_inches="tight", dpi=160)
+    plt.close(fig_id)
+
+    fig_ood = _figure_ood()
+    ood_pdf = OUT_DIR / "intersection_slope_ood.pdf"
+    ood_png = OUT_DIR / "intersection_slope_ood.png"
+    fig_ood.savefig(ood_pdf, bbox_inches="tight")
+    fig_ood.savefig(ood_png, bbox_inches="tight", dpi=160)
+    plt.close(fig_ood)
+
     fig_heat = _figure_heatmap(per_game, games_intersection)
     heat_pdf = OUT_DIR / "intersection_heatmap.pdf"
     heat_png = OUT_DIR / "intersection_heatmap.png"
@@ -333,7 +385,8 @@ def main() -> None:
     fig_heat.savefig(heat_png, bbox_inches="tight", dpi=160)
     plt.close(fig_heat)
 
-    for p in (slope_pdf, slope_png, heat_pdf, heat_png):
+    for p in (slope_pdf, slope_png, id_pdf, id_png,
+              ood_pdf, ood_png, heat_pdf, heat_png):
         print(f"Wrote: {p}")
 
 
