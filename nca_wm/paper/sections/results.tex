@@ -128,13 +128,14 @@ a directional axial lookup. We expect axis-cummax to carry more
 weight on games whose rule sets do reference far-apart same-axis
 cells (e.g.\ \textsc{collapse}, \textsc{varislide}); a multi-game
 version of this ablation on \textsc{Train-14} is left to future work.
-\emph{Input-skip} contributes $+54\%$ with the highest variance among
-the ablation rows ($\sigma = 2.41\%$ on BFS-AR), and we read it as a
-stability mechanism: removing it actually \emph{lowers} the
-teacher-forced one-step error ($0.168\%$ vs.\ $0.274\%$ baseline)
-while raising the autoregressive rollout error, the signature of an
-ingredient that helps the iterated body remain on-manifold rather
-than fitting per-step transitions tighter.
+\emph{Input-skip} contributes $+54\%$ on BFS-AR but \emph{lowers} the
+teacher-forced one-step error ($0.168\%$ without it vs.\ $0.274\%$
+baseline). One reading these numbers suggest---though further
+analysis would be needed to confirm---is that re-injecting
+$(s_t, a_t)$ at every NCA step anchors the body to the input;
+without that anchor it fits engine transitions tighter at the cost
+of robustness to its own slightly-off predictions, which then
+compound as the rollout feeds them back as off-manifold inputs.
 
 % TODO: rerun per-feature pool ablation on Train-14 (multi-game) to
 % verify that global-pool dominance and the small axis-cummax
