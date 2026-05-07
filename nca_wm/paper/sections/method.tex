@@ -32,18 +32,10 @@ with two self-attention layers.
 
 \subsection{Rule-conditioned NCA world model}
 
-\paragraph{Game-description encoder.}
-$\mathrm{Enc}_\phi$ maps the token sequence $\mathrm{spec} \in
-\mathbb{Z}^{S}$ (or the corresponding autoencoder latent) to slots
-$z \in \mathbb{R}^{K \times d}$ via $\ell$ self-attention layers
-followed by $K$ learned query vectors cross-attending into the
-contextualised tokens. Slots are shared across cells and fixed for
-the rollout.
+$\mathrm{Enc}_\phi$ maps the token sequence $\mathrm{spec} \in \mathbb{Z}^{S}$ (or the corresponding autoencoder latent) to slots $z \in \mathbb{R}^{K \times d}$ via $\ell$ self-attention layers followed by $K$ learned query vectors cross-attending into the contextualised tokens.
+Slots are shared across cells and fixed for the rollout.
 
-\paragraph{NCA dynamics body.}
-A single dense layer embeds the per-cell concatenation of $s_t$ and
-the broadcast one-hot action into $h^{(0)} \in \mathbb{R}^{H \times W
-\times d_h}$. We then apply $T$ NCA steps:
+A single dense layer embeds the per-cell concatenation of $s_t$ and the broadcast one-hot action into $h^{(0)} \in \mathbb{R}^{H \times W \times d_h}$, after which we apply $T$ NCA steps:
 \begin{align}
   h^{(k+1)} &= h^{(k)} + W_o \,\mathrm{GELU}\!\bigl(
       W_c\, [\, h^{(k)} \,;\, h^{(0)} \,]_{3\times 3}
@@ -51,37 +43,15 @@ the broadcast one-hot action into $h^{(0)} \in \mathbb{R}^{H \times W
       \mathrm{XAttn}(h^{(k)}, z)
     \bigr) \, ,
 \end{align}
-where $[\,\cdot\,]_{3\times 3}$ is a $3{\times}3$ convolution per
-cell, $\mathrm{XAttn}$ is multi-head attention with each cell as a
-query and the $K$ slots as keys/values, and $W_o, W_c$ are shared
-across all $T$ steps. The \emph{input-skip} concatenation re-injects
-the embedded $(s_t, a_t)$ at every step to keep the unroll anchored
-to its input.
+where $[\,\cdot\,]_{3\times 3}$ is a $3{\times}3$ convolution per cell, $\mathrm{XAttn}$ is multi-head attention with each cell as a query and the $K$ slots as keys/values, and $W_o, W_c$ are shared across all $T$ steps.
+The \emph{input-skip} concatenation re-injects the embedded $(s_t, a_t)$ at every step to keep the unroll anchored to its input.
+Since PuzzleScript has two natural iteration levels (an inner ordered rule list, an outer \texttt{again} re-evaluation loop), we factor $T = n_\ell \cdot n_r$ with $n_\ell$ distinct inner layers and $n_r$ shared-weight outer passes; $n_r = T$ recovers a single shared layer applied $T$ times, while $n_r = 1$ recovers a per-step body with $T$ distinct layers.
 
-\paragraph{Pool features.}
-A $3{\times}3$ convolution propagates one cell of context per step,
-but several PuzzleScript patterns reference cells arbitrarily far
-apart (\texttt{[ X | ... | Y ]} or \texttt{[X][Y]}). We therefore
-augment each step with three optional pool stacks computed from
-$h^{(k)}$ and broadcast back per cell: axis max-pool (row+col),
-axis cumulative max (directional prefix-max in four directions), and
-global max-pool---surfacing non-local information that would
-otherwise require $\Omega(\max(H,W))$ NCA steps to reach.
+A $3{\times}3$ convolution propagates one cell of context per step, but several PuzzleScript patterns reference cells arbitrarily far apart (\texttt{[ X | ... | Y ]} or \texttt{[X][Y]}).
+We therefore augment each step with three optional pool stacks computed from $h^{(k)}$ and broadcast back per cell: axis max-pool (row+col), axis cumulative max (directional prefix-max in four directions), and global max-pool---surfacing non-local information that would otherwise require $\Omega(\max(H,W))$ NCA steps to reach.
 
-\paragraph{Hierarchical weight sharing.}
-PuzzleScript has two natural iteration levels (an inner ordered
-rule list, an outer \texttt{again} re-evaluation loop). We factor
-$T = n_\ell \cdot n_r$ with $n_\ell$ distinct inner layers and $n_r$
-shared-weight outer passes. $n_r = T$ recovers a single shared layer
-applied $T$ times; $n_r = 1$ recovers a per-step body with $T$
-distinct layers.
-
-\paragraph{Heads.}
-A shared \texttt{readout} dense maps $h^{(T)}$ cell-wise to next-state
-logits $\widehat{s}_{t+1}$; a separate dense over spatially
-average-pooled $h^{(T)}$ produces a binary win logit. Training loss is
-per-cell BCE on the next-state, upweighting cells that change between
-$s_t$ and $s_{t+1}$, plus binary cross-entropy on the win head.
+A shared \texttt{readout} dense maps $h^{(T)}$ cell-wise to next-state logits $\widehat{s}_{t+1}$, and a separate dense over spatially average-pooled $h^{(T)}$ produces a binary win logit.
+Training loss is per-cell BCE on the next-state, upweighting cells that change between $s_t$ and $s_{t+1}$, plus binary cross-entropy on the win head.
 
 \subsection{Baselines}
 
