@@ -37,7 +37,9 @@ where $[\,\cdot\,]_{3\times 3}$ is a $3{\times}3$ convolution per cell, $\mathrm
 The \emph{input-skip} concatenation re-injects the embedded $(s_t, a_t)$ at every step to keep the unroll anchored to its input.
 Since PuzzleScript has two natural iteration levels (an inner ordered rule list, an outer \texttt{again} re-evaluation loop), we factor $T = n_\ell \cdot n_r$ with $n_\ell$ distinct inner layers and $n_r$ shared-weight outer passes; $n_r = T$ recovers a single shared layer applied $T$ times, while $n_r = 1$ recovers a per-step body with $T$ distinct layers.
 
-A $3{\times}3$ convolution propagates one cell of context per step, but several PuzzleScript patterns reference cells arbitrarily far apart (\texttt{[ X | ... | Y ]} or \texttt{[X][Y]}).
+A $3{\times}3$ convolution propagates one cell of context per step, but several PuzzleScript patterns reference cells arbitrarily far apart.
+An ellipsis pattern \texttt{[ X | \ldots | Y ]} matches an X and a Y separated by any number of cells along a single row or column; for instance \textit{neko puzzle}'s \texttt{[ > Player | \ldots | Fruit ] -> [ | \ldots | Player ]} teleports a moving player onto the next fruit in its row of motion.
+A multi-bracket pattern \texttt{[X][Y]} matches an X and a Y anywhere on the level regardless of relative position; for instance \texttt{[ ExitOpen ][ Slime ] -> [ ExitClosed Wall ][ Slime ]} closes the level's exit whenever any Slime remains on the board.
 We therefore augment each step with three optional pool stacks computed from $h^{(k)}$ and broadcast back per cell: axis max-pool (row+col), axis cumulative max (directional prefix-max in four directions), and global max-pool---surfacing non-local information that would otherwise require $\Omega(\max(H,W))$ NCA steps to reach.
 
 A shared \texttt{readout} dense maps $h^{(T)}$ cell-wise to next-state logits $\widehat{s}_{t+1}$, and a separate dense over spatially average-pooled $h^{(T)}$ produces a binary win logit.
@@ -49,7 +51,7 @@ Three non-NCA baselines share the encoder, input embedding, and
 readout heads, replacing only the NCA body so the comparison
 isolates the spatial-update body. The \textbf{CNN} stacks $n_b$
 residual blocks (conv + optional pool + slot-cross-attn + residual
-gate) with \emph{distinct} per-block weights, helping to isolate the effect of the NCA's weight-sharing. The \textbf{U-Net}
+gate) with distinct per-block weights, helping to isolate the effect of the NCA's weight-sharing. The \textbf{U-Net}
 is a 2-level encoder-decoder with skip connections and a FiLM
 bottleneck that reads pooled slots, testing whether multi-scale
 hierarchy substitutes for repeated local updates. The \textbf{ViT}

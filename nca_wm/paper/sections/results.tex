@@ -95,7 +95,7 @@ handling---dropping all three ($+316\%$) costs roughly twice removing
 ($+123\%$) and \emph{axis-cummax} a smaller $+48\%$.
 The axis-cummax contribution is surprising given that Sokoban's push rule
 \texttt{[ > Player | Crate ] -> [ > Player | > Crate ]} only references its $3{\times}3$ neighborhood and should not need directional prefix-max at all; the seed std on the no-axis-cummax row is large (1.30\% absolute on a 3.07\% mean), so part of the gap is plausibly noise.
-We expect a cleaner axis-cummax win on games like \textit{neko puzzle}, whose rule \texttt{[ > Player | ... | Fruit ] -> [ | ... | Player ]} reaches across the row.
+We expect a cleaner axis-cummax win on games like \textit{neko puzzle}, whose ellipsis-spanning push rule (\S\ref{sec:method}) reaches across the row.
 \emph{Input-skip} raises BFS-AR by $+54\%$ when removed but
 \emph{lowers} one-step (TF) error ($0.168\%$ vs.\ $0.274\%$):
 re-injecting $(s_t, a_t)$ at every step anchors the body to its input,
@@ -133,12 +133,7 @@ shared across all three presets, and (ii) \textsc{Heldout-26}, the
 subset of the 30-game stratified held-out set. We isolate the encoder's contribution by
 training a matched unconditional variant (no encoded slots) at every
 scale, and report against the identity baseline
-$\hat s_{t+1}{=}s_t$.
-Because most cells remain static between consecutive steps, identity
-is correct everywhere except where a rule firing actually changes a
-cell, lower-bounding the per-step state-change rate; matching it on
-an unseen game requires predicting the changing cells correctly
-without ever seeing the rules. Conditional and unconditional models tie in-distribution at
+$\hat s_{t+1}{=}s_t$, which lower-bounds the per-step state-change rate. Conditional and unconditional models tie in-distribution at
 \textsc{Train-14} (Table~\ref{tab:indist-scaling}: $1.63 / 0.11$
 vs.\ $1.98 / 0.08$ random-AR mean / median; within $0.4$pp on every
 regime), with the encoder's ID benefit emerging only at larger
