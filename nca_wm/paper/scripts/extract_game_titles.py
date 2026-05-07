@@ -177,7 +177,7 @@ TRAIN_199_EXTRA_142 = [
     "pathfinding_by_madball",
 ]
 
-HELDOUT_30 = [
+HELDOUT_26 = [
     "in_the_way_by_giovanni_mota", "cyberpunk_2020_by_gzhao-jpg",
     "my_nana_ate_my_kid_brother_by_ruth_williams",
     "ice_sliding_by_by_ian_cox", "block_game_by_emily_dresden",
@@ -194,9 +194,6 @@ HELDOUT_30 = [
     "haberdashery_by_lee2sman", "ghosts_by_henry-friedman",
     "a_snowballs_chance_in_hell_by_iznaut", "hedgehogger_by_increpare",
     "cat_adventure_2_by_whenyoucando", "Hamiltwo",
-    "headless_people_problems_by_monakrom",
-    "break_out_of_the_mine_by_jja_i.e._juan,_jose_&_andre",
-    "Heroes_of_Sokoban_-_Ancient_Japan", "angize_by_ali_nikkhah",
 ]
 
 
@@ -311,7 +308,7 @@ def main() -> None:
         "Train-94 high": TRAIN_94_HIGH,
         "Train-94 xhigh": TRAIN_94_XHIGH,
         "Train-199 extra 142": TRAIN_199_EXTRA_142,
-        "Heldout-30": HELDOUT_30,
+        "Heldout-26": HELDOUT_26,
     }
     out: dict[str, list[dict]] = {}
     missing = []

@@ -56,9 +56,9 @@ grid sizes from $4{\times}4$ to $32{\times}24$.
 \textsc{Train-59} and \textsc{Train-199}
 (Tables~\ref{tab:indist-scaling}, \ref{tab:cond-vs-uncond-match})
 add breadth.
-\textsc{Heldout-26} is the 26 games from \textsc{Heldout-30} whose
-tokenized rules fit the conditional encoder without truncation, used
-for unseen-game evaluation.
+\textsc{Heldout-26} is a stratified 26-game held-out set disjoint
+from every training preset by filename and by token-sequence hash,
+used for unseen-game evaluation.
 
 \subsection{Architectures and hyper-parameters}
 

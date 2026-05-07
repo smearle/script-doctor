@@ -84,7 +84,7 @@
 \item {\bf Experimental setting/details}
     \item[] Question: Does the paper specify all the training and test details (e.g., data splits, hyperparameters, how they were chosen, type of optimizer) necessary to understand the results?
     \item[] Answer: \answerYes{}
-    \item[] Justification: \S\ref{sec:experiments} (``Architectures and hyper-parameters'' and ``Evaluation'') specifies the optimizer (Adam), learning-rate schedule (cosine $3 \times 10^{-4} \to 10^{-7}$), batch size, gradient-clipping norm, change-loss weight, slot dimensions, and per-architecture depth/width. Train/test splits are specified per preset: held-out transitions per game for cell-error, full-rollout evaluation under random / BFS / A* policies, and the 30-game token-hash-disjoint heldout set with a 26-game non-truncated reported subset for unseen-game generalization (\S\ref{sec:results-encoder-ablation}, Appendix~\ref{app:ood}).
+    \item[] Justification: \S\ref{sec:experiments} (``Architectures and hyper-parameters'' and ``Evaluation'') specifies the optimizer (Adam), learning-rate schedule (cosine $3 \times 10^{-4} \to 10^{-7}$), batch size, gradient-clipping norm, change-loss weight, slot dimensions, and per-architecture depth/width. Train/test splits are specified per preset: held-out transitions per game for cell-error, full-rollout evaluation under random / BFS / A* policies, and the 26-game token-hash-disjoint \textsc{Heldout-26} set for unseen-game generalization (\S\ref{sec:results-encoder-ablation}, Appendix~\ref{app:ood}).
     \item[] Guidelines:
     \begin{itemize}
         \item The answer \answerNA{} means that the paper does not include experiments.

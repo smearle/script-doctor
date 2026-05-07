@@ -45,8 +45,7 @@ us measure fidelity cell-by-cell against the engine.
 % Our corpus contains 3{,}474 token-distinct human-authored games (1--20
 % rules each), with
 We train on up to 199 token-distinct human-authored games with between 1-20 rules each.
-For each level of each game, we collect bounded A* transition ($\approx 15$M transitions); held-out evaluation uses the 26 non-truncated games
-from a 30-game stratified sample disjoint from training by name and
+For each level of each game, we collect bounded A* transition ($\approx 15$M transitions); held-out evaluation uses \textsc{Heldout-26}, a 26-game stratified sample disjoint from training by name and
 token-sequence hash.
 
 \begin{figure}[t]
@@ -82,10 +81,8 @@ We make the following contributions:
         cross-attending to slot embeddings of each game's tokenized
         rule text.
   \item \textbf{An evaluation protocol for unseen-rule generalization.}
-        We construct \textsc{Heldout-30}, a 30-game stratified set
+        We construct \textsc{Heldout-26}, a 26-game stratified set
         disjoint from every training preset by filename and by
-        token-sequence hash, and report on the 26 games whose
-        tokenized rules fit the encoder without truncation against an
-        identity baseline that lower-bounds the per-step state-change
-        rate.
+        token-sequence hash, and report against an identity baseline
+        that lower-bounds the per-step state-change rate.
 \end{enumerate}

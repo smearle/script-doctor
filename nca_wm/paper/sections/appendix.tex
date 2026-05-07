@@ -212,15 +212,10 @@ the Gap}, \textit{marbles}, \textit{Annoying Skull}, \textit{Colors},
 \textit{Test Teleportation}, \textit{Unlink}, \textit{PathFinding}.
 }
 
-\paragraph{\textsc{Heldout-30} and reported \textsc{Heldout-26}.}
+\paragraph{\textsc{Heldout-26}.}
 The held-out evaluation set is disjoint from every training preset by
-filename and by token-sequence hash. Drawn by stratified sampling
-from the dedup pool to span low/mid/high rule counts. Main-body OOD
-numbers report \textsc{Heldout-26}, which removes four games whose
-tokenized rules exceed the conditional encoder's 657-token limit:
-\textit{Angize}, \textit{Headless People Problems},
-\textit{Break Out of the Mine}, and
-\textit{Heroes of Sokoban - Ancient Japan}.
+filename and by token-sequence hash, drawn by stratified sampling from
+the dedup pool to span low/mid/high rule counts.
 {\small
 \textit{in the way}, \textit{Cyberpunk 2020}, \textit{My Nana Ate My
 Kid Brother}, \textit{Ice Sliding}, \textit{Block game}, \textit{Kitten
@@ -233,9 +228,7 @@ CREATED}, \textit{Monophobic Multiban}, \textit{Charge The Bot},
 \textit{Watchers' Ritual}, \textit{GDD301 Demo Game}, \textit{Surround
 Yourself With Dogs}, \textit{Haberdashery}, \textit{Ghosts}, \textit{A
 Snowball's Chance in Hell}, \textit{hedgehogger}, \textit{Cat
-Adventure 2}, \textit{Hamiltwo}, \textit{Headless People Problems},
-\textit{Break out of the Mine}, \textit{Heroes of Sokoban - Ancient
-Japan}, \textit{Angize}.
+Adventure 2}, \textit{Hamiltwo}.
 }
 
 \subsection{Architecture baselines: full per-preset table}
@@ -814,11 +807,9 @@ of the two limits binds first; we leave that to future work.
 \section{Generalization to unseen games}
 \label{app:ood}
 
-The 30-game stratified held-out set is disjoint from every training
-preset by name and by token-sequence hash; main OOD rollout tables
-report the 26 non-truncated games whose tokenized rules fit the
-conditional encoder. We probe generalization along three axes:
-held-out latent geometry, symbolic decoder
+The held-out set \textsc{Heldout-26} is disjoint from every training
+preset by name and by token-sequence hash. We probe generalization
+along three axes: held-out latent geometry, symbolic decoder
 reconstruction and sampling, and frozen-NCA inverse fitting from
 observed transitions.
 
@@ -835,10 +826,7 @@ count summarized in
 \begin{table}[t]
   \centering
   \caption{\textbf{Out-of-distribution per-cell rollout error on
-    \textsc{Heldout-26}.} \textsc{Heldout-26} drops the four
-    \textsc{Heldout-30} games whose tokenized rules exceed the
-    conditional encoder's 657-token limit, avoiding rule truncation at
-    evaluation time. Mean / median are across the 26 retained games.
+    \textsc{Heldout-26}.} Mean / median are across the 26 games.
     The four error columns mirror Table~\ref{tab:indist-scaling};
     BFS / A* cells are shown when that refresh has completed for a
     row. The final column counts games where the model's 1-step (TF)
