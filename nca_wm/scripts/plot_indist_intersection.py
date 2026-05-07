@@ -13,13 +13,13 @@ Emits four PDFs:
     line styling so the in-dist and OOD trends can be compared at a
     glance.
 
-  intersection_slope_id.pdf
-    Single-panel version of the in-distribution (left) panel, for use
-    as a subfigure in the main paper.
+  intersection_slope_id.pdf / intersection_slope_id_ar.pdf
+    Single-panel versions of the in-distribution panel for 1-step (TF)
+    and random-action AR, for use as subfigures in the main paper.
 
-  intersection_slope_ood.pdf
-    Single-panel version of the out-of-distribution (right) panel, for
-    use as a subfigure in the main paper.
+  intersection_slope_ood.pdf / intersection_slope_ood_ar.pdf
+    Single-panel versions of the out-of-distribution panel for 1-step
+    (TF) and random-action AR, for use as subfigures in the main paper.
 
   intersection_heatmap.pdf
     Per-game heatmap on the 14-game intersection (rows: games sorted
@@ -47,6 +47,7 @@ import numpy as np
 REPO_ROOT      = Path(__file__).resolve().parents[2]
 INTER_SUMMARY  = REPO_ROOT / "nca_wm" / "paper" / "figures" / "indist_intersection"  / "summary.json"
 OOD_SUMMARY    = REPO_ROOT / "nca_wm" / "paper" / "figures" / "cond_vs_uncond_match" / "summary.csv"
+GAMES_META     = REPO_ROOT / "data" / "games_metadata.json"
 OUT_DIR        = REPO_ROOT / "nca_wm" / "paper" / "figures" / "indist_intersection"
 
 SCALES   = ["Train-14", "Train-59", "Train-199"]
@@ -59,8 +60,6 @@ RUN_BY   = {
     ("Train-199", "cond"):   "multi_scaling_gallery_v4_cond_match_s0",
     ("Train-199", "uncond"): "multi_scaling_gallery_v4_uncond_match_s0",
 }
-HEADLINE = "random_tf"
-
 SERIES = [
     ("cond",   "Rule-conditioned", "#d62728"),
     ("uncond", "Unconditional",    "#1f77b4"),
@@ -76,13 +75,14 @@ RC_PARAMS = {
 }
 
 
-def _load_eval_per_game(run_dir: str, games: list[str]) -> dict[str, float]:
+def _load_eval_per_game(run_dir: str, games: list[str],
+                        regime: str = "random_tf") -> dict[str, float]:
     """Per-game headline-regime mean (over levels) for the listed games."""
     npz_path = REPO_ROOT / "nca_wm" / "logs" / run_dir / "eval_multigame.npz"
     if not npz_path.exists():
         return {}
     d = np.load(npz_path, allow_pickle=True)
-    pat = re.compile(rf"^(?P<game>.+?)_L\d+_{HEADLINE}_cell_error_rate$")
+    pat = re.compile(rf"^(?P<game>.+?)_L\d+_{regime}_cell_error_rate$")
     accum: dict[str, list[float]] = {}
     for k in d.files:
         m = pat.match(k)
@@ -176,14 +176,20 @@ def _annotate_t14_to_t199(ax, fig_data: dict[str, dict]) -> None:
                       ec="#666666", alpha=0.95))
 
 
-def _load_ood_summary() -> tuple[dict[tuple[str, str], float],
-                                 dict[tuple[str, str], float],
-                                 float, float]:
+def _load_ood_summary(metric: str = "tf") -> tuple[dict[tuple[str, str], float],
+                                                   dict[tuple[str, str], float],
+                                                   float, float]:
     """Read OOD aggregates from cond_vs_uncond_match/summary.csv.
 
     Returns (mean_by_(scale,model), median_by_(scale,model), id_mean, id_median)
     in [0,1] units (matching the indist summary)."""
     import csv as _csv
+    if metric == "tf":
+        prefix = "ood_tf"
+    elif metric == "ar30":
+        prefix = "ood_ar30"
+    else:
+        raise ValueError(f"unknown OOD metric: {metric}")
     means, medians = {}, {}
     id_mean = id_median = float("nan")
     with open(OOD_SUMMARY) as f:
@@ -191,15 +197,15 @@ def _load_ood_summary() -> tuple[dict[tuple[str, str], float],
             scale = row["preset"]
             model = "cond" if row["kind"] == "cond" else "uncond"
             try:
-                m  = float(row["ood_tf_model_mean"])
-                md = float(row["ood_tf_model_median"])
+                m  = float(row[f"{prefix}_model_mean"])
+                md = float(row[f"{prefix}_model_median"])
                 means[(scale, model)]   = m
                 medians[(scale, model)] = md
             except ValueError:
                 continue
             try:
-                id_mean   = float(row["ood_tf_identity_mean"])
-                id_median = float(row["ood_tf_identity_median"])
+                id_mean   = float(row[f"{prefix}_identity_mean"])
+                id_median = float(row[f"{prefix}_identity_median"])
             except (ValueError, KeyError):
                 pass
     return means, medians, id_mean, id_median
@@ -221,22 +227,24 @@ def _intersection_aggregates(per_game: dict[tuple[str, str], dict[str, float]],
     return inter_mean, inter_median
 
 
-def _draw_id_panel(ax, inter_mean, inter_median) -> None:
+def _draw_id_panel(ax, inter_mean, inter_median,
+                   *, title: str, ylabel: str) -> None:
     fd = _slope_panel(
         ax, inter_mean, inter_median,
-        title="In-distribution (14-game intersection)",
+        title=title,
     )
-    ax.set_ylabel("1-step (TF) cell-error (%)")
+    ax.set_ylabel(ylabel)
     _annotate_t14_to_t59(ax, fd)
     ax.legend(loc="lower right", framealpha=0.95)
 
 
-def _draw_ood_panel(ax, ood_mean, ood_median, id_mean, id_median) -> None:
+def _draw_ood_panel(ax, ood_mean, ood_median, id_mean, id_median,
+                    *, title: str, ylabel: str) -> None:
     fd = _slope_panel(
         ax, ood_mean, ood_median,
-        title="Out-of-distribution (Heldout-26)",
+        title=title,
     )
-    ax.set_ylabel("1-step (TF) cell-error (%)")
+    ax.set_ylabel(ylabel)
     if np.isfinite(id_mean):
         ax.axhline(100*id_mean, color="black", linewidth=1.4,
                    linestyle=":", alpha=0.7,
@@ -258,47 +266,74 @@ def _figure_slope(per_game: dict[tuple[str, str], dict[str, float]],
         gridspec_kw={"width_ratios": [1.0, 1.0]},
     )
     inter_mean, inter_median = _intersection_aggregates(per_game, games_intersection)
-    _draw_id_panel(ax_left, inter_mean, inter_median)
-    ood_mean, ood_median, id_mean, id_median = _load_ood_summary()
-    _draw_ood_panel(ax_right, ood_mean, ood_median, id_mean, id_median)
+    _draw_id_panel(
+        ax_left, inter_mean, inter_median,
+        title="In-distribution (14-game intersection)",
+        ylabel="1-step (TF) cell-error (%)",
+    )
+    ood_mean, ood_median, id_mean, id_median = _load_ood_summary("tf")
+    _draw_ood_panel(
+        ax_right, ood_mean, ood_median, id_mean, id_median,
+        title="Out-of-distribution (Heldout-26)",
+        ylabel="1-step (TF) cell-error (%)",
+    )
     fig.tight_layout()
     return fig
 
 
 def _figure_id(per_game: dict[tuple[str, str], dict[str, float]],
-               games_intersection: list[str]) -> plt.Figure:
+               games_intersection: list[str],
+               *, title: str, ylabel: str) -> plt.Figure:
     """Single-panel ID slope, for use as a subfigure."""
     plt.rcParams.update(RC_PARAMS)
     fig, ax = plt.subplots(figsize=(5.6, 4.6))
     inter_mean, inter_median = _intersection_aggregates(per_game, games_intersection)
-    _draw_id_panel(ax, inter_mean, inter_median)
+    _draw_id_panel(ax, inter_mean, inter_median, title=title, ylabel=ylabel)
     fig.tight_layout()
     return fig
 
 
-def _figure_ood() -> plt.Figure:
+def _figure_ood(*, metric: str, title: str, ylabel: str) -> plt.Figure:
     """Single-panel OOD slope, for use as a subfigure."""
     plt.rcParams.update(RC_PARAMS)
     fig, ax = plt.subplots(figsize=(5.6, 4.6))
-    ood_mean, ood_median, id_mean, id_median = _load_ood_summary()
-    _draw_ood_panel(ax, ood_mean, ood_median, id_mean, id_median)
+    ood_mean, ood_median, id_mean, id_median = _load_ood_summary(metric)
+    _draw_ood_panel(ax, ood_mean, ood_median, id_mean, id_median,
+                    title=title, ylabel=ylabel)
     fig.tight_layout()
     return fig
+
+
+def _load_rule_counts(games: list[str]) -> dict[str, int]:
+    """Look up per-game n_rules from games_metadata.json (best-effort)."""
+    if not GAMES_META.exists():
+        return {}
+    meta = json.loads(GAMES_META.read_text())
+    rules = {}
+    for g in games:
+        for cand in (g + ".txt", g.replace(" ", "_") + ".txt",
+                     g.lower() + ".txt"):
+            if cand in meta:
+                rules[g] = int(meta[cand].get("n_rules", -1))
+                break
+    return rules
 
 
 def _figure_heatmap(per_game: dict[tuple[str, str], dict[str, float]],
                     games: list[str]) -> plt.Figure:
-    """Standalone per-game heatmap on the 14-game intersection."""
+    """Per-game heatmap on the 14-game intersection.
+
+    Rows are ordered by rule count (ascending) so the reader can scan
+    top-to-bottom for any monotone relationship between rule count and
+    cell-error; cell values from per_game stay unchanged.
+    """
     plt.rcParams.update(RC_PARAMS)
 
+    rule_counts = _load_rule_counts(games)
     def _row_key(g):
-        cells = []
-        for scale in SCALES:
-            for model in ("cond", "uncond"):
-                v = per_game[(scale, model)].get(g)
-                if v is not None:
-                    cells.append(v)
-        return -max(cells) if cells else 0.0
+        rc = rule_counts.get(g, 99)
+        # secondary: alphabetical for stable order within a rule-count bucket
+        return (rc, g.lower())
     sorted_games = sorted(games, key=_row_key)
 
     col_labels = []
@@ -319,7 +354,12 @@ def _figure_heatmap(per_game: dict[tuple[str, str], dict[str, float]],
                    vmin=np.log10(floor), vmax=np.log10(30.0))
 
     ax.set_yticks(range(len(sorted_games)))
-    ax.set_yticklabels([g.replace("_", " ") for g in sorted_games])
+    ylabels = []
+    for g in sorted_games:
+        rc = rule_counts.get(g)
+        suffix = f" (n={rc})" if rc is not None else ""
+        ylabels.append(g.replace("_", " ") + suffix)
+    ax.set_yticklabels(ylabels)
     ax.set_xticks(range(len(col_labels)))
     ax.set_xticklabels(col_labels, fontsize=10)
 
@@ -352,33 +392,67 @@ def main() -> None:
     inter_summary = json.loads(INTER_SUMMARY.read_text())
     games_intersection = inter_summary["intersection_games"]
 
-    per_game = {
-        (scale, model): _load_eval_per_game(run_dir, games_intersection)
+    per_game_tf = {
+        (scale, model): _load_eval_per_game(run_dir, games_intersection, "random_tf")
+        for (scale, model), run_dir in RUN_BY.items()
+    }
+    per_game_ar = {
+        (scale, model): _load_eval_per_game(run_dir, games_intersection, "random")
         for (scale, model), run_dir in RUN_BY.items()
     }
 
-    fig_slope = _figure_slope(per_game, games_intersection)
+    fig_slope = _figure_slope(per_game_tf, games_intersection)
     slope_pdf = OUT_DIR / "intersection_slope.pdf"
     slope_png = OUT_DIR / "intersection_slope.png"
     fig_slope.savefig(slope_pdf, bbox_inches="tight")
     fig_slope.savefig(slope_png, bbox_inches="tight", dpi=160)
     plt.close(fig_slope)
 
-    fig_id = _figure_id(per_game, games_intersection)
+    fig_id = _figure_id(
+        per_game_tf, games_intersection,
+        title="In-distribution (14-game intersection)",
+        ylabel="1-step (TF) cell-error (%)",
+    )
     id_pdf = OUT_DIR / "intersection_slope_id.pdf"
     id_png = OUT_DIR / "intersection_slope_id.png"
     fig_id.savefig(id_pdf, bbox_inches="tight")
     fig_id.savefig(id_png, bbox_inches="tight", dpi=160)
     plt.close(fig_id)
 
-    fig_ood = _figure_ood()
+    fig_ood = _figure_ood(
+        metric="tf",
+        title="Out-of-distribution (Heldout-26)",
+        ylabel="1-step (TF) cell-error (%)",
+    )
     ood_pdf = OUT_DIR / "intersection_slope_ood.pdf"
     ood_png = OUT_DIR / "intersection_slope_ood.png"
     fig_ood.savefig(ood_pdf, bbox_inches="tight")
     fig_ood.savefig(ood_png, bbox_inches="tight", dpi=160)
     plt.close(fig_ood)
 
-    fig_heat = _figure_heatmap(per_game, games_intersection)
+    fig_id_ar = _figure_id(
+        per_game_ar, games_intersection,
+        title="In-distribution AR (14-game intersection)",
+        ylabel="random-action AR cell-error (%)",
+    )
+    id_ar_pdf = OUT_DIR / "intersection_slope_id_ar.pdf"
+    id_ar_png = OUT_DIR / "intersection_slope_id_ar.png"
+    fig_id_ar.savefig(id_ar_pdf, bbox_inches="tight")
+    fig_id_ar.savefig(id_ar_png, bbox_inches="tight", dpi=160)
+    plt.close(fig_id_ar)
+
+    fig_ood_ar = _figure_ood(
+        metric="ar30",
+        title="Out-of-distribution AR (Heldout-26)",
+        ylabel="random-action AR cell-error (%)",
+    )
+    ood_ar_pdf = OUT_DIR / "intersection_slope_ood_ar.pdf"
+    ood_ar_png = OUT_DIR / "intersection_slope_ood_ar.png"
+    fig_ood_ar.savefig(ood_ar_pdf, bbox_inches="tight")
+    fig_ood_ar.savefig(ood_ar_png, bbox_inches="tight", dpi=160)
+    plt.close(fig_ood_ar)
+
+    fig_heat = _figure_heatmap(per_game_tf, games_intersection)
     heat_pdf = OUT_DIR / "intersection_heatmap.pdf"
     heat_png = OUT_DIR / "intersection_heatmap.png"
     fig_heat.savefig(heat_pdf, bbox_inches="tight")
@@ -386,7 +460,8 @@ def main() -> None:
     plt.close(fig_heat)
 
     for p in (slope_pdf, slope_png, id_pdf, id_png,
-              ood_pdf, ood_png, heat_pdf, heat_png):
+              ood_pdf, ood_png, id_ar_pdf, id_ar_png,
+              ood_ar_pdf, ood_ar_png, heat_pdf, heat_png):
         print(f"Wrote: {p}")
 
 

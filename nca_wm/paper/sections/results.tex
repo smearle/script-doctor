@@ -79,8 +79,25 @@ unconditional baseline is $1.88\% / 0.46\%$, still $\approx 5\times$
 the conditional mean and $\approx 3\times$ the median; per-game swings
 can be dramatic (\textit{neko puzzle} goes from $0.000\%$ to $24.4\%$
 when the encoder is removed; per-game cells in
-Figure~\ref{fig:intersection-heatmap}, Appendix~\ref{app:dilution}).
-The encoder amortises shared dynamics across games at fixed capacity.
+Figure~\ref{fig:intersection-heatmap}). The encoder amortises shared
+dynamics across games at fixed capacity.
+
+\begin{figure}[t]
+  \centering
+  \includegraphics[width=0.78\linewidth]{figures/indist_intersection/intersection_heatmap.pdf}
+  \caption{\textbf{Per-game 1-step (TF) cell-error (\%) on the 14
+    intersection games}, log-color scale; rows ordered by rule
+    count $n$, columns grouped by preset with cond / uncond paired.
+    Rule count is a weak predictor of difficulty: the catastrophic
+    unconditional cells (\textit{neko puzzle}@\textsc{Train-59},
+    $24.4\%$; \textit{Notsnake}@\textsc{Train-199}, $13.1\%$) sit at
+    $n{=}2$, while \textit{kettle} at $n{=}14$ stays $<1\%$. The hard
+    cells correlate with rule \emph{patterns} (e.g.\ \textit{neko
+    puzzle}'s row-spanning \texttt{[> Player | ... | Fruit]} needs
+    long-range axis context); cond columns stay an order of
+    magnitude lower throughout.}
+  \label{fig:intersection-heatmap}
+\end{figure}
 
 Out-of-distribution (Figure~\ref{fig:intersection-slope-ood};
 Appendix~\ref{app:cond-vs-uncond}, Table~\ref{tab:cond-vs-uncond-match}),
@@ -97,30 +114,14 @@ closer to identity on $20/26$ games); and at \textsc{Train-199}
 unconditional has both the lower median and more wins vs.\ identity
 ($14$ vs.\ $11$). At broader corpora unconditional and conditional are
 roughly tied on the held-out set; we return to what the unconditional
-model is exploiting in \S\ref{sec:discussion}. The per-game scatter
-in Figure~\ref{fig:ood-per-game-scatter} shows where each model wins
-at \textsc{Train-199}: nine games where both beat identity, four
-where only conditional does, eight where only unconditional does,
-and five where neither does---roughly disjoint coverage rather than
-one model dominating. On random-action AR rollout
-(Appendix~\ref{app:rollout-ar}), where errors compound over 30 steps,
-identity ($\approx 2\%$ mean) is a much stronger baseline: every
-model drifts to $7$--$27\%$ and no current checkpoint beats identity
-over the full rollout on more than a single game.
-
-\begin{figure}[t]
-  \centering
-  \includegraphics[width=0.6\linewidth]{figures/cond_vs_uncond_match/ood_per_game_scatter.pdf}
-  \caption{\textbf{Per-game OOD 1-step (TF) cell-error at
-    \textsc{Train-199}}, conditional (x) vs.\ unconditional (y), one
-    point per held-out game. Colours partition games by which model
-    beats the per-game identity baseline. Roughly disjoint coverage
-    (cond-only $4$, uncond-only $8$, both $9$, neither $5$) at the
-    broadest training scale rather than one model dominating; the
-    per-cell aggregate of these points is what
-    Figure~\ref{fig:intersection-slope-ood} reports.}
-  \label{fig:ood-per-game-scatter}
-\end{figure}
+model is exploiting in \S\ref{sec:discussion}. A per-game scatter
+showing that cond and uncond win on largely disjoint games at
+\textsc{Train-199} is in Appendix~\ref{app:ood-per-game-scatter}. On
+random-action AR rollout (Appendix~\ref{app:rollout-ar}), where
+errors compound over 30 steps, identity ($\approx 2\%$ mean) is a
+much stronger baseline: every model drifts to $7$--$27\%$ and no
+current checkpoint beats identity over the full rollout on more than
+a single game.
 
 % Generalization-to-unseen-games results (held-out latent geometry,
 % symbolic decoder reconstruction + sampling, frozen-NCA inverse fit

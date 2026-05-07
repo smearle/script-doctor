@@ -741,21 +741,9 @@ the same architecture, hidden width $n_h{=}256$, training budget
 (150k updates), batch size, balanced sampling, and recipe; only
 the training corpus differs.
 
-\begin{figure}[t]
-  \centering
-  \includegraphics[width=0.85\linewidth]{figures/indist_intersection/intersection_heatmap.pdf}
-  \caption{\textbf{Per-game 1-step (TF) cell-error (\%) on the 14
-    intersection games}, log-color scale. Rows sorted by maximum
-    cell value, descending; columns grouped by preset (ascending
-    corpus size) with conditional / unconditional paired at each
-    scale. The catastrophic unconditional failures
-    (\textit{neko puzzle}@\textsc{Train-59}, $24.4\%$;
-    \textit{Notsnake}@\textsc{Train-199}, $13.1\%$) drive the
-    aggregate mean in Figure~\ref{fig:intersection-slope-id}; the
-    conditional columns at every scale stay an order of magnitude
-    lower across the board.}
-  \label{fig:intersection-heatmap}
-\end{figure}
+The per-game heatmap of these intersection cells is
+Figure~\ref{fig:intersection-heatmap} in the main body; the
+underlying numerical table follows.
 
 \begin{table}[t]
   \centering
@@ -840,6 +828,34 @@ a single game.
     layout under autoregressive rollout (the model's prediction is
     fed back as the next input under random actions, 30 steps).}
   \label{fig:intersection-slope-ar}
+\end{figure}
+
+\subsection{Per-game OOD scatter at \textsc{Train-199}}
+\label{app:ood-per-game-scatter}
+
+Figure~\ref{fig:ood-per-game-scatter} unpacks the
+\textsc{Train-199} aggregate (Figure~\ref{fig:intersection-slope-ood})
+into one point per held-out game on the cond-vs-uncond plane, with
+points coloured by which model beats the per-game identity baseline.
+The cond-only and uncond-only winners are separately ${\sim}$as
+large as each other ($4$ and $8$ games respectively), with $9$ games
+where both models beat identity and $5$ where neither does---i.e.\
+the encoder is not a strict superset of the unconditional baseline
+on this set, which is consistent with the discussion paragraph in
+\S\ref{sec:discussion} on the unconditional model picking up
+layout-derived signal that the encoder is not exploiting.
+
+\begin{figure}[t]
+  \centering
+  \includegraphics[width=0.6\linewidth]{figures/cond_vs_uncond_match/ood_per_game_scatter.pdf}
+  \caption{\textbf{Per-game OOD 1-step (TF) cell-error at
+    \textsc{Train-199}}, conditional (x) vs.\ unconditional (y), one
+    point per held-out game on log-log axes. Colours partition games
+    by which model beats the per-game identity baseline (cond-only
+    $4$, uncond-only $8$, both $9$, neither $5$). The aggregate of
+    these points is what Figure~\ref{fig:intersection-slope-ood}
+    reports at \textsc{Train-199}.}
+  \label{fig:ood-per-game-scatter}
 \end{figure}
 
 \subsection{Per-cell rollout error breakdown on \textsc{Heldout-26}}
