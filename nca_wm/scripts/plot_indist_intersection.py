@@ -78,25 +78,26 @@ def main() -> None:
         "legend.fontsize":  11,
     })
 
-    fig, axes = plt.subplots(1, 2, figsize=(11, 4.6), sharey=True)
+    fig, ax = plt.subplots(1, 1, figsize=(7.2, 4.6))
     x = np.arange(len(SCALES))
 
-    panels = [("cond", "Rule-conditioned", axes[0]),
-              ("uncond", "Unconditional",   axes[1])]
+    series = [
+        ("cond",   "Rule-conditioned", "#d62728"),
+        ("uncond", "Unconditional",    "#1f77b4"),
+    ]
     fig_data = {}
-    for model, panel_title, ax in panels:
-        # Per-game thin gray lines.
+    for model, label, color in series:
+        # Thin per-game lines, color-coded by model.
         for g in games:
-            ys = []
-            for scale in SCALES:
-                ys.append(per_game[(scale, model)].get(g))
-            xs = [xi for xi, yi in zip(x, ys) if yi is not None and yi > 0]
+            ys = [per_game[(scale, model)].get(g) for scale in SCALES]
+            xs_p = [xi for xi, yi in zip(x, ys) if yi is not None and yi > 0]
             ys_p = [100*yi for yi in ys if yi is not None and yi > 0]
-            if len(xs) >= 2:
-                ax.plot(xs, ys_p, color="#999999", linewidth=0.8, alpha=0.55,
-                        marker="o", markersize=3, zorder=1)
+            if len(xs_p) >= 2:
+                ax.plot(xs_p, ys_p, color=color, linewidth=0.7, alpha=0.25,
+                        marker="o", markersize=2.5, zorder=1)
 
-        # Aggregate mean / median across the 14 games at each scale.
+        # Aggregate mean / median across all 14 games at scales where every
+        # game has data (skip otherwise so partial points don't pull the line).
         means, medians, xs_present = [], [], []
         for xi, scale in enumerate(SCALES):
             vals = [per_game[(scale, model)].get(g) for g in games]
@@ -105,45 +106,46 @@ def main() -> None:
                 means.append(100*float(np.mean(vals)))
                 medians.append(100*float(np.median(vals)))
                 xs_present.append(xi)
-        if len(xs_present) >= 2:
-            ax.plot(xs_present, means, color="#d62728", linewidth=2.4,
-                    marker="o", markersize=7, zorder=3, label="mean")
-            ax.plot(xs_present, medians, color="#1f77b4", linewidth=2.4,
+        if len(xs_present) >= 1:
+            ax.plot(xs_present, means, color=color, linewidth=2.6,
+                    marker="o", markersize=8, zorder=3,
+                    label=f"{label} (mean)")
+            ax.plot(xs_present, medians, color=color, linewidth=2.0,
                     marker="s", markersize=7, zorder=3, linestyle="--",
-                    label="median")
+                    label=f"{label} (median)")
             fig_data[model] = {"means": means, "medians": medians, "xs": xs_present}
 
-        ax.set_yscale("log")
-        ax.set_xticks(x)
-        ax.set_xticklabels(SCALES)
-        ax.set_xlabel("Training corpus")
-        ax.set_title(panel_title)
-        ax.grid(True, which="both", alpha=0.25)
-        ax.set_xlim(-0.25, len(SCALES) - 0.75)
+    ax.set_yscale("log")
+    ax.set_xticks(x)
+    ax.set_xticklabels(SCALES)
+    ax.set_xlabel("Training corpus")
+    ax.set_ylabel("1-step (TF) cell-error (%)")
+    ax.grid(True, which="both", alpha=0.25)
+    ax.set_xlim(-0.25, len(SCALES) - 0.75)
 
-    axes[0].set_ylabel(r"1-step (TF) cell-error (\%)" if False else
-                       "1-step (TF) cell-error (%)")
-    axes[1].legend(loc="lower right", framealpha=0.95)
-
-    # Annotate the cond / uncond Train-14 -> Train-59 multiplicative slope
-    # in each panel (since Train-199 uncond is in flight, only the
-    # T14->T59 segment is currently complete on both panels).
-    for model, _title, ax in panels:
+    # Annotate T14 -> T59 multiplicative growth for each condition; this
+    # segment is currently the one where both cond and uncond have data.
+    annotations = []
+    for model, label, color in series:
         d = fig_data.get(model)
         if d is None or len(d["means"]) < 2:
             continue
         m0, m1 = d["means"][0], d["means"][1]
         if m0 > 0 and m1 > 0:
-            factor = m1 / m0
-            ax.annotate(rf"$\approx{factor:.0f}\times$ T14$\to$T59",
-                        xy=(0.02, 0.97), xycoords="axes fraction",
-                        ha="left", va="top",
-                        fontsize=12, color="#d62728",
-                        bbox=dict(boxstyle="round,pad=0.25",
-                                  fc="white", ec="#d62728", alpha=0.9))
+            annotations.append((label, m1 / m0, color))
+    if annotations:
+        text_lines = [
+            rf"{lab}: $\approx{f:.0f}\times$ T14$\to$T59"
+            for (lab, f, _c) in annotations
+        ]
+        ax.text(0.02, 0.97, "\n".join(text_lines),
+                transform=ax.transAxes, ha="left", va="top",
+                fontsize=11,
+                bbox=dict(boxstyle="round,pad=0.3", fc="white",
+                          ec="#666666", alpha=0.95))
 
-    fig.suptitle("In-distribution dilution: per-game 1-step (TF) cell-error "
-                 "on 14 shared games", fontsize=14)
+    ax.legend(loc="lower right", framealpha=0.95)
+
     fig.tight_layout()
 
     out_pdf = OUT_DIR / "intersection_slope.pdf"

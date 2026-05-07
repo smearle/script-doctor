@@ -666,32 +666,46 @@ identical across all configurations. We discuss candidate fixes in
 \section{In-distribution dilution as the training corpus grows}
 \label{app:dilution}
 
-The aggregate cells in Table~\ref{tab:indist-scaling} pool training
-games that change between presets, so per-cell errors at \textsc{Train-14},
-\textsc{Train-59}, and \textsc{Train-199} are not directly comparable.
-Holding the games fixed reveals what scaling the corpus does to the
-fidelity on a per-game basis. Since the \textsc{Train-14} game set is
-a strict subset of \textsc{Train-59}, which in turn is a strict subset
-of \textsc{Train-199}, we can restrict every preset's evaluation to
-the 14 games shared across all three runs and compare apples to apples.
-All six runs share the same architecture, hidden width
-$n_h{=}256$, training budget (150k updates), batch size, balanced
-sampling, and recipe; only the training corpus differs.
+This appendix accompanies Figure~\ref{fig:intersection-slope} in the
+main body, which plots the headline 1-step (TF) trajectory of the
+14 games shared by every training preset. We report the per-game
+table here, plus the per-preset aggregate over the (changing) full
+training set for completeness.
 
-\begin{figure}[t]
+\subsection{Per-preset aggregate over the full training set}
+\label{app:indist-scaling-aggregate}
+
+For reference,
+Table~\ref{tab:indist-scaling} pairs each rule-conditional checkpoint
+(\textsc{Train-14}, \textsc{Train-59}, \textsc{Train-199}) with the
+unconditional baseline at the same preset, averaging across all
+training games at that scale. Because each preset trains on a
+different game set, the per-preset numbers are not directly
+comparable across rows---harder games entering at \textsc{Train-59}
+and \textsc{Train-199} drive part of the climb, the per-game
+dilution captured by Figure~\ref{fig:intersection-slope} drives the
+rest.
+
+\begin{table}[t]
   \centering
-  \includegraphics[width=0.95\linewidth]{figures/indist_intersection/intersection_slope.pdf}
-  \caption{\textbf{In-distribution 1-step (TF) cell-error on the 14
-    games shared by every training preset, as the corpus grows from
-    14 to 199 games.} Thin gray lines: per-game trajectories
-    (single seed). Bold red / dashed blue: aggregate mean / median
-    across the 14 games. Both panels share architecture, hidden
-    width $n_h{=}256$, and 150k training updates. Conditional 1-step
-    (TF) mean grows $\approx 5\times$ from \textsc{Train-14} to
-    \textsc{Train-59}; unconditional grows $\approx 25\times$.
-    \textsc{Train-199} unconditional is pending.}
-  \label{fig:intersection-slope}
-\end{figure}
+  \caption{\textbf{In-distribution per-cell rollout error as the
+    training corpus scales, with the unconditional baseline at each
+    scale.} Mean / median across all training games at the given
+    preset (each game's number is the per-rollout-step mean across
+    all authored levels). Cells marked ``--'' are pending evaluation.}
+  \label{tab:indist-scaling}
+  \small
+  \input{figures/indist_scaling/table}
+\end{table}
+
+\subsection{Per-game intersection over 14 shared games}
+
+Restricting evaluation to the 14 games shared by every preset
+(Table~\ref{tab:indist-dilution}) holds the games fixed and reads
+the per-game effect of corpus size directly. All six runs share
+the same architecture, hidden width $n_h{=}256$, training budget
+(150k updates), batch size, balanced sampling, and recipe; only
+the training corpus differs.
 
 \begin{table}[t]
   \centering
@@ -707,7 +721,8 @@ sampling, and recipe; only the training corpus differs.
   \input{figures/indist_intersection/table}
 \end{table}
 
-Two effects coexist (Table~\ref{tab:indist-dilution}). First, both
+Two effects coexist (Table~\ref{tab:indist-dilution},
+Figure~\ref{fig:intersection-slope}). First, both
 conditional and unconditional models degrade on the shared 14 games as
 the corpus widens; conditional 1-step (TF) mean grows
 $0.06\% \to 0.27\% \to 0.37\%$ across \textsc{Train-14},

@@ -27,13 +27,12 @@ and across many jointly trained games
 (\S\ref{sec:results-baselines}, \S\ref{sec:results-scaling}).
 \textbf{(ii) Rule conditioning.} Cross-attention to slot embeddings
 of each game's tokenized rule text lets a single set of weights
-jointly model many games at once. At fixed capacity, per-game
-in-distribution fidelity on shared games degrades as the corpus
-widens (Appendix~\ref{app:dilution}), but rule-conditioning slows
-that dilution by roughly an order of magnitude relative to an
-unconditional model
-(Table~\ref{tab:indist-dilution},
-Table~\ref{tab:indist-scaling}).
+jointly model many games at once. On the 14 games shared by every
+training preset (Figure~\ref{fig:intersection-slope}), per-game
+in-distribution accuracy degrades as the corpus widens---data
+dilution at fixed capacity---but rule-conditioning slows that
+dilution by roughly an order of magnitude relative to an
+unconditional model.
 \textbf{(iii) Training-data scaling.} Broadening the training
 corpus markedly improves out-of-distribution performance on an
 unseen-game held-out set, closing most of the gap to the identity

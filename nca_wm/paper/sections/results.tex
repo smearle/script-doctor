@@ -201,64 +201,49 @@ CNN family), confirming the structural mismatch from the single-game
 setting. Per-game breakdowns are in Appendix~\ref{app:per-game}.
 
 \paragraph{In-distribution mastery as the corpus scales.}
-Rule-conditioning lets a single set of weights master many games at
-once. Table~\ref{tab:indist-scaling} pairs each rule-conditional
-checkpoint (\textsc{Train-14}, \textsc{Train-59}, \textsc{Train-199};
-the same checkpoints whose held-out numbers anchor
-Table~\ref{tab:cond-vs-uncond-match}) with the unconditional baseline
-at the same preset. Each cell is averaged across games, levels, and
-rollout steps under one of four regimes: \emph{random (AR)},
-autoregressive over 50 steps with random actions; \emph{1-step (TF)},
-teacher-forced one-step prediction with random actions
-(\S\ref{sec:experiments}); and \emph{BFS} / \emph{A*} oracle-action
-autoregressive rollouts.
+Because each training preset trains on a different game set, the
+aggregate per-preset cells (Appendix~\ref{app:indist-scaling-aggregate})
+mix two effects: harder games entering the corpus, and per-game dilution
+at fixed model capacity. Holding the games fixed disentangles them.
+The \textsc{Train-14} game set is a strict subset of \textsc{Train-59}
+and \textsc{Train-199}, so we can restrict every preset's evaluation
+to the 14 shared games and read the per-game effect of corpus size
+directly. All six runs in
+Figure~\ref{fig:intersection-slope} share architecture, hidden
+width $n_h{=}256$, and 150k training updates; only the training
+corpus and the rule-conditioning flag differ.
 
-\begin{table}[t]
+\begin{figure}[t]
   \centering
-  \caption{\textbf{In-distribution per-cell rollout error as the
-    training corpus scales, with the unconditional baseline at each
-    scale.} Mean / median across all training games (each game's
-    number is the per-rollout-step mean across all authored levels).
-    Cells marked ``--'' are pending evaluation; the Train-14 and
-    Train-199 unconditional runs are still in flight.}
-  \label{tab:indist-scaling}
-  \small
-  \input{figures/indist_scaling/table}
-\end{table}
+  \includegraphics[width=0.78\linewidth]{figures/indist_intersection/intersection_slope.pdf}
+  \caption{\textbf{In-distribution 1-step (TF) cell-error on the 14
+    games shared by every training preset, as the corpus grows from
+    14 to 199 games.} Thin lines: per-game trajectories (single
+    seed). Bold solid / dashed: aggregate mean / median across the
+    14 games. The unconditional model degrades $\approx 25\times$
+    from \textsc{Train-14} to \textsc{Train-59}; the rule-conditional
+    model degrades $\approx 5\times$ over the same range and barely
+    moves to \textsc{Train-199}. \textsc{Train-199} unconditional is
+    pending. The full per-game table is in
+    Appendix~\ref{app:dilution}.}
+  \label{fig:intersection-slope}
+\end{figure}
 
-The conditional model's median 1-step (TF) cell-error grows from
-$0.01\%$ at \textsc{Train-14} to $0.10\%$ at \textsc{Train-59} and
-$0.45\%$ at \textsc{Train-199}, and the mean grows from $0.06\%$ to
-$1.62\%$ to $2.72\%$. Each scale jump is roughly an order of
-magnitude on the median; the absolute numbers are still small but
-the trend is clear. The aggregate cells pool different games at
-each scale, so part of the climb is the corpus picking up harder
-games (cascading \texttt{again} loops, large state spaces) and part
-is per-game dilution at fixed model width. We disentangle the two
-in Appendix~\ref{app:dilution} by holding the games fixed: on the
-14 games shared by every preset, the conditional 1-step (TF) mean
-grows $0.06\% \to 0.27\% \to 0.37\%$ across the three presets. Each
-game gets a smaller share of fixed model capacity / effective
-updates as the corpus widens, so per-game fidelity degrades. The
-dilution effect persists in autoregressive rollout: multi-step
-error climbs to $\approx 10\%$ mean / $\approx 4.5\%$ median on
-\textsc{Train-199}.
-
-% TODO: refresh the cond-vs-uncond intersection comparison once the
-% in-flight Train-199 uncond run finishes; the headline numbers below
-% already include the available uncond data.
-Because the aggregate Table~\ref{tab:indist-scaling} averages over
-different games at each scale, it understates the encoder's
-in-distribution benefit. Restricting to the 14 games shared by every
-preset (Appendix~\ref{app:dilution}), the gap to the unconditional
-baseline widens with corpus size: at \textsc{Train-14} the
-conditional and unconditional models tie ($0.057\%$ vs.\ $0.087\%$
-mean 1-step (TF)); at \textsc{Train-59} the conditional model holds
-at $0.27\%$ while the unconditional model degrades to $2.20\%$, an
-$\approx 8\times$ gap, with single games such as \textsc{nekopuzzle}
-going from $0.000\%$ to $24.4\%$ when the encoder is removed. The
-encoder amortizes shared dynamics across games at fixed capacity, an
-in-distribution benefit on top of its OOD effect, which we examine
+Two findings (Figure~\ref{fig:intersection-slope}). First, both
+conditional and unconditional models degrade on the shared 14 games
+as the corpus widens---data dilution at fixed capacity, since each
+game gets a smaller share of model parameters and effective updates.
+Second, rule-conditioning slows that dilution by roughly an order of
+magnitude. The unconditional model's mean 1-step (TF) cell-error
+jumps from $0.087\%$ at \textsc{Train-14} to $2.20\%$ at
+\textsc{Train-59} (an $\approx 25\times$ growth, an $8\times$ gap to
+the conditional model at the same scale), with single games like
+\textsc{nekopuzzle} going from $0.000\%$ to $24.4\%$ when the
+encoder is removed. The conditional model grows $\approx 5\times$
+over the same range and is roughly flat from \textsc{Train-59} to
+\textsc{Train-199} ($0.27\% \to 0.37\%$). The encoder amortizes
+shared dynamics across games at fixed capacity, an in-distribution
+benefit on top of its out-of-distribution effect, which we examine
 next in \S\ref{sec:results-encoder-ablation}.
 
 \subsection{Effect of scaling on out-of-distribution performance}
@@ -299,17 +284,19 @@ $\hat{s}_{t+1}{=}s_t$.
   \input{figures/cond_vs_uncond_match/match_table}
 \end{table}
 
-\textbf{Encoder helps OOD; in-distribution it is essentially free.}
-At \textsc{Train-14} scale the rule-conditional and unconditional
-models are tied in-distribution
+\textbf{Encoder helps OOD too, with a gap that widens with corpus
+size.} At \textsc{Train-14} scale the rule-conditional and
+unconditional models tie in-distribution
 (Table~\ref{tab:indist-scaling}: $1.63 / 0.11$ vs.\ $1.98 / 0.08$
 random-AR mean / median; differences within $0.4$pp on every
-regime). On \textsc{Heldout-30}, however, the encoder helps
-meaningfully: the conditional model's 1-step (TF) cell-error is
-$16.2\% / 3.7\%$ mean / median against the unconditional model's
-$22.3\% / 5.2\%$, a $\approx 6$pp mean and $\approx 1.5$pp median
-gap. The unconditional model has nothing to disambiguate which
-rule set is in play and pays for it on unseen rule systems even
+regime); the encoder's in-distribution benefit emerges only at
+larger corpora (Figure~\ref{fig:intersection-slope}). On
+\textsc{Heldout-30} the encoder helps already at \textsc{Train-14}:
+the conditional model's 1-step (TF) cell-error is $16.2\% / 3.7\%$
+mean / median against the unconditional model's $22.3\% / 5.2\%$, a
+$\approx 6$pp mean and $\approx 1.5$pp median gap. The
+unconditional model has nothing to disambiguate which rule set is
+in play and pays for it on unseen rule systems even
 though it fits the training set fine.
 
 \textbf{Out-of-distribution generalization improves with rule
