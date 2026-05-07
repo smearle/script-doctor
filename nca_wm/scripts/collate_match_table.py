@@ -56,13 +56,10 @@ RUNS = [
         "label": "Rule-conditional, Train-199 (matched recipe)",
         "kind": "cond",
     },
-    # Original v4 = scaling_gallery_v4 (199 games), older recipe (no
-    # input_skip) and predates the matched-recipe runs above. Reported
-    # as a recipe-ablation reference at the same scale.
     {
-        "run_dir": "multi_scaling_gallery_v4_decoder_sprites_eos",
-        "label": "Rule-conditional, Train-199 (legacy recipe)",
-        "kind": "cond",
+        "run_dir": "multi_scaling_gallery_v4_uncond_match_s0",
+        "label": "Unconditional, Train-199",
+        "kind": "uncond",
     },
 ]
 
