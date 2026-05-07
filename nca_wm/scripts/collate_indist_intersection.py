@@ -98,9 +98,29 @@ def _fmt_pct(x: float | None) -> str:
     return f"{100*x:.3f}"
 
 
-def _per_run_mean_across_seeds(seed_dirs: list[str]) -> tuple[dict[str, dict[str, float]], list[str]]:
+def _fmt_pct_pm(mean: float | None, std: float | None) -> str:
+    """`mean` (no decoration) or `mean$\\pm$std` when std is known.
+    Both rendered in the same percent units used by `_fmt_pct`."""
+    if mean is None or not np.isfinite(mean):
+        return "--"
+    base = f"{100*mean:.3f}"
+    if std is None or not np.isfinite(std):
+        return base
+    return rf"{base}$\pm${100*std:.3f}"
+
+
+def _per_run_mean_across_seeds(
+    seed_dirs: list[str],
+) -> tuple[
+    dict[str, dict[str, float]],
+    list[str],
+    list[dict[str, dict[str, float]]],
+]:
     """Average per-game per-algo numbers across seeds whose
-    eval_multigame.npz is present. Returns (merged_per_game, used_seeds)."""
+    eval_multigame.npz is present. Returns (merged_per_game, used_seeds,
+    per_seed_per_game). The third return preserves each seed's per-game
+    table so the caller can compute std-across-seeds of any aggregate
+    they construct (mean over 14 games, median over 14 games, etc.)."""
     used: list[str] = []
     per_seed: list[dict[str, dict[str, float]]] = []
     for sd in seed_dirs:
@@ -109,7 +129,7 @@ def _per_run_mean_across_seeds(seed_dirs: list[str]) -> tuple[dict[str, dict[str
             per_seed.append(_per_game(eval_npz))
             used.append(sd)
     if not per_seed:
-        return {}, used
+        return {}, used, []
     games = sorted(set().union(*[set(d.keys()) for d in per_seed]))
     merged: dict[str, dict[str, float]] = {}
     for g in games:
@@ -119,7 +139,37 @@ def _per_run_mean_across_seeds(seed_dirs: list[str]) -> tuple[dict[str, dict[str
             vs = [d[g][a] for d in per_seed if a in d.get(g, {})]
             if vs:
                 merged[g][a] = float(np.mean(vs))
-    return merged, used
+    return merged, used, per_seed
+
+
+def _per_seed_aggregate(
+    per_seed: list[dict[str, dict[str, float]]],
+    games: list[str],
+    algo: str,
+    stat: str,
+) -> list[float]:
+    """For each seed compute `stat` (mean / median) over `games` of `algo`.
+    Drops seeds that don't cover every requested game (so std is computed
+    only on a like-for-like basis)."""
+    out: list[float] = []
+    for d in per_seed:
+        vals = [d.get(g, {}).get(algo) for g in games]
+        if any(v is None for v in vals):
+            continue
+        if stat == "mean":
+            out.append(float(np.mean(vals)))
+        elif stat == "median":
+            out.append(float(np.median(vals)))
+        else:
+            raise ValueError(f"unknown stat {stat}")
+    return out
+
+
+def _std_or_none(vals: list[float]) -> float | None:
+    """Sample std (ddof=1); returns None when fewer than two seeds."""
+    if len(vals) < 2:
+        return None
+    return float(np.std(vals, ddof=1))
 
 
 def write_table(rows_by_game: list[tuple[str, dict]], aggregates: dict, out_path: Path) -> None:
@@ -135,6 +185,9 @@ def write_table(rows_by_game: list[tuple[str, dict]], aggregates: dict, out_path
     def cell(d: dict, run_dir: str) -> str:
         return _fmt_pct(d.get(run_dir))
 
+    # The std `±` decorations on the mean / median rows already signal
+    # which cells aggregated across multiple seeds; we keep the column
+    # headers compact and let the figure caption mention seed counts.
     headers = ["Game"] + [f"{p} {m}" for p, m, _seeds in RUNS]
 
     lines = [
@@ -152,7 +205,14 @@ def write_table(rows_by_game: list[tuple[str, dict]], aggregates: dict, out_path
         lines.append("  " + " & ".join([safe_game] + cells) + r" \\")
     lines.append("  \\midrule")
     for stat in ("mean", "median"):
-        cells = [_fmt_pct(aggregates[stat][m].get(seeds[0])) for _, m, seeds in RUNS]
+        std_key = f"{stat}_std"
+        cells = [
+            _fmt_pct_pm(
+                aggregates[stat][m].get(seeds[0]),
+                aggregates[std_key][m].get(seeds[0]),
+            )
+            for _, m, seeds in RUNS
+        ]
         lines.append("  " + " & ".join([f"\\textbf{{{stat}}}"] + cells) + r" \\")
     lines += ["  \\bottomrule", "\\end{tabular}", "\\end{adjustbox}", ""]
     out_path.write_text("\n".join(lines))
@@ -165,13 +225,15 @@ def main() -> None:
 
     # Load all runs (averaged across seeds where multiple are present).
     per_run: dict[str, dict[str, dict[str, float]]] = {}
+    per_run_per_seed: dict[str, list[dict[str, dict[str, float]]]] = {}
     used_seeds: dict[str, list[str]] = {}
     available_cells: list[str] = []
     missing_cells: list[str] = []
     for _, _, seed_dirs in RUNS:
         canonical = seed_dirs[0]
-        merged, used = _per_run_mean_across_seeds(seed_dirs)
+        merged, used, per_seed = _per_run_mean_across_seeds(seed_dirs)
         per_run[canonical] = merged
+        per_run_per_seed[canonical] = per_seed
         used_seeds[canonical] = used
         if merged:
             available_cells.append(canonical)
@@ -205,10 +267,12 @@ def main() -> None:
         rows_by_game.append((game, row))
 
     # Per-run aggregates (mean / median across the 14 intersection games)
-    # for every regime.
+    # for every regime, plus std-across-seeds of those same aggregates.
     aggregates: dict[str, dict[str, dict[str, float]]] = {
-        "mean":   {"cond": {}, "uncond": {}},
-        "median": {"cond": {}, "uncond": {}},
+        "mean":     {"cond": {}, "uncond": {}},
+        "median":   {"cond": {}, "uncond": {}},
+        "mean_std":   {"cond": {}, "uncond": {}},
+        "median_std": {"cond": {}, "uncond": {}},
     }
     summary: dict[str, dict] = {}
     for preset, model, seeds in RUNS:
@@ -228,18 +292,31 @@ def main() -> None:
                 if v is not None:
                     vals.append(v)
             if vals and len(vals) == len(intersection):
+                # Cross-seed stds: for each seed compute the same aggregate
+                # over the 14 intersection games, then take ddof=1 std.
+                seed_means = _per_seed_aggregate(
+                    per_run_per_seed[canonical], intersection, algo, "mean")
+                seed_medians = _per_seed_aggregate(
+                    per_run_per_seed[canonical], intersection, algo, "median")
                 run_summary["regimes"][algo] = {
-                    "n_games": len(vals),
-                    "mean":    float(np.mean(vals)),
-                    "median":  float(np.median(vals)),
+                    "n_games":    len(vals),
+                    "n_seeds":    len(seed_means),
+                    "mean":       float(np.mean(vals)),
+                    "median":     float(np.median(vals)),
+                    "mean_std":   _std_or_none(seed_means),
+                    "median_std": _std_or_none(seed_medians),
+                    "per_seed_mean":   seed_means,
+                    "per_seed_median": seed_medians,
                 }
             else:
                 run_summary["regimes"][algo] = None
         # Primary regime aggregates feed the table footer.
         head = run_summary["regimes"].get(PRIMARY_REGIME)
         if head is not None:
-            aggregates["mean"][model][canonical]   = head["mean"]
-            aggregates["median"][model][canonical] = head["median"]
+            aggregates["mean"][model][canonical]       = head["mean"]
+            aggregates["median"][model][canonical]     = head["median"]
+            aggregates["mean_std"][model][canonical]   = head["mean_std"]
+            aggregates["median_std"][model][canonical] = head["median_std"]
         summary[canonical] = run_summary
 
     write_table(rows_by_game, aggregates, OUT_DIR / "table.tex")

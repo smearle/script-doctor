@@ -324,6 +324,16 @@ def _seed_avg(seed_hos: list[dict], key: str) -> float | None:
     return float(np.mean(vals)) if vals else None
 
 
+def _seed_std(seed_hos: list[dict], key: str) -> float | None:
+    """Sample std across seeds (ddof=1) of a top-level scalar metric.
+    Returns None when fewer than two seeds have the metric (sample std
+    is undefined at N=1)."""
+    vals = [h.get(key) for h in seed_hos if h.get(key) is not None]
+    if len(vals) < 2:
+        return None
+    return float(np.std(vals, ddof=1))
+
+
 def _seed_avg_per_game(seed_hos: list[dict], inner_key: str) -> dict[str, float]:
     """Per-game seed-average for `per_game[g][inner_key]`."""
     bag: dict[str, list[float]] = {}
@@ -341,8 +351,12 @@ def collate(runs: list[dict]) -> tuple[list[dict], dict, dict]:
     Rows are emitted for every spec in `runs`, even if the run dir
     isn't present yet (so the table keeps placeholder '--' cells in
     the right slot order). Per-row metrics are averaged across whichever
-    of `spec["seed_dirs"]` evaluated successfully; stds are not reported
-    because seed counts are uneven across rows.
+    of `spec["seed_dirs"]` evaluated successfully. Sample stds (ddof=1)
+    are reported on every aggregated metric and exposed alongside the
+    means as `..._std`; cells with N<2 seeds set the std to None and
+    the LaTeX writer falls back to `mean / median` without a `±`. The
+    seed count for each row is exposed as `n_seeds` so consumers can
+    annotate the table or warn on N=1 rows.
     """
     rows: list[dict] = []
     per_game_step1: dict[str, dict[str, float]] = {}
@@ -379,6 +393,8 @@ def collate(runs: list[dict]) -> tuple[list[dict], dict, dict]:
             "astar_n_games", "n_games",
         ]
         ho = {k: _seed_avg(seed_hos, k) for k in ho_keys}
+        # Stds for the same set of keys (None when N<2).
+        ho_std = {k: _seed_std(seed_hos, k) for k in ho_keys}
         row = {
             "run_dir": ",".join(used_seeds) or seed_dirs[0],
             "n_seeds": n_seeds,
@@ -397,26 +413,38 @@ def collate(runs: list[dict]) -> tuple[list[dict], dict, dict]:
             "indist_random_median": indist.get("random", {}).get("median"),
             "indist_bfs_mean": indist.get("bfs", {}).get("mean"),
             "ood_tf_model_mean": ho.get("tf_model_mean"),
+            "ood_tf_model_mean_std": ho_std.get("tf_model_mean"),
             "ood_tf_model_median": ho.get("tf_model_median"),
+            "ood_tf_model_median_std": ho_std.get("tf_model_median"),
             "ood_tf_identity_mean": ho.get("tf_identity_mean"),
             "ood_tf_identity_median": ho.get("tf_identity_median"),
             "ood_tf_wins": ho.get("tf_wins"),
+            "ood_tf_wins_std": ho_std.get("tf_wins"),
             "ood_ar30_model_mean": ho.get("ar30_model_mean"),
+            "ood_ar30_model_mean_std": ho_std.get("ar30_model_mean"),
             "ood_ar30_model_median": ho.get("ar30_model_median"),
+            "ood_ar30_model_median_std": ho_std.get("ar30_model_median"),
             "ood_ar30_identity_mean": ho.get("ar30_identity_mean"),
             "ood_ar30_identity_median": ho.get("ar30_identity_median"),
             "ood_ar30_wins": ho.get("ar30_wins"),
+            "ood_ar30_wins_std": ho_std.get("ar30_wins"),
             "ood_bfs_model_mean": ho.get("bfs_model_mean"),
+            "ood_bfs_model_mean_std": ho_std.get("bfs_model_mean"),
             "ood_bfs_model_median": ho.get("bfs_model_median"),
+            "ood_bfs_model_median_std": ho_std.get("bfs_model_median"),
             "ood_bfs_identity_mean": ho.get("bfs_identity_mean"),
             "ood_bfs_identity_median": ho.get("bfs_identity_median"),
             "ood_bfs_wins": ho.get("bfs_wins"),
+            "ood_bfs_wins_std": ho_std.get("bfs_wins"),
             "ood_bfs_n_games": ho.get("bfs_n_games"),
             "ood_astar_model_mean": ho.get("astar_model_mean"),
+            "ood_astar_model_mean_std": ho_std.get("astar_model_mean"),
             "ood_astar_model_median": ho.get("astar_model_median"),
+            "ood_astar_model_median_std": ho_std.get("astar_model_median"),
             "ood_astar_identity_mean": ho.get("astar_identity_mean"),
             "ood_astar_identity_median": ho.get("astar_identity_median"),
             "ood_astar_wins": ho.get("astar_wins"),
+            "ood_astar_wins_std": ho_std.get("astar_wins"),
             "ood_astar_n_games": ho.get("astar_n_games"),
             "ood_n_games": ho.get("n_games"),
         }
@@ -480,12 +508,24 @@ def write_latex(rows: list[dict], out_path: Path) -> None:
     """
     out_path.parent.mkdir(parents=True, exist_ok=True)
 
-    def _cell(mean_v, median_v):
-        if mean_v is None or (isinstance(mean_v, float) and np.isnan(mean_v)):
+    def _is_nan(x):
+        return isinstance(x, float) and np.isnan(x)
+
+    def _cell(mean_v, median_v, mean_std=None, median_std=None):
+        """Render a `mean / median` cell, with `± std` decorations when
+        the corresponding std (across seeds) is known. Std is rendered in
+        the same percent units as the mean."""
+        if mean_v is None or _is_nan(mean_v):
             return "--"
-        if median_v is None or (isinstance(median_v, float) and np.isnan(median_v)):
-            return f"{100*mean_v:.2f}"
-        return f"{100*mean_v:.2f} / {100*median_v:.2f}"
+        m = f"{100*mean_v:.2f}"
+        if mean_std is not None and not _is_nan(mean_std):
+            m = m + rf"$\pm${100*mean_std:.2f}"
+        if median_v is None or _is_nan(median_v):
+            return m
+        med = f"{100*median_v:.2f}"
+        if median_std is not None and not _is_nan(median_std):
+            med = med + rf"$\pm${100*median_std:.2f}"
+        return f"{m} / {med}"
 
     def _wins(w, n):
         if w is None or n is None:
@@ -515,19 +555,34 @@ def write_latex(rows: list[dict], out_path: Path) -> None:
         )
         for ri, r in enumerate(group):
             first = preset_cell if ri == 0 else ""
+            # Annotate the kind cell with the seed count when N>=2 so
+            # readers can tell which means/medians carry a `±` from the
+            # ones that don't.
+            kind_cell = r["kind"]
+            n = r.get("n_seeds") or 0
+            if n >= 2:
+                kind_cell = rf"{kind_cell} ($N{{=}}{n}$)"
             body.append(
                 "  "
                 + " & ".join([
                     first,
-                    r["kind"],
+                    kind_cell,
                     _cell(r.get("ood_ar30_model_mean"),
-                          r.get("ood_ar30_model_median")),
+                          r.get("ood_ar30_model_median"),
+                          r.get("ood_ar30_model_mean_std"),
+                          r.get("ood_ar30_model_median_std")),
                     _cell(r.get("ood_tf_model_mean"),
-                          r.get("ood_tf_model_median")),
+                          r.get("ood_tf_model_median"),
+                          r.get("ood_tf_model_mean_std"),
+                          r.get("ood_tf_model_median_std")),
                     _cell(r.get("ood_bfs_model_mean"),
-                          r.get("ood_bfs_model_median")),
+                          r.get("ood_bfs_model_median"),
+                          r.get("ood_bfs_model_mean_std"),
+                          r.get("ood_bfs_model_median_std")),
                     _cell(r.get("ood_astar_model_mean"),
-                          r.get("ood_astar_model_median")),
+                          r.get("ood_astar_model_median"),
+                          r.get("ood_astar_model_mean_std"),
+                          r.get("ood_astar_model_median_std")),
                     _wins(r.get("ood_tf_wins"), r.get("ood_n_games")),
                 ])
                 + r" \\"

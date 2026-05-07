@@ -96,11 +96,11 @@ RC_PARAMS = {
 }
 
 
-def _load_eval_per_game(run_dirs: list[str] | str, games: list[str],
-                        regime: str = "random_tf") -> dict[str, float]:
-    """Per-game headline-regime mean (over levels) for the listed games,
-    averaged across seeds whose eval_multigame.npz exists. Accepts a
-    single run dir (legacy) or a list of seed dirs."""
+def _load_eval_per_seed(run_dirs: list[str] | str, games: list[str],
+                        regime: str = "random_tf") -> list[dict[str, float]]:
+    """Return one per-game-mean dict per seed whose eval_multigame.npz
+    exists (so callers can compute cross-seed stds). Caller-side seeds
+    that never wrote eval_multigame are silently dropped."""
     if isinstance(run_dirs, str):
         run_dirs = [run_dirs]
     pat = re.compile(rf"^(?P<game>.+?)_L\d+_{regime}_cell_error_rate$")
@@ -119,6 +119,15 @@ def _load_eval_per_game(run_dirs: list[str] | str, games: list[str],
             if arr.size == 0: continue
             accum.setdefault(m.group("game"), []).append(float(arr.mean()))
         per_seed.append({g: float(np.mean(v)) for g, v in accum.items()})
+    return per_seed
+
+
+def _load_eval_per_game(run_dirs: list[str] | str, games: list[str],
+                        regime: str = "random_tf") -> dict[str, float]:
+    """Per-game headline-regime mean (over levels) for the listed games,
+    averaged across seeds whose eval_multigame.npz exists. Accepts a
+    single run dir (legacy) or a list of seed dirs."""
+    per_seed = _load_eval_per_seed(run_dirs, games, regime)
     if not per_seed:
         return {}
     games_seen = sorted(set().union(*[set(d.keys()) for d in per_seed]))
@@ -132,11 +141,20 @@ def _load_eval_per_game(run_dirs: list[str] | str, games: list[str],
 
 def _slope_panel(ax, scale_to_mean: dict[tuple[str, str], float],
                  scale_to_median: dict[tuple[str, str], float],
-                 title: str) -> dict[str, dict]:
-    """Plot a cond/uncond mean+median slope on a numeric (log) x-axis."""
+                 title: str,
+                 scale_to_mean_std: dict[tuple[str, str], float] | None = None,
+                 scale_to_median_std: dict[tuple[str, str], float] | None = None,
+                 ) -> dict[str, dict]:
+    """Plot a cond/uncond mean+median slope on a numeric (log) x-axis.
+    Optional `scale_to_*_std` dicts (None on cells with N<2 seeds) trigger
+    error bars at those points; cells without stds get plain markers so
+    the visual is honest about which points carry variance and which
+    don't."""
     fig_data = {}
+    smean = scale_to_mean_std or {}
+    smed  = scale_to_median_std or {}
     for model, label, color in SERIES:
-        xs, means, medians = [], [], []
+        xs, means, medians, mean_errs, median_errs = [], [], [], [], []
         for scale in SCALES:
             mu = scale_to_mean.get((scale, model))
             md = scale_to_median.get((scale, model))
@@ -144,14 +162,34 @@ def _slope_panel(ax, scale_to_mean: dict[tuple[str, str], float],
                 xs.append(SCALE_N[scale])
                 means.append(100*mu)
                 medians.append(100*md)
+                mu_std = smean.get((scale, model))
+                md_std = smed.get((scale, model))
+                mean_errs.append(100*mu_std if mu_std is not None else 0.0)
+                median_errs.append(100*md_std if md_std is not None else 0.0)
         if xs:
-            ax.plot(xs, means, color=color, linewidth=2.6,
-                    marker="o", markersize=8, zorder=3,
+            # Mean line + error bars at points whose std is known (>0).
+            ax.plot(xs, means, color=color, linewidth=2.6, zorder=3,
                     label=f"{label} (mean)")
+            ax.errorbar(
+                xs, means, yerr=mean_errs,
+                color=color, linewidth=0, elinewidth=1.4,
+                capsize=4, capthick=1.4,
+                marker="o", markersize=8, zorder=4,
+            )
+            # Median line + error bars (dashed for distinction).
             ax.plot(xs, medians, color=color, linewidth=2.0,
-                    marker="s", markersize=7, zorder=3, linestyle="--",
+                    linestyle="--", zorder=3,
                     label=f"{label} (median)")
-            fig_data[model] = {"xs": xs, "means": means, "medians": medians}
+            ax.errorbar(
+                xs, medians, yerr=median_errs,
+                color=color, linewidth=0, elinewidth=1.0,
+                capsize=4, capthick=1.0,
+                marker="s", markersize=7, zorder=4,
+            )
+            fig_data[model] = {
+                "xs": xs, "means": means, "medians": medians,
+                "mean_errs": mean_errs, "median_errs": median_errs,
+            }
     ax.set_yscale("log")
     ax.set_xscale("log")
     ax.set_xticks([SCALE_N[s] for s in SCALES])
@@ -214,11 +252,14 @@ def _annotate_t14_to_t199(ax, fig_data: dict[str, dict]) -> None:
 
 def _load_ood_summary(metric: str = "tf") -> tuple[dict[tuple[str, str], float],
                                                    dict[tuple[str, str], float],
+                                                   dict[tuple[str, str], float | None],
+                                                   dict[tuple[str, str], float | None],
                                                    float, float]:
     """Read OOD aggregates from cond_vs_uncond_match/summary.csv.
 
-    Returns (mean_by_(scale,model), median_by_(scale,model), id_mean, id_median)
-    in [0,1] units (matching the indist summary)."""
+    Returns (mean_by_cell, median_by_cell, mean_std_by_cell, median_std_by_cell,
+    id_mean, id_median) in [0,1] units. Stds are present only on rows
+    with N>=2 seeds; otherwise the per-cell entry is None."""
     import csv as _csv
     if metric == "tf":
         prefix = "ood_tf"
@@ -227,24 +268,39 @@ def _load_ood_summary(metric: str = "tf") -> tuple[dict[tuple[str, str], float],
     else:
         raise ValueError(f"unknown OOD metric: {metric}")
     means, medians = {}, {}
+    mean_stds: dict[tuple[str, str], float | None] = {}
+    median_stds: dict[tuple[str, str], float | None] = {}
     id_mean = id_median = float("nan")
+
+    def _maybe_float(s: str) -> float | None:
+        if s is None or s == "":
+            return None
+        try:
+            v = float(s)
+        except ValueError:
+            return None
+        if not np.isfinite(v):
+            return None
+        return v
+
     with open(OOD_SUMMARY) as f:
         for row in _csv.DictReader(f):
             scale = row["preset"]
             model = "cond" if row["kind"] == "cond" else "uncond"
-            try:
-                m  = float(row[f"{prefix}_model_mean"])
-                md = float(row[f"{prefix}_model_median"])
-                means[(scale, model)]   = m
-                medians[(scale, model)] = md
-            except ValueError:
+            m  = _maybe_float(row.get(f"{prefix}_model_mean", ""))
+            md = _maybe_float(row.get(f"{prefix}_model_median", ""))
+            if m is None or md is None:
                 continue
+            means[(scale, model)]   = m
+            medians[(scale, model)] = md
+            mean_stds[(scale, model)]   = _maybe_float(row.get(f"{prefix}_model_mean_std", ""))
+            median_stds[(scale, model)] = _maybe_float(row.get(f"{prefix}_model_median_std", ""))
             try:
                 id_mean   = float(row[f"{prefix}_identity_mean"])
                 id_median = float(row[f"{prefix}_identity_median"])
             except (ValueError, KeyError):
                 pass
-    return means, medians, id_mean, id_median
+    return means, medians, mean_stds, median_stds, id_mean, id_median
 
 
 def _intersection_aggregates(per_game: dict[tuple[str, str], dict[str, float]],
@@ -263,6 +319,32 @@ def _intersection_aggregates(per_game: dict[tuple[str, str], dict[str, float]],
     return inter_mean, inter_median
 
 
+def _intersection_stds(games_intersection: list[str], regime: str
+                        ) -> tuple[dict[tuple[str, str], float | None],
+                                   dict[tuple[str, str], float | None]]:
+    """Per-cell std-across-seeds of the intersection mean / median.
+    For each (scale, model) cell, computes per-seed mean / median over
+    the 14 intersection games and returns ddof=1 std across those
+    per-seed values (None when fewer than 2 seeds have eval_multigame)."""
+    mean_stds: dict[tuple[str, str], float | None] = {}
+    median_stds: dict[tuple[str, str], float | None] = {}
+    for scale in SCALES:
+        for model in ("cond", "uncond"):
+            seeds = RUN_BY[(scale, model)]
+            per_seed_pg = _load_eval_per_seed(seeds, games_intersection, regime)
+            seed_means: list[float] = []
+            seed_medians: list[float] = []
+            for d in per_seed_pg:
+                vs = [d.get(g) for g in games_intersection]
+                if any(v is None for v in vs):
+                    continue
+                seed_means.append(float(np.mean(vs)))
+                seed_medians.append(float(np.median(vs)))
+            mean_stds[(scale, model)]   = float(np.std(seed_means, ddof=1))   if len(seed_means) >= 2 else None
+            median_stds[(scale, model)] = float(np.std(seed_medians, ddof=1)) if len(seed_medians) >= 2 else None
+    return mean_stds, median_stds
+
+
 def _load_id_identity() -> tuple[float, float]:
     """Read the in-distribution identity baseline (mean, median) from
     identity.json, or (nan, nan) if the file isn't present."""
@@ -279,10 +361,15 @@ def _load_id_identity() -> tuple[float, float]:
 def _draw_id_panel(ax, inter_mean, inter_median,
                    *, title: str, ylabel: str,
                    id_mean: float = float("nan"),
-                   id_median: float = float("nan")) -> None:
+                   id_median: float = float("nan"),
+                   inter_mean_std: dict[tuple[str, str], float | None] | None = None,
+                   inter_median_std: dict[tuple[str, str], float | None] | None = None,
+                   ) -> None:
     fd = _slope_panel(
         ax, inter_mean, inter_median,
         title=title,
+        scale_to_mean_std=inter_mean_std,
+        scale_to_median_std=inter_median_std,
     )
     ax.set_ylabel(ylabel)
     if np.isfinite(id_mean):
@@ -298,10 +385,15 @@ def _draw_id_panel(ax, inter_mean, inter_median,
 
 
 def _draw_ood_panel(ax, ood_mean, ood_median, id_mean, id_median,
-                    *, title: str, ylabel: str) -> None:
+                    *, title: str, ylabel: str,
+                    ood_mean_std: dict[tuple[str, str], float | None] | None = None,
+                    ood_median_std: dict[tuple[str, str], float | None] | None = None,
+                    ) -> None:
     fd = _slope_panel(
         ax, ood_mean, ood_median,
         title=title,
+        scale_to_mean_std=ood_mean_std,
+        scale_to_median_std=ood_median_std,
     )
     ax.set_ylabel(ylabel)
     if np.isfinite(id_mean):
@@ -325,18 +417,21 @@ def _figure_slope(per_game: dict[tuple[str, str], dict[str, float]],
         gridspec_kw={"width_ratios": [1.0, 1.0]},
     )
     inter_mean, inter_median = _intersection_aggregates(per_game, games_intersection)
+    inter_mean_std, inter_median_std = _intersection_stds(games_intersection, "random_tf")
     id_mean_id, id_median_id = _load_id_identity()
     _draw_id_panel(
         ax_left, inter_mean, inter_median,
         title="In-distribution (14-game intersection)",
         ylabel="1-step (TF) cell-error (%)",
         id_mean=id_mean_id, id_median=id_median_id,
+        inter_mean_std=inter_mean_std, inter_median_std=inter_median_std,
     )
-    ood_mean, ood_median, id_mean, id_median = _load_ood_summary("tf")
+    ood_mean, ood_median, ood_mean_std, ood_median_std, id_mean, id_median = _load_ood_summary("tf")
     _draw_ood_panel(
         ax_right, ood_mean, ood_median, id_mean, id_median,
         title="Out-of-distribution (Heldout-26)",
         ylabel="1-step (TF) cell-error (%)",
+        ood_mean_std=ood_mean_std, ood_median_std=ood_median_std,
     )
     fig.tight_layout()
     return fig
@@ -344,14 +439,20 @@ def _figure_slope(per_game: dict[tuple[str, str], dict[str, float]],
 
 def _figure_id(per_game: dict[tuple[str, str], dict[str, float]],
                games_intersection: list[str],
-               *, title: str, ylabel: str) -> plt.Figure:
-    """Single-panel ID slope, for use as a subfigure."""
+               *, title: str, ylabel: str,
+               regime: str = "random_tf") -> plt.Figure:
+    """Single-panel ID slope, for use as a subfigure. `regime` selects
+    which std-across-seeds field to read; pass `random` for the AR
+    companion figure."""
     plt.rcParams.update(RC_PARAMS)
     fig, ax = plt.subplots(figsize=(5.6, 4.6))
     inter_mean, inter_median = _intersection_aggregates(per_game, games_intersection)
+    inter_mean_std, inter_median_std = _intersection_stds(games_intersection, regime)
     id_mean, id_median = _load_id_identity()
     _draw_id_panel(ax, inter_mean, inter_median, title=title, ylabel=ylabel,
-                   id_mean=id_mean, id_median=id_median)
+                   id_mean=id_mean, id_median=id_median,
+                   inter_mean_std=inter_mean_std,
+                   inter_median_std=inter_median_std)
     fig.tight_layout()
     return fig
 
@@ -360,9 +461,11 @@ def _figure_ood(*, metric: str, title: str, ylabel: str) -> plt.Figure:
     """Single-panel OOD slope, for use as a subfigure."""
     plt.rcParams.update(RC_PARAMS)
     fig, ax = plt.subplots(figsize=(5.6, 4.6))
-    ood_mean, ood_median, id_mean, id_median = _load_ood_summary(metric)
+    ood_mean, ood_median, ood_mean_std, ood_median_std, id_mean, id_median = _load_ood_summary(metric)
     _draw_ood_panel(ax, ood_mean, ood_median, id_mean, id_median,
-                    title=title, ylabel=ylabel)
+                    title=title, ylabel=ylabel,
+                    ood_mean_std=ood_mean_std,
+                    ood_median_std=ood_median_std)
     fig.tight_layout()
     return fig
 
@@ -536,6 +639,7 @@ def main() -> None:
         per_game_ar, games_intersection,
         title="In-distribution AR (14-game intersection)",
         ylabel="random-action AR cell-error (%)",
+        regime="random",
     )
     id_ar_pdf = OUT_DIR / "intersection_slope_id_ar.pdf"
     id_ar_png = OUT_DIR / "intersection_slope_id_ar.png"
