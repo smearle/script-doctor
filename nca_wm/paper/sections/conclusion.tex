@@ -8,12 +8,13 @@ what happens next. The complementary regime is also worth
 investigating: a single dynamics model spanning a family of
 mechanically distinct, fully discrete environments, with a substrate
 light enough to study at the granularity of individual rules on
-commodity hardware. This is largely orthogonal to the dense-pixel
-video-world-model line of work, which is expensive to iterate on, and
-opens a different research surface, organized around program
-structure and rule-system generalization rather than visual fidelity.
+commodity hardware.
+% This is largely orthogonal to the dense-pixel
+% video-world-model line of work, which is expensive to iterate on, and
+% opens a different research surface, organized around program
+% structure and rule-system generalization rather than visual fidelity.
 
-Toward this end we proposed a rule-conditioned Neural Cellular
+Toward this end we propose a rule-conditioned Neural Cellular
 Automaton world model. Three design choices work in concert.
 \textbf{(i) An iterated local-update body.} The dynamics body is a
 single shared local update rule applied for several iterations on a
@@ -26,9 +27,13 @@ and across many jointly trained games
 (\S\ref{sec:results-baselines}, \S\ref{sec:results-scaling}).
 \textbf{(ii) Rule conditioning.} Cross-attention to slot embeddings
 of each game's tokenized rule text lets a single set of weights
-jointly model many games at once, with in-distribution per-cell
-fidelity remaining high as the corpus widens
-(Table~\ref{tab:indist-scaling}).
+jointly model many games at once. At fixed capacity, per-game
+in-distribution fidelity on shared games degrades as the corpus
+widens (Appendix~\ref{app:dilution}), but rule-conditioning slows
+that dilution by roughly an order of magnitude relative to an
+unconditional model
+(Table~\ref{tab:indist-dilution},
+Table~\ref{tab:indist-scaling}).
 \textbf{(iii) Training-data scaling.} Broadening the training
 corpus markedly improves out-of-distribution performance on an
 unseen-game held-out set, closing most of the gap to the identity
@@ -48,20 +53,11 @@ interaction is the central
 challenge~\cite{warrier2025benchmarking,arcprize2026arcagi3}, and a
 bridge between neural world models and symbolic program learning
 through a learned latent space that doubles as a search space over
-executable game programs. We report preliminary probes of the
-latter two in the appendix: random samples from a Gaussian fit to
-the empirical slot prior decode to PuzzleScript programs the
-original engine compiles and runs
-(Appendix~\ref{app:autoencoder}), and freezing the dynamics model
-while optimizing the slot from a small tape of an unseen game's
-transitions drives per-cell BCE down by orders of magnitude
-(Appendix~\ref{app:inverse-fit}). Scaling these probes to the full
-held-out corpus and pairing inverse-fit slots with engine-loadable
-program reconstructions remain open.
+executable game programs.
+We report preliminary probes of this latent space in \ref{app:autoencoder,app:inverse-fit}. 
 
-The combination of an efficient substrate, a domain with non-trivial
-mechanical complexity, and a learned latent space of embedded games
-makes rule-conditioned NCAs a useful sparse, dynamics-first
+By applying an efficient neural substrate to a domain with non-trivial
+mechanical complexity, and jointly learning a latent space of embedded games, our work provides a dynamics-first
 counterpoint to the dense visual world models that currently dominate
-the field, and a natural bridge between neural world models and
+the field, and lays the groundwork for a natural bridge between neural world models and
 symbolic program learning.

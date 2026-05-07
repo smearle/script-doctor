@@ -20,7 +20,7 @@ per-cell error metrics, both averaged across the steps of a 50-step
 rollout: \emph{one-step (TF) cell-error} (teacher-forced, random
 actions; isolates per-step prediction error) and \emph{BFS-AR
 cell-error} (autoregressive rollout under BFS-optimal actions). All
-five architectures fit the training cross-entropy to within $\sim 2\%$
+five architectures fit the training cross-entropy to within $\approx 2\%$
 of each other on every preset except ViT on multi-grid synth (best
 loss $0.084 \pm 0.002$ vs.\ $0.069 \pm 0.003$ for the rest), so we
 omit the train-loss column from the main-body tables and rely on the
@@ -226,26 +226,40 @@ autoregressive rollouts.
   \input{figures/indist_scaling/table}
 \end{table}
 
-The conditional model's median 1-step (TF) cell-error is $0.01\%$
-at \textsc{Train-14}, $0.10\%$ at \textsc{Train-59}, and $0.45\%$
-at \textsc{Train-199}: even at the broadest preset a single
-rule-conditioned NCA, fed only the tokenized rule text and the
-current state, predicts the next state of the median training game
-at $\geq 99.55\%$ per-cell accuracy. Multi-step rollout error climbs
-to $\approx 10\%$ mean / $\approx 4.5\%$ median on \textsc{Train-199},
-with mean error rising as the corpus widens; the mean is pulled up
-by a tail of persistently-hard games whose state spaces are large or
-whose rule structures involve cascading \texttt{again} loops, which
-we discuss in \S\ref{sec:discussion}.
+The conditional model's median 1-step (TF) cell-error grows from
+$0.01\%$ at \textsc{Train-14} to $0.10\%$ at \textsc{Train-59} and
+$0.45\%$ at \textsc{Train-199}, and the mean grows from $0.06\%$ to
+$1.62\%$ to $2.72\%$. Each scale jump is roughly an order of
+magnitude on the median; the absolute numbers are still small but
+the trend is clear. The aggregate cells pool different games at
+each scale, so part of the climb is the corpus picking up harder
+games (cascading \texttt{again} loops, large state spaces) and part
+is per-game dilution at fixed model width. We disentangle the two
+in Appendix~\ref{app:dilution} by holding the games fixed: on the
+14 games shared by every preset, the conditional 1-step (TF) mean
+grows $0.06\% \to 0.27\% \to 0.37\%$ across the three presets. Each
+game gets a smaller share of fixed model capacity / effective
+updates as the corpus widens, so per-game fidelity degrades. The
+dilution effect persists in autoregressive rollout: multi-step
+error climbs to $\approx 10\%$ mean / $\approx 4.5\%$ median on
+\textsc{Train-199}.
 
-% TODO: refresh once the in-flight Train-199 uncond and the planned
-% $n_h{=}448$ uncond relaunches finish.
-The cond-vs-uncond contrast in-distribution is modest at every
-scale we have evaluated: differences of $\le 0.4$pp on $1$-step
-(TF) at \textsc{Train-14} ($1.63 / 0.11$ vs.\ $1.98 / 0.08$
-random-AR mean / median) and $\le 1.5$pp at \textsc{Train-59}.
-Where the encoder pulls its weight is on unseen rule systems,
-which we examine next in \S\ref{sec:results-encoder-ablation}.
+% TODO: refresh the cond-vs-uncond intersection comparison once the
+% in-flight Train-199 uncond run finishes; the headline numbers below
+% already include the available uncond data.
+Because the aggregate Table~\ref{tab:indist-scaling} averages over
+different games at each scale, it understates the encoder's
+in-distribution benefit. Restricting to the 14 games shared by every
+preset (Appendix~\ref{app:dilution}), the gap to the unconditional
+baseline widens with corpus size: at \textsc{Train-14} the
+conditional and unconditional models tie ($0.057\%$ vs.\ $0.087\%$
+mean 1-step (TF)); at \textsc{Train-59} the conditional model holds
+at $0.27\%$ while the unconditional model degrades to $2.20\%$, an
+$\approx 8\times$ gap, with single games such as \textsc{nekopuzzle}
+going from $0.000\%$ to $24.4\%$ when the encoder is removed. The
+encoder amortizes shared dynamics across games at fixed capacity, an
+in-distribution benefit on top of its OOD effect, which we examine
+next in \S\ref{sec:results-encoder-ablation}.
 
 \subsection{Effect of scaling on out-of-distribution performance}
 \label{sec:results-encoder-ablation}

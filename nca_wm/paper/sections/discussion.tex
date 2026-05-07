@@ -9,11 +9,12 @@ autoregressive rollout, on every preset we tested
 shared-weight body matches the per-step body's mean BFS rollout
 error at $\pm 1\sigma$ on \textsc{Train-14} with $3.8\times$ fewer
 parameters and $\approx 5.8\times$ lower seed-to-seed variance
-(Table~\ref{tab:baselines-scaling14}). In-distribution rollout
-fidelity stays strong as the corpus grows (median 1-step
-teacher-forced cell-error of $0.01\%$ at \textsc{Train-14},
-$0.10\%$ at \textsc{Train-59}, and $0.45\%$ at \textsc{Train-199};
-Table~\ref{tab:indist-scaling}), and on unseen games broad-corpus
+(Table~\ref{tab:baselines-scaling14}). Rule-conditioning amortizes
+shared dynamics across games: on the 14 games shared by every
+training preset, conditional 1-step (TF) cell-error grows
+$\approx 5\times$ from \textsc{Train-14} to \textsc{Train-59} while
+unconditional grows $\approx 25\times$
+(Appendix~\ref{app:dilution}); on unseen games, broad-corpus
 training closes most of the gap to the identity baseline at
 \textsc{Train-199} (\S\ref{sec:results-encoder-ablation}). Inverse
 fitting from observed transitions further recovers OOD games'
@@ -39,8 +40,7 @@ $4.37\%$ on the multi-grid synthetic set
 (Table~\ref{tab:baselines-synth}), $\approx 40\times$ higher,
 setting a ceiling on what the present recipe extracts from the rule
 alone. Wider grids, capacity scans, and adaptive-halting probes of
-this gap are reported in Appendix~\ref{app:ceiling}; mechanism
-attribution is left to future work. We treat the multi-grid synth
+this gap are reported in Appendix~\ref{app:ceiling}. We treat the multi-grid synth
 preset as a default check for future PuzzleScript world-model work:
 if a model only succeeds at the single-grid setting, it may not be
 learning the dynamics. Breaking this ceiling is the remaining gap
@@ -66,9 +66,10 @@ benchmarks such as AutumnBench~\cite{warrier2025benchmarking} and
 ARC-AGI-3~\cite{arcprize2026arcagi3} are natural targets, because
 acting in novel rule systems after limited interaction benefits
 directly from inferring a fast forward model that downstream search
-or RL can plan against. The architecture itself is not
-domain-specific: any deterministic discrete-grid simulator with
-declarative rules (Conway's Game of Life and its variants,
+or RL can plan against.
+
+Indeed, our architecture is not domain-specific and could naturally be applied to such domains, any deterministic discrete-grid simulator with
+declarative rules (e.g. Conway's Game of Life and its variants,
 cellular-automata gas dynamics, Asari-style chemical-reaction
 grids) admits the same modeling pattern, and we expect the
 comparison against non-iterative baselines to favor the NCA more
