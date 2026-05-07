@@ -126,11 +126,50 @@ def _load_ood_rollout(name: str, n_frames: int) -> tuple[list[np.ndarray], list[
 
 
 def _show_image(ax, img, edge_color, edge_lw=0.8):
-    ax.imshow(img, interpolation="nearest")
+    """Project the PuzzleScript frame onto the front face of a 3D box,
+    matching the embed/readout look in nca_wm_mini.tex (same isometric
+    offset, light-fill side/top faces).
+    """
+    H, W = img.shape[:2]
+    # Isometric depth offset for the slanted top/right faces.
+    dx = max(2, int(round(0.18 * W)))
+    dy = max(2, int(round(0.18 * H)))
+
+    # y-up coordinates. Front face occupies x=[0,W], y=[0,H]; the top
+    # face is above (y > H) and the right face is to the right (x > W),
+    # both receding in the (+dx, +dy) direction.
+    ax.set_xlim(0, W + dx)
+    ax.set_ylim(0, H + dy)
+    ax.set_aspect("equal")
     ax.set_xticks([]); ax.set_yticks([])
     for s in ax.spines.values():
-        s.set_edgecolor(edge_color)
-        s.set_linewidth(edge_lw)
+        s.set_visible(False)
+
+    # Front-face image. extent=(left, right, bottom, top); origin='upper'
+    # places image[0,0] at the top of the extent, which is what we want.
+    ax.imshow(img, interpolation="nearest",
+              extent=(0, W, 0, H), origin="upper", zorder=2)
+
+    # Top face (parallelogram receding to upper-right).
+    top = mpatches.Polygon(
+        [(0, H), (W, H), (W + dx, H + dy), (dx, H + dy)],
+        closed=True, facecolor="#F2F2F2", edgecolor=edge_color,
+        linewidth=edge_lw, joinstyle="miter", zorder=1,
+    )
+    # Right face (parallelogram receding to upper-right from the right edge).
+    right = mpatches.Polygon(
+        [(W, 0), (W + dx, dy), (W + dx, H + dy), (W, H)],
+        closed=True, facecolor="#E5E5E5", edgecolor=edge_color,
+        linewidth=edge_lw, joinstyle="miter", zorder=1,
+    )
+    ax.add_patch(top)
+    ax.add_patch(right)
+    # Crisp front-face outline drawn last.
+    front = mpatches.Rectangle(
+        (0, 0), W, H, fill=False, edgecolor=edge_color,
+        linewidth=edge_lw, zorder=3,
+    )
+    ax.add_patch(front)
 
 
 def _arrow(ax, x0, y0, x1, y1, *, color="black", lw=1.0, mutation=12,
