@@ -71,22 +71,6 @@ layers over the tokens, then $K$ learned query vectors cross-attend
 into the contextualized token sequence to produce $z$. Slots are
 shared across cells and remain fixed throughout the rollout.
 
-\paragraph{Symbolic token decoder.}
-$\mathrm{Dec}_\psi$ is a four-layer causal Transformer over the same
-$\approx 140$-symbol vocabulary used by the encoder. Each token position
-self-attends causally to prior positions and cross-attends to the
-$K$ slots at every layer. We train under teacher forcing: the input
-sequence is the right-shifted target tokens with a learned BOS, and
-the per-position loss is masked cross-entropy against the next
-target token (\S\ref{sec:experiments} reports per-token reconstruction
-accuracy). Object names and sprite-RGB tokens are vocab-extended on a
-per-game basis; the decoder treats them as ordinary tokens and the
-detokenizer assigns generic names $\mathrm{Obj}_i$ on round-trip
-to .puzzlescript source. Validity checks (parser-loadable +
-JS-engine-compilable) are reported as separate metrics, since
-syntactic well-formedness and engine acceptance both diverge from
-exact-token reconstruction in the OOD-sample regime.
-
 \paragraph{NCA dynamics body.}
 We embed the input $(s_t, a_t)$ into a hidden grid $h^{(0)} \in
 \mathbb{R}^{H \times W \times d_h}$ via a single dense layer applied
