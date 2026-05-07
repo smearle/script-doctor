@@ -319,21 +319,65 @@ def _load_rule_counts(games: list[str]) -> dict[str, int]:
     return rules
 
 
+def _load_astar_difficulty(games: list[str]) -> dict[str, float]:
+    """Per-game mean A* iterations to solve (across levels with a win).
+
+    Reads per-level JSON from data/js_sols/<game>/astar_<budget>-steps_level-*.json,
+    preferring the largest available step budget per game. Games with zero
+    solved levels return NaN; the caller decides how to slot them.
+    """
+    JS_SOLS = REPO_ROOT / "data" / "js_sols"
+    out: dict[str, float] = {}
+    for g in games:
+        gdir = JS_SOLS / g
+        if not gdir.is_dir():
+            out[g] = float("nan")
+            continue
+        # Prefer largest budget present.
+        budgets = set()
+        for p in gdir.glob("astar_*-steps_level-*.json"):
+            stem = p.name
+            try:
+                budgets.add(int(stem.split("_")[1].split("-")[0]))
+            except (IndexError, ValueError):
+                continue
+        if not budgets:
+            out[g] = float("nan")
+            continue
+        budget = max(budgets)
+        iters = []
+        for p in sorted(gdir.glob(f"astar_{budget}-steps_level-*.json")):
+            try:
+                rec = json.loads(p.read_text())
+            except Exception:
+                continue
+            if rec.get("won"):
+                v = rec.get("iterations")
+                if isinstance(v, (int, float)):
+                    iters.append(float(v))
+        out[g] = float(np.mean(iters)) if iters else float("nan")
+    return out
+
+
 def _figure_heatmap(per_game: dict[tuple[str, str], dict[str, float]],
                     games: list[str]) -> plt.Figure:
     """Per-game heatmap on the 14-game intersection.
 
-    Rows are ordered by rule count (ascending) so the reader can scan
-    top-to-bottom for any monotone relationship between rule count and
-    cell-error; cell values from per_game stay unchanged.
+    Rows are ordered by A*-search difficulty (mean iterations to solve
+    a level, ascending), so the reader can scan top-to-bottom for any
+    monotone relationship between planning hardness and the model's
+    next-step prediction error. Games with no solved levels (e.g.\
+    \\textit{actiontest}, which has no win condition) are appended at
+    the bottom. Cell values from per_game stay unchanged.
     """
     plt.rcParams.update(RC_PARAMS)
 
     rule_counts = _load_rule_counts(games)
+    astar_iters = _load_astar_difficulty(games)
     def _row_key(g):
-        rc = rule_counts.get(g, 99)
-        # secondary: alphabetical for stable order within a rule-count bucket
-        return (rc, g.lower())
+        v = astar_iters.get(g, float("nan"))
+        # NaN sorts to the bottom under (is_nan, value).
+        return (np.isnan(v), v if not np.isnan(v) else 0.0, g.lower())
     sorted_games = sorted(games, key=_row_key)
 
     col_labels = []
@@ -347,17 +391,26 @@ def _figure_heatmap(per_game: dict[tuple[str, str], dict[str, float]],
                 if v is not None:
                     matrix[ri, col] = 100*v
 
-    fig, ax = plt.subplots(figsize=(7.0, 5.6))
+    fig, ax = plt.subplots(figsize=(8.0, 5.6))
     floor = 1e-3
     matrix_log = np.log10(np.clip(matrix, floor, None))
     im = ax.imshow(matrix_log, aspect="auto", cmap="magma_r",
                    vmin=np.log10(floor), vmax=np.log10(30.0))
 
     ax.set_yticks(range(len(sorted_games)))
+
+    def _fmt_iters(v: float) -> str:
+        if np.isnan(v): return "n/a"
+        if v >= 1000: return f"{v/1000:.0f}k"
+        return f"{int(round(v))}"
+
     ylabels = []
     for g in sorted_games:
         rc = rule_counts.get(g)
-        suffix = f" (n={rc})" if rc is not None else ""
+        it = astar_iters.get(g, float("nan"))
+        rc_part = f"n={rc}" if rc is not None else ""
+        it_part = f"A*={_fmt_iters(it)}"
+        suffix = f"  ({rc_part}, {it_part})" if rc_part else f"  ({it_part})"
         ylabels.append(g.replace("_", " ") + suffix)
     ax.set_yticklabels(ylabels)
     ax.set_xticks(range(len(col_labels)))
