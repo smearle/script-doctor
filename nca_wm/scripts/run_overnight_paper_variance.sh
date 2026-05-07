@@ -55,7 +55,7 @@ train() {
             --n_slots 16 --d_slot 64 --n_app_slots 1
             --n_enc_layers 2 --n_heads 4
             --d_model 64 --d_z 64
-            --encode_sprites --use_eos
+            --encode_sprites
             --token_decoder_loss_weight 1.0
             --decoder_d_model 128 --decoder_n_layers 4 --decoder_n_heads 4
         )

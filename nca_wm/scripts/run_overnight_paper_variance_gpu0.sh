@@ -48,7 +48,7 @@ train() {
             --n_slots 16 --d_slot 64 --n_app_slots 1
             --n_enc_layers 2 --n_heads 4
             --d_model 64 --d_z 64
-            --encode_sprites --use_eos
+            --encode_sprites
             --token_decoder_loss_weight 1.0
             --decoder_d_model 128 --decoder_n_layers 4 --decoder_n_heads 4
         )
@@ -105,8 +105,15 @@ stage "Train-199 cond s1 heldout" \
     heldout nca_wm/logs/multi_scaling_gallery_v4_cond_match_s1
 
 #------------------------------------------------------------------
-# Run 2 (slack): Train-14 uncond s3 — extra variance seed if time permits.
-# This will silently skip if a previous run already populated the dir.
+# Run 2: Train-14 cond s2 — covers the slot GPU 1 will fail on
+# (its bash queue captured an obsolete --use_eos flag at startup).
+stage "Train-14 cond s2" \
+    train scaling_14 cond 256 2 nca_wm/logs/multi_scaling_14_cond_match_s2
+stage "Train-14 cond s2 heldout" \
+    heldout nca_wm/logs/multi_scaling_14_cond_match_s2
+
+#------------------------------------------------------------------
+# Run 3 (slack): Train-14 uncond s3 — extra variance seed if time permits.
 stage "Train-14 uncond s3 (slack)" \
     train scaling_14 uncond 256 3 nca_wm/logs/multi_scaling_14_uncond_match_s3
 stage "Train-14 uncond s3 heldout (slack)" \
