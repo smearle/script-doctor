@@ -1,6 +1,21 @@
 \section{Introduction}
 \label{sec:intro}
 
+
+\begin{figure}[t]
+  \centering
+  \includegraphics[width=\linewidth]{nca_arch_v1.pdf}
+  \caption{\textbf{Rule-conditioned NCA dynamics.}
+    A perceiver-style encoder $\mathrm{Enc}_\phi$ maps the tokenized
+    PuzzleScript spec to $K{=}16$ slot vectors $z$. The dynamics body
+    embeds the state-action $(s_t, a_t)$ and applies $n_\text{layers}$
+    convolutional layers, with cells cross-attending to $z$ at every
+    layer; this stack is iterated for $n_\text{repeats}$ shared-weight
+    passes to produce $s_{t+1}$ ($T = n_\text{layers} \cdot
+    n_\text{repeats}$).}
+  \label{fig:arch-overview}
+\end{figure}
+
 Learned world models have been studied primarily in settings where
 the environment is observed as pixels and the task is to predict the
 next frame or latent video token. The standard recipe pairs a
@@ -28,10 +43,7 @@ is a local update rule applied for $T$ iterations on a hidden grid,
 with cells cross-attending to those slots at every step. The same body
 parameters can be reused across iterations, mirroring the engine's
 outer loop, while the conditioner makes the dynamics model portable
-across games. In the full version of the model, these slots are tied
-to a symbolic-game autoencoder so that game latents can both condition
-dynamics and decode back into program text.
-Foregoing pixels lets us model the environment in
+across games. Foregoing pixels lets us model the environment in
 its native state representation and measure fidelity cell-by-cell
 against the original engine.
 

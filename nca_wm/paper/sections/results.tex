@@ -15,8 +15,7 @@ the model has to learn the slide rule across grid sizes. We then
 ablate the NCA's pool stack and input-skip on the multi-grid synth
 preset to identify which features carry the architecture's advantage.
 
-All runs use the canonical recipe (\S\ref{sec:experiments}) at
-$d_h = 256$, trained for 10k updates per seed. We report best train
+All runs are trained for 10k updates per seed. We report best train
 cross-entropy, end-of-rollout cell-error rate under three policies
 (random, BFS-optimal, A*-optimal), and final parameter count.
 
@@ -183,22 +182,21 @@ Rule-conditioning lets a single set of weights master many games at
 once. Table~\ref{tab:indist-scaling} reports per-cell rollout error
 on the training games for three rule-conditional checkpoints---%
 \textsc{Train-14}, \textsc{Train-59}, and the broad
-\textsc{Train-199} preset---trained for 150k updates with the
-canonical recipe (\S\ref{sec:experiments}). These are the same three
-parameter-matched checkpoints whose held-out numbers anchor
-Table~\ref{tab:cond-vs-uncond-match}. Each cell is averaged across
-games and levels under one of four rollout regimes: random actions
-(autoregressive over 50 steps), random-action teacher-forced (one
-step at a time), BFS-optimal oracle actions, and A*-optimal oracle
-actions.
+\textsc{Train-199} preset---trained for 150k updates. These are the
+same three parameter-matched checkpoints whose held-out numbers
+anchor Table~\ref{tab:cond-vs-uncond-match}. Each cell is averaged
+across games and levels under one of four rollout regimes: random
+actions (autoregressive over 50 steps), random-action teacher-forced
+(one step at a time), BFS-optimal oracle actions, and A*-optimal
+oracle actions.
 
 \begin{table}[t]
   \centering
   \caption{\textbf{In-distribution per-cell rollout error as the
     training corpus scales.} Mean / median across all training games
     (each game's number is the per-rollout-step mean across all
-    authored levels). All three rows share the canonical recipe and
-    150k updates, differing only in the training preset.}
+    authored levels). The three rows differ only in the training
+    preset.}
   \label{tab:indist-scaling}
   \small
   \input{figures/indist_scaling/table}
@@ -214,9 +212,7 @@ to $\approx 10\%$ mean / $\approx 4.5\%$ median on \textsc{Train-199},
 with mean error rising as the corpus widens; the mean is pulled up
 by a tail of persistently-hard games whose state spaces are large or
 whose rule structures involve cascading \texttt{again} loops, which
-we discuss in \S\ref{sec:discussion}. Appendix~\ref{app:joint-decoder}
-shows separately that adding the joint symbolic-decoder objective
-($\beta = 1.0$) is essentially free for in-distribution fidelity.
+we discuss in \S\ref{sec:discussion}.
 
 \subsection{Effect of scaling on out-of-distribution performance}
 \label{sec:results-encoder-ablation}
@@ -228,27 +224,22 @@ does its output transfer to \emph{unseen} games, and if so, how does
 that depend on the diversity of the training corpus?
 
 To answer (i) we compare a parameter-matched unconditional NCA
-against the rule-conditional NCA on \textsc{Train-14}, holding the
-recipe (Section~\ref{sec:experiments}) constant. The unconditional
-model receives only the current state and action; the rule-conditional
-model adds the encoded rule slots as cross-attention context, plus a
-jointly-trained symbolic decoder ($\beta = 1.0$). Parameter counts
-are matched within $2\%$ ($n_h{=}448$ for unconditional vs.\
-$n_h{=}256$ + slot encoder for conditional), and both train for 150k
-updates. To answer (ii) we add a 199-game broad-corpus run
-(\textsc{Train-199}) under the same conditional recipe, and measure
-how the cond-vs-uncond gap and the cond-vs-identity gap evolve with
-rule diversity. Table~\ref{tab:cond-vs-uncond-match} reports
-in-distribution training-game rollout error \emph{and}
+against the rule-conditional NCA on \textsc{Train-14}. The
+unconditional model receives only the current state and action; the
+rule-conditional model adds the encoded rule slots as cross-attention
+context. Parameter counts are matched within $2\%$ ($n_h{=}448$ for
+unconditional vs.\ $n_h{=}256$ + slot encoder for conditional). To
+answer (ii) we add a 199-game broad-corpus run (\textsc{Train-199})
+and measure how the cond-vs-uncond gap and the cond-vs-identity gap
+evolve with rule diversity. Table~\ref{tab:cond-vs-uncond-match}
+reports in-distribution training-game rollout error \emph{and}
 out-of-distribution held-out cell-error on \textsc{Heldout-30}
 (30 games disjoint by name and token hash), against the trivial
 \emph{identity} baseline that predicts $\hat{s}_{t+1}{=}s_t$.
 
 \begin{table}[t]
   \centering
-  \caption{\textbf{Rule-conditioning, parameter-matched.} \textsc{Train-14}
-  rows trained for 150k updates with the same recipe; \textsc{Train-199}
-  is the broad-corpus run under the same conditional recipe. ID rollout =
+  \caption{\textbf{Rule-conditioning, parameter-matched.} ID rollout =
   mean per-game cell-error on training games, random-action autoregressive.
   OOD step-1 / AR-30 = mean cell-error on \textsc{Heldout-30}; the identity
   baseline lower-bounds it at the per-step state-change rate. OOD wins

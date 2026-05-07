@@ -31,10 +31,10 @@ jointly model many games at once. Scaling the training corpus from
 cell-error in the $0.01$--$0.45\%$ range
 (Table~\ref{tab:indist-scaling}).
 \textbf{(iii) Training-data scaling.} Scaling from 14 to 199 games
-under the same conditional recipe drops the step-1 cell-error on a
-30-game held-out set from $7\times$ worse than identity to within
-$2.5$pp of identity (\S\ref{sec:results-encoder-ablation}), with
-held-out wins on $9/29$ games. The headline rule-conditional
+drops the step-1 cell-error on a 30-game held-out set from $7\times$
+worse than identity to within $2.5$pp of identity
+(\S\ref{sec:results-encoder-ablation}), with held-out wins on $9/29$
+games. The headline rule-conditional
 contribution to out-of-distribution generalization is driven
 primarily by broad-corpus rule diversity rather than the encoder
 architecture in isolation, in line with the broader pattern that
@@ -44,22 +44,22 @@ Conditioning the dynamics on a continuous game embedding turns the
 slot space into a learned manifold of embedded games, and we report
 two preliminary probes of what such a manifold makes possible.
 First, sampling from a Gaussian fit to the empirical slot prior and
-greedily decoding through a jointly trained symbolic decoder
-yields PuzzleScript programs that the original engine compiles and
-runs ($15/25$ random samples and $9/9$ slot-space interpolation
-points; Appendix~\ref{app:autoencoder}), suggesting that the
-manifold is dense enough to seed novel-game generation. Second,
-freezing the dynamics model and optimizing the slot from a small
-tape of an unseen game's transitions drives per-cell BCE down by
-two-to-three orders of magnitude (Appendix~\ref{app:inverse-fit}),
-so an embedded-game latent can in principle be inferred from few
+mapping samples back to PuzzleScript program text yields programs
+that the original engine compiles and runs ($15/25$ random samples
+and $9/9$ slot-space interpolation points;
+Appendix~\ref{app:autoencoder}), suggesting that the manifold is
+dense enough to seed novel-game generation. Second, freezing the
+dynamics model and optimizing the slot from a small tape of an
+unseen game's transitions drives per-cell BCE down by two-to-three
+orders of magnitude (Appendix~\ref{app:inverse-fit}), so an
+embedded-game latent can in principle be inferred from few
 interactions---a route to fast adaptation to novel rule systems
 that complements interactive world-model benchmarks where rule
 inference from limited environment interaction is the central
 challenge~\cite{warrier2025benchmarking,arcprize2026arcagi3}. We
 treat both as exploratory signals; scaling these probes to the full
 held-out corpus, and pairing inverse-fit slots with engine-loadable
-decoded programs, are the obvious next steps.
+program reconstructions, are the obvious next steps.
 
 The combination of an efficient substrate, a domain with non-trivial
 mechanical complexity, and a learned latent space of embedded games

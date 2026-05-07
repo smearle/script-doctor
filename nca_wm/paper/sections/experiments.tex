@@ -32,7 +32,10 @@ together for the multi-game in-distribution scaling and OOD
 generalization results
 (Tables~\ref{tab:baselines-scaling14}, \ref{tab:indist-scaling},
 \ref{tab:cond-vs-uncond-match})---and \textsc{Train-94}, an
-intermediate Gallery preset used in Appendix~\ref{app:joint-decoder}.
+intermediate Gallery preset used for the appendix-level
+auxiliary-objective and latent-probe analyses
+(Appendices~\ref{app:joint-decoder}, \ref{app:autoencoder},
+\ref{app:inverse-fit}).
 For each game we run
 bounded A* from each authored level (60 s wallclock and 100k
 iteration budget per level) and cache the resulting unique
@@ -70,8 +73,9 @@ extends \textsc{Train-14} with 45 and 185 additional Gallery games
 respectively; a 30-game held-out set disjoint by name and token-hash
 is used for the unseen-game evaluations.
 \textbf{Intermediate Gallery preset} (\textsc{Train-94};
-Appendix~\ref{app:joint-decoder}) is 94 Gallery games used to compare
-the encoder-only and joint-decoder objectives at fixed corpus.
+Appendices~\ref{app:joint-decoder}, \ref{app:autoencoder},
+\ref{app:inverse-fit}) is 94 Gallery games used for the appendix-level
+auxiliary-objective and latent-probe analyses.
 
 \subsection{Architectures and hyper-parameters}
 

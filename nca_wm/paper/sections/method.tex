@@ -1,23 +1,6 @@
 \section{Method}
 \label{sec:method}
 
-\begin{figure}[t]
-  \centering
-  \includegraphics[width=\linewidth]{nca_arch_v1.pdf}
-  \caption{\textbf{Rule-conditioned NCA dynamics.}
-    A perceiver-style encoder $\mathrm{Enc}_\phi$ maps the tokenized
-    PuzzleScript spec to $K{=}16$ slot vectors $z$. The dynamics body
-    embeds the state-action $(s_t, a_t)$ and applies $n_\text{layers}$
-    convolutional layers, with cells cross-attending to $z$ at every
-    layer; this stack is iterated for $n_\text{repeats}$ shared-weight
-    passes to produce $s_{t+1}$ ($T = n_\text{layers} \cdot
-    n_\text{repeats}$). The token decoder used for joint training and
-    inverse fitting (Appendix~\ref{app:inverse-fit}) is omitted from this
-    figure to keep the focus on the per-game and multi-game dynamics
-    modeling that drives our main results.}
-  \label{fig:arch-overview}
-\end{figure}
-
 \subsection{Problem setup}
 
 A PuzzleScript game is a tuple $(\mathcal{O}, R, \{L_i\})$ where
@@ -41,24 +24,18 @@ tokens are enabled). At evaluation we roll the model out
 autoregressively and compare cell-by-cell against the engine.
 
 \paragraph{Conditioning interface.}
-The game-spec autoencoder is trained \emph{jointly} with the world
-model. Concretely, for each transition $(s_t, a_t, s_{t+1})$ in the
-training set, we (i) encode the game's token sequence to a slot matrix
+For each transition $(s_t, a_t, s_{t+1})$ in the training set we
+encode the game's token sequence to a slot matrix
 $z \in \mathbb{R}^{K \times d_{\text{slot}}}$ via the perceiver-style
-encoder $\mathrm{Enc}_\phi$, (ii) drive the rule-conditioned NCA from
-$(s_t, a_t)$ conditioned on $z$ to produce
-$\widehat{s}_{t+1}$, and (iii) feed $z$ to a causal token decoder
-$\mathrm{Dec}_\psi$ that predicts the original token sequence
-autoregressively under teacher forcing. The training loss is
+encoder $\mathrm{Enc}_\phi$ and drive the rule-conditioned NCA from
+$(s_t, a_t)$ conditioned on $z$ to produce $\widehat{s}_{t+1}$.
+The training loss is
 \begin{equation*}
   \mathcal{L} \;=\; \mathcal{L}_{\text{state}}(\widehat{s}_{t+1}, s_{t+1})
-  \;+\; \alpha\,\mathcal{L}_{\text{win}}
-  \;+\; \beta\,\mathcal{L}_{\text{tok}}(\mathrm{Dec}_\psi(z), \mathrm{spec}) \, ,
+  \;+\; \alpha\,\mathcal{L}_{\text{win}} \, .
 \end{equation*}
-with $\beta = 1.0$ in the joint runs and $\beta = 0$ in the encoder-only
-ablation. Default dimensions: $K=16$, $d_{\text{slot}}=64$, encoder
-$d_{\text{model}}=64$ with two self-attention layers, decoder
-$d_{\text{model}}=128$ with four causal-attention layers.
+Default dimensions: $K=16$, $d_{\text{slot}}=64$, encoder
+$d_{\text{model}}=64$ with two self-attention layers.
 
 \subsection{Rule-conditioned NCA world model}
 

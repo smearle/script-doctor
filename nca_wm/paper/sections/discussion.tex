@@ -8,48 +8,36 @@ half of that goal: a rule-conditioned, iterated local-update model is
 a strong forward model for PuzzleScript-style grid dynamics and is
 more parameter-efficient than several non-iterative baselines. A full
 engine-model claim additionally requires smooth scaling with the
-number of games, held-out rule-system generalization, meaningful
-symbolic decoding, and inverse fitting from transitions.
+number of games, held-out rule-system generalization, and inverse
+fitting from transitions.
 
-The in-distribution scaling and joint-AE results
-(Table~\ref{tab:indist-scaling};
-Appendices~\ref{app:scaling-curve}, \ref{app:autoencoder},
-\ref{app:inverse-fit}) take partial steps in each direction:
-in-distribution rollout fidelity stays strong as the corpus grows
+In-distribution rollout fidelity stays strong as the corpus grows
 (median 1-step teacher-forced cell-error of $0.01\%$ at
 \textsc{Train-14}, $0.10\%$ at \textsc{Train-59}, and $0.45\%$ at
-\textsc{Train-199};
-Table~\ref{tab:indist-scaling}); the joint decoder objective
-tightens held-out games' nearest-training-neighbour distance in slot
-space; inverse-fitting recovers OOD games' dynamics through the
-latent variable to $\approx 10^{-3}$ BCE; and autoregressive sampling
-from the empirical slot prior at the 94-game scale clears the engine
-validator at $15/25$ random draws and at $9/9$ slot-space
-interpolation points. Slot-space interpolation between two training
-games stays at $9/9$ engine-loadable when scaled to 199 games,
-suggesting the latent line carries enough structure for the decoder
-to track; random sampling under the same checkpoint drops to
-$4/25$, consistent with the empirical slot prior becoming a poorer
-match to the manifold as more games crowd it. The remaining gap in
-the engine-modelling story is breaking the multi-grid synthetic-data
+\textsc{Train-199}; Table~\ref{tab:indist-scaling}), and inverse
+fitting from transitions recovers OOD games' dynamics through the
+latent variable to $\approx 10^{-3}$ BCE
+(Appendix~\ref{app:inverse-fit}). The remaining gap in the
+engine-modelling story is breaking the multi-grid synthetic-data
 ceiling described below.
 
 \paragraph{Toward latent world coders.}
-The inverse-fit and slot-sampling probes
-(Appendices~\ref{app:autoencoder}, \ref{app:inverse-fit}) point
-toward a ``latent world coder'' direction: treat a learned dynamics
-manifold as the search space for novel rule systems, and project
-successful latent hypotheses back into executable symbolic
-programs. This is complementary to program-synthesis world-model
-agents such as WorldCoder and TheoryCoder, which synthesize Python
-transition models from
+Inverse fitting from observed transitions
+(Appendix~\ref{app:inverse-fit}) points toward a ``latent world
+coder'' direction: treat a learned dynamics manifold as the search
+space for novel rule systems, and project successful latent
+hypotheses back into executable symbolic programs through the
+mapping reported separately in Appendix~\ref{app:autoencoder}. This
+is complementary to program-synthesis world-model agents such as
+WorldCoder and TheoryCoder, which synthesize Python transition
+models from
 interaction~\cite{tang2024worldcoder,ahmed2025theorycoder}, and to
 DreamCoder-style systems that grow reusable symbolic libraries for
-program induction~\cite{ellis2021dreamcoder}. The decoder already
-emits engine-loadable PuzzleScript programs from random slot
-samples and along slot-space interpolations, but pairing inverse-fit
-slots with engine-loadable decoded code is still an open thread that
-we report as an early exploratory signal. Interactive world-model benchmarks such as
+program induction~\cite{ellis2021dreamcoder}. Pairing inverse-fit
+slots with engine-loadable program reconstructions
+(Appendix~\ref{app:autoencoder}) is still an open thread that we
+report as an early exploratory signal. Interactive
+world-model benchmarks such as
 AutumnBench~\cite{warrier2025benchmarking} and
 ARC-AGI-3~\cite{arcprize2026arcagi3} are natural targets, because
 acting in novel rule systems after limited interaction benefits

@@ -736,15 +736,31 @@ held-out set.
 \subsection{Joint symbolic-decoder objective is free for in-distribution fidelity}
 \label{app:joint-decoder}
 
-A natural concern when adding the joint symbolic-decoder loss
-($\beta = 1.0$) is whether the auxiliary objective costs anything on
-the world-model's primary job---predicting the next state. Table~\ref{tab:fidelity}
-compares two checkpoints that share architecture, training preset
-(\textsc{Train-94}: 94 deduped Gallery games), and update count, and
-differ only in whether the decoder loss is on. Per-cell rollout error
-ties within $0.5$pp on every regime, so the
-in-distribution dynamics-fidelity claim is robust to the auxiliary
-loss.
+\paragraph{Default training setup.}
+The main-body Conditioning interface paragraph
+(\S\ref{sec:method}) writes the training loss as
+$\mathcal{L} = \mathcal{L}_{\text{state}} + \alpha \mathcal{L}_{\text{win}}$.
+The actual training objective adds a third
+auxiliary term $\beta \mathcal{L}_{\text{tok}}$ whose role is purely
+to shape the slot space: the encoded slots $z$ are fed to a causal
+token decoder $\mathrm{Dec}_\psi$ that is trained under teacher
+forcing to reconstruct the original token sequence (decoder
+architecture and reconstruction / sampling results in
+Appendix~\ref{app:autoencoder}). All conditional runs reported in
+the main body train with $\beta = 1.0$ by default; we never observed
+the auxiliary loss to harm world-model fidelity, and switching it on
+is what makes the slot-space probes in
+Appendices~\ref{app:autoencoder} and \ref{app:inverse-fit} possible
+(the decoder is what turns a slot back into program text).
+
+A natural concern when adding this auxiliary loss is whether it
+costs anything on the world-model's primary job---predicting the
+next state. Table~\ref{tab:fidelity} compares two checkpoints that
+share architecture, training preset (\textsc{Train-94}: 94 deduped
+Gallery games), and update count, and differ only in whether the
+decoder loss is on. Per-cell rollout error ties within $0.5$pp on
+every regime, so the in-distribution dynamics-fidelity claim is
+robust to the auxiliary loss.
 
 \begin{table}[t]
   \centering
