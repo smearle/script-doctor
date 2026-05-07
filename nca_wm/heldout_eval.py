@@ -39,7 +39,16 @@ from nca_wm.train import (
     _pad_offsets,
     _pad_state_for_model,
     _wm_p,
+    _load_npz_dict,
+    _save_npz_dict,
+    _solution_from_sol_dir,
 )
+# Repo root, used to resolve js_sols / cpp_sols dirs.
+_REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+# Cache for search-action sequences on heldout games. Re-used across all
+# checkpoints since search is model-independent.
+_HELDOUT_SEARCH_CACHE = os.path.join(_REPO_ROOT, "nca_wm", "data_cache",
+                                     "heldout_search")
 from nca_wm.tokenize_game import (
     VOCAB_SIZE_BASE, VOCAB_SIZE_EXT, VOCAB_SIZE_EXT_V2,
     tokenize_game, get_game_tree_from_js,
@@ -315,6 +324,64 @@ def _rollout_with_identity(
     }
 
 
+def _get_heldout_search_actions(
+    name: str, level_i: int, algo: str, json_str: str,
+    *, search_n_steps: int = 100_000, search_timeout_ms: int = 60_000,
+) -> list[int] | None:
+    """Return the BFS- or A*-optimal action sequence for a heldout (game,
+    level, algo). Tries cached → js_sols → cpp_sols → live C++ search,
+    then caches whatever it finds. Returns None if the engine cannot
+    solve within the budget.
+    """
+    os.makedirs(_HELDOUT_SEARCH_CACHE, exist_ok=True)
+
+    def _safe_path(s: str) -> str:
+        # Filenames cannot contain '/', and we keep the rest readable.
+        return s.replace("/", "_")
+
+    cache_path = os.path.join(
+        _HELDOUT_SEARCH_CACHE,
+        f"{_safe_path(name)}_L{level_i}_{algo}_{search_n_steps}_{search_timeout_ms}.npz",
+    )
+    cached = _load_npz_dict(cache_path)
+    if cached is not None and len(cached.get("actions", [])) > 0:
+        return cached["actions"].tolist()
+
+    # cpp_sols use the C++-backend action convention; drop-in compatible.
+    sol_actions = _solution_from_sol_dir(
+        os.path.join(_REPO_ROOT, "data", "cpp_sols"),
+        name, level_i, translate_js_to_jax=False,
+    )
+    # js_sols use the JS-engine action convention; remap to JAX/CPP.
+    if sol_actions is None:
+        sol_actions = _solution_from_sol_dir(
+            os.path.join(_REPO_ROOT, "data", "js_sols"),
+            name, level_i, translate_js_to_jax=True,
+        )
+
+    if sol_actions is None:
+        # Live C++ search.
+        try:
+            backend = CppPuzzleScriptBackend()
+            backend.load_from_json(json_str)
+            backend.load_level("", level_i)
+            result = backend.run_search(
+                algo, game_text="", level_i=level_i,
+                n_steps=search_n_steps, timeout_ms=search_timeout_ms,
+            )
+            if result.actions:
+                sol_actions = list(result.actions)
+        except Exception as e:
+            print(f"      [search] {algo} {name} L{level_i} live failed: {e}")
+            return None
+
+    if sol_actions is not None:
+        _save_npz_dict(cache_path, {
+            "actions": np.asarray(sol_actions, dtype=np.int32),
+        })
+    return sol_actions
+
+
 def _aggregate_episodes(eps: list[dict]) -> dict:
     """Mean per-step error rates across episodes, padded to longest."""
     max_len = max(len(e["model_wrong_cells"]) for e in eps)
@@ -482,6 +549,32 @@ def evaluate_heldout(
                   f"({time.time()-t0:.1f}s)")
             print(f"    TF step1 model={agg_tf['model_cell_err_step1']:.4f} "
                   f"identity={agg_tf['identity_cell_err_step1']:.3f}")
+
+            # --- Search rollouts (BFS-optimal and A*-optimal, AR mode) ---
+            # Search is deterministic so a single rollout per algo suffices.
+            for algo in ("bfs", "astar"):
+                t_search = time.time()
+                actions = _get_heldout_search_actions(
+                    info["name"], li, algo, info["json_str"],
+                )
+                if actions is None or len(actions) == 0:
+                    print(f"    {algo:5s} no solution within budget; skipped")
+                    continue
+                r = _rollout_with_identity(
+                    apply_fn, params, info, level_i=li,
+                    max_C=max_C, model_max_seq_len=model_max_seq_len,
+                    actions=actions, max_steps=len(actions),
+                    teacher_forced=False,
+                    conditional=conditional,
+                    seed=rng_seed + 1000 * li,
+                )
+                agg_s = _aggregate_episodes([r])
+                per_level[li][algo] = agg_s
+                print(f"    {algo:5s} step1 model={agg_s['model_cell_err_step1']:.3f} "
+                      f"identity={agg_s['identity_cell_err_step1']:.3f}  "
+                      f"mean model={agg_s['model_cell_err_mean']:.3f} "
+                      f"identity={agg_s['identity_cell_err_mean']:.3f}  "
+                      f"({time.time()-t_search:.1f}s, n_actions={len(actions)})")
         return per_level
 
     print(f"\n=== Evaluating {len(heldout_infos)} held-out games ===")
@@ -642,8 +735,10 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--load", required=True,
                     help="Path to a trained-checkpoint save_dir.")
-    ap.add_argument("--heldout_games", default=",".join(DEFAULT_HELDOUT),
-                    help=f"Comma-separated game names. Default: {DEFAULT_HELDOUT}")
+    ap.add_argument("--heldout_games", default=";".join(DEFAULT_HELDOUT),
+                    help=f"Semicolon-separated game names (some PuzzleScript filenames "
+                         f"contain commas, so we deliberately do not split on ','). "
+                         f"Default: {DEFAULT_HELDOUT}")
     ap.add_argument("--n_random_episodes", type=int, default=5)
     ap.add_argument("--max_steps", type=int, default=30)
     ap.add_argument("--include_train_sample", type=int, default=3,
@@ -656,7 +751,7 @@ def main():
                     help="Do not skip names that were in the training set; rebuild/evaluate their authored levels.")
     args = ap.parse_args()
 
-    heldout = [g.strip() for g in args.heldout_games.split(",") if g.strip()]
+    heldout = [g.strip() for g in args.heldout_games.split(";") if g.strip()]
     evaluate_heldout(
         args.load, heldout,
         n_random_episodes=args.n_random_episodes,
