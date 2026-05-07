@@ -379,7 +379,7 @@ def _figure_heatmap(per_game: dict[tuple[str, str], dict[str, float]],
     for ci, scale in enumerate(SCALES):
         for cj, model in enumerate(("cond", "uncond")):
             col = 2*ci + cj
-            col_labels.append(f"{scale}\n{model}")
+            col_labels.append(f"{scale} {model}")
             for ri, g in enumerate(sorted_games):
                 v = per_game[(scale, model)].get(g)
                 if v is not None:
@@ -399,7 +399,8 @@ def _figure_heatmap(per_game: dict[tuple[str, str], dict[str, float]],
         ylabels.append(g.replace("_", " ") + suffix)
     ax.set_yticklabels(ylabels)
     ax.set_xticks(range(len(col_labels)))
-    ax.set_xticklabels(col_labels, fontsize=10)
+    ax.set_xticklabels(col_labels, fontsize=10, rotation=45,
+                       ha="right", rotation_mode="anchor")
 
     for sep in (1.5, 3.5):
         ax.axvline(sep, color="white", linewidth=1.5)

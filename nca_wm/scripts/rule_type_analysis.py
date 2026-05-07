@@ -175,7 +175,8 @@ def _emit_heatmap(rows: list[tuple[str, str, int, float, float]]) -> None:
     ax.set_yticks(range(len(feats)))
     ax.set_yticklabels([f"{FEATURE_LABEL[f]} (n={n})" for f, n in zip(feats, ns)])
     ax.set_xticks([0, 1])
-    ax.set_xticklabels(["cond", "uncond"])
+    ax.set_xticklabels(["cond", "uncond"], rotation=45,
+                       ha="right", rotation_mode="anchor")
 
     for ri in range(matp.shape[0]):
         for ci in range(matp.shape[1]):
