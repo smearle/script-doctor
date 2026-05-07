@@ -141,14 +141,28 @@ stage "Train-199 uncond s1 heldout" \
     heldout nca_wm/logs/multi_scaling_gallery_v4_uncond_match_s1
 
 #------------------------------------------------------------------
-# Run 3: Train-199 cond, n_hid=384 — larger-model probe for the
-# discussion's "phase transition" hypothesis (does the encoder become
-# load-bearing OOD at greater capacity?). All other recipe knobs
-# match the canonical n_hid=256 run.
-stage "Train-199 cond s0 n_hid=384" \
-    train scaling_gallery_v4 cond 384 0 nca_wm/logs/multi_scaling_gallery_v4_cond_match_s0_h384
-stage "Train-199 cond s0 n_hid=384 heldout" \
-    heldout nca_wm/logs/multi_scaling_gallery_v4_cond_match_s0_h384
+# Run 3: Train-500 cond — directly addresses the discussion section's
+# "phase transition" hypothesis: does ~3x more rule diversity make the
+# encoder load-bearing OOD? scaling_gallery_v5 (500 games) is a strict
+# superset of v4 (Train-199), constructed at module-import time so the
+# 14 → 59 → 199 → 500 progression stays nested on the anchor games.
+# Heldout-26 disjointness preserved. (Replaces an earlier n_hid=384
+# capacity probe; capacity isn't the bottleneck per the cond/uncond
+# OOD tie at Train-199, more rule diversity is the right axis.)
+stage "Train-500 cond s0" \
+    train scaling_gallery_v5 cond 256 0 nca_wm/logs/multi_scaling_gallery_v5_cond_match_s0
+stage "Train-500 cond s0 heldout" \
+    heldout nca_wm/logs/multi_scaling_gallery_v5_cond_match_s0
+
+#------------------------------------------------------------------
+# Run 4: Train-500 uncond — companion seed for the cond-vs-uncond
+# OOD comparison at the new scale. If the encoder becomes load-bearing
+# at Train-500 (lower OOD than uncond), the phase transition shows up
+# here.
+stage "Train-500 uncond s0" \
+    train scaling_gallery_v5 uncond 256 0 nca_wm/logs/multi_scaling_gallery_v5_uncond_match_s0
+stage "Train-500 uncond s0 heldout" \
+    heldout nca_wm/logs/multi_scaling_gallery_v5_uncond_match_s0
 
 echo
 echo "=== [$(date '+%F %T')] post-deadline queue done ==="

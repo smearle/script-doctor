@@ -107,11 +107,10 @@ echo "=== [$(date '+%F %T')] 210 post-deadline queue start (GPU $GPU) ==="
 stage "Train-14 cond s2 heldout (recovered)" \
     heldout nca_wm/logs/multi_scaling_14_cond_match_s2
 
-# Run 2 (slack, only if we don't already have results from yalda):
-# heldout on the Train-59 cond s1 trained on 210. Yalda's queue is also
-# evaluating its own copy; whichever finishes first populates the row.
-stage "Train-59 cond s1 heldout (210 copy, slack)" \
-    heldout nca_wm/logs/multi_scaling_gallery_v2_cond_match_s1
+# Run 2 dropped: yalda is doing the canonical Train-59 cond s1 heldout
+# on its own copy, so 210's redundant copy is not worth the GPU time.
+# (210's checkpoint will sit on disk indefinitely and can be re-evaluated
+# later if we ever need a same-seed-different-machine variance estimate.)
 
 #------------------------------------------------------------------
 # Run 3: parameter-matched uncond Train-199. Train-199 cond at n_hid=256
