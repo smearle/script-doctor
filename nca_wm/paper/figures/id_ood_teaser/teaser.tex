@@ -31,48 +31,44 @@
 \colorlet{EncColor}{blue!50}
 \colorlet{SlotColor}{yellow!75}
 \colorlet{PSFrameFill}{gray!12}
-\colorlet{CodeFill}{white}
+\colorlet{CodeFill}{gray!10}
 
 \colorlet{IDColor}{blue!55!black}
 \colorlet{OODColor}{red!55!black}
 \colorlet{LossColor}{red!75!black}
 \colorlet{CondColor}{violet!60!black}
 
-% --- PS state frame (transparent), scaled up to 2.0×2.0 cm visible. ---
+% --- PS state frame (transparent), scaled up to 2.4×2.4 cm visible. ---
 \newcommand{\PSframe}[4]{%
   \pic[shift={(#2, #3, 0)}] at (0,0,0)
       {Box={name=#1, caption=, xlabel={{,}}, zlabel={},
             fill=PSFrameFill, opacity=0.35,
-            height=10, width=1.0, depth=10}};%
+            height=12, width=1.0, depth=12}};%
   \node[canvas is zy plane at x={#2 + 0.2}] at (0, #3)
-      {\includegraphics[width=2.0cm,height=2.0cm]{#4}};%
+      {\includegraphics[width=2.4cm,height=2.4cm]{#4}};%
 }
 
-% --- Pair of decoupled boxes: a code/game-spec box LEFT of an input
-%     state box, with a clear gap between them. Code text mimics the
-%     PuzzleScript spec layout used in nca_arch_v1.tex (objects /
-%     rules / winconditions sections, "===" separators).
+% --- Decoupled card pair: a flat 2D code/spec node LEFT of a 3D
+%     transparent state box, with visible space between them. The
+%     code spec is rendered exactly like the game-spec node in
+%     nca_arch_v1.tex — light-gray fill, black ttfamily text, left
+%     aligned in a 2D rectangle.
 %
 %     #1 = name base, #2 = state x, #3 = y,
 %     #4 = state image path, #5 = code/spec text body
 \newcommand{\StateOnCode}[5]{%
-  % Code spec box, detached: shifted further left so there is visible
-  % blank space between code-east and state-west.
-  \pic[shift={({#2 - 1.6}, #3, 0)}] at (0,0,0)
-      {Box={name=#1c, caption=, xlabel={{,}}, zlabel={},
-            fill=CodeFill, opacity=0.35,
-            height=10, width=2.0, depth=10}};%
-  \node[canvas is zy plane at x={#2 - 1.2}, font=\tiny\ttfamily,
-        align=left, inner sep=0.5pt, text width=1.9cm,
-        anchor=center]
-        at (0, #3) {#5};%
-  % State box.
+  \node[draw=black!55, rounded corners=2pt, fill=CodeFill,
+        line width=0.3pt, font=\scriptsize\ttfamily, align=left,
+        inner sep=3pt, text width=1.4cm, text=black,
+        anchor=east, name=#1c]
+        at ({#2 - 0.5}, #3) {#5};%
+  % State box (3D, transparent).
   \pic[shift={(#2, #3, 0)}] at (0,0,0)
       {Box={name=#1g, caption=, xlabel={{,}}, zlabel={},
             fill=PSFrameFill, opacity=0.35,
-            height=10, width=1.0, depth=10}};%
+            height=12, width=1.0, depth=12}};%
   \node[canvas is zy plane at x={#2 + 0.2}] at (0, #3)
-      {\includegraphics[width=2.0cm,height=2.0cm]{#4}};%
+      {\includegraphics[width=2.4cm,height=2.4cm]{#4}};%
 }
 
 % --- NCA "step": just the 3 green bands at (x, y).
@@ -111,26 +107,27 @@
 %  LEFT HALF: in-distribution training
 % =============================================================
 
-\StateOnCode{neko}{-7}{ 2.2}{rollouts/nekopuzzle/engine_t0.png}
-    {objects\\===\\Player Fruit\\Wall\\===\\rules\\===\\{}[>P|...|F]\\{}~->[|...|P]\\===\\winconditions\\===\\no Fruit}
+\StateOnCode{neko}{-7}{ 2.8}{rollouts/nekopuzzle/engine_t0.png}
+    {\textbf{Player Fruit}\\===\\{}[\textbf{>P}|...|\textbf{F}]\\{}~->[|...|\textbf{P}]}
 \StateOnCode{soko}{-7}{ 0.0}{rollouts/sokoban_basic/engine_t0.png}
-    {objects\\===\\Player Crate\\Wall Target\\===\\rules\\===\\{}[>P|C]\\{}~->[>P|>C]\\===\\winconditions\\===\\all Crate on Target}
-\StateOnCode{mod} {-7}{-2.2}{rollouts/Modality/engine_t0.png}
-    {objects\\===\\Player Crate\\Black White\\===\\rules\\===\\{}[>P W|B]\\{}~->CANCEL\\===\\win\\===\\all Crate on Goal}
+    {\textbf{Player Crate}\\===\\{}[\textbf{>P}|\textbf{C}]\\{}~->[\textbf{>P}|\textbf{>C}]}
+\StateOnCode{mod} {-7}{-2.8}{rollouts/Modality/engine_t0.png}
+    {\textbf{Player Crate}\\===\\{}[\textbf{>P W}|\textbf{B}]\\{}~->\textbf{CANCEL}}
 
-\EncLatent{id}{-5.4}{4.4}
+\EncLatent{id}{-5.4}{5.4}
 
 % Single ID NCA, vertically centered (y=0).
 \NCAstep{idn}{-3}{0}
 
-\PSframe{s1_neko}{-1.5}{ 2.2}{rollouts/nekopuzzle/engine_t1.png}
+\PSframe{s1_neko}{-1.5}{ 2.8}{rollouts/nekopuzzle/engine_t1.png}
 \PSframe{s1_soko}{-1.5}{ 0.0}{rollouts/sokoban_basic/engine_t1.png}
-\PSframe{s1_mod} {-1.5}{-2.2}{rollouts/Modality/engine_t1.png}
+\PSframe{s1_mod} {-1.5}{-2.8}{rollouts/Modality/engine_t1.png}
 
-% Forward (blue) state arrows: each row's state -> single NCA (fan-in).
-\draw[arrow, color=IDColor] (nekog-east) -- (nidn-west);
-\draw[arrow, color=IDColor] (sokog-east) -- (nidn-west);
-\draw[arrow, color=IDColor] (modg-east)  -- (nidn-west);
+% Forward (blue) state arrows: each row's state -> single NCA (fan-in,
+% curvy so the top/bottom rows arc into the NCA from above/below).
+\draw[arrow, color=IDColor] (nekog-east) to[out=  0,in=180] (nidn-west);
+\draw[arrow, color=IDColor] (sokog-east) to[out=  0,in=180] (nidn-west);
+\draw[arrow, color=IDColor] (modg-east)  to[out=  0,in=180] (nidn-west);
 
 % Loss (red) arrows back from each s_1 to the NCA.
 \draw[lossarrow] (s1_neko-west) to[out=180,in=  0] (nidn-east);
@@ -138,35 +135,35 @@
 \draw[lossarrow] (s1_mod-west)  to[out=180,in=  0] (nidn-east);
 
 % Code → encoder fan-in (upward to encoder above rows)
-\draw[condarrow] (nekoc-east) to[out= 60,in=200] (enc_id.south);
-\draw[condarrow] (sokoc-east) to[out= 60,in=215] (enc_id.south);
-\draw[condarrow] (modc-east)  to[out= 60,in=230] (enc_id.south);
+\draw[condarrow] (nekoc.east) to[out= 60,in=200] (enc_id.south);
+\draw[condarrow] (sokoc.east) to[out= 60,in=215] (enc_id.south);
+\draw[condarrow] (modc.east)  to[out= 60,in=230] (enc_id.south);
 
 % Latent z conditions the ID NCA
 \draw[condarrow] (slots_id.south) to[out=-90,in=90] (nidn-north);
 
 % Latent scatter ABOVE the encoder, takes up almost half the page width
-\node[anchor=south, inner sep=1pt] (latent_id) at (-4.0, 5.7)
+\node[anchor=south, inner sep=1pt] (latent_id) at (-4.0, 6.7)
     {\includegraphics[width=8cm]{latent_train_only.pdf}};
 \node[font=\footnotesize\itshape, color=IDColor, anchor=south]
-    at (-4.0, 11.95) {encoder latent space};
+    at (-4.0, 12.95) {encoder latent space};
 \draw[condline] (slots_id.north) -- (latent_id.south);
 
 \node[font=\bfseries, color=IDColor, anchor=south, align=center]
-    at (-4.0, 12.45) {Training (in-distribution)};
+    at (-4.0, 13.45) {Training (in-distribution)};
 
 % =============================================================
 %  VERTICAL DASHED BORDER between train and eval
 % =============================================================
 \draw[dashed, line width=0.3mm, color=black!70]
-    (0.5, -3.7) -- (0.5,  12.65);
+    (0.5, -4.5) -- (0.5,  13.65);
 \node[font=\itshape\tiny, color=black!50, anchor=south, rotate=90]
     at (0.75, 0.4) {trained $\theta \rightarrow \theta^{*}$};
 
 % PuzzleScript engine mascot at bottom-center. (The engine is
 % implemented in JavaScript — flagged in the caption.)
 \node[anchor=center, inner sep=0pt] (mascot)
-    at (1.6, -5.0) {\includegraphics[width=1.4cm]{ps_mascot.png}};
+    at (1.6, -5.7) {\includegraphics[width=1.4cm]{ps_mascot.png}};
 % Invisible "engine" node so the data-flow arrows can target a single
 % logical entity (and we can swap PS+JS back in later if we want to).
 \node[fit=(mascot), inner sep=1pt, draw=none] (engine) {};
@@ -181,13 +178,13 @@
 \tikzstyle{datafl}=[-Stealth, line width=0.25mm, color=black!45,
     opacity=0.85]
 
-% s_0 → engine (south of each state box; state height=10 ⇒ -1.0 from y).
-\coordinate (s0_neko_s) at (-6.9,  1.2);
-\coordinate (s0_soko_s) at (-6.9, -1.0);
-\coordinate (s0_mod_s)  at (-6.9, -3.2);
-\coordinate (s0_inway_s) at (2.5,  1.2);
-\coordinate (s0_nana_s)  at (2.5, -1.0);
-\coordinate (s0_ham_s)   at (2.5, -3.2);
+% s_0 → engine (south of each state box; state height=12 ⇒ -1.2 from y).
+\coordinate (s0_neko_s) at (-6.9,  1.6);
+\coordinate (s0_soko_s) at (-6.9, -1.2);
+\coordinate (s0_mod_s)  at (-6.9, -4.0);
+\coordinate (s0_inway_s) at (2.5,  1.6);
+\coordinate (s0_nana_s)  at (2.5, -1.2);
+\coordinate (s0_ham_s)   at (2.5, -4.0);
 \draw[datafl] (s0_neko_s)  to[out=-90,in=160] (engine.west);
 \draw[datafl] (s0_soko_s)  to[out=-90,in=170] (engine.west);
 \draw[datafl] (s0_mod_s)   to[out=-90,in=180] (engine.west);
@@ -196,9 +193,9 @@
 \draw[datafl] (s0_ham_s)   to[out=-90,in=  0] (engine.east);
 
 % engine → train s_1 (south of each train s_1 box)
-\coordinate (s1_neko_s) at (-1.4,  1.2);
-\coordinate (s1_soko_s) at (-1.4, -1.0);
-\coordinate (s1_mod_s)  at (-1.4, -3.2);
+\coordinate (s1_neko_s) at (-1.4,  1.6);
+\coordinate (s1_soko_s) at (-1.4, -1.2);
+\coordinate (s1_mod_s)  at (-1.4, -4.0);
 \draw[datafl] (engine.north) to[out= 60, in=-90] (s1_neko_s);
 \draw[datafl] (engine.north) to[out= 70, in=-90] (s1_soko_s);
 \draw[datafl] (engine.north) to[out= 80, in=-90] (s1_mod_s);
@@ -215,66 +212,61 @@
 %  RIGHT HALF: held-out eval — one NCA per TIMESTEP, all rows fan in
 % =============================================================
 
-\StateOnCode{inway}{ 2.4}{ 2.2}
+\StateOnCode{inway}{ 2.4}{ 2.8}
     {rollouts/in_the_way_by_giovanni_mota/pred_t0.png}
-    {objects\\===\\Player Fruit\\Wall Block\\===\\rules\\===\\{}[>P|F]\\{}~->[|P]\\===\\winconditions\\===\\no Fruit}
+    {\textbf{Player Fruit}\\===\\{}[\textbf{>P}|\textbf{F}]\\{}~->[|\textbf{P}]}
 \StateOnCode{nana}{ 2.4}{ 0.0}
     {rollouts/my_nana_ate_my_kid_brother_by_ruth_williams/pred_t0.png}
-    {objects\\===\\Player Grave\\Fruit Temp\\===\\rules\\===\\late[G|.|P]\\{}~->[T|.|G]\\{}[P F]->[P]\\===\\win\\===\\no Player}
-\StateOnCode{ham}{ 2.4}{-2.2}
+    {\textbf{Grave Player}\\===\\\textbf{late} [\textbf{G}|.|\textbf{P}]\\{}~->[\textbf{T}|.|\textbf{G}]}
+\StateOnCode{ham}{ 2.4}{-2.8}
     {rollouts/Hamiltwo/pred_t0.png}
-    {objects\\===\\LivePlayer\\DeadP Wall\\Digit Sub\\===\\rules\\===\\{}[>L|noW]\\{}~->[>L Sub]\\===\\win\\===\\no Sub}
+    {\textbf{LivePlayer Wall}\\===\\{}[\textbf{>L}|\textbf{noW}]\\{}~->[\textbf{>L Sub}]}
 
-\EncLatent{ood}{3.4}{4.4}
+\EncLatent{ood}{3.4}{5.4}
 
 % Three NCA timesteps, vertically centered.
 \NCAstep{oodn1}{4.7}{0}
 \NCAstep{oodn2}{7.1}{0}
 \NCAstep{oodn3}{9.5}{0}
 
-\PSframe{h1_inway}{ 5.9}{ 2.2}{rollouts/in_the_way_by_giovanni_mota/pred_t1.png}
-\PSframe{h2_inway}{ 8.3}{ 2.2}{rollouts/in_the_way_by_giovanni_mota/pred_t2.png}
-\PSframe{h3_inway}{10.7}{ 2.2}{rollouts/in_the_way_by_giovanni_mota/pred_t3.png}
+\PSframe{h1_inway}{ 5.9}{ 2.8}{rollouts/in_the_way_by_giovanni_mota/pred_t1.png}
+\PSframe{h2_inway}{ 8.3}{ 2.8}{rollouts/in_the_way_by_giovanni_mota/pred_t2.png}
+\PSframe{h3_inway}{10.7}{ 2.8}{rollouts/in_the_way_by_giovanni_mota/pred_t3.png}
 
 \PSframe{h1_nana}{ 5.9}{ 0.0}{rollouts/my_nana_ate_my_kid_brother_by_ruth_williams/pred_t1.png}
 \PSframe{h2_nana}{ 8.3}{ 0.0}{rollouts/my_nana_ate_my_kid_brother_by_ruth_williams/pred_t2.png}
 \PSframe{h3_nana}{10.7}{ 0.0}{rollouts/my_nana_ate_my_kid_brother_by_ruth_williams/pred_t3.png}
 
-\PSframe{h1_ham}{ 5.9}{-2.2}{rollouts/Hamiltwo/pred_t1.png}
-\PSframe{h2_ham}{ 8.3}{-2.2}{rollouts/Hamiltwo/pred_t2.png}
-\PSframe{h3_ham}{10.7}{-2.2}{rollouts/Hamiltwo/pred_t3.png}
+\PSframe{h1_ham}{ 5.9}{-2.8}{rollouts/Hamiltwo/pred_t1.png}
+\PSframe{h2_ham}{ 8.3}{-2.8}{rollouts/Hamiltwo/pred_t2.png}
+\PSframe{h3_ham}{10.7}{-2.8}{rollouts/Hamiltwo/pred_t3.png}
 
-% Forward chain (BLUE everywhere in the eval part). Fan-in into each
-% NCA from all 3 rows, fan-out from each NCA to all 3 rows.
-% s_0 → NCA1
-\draw[arrow, color=IDColor] (inwayg-east) -- (noodn1-west);
-\draw[arrow, color=IDColor] (nanag-east)  -- (noodn1-west);
-\draw[arrow, color=IDColor] (hamg-east)   -- (noodn1-west);
-% NCA1 → ŝ_1
-\draw[arrow, color=IDColor] (noodn1-east) -- (h1_inway-west);
-\draw[arrow, color=IDColor] (noodn1-east) -- (h1_nana-west);
-\draw[arrow, color=IDColor] (noodn1-east) -- (h1_ham-west);
-% ŝ_1 → NCA2
-\draw[arrow, color=IDColor] (h1_inway-east) -- (noodn2-west);
-\draw[arrow, color=IDColor] (h1_nana-east)  -- (noodn2-west);
-\draw[arrow, color=IDColor] (h1_ham-east)   -- (noodn2-west);
-% NCA2 → ŝ_2
-\draw[arrow, color=IDColor] (noodn2-east) -- (h2_inway-west);
-\draw[arrow, color=IDColor] (noodn2-east) -- (h2_nana-west);
-\draw[arrow, color=IDColor] (noodn2-east) -- (h2_ham-west);
-% ŝ_2 → NCA3
-\draw[arrow, color=IDColor] (h2_inway-east) -- (noodn3-west);
-\draw[arrow, color=IDColor] (h2_nana-east)  -- (noodn3-west);
-\draw[arrow, color=IDColor] (h2_ham-east)   -- (noodn3-west);
-% NCA3 → ŝ_3
-\draw[arrow, color=IDColor] (noodn3-east) -- (h3_inway-west);
-\draw[arrow, color=IDColor] (noodn3-east) -- (h3_nana-west);
-\draw[arrow, color=IDColor] (noodn3-east) -- (h3_ham-west);
+% Forward chain (BLUE everywhere in the eval part). Curvy fan-in /
+% fan-out around each NCA — each arrow uses to[out=0,in=180] so it
+% bends naturally between row-y and the NCA's vertical center.
+\draw[arrow, color=IDColor] (inwayg-east)   to[out=0,in=180] (noodn1-west);
+\draw[arrow, color=IDColor] (nanag-east)    to[out=0,in=180] (noodn1-west);
+\draw[arrow, color=IDColor] (hamg-east)     to[out=0,in=180] (noodn1-west);
+\draw[arrow, color=IDColor] (noodn1-east)   to[out=0,in=180] (h1_inway-west);
+\draw[arrow, color=IDColor] (noodn1-east)   to[out=0,in=180] (h1_nana-west);
+\draw[arrow, color=IDColor] (noodn1-east)   to[out=0,in=180] (h1_ham-west);
+\draw[arrow, color=IDColor] (h1_inway-east) to[out=0,in=180] (noodn2-west);
+\draw[arrow, color=IDColor] (h1_nana-east)  to[out=0,in=180] (noodn2-west);
+\draw[arrow, color=IDColor] (h1_ham-east)   to[out=0,in=180] (noodn2-west);
+\draw[arrow, color=IDColor] (noodn2-east)   to[out=0,in=180] (h2_inway-west);
+\draw[arrow, color=IDColor] (noodn2-east)   to[out=0,in=180] (h2_nana-west);
+\draw[arrow, color=IDColor] (noodn2-east)   to[out=0,in=180] (h2_ham-west);
+\draw[arrow, color=IDColor] (h2_inway-east) to[out=0,in=180] (noodn3-west);
+\draw[arrow, color=IDColor] (h2_nana-east)  to[out=0,in=180] (noodn3-west);
+\draw[arrow, color=IDColor] (h2_ham-east)   to[out=0,in=180] (noodn3-west);
+\draw[arrow, color=IDColor] (noodn3-east)   to[out=0,in=180] (h3_inway-west);
+\draw[arrow, color=IDColor] (noodn3-east)   to[out=0,in=180] (h3_nana-west);
+\draw[arrow, color=IDColor] (noodn3-east)   to[out=0,in=180] (h3_ham-west);
 
 % Code → encoder
-\draw[condarrow] (inwayc-east) to[out= 60,in=200] (enc_ood.south);
-\draw[condarrow] (nanac-east)  to[out= 60,in=215] (enc_ood.south);
-\draw[condarrow] (hamc-east)   to[out= 60,in=230] (enc_ood.south);
+\draw[condarrow] (inwayc.east) to[out= 60,in=200] (enc_ood.south);
+\draw[condarrow] (nanac.east)  to[out= 60,in=215] (enc_ood.south);
+\draw[condarrow] (hamc.east)   to[out= 60,in=230] (enc_ood.south);
 
 % Latent z conditions every OOD NCA timestep
 \draw[condarrow] (slots_ood.south) to[out=-90,in=90] (noodn1-north);
@@ -282,14 +274,14 @@
 \draw[condarrow] (slots_ood.south) to[out=-90,in=90] (noodn3-north);
 
 % Latent scatter ABOVE the encoder, takes up almost half the page width
-\node[anchor=south, inner sep=1pt] (latent_ood) at (6.5, 5.7)
+\node[anchor=south, inner sep=1pt] (latent_ood) at (6.5, 6.7)
     {\includegraphics[width=8cm]{latent_with_ood.pdf}};
 \node[font=\footnotesize\itshape, color=OODColor, anchor=south]
-    at (6.5, 11.95) {encoder latent space + OOD ($\bigstar$)};
+    at (6.5, 12.95) {encoder latent space + OOD ($\bigstar$)};
 \draw[condline] (slots_ood.north) -- (latent_ood.south);
 
 \node[font=\bfseries, color=OODColor, anchor=south, align=center]
-    at (6.5, 12.45) {Evaluation (held-out / OOD)};
+    at (6.5, 13.45) {Evaluation (held-out / OOD)};
 
 \end{tikzpicture}
 
