@@ -45,6 +45,12 @@ load-bearing claim, then, is in-distribution: it slows per-game
 capacity dilution by an order of magnitude on the shared 14-game
 intersection, where data dilution---not rule disambiguation---is the
 binding constraint.
+An open question is whether further data and training would eventually trigger a phase transition---in the spirit of grokking on algorithmic
+tasks~\cite{power2022grokking,nanda2023progress}---in which the rule
+channel becomes load-bearing: the model would shift from inferring
+mechanics from layout statistics to interpreting the rule text
+directly, and OOD performance would then track the encoder rather
+than the unconditional baseline.
 
 A single-grid win does not establish that the model has learned the
 dynamics, because slot cross-attention can in principle memorize

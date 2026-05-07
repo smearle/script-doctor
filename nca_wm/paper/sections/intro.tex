@@ -71,18 +71,10 @@ token-sequence hash.
 
 We make the following contributions:
 \begin{enumerate}
-  \item \textbf{NCA dynamics over discrete state.} A shared,
-        iteratively-applied local update body, operating on the
-        engine's native discrete grid, outperforms non-iterative
-        baselines (CNN, U-Net, ViT) on rollout fidelity in a
-        controlled comparison that varies only the spatial body.
+  \item \textbf{NCA dynamics over discrete state.}
+        A shared, iteratively-applied local update body operating on the engine's native discrete grid outperforms non-iterative baselines (CNN, U-Net, ViT) on rollout fidelity.
   \item \textbf{Rule-conditioning for multi-game simulation.}
-        A single set of weights simulates many games by
-        cross-attending to slot embeddings of each game's tokenized
-        rule text.
-  \item \textbf{An evaluation protocol for unseen-rule generalization.}
-        We construct \textsc{Heldout-26}, a 26-game stratified set
-        disjoint from every training preset by filename and by
-        token-sequence hash, and report against an identity baseline
-        that lower-bounds the per-step state-change rate.
+        Cross-attending to slot embeddings of each game's tokenized rule text lets a single set of weights cover many games and slows per-game capacity dilution by roughly an order of magnitude as the corpus grows.
+  \item \textbf{Scaling helps OOD, but the rule channel does not.}
+        Broadening the training corpus closes most of the gap to the identity baseline on unseen games, yet the rule encoder shows little advantage over an unconditional baseline---suggesting the model is inferring dynamics from level layouts rather than from the explicit rule channel.
 \end{enumerate}
