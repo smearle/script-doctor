@@ -1,5 +1,6 @@
 run_dir,label,kind,n_train_games,n_hid,n_nca_steps,input_skip,encode_sprites,token_decoder_loss_weight,indist_random_n_games,indist_random_mean,indist_random_median,indist_bfs_mean,ood_step1_model_mean,ood_step1_identity_mean,ood_ar30_model_mean,ood_ar30_identity_mean,ood_wins,ood_n_games
+multi_scaling_14_uncond_match_s0,"Unconditional, Train-14",uncond,scaling_14,256,8,True,False,0.0,,,,,,,,,,
 multi_scaling_14_cond_match_s0,"Rule-conditional, Train-14",cond,scaling_14,256,8,True,True,1.0,14,0.016308665125540498,0.0010978835978835981,0.011700941734064647,0.16394086692835808,0.023415313086925942,0.23969247761576248,0.020516449367738034,7,29
 multi_scaling_gallery_v2_uncond_match_s0,"Unconditional, Train-59",uncond,scaling_gallery_v2,256,8,True,False,0.0,59,0.10536161543057551,0.03634133865149271,0.10996256104738061,,,,,,
 multi_scaling_gallery_v2_cond_match_s0,"Rule-conditional, Train-59",cond,scaling_gallery_v2,256,8,True,True,1.0,59,0.09038550550430159,0.024810256410256408,0.09252865016441399,0.06189254112518623,0.023415313086925942,0.15255182465992767,0.020516449367738034,7,29
-multi_scaling_gallery_v4_cond_match_s0,"Rule-conditional, Train-199 (matched recipe)",cond,scaling_gallery_v4,256,8,True,True,1.0,,,,,,,,,,
+multi_scaling_gallery_v4_cond_match_s0,"Rule-conditional, Train-199 (matched recipe)",cond,scaling_gallery_v4,256,8,True,True,1.0,199,0.10640446586216595,0.04437142857142857,0.10731940051201687,0.03168612279697546,0.023415313086925942,0.09354737655553702,0.020516449367738034,15,29

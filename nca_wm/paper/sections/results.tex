@@ -258,19 +258,18 @@ model on $18 / 29$ held-out games. The encoder is at minimum learning
 to disambiguate which rule set is in play.
 
 \textbf{Out-of-distribution generalization is a function of rule
-diversity, not the encoder alone.} On \textsc{Heldout-30} the Train-14
-conditional model still fails catastrophically ($16.4\%$ step-1
-cell-error, $7\times$ worse than identity), barely better than
-unconditional ($19.6\%$). With $14\times$ more rule diversity the
-\textsc{Train-199} conditional model drops to $4.8\%$ at step 1---%
-within $2.5$pp of the identity baseline---and matches or beats
-identity on $9 / 29$ held-out games. The headline rule-conditional
-contribution to OOD generalization is \emph{driven primarily by
-broad-corpus rule diversity} rather than by the encoder architecture
-in isolation. We discuss the implications, including the fraction of
-games on which even \textsc{Train-199} fails (e.g.\ pseudo-random
-spawn games, deeply cascaded \texttt{again} rules), in
-\S\ref{sec:discussion}.
+diversity, not the encoder alone.} On \textsc{Heldout-30} the
+\textsc{Train-14} conditional model fails catastrophically
+($16.4\%$ step-1 cell-error, $7\times$ worse than identity). With
+$14\times$ more rule diversity the \textsc{Train-199} conditional
+model drops to $3.17\%$ at step 1---within $1$pp of the identity
+baseline---and matches or beats identity on $15 / 29$ held-out games.
+The headline rule-conditional contribution to OOD generalization is
+\emph{driven primarily by broad-corpus rule diversity} rather than by
+the encoder architecture in isolation. We discuss the implications,
+including the fraction of games on which even \textsc{Train-199}
+fails (e.g.\ pseudo-random spawn games, deeply cascaded
+\texttt{again} rules), in \S\ref{sec:discussion}.
 
 % Generalization-to-unseen-games results (held-out latent geometry,
 % symbolic decoder reconstruction + sampling, frozen-NCA inverse fit
