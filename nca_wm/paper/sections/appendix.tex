@@ -620,6 +620,17 @@ $0\% / 0\% / 26.9\% / 45.1\%$ on L0 BFS cell-error.
 % and on the multi-game \textsc{Train-14} preset, reporting
 % change-error and parameter count.}
 
+\section{Limitations and future work: gated local updates}
+\label{app:gated-updates}
+
+Our NCA body applies an ungated convolutional update at every iteration: each step replaces the hidden cell vector with the output of a small conv $+$ activation stack (with optional input-skip re-injection).
+By contrast, the closest prior local-update grid-engine model~\cite{bamford2020neural} uses a 2D Neural GPU~\cite{kaiser2016neuralgpu}, whose core is a convolutional GRU (CGRU) with explicit update and reset gates: the new state is a convex combination $u \odot s_{i-1} + (1-u) \odot c_i$ of the previous state and a candidate update.
+Two concrete directions are worth exploring.
+First, plugging a CGRU-style gate into our shared-body NCA would let the model express ``hold this cell unchanged'' as a learnable, content-dependent identity rather than relying on the residual recurrence we currently use; this is the same mechanism that lets a Neural GPU run for many iterations past convergence without drifting, and it interacts naturally with our adaptive-halting experiments (Appendix~\ref{app:halting}), where convergence-ST already exploits self-arrest at inference time.
+Second, gating could change the train-loss-vs-rollout-error decoupling we report in F3 (Appendix~\ref{app:F3}): per-step models that overfit per-step prediction at the cost of autoregressive stability might be exactly the regime where a learned ``do nothing'' gate dampens compounding error.
+Whether the inductive bias matches the PuzzleScript engine's outer-loop semantics as well as our ungated body does is an open empirical question---the engine's \texttt{again} loop also expresses ``re-run rules until the state stops changing,'' so a gating mechanism that learns a content-dependent halt is in principle a closer match to the target dynamics than our fixed-depth body.
+We leave a controlled CGRU-vs-ungated comparison at matched parameter count and matched depth to future work.
+
 \section{Additional related work}
 \label{app:related}
 

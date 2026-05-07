@@ -1,25 +1,7 @@
 \section{Related Work}
 \label{sec:related}
 
-\paragraph{Neural Cellular Automata.}
-NCAs learn a local update rule that, applied repeatedly to a grid of
-hidden states, gives rise to globally coordinated
-behavior~\cite{mordvintsev2020growing}. Subsequent work covers seeded
-morphology growth, classification under distribution shift, texture
-synthesis, and self-organizing
-attention~\cite{niklasson2021selforganising,palm2022variational,najarro2022hypernca};
-3D artefacts and functional machines in
-Minecraft~\cite{sudhakaran2021growing}; graph algorithms on grid
-mazes~\cite{earle2023pathfinding}; populations of continually-adapting
-NCA agents in differentiable ALife
-substrates~\cite{berdica2026pbtnca}; and compilation of symbolic
-rewrite rules into NCA dynamics for grid-based RL
-environments~\cite{earle2025autoverse}. We use NCAs as
-action-conditioned world models: rather than asking the NCA to
-converge to a static target, we ask it to predict the engine's
-deterministic next state at every tick.
-
-\paragraph{World models and self-prediction.}
+% \paragraph{World models and self-prediction.}
 World-model research traces back to Schmidhuber's curiosity work and
 was popularized for vision-based RL by Ha and
 Schmidhuber~\cite{ha2018world}. Transformer-based world
@@ -45,10 +27,26 @@ models~\cite{schrittwieser2020muzero}, which learn abstract latent
 dynamics, we commit to predicting the engine state in its native grid,
 making ground-truth supervision exact and cell-by-cell.
 
-\paragraph{Learned grid-engine and local-update models.}
-Closest to our setting, Bamford and Lucas's Neural Game
-Engine~\cite{bamford2020neural} is an NCA-like 2D recurrent local-update
-system with shared convolutional gated updates conditioned on the
+% \paragraph{Neural Cellular Automata.}
+NCAs learn a local update rule that, applied repeatedly to a grid of
+hidden states, gives rise to globally coordinated
+behavior~\cite{mordvintsev2020growing}. Subsequent work covers seeded
+morphology growth, classification under distribution shift, texture
+synthesis, and self-organizing
+attention~\cite{niklasson2021selforganising,palm2022variational,najarro2022hypernca};
+3D artefacts and functional machines in
+Minecraft~\cite{sudhakaran2021growing}; graph algorithms on grid
+mazes~\cite{earle2023pathfinding}; populations of continually-adapting
+NCA agents in differentiable ALife
+substrates~\cite{berdica2026pbtnca}; and compilation of symbolic
+rewrite rules into NCA dynamics for grid-based RL
+environments~\cite{earle2025autoverse}. We use NCAs as
+action-conditioned world models: rather than asking the NCA to
+converge to a static target, we ask it to predict the engine's
+deterministic next state at every tick.
+
+% \paragraph{Learned grid-engine and local-update models.}
+\cite{bamford2020neural} similarly use an NCA-like 2D recurrent local-update system with shared convolutional GRU updates~\cite{kaiser2016neuralgpu} conditioned on the
 player action, trained from pixels with a separate forward model per
 GVGAI game. We instead train one rule-conditioned model across many
 games, predict the engine's symbolic object-channel state, and
@@ -58,7 +56,8 @@ use repeated local computation; NCAs differ in committing to a
 \emph{shared} (across iterations) update rule on a fixed grid, which
 matches the PuzzleScript engine's outer-loop semantics.
 
-\paragraph{PuzzleScript and rule-based puzzle games.}
+% USER: We don't need so many headers.
+% \paragraph{PuzzleScript and rule-based puzzle games.}
 PuzzleScript~\cite{lavelle2013puzzlescript} is a DSL for grid-based
 puzzle games supporting chained local interactions, \texttt{again}-driven
 simulation (gravity, projectiles, light beams), multi-character control,
