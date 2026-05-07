@@ -3,25 +3,25 @@
   \toprule
   Architecture & params (M) & random (AR) & one-step (TF) & BFS (AR) \\
   \midrule
-  \multicolumn{5}{l}{\emph{\textsc{Train-14} (multi-game, 14 PuzzleScript games, 20k updates)}} \\
-  NCA (per-step, $T{=}4, n_r{=}1$) & 7.37 & $7.51\% \pm 0.48\%$ & $0.251\% \pm 0.039\%$ & $\mathbf{7.05\% \pm 0.87\%}$ \\
-  \textbf{NCA (shared, $T{=}4, n_r{=}T$)} & \textbf{1.96} & $7.85\% \pm 0.21\%$ & $0.443\% \pm 0.099\%$ & $7.71\% \pm 0.15\%$ \\
-  CNN (4-block ResNet) & 5.01 & $8.33\% \pm 0.65\%$ & $0.475\% \pm 0.092\%$ & $8.02\% \pm 0.82\%$ \\
-  U-Net (2 levels) & 6.09 & $12.70\% \pm 0.80\%$ & $1.31\% \pm 0.08\%$ & $12.48\% \pm 0.24\%$ \\
-  ViT (4 layers) & 4.01 & $18.19\% \pm 3.15\%$ & $2.88\% \pm 0.53\%$ & $16.45\% \pm 2.94\%$ \\
-  \midrule
   \multicolumn{5}{l}{\emph{Sokoban authored (single-game, 10 \textit{Microban} levels, 10k updates)}} \\
-  \textbf{NCA (shared, $T{=}4, n_r{=}T$)} & \textbf{1.94} & $0.094\% \pm 0.107\%$ & $0.002\% \pm 0.002\%$ & $\mathbf{0.003\% \pm 0.004\%}$ \\
+  \textbf{NCA (shared)} & \textbf{1.94} & $0.094\% \pm 0.107\%$ & $0.002\% \pm 0.002\%$ & $\mathbf{0.003\% \pm 0.004\%}$ \\
   CNN (4-block ResNet) & 5.00 & $0.117\% \pm 0.065\%$ & $0.005\% \pm 0.001\%$ & $0.055\% \pm 0.075\%$ \\
-  NCA (per-step, $T{=}4, n_r{=}1$) & 7.36 & $0.058\% \pm 0.041\%$ & $0.002\% \pm 0.001\%$ & $0.283\% \pm 0.400\%$ \\
+  NCA (per-step) & 7.36 & $0.058\% \pm 0.041\%$ & $0.002\% \pm 0.001\%$ & $0.283\% \pm 0.400\%$ \\
   U-Net (2 levels) & 6.07 & $1.85\% \pm 0.96\%$ & $0.261\% \pm 0.047\%$ & $3.13\% \pm 0.87\%$ \\
   ViT (4 layers) & 3.99 & $6.51\% \pm 0.38\%$ & $1.49\% \pm 0.21\%$ & $9.32\% \pm 0.42\%$ \\
   \midrule
   \multicolumn{5}{l}{\emph{Sokoban multi-grid synth (single-rule, 1024 evolved levels, 10k updates)}} \\
-  \textbf{NCA (shared, $T{=}4, n_r{=}T$)} & \textbf{3.07} & $4.09\% \pm 0.19\%$ & $0.274\% \pm 0.055\%$ & $\mathbf{2.08\% \pm 0.47\%}$ \\
-  NCA (per-step, $T{=}4, n_r{=}1$) & 8.49 & $4.87\% \pm 1.43\%$ & $0.263\% \pm 0.064\%$ & $2.09\% \pm 1.75\%$ \\
+  \textbf{NCA (shared)} & \textbf{3.07} & $4.09\% \pm 0.19\%$ & $0.274\% \pm 0.055\%$ & $\mathbf{2.08\% \pm 0.47\%}$ \\
+  NCA (per-step) & 8.49 & $4.87\% \pm 1.43\%$ & $0.263\% \pm 0.064\%$ & $2.09\% \pm 1.75\%$ \\
   CNN (4-block ResNet) & 5.00 & $3.68\% \pm 0.88\%$ & $0.162\% \pm 0.007\%$ & $2.82\% \pm 1.97\%$ \\
   U-Net (2 levels) & 6.07 & $7.10\% \pm 1.63\%$ & $1.37\% \pm 0.06\%$ & $8.92\% \pm 0.54\%$ \\
   ViT (4 layers) & 3.99 & $10.40\% \pm 1.86\%$ & $2.33\% \pm 0.32\%$ & $10.99\% \pm 0.29\%$ \\
+  \midrule
+  \multicolumn{5}{l}{\emph{\textsc{Train-14} (multi-game, 14 PuzzleScript games, 20k updates)}} \\
+  NCA (per-step) & 7.37 & $7.51\% \pm 0.48\%$ & $0.251\% \pm 0.039\%$ & $\mathbf{7.05\% \pm 0.87\%}$ \\
+  \textbf{NCA (shared)} & \textbf{1.96} & $7.85\% \pm 0.21\%$ & $0.443\% \pm 0.099\%$ & $7.71\% \pm 0.15\%$ \\
+  CNN (4-block ResNet) & 5.01 & $8.33\% \pm 0.65\%$ & $0.475\% \pm 0.092\%$ & $8.02\% \pm 0.82\%$ \\
+  U-Net (2 levels) & 6.09 & $12.70\% \pm 0.80\%$ & $1.31\% \pm 0.08\%$ & $12.48\% \pm 0.24\%$ \\
+  ViT (4 layers) & 4.01 & $18.19\% \pm 3.15\%$ & $2.88\% \pm 0.53\%$ & $16.45\% \pm 2.94\%$ \\
   \bottomrule
 \end{tabular}

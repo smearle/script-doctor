@@ -36,8 +36,8 @@ OUT_DIR = REPO_ROOT / "nca_wm" / "paper" / "figures" / "baselines"
 # four tables; the order in each table is given separately by `arch_order`
 # below (which the table sorts further by BFS final-err).
 ARCH_DISPLAY = {
-    "nca_shared":  r"\textbf{NCA (shared, $T{=}4, n_r{=}T$)}",
-    "nca_perstep": "NCA (per-step, $T{=}4, n_r{=}1$)",
+    "nca_shared":  r"\textbf{NCA (shared)}",
+    "nca_perstep": "NCA (per-step)",
     "cnn_d4":      "CNN (4-block ResNet)",
     "unet_l2":     "U-Net (2 levels)",
     "vit_l4":      "ViT (4 layers)",
@@ -351,9 +351,9 @@ def main() -> None:
     _table_combined(
         rows,
         blocks=[
-            (r"\textsc{Train-14} (multi-game, 14 PuzzleScript games, 20k updates)", "scaling_14"),
             (r"Sokoban authored (single-game, 10 \textit{Microban} levels, 10k updates)", "microban_authored"),
             (r"Sokoban multi-grid synth (single-rule, 1024 evolved levels, 10k updates)", "sokoban_basic_synth"),
+            (r"\textsc{Train-14} (multi-game, 14 PuzzleScript games, 20k updates)", "scaling_14"),
         ],
         arch_order=arch_order,
         out_path=OUT_DIR / "architectures.tex",
@@ -361,9 +361,9 @@ def main() -> None:
     _table_compact_bfs(
         rows,
         presets=[
-            (r"\textsc{Train-14}", "scaling_14"),
             (r"Sokoban authored", "microban_authored"),
             (r"Sokoban synth", "sokoban_basic_synth"),
+            (r"\textsc{Train-14}", "scaling_14"),
         ],
         sort_key_games="scaling_14",
         arch_order=arch_order,
