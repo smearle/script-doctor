@@ -3,56 +3,47 @@
 
 \subsection{Problem setup}
 
-A PuzzleScript game is a tuple $(\mathcal{O}, R, \{L_i\})$ where
-$\mathcal{O}$ is an ordered list of object kinds, $R$ is a list of
-rewrite rules, and $\{L_i\}$ are authored levels. Each level is a
-multi-channel grid $s \in \{0,1\}^{C \times H \times W}$ where channel
-$c$ is the indicator of object kind $c$ at each cell ($C = \lvert \mathcal{O} \rvert$). An action $a \in
-\{\texttt{up}, \texttt{down}, \texttt{left}, \texttt{right},
-\texttt{action}\}$ together with the current state $s_t$
-deterministically yields a next state $s_{t+1}$ via the engine. The
-state can also carry a terminal \emph{won} bit, since some rules
-trigger a win on certain conditions.
+A PuzzleScript game is a tuple $(\mathcal{O}, R, \{L_i\})$ of object
+kinds, rewrite rules, and authored levels. Each level is a
+multi-channel grid $s \in \{0,1\}^{C \times H \times W}$ with
+$C = |\mathcal{O}|$ and channel $c$ indicating object kind $c$. An
+action $a \in \{\texttt{up}, \texttt{down}, \texttt{left}, \texttt{right},
+\texttt{action}\}$ and current state $s_t$ deterministically yield
+$s_{t+1}$ via the engine; the state also carries a terminal \emph{won}
+bit triggered by certain rules.
 
-We train a model $f_\theta(s_t, a_t, g) \mapsto
-\widehat{s}_{t+1}$ where $g$ is a latent representation of the
-game's symbolic source. In the experiments below, $g$ is produced
-from the tokenized game source (a sequence of integers from a shared
-$\approx 140$-symbol vocabulary that covers the engine grammar plus
-per-game object names and 5$\times$5 sprite RGBA values when sprite
-tokens are enabled). At evaluation we roll the model out
-autoregressively and compare cell-by-cell against the engine.
+We train $f_\theta(s_t, a_t, g) \mapsto \widehat{s}_{t+1}$ where $g$
+is a latent representation of the game's symbolic source. We obtain
+$g$ from the tokenized game source (integers from a $\approx
+140$-symbol vocabulary covering the engine grammar, per-game object
+names, and 5$\times$5 sprite RGBA values when sprite tokens are
+enabled). At evaluation we roll the model out autoregressively and
+compare cell-by-cell against the engine.
 
 \paragraph{Conditioning interface.}
-For each transition $(s_t, a_t, s_{t+1})$ in the training set we
-encode the game's token sequence to a slot matrix
-$z \in \mathbb{R}^{K \times d_{\text{slot}}}$ via the perceiver-style
-encoder $\mathrm{Enc}_\phi$ and drive the rule-conditioned NCA from
-$(s_t, a_t)$ conditioned on $z$ to produce $\widehat{s}_{t+1}$.
-The training loss is
-\begin{equation*}
-  \mathcal{L} \;=\; \mathcal{L}_{\text{state}}(\widehat{s}_{t+1}, s_{t+1})
-  \;+\; \alpha\,\mathcal{L}_{\text{win}} \, .
-\end{equation*}
-Default dimensions: $K=16$, $d_{\text{slot}}=64$, encoder
-$d_{\text{model}}=64$ with two self-attention layers.
+The encoder $\mathrm{Enc}_\phi$ maps the token sequence to slots
+$z \in \mathbb{R}^{K \times d_{\text{slot}}}$, and the NCA produces
+$\widehat{s}_{t+1}$ from $(s_t, a_t)$ conditioned on $z$. Training
+loss is
+$\mathcal{L} = \mathcal{L}_{\text{state}}(\widehat{s}_{t+1}, s_{t+1})
++ \alpha\,\mathcal{L}_{\text{win}}$.
+Defaults: $K=16$, $d_{\text{slot}}=64$, encoder $d_{\text{model}}=64$
+with two self-attention layers.
 
 \subsection{Rule-conditioned NCA world model}
 
 \paragraph{Game-description encoder.}
-A perceiver-style encoder $\mathrm{Enc}_\phi$ maps the game's token
-sequence $\mathrm{spec} \in \mathbb{Z}^{S}$, or the corresponding
-autoencoder latent, to $K$ slot vectors $z \in \mathbb{R}^{K \times d}$.
-For token-conditioned runs, the encoder applies $\ell$ self-attention
-layers over the tokens, then $K$ learned query vectors cross-attend
-into the contextualized token sequence to produce $z$. Slots are
-shared across cells and remain fixed throughout the rollout.
+$\mathrm{Enc}_\phi$ maps the token sequence $\mathrm{spec} \in
+\mathbb{Z}^{S}$ (or the corresponding autoencoder latent) to slots
+$z \in \mathbb{R}^{K \times d}$ via $\ell$ self-attention layers
+followed by $K$ learned query vectors cross-attending into the
+contextualised tokens. Slots are shared across cells and fixed for
+the rollout.
 
 \paragraph{NCA dynamics body.}
-We embed the input $(s_t, a_t)$ into a hidden grid $h^{(0)} \in
-\mathbb{R}^{H \times W \times d_h}$ via a single dense layer applied
-to the per-cell concatenation of $s_t$'s channels and a broadcast
-one-hot action. We then apply $T$ NCA steps:
+A single dense layer embeds the per-cell concatenation of $s_t$ and
+the broadcast one-hot action into $h^{(0)} \in \mathbb{R}^{H \times W
+\times d_h}$. We then apply $T$ NCA steps:
 \begin{align}
   h^{(k+1)} &= h^{(k)} + W_o \,\mathrm{GELU}\!\bigl(
       W_c\, [\, h^{(k)} \,;\, h^{(0)} \,]_{3\times 3}
@@ -60,67 +51,52 @@ one-hot action. We then apply $T$ NCA steps:
       \mathrm{XAttn}(h^{(k)}, z)
     \bigr) \, ,
 \end{align}
-where $[\,\cdot\,]_{3\times 3}$ denotes a $3{\times}3$ convolution
-producing a vector at each cell, $\mathrm{XAttn}$ is a multi-head
-attention with each cell as a query and the $K$ slots as keys/values,
-and $W_o, W_c$ are shared across all $T$ steps. The
-\emph{input-skip} concatenation re-injects the embedded
-$(s_t, a_t)$ at every step, preventing the deep unroll from drifting.
+where $[\,\cdot\,]_{3\times 3}$ is a $3{\times}3$ convolution per
+cell, $\mathrm{XAttn}$ is multi-head attention with each cell as a
+query and the $K$ slots as keys/values, and $W_o, W_c$ are shared
+across all $T$ steps. The \emph{input-skip} concatenation re-injects
+the embedded $(s_t, a_t)$ at every step to keep the unroll anchored
+to its input.
 
 \paragraph{Pool features.}
-A bare $3{\times}3$ convolution can only propagate one cell of context
-per NCA step, but several PuzzleScript rule patterns reference cells
-that are arbitrarily far apart (\texttt{[ X | ... | Y ]} along an
-axis, or \texttt{[X][Y]} anywhere in the grid). We therefore augment
-each step with three optional pool feature stacks:
-axis max pool (row-max and col-max), axis cumulative max
-(directional prefix-max in each of four directions), and global max
-pool. These features are computed from the current hidden grid and
-broadcast back to every cell before the convolution, exposing
-non-local information that would otherwise require $\Omega(\max(H,W))$
-NCA steps to surface.
+A $3{\times}3$ convolution propagates one cell of context per step,
+but several PuzzleScript patterns reference cells arbitrarily far
+apart (\texttt{[ X | ... | Y ]} or \texttt{[X][Y]}). We therefore
+augment each step with three optional pool stacks computed from
+$h^{(k)}$ and broadcast back per cell: axis max-pool (row+col),
+axis cumulative max (directional prefix-max in four directions), and
+global max-pool---surfacing non-local information that would
+otherwise require $\Omega(\max(H,W))$ NCA steps to reach.
 
 \paragraph{Hierarchical weight sharing.}
-Inspired by the engine's two natural levels of iteration (an inner
-ordered list of rules + an outer \texttt{again} re-evaluation loop),
-we factor $T = n_\ell \cdot n_r$ where $n_\ell$ distinct layers form
-the inner block and $n_r$ outer applications share weights. Setting
-$n_r = T$ recovers a single shared layer applied $T$ times (matches
-the engine's outer-loop structure); setting $n_r = 1$ recovers the
-usual per-step body with $T$ distinct layers.
+PuzzleScript has two natural iteration levels (an inner ordered
+rule list, an outer \texttt{again} re-evaluation loop). We factor
+$T = n_\ell \cdot n_r$ with $n_\ell$ distinct inner layers and $n_r$
+shared-weight outer passes. $n_r = T$ recovers a single shared layer
+applied $T$ times; $n_r = 1$ recovers a per-step body with $T$
+distinct layers.
 
 \paragraph{Heads.}
-A shared \texttt{readout} dense layer maps the final $h^{(T)}$
-cell-wise to next-state logits $\widehat{s}_{t+1} \in \mathbb{R}^{C
-\times H \times W}$; a separate dense layer over the spatially
-average-pooled $h^{(T)}$ produces a binary win logit. Training loss
-is a per-cell BCE on the next-state with an upweight on cells that
-\emph{change} between $s_t$ and $s_{t+1}$, plus a binary cross-entropy
-on the win head.
+A shared \texttt{readout} dense maps $h^{(T)}$ cell-wise to next-state
+logits $\widehat{s}_{t+1}$; a separate dense over spatially
+average-pooled $h^{(T)}$ produces a binary win logit. Training loss is
+per-cell BCE on the next-state, upweighting cells that change between
+$s_t$ and $s_{t+1}$, plus binary cross-entropy on the win head.
 
 \subsection{Baselines}
 
-We compare against three non-NCA baselines that share the slot
-encoder $\mathrm{Enc}_\phi$, the input embedding, and the readout
-heads, but replace the NCA body. Each baseline consumes
-$h^{(0)}$ and the slots $z$ and emits a final hidden grid $h^{(T)}$
-of the same shape; the comparison isolates the contribution of the
-spatial-update body.
-
-The \textbf{CNN} baseline is a stack of $n_b$ residual blocks, each
-containing the same conv + optional pool + slot-cross-attn +
-residual gate as one NCA layer, but with \emph{distinct} weights
-per block and applied once; this tests whether iteration with
-weight sharing matters at all. The \textbf{U-Net} is a 2-level
-encoder-decoder with skip connections and a FiLM bottleneck that
-reads pooled slots, testing whether multi-scale hierarchy
-substitutes for repeated local updates. The \textbf{ViT} stacks
-$n_v$ Transformer encoder layers over the flattened cell sequence
-with learned 2D positional embedding, plus a slot cross-attention
-and feed-forward block per layer, testing whether unrestricted
-global attention beats locality plus iteration.
-
-All baselines accept the same input $(s_t, a_t, g)$ and
-produce the same $(\widehat{s}_{t+1}, \widehat{w}_{t+1})$ outputs as
-the NCA, allowing identical training and evaluation pipelines.
+Three non-NCA baselines share the encoder, input embedding, and
+readout heads, replacing only the NCA body so the comparison
+isolates the spatial-update body. The \textbf{CNN} stacks $n_b$
+residual blocks (conv + optional pool + slot-cross-attn + residual
+gate) with \emph{distinct} per-block weights, testing whether
+iteration with weight sharing matters at all. The \textbf{U-Net}
+is a 2-level encoder-decoder with skip connections and a FiLM
+bottleneck that reads pooled slots, testing whether multi-scale
+hierarchy substitutes for repeated local updates. The \textbf{ViT}
+stacks $n_v$ Transformer encoder layers over flattened cells with
+learned 2D positional embeddings plus per-layer slot cross-attention,
+testing whether unrestricted global attention beats locality plus
+iteration. All baselines accept $(s_t, a_t, g)$ and produce the same
+$(\widehat{s}_{t+1}, \widehat{w}_{t+1})$ outputs.
 

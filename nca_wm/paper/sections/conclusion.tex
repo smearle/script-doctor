@@ -1,63 +1,45 @@
 \section{Conclusion}
 \label{sec:conclusion}
 
-World-model research has so far been organized around individual,
-visually rich games, with a large fraction of model capacity spent
-reproducing pixels rather than the symbolic mechanics that determine
-what happens next. The complementary regime is also worth
-investigating: a single dynamics model spanning a family of
-mechanically distinct, fully discrete environments, with a substrate
-light enough to study at the granularity of individual rules on
-commodity hardware.
-% This is largely orthogonal to the dense-pixel
-% video-world-model line of work, which is expensive to iterate on, and
-% opens a different research surface, organized around program
-% structure and rule-system generalization rather than visual fidelity.
+World-model research has largely been organised around individual,
+visually rich games, spending capacity on pixels rather than the
+symbolic mechanics that determine what happens next. We investigate
+the complementary regime: a single dynamics model spanning a family of
+mechanically distinct, fully discrete environments, light enough to
+study at the rule level on commodity hardware.
 
-Toward this end we propose a rule-conditioned Neural Cellular
-Automaton world model. Three design choices work in concert.
-\textbf{(i) An iterated local-update body.} The dynamics body is a
-single shared local update rule applied for several iterations on a
-hidden grid, mirroring the recursive outer loop of a PuzzleScript
-engine that fires a sequence of atomic local rewrites until
-convergence. This inductive bias yields parameter-efficient world
-models that outperform non-iterative CNN, U-Net, and ViT baselines
-on autoregressive rollout fidelity, both for a single rule family
-and across many jointly trained games
-(\S\ref{sec:results-baselines}, \S\ref{sec:results-scaling}).
-\textbf{(ii) Rule conditioning.} Cross-attention to slot embeddings
-of each game's tokenized rule text lets a single set of weights
-jointly model many games at once. On the 14 games shared by every
-training preset (Figure~\ref{fig:intersection-slope}), per-game
-in-distribution accuracy degrades as the corpus widens---data
-dilution at fixed capacity---but rule-conditioning slows that
-dilution by roughly an order of magnitude relative to an
-unconditional model.
-\textbf{(iii) Training-data scaling.} Broadening the training
-corpus markedly improves out-of-distribution performance on an
-unseen-game held-out set, closing most of the gap to the identity
-baseline and yielding held-out wins on a non-trivial fraction of
-games (\S\ref{sec:results-encoder-ablation}). The headline
-rule-conditional contribution to out-of-distribution generalization
-is driven primarily by broad-corpus rule diversity rather than the
-encoder architecture in isolation, in line with the broader pattern
-that generalization is a function of training-distribution coverage.
+We propose a rule-conditioned Neural Cellular Automaton world model.
+Three design choices work in concert.
+\textbf{(i) Iterated local-update body.} A single shared update
+applied for several iterations on a hidden grid mirrors the engine's
+outer loop and beats non-iterative CNN, U-Net, and ViT baselines on
+autoregressive rollout fidelity, both per-game and across many
+jointly trained games (\S\ref{sec:results-baselines},
+\S\ref{sec:results-scaling}).
+\textbf{(ii) Rule conditioning.} Cross-attention to slot embeddings of
+each game's rule text lets one set of weights model many games. On the
+14 games shared by every training preset
+(Figure~\ref{fig:intersection-slope}), per-game in-distribution accuracy
+degrades as the corpus widens (data dilution at fixed capacity), but
+rule-conditioning slows that dilution by roughly an order of magnitude
+versus an unconditional baseline.
+\textbf{(iii) Training-data scaling.} Broadening the training corpus
+markedly improves out-of-distribution performance on
+\textsc{Heldout-30}, closing most of the gap to the identity baseline
+and yielding wins on a non-trivial fraction of games
+(\S\ref{sec:results-encoder-ablation}). The OOD contribution is driven
+primarily by rule diversity in the training corpus rather than the
+encoder in isolation.
 
-A general rule-conditioned world model is desirable for several
-downstream applications: sample-efficient policy learning and
+Downstream applications include sample-efficient policy learning and
 gradient-based planning across many environments without per-game
-retraining, fast adaptation to novel rule systems on interactive
-world-model benchmarks where rule inference from limited
-interaction is the central
-challenge~\cite{warrier2025benchmarking,arcprize2026arcagi3}, and a
-bridge between neural world models and symbolic program learning
-through a learned latent space that doubles as a search space over
-executable game programs.
-We report preliminary probes of this latent space in
-Appendices~\ref{app:autoencoder} and~\ref{app:inverse-fit}.
-
-By applying an efficient neural substrate to a domain with non-trivial
-mechanical complexity, and jointly learning a latent space of embedded games, our work provides a dynamics-first
-counterpoint to the dense visual world models that currently dominate
-the field, and lays the groundwork for a natural bridge between neural world models and
-symbolic program learning.
+retraining; fast adaptation on interactive world-model benchmarks where
+rule inference from limited interaction is the central
+challenge~\cite{warrier2025benchmarking,arcprize2026arcagi3}; and a
+bridge between neural world models and symbolic program learning via a
+latent space that doubles as a search space over executable game
+programs (preliminary probes in Appendices~\ref{app:autoencoder}
+and~\ref{app:inverse-fit}). We also release the held-out evaluation
+protocol (token-hash-deduplicated \textsc{Heldout-30}, identity
+baseline, wins-vs-identity counter) as a methodological contribution
+for testing rule-system generality of future world models.

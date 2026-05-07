@@ -16,42 +16,34 @@
   \label{fig:arch-overview}
 \end{figure}
 
-Learned world models have been studied primarily in settings where
-the environment is observed as pixels and the task is to predict the
-next frame or latent video token. The standard recipe pairs a
-high-capacity visual encoder-decoder---typically a CNN, U-Net, or
-video Transformer---with an action-conditioned dynamics module. This
-is a natural fit when the observation is visually rich and the
-underlying mechanics are comparatively smooth or uniform. It is a
-less natural fit for games whose difficulty lies not in rendering but
-in a large space of symbolic rule systems.
+Learned world models are typically trained on pixel observations, with
+a high-capacity CNN, U-Net, or video Transformer paired to an
+action-conditioned dynamics module. This is a natural fit for visually
+rich, mechanically uniform environments, but a less natural one for
+games whose difficulty lies in a large space of symbolic rule systems
+rather than in rendering.
 
-PuzzleScript games are such a regime. Each game is fully specified by
-a short text file describing object kinds, layered grid levels, and a
-list of declarative rewrite rules, e.g.
-\texttt{[ > Player | Crate ] -> [ > Player | > Crate ]}. The engine
-evaluates these rules in order on the grid at every tick, applying each rule until the state converges, with \texttt{again} rules causing the entire rule block to fire again. The state can be represented as a discrete multi-channel
-grid, the dynamics are deterministic and combinatorial, and
-the hard computation per tick is a sequence of atomic local updates
-applied repeatedly.
+PuzzleScript games are such a regime. Each game is specified by a short
+text file of object kinds, layered grid levels, and declarative rewrite
+rules, e.g.\ \texttt{[ > Player | Crate ] -> [ > Player | > Crate ]}.
+The engine evaluates the rule list in order at every tick, repeating
+the block while \texttt{again} fires. State is a discrete multi-channel
+grid, dynamics are deterministic and combinatorial, and the per-tick
+computation is a sequence of atomic local updates.
 
-To capture this symbolic mechanical complexity, we propose a \emph{rule-conditioned Neural
-Cellular Automaton} (NCA) world model.
-A perceiver-style encoder maps
-the tokenized game description to $K$ latent slots; the dynamics body
-is a local update rule applied for $T$ iterations on a hidden grid,
-with cells cross-attending to those slots at every step. The same body
-parameters can be reused across iterations, mirroring the engine's
-outer loop, while the conditioner makes the dynamics model portable
-across games. Foregoing pixels lets us model the environment in
-its native state representation and measure fidelity cell-by-cell
-against the original engine.
+We propose a \emph{rule-conditioned Neural Cellular Automaton} (NCA)
+world model. A perceiver-style encoder maps the tokenized game spec to
+$K$ latent slots; the dynamics body is a local update rule applied for
+$T$ iterations on a hidden grid, cross-attending to those slots at
+every step. Sharing body parameters across iterations mirrors the
+engine's outer loop; the conditioner makes the dynamics portable across
+games. Predicting the engine state directly (rather than pixels) lets
+us measure fidelity cell-by-cell against the engine.
 
-Our corpus contains 3{,}474 token-distinct
-human-authored games (one to twenty rules each), of which up to 199
-are used in the largest training preset. Across these games we cache
-bounded-A* transitions from authored levels, yielding $\approx 15$M
-transitions; held-out evaluation uses a 30-game stratified sample
+Our corpus contains 3{,}474 token-distinct human-authored games (1--20
+rules each), with up to 199 used in the largest training preset. We
+cache bounded-A* transitions from authored levels ($\approx 15$M
+transitions); held-out evaluation uses a 30-game stratified sample
 disjoint from training by name and token-sequence hash.
 
 \begin{figure}[t]
@@ -83,8 +75,9 @@ We make the following contributions:
         A single set of weights simulates many games by
         cross-attending to slot embeddings of each game's tokenized
         rule text.
-  \item \textbf{Evaluation on unseen games.}
-        On a 30-game held-out set disjoint from training by name and
-        token-sequence hash, we report where the rule-conditioned NCA
-        transfers and where it does not.
+  \item \textbf{An evaluation protocol for unseen-rule generalization.}
+        We construct \textsc{Heldout-30}, a 30-game stratified set
+        disjoint from every training preset by filename and by
+        token-sequence hash, and report against an identity baseline
+        that lower-bounds the per-step state-change rate.
 \end{enumerate}

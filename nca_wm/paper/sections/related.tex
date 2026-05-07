@@ -2,94 +2,73 @@
 \label{sec:related}
 
 \paragraph{Neural Cellular Automata.}
-Neural Cellular Automata learn a local update rule that, applied
-repeatedly to a grid of hidden states, gives rise to globally
-coordinated behavior~\cite{mordvintsev2020growing}. Subsequent work has
-demonstrated NCAs that grow morphologies from a seed, classify under
-distribution shift, perform texture synthesis, and self-organize
+NCAs learn a local update rule that, applied repeatedly to a grid of
+hidden states, gives rise to globally coordinated
+behavior~\cite{mordvintsev2020growing}. Subsequent work covers seeded
+morphology growth, classification under distribution shift, texture
+synthesis, and self-organizing
 attention~\cite{niklasson2021selforganising,palm2022variational,najarro2022hypernca};
-that grow 3D artefacts and functional machines in
-Minecraft~\cite{sudhakaran2021growing}; that learn graph algorithms
-such as breadth-first search and diameter computation on grid
-mazes~\cite{earle2023pathfinding}; that host populations of
-continually-adapting NCA agents in differentiable ALife
-substrates~\cite{berdica2026pbtnca}; and that compile symbolic rewrite
-rules into NCA dynamics to define grid-based RL environments for
-embodied agents~\cite{earle2025autoverse}.
-NCAs are typically trained with stochastic update schedules and a
-``pool'' of intermediate states for stability. Recent work treats the
-NCA's iteration count as a meaningful axis of computation and studies
-when more iterations buy more reasoning. Our use of NCAs as
-action-conditioned world models extends this line: rather than
-asking the NCA to converge to a static target, we ask it to predict
-the engine's deterministic next state at every tick.
+3D artefacts and functional machines in
+Minecraft~\cite{sudhakaran2021growing}; graph algorithms on grid
+mazes~\cite{earle2023pathfinding}; populations of continually-adapting
+NCA agents in differentiable ALife
+substrates~\cite{berdica2026pbtnca}; and compilation of symbolic
+rewrite rules into NCA dynamics for grid-based RL
+environments~\cite{earle2025autoverse}. We use NCAs as
+action-conditioned world models: rather than asking the NCA to
+converge to a static target, we ask it to predict the engine's
+deterministic next state at every tick.
 
 \paragraph{World models and self-prediction.}
-World-model literature dates back at least to Schmidhuber's curiosity
-work and was popularized for vision-based RL by
-Ha and Schmidhuber~\cite{ha2018world}. Recent transformer-based
-world models~\cite{micheli2022iris,robine2023transformer} compress
-images to discrete tokens and roll out dynamics autoregressively over
-those tokens; PWM-style methods integrate planning into a learned
-model. Recent dynamics-centric video work makes a related point from
-the opposite direction: dense appearance prediction can spend model
-capacity on visual detail rather than on the sparse trajectories that
-drive future scene evolution~\cite{baumann2026envisioning}. Recent
-interactive video world models push toward game-like simulation from
+World-model research traces back to Schmidhuber's curiosity work and
+was popularized for vision-based RL by Ha and
+Schmidhuber~\cite{ha2018world}. Transformer-based world
+models~\cite{micheli2022iris,robine2023transformer} compress images to
+discrete tokens and roll out dynamics autoregressively;
+dynamics-centric video work argues that dense appearance prediction
+spends capacity on visual detail rather than on the trajectories that
+drive scene evolution~\cite{baumann2026envisioning}. Interactive video
+world models push toward game-like simulation from
 pixels~\cite{valevski2025gamengen,parkerholder2025genie3,savva2026solaris},
-while related methods add scaffolding for long-horizon consistency:
-self-rollout training and rolling caches~\cite{huang2025selfforcing},
-causal diffusion noise schedules~\cite{chen2024diffusionforcing}, and
-external memory or retrieval over revisited
-views~\cite{xiao2025worldmem,oshima2025worldpack}. These mechanisms
-encourage latent state to persist despite dense visual prediction. Our
-separation is direct: the predicted state is the engine state, and the
-transition model is conditioned on the program defining the dynamics.
-Our
-problem domain---fully discrete grid observations,
-authored rule sets, dozens of related games sharing a substrate---is
-closer to procedurally-generated grid benchmarks like
-NetHack~\cite{kuettler2020nethack} and its
-descendants~\cite{samvelyan2021minihack,hafner2021crafter,matthews2024craftax}
-than to pixel-based Atari~\cite{bellemare2013arcade}. Compared to
-MuZero-style models~\cite{schrittwieser2020muzero} that learn an
-abstract latent dynamics, our model commits to predicting the engine's
-next state in its native grid representation, which makes ground-truth
-supervision exact and lets us compare to the engine cell-by-cell.
+with scaffolding for long-horizon consistency via self-rollout and
+rolling caches~\cite{huang2025selfforcing}, causal diffusion
+schedules~\cite{chen2024diffusionforcing}, and external memory or
+retrieval~\cite{xiao2025worldmem,oshima2025worldpack}. These methods
+encourage latent state to persist despite dense visual prediction; we
+take a more direct route by predicting the engine state itself,
+conditioned on the program defining the dynamics. Our domain---fully
+discrete grid observations with authored rule sets shared across
+games---is closer to procedurally-generated grid
+benchmarks~\cite{kuettler2020nethack,samvelyan2021minihack,hafner2021crafter,matthews2024craftax}
+than to pixel-based Atari~\cite{bellemare2013arcade}. Unlike MuZero-style
+models~\cite{schrittwieser2020muzero}, which learn abstract latent
+dynamics, we commit to predicting the engine state in its native grid,
+making ground-truth supervision exact and cell-by-cell.
 
 \paragraph{Learned grid-engine and local-update models.}
-Closest to our setting, Bamford and Lucas introduce a Neural Game
-Engine for deterministic GVGAI grid games~\cite{bamford2020neural}.
-Their model is effectively NCA-like: it adapts the Neural GPU into a
-2D recurrent local-update system with shared convolutional gated
-updates applied repeatedly over a grid, and it conditions each step on
-the player action. The key distinction is scope. Neural Game Engine
-learns directly from pixels and trains a separate forward model for
-each game. We instead train one rule-conditioned model across many
-games, predict the engine's symbolic object-channel state directly,
-and condition the shared dynamics on the tokenized game program.
-More broadly,
-ConvLSTMs~\cite{shi2015convlstm}, graph neural networks, and
-diffusion-style iterative refinement all share with NCAs the
-high-level idea of repeated local computation; NCAs differ in
-committing to a \emph{shared} (across iterations) update rule on a
-fixed grid, which matches the PuzzleScript engine's outer-loop
-semantics. A detailed comparison to procedural / engine-aligned NCA
-work is deferred to the appendix.
+Closest to our setting, Bamford and Lucas's Neural Game
+Engine~\cite{bamford2020neural} is an NCA-like 2D recurrent local-update
+system with shared convolutional gated updates conditioned on the
+player action, trained from pixels with a separate forward model per
+GVGAI game. We instead train one rule-conditioned model across many
+games, predict the engine's symbolic object-channel state, and
+condition on the tokenized game program. ConvLSTMs~\cite{shi2015convlstm},
+graph neural networks, and diffusion-style iterative refinement also
+use repeated local computation; NCAs differ in committing to a
+\emph{shared} (across iterations) update rule on a fixed grid, which
+matches the PuzzleScript engine's outer-loop semantics.
 
 \paragraph{PuzzleScript and rule-based puzzle games.}
-PuzzleScript~\cite{lavelle2013puzzlescript} is a domain-specific
-language for grid-based puzzle games that supports a rich family of
-authoring patterns: chained local interactions, \texttt{again}-driven simulation (gravity, projectiles, light beams), multi-character control, and rule
-priorities. A growing collection of thousands of community games are publicly available and
-share both a tokenization scheme (the engine source) and a common
-state encoding, making the family a natural multi-game benchmark for
+PuzzleScript~\cite{lavelle2013puzzlescript} is a DSL for grid-based
+puzzle games supporting chained local interactions, \texttt{again}-driven
+simulation (gravity, projectiles, light beams), multi-character control,
+and rule priorities. Thousands of community games share its tokenization
+and state encoding, making the family a natural multi-game benchmark for
 world models. PuzzleJax~\cite{earle2025puzzlejax} introduced a
-PuzzleScript reasoning-and-learning benchmark with a JAX engine and
-three game collections: the PuzzleScript Gallery~\cite{puzzlescript_gallery}
-(curated by increpare), a larger Archive of community
-games~\cite{pedro2019database}, and a long-tail collection of gists. We draw from
-the same three collections and extend the tooling with a C++ engine
-backend, cached transition datasets, and rule-conditioned learned
+reasoning-and-learning benchmark with a JAX engine and three game
+collections: the PuzzleScript Gallery~\cite{puzzlescript_gallery} (curated
+by increpare), an Archive~\cite{pedro2019database}, and a long-tail
+collection of gists. We draw from the same three collections and add a
+C++ engine backend, cached transition datasets, and rule-conditioned
 forward models.
 

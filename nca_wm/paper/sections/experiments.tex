@@ -3,119 +3,100 @@
 
 \subsection{Data}
 
-We collect $(s_t, a_t, s_{t+1}, w_{t+1})$ transitions for each game by
-running the C++ PuzzleScript engine under bounded A* search from each
-authored level. Each transition is cached on disk (bit-packed for
-roughly 8$\times$ compression) and re-used across runs. For
-multi-game training we draw batches with one share per game per step
-(\emph{balanced sampling}), which compensates for per-game dataset-size
-imbalance.
+For each game we collect $(s_t, a_t, s_{t+1}, w_{t+1})$ transitions
+by running the C++ PuzzleScript engine under bounded A* from each
+authored level (60 s wallclock and 100k iteration budget per level,
+200k transitions per game cap). Transitions are cached on disk
+bit-packed ($\approx 8\times$ compression). Multi-game batches use
+\emph{balanced sampling} (one share per game per step) to compensate
+for dataset-size imbalance.
 
 \paragraph{Corpus.}
-Our corpus draws from the PuzzleJax collections~\cite{earle2025puzzlejax}
-(Gallery, Archive, and gists) plus a small set of curated custom games.
-After (a) deduplicating by lowercased filename across collections and
-(b) collapsing structural near-duplicates by hashing the canonical
-name-invariant token sequence produced by our tokenizer, the pool
-contains 3{,}474 token-distinct games with rule counts in
+We draw from the PuzzleJax collections~\cite{earle2025puzzlejax}
+(Gallery, Archive, gists) plus a few curated custom games. After
+filename dedup across collections and collapsing structural
+near-duplicates by canonical name-invariant token-sequence hash, the
+pool contains 3{,}474 token-distinct games with rule counts
 $\{1,\ldots,20\}$, object counts $\le 20$, level counts $\le 30$, and
-grid areas $\le 30$. The pool's largest collision group is 445 copies
-of the default PuzzleScript template, all of which collapse to the
-same token sequence under our tokenizer; this dedup step is essential
-because the encoder cannot otherwise be expected to produce distinct
-slot embeddings for token-identical inputs. Median rule count is 6
-(min 1, max 20), median level count is 3 (max 30), and grid sizes
-range from $1{\times}3$ to $30{\times}40$. We use four training
-presets: \textsc{Train-14} (14 curated games), \textsc{Train-59}
-(59 Gallery games), \textsc{Train-199} (199 broad-corpus games)---used
-together for the multi-game in-distribution scaling and OOD
-generalization results
-(Tables~\ref{tab:baselines-scaling14}, \ref{tab:indist-scaling},
-\ref{tab:cond-vs-uncond-match})---and \textsc{Train-94}, an
-intermediate Gallery preset used for the appendix-level
+grid areas $\le 30$. The largest collision group is 445 copies of
+the default PuzzleScript template; this dedup is essential because
+the encoder cannot produce distinct slots for token-identical inputs.
+Median rule count is 6 (min 1, max 20), median level count is 3
+(max 30), grid sizes range from $1{\times}3$ to $30{\times}40$.
+
+\paragraph{Training presets.}
+\textsc{Train-14} (14 curated games), \textsc{Train-59} (59 Gallery
+games extending Train-14 by 45 more), and \textsc{Train-199} (199
+broad-corpus games extending Train-14 by 185 more) feed the
+multi-game in-distribution scaling and OOD generalization
+results (Tables~\ref{tab:baselines-scaling14},
+\ref{tab:indist-scaling}, \ref{tab:cond-vs-uncond-match}). An
+intermediate \textsc{Train-94} (94 Gallery games sharing the same
+57-game gallery base as Train-199) is used for the appendix-level
 auxiliary-objective and latent-probe analyses
 (Appendices~\ref{app:joint-decoder}, \ref{app:autoencoder},
-\ref{app:inverse-fit}).
-For each game we run
-bounded A* from each authored level (60 s wallclock and 100k
-iteration budget per level) and cache the resulting unique
-transitions on disk under bit-packing, with a per-game cap of 200k
-transitions.
+\ref{app:inverse-fit}). Game lists are in
+Appendix~\ref{app:data-provenance}.
 
 \paragraph{Synthetic levels.}
 The single-game multi-grid suite (\S\ref{sec:results-baselines},
 Table~\ref{tab:baselines-synth}) trains on \emph{evolved} synthetic
-levels: a genetic algorithm proposes candidate grids and the engine
-checks each candidate is solvable and reaches a non-trivial state
-space; surviving levels are kept. Generation details and the
-within-game OOD-levels probe that uses the same generator are in
-Appendix~\ref{app:synth-only}.
+levels: a GA proposes candidate grids and the engine retains
+solvable, non-trivial ones. Details and the within-game OOD-levels
+probe in Appendix~\ref{app:synth-only}.
 
 \subsection{Game suites}
 
-\textbf{Single-game Sokoban authored levels} (10 levels;
-Table~\ref{tab:baselines-sokoban}) are used for the single-game
-architecture comparison where dynamics are fully controlled
-(provenance in Appendix~\ref{app:data-provenance}).
+\textbf{Single-game Sokoban authored} (10 levels;
+Table~\ref{tab:baselines-sokoban}) supports the single-game
+architecture comparison.
 \textbf{Single-game multi-grid synth} (Sokoban; widths
-$\{5,6,7,8\}^2$ with 256 evolved levels per width;
-Tables~\ref{tab:baselines-synth} and \ref{tab:ablation-pool})
-shares one rule set across 256 synthetic levels per width, so
-per-state memorization is unavailable and the model has to learn
-the rule. \textbf{Multi-game} (\textsc{Train-14};
-Table~\ref{tab:baselines-scaling14}) covers 14 PuzzleScript games
-spanning gravity, light beams, multi-character control, and several
-\texttt{again}-driven simulations, with per-game grid sizes from
-$4{\times}4$ to $32{\times}24$. \textbf{Broad-corpus}
-(\textsc{Train-59}, \textsc{Train-199};
+$\{5,6,7,8\}^2$, 256 evolved levels per width; Tables~\ref{tab:baselines-synth},
+\ref{tab:ablation-pool}) shares one rule set across 1024 synthetic
+levels, removing per-state memorization.
+\textbf{Multi-game \textsc{Train-14}} (Table~\ref{tab:baselines-scaling14})
+covers 14 games spanning gravity, light beams, multi-character control,
+and \texttt{again}-driven simulations, with grid sizes from
+$4{\times}4$ to $32{\times}24$.
+\textbf{Broad-corpus} (\textsc{Train-59}, \textsc{Train-199};
 Tables~\ref{tab:indist-scaling}, \ref{tab:cond-vs-uncond-match})
-extends \textsc{Train-14} with 45 and 185 additional Gallery games
-respectively; a 30-game held-out set disjoint by name and token-hash
-is used for the unseen-game evaluations.
-\textbf{Intermediate Gallery preset} (\textsc{Train-94};
-Appendices~\ref{app:joint-decoder}, \ref{app:autoencoder},
-\ref{app:inverse-fit}) is 94 Gallery games used for the appendix-level
-auxiliary-objective and latent-probe analyses.
+adds breadth.
+\textbf{Held-out} \textsc{Heldout-30}: 30 games disjoint from every
+preset by filename and token-sequence hash, used for unseen-game
+evaluation.
 
 \subsection{Architectures and hyper-parameters}
 
-All models share the same input embedding (Dense over
-$(s_t \,\|\, \mathrm{onehot}(a_t))$) and readout heads. The slot
-encoder is identical across architectures: $K{=}16$ slots, $d{=}64$
-slot dim, two self-attention layers over tokens, four heads.
+All models share the input embedding (dense over
+$(s_t \,\|\, \mathrm{onehot}(a_t))$), readout heads, and slot encoder
+($K{=}16$ slots, $d{=}64$, two self-attention layers, four heads).
+The NCA uses $T{=}4$ steps with $n_r{=}T$ (one shared layer applied
+$T$ times), $d_h{=}256$, full pool features, and input-skip on.
+Padding cells (from per-bucket batching of mixed-size levels) are
+always masked in both the hidden state and the loss. The CNN uses
+$n_b{=}4$ residual blocks; the U-Net is 2 levels of down/up-sampling
+with bottleneck FiLM; the ViT uses $n_v{=}4$ layers with four heads.
+We report parameter counts alongside every metric.
 
-The NCA uses $T{=}4$ NCA steps with $n_r{=}T$ (single shared layer
-applied $T$ times), $d_h{=}256$, full pool features, and input-skip
-on. Padding cells (introduced by per-bucket batching of mixed-size
-levels) are always masked from both the hidden state and the loss
-to avoid leakage across off-grid regions. The CNN baseline uses
-$n_b{=}4$ residual blocks; the U-Net uses 2 levels of down/up
-sampling with bottleneck FiLM; the ViT uses $n_v{=}4$ layers, four
-heads. We report parameter count alongside every metric so the
-comparison is honest.
-
-Training: Adam, learning rate $3 \times 10^{-4}$ with cosine decay
-to $10^{-7}$, gradient clipping at global norm $0.5$, batch size 32,
-\emph{change-loss-weight} $5.0$ (per-cell BCE upweighted on cells
-that change between $t$ and $t+1$), and patience-based early stop on
-the change-accuracy metric. Each run is replicated with three random
-seeds.
+Training: Adam, lr $3 \times 10^{-4}$ cosine-decayed to $10^{-7}$,
+grad-clip global-norm $0.5$, batch size 32, change-loss-weight 5.0
+(per-cell BCE upweighting cells that change between $t$ and $t+1$),
+and patience-based early stop on change-accuracy. Three seeds per run.
 
 \subsection{Evaluation}
 
-We report two complementary metrics, both computed as the per-cell
-prediction error rate (fraction of cells where the binarized model
-output disagrees with the engine's next state, averaged over all
-cells) and averaged over the steps of a 30--50-step rollout from each
-authored level's start state.
-\textbf{One-step (teacher-forced) cell-error} feeds the real previous
-state $s_t$ at every step, isolating the per-step prediction error
-from compounding rollout drift; actions are drawn uniformly at random.
-\textbf{Autoregressive rollout error} feeds the model's own
-prediction back at every step, under three action policies: random,
-BFS-optimal, and A*-optimal.
+Both metrics report per-cell prediction error (fraction of cells
+where the binarised model output disagrees with the engine's next
+state) averaged over a 30--50-step rollout from each authored
+level's start state.
+\textbf{One-step (TF) cell-error} teacher-forces the real previous
+state at every step under random actions, isolating per-step
+prediction error.
+\textbf{Autoregressive rollout error} feeds the model's prediction
+back at every step under three action policies: random, BFS-optimal,
+and A*-optimal.
 Train loss decouples from autoregressive rollout error in the
-over-capacity regime (\S\ref{app:F3}), so reporting both is essential.
+over-capacity regime (\S\ref{app:F3}), so we report both.
 
 % Symbolic-game-modeling metrics (token reconstruction accuracy,
 % engine-load success rate, inverse-fit BCE) are explained inline

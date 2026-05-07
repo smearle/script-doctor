@@ -53,10 +53,20 @@ Garden}, \textit{Multi-word Dictionary Game}, \textit{Kettle},
 \textit{Love and Pieces}, \textit{Simple Action Example (increpare;
 actiontest)}, \textit{ScriptCross}, \textit{Modality}.
 
+\paragraph{\textsc{Train-59} (59 games).}
+\textsc{Train-59} is the curated Gallery preset (filter: $\le 20$
+rules, $\le 20$ objects, $\le 30$ max level area, $\le 30$ levels)
+extending \textsc{Train-14} with 45 further Gallery games. One
+preset entry (\texttt{blank}) is dropped at load time as
+token-identical to the basic-Sokoban demo, leaving 59 games. The
+deduplicated form (drop \texttt{blank} + two further token-collapsed
+duplicates, \textit{Microban} and \texttt{twolittlecrates4}) is the
+57-game gallery base referenced in \textsc{Train-94} and
+\textsc{Train-199} below.
+
 \paragraph{\textsc{Train-94} (94 games).}
 The \textsc{Train-94} preset is the deduplicated 57-game gallery
-suite (filter: $\le 20$ rules, $\le 20$ objects, $\le 30$ max level
-area, $\le 30$ levels) plus 37 stratified additions drawn from the
+base (above) plus 37 stratified additions drawn from the
 3{,}474-game dedup pool (12 low, 15 mid, 8 high, 2 xhigh rule-count
 buckets).
 
@@ -129,11 +139,10 @@ simple\_block\_pushing\_game\_by\_maximyzer)}, \textit{snowman game},
 }
 
 \paragraph{\textsc{Train-199} (199 games).}
-\textsc{Train-199} is the same 57-game gallery base as
-\textsc{Train-94} extended with 142 additional stratified games drawn
-from the dedup pool under the same filter.
-
-\textit{57-game gallery base:} as in \textsc{Train-94} above.
+\textsc{Train-199} reuses the 57-game gallery base and extends it
+with 142 stratified additions drawn from the dedup pool under the
+same filter. \textsc{Train-94} and \textsc{Train-199} are parallel
+sweeps from the same base, not nested.
 
 \textit{142 stratified additions:}
 {\footnotesize
