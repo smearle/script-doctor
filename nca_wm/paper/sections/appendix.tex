@@ -24,16 +24,291 @@ input.
 After filename and token-hash deduplication, all training and held-out
 splits are defined by explicit game-name lists.
 
-The \textsc{Train-14} ablation suite is:
+\paragraph{Single-game Sokoban level provenance.}
+The 10 authored Sokoban levels used for the single-game evaluation
+(Table~\ref{tab:baselines-sokoban}) are drawn from the Microban level
+pack, a community-authored set of Sokoban puzzles. Microban shares
+its rule set 1-to-1 with PuzzleScript's basic Sokoban game
+(\textsc{sokoban\_basic}); the only thing it adds is additional
+authored levels for the same dynamics. Wherever this appendix
+references \textsc{Microban} or \textsc{sokoban\_basic} explicitly
+(e.g.\ in the per-game $\times$ per-architecture grid in
+\S\ref{app:per-game-arch}), it refers to this same Sokoban rule set.
+
+\paragraph{\textsc{Train-14} (14 games).}
 \textsc{nekopuzzle}, \textsc{notsnake}, \textsc{blocks},
 \textsc{sokoban\_basic}, \textsc{sokoban\_match3},
 \textsc{Zen\_Puzzle\_Garden}, \textsc{Multi-word\_Dictionary\_Game},
 \textsc{kettle}, \textsc{Travelling\_salesman},
 \textsc{Collapsable\_Sokoban}, \textsc{Love\_and\_Pieces},
-\textsc{actiontest}, \textsc{scriptcross}, and \textsc{Modality}.
-\textsc{Train-59}, \textsc{Train-94}, and \textsc{Train-199} are
-nested supersets; their full lists are included in the released
-configuration files.
+\textsc{actiontest}, \textsc{scriptcross}, \textsc{Modality}.
+
+\paragraph{\textsc{Train-94} (94 games).}
+The \textsc{Train-94} preset is the deduplicated 57-game gallery
+suite (filter: $\le 20$ rules, $\le 20$ objects, $\le 30$ max level
+area, $\le 30$ levels) plus 37 stratified additions drawn from the
+3{,}474-game dedup pool (12 low, 15 mid, 8 high, 2 xhigh rule-count
+buckets).
+
+\textit{Deduplicated 57-game gallery base:}
+{\small
+\textsc{nekopuzzle}, \textsc{notsnake}, \textsc{blocks},
+\textsc{sokoban\_basic}, \textsc{sokoban\_match3},
+\textsc{Zen\_Puzzle\_Garden}, \textsc{Multi-word\_Dictionary\_Game},
+\textsc{kettle}, \textsc{Travelling\_salesman}, \textsc{sumo},
+\textsc{the\_undertaking}, \textsc{wrappingrecipe},
+\textsc{Collapsable\_Sokoban}, \textsc{Love\_and\_Pieces},
+\textsc{actiontest}, \textsc{rigidfail1}, \textsc{scriptcross},
+\textsc{Modality}, \textsc{constellationz}, \textsc{randomrobots},
+\textsc{againexample}, \textsc{naughtysprite}, \textsc{randomspawner},
+\textsc{twolittlecrates1}, \textsc{rigid\_11},
+\textsc{Long\_Haul\_Space\_Flight}, \textsc{leftrightnpcs},
+\textsc{twolittlecrates2}, \textsc{twolittlecrates3}, \textsc{octat},
+\textsc{lunar\_lockout}, \textsc{Stairways},
+\textsc{the\_art\_of\_cloning}, \textsc{rigid\_scott1},
+\textsc{rigid\_one\_unlimited},
+\textsc{Some\_lines\_were\_meant\_to\_be\_crossed},
+\textsc{blockfaker}, \textsc{Pushing\_It}, \textsc{2D\_Whale\_World},
+\textsc{MazezaM}, \textsc{Ebony\_\&\_Ivory},
+\textsc{Singleton\_Traffic}, \textsc{mazetest}, \textsc{Slidings},
+\textsc{Lime\_Rick}, \textsc{riverpuzzle}, \textsc{Midas},
+\textsc{rigid\_parallel\_many}, \textsc{Take\_Heart\_Lass},
+\textsc{rigid\_many\_broken}, \textsc{Lightdown},
+\textsc{The\_observer's\_paradox},
+\textsc{rigid\_parallel\_unlimited},
+\textsc{MC\_Escher's\_Equestrian\_Armageddon}, \textsc{Smother},
+\textsc{It\_Dies\_In\_The\_Light}, \textsc{Pushcat\_Jr}.
+}
+
+\textit{Low-rule additions (12):}
+{\small
+\textsc{Time-reversed\_Microban},
+\textsc{clone\_cloned\_clones!\_by\_sammytooch},
+\textsc{bell,\_book,\_and\_candle\_by\_bagenzo},
+\textsc{zombie\_bedtime\_by\_dan}, \textsc{Dot\_Puzzle\_3.1},
+\textsc{cat\_in\_a\_box\_by\_trevor},
+\textsc{no\_name\_yet\_by\_dustin\_lane},
+\textsc{bit\_treats\_by\_barefootengineer1},
+\textsc{Carnival\_Shooter!},
+\textsc{sokobee\_simples\_by\_matteomenapace},
+\textsc{shadow\_by\_unknown\_author},
+\textsc{my\_game\_by\_calvin\_mcnamara}.
+}
+
+\textit{Mid-rule additions (15):}
+{\small
+\textsc{neko\_puzzle\_by\_increpare},
+\textsc{division\_by\_paul\_gomez},
+\textsc{el\_laberinto\_dorado\_by\_skyemoure},
+\textsc{simple\_block\_pushing\_game\_by\_maximyzer},
+\textsc{snowman\_game\_by\_yuna},
+\textsc{the\_adventurer\_by\_mose\_e.eckman},
+\textsc{boxob\_by\_randomnamemn},
+\textsc{\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_by\_bagenzo},
+\textsc{pokemon\_gooooo\_by\_drewdrewsan},
+\textsc{simple\_foxes\_by\_torybash},
+\textsc{run\_em\_over\_by\_xxsethyxxxoultraomeg},
+\textsc{encuentra\_a\_tu\_amigo\_by\_tobiasguzzo},
+\textsc{build\_a\_snowman\_v2.0\_by\_arthur\_yi},
+\textsc{constellation\_by\_jere\_majava},
+\textsc{avaruus\_tunkeutujat\_by\_janjulije}.
+}
+
+\textit{High-rule additions (8):}
+{\small
+\textsc{Union\_Move}, \textsc{cyber\_sokoban\_by\_eraykaan},
+\textsc{game\_by\_jobiden123},
+\textsc{nabokos\_3\_-\_tech\_demo\_by\_asynartesies},
+\textsc{buny\_hoping\_by\_pickten},
+\textsc{drunkard\_walk\_by\_unknown\_author},
+\textsc{directional\_insanity\_by\_zithral},
+\textsc{tron\_by\_lorapel}.
+}
+
+\textit{Xhigh-rule additions (2):}
+{\small
+\textsc{venganza\_i\_by\_felipe\_gomez},
+\textsc{spell\_by\_beekie18}.
+}
+
+\paragraph{\textsc{Train-199} (199 games).}
+\textsc{Train-199} is the same 57-game gallery base as
+\textsc{Train-94} extended with 142 additional stratified games drawn
+from the dedup pool under the same filter. The full list is given
+below at \texttt{\textbackslash footnotesize}.
+
+\textit{57-game gallery base:} as in \textsc{Train-94} above.
+
+\textit{142 stratified additions:}
+{\footnotesize
+\textsc{bit\_treat\_by\_barefootengineer1}, \textsc{error\_1\_by\_bvoq},
+\textsc{threat\_level\_midnight\_by\_vignesh},
+\textsc{the\_magic\_broom\_by\_radiosoap},
+\textsc{davib\_by\_thebigfive-381},
+\textsc{cat\_adventure\_deluxe!\_demo\_by\_testethetestcat},
+\textsc{Opposition}, \textsc{my\_eyes!!!\_by\_explodedcoder},
+\textsc{a\_game\_by\_password69},
+\textsc{bombero\_en\_acción\_by\_tevo66},
+\textsc{displacement\_by\_oliverwebsim},
+\textsc{bittle\_bat\_by\_unknown\_author},
+\textsc{match\_threekoban\_by\_ezra\_szanton},
+\textsc{my\_game\_by\_amanda\_howell},
+\textsc{puzzle\_by\_unknown\_author},
+\textsc{super\_mario\_nazi\_killer\_by\_koldo},
+\textsc{ditto\_by\_acercandrito},
+\textsc{the\_far\_away\_danish\_pastry\_is\_always\_deliciouser\_by\_increpare\_[variant\_of\_lexaloffles\_neko\_puzzle]},
+\textsc{prototype\_1\_by\_caurso99},
+\textsc{herding\_cats!!!1!\_by\_docchewkie},
+\textsc{robot\_run\_by\_veeraalt},
+\textsc{sokobad\_by\_noacubestudio},
+\textsc{block\_pushing\_game\_tutorial\_2-4\_by\_unknown\_author},
+\textsc{2to\_by\_yeah-and-no}, \textsc{blockpush\_by\_tapcat},
+\textsc{simple\_block\_pushing\_game\_by\_zaydiscool777},
+\textsc{neko\_puzzle\_by\_increpare},
+\textsc{no\_forbidden\_symbols\_by\_increpare},
+\textsc{All\_These\_Damn\_Crates},
+\textsc{bahçıvanın\_çiçekleri\_by\_harunylc},
+\textsc{t-rex\_hot\_chocolate\_by\_therealeddawson},
+\textsc{zombie\_blocks\_by\_aidan\_quade},
+\textsc{the\_poop\_game\_by\_pontus\_granstrom},
+\textsc{hanoi\_by\_sfiera},
+\textsc{feed\_the\_flames\_by\_callum\_scott},
+\textsc{match\_by\_0creds},
+\textsc{Monster\_block\_push\_game},
+\textsc{welcome\_to\_flatland\_by\_caitlin\_weaver},
+\textsc{switch\_switcher\_by\_increpare},
+\textsc{snow\_day\_by\_forgdeer},
+\textsc{ambiguity\_generalization\_prototype\_by\_thebigfive-381},
+\textsc{avain\_peli\_by\_my\_name\_here},
+\textsc{midnight\_snack\_by\_lilianaaaaaaaa},
+\textsc{de+a+ch\_by\_razthepenguin},
+\textsc{variations\_on\_constellation\_z\_by\_n\_a},
+\textsc{rabbit\_meets\_camel\_by\_james\_wood},
+\textsc{golem\_five\_by\_henketime},
+\textsc{neko\_puzzle\_by\_necrothaum},
+\textsc{puzzle\_script\_random\_game\_by\_jeremy\_labossiere},
+\textsc{custom\_expulsion\_by\_chinbag},
+\textsc{swizzeroony\_by\_increpare},
+\textsc{lumberjack\_run\_by\_nickromancer},
+\textsc{build\_a\_snowman\_v1.0\_by\_kimchi2012},
+\textsc{impossible\_pushing\_-\_level\_2\_by\_stingby12},
+\textsc{push\_pull\_undo\_redo\_by\_11pepi},
+\textsc{trample\_by\_jonathan\_whiting},
+\textsc{simple\_block\_pushing\_game\_by\_mirage-xel},
+\textsc{marathon\_by\_2sman}, \textsc{simple\_puzzle\_by\_paul},
+\textsc{maze\_by\_251119s},
+\textsc{build\_a\_snowman\_v1.0\_by\_minjikim2013},
+\textsc{skyroad\_by\_sorendipitous},
+\textsc{interchange\_by\_pickten},
+\textsc{combo\_by\_nicholas\_udell},
+\textsc{path\_to\_the\_bee\_by\_jonbro},
+\textsc{Game\_One}, \textsc{One\_Way\_Street},
+\textsc{lasers\_by\_franklin\_p.\_dyer},
+\textsc{on\_thin\_ice\_by\_gamez7\_with\_music\_by\_roccow},
+\textsc{robot\_soccer\_by\_weiliuu}, \textsc{Bridge-toggle\_Maze},
+\textsc{flipping\_by\_mlipmanh},
+\textsc{bit\_match!\_by\_unknown\_author},
+\textsc{Lime\_Richard},
+\textsc{naomis\_challenge\_4\_game\_winter\_by\_techythanh},
+\textsc{abocalipc\_zumbi\_br\_by\_robertjesus},
+\textsc{puzz-not\_by\_stew\_hogarth},
+\textsc{simple\_block\_pushing\_game\_by\_zacharybarbanell},
+\textsc{go\_hunt\_$\psi$\texttrademark{}![beta]\_by\_puzzle00},
+\textsc{Festive\_Lights}, \textsc{Rolling-block\_colour-zone\_mazes},
+\textsc{build\_a\_snowball\_v2\_by\_coconana9010},
+\textsc{remote\_sokoban\_by\_poorlydrawncactus},
+\textsc{mr.hooper\_by\_yadel23},
+\textsc{blind\_ninja\_by\_connorses},
+\textsc{sticky\_v0.7\_by\_connorses},
+\textsc{green\_by\_laindey\_denaige},
+\textsc{cathartic\_colours\_by\_ronan\_tumelty},
+\textsc{cow\_rancher\_by\_bagenzo},
+\textsc{buny\_hoping\_by\_pickten}, \textsc{Solitaire},
+\textsc{mini\_grapplenauts\_by\_jesse\_purvis},
+\textsc{telekin\_by\_diego\_cathalifaud},
+\textsc{Carnival\_Shooter!},
+\textsc{minecraft\_v1.0.1\_by\_coconana9010},
+\textsc{my\_game\_by\_dio7225},
+\textsc{feed\_the\_cat\_by\_kim\_cerna},
+\textsc{test\_golfer\_by\_simonskvara},
+\textsc{maze\_by\_meena0303},
+\textsc{move\_3\_crates\_next\_to\_eachother\_by\_alex\_giger},
+\textsc{herding\_cats!\_by\_albert24082408},
+\textsc{j\_by\_jack\_gilbert},
+\textsc{schatkamer\_by\_jan-niestadt},
+\textsc{arregla\_la\_vereda\_by\_marcos-do},
+\textsc{test\_by\_finn\_coffey},
+\textsc{simple\_block\_pushing\_game\_by\_meddlingcactus},
+\textsc{cat\_making\_friends\_by\_wfykitty},
+\textsc{tall\_player\_by\_henry-friedman},
+\textsc{my\_game\_is\_better\_than\_your\_game\_by\_nahcirn},
+\textsc{a\_very\_good\_puzzle\_by\_nahcirn},
+\textsc{double\_message\_by\_sevansevan},
+\textsc{weeeee\_by\_phuongstillhatework},
+\textsc{testi\_by\_janisamuli},
+\textsc{amor\_en\_tiempos\_de\_pandemia\_by\_i.enba},
+\textsc{space\_invaders\_by\_e\_is\_cool\_\_\_edited\_by\_fz0718},
+\textsc{two\_coats\_and\_crates\_by\_henry-friedman},
+\textsc{ea\_sports\_fifa\_2018\_qatar\_world\_cup\_edition!\_by\_john\_q.\_futbol\_and\_ea\_sports\_of\_course},
+\textsc{space\_invaders\_by\_solafson},
+\textsc{platformer\_thing\_by\_thesalamaderboy},
+\textsc{underpuzzle\_by\_pac2005},
+\textsc{eventually\_this\_is\_gonna\_be\_zelda\_by\_soolseem},
+\textsc{endless\_practice\_by\_plurmorant},
+\textsc{player\_move,\_pause,\_badfish\_move,\_pause\_by\_jon-jon},
+\textsc{title\_by\_author},
+\textsc{rgb\_by\_michael\_straeubig},
+\textsc{prototype\_by\_tebrown1011},
+\textsc{full\_bloom\_by\_qwaffles},
+\textsc{beat\_game\_test\_by\_connorses\_[loneship\_games]},
+\textsc{Cell\_Division}, \textsc{test\_by\_katelyn\_delta},
+\textsc{\_\_by\_jennybuckley},
+\textsc{drunkard\_walk\_by\_unknown\_author},
+\textsc{crossing\_the\_gap\_by\_barefootengineer1},
+\textsc{marbles\_by\_jcmiller11},
+\textsc{annoying\_skull\_by\_qwaffles}, \textsc{Colors},
+\textsc{puzzletracker\_by\_puzzlescriptfan34},
+\textsc{card\_by\_lintsungyueh},
+\textsc{ice\_wolrd\_by\_scott\_hughes},
+\textsc{test\_teleportation\_by\_eoniz},
+\textsc{unlink\_by\_zacharybarbanell},
+\textsc{pathfinding\_by\_madball}.
+}
+
+\paragraph{\textsc{Heldout-30} (30 games).}
+The held-out evaluation set is disjoint from every training preset by
+filename and by token-sequence hash. Drawn by stratified sampling
+from the dedup pool to span low/mid/high rule counts.
+{\small
+\textsc{in\_the\_way\_by\_giovanni\_mota},
+\textsc{cyberpunk\_2020\_by\_gzhao-jpg},
+\textsc{my\_nana\_ate\_my\_kid\_brother\_by\_ruth\_williams},
+\textsc{ice\_sliding\_by\_by\_ian\_cox},
+\textsc{block\_game\_by\_emily\_dresden},
+\textsc{kitten\_rescue\_by\_unknownprodigy-beep},
+\textsc{kyles\_chesse\_cuisine\_by\_techythanh},
+\textsc{the\_best\_2d\_game\_ever\_created\_by\_cwm\_gaming},
+\textsc{monophobic\_multiban\_by\_increpare},
+\textsc{charge\_the\_bot\_by\_tiddly5},
+\textsc{build\_a\_snowman\_challenges\_by\_flyingfroakie},
+\textsc{the\_single\_flame\_by\_hassan\_masood},
+\textsc{pacman\_\_by\_cora}, \textsc{escape\_by\_shawn\_martin},
+\textsc{megabot\_invades!\_by\_louis\_g},
+\textsc{link\_by\_jeffjeff123456},
+\textsc{\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_by\_ncrecc},
+\textsc{watchers\_ritual\_by\_purpledragon17},
+\textsc{gdd301\_demo\_game\_by\_emma\_hubbell},
+\textsc{Surround\_Yourself\_With\_Dogs},
+\textsc{haberdashery\_by\_lee2sman},
+\textsc{ghosts\_by\_henry-friedman},
+\textsc{a\_snowballs\_chance\_in\_hell\_by\_iznaut},
+\textsc{hedgehogger\_by\_increpare},
+\textsc{cat\_adventure\_2\_by\_whenyoucando}, \textsc{Hamiltwo},
+\textsc{headless\_people\_problems\_by\_monakrom},
+\textsc{break\_out\_of\_the\_mine\_by\_jja\_i.e.\_juan,\_jose\_\&\_andre},
+\textsc{Heroes\_of\_Sokoban\_-\_Ancient\_Japan},
+\textsc{angize\_by\_ali\_nikkhah}.
+}
 
 \subsection{Per-game \textsc{Train-14} breakdown}
 \label{app:per-game}
@@ -308,7 +583,7 @@ Table~\ref{tab:within-game-synth-anchor}. Five of the ten authored
 levels land at $0\%$ BFS exactly. The $0.02\%$ teacher-forced figure
 is in fact $5\times$ \emph{lower} than the authored-only baseline
 of $0.11\%$ at $10{,}000$ updates
-(Table~\ref{tab:baselines-microban}), demonstrating that synth-only
+(Table~\ref{tab:baselines-sokoban}), demonstrating that synth-only
 training with a coverage-driven GA produces a \emph{more accurate}
 per-step rule predictor than authored-only training, with the BFS
 rollout still close to authored (within $5\times$). This is the

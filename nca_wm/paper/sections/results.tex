@@ -5,11 +5,11 @@
 \label{sec:results-baselines}
 
 We first fix a single rule family (Sokoban~\cite{sokoban}) and ask which architecture
-best predicts per-step dynamics. Two scopes: (i) 10 authored Microban
+best predicts per-step dynamics. Two scopes: (i) 10 authored Sokoban
 levels, where the model can in principle memorize per-state outcomes
 via cross-attention over slot embeddings, and (ii) a multi-grid
 synthetic regime (four widths $\{5,6,7,8\}^2$ $\times$ 256 levels per
-width, sharing one \textsc{sokoban\_basic} rule set) where per-state
+width, sharing one Sokoban rule set) where per-state
 memorization is unavailable (1024 distinct levels share one rule) and
 the model has to learn the slide rule across grid sizes. We then
 ablate the NCA's pool stack and input-skip on the multi-grid synth
@@ -20,18 +20,18 @@ $d_h = 256$, trained for 10k updates per seed. We report best train
 cross-entropy, end-of-rollout cell-error rate under three policies
 (random, BFS-optimal, A*-optimal), and final parameter count.
 
-\paragraph{Single-game (Microban).}
-Table~\ref{tab:baselines-microban} reports the head-to-head
-comparison on the 10 authored Microban levels.
+\paragraph{Single-game (Sokoban).}
+Table~\ref{tab:baselines-sokoban} reports the head-to-head
+comparison on 10 authored Sokoban levels.
 
 \begin{table}[t]
   \centering
   \caption{\textbf{Baselines vs.\ rule-conditioned NCA on Sokoban
-    (10 authored Microban levels).} Mean $\pm$ std over 3 seeds
+    (10 authored levels).} Mean $\pm$ std over 3 seeds
     at 10k updates. Lower is better for loss and cell-error; A* first-
     divergence step is higher-is-better. Param count in millions;
     architectures sorted by BFS final cell-error.}
-  \label{tab:baselines-microban}
+  \label{tab:baselines-sokoban}
   \small
   \begin{tabular}{l c c c c}
     \toprule
@@ -66,8 +66,8 @@ multi-grid synthetic regime.
 
 \begin{table}[t]
   \centering
-  \caption{\textbf{Baselines vs.\ rule-conditioned NCA on
-    \textsc{sokoban\_basic} (multi-grid synthetic).} Mean $\pm$ std
+  \caption{\textbf{Baselines vs.\ rule-conditioned NCA on Sokoban
+    (multi-grid synthetic).} Mean $\pm$ std
     over 3 seeds at 10k updates; widths
     $\{5{\times}5, 6{\times}6, 7{\times}7, 8{\times}8\}$ with 256
     synthetic levels per width.}
@@ -112,7 +112,7 @@ $(s_t, a_t)$ at every step.
 \begin{table}[t]
   \centering
   \caption{\textbf{Per-feature ablation of the NCA-shared recipe on
-    multi-grid synth \textsc{sokoban\_basic}.} Mean $\pm$ std over 3
+    multi-grid synth Sokoban.} Mean $\pm$ std over 3
     seeds at 10k updates. $\Delta$BFS reports the absolute increase
     in BFS final cell-error vs.\ the full recipe; relative figures
     in parentheses. Train loss is essentially constant across all
@@ -143,7 +143,7 @@ grid-wide presence-of-X signals are doing all the non-local work on
 this task. \emph{Axis-cummax}---the directional prefix-max designed
 for axis-aligned ``rule fires once X is in the same row/column as
 Y'' patterns---contributes nothing measurable on
-\textsc{sokoban\_basic}: the Sokoban push rule
+Sokoban: the push rule
 \texttt{[ > Player | Crate ] -> [ > Player | > Crate ]} depends only
 on the immediate $3{\times}3$ neighbourhood, not on a directional
 axial lookup. We expect the cummax feature to recover its
@@ -178,7 +178,7 @@ in-distribution fidelity ceiling of a single rule-conditioned NCA.
 Table~\ref{tab:baselines-scaling14} extends the head-to-head to the
 \textsc{Train-14} preset: 14 PuzzleScript games sharing the rule-slot
 encoder, with grid sizes from $4{\times}4$ to $32{\times}24$ and rule
-counts from a handful (basic Sokoban) to $\approx 30$
+counts from a handful (Sokoban) to $\approx 30$
 (\texttt{Heroes\_of\_Sokoban}, \texttt{Sokoboros}). 20k updates per
 seed, $d_h = 256$.
 
