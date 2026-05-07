@@ -183,7 +183,7 @@ Maze}, \textit{Flipping}, \textit{Bit Match!}, \textit{Lime Richard},
 \textit{Puzz-Not}, \textit{Simple Block Pushing Game (David Skinner;
 simple\_block\_pushing\_game\_by\_zacharybarbanell)},
 \textit{Go Hunt $\Psi$\texttrademark{}![beta]}, \textit{Festive
-Lights}, \textit{Rolling-block colour-zone mazes}, \textit{Build a
+Lights}, \textit{Rolling-block color-zone mazes}, \textit{Build a
 Snowball v2}, \textit{Remote Sokoban}, \textit{MR.Hooper},
 \textit{Blind Ninja}, \textit{Sticky v0.7}, \textit{Green},
 \textit{Cathartic Colours}, \textit{Cow Rancher}, \textit{buny
@@ -299,11 +299,11 @@ aggregators are released alongside the paper. Each run is reproduced
 end-to-end by re-running its launcher on the same hardware
 (single 24~GB consumer GPU). The full experimental log accompanies
 the released code.
-% Internal notes (deanonymised paths kept as comments for the
+% Internal notes (deanonymized paths kept as comments for the
 % camera-ready / reproducibility supplement):
 %   - Launchers: nca_wm/scripts/run_*.sh
 %   - Per-game/per-arch synth grid: nca_wm/scripts/run_per_game_arch_synth_grid.sh
-%     summarised via summarize_per_game_arch_grid.py --all_authored_as_heldout
+%     summarized via summarize_per_game_arch_grid.py --all_authored_as_heldout
 %     and figures via nca_wm/scripts/make_within_game_synth_artifacts.py
 %     (logs land in nca_wm/logs_per_game_arch_synth/)
 %   - Running-state docs: nca_wm/SCALING_RESULTS.md, nca_wm/ARCHITECTURE_REPORT.md,
@@ -367,7 +367,7 @@ buckets converge to within $1\%$ of the same train loss
 splits $0\% / 0\% / 26.9\% / 45.1\%$ across buckets D / C / B / A.
 Bucket~A's L0 rollout is in fact \emph{worse} at 50k than at 15k
 ($45.1\%$ vs.\ $24.0\%$) despite a $68\times$ lower train loss---%
-additional optimisation on a per-step minimum that compounds
+additional optimization on a per-step minimum that compounds
 destructively under autoregressive feedback. Buckets~C and D, which
 replace global pool features with input-skip re-injection, converge to
 the same train loss with a stable rollout. The pool-ON cells thus
@@ -387,7 +387,7 @@ levels, and multi-grid synth on \textit{neko puzzle} closed a
 $3$--$8\%$ gap to $0.3\%$ once the synth widths included the authored
 aspect ratio. Both signals suggest the right-panel gap here is data
 scarcity, not an architectural ceiling.
-% Prior-work pointers (deanonymised; kept as comments):
+% Prior-work pointers (deanonymized; kept as comments):
 %   - nca_wm/RUNNING_REPORT.md (single-game synth-only Sokoban run)
 %   - nca_wm/SCALING_RESULTS.md (multi-grid nekopuzzle synth run)
 
@@ -438,7 +438,7 @@ synth fails on a game we fall back to seeding from one or a handful
 of authored levels alongside synth---a lesser form of within-game
 generalization that still tests few-shot extrapolation.
 % Internal pointers (paths kept as comments for the reproducibility
-% supplement; they reference deanonymised tooling, so they should not
+% supplement; they reference deanonymized tooling, so they should not
 % appear in the submission body):
 %   - Launcher: nca_wm/scripts/run_per_game_arch_synth_grid.sh
 %   - Summariser: nca_wm/scripts/summarize_per_game_arch_grid.py
@@ -591,7 +591,7 @@ A bare $3{\times}3$ convolution can only propagate one cell of context
 per NCA step.
 Several PuzzleScript rule patterns reference cells arbitrarily far apart along an axis or anywhere on the level (\texttt{[X | ... | Y]}, \texttt{[X][Y]}).
 Without pool features the NCA needs $\Omega(\max(H,W))$ steps just to surface non-local information.
-The per-feature ablation in Table~\ref{tab:ablation-pool} isolates which pool flavour does the work: removing global-pool alone is as costly as removing all three ($+182\%$ relative BFS error).
+The per-feature ablation in Table~\ref{tab:ablation-pool} isolates which pool feature does the work: removing global-pool alone is as costly as removing all three ($+182\%$ relative BFS error).
 Removing axis-cummax also costs $+48\%$ on \textsc{Sokoban-Evolved}, even though its target patterns---axis-aligned \texttt{[X | ... | Y]} matches---do not appear in Sokoban's rule set; seed variance on that row is large (1.30\% absolute), so the effect may be partly noise rather than a genuine inductive-bias contribution from prefix-max.
 On a 19-game gallery preset and a controlled \textit{Collapse} no-pool ablation, turning pool off costs both convergence speed and final loss, with the no-pool model collapsing into the identity-prediction minimum even at $4{\times}$ the depth.
 
@@ -836,7 +836,7 @@ a single game.
 Figure~\ref{fig:ood-per-game-scatter} unpacks the
 \textsc{Train-199} aggregate (Figure~\ref{fig:intersection-slope-ood})
 into one point per held-out game on the cond-vs-uncond plane, with
-points coloured by which model beats the per-game identity baseline.
+points colored by which model beats the per-game identity baseline.
 The cond-only and uncond-only winners are separately ${\sim}$as
 large as each other ($4$ and $8$ games respectively), with $9$ games
 where both models beat identity and $5$ where neither does---i.e.\
@@ -850,7 +850,7 @@ layout-derived signal that the encoder is not exploiting.
   \includegraphics[width=0.6\linewidth]{figures/cond_vs_uncond_match/ood_per_game_scatter.pdf}
   \caption{\textbf{Per-game OOD 1-step (TF) cell-error at
     \textsc{Train-199}}, conditional (x) vs.\ unconditional (y), one
-    point per held-out game on log-log axes. Colours partition games
+    point per held-out game on log-log axes. Colors partition games
     by which model beats the per-game identity baseline (cond-only
     $4$, uncond-only $8$, both $9$, neither $5$). The aggregate of
     these points is what Figure~\ref{fig:intersection-slope-ood}
@@ -889,7 +889,7 @@ count summarized in
 For each held-out game we encode its tokens through the trained
 encoder, compute cosine distance to every training game's encoded
 slot, and report the smallest of those distances---the distance
-to the held-out game's \emph{nearest training-game neighbour} in
+to the held-out game's \emph{nearest training-game neighbor} in
 slot space. We use the flattened
 $K \cdot d_{\text{slot}} = 1024$-dim slot vector, and the median
 across the 21 of 30 held-outs whose tokens fit within the smallest
@@ -913,7 +913,7 @@ context.
   \caption{\textbf{Held-out latent geometry as we scale training
     games.} Cosine distance, in flattened-slot space, from each
     held-out game's encoded slot to its nearest training-game
-    neighbour. All runs use the rule-attention NCA body, $K{=}16$
+    neighbor. All runs use the rule-attention NCA body, $K{=}16$
     slots, $d_{\text{slot}}{=}64$, $T{=}8$ NCA steps, batch 32, 150k
     Adam updates. The held-out set is the same 30-game stratified
     sample for every row.}
@@ -937,8 +937,8 @@ that sit close to any of several push-puzzle training games at
 that scale. The 94-game decoder-on row drops to $0.153$, but
 because of the diagnostic caveats above we do not read this as
 evidence the decoder objective improves transfer; it could equally
-indicate decoder-induced collapse onto training neighbours.
-Whether those neighbours are \emph{mechanically} related to the
+indicate decoder-induced collapse onto training neighbors.
+Whether those neighbors are \emph{mechanically} related to the
 held-out target is a separate question---two example matches in
 \S\ref{app:inverse-fit} suggest the geometry is not pure
 collapse, but we have not enumerated the relation across the full
@@ -1051,9 +1051,9 @@ unobserved game embedding from transition data. Concretely, we
 freeze the world model and decoder $(\theta, \psi)$ and treat
 $z \in \mathbb{R}^{K \times d_{\text{slot}}}$ as the only free
 variable: the encoder $\mathrm{Enc}_\phi$ is bypassed entirely and
-the optimised $z$ enters the world model through a slot-override
-path. We initialise $z$ from a small Gaussian around the empirical
-training-slot mean and optimise the per-cell next-state BCE used
+the optimized $z$ enters the world model through a slot-override
+path. We initialize $z$ from a small Gaussian around the empirical
+training-slot mean and optimize the per-cell next-state BCE used
 during training, summed over the held-out target's observed
 transitions, for 2{,}000 Adam steps at $\text{lr} = 5 \times 10^{-3}$
 with batch size 32. Targets are drawn from the deduped pool and
@@ -1068,8 +1068,8 @@ reference encoding of the target.
   \centering
   \caption{\textbf{Inverse-fit recovery from OOD transitions.}
     Final per-cell BCE on the observed transitions of three
-    held-out games, and the cosine distance from the optimised slot
-    to its nearest training-game neighbour (with that neighbour's
+    held-out games, and the cosine distance from the optimized slot
+    to its nearest training-game neighbor (with that neighbor's
     name).}
   \label{tab:inverse-fit}
   \small
@@ -1084,21 +1084,21 @@ reference encoding of the target.
   \end{tabular}
 \end{table}
 
-The optimisation drives BCE down two-to-three orders of magnitude on
+The optimization drives BCE down two-to-three orders of magnitude on
 every target, so the frozen NCA can fit OoD dynamics through the
 latent variable. The reported BCE is on the same transition tape
-the slot was optimised against, however, so it measures the
-expressive capacity of $(\theta, \psi)$ plus the optimisation
-landscape, not held-out generalisation; an honest upgrade would
+the slot was optimized against, however, so it measures the
+expressive capacity of $(\theta, \psi)$ plus the optimization
+landscape, not held-out generalization; an honest upgrade would
 hold out a fraction of the tape, fit on the rest, and report
 test-tape BCE.
 
 On two of three targets the recovered slot's nearest training-game
-neighbour matches a plausible mechanical sibling:
+neighbor matches a plausible mechanical sibling:
 \textit{Cat Adventure 2} (a push-puzzle) lands closest to
 \textit{neko puzzle} (also a push-puzzle), and
 \textit{Monophobic Multiban} (a multi-character chase mechanic)
 lands closest to \textit{Run em' over} (also multi-character /
 chase). We do not yet have a systematic enumeration of how often
-the nearest neighbour is mechanically related across the full
+the nearest neighbor is mechanically related across the full
 held-out set; the two matches above are illustrative.

@@ -80,7 +80,7 @@ unconditional baseline is $1.88\% / 0.46\%$, still $\approx 5\times$
 the conditional mean and $\approx 3\times$ the median; per-game swings
 can be dramatic (\textit{neko puzzle} goes from $0.000\%$ to $24.4\%$
 when the encoder is removed; per-game cells in
-Figure~\ref{fig:intersection-heatmap}). The encoder amortises shared
+Figure~\ref{fig:intersection-heatmap}). The encoder amortizes shared
 dynamics across games at fixed capacity.
 
 \begin{figure}[t]
@@ -196,7 +196,7 @@ $2.6\times$ more params) and two orders below the per-step NCA
 loses fine-grained player position on small grids ($3.13\%$), and ViT
 fails to fit the data ($9.32\%$ BFS-AR; one-step $1.49\%$ vs.\
 $\approx 0$ for the rest).
-Removing the per-state memorisation crutch (\textsc{Sokoban-Evolved},
+Removing the per-state memorization crutch (\textsc{Sokoban-Evolved},
 1024 levels sharing one rule set) ties shared and per-step NCAs ($2.08\%$
 vs.\ $2.09\%$ BFS-AR) but the shared variant gets there with
 $2.8\times$ fewer parameters; CNN trails both at $2.82\%$ despite
@@ -223,14 +223,14 @@ hierarchical weight sharing) are in Appendix~\ref{app:per-game-arch}.
   }
 \end{table}
 
-Decomposing the shared-NCA recipe by ablating each pool flavour and
+Decomposing the shared-NCA recipe by ablating each pool feature and
 input-skip individually (Table~\ref{tab:ablation-pool}, $\Delta$BFS as
 relative BFS-AR increase): pool features carry most of the non-local
 handling---dropping all three ($+316\%$) costs roughly twice removing
 \emph{global-pool} alone ($+182\%$), with \emph{axis-pool} next
 ($+123\%$) and \emph{axis-cummax} a smaller $+48\%$.
 The axis-cummax contribution is surprising given that Sokoban's push rule
-\texttt{[ > Player | Crate ] -> [ > Player | > Crate ]} only references its $3{\times}3$ neighbourhood and should not need directional prefix-max at all; the seed std on the no-axis-cummax row is large (1.30\% absolute on a 3.07\% mean), so part of the gap is plausibly noise.
+\texttt{[ > Player | Crate ] -> [ > Player | > Crate ]} only references its $3{\times}3$ neighborhood and should not need directional prefix-max at all; the seed std on the no-axis-cummax row is large (1.30\% absolute on a 3.07\% mean), so part of the gap is plausibly noise.
 We expect a cleaner axis-cummax win on games like \textit{neko puzzle}, whose rule \texttt{[ > Player | ... | Fruit ] -> [ | ... | Player ]} reaches across the row (multi-game version: future work).
 \emph{Input-skip} raises BFS-AR by $+54\%$ when removed but
 \emph{lowers} one-step (TF) error ($0.168\%$ vs.\ $0.274\%$):

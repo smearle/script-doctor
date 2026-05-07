@@ -22,7 +22,7 @@ compare cell-by-cell against the engine.
 
 \subsection{Rule-conditioned NCA world model}
 
-$\mathrm{Enc}_\phi$ maps the token sequence $\mathrm{spec} \in \mathbb{Z}^{S}$ (or the corresponding autoencoder latent) to slots $z \in \mathbb{R}^{K \times d}$ via $\ell$ self-attention layers followed by $K$ learned query vectors cross-attending into the contextualised tokens.
+$\mathrm{Enc}_\phi$ maps the token sequence $\mathrm{spec} \in \mathbb{Z}^{S}$ (or the corresponding autoencoder latent) to slots $z \in \mathbb{R}^{K \times d}$ via $\ell$ self-attention layers followed by $K$ learned query vectors cross-attending into the contextualized tokens.
 Slots are shared across cells and fixed for the rollout.
 
 A single dense layer embeds the per-cell concatenation of $s_t$ and the broadcast one-hot action into $h^{(0)} \in \mathbb{R}^{H \times W \times d_h}$, after which we apply $T$ NCA steps:
@@ -49,8 +49,7 @@ Three non-NCA baselines share the encoder, input embedding, and
 readout heads, replacing only the NCA body so the comparison
 isolates the spatial-update body. The \textbf{CNN} stacks $n_b$
 residual blocks (conv + optional pool + slot-cross-attn + residual
-gate) with \emph{distinct} per-block weights, testing whether
-iteration with weight sharing matters at all. The \textbf{U-Net}
+gate) with \emph{distinct} per-block weights, helping to isolate the effect of the NCA's weight-sharing. The \textbf{U-Net}
 is a 2-level encoder-decoder with skip connections and a FiLM
 bottleneck that reads pooled slots, testing whether multi-scale
 hierarchy substitutes for repeated local updates. The \textbf{ViT}

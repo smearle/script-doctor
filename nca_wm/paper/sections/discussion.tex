@@ -2,7 +2,7 @@
 \label{sec:discussion}
 
 Holding the conditioner constant, the NCA's iterated-local-update body beats non-iterative CNN, U-Net, and ViT baselines on autoregressive rollout across every preset (Table~\ref{tab:baselines-arch}); within the NCA family the shared-weight body matches the per-step body at $\pm 1\sigma$ on \textsc{Train-14} with $3.8\times$ fewer parameters and $\approx 5.8\times$ lower seed variance.
-Rule-conditioning amortises shared dynamics across games: on the 14-game intersection conditional 1-step (TF) error grows $\approx 5\times$ from \textsc{Train-14} to \textsc{Train-59} while unconditional grows $\approx 25\times$ (Appendix~\ref{app:dilution}); on unseen games, scaling to \textsc{Train-199} closes most of the gap to identity (\S\ref{sec:results-encoder-ablation}).
+Rule-conditioning amortizes shared dynamics across games: on the 14-game intersection conditional 1-step (TF) error grows $\approx 5\times$ from \textsc{Train-14} to \textsc{Train-59} while unconditional grows $\approx 25\times$ (Appendix~\ref{app:dilution}); on unseen games, scaling to \textsc{Train-199} closes most of the gap to identity (\S\ref{sec:results-encoder-ablation}).
 
 Conditional and unconditional baselines are roughly tied OOD at every training scale we tested (\textsc{Train-14}, \textsc{Train-59}, \textsc{Train-199}), with per-metric orderings shifting between corpora and the apparent \textsc{Train-14} cond edge plausibly within seed variation.
 With no rule channel the unconditional model only consumes state and action grids, so any OOD gain must come from level-layout features---object identities, wall topology, win-condition cues---making the explicit rule channel partially redundant on unseen games.
