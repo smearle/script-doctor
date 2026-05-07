@@ -48,17 +48,20 @@
       {\includegraphics[width=2.8cm,height=2.8cm]{#4}};%
 }
 
-% --- Decoupled pair: a flat code/spec text block (no box, no fill,
-%     just text) LEFT of a 3D state Box. Text is left-aligned,
-%     anchored east at (state_x - 0.5) so it reads naturally toward
-%     the state card.
+% --- Decoupled pair: code/spec text projected on a flat zy plane
+%     LEFT of the state card. No surrounding Box — just the text
+%     sitting on a virtual plane at x = state_x - 1.0, projected with
+%     the same iso transform as the state image's east face. Anchor
+%     west at z=-1.4 so the text starts at the "left edge" of the
+%     imaginary face and reads left-to-right under the iso tilt.
 %
 %     #1 = name base, #2 = state x, #3 = y,
 %     #4 = state image path, #5 = code/spec text body
 \newcommand{\StateOnCode}[5]{%
-  \node[font=\footnotesize\ttfamily, align=left, text=black,
-        inner sep=2pt, anchor=east, name=#1c]
-        at ({#2 - 0.6}, #3) {#5};%
+  \node[canvas is zy plane at x={#2 - 1.0}, font=\footnotesize\ttfamily,
+        align=left, text=black, text width=2.8cm,
+        inner sep=2pt, anchor=west, name=#1c]
+        at (-1.4, #3) {#5};%
   % State box (3D, transparent).
   \pic[shift={(#2, #3, 0)}] at (0,0,0)
       {Box={name=#1g, caption=, xlabel={{,}}, zlabel={},

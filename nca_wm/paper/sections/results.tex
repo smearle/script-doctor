@@ -142,6 +142,26 @@ corpora.
 
 \begin{figure}[t]
   \centering
+  \includegraphics[width=\linewidth]{figures/id_ood_teaser/teaser.pdf}
+  \caption{\textbf{We propose to learn a latent space of games
+    conditioned on dynamics, implemented as a rule-conditioned NCA
+    world model.} \emph{Left (training):} for each PuzzleScript game
+    $g$, the engine produces $(s_0, s_1)$ pairs that the NCA-WM is
+    fit to under a per-cell loss; the encoder maps the game's spec
+    text to a latent $z$ that conditions the dynamics. \emph{Right
+    (evaluation, held-out):} on a game the NCA-WM has never seen,
+    only $s_0$ is provided and the trained model is rolled out
+    autoregressively. The PuzzleScript engine (bottom, JavaScript)
+    is the data source for both regimes. The latent-space scatters
+    on top show where each training game (gray) and held-out game
+    (red $\bigstar$) lands in the encoder's slot space; mapping
+    held-outs into the same neighbourhood as training games is the
+    aspirational goal.}
+  \label{fig:id-ood-teaser}
+\end{figure}
+
+\begin{figure}[t]
+  \centering
   \begin{subfigure}[b]{0.49\linewidth}
     \centering
     \includegraphics[width=\linewidth]{figures/indist_intersection/intersection_slope_id.pdf}
