@@ -46,28 +46,24 @@ Appendix~\ref{app:synth-only}.
 
 \subsection{Game suites}
 
-\begin{itemize}
-  \item \textbf{Single-game Sokoban authored levels} (10 levels;
-    Table~\ref{tab:baselines-sokoban}): used for the
-    single-game architecture comparison where dynamics are fully
-    controlled. Provenance of the level set is in
-    Appendix~\ref{app:data-provenance}.
-  \item \textbf{Single-game multi-grid synth} (Sokoban; widths
-    $\{5,6,7,8\}^2$ with 256 evolved levels per width;
-    Tables~\ref{tab:baselines-synth} and \ref{tab:ablation-pool}):
-    256 synthetic levels per width share one rule set, so per-state
-    memorization is unavailable and the model has to learn the rule.
-  \item \textbf{Multi-game} (\textsc{Train-14};
-    Table~\ref{tab:baselines-scaling14}): 14 PuzzleScript games
-    spanning gravity, light beams, multi-character control, and
-    several \texttt{again}-driven simulations. Per-game grid sizes
-    range from $4{\times}4$ to $32{\times}24$.
-  \item \textbf{Broad-corpus} (\textsc{Train-94};
-    Table~\ref{tab:fidelity}): 94 Gallery games drawn from the
-    deduped pool. A 30-game held-out set, disjoint from training by
-    name and token-hash, is used for the unseen-game evaluations
-    deferred to the appendix.
-\end{itemize}
+\textbf{Single-game Sokoban authored levels} (10 levels;
+Table~\ref{tab:baselines-sokoban}) are used for the single-game
+architecture comparison where dynamics are fully controlled
+(provenance in Appendix~\ref{app:data-provenance}).
+\textbf{Single-game multi-grid synth} (Sokoban; widths
+$\{5,6,7,8\}^2$ with 256 evolved levels per width;
+Tables~\ref{tab:baselines-synth} and \ref{tab:ablation-pool})
+shares one rule set across 256 synthetic levels per width, so
+per-state memorization is unavailable and the model has to learn
+the rule. \textbf{Multi-game} (\textsc{Train-14};
+Table~\ref{tab:baselines-scaling14}) covers 14 PuzzleScript games
+spanning gravity, light beams, multi-character control, and several
+\texttt{again}-driven simulations, with per-game grid sizes from
+$4{\times}4$ to $32{\times}24$. \textbf{Broad-corpus}
+(\textsc{Train-94}; Table~\ref{tab:fidelity}) is 94 Gallery games
+drawn from the deduped pool; a 30-game held-out set, disjoint from
+training by name and token-hash, is used for the unseen-game
+evaluations deferred to the appendix.
 
 \subsection{Architectures and hyper-parameters}
 
@@ -95,16 +91,14 @@ seeds.
 
 \subsection{Evaluation}
 
-We report two complementary metrics:
-\begin{itemize}
-  \item \textbf{One-step change-error}: the per-cell BCE-thresholded
-    error rate on the cells that change between $s_t$ and $s_{t+1}$,
-    measured under teacher forcing on the held-out portion of each
-    cache.
-  \item \textbf{Autoregressive rollout error}: the same per-cell error
-    averaged over a 50-step rollout from each level's start state,
-    under three policies: random actions, BFS-optimal, and A*-optimal.
-\end{itemize}
+We report two complementary metrics.
+\textbf{One-step change-error} is the per-cell BCE-thresholded
+error rate on cells that change between $s_t$ and $s_{t+1}$,
+measured under teacher forcing on the held-out portion of each
+cache. \textbf{Autoregressive rollout error} is the same per-cell
+error averaged over a 50-step rollout from each level's start
+state, under three policies: random actions, BFS-optimal, and
+A*-optimal.
 Train loss decouples from autoregressive rollout error in the
 over-capacity regime (\S\ref{app:F3}), so reporting both is essential.
 

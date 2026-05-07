@@ -146,22 +146,18 @@ $h^{(0)}$ and the slots $z$ and emits a final hidden grid $h^{(T)}$
 of the same shape; the comparison isolates the contribution of the
 spatial-update body.
 
-\begin{itemize}
-  \item \textbf{CNN}: a stack of $n_b$ residual blocks, each
-    containing the same conv + optional pool + slot-cross-attn +
-    residual gate as one NCA layer, but with \emph{distinct}
-    weights per block and applied once. Tests whether iteration with
-    weight sharing matters at all.
-  \item \textbf{U-Net}: a 2-level encoder-decoder with skip
-    connections and a FiLM bottleneck that reads pooled slots. Tests
-    whether multi-scale hierarchy substitutes for repeated local
-    updates.
-  \item \textbf{ViT}: $n_v$ Transformer encoder layers over the
-    flattened cell sequence with learned 2D positional embedding,
-    plus a slot cross-attention and feed-forward block per layer.
-    Tests whether unrestricted global attention beats locality plus
-    iteration.
-\end{itemize}
+The \textbf{CNN} baseline is a stack of $n_b$ residual blocks, each
+containing the same conv + optional pool + slot-cross-attn +
+residual gate as one NCA layer, but with \emph{distinct} weights
+per block and applied once; this tests whether iteration with
+weight sharing matters at all. The \textbf{U-Net} is a 2-level
+encoder-decoder with skip connections and a FiLM bottleneck that
+reads pooled slots, testing whether multi-scale hierarchy
+substitutes for repeated local updates. The \textbf{ViT} stacks
+$n_v$ Transformer encoder layers over the flattened cell sequence
+with learned 2D positional embedding, plus a slot cross-attention
+and feed-forward block per layer, testing whether unrestricted
+global attention beats locality plus iteration.
 
 All baselines accept the same input $(s_t, a_t, g)$ and
 produce the same $(\widehat{s}_{t+1}, \widehat{w}_{t+1})$ outputs as
