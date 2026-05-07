@@ -113,35 +113,40 @@ $(s_t, a_t)$ at every step.
   }
 \end{table}
 
-The pool features collectively account for the bulk of the
-architecture's non-local-context handling: removing all three at
-once ($+316\%$ relative BFS-AR error) costs roughly twice as much as
+All percentages below are relative BFS-AR cell-error increases over
+the full recipe (cf.\ the $\Delta$BFS column of
+Table~\ref{tab:ablation-pool}). The pool features collectively account
+for the bulk of the architecture's non-local-context handling:
+removing all three at once ($+316\%$) costs roughly twice as much as
 removing the single most important pool flavour, \emph{global-pool}
-($+182\%$). \emph{Axis-pool} contributes the next-largest
-chunk ($+123\%$); \emph{axis-cummax}---the directional prefix-max
-designed for axis-aligned ``rule fires once X is in the same
-row/column as Y'' patterns---contributes a small but measurable
-$+48\%$, consistent with the push rule
+($+182\%$). \emph{Axis-pool} contributes the next-largest chunk
+($+123\%$); \emph{axis-cummax}---the directional prefix-max designed
+for axis-aligned ``rule fires once X is in the same row/column as Y''
+patterns---contributes a small but measurable $+48\%$, consistent
+with the push rule
 \texttt{[ > Player | Crate ] -> [ > Player | > Crate ]} depending
 mostly on the immediate $3{\times}3$ neighbourhood and only weakly on
 a directional axial lookup. We expect axis-cummax to carry more
-weight on games whose rule sets do reference far-apart same-axis
-cells (e.g.\ \textsc{collapse}, \textsc{varislide}); a multi-game
-version of this ablation on \textsc{Train-14} is left to future work.
-\emph{Input-skip} contributes $+54\%$ on BFS-AR but \emph{lowers} the
-teacher-forced one-step error ($0.168\%$ without it vs.\ $0.274\%$
-baseline). One reading these numbers suggest---though further
-analysis would be needed to confirm---is that re-injecting
-$(s_t, a_t)$ at every NCA step anchors the body to the input;
-without that anchor it fits engine transitions tighter at the cost
-of robustness to its own slightly-off predictions, which then
-compound as the rollout feeds them back as off-manifold inputs.
+weight on games whose rule sets reference far-apart same-axis cells
+(e.g.\ \textsc{nekopuzzle}, whose lone rule
+\texttt{[ > Player | ... | Fruit ] -> [ | ... | Player ]} pushes a
+fruit \emph{anywhere} along the player's row to the player's
+position); a multi-game version of this ablation on \textsc{Train-14}
+is left to future work.
+\emph{Input-skip} raises BFS-AR cell-error by $+54\%$ when removed,
+but \emph{lowers} the teacher-forced one-step error
+($0.168\%$ without it vs.\ $0.274\%$ baseline). This suggests that
+re-injecting the embedded $(s_t, a_t)$ at every NCA step anchors the
+body to the input; without that anchor it fits engine transitions
+tighter at the cost of robustness to its own slightly-off
+predictions, which then compound as the rollout feeds them back as
+off-manifold inputs.
 
 % TODO: rerun per-feature pool ablation on Train-14 (multi-game) to
 % verify that global-pool dominance and the small axis-cummax
 % contribution generalize beyond the single Sokoban rule. Expected:
 % axis-cummax carries more weight on rules that reference far-apart
-% same-axis cells (e.g. collapse, varislide).
+% same-axis cells (e.g. nekopuzzle's [ > Player | ... | Fruit ] rule).
 
 The architecture-axis findings here are derived from a single rule
 family. We turn next to whether the shared-weights NCA continues to
