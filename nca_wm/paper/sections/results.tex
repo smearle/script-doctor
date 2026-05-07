@@ -182,21 +182,20 @@ Rule-conditioning lets a single set of weights master many games at
 once. Table~\ref{tab:indist-scaling} pairs each rule-conditional
 checkpoint (\textsc{Train-14}, \textsc{Train-59}, \textsc{Train-199};
 the same checkpoints whose held-out numbers anchor
-Table~\ref{tab:cond-vs-uncond-match}) with the parameter-matched
-unconditional baseline at the same preset. Each cell is averaged
-across games and levels under one of four rollout regimes: random
-actions (autoregressive over 50 steps), random-action teacher-forced
-(one step at a time), BFS-optimal oracle actions, and A*-optimal
-oracle actions.
+Table~\ref{tab:cond-vs-uncond-match}) with the unconditional baseline
+at the same preset. Each cell is averaged across games and levels
+under one of four rollout regimes: random actions (autoregressive
+over 50 steps), random-action teacher-forced (one step at a time),
+BFS-optimal oracle actions, and A*-optimal oracle actions.
 
 \begin{table}[t]
   \centering
   \caption{\textbf{In-distribution per-cell rollout error as the
-    training corpus scales, with the parameter-matched unconditional
-    baseline at each scale.} Mean / median across all training games
-    (each game's number is the per-rollout-step mean across all
-    authored levels). Cells marked ``--'' are pending evaluation; the
-    Train-14 and Train-199 unconditional runs are still in flight.}
+    training corpus scales, with the unconditional baseline at each
+    scale.} Mean / median across all training games (each game's
+    number is the per-rollout-step mean across all authored levels).
+    Cells marked ``--'' are pending evaluation; the Train-14 and
+    Train-199 unconditional runs are still in flight.}
   \label{tab:indist-scaling}
   \small
   \input{figures/indist_scaling/table}
