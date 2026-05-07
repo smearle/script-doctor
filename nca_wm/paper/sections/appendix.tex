@@ -418,6 +418,20 @@ $n_r \in \{1, 2, 4, 8, 16\}$ on \textsc{microban} multi-grid synth
 and on the multi-game \textsc{Train-14} preset, reporting
 change-error and parameter count.}
 
+\section{Additional related work}
+\label{app:related}
+
+\paragraph{Adaptive computation.}
+PonderNet~\cite{banino2021pondernet} learns a per-input halting
+distribution over a recurrent module, with a KL prior over the number
+of iterations. Adaptive Computation Time~\cite{graves2016act} and
+Universal Transformers~\cite{dehghani2018universal} are predecessors.
+Our adaptive-halt experiments
+(Appendix~\ref{app:halting}) adapt PonderNet to NCA world models
+with a shared body, so that ``halt at step $k$'' coherently asks the
+same rule set to converge in $k$ iterations rather than selecting
+between $k$ different models.
+
 \section{Adaptive halting}
 \label{app:halting}
 

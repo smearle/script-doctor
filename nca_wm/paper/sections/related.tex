@@ -7,12 +7,20 @@ repeatedly to a grid of hidden states, gives rise to globally
 coordinated behavior~\cite{mordvintsev2020growing}. Subsequent work has
 demonstrated NCAs that grow morphologies from a seed, classify under
 distribution shift, perform texture synthesis, and self-organize
-attention~\cite{niklasson2021selforganising,palm2022variational,najarro2022hypernca}.
+attention~\cite{niklasson2021selforganising,palm2022variational,najarro2022hypernca};
+that grow 3D artefacts and functional machines in
+Minecraft~\cite{sudhakaran2021minecraft}; that learn graph algorithms
+such as breadth-first search and diameter computation on grid
+mazes~\cite{earle2023pathfinding}; that host populations of
+continually-adapting NCA agents in differentiable ALife
+substrates~\cite{zhang2025pdnca}; and that compile symbolic rewrite
+rules into NCA dynamics to define grid-based RL environments for
+embodied agents~\cite{earle2024autoverse}.
 NCAs are typically trained with stochastic update schedules and a
 ``pool'' of intermediate states for stability. Recent work treats the
 NCA's iteration count as a meaningful axis of computation and studies
 when more iterations buy more reasoning. Our use of NCAs as
-\emph{action-conditioned world models} extends this line: rather than
+action-conditioned world models extends this line: rather than
 asking the NCA to converge to a static target, we ask it to predict
 the engine's deterministic next state at every tick.
 
@@ -67,26 +75,16 @@ language for grid-based puzzle games that supports a rich family of
 authoring patterns: chained pushing (\texttt{[ Crate | Crate ] -> [
 Crate | Crate ]}), \texttt{again}-driven simulation (gravity, ball
 trajectories, light beams), multi-character control, and rule
-priorities. Several hundred community games are publicly available and
+priorities. A growing collection of thousands of community games are publicly available and
 share both a tokenization scheme (the engine source) and a common
 state encoding, making the family a natural multi-game benchmark for
 world models. PuzzleJax~\cite{anonymous2026puzzlejax} introduced a
 PuzzleScript reasoning-and-learning benchmark with a JAX engine and
-three game collections: a curated Gallery, a larger Archive of
-community games, and a long-tail collection of gists. We draw from
+three game collections: the PuzzleScript Gallery (curated by increpare CITE TO puzzlescript.net/gallery), a larger Archive of
+community games (CITE TO PEDRO'S ARCHIVE), and a long-tail collection of gists. We draw from
 the same three collections and extend the tooling with a C++ engine
 backend, cached transition datasets, and rule-conditioned learned
 forward models.
-
-\paragraph{Adaptive computation.}
-PonderNet~\cite{banino2021pondernet} learns a per-input halting
-distribution over a recurrent module, with a KL prior over the number
-of iterations. Adaptive Computation Time~\cite{graves2016act} and
-Universal Transformers~\cite{dehghani2018universal} are predecessors.
-Our adaptive-halt experiments adapt PonderNet to NCA world models
-with a shared body, so that ``halt at step $k$'' coherently asks the
-same rule set to converge in $k$ iterations rather than selecting
-between $k$ different models.
 
 \paragraph{Learned local-update grids more broadly.}
 ConvLSTMs~\cite{shi2015convlstm}, graph neural networks, and
