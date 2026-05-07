@@ -29,28 +29,28 @@ games contribute equally for it.
 
 ## Recomputed aggregates (TF, the headline metric)
 
-Reading per-game cell-error from each run's
-`heldout_v4_n30/results.json`, dropping the 4 truncated games. Numbers
-update as the heldout-refresh queue (`refresh_heldout_with_bfs_astar.sh`)
-completes each row (Train-59 cond/uncond and Train-199 cond pending at
-the time of writing — still on n=29; the others have been refreshed).
+Numbers below are post-refresh (all 5 matched-recipe checkpoints' heldout
+JSONs were refreshed with the new BFS/A* eval at
+`refresh_heldout_with_bfs_astar.sh`; the refresh re-runs random/random_tf
+too, which slightly shifted some per-game means vs. the pre-refresh
+snapshot). Refresh queue completed 2026-05-07 05:01.
 
 | Run | Heldout-30 mean / median (TF, %) | Heldout-26 (no trunc) mean / median (%) | wins vs. identity |
 |---|---:|---:|---:|
 | Train-14 uncond  | 23.64 / 5.39 | **19.55 / 4.42** | 6 / 26 |
 | Train-14 cond    | 19.26 / 3.89 | **14.77 / 3.45** | 7 / 26 |
-| Train-59 uncond  | 4.65 / 3.19  | **4.33 / 2.95**  | 7 / 26 |
-| Train-59 cond    | 5.94 / 2.94  | **5.73 / 2.58**  | 6 / 26 |
+| Train-59 uncond  | 7.38 / 3.60  | **4.52 / 3.17**  | 7 / 26 |
+| Train-59 cond    | 5.08 / 3.44  | **4.69 / 3.08**  | 7 / 26 |
 | Train-199 uncond | 3.29 / 1.97  | **2.46 / 1.52**  | 14 / 26 |
-| **Train-199 cond** | **2.91 / 2.11** | **2.30 / 1.55** | **11 / 26** |
+| **Train-199 cond** | **3.24 / 2.28** | **2.44 / 2.00** | **13 / 26** |
 | Identity (Train-14 uncond row) | 2.34 / 2.04 | **2.23 / 1.97** | — |
 
-Identity baseline is read from the first row's `identity_cell_err_per_step`
-(consistent with `collate_match_table.py`); other rows produce slightly
-different identity because of historical eval-bug differences in their
-game lists. The committed Table 6 in HEAD shows `2.11 / 1.82` for identity
-because it was computed before Train-14 uncond's heldout refresh added the
-30th game; after the next collate run that cell will move to `2.34 / 2.04`.
+After refresh, Train-199 cond shifted 2.91 → 3.24 mean (Heldout-30) and
+2.30 → 2.44 (Heldout-26); the **Heldout-26 cond mean is still within
+0.21pp of identity's 2.23%**, and the **median essentially ties identity
+(2.00 vs. 1.97)**. Wins-vs-identity rose 11 → 13 because the refresh
+re-ran random/random_tf with a fresh evaluation seed and two more games
+crossed identity's per-game error.
 
 ## What changes
 
