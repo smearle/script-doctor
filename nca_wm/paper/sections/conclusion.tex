@@ -26,10 +26,10 @@ across 14 jointly trained games (\S\ref{sec:results-baselines},
 \S\ref{sec:results-scaling}).
 \textbf{(ii) Rule conditioning.} Cross-attention to slot embeddings
 of each game's tokenized rule text lets a single set of weights
-jointly model many games at once. On a 94-game broad corpus the
-resulting checkpoint predicts the next state at $\geq 99.85\%$
-median per-cell accuracy under one-step teacher forcing
-(Table~\ref{tab:fidelity}).
+jointly model many games at once. Scaling the training corpus from
+14 to 199 jointly trained games keeps median 1-step teacher-forced
+cell-error in the $0.01$--$0.45\%$ range
+(Table~\ref{tab:indist-scaling}).
 \textbf{(iii) Training-data scaling.} Scaling from 14 to 199 games
 under the same conditional recipe drops the step-1 cell-error on a
 30-game held-out set from $7\times$ worse than identity to within

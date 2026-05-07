@@ -11,16 +11,19 @@ engine-model claim additionally requires smooth scaling with the
 number of games, held-out rule-system generalization, meaningful
 symbolic decoding, and inverse fitting from transitions.
 
-The broad-corpus and joint-AE results
-(Appendices~\ref{app:scaling-curve}, \ref{app:autoencoder},
+The in-distribution scaling and joint-AE results
+(Table~\ref{tab:indist-scaling};
+Appendices~\ref{app:scaling-curve}, \ref{app:autoencoder},
 \ref{app:inverse-fit}) take partial steps in each direction:
-training on 94 deduped human games delivers median 1-step
-teacher-forced cell-error of $0.15\%$
-(Table~\ref{tab:fidelity}); the joint decoder objective tightens
-held-out games' nearest-training-neighbour distance in slot space;
-inverse-fitting recovers OOD games' dynamics through the latent
-variable to $\approx 10^{-3}$ BCE; and autoregressive sampling from the
-empirical slot prior at the 94-game scale clears the engine
+in-distribution rollout fidelity stays strong as the corpus grows
+(median 1-step teacher-forced cell-error of $0.01\%$ at
+\textsc{Train-14}, $0.10\%$ at \textsc{Train-59}, and $0.45\%$ at
+\textsc{Train-199};
+Table~\ref{tab:indist-scaling}); the joint decoder objective
+tightens held-out games' nearest-training-neighbour distance in slot
+space; inverse-fitting recovers OOD games' dynamics through the
+latent variable to $\approx 10^{-3}$ BCE; and autoregressive sampling
+from the empirical slot prior at the 94-game scale clears the engine
 validator at $15/25$ random draws and at $9/9$ slot-space
 interpolation points. Slot-space interpolation between two training
 games stays at $9/9$ engine-loadable when scaled to 199 games,
@@ -93,9 +96,10 @@ milestone for an engine-modeling claim.
 
 ``Near-perfect fidelity'' refers to the on-distribution regime:
 training on authored levels of human-written games and evaluating on
-the same authored levels gives a median
-1-step teacher-forced cell-error of $0.15\%$ on 94 broad-corpus
-games (Table~\ref{tab:fidelity}). The
+the same authored levels gives median 1-step teacher-forced
+cell-error in the $0.01$--$0.45\%$ range across the
+\textsc{Train-14}, \textsc{Train-59}, and \textsc{Train-199}
+checkpoints (Table~\ref{tab:indist-scaling}). The
 multi-grid synthetic ceiling is a separate distribution-shift result:
 when the model is trained on synthetic levels of multiple grid
 sizes \emph{without} access to authored-data memorisation, current

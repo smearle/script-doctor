@@ -1,5 +1,5 @@
 {
-  "v3": {
+  "encoder_only": {
     "run_dir": "multi_scaling_gallery_v3",
     "results": {
       "random": {
@@ -24,7 +24,7 @@
       }
     }
   },
-  "v3+dec": {
+  "joint_decoder": {
     "run_dir": "multi_scaling_gallery_v3_decoder",
     "results": {
       "random": {

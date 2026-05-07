@@ -25,11 +25,15 @@ same token sequence under our tokenizer; this dedup step is essential
 because the encoder cannot otherwise be expected to produce distinct
 slot embeddings for token-identical inputs. Median rule count is 6
 (min 1, max 20), median level count is 3 (max 30), and grid sizes
-range from $1{\times}3$ to $30{\times}40$. We use two training
-presets: \textsc{Train-14} (14 curated games used for the multi-game
-baseline comparison in Table~\ref{tab:baselines-scaling14}) and
-\textsc{Train-94} (94 Gallery games used for the broad-corpus
-fidelity result in Table~\ref{tab:fidelity}). For each game we run
+range from $1{\times}3$ to $30{\times}40$. We use four training
+presets: \textsc{Train-14} (14 curated games), \textsc{Train-59}
+(59 Gallery games), \textsc{Train-199} (199 broad-corpus games)---used
+together for the multi-game in-distribution scaling and OOD
+generalization results
+(Tables~\ref{tab:baselines-scaling14}, \ref{tab:indist-scaling},
+\ref{tab:cond-vs-uncond-match})---and \textsc{Train-94}, an
+intermediate Gallery preset used in Appendix~\ref{app:joint-decoder}.
+For each game we run
 bounded A* from each authored level (60 s wallclock and 100k
 iteration budget per level) and cache the resulting unique
 transitions on disk under bit-packing, with a per-game cap of 200k
@@ -60,10 +64,14 @@ Table~\ref{tab:baselines-scaling14}) covers 14 PuzzleScript games
 spanning gravity, light beams, multi-character control, and several
 \texttt{again}-driven simulations, with per-game grid sizes from
 $4{\times}4$ to $32{\times}24$. \textbf{Broad-corpus}
-(\textsc{Train-94}; Table~\ref{tab:fidelity}) is 94 Gallery games
-drawn from the deduped pool; a 30-game held-out set, disjoint from
-training by name and token-hash, is used for the unseen-game
-evaluations deferred to the appendix.
+(\textsc{Train-59}, \textsc{Train-199};
+Tables~\ref{tab:indist-scaling}, \ref{tab:cond-vs-uncond-match})
+extends \textsc{Train-14} with 45 and 185 additional Gallery games
+respectively; a 30-game held-out set disjoint by name and token-hash
+is used for the unseen-game evaluations.
+\textbf{Intermediate Gallery preset} (\textsc{Train-94};
+Appendix~\ref{app:joint-decoder}) is 94 Gallery games used to compare
+the encoder-only and joint-decoder objectives at fixed corpus.
 
 \subsection{Architectures and hyper-parameters}
 

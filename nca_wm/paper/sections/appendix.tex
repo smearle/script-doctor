@@ -450,7 +450,7 @@ single-game multi-grid tasks.}
 \section{Within-game generalization from synthetic levels}
 \label{app:within-game}
 
-The fidelity numbers in Table~\ref{tab:fidelity} measure cell-error
+The fidelity numbers in Table~\ref{tab:indist-scaling} measure cell-error
 on the same authored levels the model trained on. To probe whether
 the rule-conditioned NCA learns rule structure rather than per-state
 outcomes within a single game, we strip every authored level out of
@@ -732,6 +732,39 @@ held-out target is a separate question---two example matches in
 \S\ref{app:inverse-fit} suggest the geometry is not pure
 collapse, but we have not enumerated the relation across the full
 held-out set.
+
+\subsection{Joint symbolic-decoder objective is free for in-distribution fidelity}
+\label{app:joint-decoder}
+
+A natural concern when adding the joint symbolic-decoder loss
+($\beta = 1.0$) is whether the auxiliary objective costs anything on
+the world-model's primary job---predicting the next state. Table~\ref{tab:fidelity}
+compares two checkpoints that share architecture, training preset
+(\textsc{Train-94}: 94 deduped Gallery games), and update count, and
+differ only in whether the decoder loss is on. Per-cell rollout error
+ties within $0.5$pp on every regime, so the
+in-distribution dynamics-fidelity claim is robust to the auxiliary
+loss.
+
+\begin{table}[t]
+  \centering
+  \caption{\textbf{Joint decoder objective is essentially free for
+    in-distribution fidelity.} Per-cell rollout error on the 94-game
+    \textsc{Train-94} preset for the encoder-only ($\beta = 0$) and
+    joint-decoder ($\beta = 1.0$) checkpoints. Mean / median across
+    all 94 games (each game's number is the per-rollout-step mean
+    across all authored levels, 50 steps for autoregressive regimes /
+    level-length for BFS / A*). Every regime ties within $0.5$pp.}
+  \label{tab:fidelity}
+  \small
+  \input{figures/fidelity/table}
+\end{table}
+
+% TODO: re-run the encoder-only / joint-decoder pair with the same
+% preset and update count under the canonical recipe, so this
+% comparison sits on the same footing as the cond_match runs that
+% populate Table~\ref{tab:indist-scaling} and
+% Table~\ref{tab:cond-vs-uncond-match}.
 
 \subsection{Symbolic decoder: reconstruction and sampling}
 \label{app:autoencoder}

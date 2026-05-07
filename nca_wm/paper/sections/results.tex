@@ -139,8 +139,9 @@ ranking.
 \label{sec:results-scaling}
 
 We extend the head-to-head architecture comparison to multi-game
-training, then push to a 94-game broad corpus to quantify the
-in-distribution fidelity ceiling of a single rule-conditioned NCA.
+training, then sweep the training corpus from 14 to 199 games under
+the canonical conditional recipe to characterize how in-distribution
+fidelity scales with the number of jointly trained games.
 
 \paragraph{\textsc{Train-14} multi-game baselines.}
 Table~\ref{tab:baselines-scaling14} extends the head-to-head to the
@@ -177,45 +178,45 @@ loss is $\approx 10^{4}$ times higher than the NCA / CNN family
 mismatch from the single-game setting. Per-game breakdowns are in
 Appendix~\ref{app:per-game}.
 
-\paragraph{In-distribution mastery on the broad corpus.}
+\paragraph{In-distribution mastery as the corpus scales.}
 Rule-conditioning lets a single set of weights master many games at
-once. Table~\ref{tab:fidelity} reports per-cell rollout error on the
-94-game broad-corpus preset \textsc{Train-94}, averaged across all
-94 games and all authored levels per game, under four rollout
-regimes: random actions (autoregressive),
-random-action teacher-forced (one step at a time), BFS-optimal
-oracle actions, and A*-optimal oracle actions. We compare the
-encoder-only run ($\beta = 0$) and the joint-decoder run
-($\beta = 1.0$), where $\beta$ controls the weight of the symbolic
-token-decoder loss in the training objective.
+once. Table~\ref{tab:indist-scaling} reports per-cell rollout error
+on the training games for three rule-conditional checkpoints---%
+\textsc{Train-14}, \textsc{Train-59}, and the broad
+\textsc{Train-199} preset---trained for 150k updates with the
+canonical recipe (\S\ref{sec:experiments}). These are the same three
+parameter-matched checkpoints whose held-out numbers anchor
+Table~\ref{tab:cond-vs-uncond-match}. Each cell is averaged across
+games and levels under one of four rollout regimes: random actions
+(autoregressive over 50 steps), random-action teacher-forced (one
+step at a time), BFS-optimal oracle actions, and A*-optimal oracle
+actions.
 
 \begin{table}[t]
   \centering
-  \caption{\textbf{Per-cell rollout error on the 94-game broad-corpus
-  training preset.} Mean / median across all 94 games (each game's
-  number is the per-rollout-step mean across all authored levels,
-  50 steps for autoregressive regimes / level-length for BFS / A*).
-  Adding the joint decoder objective is essentially \emph{free} on
-  rollout fidelity: every regime ties within 0.5pp.}
-  \label{tab:fidelity}
+  \caption{\textbf{In-distribution per-cell rollout error as the
+    training corpus scales.} Mean / median across all training games
+    (each game's number is the per-rollout-step mean across all
+    authored levels). All three rows share the canonical recipe and
+    150k updates, differing only in the training preset.}
+  \label{tab:indist-scaling}
   \small
-  \input{figures/fidelity/table}
+  \input{figures/indist_scaling/table}
 \end{table}
 
-The 1-step teacher-forced cell-error of $\approx 0.15\%$ across 94 games
-quantifies on-distribution fidelity in a single number: a single
+The median game's 1-step teacher-forced cell-error is $0.01\%$ at
+\textsc{Train-14}, $0.10\%$ at \textsc{Train-59}, and $0.45\%$ at
+\textsc{Train-199}: even at the broadest preset a single
 rule-conditioned NCA, fed only the tokenized rule text and the
-current state, predicts the next state of any of 94 different
-authored games at $\geq 99.85\%$ per-cell accuracy median.
-Multi-step rollout error climbs to $\approx 5$--$8\%$ across regimes,
-with the median game still under $3\%$ on every regime. The mean is
-pulled up by a small set of persistently-hard games whose state
-spaces are large or whose rule structures involve cascading
-\texttt{again} loops; we discuss this distribution in
-\S\ref{sec:discussion}. Adding the joint symbolic-decoder objective
-($\beta = 1.0$) ties the encoder-only run within $0.5$pp on every
-regime, so the dynamics-fidelity claim is robust to that auxiliary
-loss.
+current state, predicts the next state of the median training game
+at $\geq 99.55\%$ per-cell accuracy. Multi-step rollout error climbs
+to $\approx 10\%$ mean / $\approx 4.5\%$ median on \textsc{Train-199},
+with mean error rising as the corpus widens; the mean is pulled up
+by a tail of persistently-hard games whose state spaces are large or
+whose rule structures involve cascading \texttt{again} loops, which
+we discuss in \S\ref{sec:discussion}. Appendix~\ref{app:joint-decoder}
+shows separately that adding the joint symbolic-decoder objective
+($\beta = 1.0$) is essentially free for in-distribution fidelity.
 
 \subsection{Effect of scaling on out-of-distribution performance}
 \label{sec:results-encoder-ablation}
