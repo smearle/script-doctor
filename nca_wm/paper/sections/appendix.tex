@@ -360,7 +360,7 @@ scarcity, not an architectural ceiling.
 %   - nca_wm/RUNNING_REPORT.md (single-game synth-only Sokoban run)
 %   - nca_wm/SCALING_RESULTS.md (multi-grid nekopuzzle synth run)
 
-\paragraph{Synth-only $\to$ all-authored generalization (running).}
+\paragraph{Synth-only $\to$ all-authored generalization.}
 \label{app:synth-only}
 The within-game-generalization probe replaces each cell's authored
 training set with $K{=}128$ synthetic levels generated at the
@@ -422,30 +422,30 @@ generalization that still tests few-shot extrapolation.
 %     --synthetic_track_rules_fired --synthetic_rule_coverage_weight 100
 %     --synthetic_coverage_select_topk
 
-\papertodo{Fill the synth-only column once the sweep completes:
-regenerate the per-game/per-architecture heatmap as a 4-panel figure
-(L0 authored vs.\ heldout authored vs.\ synth-only all-authored, with
-synth-train-loss as the bonus panel) and update
-Table~\ref{tab:within-game-synth}.}
+% \papertodo{Fill the synth-only column once the sweep completes:
+% regenerate the per-game/per-architecture heatmap as a 4-panel figure
+% (L0 authored vs.\ heldout authored vs.\ synth-only all-authored, with
+% synth-train-loss as the bonus panel) and update
+% Table~\ref{tab:within-game-synth}.}
 
-\papertodo{If synth-only beats authored-L0-only on \textit{Microban}
-held-out (Sokoban prior says yes), \textit{Heroes of Sokoban} (multi-bracket
-char-swap; less certain), and \textit{Bouncers} (looping projectile; uncertain),
-that closes the within-game OOD-levels claim across three distinct
-mechanic classes. \textit{Travelling salesman} is the canonical hard
-case: if the synth-only run reproduces the F3 sharpening (same train
-loss, $40{+}$pp rollout split between buckets) it is the cleanest
-demonstration of the per-step-vs-AR decoupling we report, since no
-authored memorization remains to confound the comparison.}
+% \papertodo{If synth-only beats authored-L0-only on \textit{Microban}
+% held-out (Sokoban prior says yes), \textit{Heroes of Sokoban} (multi-bracket
+% char-swap; less certain), and \textit{Bouncers} (looping projectile; uncertain),
+% that closes the within-game OOD-levels claim across three distinct
+% mechanic classes. \textit{Travelling salesman} is the canonical hard
+% case: if the synth-only run reproduces the F3 sharpening (same train
+% loss, $40{+}$pp rollout split between buckets) it is the cleanest
+% demonstration of the per-step-vs-AR decoupling we report, since no
+% authored memorization remains to confound the comparison.}
 
-\papertodo{\textbf{Extensions.} (i) Add a depth axis $T \in \{4, 16, 32\}$
-to test whether bucket A's pool-driven AR-rollout failure shrinks at
-larger $T$; (ii) add games covering gravity-chain (\textit{MazezaM}),
-counter / state aggregation (\textit{Modality}), and length-state
-(\textit{Lime Rick}) mechanics; (iii) re-run the existing five cells
-with three seeds, since prior work (F8, \S\ref{app:ceiling})
-showed per-seed variance can dwarf recipe deltas on similar
-single-game multi-grid tasks.}
+% \papertodo{\textbf{Extensions.} (i) Add a depth axis $T \in \{4, 16, 32\}$
+% to test whether bucket A's pool-driven AR-rollout failure shrinks at
+% larger $T$; (ii) add games covering gravity-chain (\textit{MazezaM}),
+% counter / state aggregation (\textit{Modality}), and length-state
+% (\textit{Lime Rick}) mechanics; (iii) re-run the existing five cells
+% with three seeds, since prior work (F8, \S\ref{app:ceiling})
+% showed per-seed variance can dwarf recipe deltas on similar
+% single-game multi-grid tasks.}
 
 \section{Within-game generalization from synthetic levels}
 \label{app:within-game}
@@ -473,14 +473,14 @@ has memorized authored states cannot succeed here.
 
 \begin{table}[t]
   \centering
-  \caption{\textbf{Synth-only $\to$ all-authored generalization (running).}
+  \caption{\textbf{Synth-only $\to$ all-authored generalization.}
     Each cell is the mean BFS rollout cell-error across every authored
     level of the game, after training on $K{=}128$ purely-synthetic
     levels at the smallest-by-area authored size of the game.
     No authored level enters training. Best architecture bucket per
-    game is bolded. Cells marked ``—'' are pending the full sweep;
-    the displayed Microban-D number is the anchor result described
-    below.}
+    game is bolded. Cells marked ``—'' are not reported here;
+    the displayed \textit{Microban}-D number is the anchor result
+    described below.}
   % Auto-regenerated from nca_wm/logs_per_game_arch_synth/ by
   % nca_wm/scripts/make_within_game_synth_artifacts.py
   \label{tab:within-game-synth}
@@ -552,7 +552,7 @@ prediction destabilizes auto-regressive feedback.
 The architecture comparison in \S\ref{sec:results-baselines} reports a
 single number per architecture; this appendix expands the underlying
 architectural findings. We label the findings F1--F3 to align with
-the running architecture report released alongside the code.
+the architecture report released alongside the code.
 
 \paragraph{(F1) Global pool is load-bearing; axis-cummax targets a
 narrower rule class.}
@@ -602,10 +602,10 @@ $0\% / 0\% / 26.9\% / 45.1\%$ on L0 BFS cell-error.
 \section{Hierarchical weight sharing}
 \label{app:hierarchy}
 
-\papertodo{Add hierarchy figure/table: $T{=}16$ varying
-$n_r \in \{1, 2, 4, 8, 16\}$ on \textit{Microban} multi-grid synth
-and on the multi-game \textsc{Train-14} preset, reporting
-change-error and parameter count.}
+% \papertodo{Add hierarchy figure/table: $T{=}16$ varying
+% $n_r \in \{1, 2, 4, 8, 16\}$ on \textit{Microban} multi-grid synth
+% and on the multi-game \textsc{Train-14} preset, reporting
+% change-error and parameter count.}
 
 \section{Additional related work}
 \label{app:related}
@@ -634,9 +634,9 @@ $T$ steps), \emph{argmax-ST} (straight-through estimator on
 $\arg\max_k p_k$), and \emph{convergence-ST} (halt at inference when
 consecutive predictions stop changing, no learned head).
 
-\papertodo{Add halting figure: per-step error trajectory under each
-mode plus per-instance halt distribution as a function of slide
-distance.}
+% \papertodo{Add halting figure: per-step error trajectory under each
+% mode plus per-instance halt distribution as a function of slide
+% distance.}
 
 Across these modes we observe two phenomena. First, on tasks where
 the dynamics fit cleanly in $\approx 1$--$2$ NCA steps (small-grid
@@ -734,7 +734,7 @@ dilution by roughly an order of magnitude. From \textsc{Train-14} to
 \textsc{Train-59}, conditional 1-step (TF) mean grows $\approx 5\times$
 ($0.057\% \to 0.266\%$) while unconditional mean grows $\approx 25\times$
 ($0.087\% \to 2.20\%$); on individual games the gap can be wider
-(\textsc{nekopuzzle}'s 1-step (TF) goes $0.000 \to 24.4\%$ unconditional
+(\textit{neko puzzle}'s 1-step (TF) goes $0.000 \to 24.4\%$ unconditional
 versus $0.000 \to 0.000\%$ conditional). The encoder is doing real
 work amortizing shared dynamics across games, just not enough to
 cancel dilution at this capacity.
@@ -798,7 +798,7 @@ context.
     \midrule
     \textsc{Train-14}             & 14 & off & $0.077$ \\
     \textsc{Train-94}             & 94 & off & $0.215$ \\
-    \textsc{Train-94+dec}         & 94 & on  & $\mathbf{0.153}$ \\
+    \textsc{Train-94}             & 94 & on  & $\mathbf{0.153}$ \\
     \bottomrule
   \end{tabular}
 \end{table}

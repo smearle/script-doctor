@@ -128,7 +128,7 @@ with the push rule
 mostly on the immediate $3{\times}3$ neighbourhood and only weakly on
 a directional axial lookup. We expect axis-cummax to carry more
 weight on games whose rule sets reference far-apart same-axis cells
-(e.g.\ \textsc{nekopuzzle}, whose lone rule
+(e.g.\ \textit{neko puzzle}, whose lone rule
 \texttt{[ > Player | ... | Fruit ] -> [ | ... | Player ]} pushes a
 fruit \emph{anywhere} along the player's row to the player's
 position); a multi-game version of this ablation on \textsc{Train-14}
@@ -238,7 +238,7 @@ magnitude. The unconditional model's mean 1-step (TF) cell-error
 jumps from $0.087\%$ at \textsc{Train-14} to $2.20\%$ at
 \textsc{Train-59} (an $\approx 25\times$ growth, an $8\times$ gap to
 the conditional model at the same scale), with single games like
-\textsc{nekopuzzle} going from $0.000\%$ to $24.4\%$ when the
+\textit{neko puzzle} going from $0.000\%$ to $24.4\%$ when the
 encoder is removed. The conditional model grows $\approx 5\times$
 over the same range and is roughly flat from \textsc{Train-59} to
 \textsc{Train-199} ($0.27\% \to 0.37\%$ mean; $0.021\% \to 0.157\%$
@@ -277,8 +277,8 @@ $\hat{s}_{t+1}{=}s_t$.
   \caption{\textbf{Out-of-distribution per-cell rollout error on
     \textsc{Heldout-30}.} Mean / median across 29 held-out games
     that the model produced rollouts for. The four error columns
-    mirror Table~\ref{tab:indist-scaling}; the BFS / A* oracle
-    columns are pending an oracle-action heldout eval pass. The
+    mirror Table~\ref{tab:indist-scaling}; oracle-action regimes
+    (BFS / A*) are not reported here. The
     final column counts games where the model's mean error over the
     30-step random-action rollout is lower than identity's; the
     identity baseline predicts $\hat{s}_{t+1}{=}s_t$ and lower-bounds
