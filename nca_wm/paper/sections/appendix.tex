@@ -214,8 +214,9 @@ the Gap}, \textit{marbles}, \textit{Annoying Skull}, \textit{Colors},
 
 \paragraph{\textsc{Heldout-26}.}
 The held-out evaluation set is disjoint from every training preset by
-filename and by token-sequence hash, drawn by stratified sampling from
-the dedup pool to span low/mid/high rule counts.
+token-sequence hash after structural canonicalization, drawn by
+stratified sampling from the dedup pool to span low/mid/high rule
+counts.
 {\small
 \textit{in the way}, \textit{Cyberpunk 2020}, \textit{My Nana Ate My
 Kid Brother}, \textit{Ice Sliding}, \textit{Block game}, \textit{Kitten
@@ -800,7 +801,8 @@ of the two limits binds first; we leave that to future work.
 \label{app:ood}
 
 The held-out set \textsc{Heldout-26} is disjoint from every training
-preset by name and by token-sequence hash. We probe generalization
+preset by token-sequence hash after structural canonicalization. We
+probe generalization
 along three axes: held-out latent geometry, symbolic decoder
 reconstruction and sampling, and frozen-NCA inverse fitting from
 observed transitions.
