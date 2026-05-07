@@ -32,34 +32,46 @@ OUT_DIR = REPO_ROOT / "nca_wm" / "paper" / "figures" / "cond_vs_uncond_match"
 # the experiment finishes and the row populates.
 RUNS = [
     {
-        "run_dir": "multi_scaling_14_uncond_match_s0",
-        "label": "Unconditional, Train-14",
-        "kind": "uncond",
-    },
-    {
         "run_dir": "multi_scaling_14_cond_match_s0",
-        "label": "Rule-conditional, Train-14",
+        "preset": "Train-14",
+        "n_games": 14,
         "kind": "cond",
+        "label": "Rule-conditional, Train-14",  # used for per-game CSV column header
     },
     {
-        "run_dir": "multi_scaling_gallery_v2_uncond_match_s0",
-        "label": "Unconditional, Train-59",
+        "run_dir": "multi_scaling_14_uncond_match_s0",
+        "preset": "Train-14",
+        "n_games": 14,
         "kind": "uncond",
+        "label": "Unconditional, Train-14",
     },
     {
         "run_dir": "multi_scaling_gallery_v2_cond_match_s0",
-        "label": "Rule-conditional, Train-59",
+        "preset": "Train-59",
+        "n_games": 59,
         "kind": "cond",
+        "label": "Rule-conditional, Train-59",
+    },
+    {
+        "run_dir": "multi_scaling_gallery_v2_uncond_match_s0",
+        "preset": "Train-59",
+        "n_games": 59,
+        "kind": "uncond",
+        "label": "Unconditional, Train-59",
     },
     {
         "run_dir": "multi_scaling_gallery_v4_cond_match_s0",
-        "label": "Rule-conditional, Train-199",
+        "preset": "Train-199",
+        "n_games": 199,
         "kind": "cond",
+        "label": "Rule-conditional, Train-199",
     },
     {
         "run_dir": "multi_scaling_gallery_v4_uncond_match_s0",
-        "label": "Unconditional, Train-199",
+        "preset": "Train-199",
+        "n_games": 199,
         "kind": "uncond",
+        "label": "Unconditional, Train-199",
     },
 ]
 
@@ -212,23 +224,31 @@ def _aggregate_heldout(results_json_path: Path) -> dict:
 
 
 def collate(runs: list[dict]) -> tuple[list[dict], dict, dict]:
-    """Returns (rows, per_game_step1_table, identity_per_game)."""
+    """Returns (rows, per_game_step1_table, identity_per_game).
+
+    Rows are emitted for every spec in `runs`, even if the run dir
+    isn't present yet (so the table keeps placeholder '--' cells in
+    the right slot order).
+    """
     rows: list[dict] = []
-    # Per-game step-1: rows are games, columns are run labels + identity.
     per_game_step1: dict[str, dict[str, float]] = {}
     identity_per_game: dict[str, float] = {}
     for spec in runs:
         run_dir = LOGS_ROOT / spec["run_dir"]
-        if not (run_dir / "config.json").exists():
-            print(f"[collate] skip {spec['label']}: run dir not present yet "
-                  f"({run_dir})")
-            continue
-        cfg = _load_config(run_dir)
-        indist = _aggregate_indist(run_dir / "eval_multigame.npz")
-        ho = _aggregate_heldout(run_dir / "heldout_v4_n30" / "results.json")
+        present = (run_dir / "config.json").exists()
+        if present:
+            cfg = _load_config(run_dir)
+            indist = _aggregate_indist(run_dir / "eval_multigame.npz")
+            ho = _aggregate_heldout(run_dir / "heldout_v4_n30" / "results.json")
+        else:
+            print(f"[collate] {spec['label']}: run dir not present, "
+                  f"emitting placeholder row")
+            cfg, indist, ho = {}, {}, {}
         row = {
             "run_dir": spec["run_dir"],
             "label": spec["label"],
+            "preset": spec["preset"],
+            "n_games": spec["n_games"],
             "kind": spec["kind"],
             "n_train_games": cfg.get("games", "?"),
             "n_hid": cfg.get("n_hid"),
@@ -301,14 +321,11 @@ def write_per_game_csv(
 
 
 def write_latex(rows: list[dict], out_path: Path) -> None:
-    """OOD cell-error table mirroring Table 5's regime columns, plus a
-    final column counting per-game wins vs the identity baseline under
-    the AR-30 random-action rollout.
+    """OOD cell-error table with the same Preset / Model layout as
+    Table 5, plus a wins-vs-identity column.
 
-    Heldout-30 eval currently runs random actions only, so the BFS / A*
-    columns render as `--` until the oracle-action heldout eval is
-    added. The ID rollout column is intentionally omitted: in-distribution
-    fidelity lives in Table 5.
+    Heldout-30 eval currently runs random actions only, so BFS (AR) /
+    A* (AR) render as `--` until those rollouts are added.
     """
     out_path.parent.mkdir(parents=True, exist_ok=True)
 
@@ -322,24 +339,46 @@ def write_latex(rows: list[dict], out_path: Path) -> None:
     def _wins(w, n):
         return "--" if w is None or n is None else f"{w} / {n}"
 
-    body = []
+    # Group rows by preset so we can emit \multirow + a \midrule between
+    # presets, matching the in-distribution scaling table.
+    groups: list[list[dict]] = []
     for r in rows:
-        body.append(
-            "  "
-            + " & ".join([
-                r["label"],
-                _cell(r.get("ood_ar30_model_mean"), r.get("ood_ar30_model_median")),
-                _cell(r.get("ood_tf_model_mean"), r.get("ood_tf_model_median")),
-                "--",  # BFS oracle on heldout: not yet evaluated
-                "--",  # A* oracle on heldout: not yet evaluated
-                _wins(r.get("ood_tf_wins"), r.get("ood_n_games")),
-            ])
-            + r" \\"
+        if groups and groups[-1][0]["preset"] == r["preset"]:
+            groups[-1].append(r)
+        else:
+            groups.append([r])
+
+    body = []
+    for gi, group in enumerate(groups):
+        if gi > 0:
+            body.append("  \\midrule")
+        size = len(group)
+        preset = group[0]["preset"]
+        n_games = group[0]["n_games"]
+        preset_cell = (
+            f"\\multirow{{{size}}}{{*}}{{\\textsc{{{preset}}} ({n_games})}}"
+            if size > 1
+            else f"\\textsc{{{preset}}} ({n_games})"
         )
+        for ri, r in enumerate(group):
+            first = preset_cell if ri == 0 else ""
+            body.append(
+                "  "
+                + " & ".join([
+                    first,
+                    r["kind"],
+                    _cell(r.get("ood_ar30_model_mean"),
+                          r.get("ood_ar30_model_median")),
+                    _cell(r.get("ood_tf_model_mean"),
+                          r.get("ood_tf_model_median")),
+                    "--",  # BFS (AR) on heldout: not yet evaluated
+                    "--",  # A* (AR) on heldout: not yet evaluated
+                    _wins(r.get("ood_tf_wins"), r.get("ood_n_games")),
+                ])
+                + r" \\"
+            )
+
     if rows:
-        # Identity baseline holds for any random-action regime; per-cell
-        # state-change rates would differ for BFS / A* trajectories, so we
-        # leave those `--` until those regimes are evaluated on heldout.
         ident_ar = next((
             (r.get("ood_ar30_identity_mean"), r.get("ood_ar30_identity_median"))
             for r in rows
@@ -350,10 +389,11 @@ def write_latex(rows: list[dict], out_path: Path) -> None:
             for r in rows
             if r.get("ood_tf_identity_mean") is not None
         ), (None, None))
+        body.append("  \\midrule")
         body.append(
             "  "
             + " & ".join([
-                "Identity baseline",
+                "\\multicolumn{2}{l}{Identity baseline}",
                 _cell(*ident_ar),
                 _cell(*ident_tf),
                 "--",
@@ -362,14 +402,16 @@ def write_latex(rows: list[dict], out_path: Path) -> None:
             ])
             + r" \\"
         )
-    col_spec = "l c c c c c"
+
+    col_spec = "l l c c c c c"
     table = (
         "% AUTOGENERATED by nca_wm/scripts/collate_match_table.py — do not edit.\n"
+        "\\begin{adjustbox}{max width=\\linewidth}\n"
         f"\\begin{{tabular}}{{{col_spec}}}\n"
         "  \\toprule\n"
-        "  Model & random (AR) & 1-step (TF)"
-        " & BFS (oracle) & A* (oracle) & wins vs.\\ identity \\\\\n"
-        "  & \\small mean / median (\\%) & \\small mean / median (\\%)"
+        "  Preset & Model & random (AR) & 1-step (TF)"
+        " & BFS (AR) & A* (AR) & wins vs.\\ identity \\\\\n"
+        "  & & \\small mean / median (\\%) & \\small mean / median (\\%)"
         " & \\small mean / median (\\%) & \\small mean / median (\\%)"
         " & \\small TF, games \\\\\n"
         "  \\midrule\n"
@@ -377,6 +419,7 @@ def write_latex(rows: list[dict], out_path: Path) -> None:
         + "\n"
         "  \\bottomrule\n"
         "\\end{tabular}\n"
+        "\\end{adjustbox}\n"
     )
     out_path.write_text(table)
 

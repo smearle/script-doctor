@@ -1,6 +1,7 @@
 {
   "multi_scaling_14_cond_match_s0": {
-    "latex_label": "\\textsc{Train-14}, cond",
+    "preset": "Train-14",
+    "model": "cond",
     "results": {
       "random": {
         "n_games": 14,
@@ -25,7 +26,8 @@
     }
   },
   "multi_scaling_14_uncond_match_s0": {
-    "latex_label": "\\textsc{Train-14}, uncond",
+    "preset": "Train-14",
+    "model": "uncond",
     "results": {
       "random": {
         "n_games": 14,
@@ -50,7 +52,8 @@
     }
   },
   "multi_scaling_gallery_v2_cond_match_s0": {
-    "latex_label": "\\textsc{Train-59}, cond",
+    "preset": "Train-59",
+    "model": "cond",
     "results": {
       "random": {
         "n_games": 59,
@@ -75,7 +78,8 @@
     }
   },
   "multi_scaling_gallery_v2_uncond_match_s0": {
-    "latex_label": "\\textsc{Train-59}, uncond",
+    "preset": "Train-59",
+    "model": "uncond",
     "results": {
       "random": {
         "n_games": 59,
@@ -100,7 +104,8 @@
     }
   },
   "multi_scaling_gallery_v4_cond_match_s0": {
-    "latex_label": "\\textsc{Train-199}, cond",
+    "preset": "Train-199",
+    "model": "cond",
     "results": {
       "random": {
         "n_games": 199,
@@ -125,7 +130,8 @@
     }
   },
   "multi_scaling_gallery_v4_uncond_match_s0": {
-    "latex_label": "\\textsc{Train-199}, uncond",
+    "preset": "Train-199",
+    "model": "uncond",
     "results": null
   }
 }

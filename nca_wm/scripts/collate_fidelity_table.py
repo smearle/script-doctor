@@ -36,8 +36,8 @@ RUNS = [
 REGIMES = [
     ("random", "random (AR)"),
     ("random_tf", "1-step (TF)"),
-    ("bfs", "BFS (oracle)"),
-    ("astar", "A* (oracle)"),
+    ("bfs", "BFS (AR)"),
+    ("astar", "A* (AR)"),
 ]
 
 
