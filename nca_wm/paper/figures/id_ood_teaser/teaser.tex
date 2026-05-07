@@ -4,9 +4,13 @@
 % banded NCA body → readout) is copied from ../architecture/nca_wm_mini.tex
 % and placed once per regime (in-distribution training and OOD eval),
 % with PuzzleScript engine frames projected onto small Box pics around
-% it. Forward connections (blue/red), loss connections (dark orange),
-% and the autoregressive feedback chain (dashed red) are all drawn
-% natively — no external PNG mini-diagram is included.
+% it. Each row also has a small "clear" Box just before the s_0 frame
+% containing a miniaturized snippet of the game's PuzzleScript rules,
+% representing the rule-conditioning input the NCA-WM gets alongside s_0.
+%
+% Forward (blue/red), loss (dark orange), and autoregressive (dashed
+% red) connections are all drawn natively in TikZ — no external PNG
+% mini-diagram is included.
 %
 % Required engine renders (produced by nca_wm/scripts/dump_engine_frames.py
 % and nca_wm/scripts/dump_ood_rollout_frames.py):
@@ -35,46 +39,55 @@
 \colorlet{EmbedColor}{green!12}
 \colorlet{ReadoutColor}{red!18}
 \colorlet{PSFrameFill}{gray!20}
+\colorlet{CodeFill}{white}
 
 \colorlet{IDColor}{blue!55!black}
 \colorlet{OODColor}{red!55!black}
 \colorlet{LossColor}{orange!85!black}
+\colorlet{CondColor}{violet!60!black}
 
-% --- helper macros (no \foreach) ---
-% Place a small PS-frame Box and project an image on its east face.
-%   #1 = pic name, #2 = x_shift, #3 = y_shift, #4 = image path
+% --- PS frame: small Box with image projected on east face. ---
 \newcommand{\PSframe}[4]{%
   \pic[shift={(#2, #3, 0)}] at (0,0,0)
       {Box={name=#1, caption=, xlabel={{,}}, zlabel={},
-            fill=PSFrameFill, height=6, width=1.5, depth=6}};%
-  % east face is at x = #2 + 1.5*0.2 = #2 + 0.3
-  \node[canvas is zy plane at x={#2 + 0.3}] at (0, #3)
-      {\includegraphics[width=1.2cm,height=1.2cm]{#4}};%
+            fill=PSFrameFill, height=4, width=1.0, depth=4}};%
+  \node[canvas is zy plane at x={#2 + 0.2}] at (0, #3)
+      {\includegraphics[width=0.8cm,height=0.8cm]{#4}};%
 }
 
-% Place an NCA-WM dynamics block (embed -> 3 NCA bands -> readout) plus
-% a faint loop arrow underneath.
-%   #1 = name suffix (id / ood), #2 = y_center
-\newcommand{\NCAblock}[2]{%
-  \pic[shift={(-2.2, #2, 0)}] at (0,0,0)
+% --- Code Box: clear (white) Box with a tiny PS rule snippet on the
+%     east face. Slightly deeper than PS frames so wide rule lines fit.
+%     #1 = pic name, #2 = x_shift, #3 = y_shift, #4 = code text
+\newcommand{\Codebox}[4]{%
+  \pic[shift={(#2, #3, 0)}] at (0,0,0)
+      {Box={name=#1, caption=, xlabel={{,}}, zlabel={},
+            fill=CodeFill, opacity=0.6,
+            height=4, width=1.0, depth=5}};%
+  \node[canvas is zy plane at x={#2 + 0.2}, font=\tiny\ttfamily,
+        align=left, inner sep=0.6pt, text width=1cm] at (0, #3)
+      {#4};%
+}
+
+% --- NCA-WM block (embed -> 3 NCA bands -> readout) + faint loop arrow.
+\newcommand{\NCAblock}[3]{%
+  \pic[shift={({#2 - 1.4}, #3, 0)}] at (0,0,0)
       {Box={name=embed_#1, caption=, xlabel={{,}}, zlabel={},
-            fill=EmbedColor, height=12, width=2.5, depth=12}};
-  \pic[shift={(0.4, #2, 0)}] at (0,0,0)
+            fill=EmbedColor, height=8, width=1.5, depth=8}};
+  \pic[shift={({#2 + 0.0}, #3, 0)}] at (0,0,0)
       {RightBandedBox={name=nca_#1, caption=, xlabel={{,,}}, zlabel={},
             fill=NCAColor, bandfill=NCABandColor,
-            height=12, width={2.5,2.5,2.5}, depth=12}};
-  \pic[shift={(4.0, #2, 0)}] at (0,0,0)
+            height=8, width={1.5,1.5,1.5}, depth=8}};
+  \pic[shift={({#2 + 1.7}, #3, 0)}] at (0,0,0)
       {Box={name=readout_#1, caption=, xlabel={{,}}, zlabel={},
-            fill=ReadoutColor, height=12, width=2.5, depth=12}};
+            fill=ReadoutColor, height=8, width=1.5, depth=8}};
   \draw[connection, -Stealth] (embed_#1-east) -- (nca_#1-west);
   \draw[connection, -Stealth] (nca_#1-east)   -- (readout_#1-west);
-  % loop arrow under the body
   \path let \p1 = (nca_#1-east), \p2 = (nca_#1-west) in
-    coordinate (loopOutR_#1)  at (\x1+0.4cm, \y1)
-    coordinate (loopOutRD_#1) at (\x1+0.4cm, \y1-1.7cm)
-    coordinate (loopInLD_#1)  at (\x2-0.6cm, \y2-1.7cm)
-    coordinate (loopInL_#1)   at (\x2-0.6cm, \y2);
-  \draw[-Stealth, line width=0.5mm, opacity=0.32, rounded corners=6pt]
+    coordinate (loopOutR_#1)  at (\x1+0.25cm, \y1)
+    coordinate (loopOutRD_#1) at (\x1+0.25cm, \y1-1.0cm)
+    coordinate (loopInLD_#1)  at (\x2-0.35cm, \y2-1.0cm)
+    coordinate (loopInL_#1)   at (\x2-0.35cm, \y2);
+  \draw[-Stealth, line width=0.4mm, opacity=0.32, rounded corners=4pt]
       (nca_#1-east) -- (loopOutR_#1) -- (loopOutRD_#1)
       -- (loopInLD_#1) -- (loopInL_#1) -- (nca_#1-west);
 }
@@ -82,87 +95,115 @@
 \begin{document}
 
 \begin{tikzpicture}
-\tikzstyle{connection}=[ultra thick, every node/.style={sloped,allow upside down},
+\tikzstyle{connection}=[thick, every node/.style={sloped,allow upside down},
     draw=\edgecolor, opacity=0.7]
-\tikzstyle{arrow}=[-Stealth, line width=0.4mm, opacity=0.85]
-\tikzstyle{lossarrow}=[-Stealth, line width=0.4mm, color=LossColor]
-\tikzstyle{ardashed}=[-Stealth, line width=0.35mm, dashed,
+\tikzstyle{arrow}=[-Stealth, line width=0.3mm, opacity=0.85]
+\tikzstyle{lossarrow}=[-Stealth, line width=0.3mm, color=LossColor]
+\tikzstyle{condarrow}=[-Stealth, line width=0.3mm, dashed,
+    color=CondColor, opacity=0.85]
+\tikzstyle{ardashed}=[-Stealth, line width=0.25mm, dashed,
     color=OODColor, opacity=0.9]
 
 % =============================================================
-%  IN-DISTRIBUTION TRAINING (top section, NCA-WM at y=0)
+%  LEFT HALF: in-distribution training (NCA-WM at x=-4)
 % =============================================================
-\NCAblock{id}{0}
+%
+% Per row: [code box at x=-9] [s_0 at x=-7] -> [NCA-WM @ -4] -> [s_1 at -0.5]
+% Row centers (3 rows): y = +1.5 / 0 / -1.5
 
-% s_0 column at x=-6.5, s_1 column at x=6
-\PSframe{s0_neko}{-6.5}{ 2.5}{rollouts/nekopuzzle/engine_t0.png}
-\PSframe{s1_neko}{ 6.0}{ 2.5}{rollouts/nekopuzzle/engine_t1.png}
-\PSframe{s0_soko}{-6.5}{ 0.0}{rollouts/sokoban_basic/engine_t0.png}
-\PSframe{s1_soko}{ 6.0}{ 0.0}{rollouts/sokoban_basic/engine_t1.png}
-\PSframe{s0_mod} {-6.5}{-2.5}{rollouts/Modality/engine_t0.png}
-\PSframe{s1_mod} { 6.0}{-2.5}{rollouts/Modality/engine_t1.png}
+\NCAblock{id}{-4}{0}
 
-% Forward (blue) fan-in to embed
+% Code boxes (clear) for ID games
+\Codebox{c_neko}{-9}{ 1.5}{[>P|...|F]\\->[|...|P]}
+\Codebox{c_soko}{-9}{ 0.0}{[>P|C]\\->[>P|>C]}
+\Codebox{c_mod} {-9}{-1.5}{[>PW|B]\\->CANCEL}
+
+% s_0 / s_1 PS frames
+\PSframe{s0_neko}{-7}{ 1.5}{rollouts/nekopuzzle/engine_t0.png}
+\PSframe{s1_neko}{-0.5}{ 1.5}{rollouts/nekopuzzle/engine_t1.png}
+\PSframe{s0_soko}{-7}{ 0.0}{rollouts/sokoban_basic/engine_t0.png}
+\PSframe{s1_soko}{-0.5}{ 0.0}{rollouts/sokoban_basic/engine_t1.png}
+\PSframe{s0_mod} {-7}{-1.5}{rollouts/Modality/engine_t0.png}
+\PSframe{s1_mod} {-0.5}{-1.5}{rollouts/Modality/engine_t1.png}
+
+% Forward (blue) fan-in to embed: state input
 \draw[arrow, color=IDColor] (s0_neko-east) -- (embed_id-west);
 \draw[arrow, color=IDColor] (s0_soko-east) -- (embed_id-west);
 \draw[arrow, color=IDColor] (s0_mod-east)  -- (embed_id-west);
+
+% Conditioning fan-in (dashed violet): code box -> NCA body (rule slots)
+\draw[condarrow] (c_neko-east) -- (nca_id-west);
+\draw[condarrow] (c_soko-east) -- (nca_id-west);
+\draw[condarrow] (c_mod-east)  -- (nca_id-west);
 
 % Loss (dark orange) fan-in to readout
 \draw[lossarrow] (s1_neko-west) -- (readout_id-east);
 \draw[lossarrow] (s1_soko-west) -- (readout_id-east);
 \draw[lossarrow] (s1_mod-west)  -- (readout_id-east);
 
-% Section labels
-\node[font=\small\bfseries, color=IDColor, anchor=south, align=center]
-    at (0, 4.0) {Training on in-distribution PuzzleScript games};
-\node[font=\scriptsize, color=IDColor, anchor=east] at (-7.4,  2.5) {nekopuzzle};
-\node[font=\scriptsize, color=IDColor, anchor=east] at (-7.4,  0.0) {sokoban\_basic};
-\node[font=\scriptsize, color=IDColor, anchor=east] at (-7.4, -2.5) {Modality};
-\node[font=\scriptsize, color=IDColor] at (-6.5, 3.4) {$s_0$};
-\node[font=\scriptsize, color=IDColor] at ( 6.0, 3.4) {$\hat s_1\;(\!\approx\!s_1)$};
-\node[font=\footnotesize\bfseries, color=LossColor, align=center]
-    at (4.5, 3.6) {loss $\|\hat s_1 - s_1\|\;\rightarrow\;$ back-prop $\nabla_\theta$};
+% ID labels
+\node[font=\footnotesize\bfseries, color=IDColor, anchor=south, align=center]
+    at (-4, 2.5) {Training (in-distribution)};
+\node[font=\tiny, color=IDColor] at (-9.0, 2.0) {rules};
+\node[font=\tiny, color=IDColor] at (-7.0, 2.0) {$s_0$};
+\node[font=\tiny, color=IDColor] at (-0.5, 2.0) {$\hat s_1\;(\!\approx\!s_1)$};
+\node[font=\tiny\bfseries, color=LossColor, align=center]
+    at (-2.4, 2.0) {loss $\|\hat s_1 - s_1\|$};
+
+\node[font=\tiny, color=IDColor, anchor=east] at (-9.6,  1.5) {nekopuzzle};
+\node[font=\tiny, color=IDColor, anchor=east] at (-9.6,  0.0) {sokoban\_basic};
+\node[font=\tiny, color=IDColor, anchor=east] at (-9.6, -1.5) {Modality};
 
 % =============================================================
-%  Dashed border
+%  VERTICAL DASHED BORDER between train and eval
 % =============================================================
-\draw[dashed, line width=0.35mm, color=black!70]
-    (-9.5, -4.5) -- (12, -4.5);
-\node[font=\itshape\scriptsize, color=black!50, anchor=east]
-    at (12, -4.85) {trained $\theta \rightarrow \theta^{*}$};
+\draw[dashed, line width=0.3mm, color=black!70]
+    (1.0, -2.6) -- (1.0,  2.8);
+\node[font=\itshape\tiny, color=black!50, anchor=south, rotate=90]
+    at (1.25, 0) {trained $\theta \rightarrow \theta^{*}$};
 
 % =============================================================
-%  OUT-OF-DISTRIBUTION EVAL (bottom section, NCA-WM at y=-9)
+%  RIGHT HALF: held-out eval (NCA-WM at x=+5.5)
 % =============================================================
-\NCAblock{ood}{-9}
+\NCAblock{ood}{5.5}{0}
 
-% s_0 column, then ŝ_1, ŝ_2, ŝ_3 to the right of readout
-\PSframe{s0_inway}{-6.5}{-6.5}{rollouts/in_the_way_by_giovanni_mota/pred_t0.png}
-\PSframe{h1_inway}{ 6.0}{-6.5}{rollouts/in_the_way_by_giovanni_mota/pred_t1.png}
-\PSframe{h2_inway}{ 8.2}{-6.5}{rollouts/in_the_way_by_giovanni_mota/pred_t2.png}
-\PSframe{h3_inway}{10.4}{-6.5}{rollouts/in_the_way_by_giovanni_mota/pred_t3.png}
+% OOD code boxes
+\Codebox{c_inway}{ 2.5}{ 1.5}{[>P|F]\\->[|P]}
+\Codebox{c_nana} { 2.5}{ 0.0}{late[G|...|P]\\->[T|...|G]}
+\Codebox{c_ham}  { 2.5}{-1.5}{[>L|noW]\\->[>L Sub|noW]}
 
-\PSframe{s0_nana}{-6.5}{-9.0}{rollouts/my_nana_ate_my_kid_brother_by_ruth_williams/pred_t0.png}
-\PSframe{h1_nana}{ 6.0}{-9.0}{rollouts/my_nana_ate_my_kid_brother_by_ruth_williams/pred_t1.png}
-\PSframe{h2_nana}{ 8.2}{-9.0}{rollouts/my_nana_ate_my_kid_brother_by_ruth_williams/pred_t2.png}
-\PSframe{h3_nana}{10.4}{-9.0}{rollouts/my_nana_ate_my_kid_brother_by_ruth_williams/pred_t3.png}
+% OOD PS frames
+\PSframe{s0_inway}{ 4.5}{ 1.5}{rollouts/in_the_way_by_giovanni_mota/pred_t0.png}
+\PSframe{h1_inway}{ 8.0}{ 1.5}{rollouts/in_the_way_by_giovanni_mota/pred_t1.png}
+\PSframe{h2_inway}{ 9.2}{ 1.5}{rollouts/in_the_way_by_giovanni_mota/pred_t2.png}
+\PSframe{h3_inway}{10.4}{ 1.5}{rollouts/in_the_way_by_giovanni_mota/pred_t3.png}
 
-\PSframe{s0_ham}{-6.5}{-11.5}{rollouts/Hamiltwo/pred_t0.png}
-\PSframe{h1_ham}{ 6.0}{-11.5}{rollouts/Hamiltwo/pred_t1.png}
-\PSframe{h2_ham}{ 8.2}{-11.5}{rollouts/Hamiltwo/pred_t2.png}
-\PSframe{h3_ham}{10.4}{-11.5}{rollouts/Hamiltwo/pred_t3.png}
+\PSframe{s0_nana}{ 4.5}{ 0.0}{rollouts/my_nana_ate_my_kid_brother_by_ruth_williams/pred_t0.png}
+\PSframe{h1_nana}{ 8.0}{ 0.0}{rollouts/my_nana_ate_my_kid_brother_by_ruth_williams/pred_t1.png}
+\PSframe{h2_nana}{ 9.2}{ 0.0}{rollouts/my_nana_ate_my_kid_brother_by_ruth_williams/pred_t2.png}
+\PSframe{h3_nana}{10.4}{ 0.0}{rollouts/my_nana_ate_my_kid_brother_by_ruth_williams/pred_t3.png}
 
-% Forward red fan-in to embed
+\PSframe{s0_ham}{ 4.5}{-1.5}{rollouts/Hamiltwo/pred_t0.png}
+\PSframe{h1_ham}{ 8.0}{-1.5}{rollouts/Hamiltwo/pred_t1.png}
+\PSframe{h2_ham}{ 9.2}{-1.5}{rollouts/Hamiltwo/pred_t2.png}
+\PSframe{h3_ham}{10.4}{-1.5}{rollouts/Hamiltwo/pred_t3.png}
+
+% State fan-in to embed
 \draw[arrow, color=OODColor] (s0_inway-east) -- (embed_ood-west);
 \draw[arrow, color=OODColor] (s0_nana-east)  -- (embed_ood-west);
 \draw[arrow, color=OODColor] (s0_ham-east)   -- (embed_ood-west);
 
-% Output red fan-out from readout to ŝ_1
+% Rule fan-in to NCA body (dashed violet)
+\draw[condarrow] (c_inway-east) -- (nca_ood-west);
+\draw[condarrow] (c_nana-east)  -- (nca_ood-west);
+\draw[condarrow] (c_ham-east)   -- (nca_ood-west);
+
+% Forward fan-out from readout to ŝ_1
 \draw[arrow, color=OODColor] (readout_ood-east) -- (h1_inway-west);
 \draw[arrow, color=OODColor] (readout_ood-east) -- (h1_nana-west);
 \draw[arrow, color=OODColor] (readout_ood-east) -- (h1_ham-west);
 
-% Autoregressive dashed chain ŝ_1 → ŝ_2 → ŝ_3
+% Autoregressive dashed chain
 \draw[ardashed] (h1_inway-east) -- (h2_inway-west);
 \draw[ardashed] (h2_inway-east) -- (h3_inway-west);
 \draw[ardashed] (h1_nana-east)  -- (h2_nana-west);
@@ -170,18 +211,21 @@
 \draw[ardashed] (h1_ham-east)   -- (h2_ham-west);
 \draw[ardashed] (h2_ham-east)   -- (h3_ham-west);
 
-% Section labels
-\node[font=\small\bfseries, color=OODColor, anchor=south, align=center]
-    at (0, -5.3) {Evaluation on held-out (OOD) games};
-\node[font=\scriptsize, color=OODColor, anchor=east] at (-7.4,  -6.5) {in\_the\_way};
-\node[font=\scriptsize, color=OODColor, anchor=east] at (-7.4,  -9.0) {my\_nana};
-\node[font=\scriptsize, color=OODColor, anchor=east] at (-7.4, -11.5) {Hamiltwo};
-\node[font=\scriptsize, color=OODColor] at (-6.5, -5.6) {$s_0$};
-\node[font=\scriptsize, color=OODColor] at ( 6.0, -5.6) {$\hat s_1$};
-\node[font=\scriptsize, color=OODColor] at ( 8.2, -5.6) {$\hat s_2$};
-\node[font=\scriptsize, color=OODColor] at (10.4, -5.6) {$\hat s_3$};
-\node[font=\itshape\scriptsize, color=OODColor, anchor=north, align=center]
-    at (8.2, -12.6)
+% OOD labels
+\node[font=\footnotesize\bfseries, color=OODColor, anchor=south, align=center]
+    at (6, 2.5) {Evaluation (held-out / OOD)};
+\node[font=\tiny, color=OODColor] at ( 2.5, 2.0) {rules};
+\node[font=\tiny, color=OODColor] at ( 4.5, 2.0) {$s_0$};
+\node[font=\tiny, color=OODColor] at ( 8.0, 2.0) {$\hat s_1$};
+\node[font=\tiny, color=OODColor] at ( 9.2, 2.0) {$\hat s_2$};
+\node[font=\tiny, color=OODColor] at (10.4, 2.0) {$\hat s_3$};
+
+\node[font=\tiny, color=OODColor, anchor=east] at ( 1.9,  1.5) {in\_the\_way};
+\node[font=\tiny, color=OODColor, anchor=east] at ( 1.9,  0.0) {my\_nana};
+\node[font=\tiny, color=OODColor, anchor=east] at ( 1.9, -1.5) {Hamiltwo};
+
+\node[font=\itshape\tiny, color=OODColor, anchor=north, align=center]
+    at (9.2, -2.4)
     {$\hat s_{t+1}$ fed back as input (autoregressive); no supervision};
 
 \end{tikzpicture}
