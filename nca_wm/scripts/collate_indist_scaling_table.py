@@ -31,12 +31,12 @@ OUT_DIR = REPO_ROOT / "nca_wm" / "paper" / "figures" / "indist_scaling"
 # eval data renders as "--" cells (the in-flight uncond runs land
 # here once they finish).
 RUNS = [
-    ("multi_scaling_14_cond_match_s0",          "Train-14",  14,  "cond"),
     ("multi_scaling_14_uncond_match_s0",        "Train-14",  14,  "uncond"),
-    ("multi_scaling_gallery_v2_cond_match_s0",  "Train-59",  59,  "cond"),
+    ("multi_scaling_14_cond_match_s0",          "Train-14",  14,  "cond"),
     ("multi_scaling_gallery_v2_uncond_match_s0", "Train-59", 59,  "uncond"),
-    ("multi_scaling_gallery_v4_cond_match_s0",  "Train-199", 199, "cond"),
+    ("multi_scaling_gallery_v2_cond_match_s0",  "Train-59",  59,  "cond"),
     ("multi_scaling_gallery_v4_uncond_match_s0", "Train-199", 199,"uncond"),
+    ("multi_scaling_gallery_v4_cond_match_s0",  "Train-199", 199, "cond"),
 ]
 
 REGIMES = [
@@ -118,11 +118,11 @@ def write_table(rows: list[tuple[str, int, str, dict]], out_path: Path) -> None:
         if gi > 0:
             lines.append("  \\midrule")
         size = len(group)
-        preset, n_games, _, _ = group[0]
+        preset, _, _, _ = group[0]
         preset_cell = (
-            f"\\multirow{{{size}}}{{*}}{{\\textsc{{{preset}}} ({n_games})}}"
+            f"\\multirow{{{size}}}{{*}}{{\\textsc{{{preset}}}}}"
             if size > 1
-            else f"\\textsc{{{preset}}} ({n_games})"
+            else f"\\textsc{{{preset}}}"
         )
         for ri, (_, _, model, results) in enumerate(group):
             cells = [_fmt(results.get(algo)) for algo, _ in REGIMES]

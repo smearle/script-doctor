@@ -1,30 +1,4 @@
 {
-  "multi_scaling_14_cond_match_s0": {
-    "preset": "Train-14",
-    "model": "cond",
-    "results": {
-      "random": {
-        "n_games": 14,
-        "mean": 0.016308665125540498,
-        "median": 0.0010978835978835981
-      },
-      "random_tf": {
-        "n_games": 14,
-        "mean": 0.0005732498968878169,
-        "median": 5.70855614973262e-05
-      },
-      "bfs": {
-        "n_games": 14,
-        "mean": 0.011700941734064647,
-        "median": 0.004195011337868481
-      },
-      "astar": {
-        "n_games": 13,
-        "mean": 0.010538998891382035,
-        "median": 0.0022675736961451248
-      }
-    }
-  },
   "multi_scaling_14_uncond_match_s0": {
     "preset": "Train-14",
     "model": "uncond",
@@ -51,29 +25,29 @@
       }
     }
   },
-  "multi_scaling_gallery_v2_cond_match_s0": {
-    "preset": "Train-59",
+  "multi_scaling_14_cond_match_s0": {
+    "preset": "Train-14",
     "model": "cond",
     "results": {
       "random": {
-        "n_games": 59,
-        "mean": 0.09038550550430159,
-        "median": 0.024810256410256408
+        "n_games": 14,
+        "mean": 0.016308665125540498,
+        "median": 0.0010978835978835981
       },
       "random_tf": {
-        "n_games": 59,
-        "mean": 0.016215567654322045,
-        "median": 0.001
+        "n_games": 14,
+        "mean": 0.0005732498968878169,
+        "median": 5.70855614973262e-05
       },
       "bfs": {
-        "n_games": 58,
-        "mean": 0.09252865016441399,
-        "median": 0.02565935151755554
+        "n_games": 14,
+        "mean": 0.011700941734064647,
+        "median": 0.004195011337868481
       },
       "astar": {
-        "n_games": 37,
-        "mean": 0.07955833829916449,
-        "median": 0.03512092853670394
+        "n_games": 13,
+        "mean": 0.010538998891382035,
+        "median": 0.0022675736961451248
       }
     }
   },
@@ -103,6 +77,37 @@
       }
     }
   },
+  "multi_scaling_gallery_v2_cond_match_s0": {
+    "preset": "Train-59",
+    "model": "cond",
+    "results": {
+      "random": {
+        "n_games": 59,
+        "mean": 0.09038550550430159,
+        "median": 0.024810256410256408
+      },
+      "random_tf": {
+        "n_games": 59,
+        "mean": 0.016215567654322045,
+        "median": 0.001
+      },
+      "bfs": {
+        "n_games": 58,
+        "mean": 0.09252865016441399,
+        "median": 0.02565935151755554
+      },
+      "astar": {
+        "n_games": 37,
+        "mean": 0.07955833829916449,
+        "median": 0.03512092853670394
+      }
+    }
+  },
+  "multi_scaling_gallery_v4_uncond_match_s0": {
+    "preset": "Train-199",
+    "model": "uncond",
+    "results": null
+  },
   "multi_scaling_gallery_v4_cond_match_s0": {
     "preset": "Train-199",
     "model": "cond",
@@ -128,10 +133,5 @@
         "median": 0.04717871964895774
       }
     }
-  },
-  "multi_scaling_gallery_v4_uncond_match_s0": {
-    "preset": "Train-199",
-    "model": "uncond",
-    "results": null
   }
 }

@@ -32,25 +32,18 @@ OUT_DIR = REPO_ROOT / "nca_wm" / "paper" / "figures" / "cond_vs_uncond_match"
 # the experiment finishes and the row populates.
 RUNS = [
     {
-        "run_dir": "multi_scaling_14_cond_match_s0",
-        "preset": "Train-14",
-        "n_games": 14,
-        "kind": "cond",
-        "label": "Rule-conditional, Train-14",  # used for per-game CSV column header
-    },
-    {
         "run_dir": "multi_scaling_14_uncond_match_s0",
         "preset": "Train-14",
         "n_games": 14,
         "kind": "uncond",
-        "label": "Unconditional, Train-14",
+        "label": "Unconditional, Train-14",  # used for per-game CSV column header
     },
     {
-        "run_dir": "multi_scaling_gallery_v2_cond_match_s0",
-        "preset": "Train-59",
-        "n_games": 59,
+        "run_dir": "multi_scaling_14_cond_match_s0",
+        "preset": "Train-14",
+        "n_games": 14,
         "kind": "cond",
-        "label": "Rule-conditional, Train-59",
+        "label": "Rule-conditional, Train-14",
     },
     {
         "run_dir": "multi_scaling_gallery_v2_uncond_match_s0",
@@ -60,11 +53,11 @@ RUNS = [
         "label": "Unconditional, Train-59",
     },
     {
-        "run_dir": "multi_scaling_gallery_v4_cond_match_s0",
-        "preset": "Train-199",
-        "n_games": 199,
+        "run_dir": "multi_scaling_gallery_v2_cond_match_s0",
+        "preset": "Train-59",
+        "n_games": 59,
         "kind": "cond",
-        "label": "Rule-conditional, Train-199",
+        "label": "Rule-conditional, Train-59",
     },
     {
         "run_dir": "multi_scaling_gallery_v4_uncond_match_s0",
@@ -72,6 +65,13 @@ RUNS = [
         "n_games": 199,
         "kind": "uncond",
         "label": "Unconditional, Train-199",
+    },
+    {
+        "run_dir": "multi_scaling_gallery_v4_cond_match_s0",
+        "preset": "Train-199",
+        "n_games": 199,
+        "kind": "cond",
+        "label": "Rule-conditional, Train-199",
     },
 ]
 
@@ -354,11 +354,10 @@ def write_latex(rows: list[dict], out_path: Path) -> None:
             body.append("  \\midrule")
         size = len(group)
         preset = group[0]["preset"]
-        n_games = group[0]["n_games"]
         preset_cell = (
-            f"\\multirow{{{size}}}{{*}}{{\\textsc{{{preset}}} ({n_games})}}"
+            f"\\multirow{{{size}}}{{*}}{{\\textsc{{{preset}}}}}"
             if size > 1
-            else f"\\textsc{{{preset}}} ({n_games})"
+            else f"\\textsc{{{preset}}}"
         )
         for ri, r in enumerate(group):
             first = preset_cell if ri == 0 else ""
