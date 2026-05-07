@@ -86,6 +86,20 @@ lost.
 
 (prepended; newest first)
 
+- 03:52 — variance run state: GPU 1 finished Run 1 (Train-14 uncond
+  s1) at 01:58 → heldout 02:10. Run 2 (uncond s2) just finished
+  training, eval running. **s1's heldout output landed in
+  `heldout_v4_n30_per_game/` not `heldout_v4_n30/`** — appears to be
+  a parallel format (same JSON schema, different dir name). The
+  collate script reads from `heldout_v4_n30/`, so s1 won't pick up
+  in the variance pass without aggregation. s2 will land in the
+  standard dir as expected.
+  - Run 3 (cond s2) starts after Run 2 heldout finishes (~04:15);
+    GPU 0 queue also schedules cond s2, first to finish wins.
+  - Run 4 (Train-59 uncond s1, ~3h) won't fit in remaining budget.
+- 03:48 — paper agent committed the Heldout-26 sweep:
+  `4a674cf "Table 6: filter to Heldout-26 (drop 4 token-truncated games)"`.
+  This is the official headline framing now.
 - 03:55 — paper agent **adopted the Heldout-26 framing** I proposed,
   patched `collate_match_table.py` with `EXCLUDE_HELDOUT_GAMES` and
   regenerated `match_table.tex`, `intersection_slope.pdf`, etc.
