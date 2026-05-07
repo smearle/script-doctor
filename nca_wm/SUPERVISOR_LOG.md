@@ -86,6 +86,24 @@ lost.
 
 (prepended; newest first)
 
+- 03:55 — paper agent **adopted the Heldout-26 framing** I proposed,
+  patched `collate_match_table.py` with `EXCLUDE_HELDOUT_GAMES` and
+  regenerated `match_table.tex`, `intersection_slope.pdf`, etc.
+  (uncommitted in working tree). Main paper headline numbers thus
+  shift from the Heldout-30 numbers in commit `8ad03f4` to
+  Heldout-26: Train-14 cond `19.26 / 3.89 -> 14.77 / 3.45`;
+  Train-199 cond `2.91 / 2.11 -> 2.30 / 1.55` TF mean / median.
+  My caption-prose edit at `8ad03f4` (numbers `19.3 / 3.9 -> 2.9 / 2.1`)
+  is **now stale** relative to the new framing. NOT touching it
+  while the paper agent is mid-edit; they're best placed to update
+  prose alongside their figure regen.
+- 03:30 — built per-game scatter
+  `nca_wm/paper/figures/heldout_truncation/heldout_per_game.{pdf,png}`
+  via `nca_wm/scripts/plot_heldout_per_game.py`. Two-panel: Train-199
+  uncond (14/30) + cond (11/29) wins, with truncated games as open
+  circles named inline. Committed as `ff457dd`.
+- 03:25 — Fig 2 caption edit (`8ad03f4`) now stale per ^above. To
+  re-update if/when paper agent's commit lands.
 - 03:05 — quantified Heldout truncation: 4 of 30 games tokenize past
   `max_seq_len=657`, dragging Train-199 cond's TF mean from 2.30
   (no-trunc) to 2.91 (full set). On Heldout-26, cond beats identity's
