@@ -63,7 +63,8 @@ def serve_world_model(
         mask[:L] = True
         return pad, mask
 
-    def _switch(game_id: int, level_i: int):
+    def _build_env(game_id: int, level_i: int):
+        """Create a fresh (env, backend, real_obs) tuple at level start."""
         info = game_infos[game_id]
         backend = CppPuzzleScriptBackend()
         backend.compile_game(ps_parser, info["name"])
@@ -71,8 +72,25 @@ def serve_world_model(
         # process_input runs on uninitialized backend state and segfaults.
         backend.cpp_engine.load_level(level_i)
         env = CppPuzzleScriptEnv(info["json_str"], level_i=level_i, max_episode_steps=10000)
-        n_objs, grid_h, grid_w = env.observation_shape
         real_obs, _ = env.reset()
+        return env, backend, real_obs
+
+    def _replay(env, backend, actions):
+        """Replay an action list on a fresh env+backend, returning final real_obs."""
+        real_obs = None
+        for a in actions:
+            real_obs, _, _, _, _ = env.step(a)
+            backend.process_input(a)
+            again = 0
+            while backend.againing and again < 1000:
+                backend.process_input(-1)
+                again += 1
+        return real_obs
+
+    def _switch(game_id: int, level_i: int):
+        info = game_infos[game_id]
+        env, backend, real_obs = _build_env(game_id, level_i)
+        n_objs, grid_h, grid_w = env.observation_shape
         pred_state = _pad_state_for_model(real_obs, max_C, max_H, max_W)
         state.clear()
         state.update(
@@ -88,12 +106,52 @@ def serve_world_model(
             step=0,
             diverged=False,
             last_action=None,
+            env_actions=[],   # actions actually fed to the real env, in order
+            history=[],       # snapshots taken pre-step; pop on undo
         )
         if conditional:
             tids = info.get("token_ids", [])
             pad, mask = _pad_tokens(tids)
             state["tokens"] = jnp.array(pad[None])
             state["mask"] = jnp.array(mask[None])
+
+    def _snapshot():
+        """Push a snapshot of state we want to be able to restore via undo.
+
+        Stored before each step; undo pops one snapshot and restores. The env
+        and backend aren't snapshotted (C++ internal state isn't serializable);
+        instead we record env_actions and rebuild on undo by replay.
+        """
+        state["history"].append(dict(
+            pred_state=state["pred_state"],
+            step=state["step"],
+            last_action=state["last_action"],
+            diverged=state["diverged"],
+            env_actions=list(state["env_actions"]),
+        ))
+
+    def _undo():
+        """Pop one snapshot and restore. No-op if history is empty."""
+        if not state["history"]:
+            return
+        snap = state["history"].pop()
+        state["pred_state"] = snap["pred_state"]
+        state["step"] = snap["step"]
+        state["last_action"] = snap["last_action"]
+        state["diverged"] = snap["diverged"]
+        # If env_actions changed (real step was undone), rebuild env+backend
+        # and replay the trimmed action list. Pure dream-step undo is cheaper:
+        # env_actions list is unchanged so we skip the rebuild.
+        if snap["env_actions"] != state["env_actions"]:
+            env, backend, real_obs = _build_env(state["game_id"], state["level_i"])
+            replayed = _replay(env, backend, snap["env_actions"])
+            state["env"] = env
+            state["backend"] = backend
+            state["env_actions"] = list(snap["env_actions"])
+            if replayed is not None:
+                state["real_obs"] = replayed
+            else:
+                state["real_obs"] = real_obs
 
     def _render_obs(obs_native):
         objects = _multihot_to_objects(obs_native)
@@ -162,11 +220,13 @@ def serve_world_model(
     def step(action):
         if action < 0 or action >= N_ACTIONS:
             return jsonify(error="invalid action"), 400
+        _snapshot()
         logits, win_logit = _apply_step(action)
         state["pred_state"] = (jax.nn.sigmoid(logits) > 0.5).astype(jnp.float32)
         state["pred_won"] = float(jax.nn.sigmoid(win_logit)[0])
         state["last_action"] = action
         state["real_obs"], _, done, _, info = state["env"].step(action)
+        state["env_actions"].append(action)
         state["backend"].process_input(action)
         again_steps = 0
         while state["backend"].againing and again_steps < 1000:
@@ -183,6 +243,7 @@ def serve_world_model(
         """Step only the world model (no real env) — pure dreaming."""
         if action < 0 or action >= N_ACTIONS:
             return jsonify(error="invalid action"), 400
+        _snapshot()
         logits, win_logit = _apply_step(action)
         state["pred_state"] = (jax.nn.sigmoid(logits) > 0.5).astype(jnp.float32)
         state["pred_won"] = float(jax.nn.sigmoid(win_logit)[0])
@@ -191,6 +252,13 @@ def serve_world_model(
         state["last_action"] = action
         pred_b64 = _render_obs(_crop_pred())
         return jsonify(pred=pred_b64, step=state["step"], pred_won=state["pred_won"])
+
+    @app.route("/api/undo")
+    def undo():
+        _undo()
+        payload = _state_payload()
+        payload["can_undo"] = bool(state["history"])
+        return jsonify(payload)
 
     @app.route("/api/reset")
     def reset():
@@ -288,7 +356,7 @@ HTML_PAGE = r"""<!DOCTYPE html>
   </div>
   <div class="controls">
     Arrows / WASD = move &nbsp;|&nbsp; X = action &nbsp;|&nbsp;
-    R = restart &nbsp;|&nbsp; V = dream mode
+    Z = undo &nbsp;|&nbsp; R = restart &nbsp;|&nbsp; V = dream mode
   </div>
 
 <script>
@@ -380,6 +448,12 @@ document.addEventListener('keydown', async (e) => {
     dreaming = false;
     document.getElementById('dreamBadge').classList.add('hidden');
     update(await (await fetch('/api/reset')).json());
+    busy = false;
+    return;
+  }
+  if (key === 'z' || key === 'Z') {
+    busy = true;
+    update(await (await fetch('/api/undo')).json());
     busy = false;
     return;
   }

@@ -165,9 +165,13 @@ def main():
     model = _build_model(cfg, train_game_infos)
     max_C = max(g["n_objs"] for g in train_game_infos)
     train_max_seq_len = max(len(g.get("token_ids", [])) for g in train_game_infos)
+    train_max_seq_len = max(train_max_seq_len, 1)
+    # The encoder reserves one position for an internally-prepended CLS token.
     model_max_seq_len = train_max_seq_len + 1
+    model_token_capacity = model_max_seq_len - 1
     print(f"  arch={cfg.get('architecture', 'film')}  n_hid={cfg['n_hid']}  "
           f"n_out={max_C}  max_seq_len={model_max_seq_len}  "
+          f"raw_token_capacity={model_token_capacity}  "
           f"games={[g['name'] for g in train_game_infos]}")
 
     by_name = {g["name"]: g for g in train_game_infos}
@@ -185,7 +189,7 @@ def main():
     print(f"  targets   ({len(target_names)}): {target_names}")
     print(f"  candidates({len(cand_names)}): {cand_names}")
 
-    cand_tok = {n: _pad_tokens(by_name[n]["token_ids"], model_max_seq_len)
+    cand_tok = {n: _pad_tokens(by_name[n]["token_ids"], model_token_capacity)
                 for n in cand_names}
 
     apply_fn = jax.jit(model.apply)

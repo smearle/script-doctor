@@ -14,8 +14,10 @@ Usage:
         [--skip-existing]   # default
 """
 import argparse
+import glob
 import multiprocessing as mp
 import os
+import re
 import sys
 import time
 import traceback
@@ -24,6 +26,8 @@ import numpy as np
 
 # Make sure the repo is on sys.path when run as `python -m`
 sys.path.insert(0, "/home/jupyter-smearle/script-doctor")
+
+TRANSITIONS_CACHE_VERSION_RE = re.compile(r"_transitions_v(\d+)_")
 
 # Top-level so workers can import (functions defined in __main__ aren't
 # picklable on spawn-style fork starts).
@@ -41,6 +45,39 @@ def _compile_game(name: str):
     return json_str, int(env.num_levels)
 
 
+def _latest_transition_cache(
+    cache_dir: str,
+    algo: str,
+    max_iters: int,
+    min_version: int,
+) -> str | None:
+    """Return the newest-version transition cache for this algo/iteration cap.
+
+    Cache filenames include the format version but may vary in timeout and cap
+    tags. Parallel prewarming only needs to know whether the current highest
+    format already exists; `collect_unique_transitions` handles exact loading.
+    """
+    candidates = glob.glob(
+        os.path.join(cache_dir, f"{algo}_transitions_v*_{max_iters}_*.npz")
+    )
+    if not candidates:
+        return None
+
+    def sort_key(path: str) -> tuple[int, float]:
+        m = TRANSITIONS_CACHE_VERSION_RE.search(os.path.basename(path))
+        version = int(m.group(1)) if m else -1
+        try:
+            mtime = os.path.getmtime(path)
+        except OSError:
+            mtime = 0.0
+        if version < min_version:
+            return -1, mtime
+        return version, mtime
+
+    latest = max(candidates, key=sort_key)
+    return latest if sort_key(latest)[0] >= min_version else None
+
+
 def _collect_one_game(args):
     """Collect every level for a single game.
 
@@ -50,7 +87,11 @@ def _collect_one_game(args):
     name, max_iters, timeout_ms, skip_existing = args
     t0 = time.time()
     try:
-        from nca_wm.train import collect_unique_transitions, _cache_dir
+        from nca_wm.train import (
+            TRANSITIONS_CACHE_VERSION,
+            collect_unique_transitions,
+            _cache_dir,
+        )
 
         json_str, n_levels = _compile_game(name)
         cached_levels = 0
@@ -58,11 +99,11 @@ def _collect_one_game(args):
         empty_levels = 0
         total_trans = 0
         for li in range(n_levels):
-            cache_path = os.path.join(
-                _cache_dir(name, li),
-                f"astar_transitions_v4_{max_iters}_{timeout_ms}.npz",
+            cache_path = _latest_transition_cache(
+                _cache_dir(name, li), "astar", max_iters,
+                TRANSITIONS_CACHE_VERSION,
             )
-            if skip_existing and os.path.isfile(cache_path):
+            if skip_existing and cache_path is not None:
                 cached_levels += 1
                 continue
             level_data = collect_unique_transitions(

@@ -6,7 +6,7 @@ to an identity-predictor baseline.
 
 Held-out games must satisfy:
   - n_objs <= model.n_out (the readout has fixed channel width)
-  - tokenized rule sequence <= model.max_seq_len (encoder pos-embed table)
+  - tokenized rule sequence <= model.max_seq_len - 1 (CLS uses one slot)
 
 Spatial dims are unconstrained (convs and rule-attn are size-flexible).
 
@@ -125,7 +125,6 @@ def _build_model(cfg: dict, game_infos: list[dict]):
             n_attn_heads=cfg["n_heads"],
             max_seq_len=max_tok_len + 1,
             n_repeats=cfg.get("n_nca_repeats", 1),
-            mask_hidden=cfg.get("mask_hidden", False),
             use_layernorm=cfg.get("use_layernorm", False),
             input_skip=cfg.get("input_skip", False),
             adaptive_halt=cfg.get("adaptive_halt", False),
@@ -201,7 +200,7 @@ def _build_heldout_game_info(
 
 def _rollout_with_identity(
     apply_fn, params, info: dict, level_i: int,
-    *, max_C: int, model_max_seq_len: int,
+    *, max_C: int, model_token_capacity: int,
     actions: list[int] | None = None, max_steps: int = 30,
     teacher_forced: bool = False, conditional: bool = True,
     seed: int = 0,
@@ -228,9 +227,9 @@ def _rollout_with_identity(
     # the actual level dims. Needed when training shape differs from authored
     # level shape (e.g. synthetic-trained model evaluated on bigger
     # authored levels). We round up to next-pow2 (min 8) to match training's
-    # bucket convention (`_next_pow2` in train.py), so models trained with
-    # mask_hidden=True see eval inputs at the same bucketed shape they
-    # learned to operate on. Without this, a model trained at bucket (8,8)
+    # bucket convention (`_next_pow2` in train.py), so models see eval inputs at
+    # the same bucketed shape they learned to operate on. Without this, a model
+    # trained at bucket (8,8)
     # eval'd on a 7x7 native shape produces garbage because its mask-derived
     # features were learned for the (8,8) canvas.
     def _next_pow2(x: int, min_val: int = 8) -> int:
@@ -244,15 +243,16 @@ def _rollout_with_identity(
     total_tiles = n_objs * H * W
     total_cells = H * W
 
-    # Token padding: use model.max_seq_len (the encoder's pos-embed table size).
+    # Token padding: the model prepends CLS internally, so raw game tokens may
+    # occupy at most encoder_max_seq_len - 1 positions.
     if conditional:
         tids = info.get("token_ids", [])
-        if len(tids) > model_max_seq_len:
+        if len(tids) > model_token_capacity:
             print(f"    WARNING: {info['name']} tokens ({len(tids)}) exceed "
-                  f"model.max_seq_len ({model_max_seq_len}); truncating")
-            tids = tids[:model_max_seq_len]
-        padded_tok = np.zeros(model_max_seq_len, dtype=np.int32)
-        padded_mask = np.zeros(model_max_seq_len, dtype=np.bool_)
+                  f"model raw-token capacity ({model_token_capacity}); truncating")
+            tids = tids[:model_token_capacity]
+        padded_tok = np.zeros(model_token_capacity, dtype=np.int32)
+        padded_mask = np.zeros(model_token_capacity, dtype=np.bool_)
         padded_tok[:len(tids)] = tids
         padded_mask[:len(tids)] = True
         gt = jnp.array(padded_tok[None])
@@ -344,20 +344,28 @@ def _get_heldout_search_actions(
         f"{_safe_path(name)}_L{level_i}_{algo}_{search_n_steps}_{search_timeout_ms}.npz",
     )
     cached = _load_npz_dict(cache_path)
+    cache_valid = False
     if cached is not None and len(cached.get("actions", [])) > 0:
+        source_algo = str(cached.get("source_algo", ""))
+        cache_valid = source_algo == algo
+    if cache_valid:
         return cached["actions"].tolist()
 
     # cpp_sols use the C++-backend action convention; drop-in compatible.
     sol_actions = _solution_from_sol_dir(
         os.path.join(_REPO_ROOT, "data", "cpp_sols"),
         name, level_i, translate_js_to_jax=False,
+        algos=(algo,),
     )
+    source_kind = "cpp_sols" if sol_actions is not None else ""
     # js_sols use the JS-engine action convention; remap to JAX/CPP.
     if sol_actions is None:
         sol_actions = _solution_from_sol_dir(
             os.path.join(_REPO_ROOT, "data", "js_sols"),
             name, level_i, translate_js_to_jax=True,
+            algos=(algo,),
         )
+        source_kind = "js_sols" if sol_actions is not None else ""
 
     if sol_actions is None:
         # Live C++ search.
@@ -371,6 +379,7 @@ def _get_heldout_search_actions(
             )
             if result.actions:
                 sol_actions = list(result.actions)
+                source_kind = "live_search"
         except Exception as e:
             print(f"      [search] {algo} {name} L{level_i} live failed: {e}")
             return None
@@ -378,6 +387,8 @@ def _get_heldout_search_actions(
     if sol_actions is not None:
         _save_npz_dict(cache_path, {
             "actions": np.asarray(sol_actions, dtype=np.int32),
+            "source_algo": np.asarray(algo),
+            "source_kind": np.asarray(source_kind),
         })
     return sol_actions
 
@@ -444,9 +455,11 @@ def evaluate_heldout(
     train_max_seq_len = max(train_max_seq_len, 1)
     # Model's pos-embed table is sized to train_max_seq_len + 1 (for CLS).
     model_max_seq_len = train_max_seq_len + 1
+    model_token_capacity = model_max_seq_len - 1
 
     print(f"  model: {type(model).__name__}, n_hid={cfg['n_hid']}, "
           f"n_out={max_C}, max_seq_len={model_max_seq_len}, "
+          f"raw_token_capacity={model_token_capacity}, "
           f"arch={cfg.get('architecture', 'film')}")
     print(f"  trained on {len(train_game_infos)} games: "
           f"{[g['name'] for g in train_game_infos]}")
@@ -476,9 +489,9 @@ def evaluate_heldout(
             print(f"  SKIP {name}: n_objs={info['n_objs']} > model.n_out={max_C}")
             skipped.append((name, f"n_objs_too_large_{info['n_objs']}"))
             continue
-        if len(info["token_ids"]) > model_max_seq_len:
+        if len(info["token_ids"]) > model_token_capacity:
             print(f"  WARNING: {name} tokens ({len(info['token_ids'])}) > "
-                  f"model.max_seq_len ({model_max_seq_len}) — will truncate")
+                  f"model raw-token capacity ({model_token_capacity}) — will truncate")
         print(f"  OK   {name}: n_objs={info['n_objs']} ({max_C}), "
               f"shape=({info['H']}, {info['W']}), "
               f"tokens={len(info['token_ids'])}, levels={info['n_levels']}")
@@ -520,7 +533,7 @@ def evaluate_heldout(
             for ep_i in range(n_random_episodes):
                 r = _rollout_with_identity(
                     apply_fn, params, info, level_i=li,
-                    max_C=max_C, model_max_seq_len=model_max_seq_len,
+                    max_C=max_C, model_token_capacity=model_token_capacity,
                     actions=None, max_steps=max_steps,
                     teacher_forced=False,
                     conditional=conditional,
@@ -532,7 +545,7 @@ def evaluate_heldout(
             for ep_i in range(n_random_episodes):
                 r = _rollout_with_identity(
                     apply_fn, params, info, level_i=li,
-                    max_C=max_C, model_max_seq_len=model_max_seq_len,
+                    max_C=max_C, model_token_capacity=model_token_capacity,
                     actions=None, max_steps=max_steps,
                     teacher_forced=True,
                     conditional=conditional,
@@ -562,7 +575,7 @@ def evaluate_heldout(
                     continue
                 r = _rollout_with_identity(
                     apply_fn, params, info, level_i=li,
-                    max_C=max_C, model_max_seq_len=model_max_seq_len,
+                    max_C=max_C, model_token_capacity=model_token_capacity,
                     actions=actions, max_steps=len(actions),
                     teacher_forced=False,
                     conditional=conditional,

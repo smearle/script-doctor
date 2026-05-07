@@ -44,6 +44,7 @@ from nca_wm.tokenize_game import (
 )
 
 N_ACTIONS = 5
+TRANSITIONS_CACHE_VERSION = 5
 
 
 # ---------------------------------------------------------------------------
@@ -97,12 +98,18 @@ def _unpack_states(packed: np.ndarray, W: int) -> np.ndarray:
     return np.unpackbits(packed, axis=-1, count=W)
 
 
-def _solution_from_sol_dir(sol_root: str, game_name: str, level_i: int,
-                            translate_js_to_jax: bool = False) -> list[int] | None:
+def _solution_from_sol_dir(
+    sol_root: str,
+    game_name: str,
+    level_i: int,
+    translate_js_to_jax: bool = False,
+    algos: tuple[str, ...] = ("astar", "bfs", "gbfs", "mcts"),
+) -> list[int] | None:
     """Look for a pre-computed winning solution under
     `<sol_root>/<game_name>/<algo>_<budget>-steps_level-<level_i>.json` and
-    return its action sequence. Preference order: astar > bfs > gbfs > mcts;
-    within each algorithm, larger search budgets first.
+    return its action sequence. By default, preference order is astar > bfs >
+    gbfs > mcts; within each algorithm, larger search budgets first. Pass
+    `algos=(algo,)` when an evaluation cache is algorithm-specific.
 
     Solutions under `data/cpp_sols/` use the same C++-backend action IDs as
     eval rollouts (no translation). Solutions under `data/js_sols/` use the
@@ -116,7 +123,7 @@ def _solution_from_sol_dir(sol_root: str, game_name: str, level_i: int,
     if not os.path.isdir(game_dir):
         return None
     candidates: list[str] = []
-    for prio_algo in ("astar", "bfs", "gbfs", "mcts"):
+    for prio_algo in algos:
         pattern = os.path.join(
             game_dir, f"{prio_algo}_*-steps_level-{level_i}.json"
         )
@@ -148,7 +155,11 @@ def _solution_from_sol_dir(sol_root: str, game_name: str, level_i: int,
     return None
 
 
-def _solution_from_transitions_cache(game_name: str, level_i: int) -> list[int] | None:
+def _solution_from_transitions_cache(
+    game_name: str,
+    level_i: int,
+    search_algo: str | None = None,
+) -> list[int] | None:
     """Look for an existing transitions cache that contains a winning
     trajectory for `(game_name, level_i)` and reconstruct the action sequence
     via the BFS-on-collected-edges helper from `synthetic_levels`. Returns
@@ -156,21 +167,20 @@ def _solution_from_transitions_cache(game_name: str, level_i: int) -> list[int] 
     initial state in the collected edge set.
 
     Bypasses the per-eval search call when training already explored the
-    goal — typically saves tens of seconds per level on hard games where
-    eval search would otherwise hit the wallclock timeout.
+    goal. If `search_algo` is given, only caches produced by that algorithm
+    are considered so we do not persist an A* trajectory as a BFS rollout.
     """
     import glob
     cache_dir = _cache_dir(game_name, level_i)
     if not os.path.isdir(cache_dir):
         return None
     candidates = []
-    # Prefer astar (heuristic-guided ⇒ likelier to have hit a goal sooner)
-    # over bfs; prefer non-capped over capped (full edge set survives).
-    for prio_algo in ("astar", "bfs"):
+    algos = (search_algo,) if search_algo is not None else ("astar", "bfs")
+    for prio_algo in algos:
         for prio_cap in ("capall", "cap*"):
             pattern = os.path.join(
                 cache_dir,
-                f"{prio_algo}_transitions_v5_*_{prio_cap}.npz",
+                f"{prio_algo}_transitions_v{TRANSITIONS_CACHE_VERSION}_*_{prio_cap}.npz",
             )
             candidates.extend(sorted(glob.glob(pattern)))
     seen = set()
@@ -290,7 +300,7 @@ def collect_unique_transitions(
     Every (state, action, next_state) transition visited during search is returned.
     Uses A* (default) or BFS to explore the state space.
 
-    Cached at rollout_data/{game}/level_{i}/{algo}_transitions_v5_*.npz.
+    Cached at rollout_data/{game}/level_{i}/{algo}_transitions_v{TRANSITIONS_CACHE_VERSION}_*.npz.
 
     `max_transitions` (per-level cap) caps the *cached* output: if the search
     finds more than that many unique transitions, we uniformly subsample down
@@ -315,7 +325,7 @@ def collect_unique_transitions(
     cache_dir = _cache_dir(game_name, level_i)
     cache_path = os.path.join(
         cache_dir,
-        f"{search_algo}_transitions_v5_{max_iters}_{timeout_ms}_cap{cap_tag}.npz",
+        f"{search_algo}_transitions_v{TRANSITIONS_CACHE_VERSION}_{max_iters}_{timeout_ms}_cap{cap_tag}.npz",
     )
     # On cache lookup, fall back to any prior cache with the same algo / iters /
     # cap but a different `timeout_ms` — what's stored on disk is the resulting
@@ -326,7 +336,7 @@ def collect_unique_transitions(
         import glob
         glob_pattern = os.path.join(
             cache_dir,
-            f"{search_algo}_transitions_v5_{max_iters}_*_cap{cap_tag}.npz",
+            f"{search_algo}_transitions_v{TRANSITIONS_CACHE_VERSION}_{max_iters}_*_cap{cap_tag}.npz",
         )
         for alt in sorted(glob.glob(glob_pattern)):
             if alt == cache_path:
@@ -869,9 +879,22 @@ def collect_multigame_dataset(
         dataset = _unpack_v7_cache(raw)
         with open(infos_cache, "rb") as f:
             game_infos = pickle.load(f)
-        n_total = sum(len(s) for s in dataset["per_game_states"])
-        print(f"  {n_total:,} transitions loaded in {time.time()-t0:.1f}s")
-        return dataset, game_infos
+        n_games = len(game_infos)
+        per_game_keys = (
+            "per_game_states", "per_game_next_states", "per_game_actions",
+            "per_game_wons", "per_game_tokens", "per_game_masks",
+            "per_game_sprites", "game_shapes", "per_game_n_transitions",
+        )
+        cache_valid = all(len(dataset.get(k, [])) == n_games for k in per_game_keys)
+        if not cache_valid:
+            print(
+                "  cached dataset/game_infos length mismatch; ignoring merged "
+                "cache and rebuilding"
+            )
+        else:
+            n_total = sum(len(s) for s in dataset["per_game_states"])
+            print(f"  {n_total:,} transitions loaded in {time.time()-t0:.1f}s")
+            return dataset, game_infos
 
     # First pass: compile all games and get shapes (max across all levels)
     game_infos = []
@@ -934,6 +957,11 @@ def collect_multigame_dataset(
             "sprite_tensor": sprite_tensor,   # (n_objs, 5, 5, 4) uint8 or None
         })
 
+    if not game_infos:
+        raise RuntimeError(
+            "No games compiled successfully; cannot build a multi-game dataset."
+        )
+
     # Preliminary max (will be recomputed after collection, since per-game
     # refinement can push n_objs up when the transition collector reports
     # more objects than the env probe).
@@ -949,6 +977,7 @@ def collect_multigame_dataset(
     per_game_actions = []
     per_game_next_states = []
     per_game_wons = []
+    collected_game_infos = []
 
     for game_id, info in enumerate(game_infos):
         name = info["name"]
@@ -1041,6 +1070,7 @@ def collect_multigame_dataset(
 
         info["n_transitions"] = n_trans
         info["n_wins"] = int(wons.sum())
+        collected_game_infos.append(info)
 
         per_game_states.append(states)
         per_game_actions.append(actions)
@@ -1052,6 +1082,13 @@ def collect_multigame_dataset(
               f"({100*changed.mean():.1f}%), {wons.sum():,} winning "
               f"({100*wons.mean():.3f}%), "
               f"shape=({g_C}, {g_H}, {g_W})")
+
+    game_infos = collected_game_infos
+    if not game_infos:
+        raise RuntimeError(
+            "No transitions collected for any compiled game; cannot build a "
+            "multi-game dataset."
+        )
 
     # Recompute global max shape after per-game refinement.
     max_C = max((g.get("n_objs", 0) for g in game_infos), default=1)
@@ -3553,27 +3590,39 @@ def evaluate_multigame(
                 )
                 cached = _load_npz_dict(cache_path)
                 sol_actions = None
+                cache_valid = False
                 if cached is not None and len(cached["actions"]) > 0:
+                    source_algo = str(cached.get("source_algo", ""))
+                    cache_valid = source_algo == algo
+                if cache_valid:
                     sol_actions = cached["actions"].tolist()
+                source_kind = "search_cache" if sol_actions is not None else ""
                 if sol_actions is None:
                     # Reuse the winning trajectory the training-time collector
                     # already explored. Saves up to `search_timeout_ms` of
                     # wall-clock per (game, level, algo) on hard games where
                     # search would otherwise time out at eval.
-                    sol_actions = _solution_from_transitions_cache(name, level_i)
+                    sol_actions = _solution_from_transitions_cache(
+                        name, level_i, search_algo=algo,
+                    )
+                    source_kind = "transitions_cache" if sol_actions is not None else ""
                 if sol_actions is None:
                     # Pre-computed solutions from prior search_cpp / search_nodejs
                     # runs. cpp_sols use the same C++-backend action IDs as eval.
                     sol_actions = _solution_from_sol_dir(
                         os.path.join(_REPO_ROOT, "data", "cpp_sols"),
                         name, level_i, translate_js_to_jax=False,
+                        algos=(algo,),
                     )
+                    source_kind = "cpp_sols" if sol_actions is not None else ""
                 if sol_actions is None:
                     # js_sols use the JS-engine action convention; remap to JAX/CPP.
                     sol_actions = _solution_from_sol_dir(
                         os.path.join(_REPO_ROOT, "data", "js_sols"),
                         name, level_i, translate_js_to_jax=True,
+                        algos=(algo,),
                     )
+                    source_kind = "js_sols" if sol_actions is not None else ""
                 if sol_actions is None:
                     try:
                         backend_search.load_level("", level_i)
@@ -3584,14 +3633,17 @@ def evaluate_multigame(
                         if not result.actions:
                             continue
                         sol_actions = list(result.actions)
+                        source_kind = "live_search"
                     except Exception:
                         continue
                 # Persist whatever we ended up with so the next eval run
                 # (this run or any other model trained on the same game) is
                 # entirely search-free for this (algo, budget, timeout).
-                if cached is None:
+                if not cache_valid:
                     _save_npz_dict(cache_path, {
                         "actions": np.asarray(sol_actions, dtype=np.int32),
+                        "source_algo": np.asarray(algo),
+                        "source_kind": np.asarray(source_kind),
                     })
 
                 r = _run_eval_rollout(
@@ -4354,8 +4406,8 @@ def _pad_state_for_model(obs: np.ndarray, target_C: int,
     Level is top-left-aligned to match training-time bucket padding (where
     ``s_buf[i, :C_g, :H_g, :W_g] = ...``). Centering would put real cells in
     different (row,col) positions than the model saw during training, which is
-    catastrophic with --mask_hidden (model is conditioned on the input mask
-    pattern) and merely sub-optimal without it.
+    catastrophic because the model is conditioned on the input-derived padding
+    mask.
 
     eff_H/W = max(target, obs) so OOD-larger eval levels (e.g. authored width
     19 vs training max 16) are run at their own size — the NCA is convolutional
@@ -4720,13 +4772,7 @@ def main():
     p.add_argument("--mask_padded_loss", action=argparse.BooleanOptionalAction, default=True,
                    help="Mask state loss/metrics outside each sampled transition's real "
                         "(C,H,W) region after bucket padding. Hidden activations are "
-                        "unchanged by this flag; pair with --mask_hidden to also stop the "
-                        "NCA from computing in padded cells.")
-    p.add_argument("--mask_hidden", action=argparse.BooleanOptionalAction, default=True,
-                   help="(rule_attn only) Architecturally zero out the NCA's hidden state "
-                        "and win-pool weighting outside each sample's real (H,W) region. "
-                        "Mask is derived from the input itself (real cells have ≥1 channel "
-                        "set; padding is all-zero).")
+                        "masked independently by the model's input-derived padding mask.")
     # Architectural pool flags (see _pool_features). Independent booleans;
     # any combination may be active.
     p.add_argument("--axis_pool", action=argparse.BooleanOptionalAction, default=True,
@@ -5121,7 +5167,6 @@ def main():
                     input_skip=args.input_skip,
                     n_repeats=args.n_nca_repeats,
                     adaptive_halt=args.adaptive_halt,
-                    mask_hidden=args.mask_hidden,
                 )
             elif args.architecture in ("cnn", "unet", "vit"):
                 from nca_wm.baselines import (
@@ -5135,7 +5180,6 @@ def main():
                     d_slot=args.d_slot,
                     n_attn_heads=args.n_heads,
                     max_seq_len=max_tok_len + 1,
-                    mask_hidden=args.mask_hidden,
                 )
                 if args.architecture == "cnn":
                     model = CNNWorldModel(

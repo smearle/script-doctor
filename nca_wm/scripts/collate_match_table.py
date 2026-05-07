@@ -67,28 +67,40 @@ RUNS = [
         "label": "Rule-conditional, Train-14",
     },
     {
-        "seed_dirs": ["multi_scaling_gallery_v2_uncond_match_s0"],
+        "seed_dirs": [
+            "multi_scaling_gallery_v2_uncond_match_s0",
+            "multi_scaling_gallery_v2_uncond_match_s1",
+        ],
         "preset": "Train-59",
         "n_games": 59,
         "kind": "uncond",
         "label": "Unconditional, Train-59",
     },
     {
-        "seed_dirs": ["multi_scaling_gallery_v2_cond_match_s0"],
+        "seed_dirs": [
+            "multi_scaling_gallery_v2_cond_match_s0",
+            "multi_scaling_gallery_v2_cond_match_s1",
+        ],
         "preset": "Train-59",
         "n_games": 59,
         "kind": "cond",
         "label": "Rule-conditional, Train-59",
     },
     {
-        "seed_dirs": ["multi_scaling_gallery_v4_uncond_match_s0"],
+        "seed_dirs": [
+            "multi_scaling_gallery_v4_uncond_match_s0",
+            "multi_scaling_gallery_v4_uncond_match_s1",
+        ],
         "preset": "Train-199",
         "n_games": 199,
         "kind": "uncond",
         "label": "Unconditional, Train-199",
     },
     {
-        "seed_dirs": ["multi_scaling_gallery_v4_cond_match_s0"],
+        "seed_dirs": [
+            "multi_scaling_gallery_v4_cond_match_s0",
+            "multi_scaling_gallery_v4_cond_match_s1",
+        ],
         "preset": "Train-199",
         "n_games": 199,
         "kind": "cond",
