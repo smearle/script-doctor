@@ -1,19 +1,21 @@
 #!/usr/bin/env bash
-# Second overnight queue, runs on GPU 0. Two pieces:
+# GPU 0 overnight queue.
 #
-# 1. Quick param-count sweep at several n_hid values to identify the
-#    n_hid that gives uncond ~16M total params (matching the cond
-#    Train-14 / Train-59 / Train-199 cond_match recipe). The n_hid=448
-#    "match" cited in the legacy paper was 15M under the old pool
-#    topology; under the current pool topology it lands at ~40M, so
-#    we need to refind the match.
+# Refocused: the headline OOD claim (Train-199 conditional reaches
+# 2.91 / 2.11 % TF mean / median, beats identity on 11/29 heldout
+# games) currently rests on a single seed. A second seed there
+# tightens that claim much more than a param-matched uncond run at
+# Train-14. Param-matching is deferred — the n_hid that gives ~16M
+# total params under the current pool topology is not yet pinned
+# down, and the value of resolving it is smaller than confirming
+# the headline scaling result is reproducible.
 #
-# 2. Once n_hid_match is known, train Train-14 uncond at that width
-#    for a clean parameter-matched comparison, then fill in two
-#    Train-59 cond variance seeds (s1, s2) for the rest of the budget.
-#
-# GPU 0 is shared with gdrtodd (488 MiB idle), but the user has
-# confirmed the GPUs are ours for tonight.
+# Schedule:
+#   1. Train-199 cond s1 (~5h)         — variance on the headline OOD claim
+#   2. Train-199 cond s1 heldout       — fills Table 6 row
+#   3. (slack) Train-14 uncond s3 OR a param-count sweep, depending
+#      on remaining budget; this is queued but the script will skip
+#      gracefully if eval data already exists.
 #
 # Usage:
 #   nohup nca_wm/scripts/run_overnight_paper_variance_gpu0.sh \
@@ -24,74 +26,6 @@ cd "$(dirname "$0")/../.."
 
 GPU=0
 HELDOUT_FILE="data/heldout_v4_n30.json"
-
-# Target total param count. cond_match's NCA body + slot encoder + decoder
-# at n_hid=256 lands at ~16M (verified via Train-14, Train-59, Train-199
-# cond_match s0 checkpoints).
-TARGET_PARAMS=16000000
-
-stage() {
-    local label=$1
-    shift
-    echo
-    echo "=== [$(date '+%F %T')] $label ==="
-    "$@"
-    echo "=== [$(date '+%F %T')] $label done ==="
-}
-
-# Quick param count: train --n_updates 1 with smallest data, grep "Model
-# params:" line. Returns the param count via stdout.
-count_params() {
-    local nhid=$1
-    local tmp=/tmp/_pcount_n${nhid}
-    local log=/tmp/_pcount_n${nhid}.log
-    rm -rf "$tmp"
-    timeout 240 bash -c "
-        CUDA_VISIBLE_DEVICES=$GPU PYTHONUNBUFFERED=1 .venv/bin/python3 -u -m nca_wm.train \
-            --games scaling_14 --no-conditional \
-            --architecture rule_attn --n_hid $nhid --n_nca_steps 8 --batch_size 32 \
-            --n_updates 1 --lr 3e-4 --lr_schedule cosine --lr_min 1e-7 \
-            --grad_clip 0.5 --change_loss_weight 5.0 --balanced_sampling \
-            --max_transitions_per_game 50000 --search_timeout_ms 60000 --n_search_steps 100000 \
-            --input_skip --axis_pool --axis_cummax --global_pool \
-            --patience 4000 --ckpt_interval 100 --log_interval 100 \
-            --seed 0 --save_dir $tmp
-    " > "$log" 2>&1 || true
-    local n
-    n=$(grep -oE "Model params: [0-9,]+" "$log" | tail -1 | tr -d ',' | awk '{print $3}')
-    rm -rf "$tmp" "$log"
-    echo "$n"
-}
-
-#------------------------------------------------------------------
-# Stage 1: sweep n_hid to find the param-matched value
-echo "[gpu0] starting param-count sweep at $(date '+%F %T')"
-declare -A NPARAMS
-for nhid in 288 320 352 384; do
-    n=$(count_params "$nhid")
-    NPARAMS[$nhid]=$n
-    echo "[gpu0] n_hid=$nhid → params=$n"
-done
-
-# Pick the n_hid whose param count is closest to TARGET_PARAMS.
-best_nhid=288
-best_diff=999999999
-for nhid in "${!NPARAMS[@]}"; do
-    n=${NPARAMS[$nhid]}
-    if [ -z "$n" ]; then continue; fi
-    diff=$((n - TARGET_PARAMS))
-    diff=${diff#-}
-    if [ "$diff" -lt "$best_diff" ]; then
-        best_diff=$diff
-        best_nhid=$nhid
-    fi
-done
-
-echo "[gpu0] best param-matched n_hid = $best_nhid (params=${NPARAMS[$best_nhid]})"
-echo "[gpu0] all candidates:"
-for nhid in 288 320 352 384; do
-    echo "  n_hid=$nhid params=${NPARAMS[$nhid]:-?}"
-done
 
 train() {
     local games=$1
@@ -154,25 +88,29 @@ heldout() {
         --skip_done 2>&1 | tail -30
 }
 
-#------------------------------------------------------------------
-# Stage 2: param-matched Train-14 uncond
-match_dir="nca_wm/logs/multi_scaling_14_uncond_match_n${best_nhid}_s0"
-stage "Train-14 uncond n_hid=${best_nhid} s0 (param-matched)" \
-    train scaling_14 uncond "$best_nhid" 0 "$match_dir"
-stage "Train-14 uncond n_hid=${best_nhid} s0 heldout" \
-    heldout "$match_dir"
+stage() {
+    local label=$1
+    shift
+    echo
+    echo "=== [$(date '+%F %T')] $label ==="
+    "$@"
+    echo "=== [$(date '+%F %T')] $label done ==="
+}
 
 #------------------------------------------------------------------
-# Stage 3: Train-59 cond variance (s1, then s2 if budget allows)
-stage "Train-59 cond s1" \
-    train scaling_gallery_v2 cond 256 1 nca_wm/logs/multi_scaling_gallery_v2_cond_match_s1
-stage "Train-59 cond s1 heldout" \
-    heldout nca_wm/logs/multi_scaling_gallery_v2_cond_match_s1
+# Run 1: Train-199 cond s1 — variance on the headline OOD claim
+stage "Train-199 cond s1" \
+    train scaling_gallery_v4 cond 256 1 nca_wm/logs/multi_scaling_gallery_v4_cond_match_s1
+stage "Train-199 cond s1 heldout" \
+    heldout nca_wm/logs/multi_scaling_gallery_v4_cond_match_s1
 
-stage "Train-59 cond s2" \
-    train scaling_gallery_v2 cond 256 2 nca_wm/logs/multi_scaling_gallery_v2_cond_match_s2
-stage "Train-59 cond s2 heldout" \
-    heldout nca_wm/logs/multi_scaling_gallery_v2_cond_match_s2
+#------------------------------------------------------------------
+# Run 2 (slack): Train-14 uncond s3 — extra variance seed if time permits.
+# This will silently skip if a previous run already populated the dir.
+stage "Train-14 uncond s3 (slack)" \
+    train scaling_14 uncond 256 3 nca_wm/logs/multi_scaling_14_uncond_match_s3
+stage "Train-14 uncond s3 heldout (slack)" \
+    heldout nca_wm/logs/multi_scaling_14_uncond_match_s3
 
 echo
 echo "=== gpu0 queue done at $(date '+%F %T') ==="
