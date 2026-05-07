@@ -280,6 +280,12 @@ def display_title(entry: dict, t_collisions: set, ta_collisions: set) -> str:
     name = entry["name"]
     t_key = title.lower()
     ta_key = (title.lower(), (author or "").lower())
+    # Several authors used a row of underscores as a placeholder title;
+    # in italics the bare underscores merge into a baseline rule, so wrap
+    # the literal title in quotes to delimit it. Do this *after* computing
+    # collision keys so the quoted form doesn't bypass dedup.
+    if title and set(title) <= {"_"}:
+        title = f"``{title}''"
     if ta_key in ta_collisions:
         return f"{title} ({author}; {name})" if author else f"{title} ({name})"
     if t_key in t_collisions and author:
