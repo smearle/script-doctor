@@ -36,23 +36,12 @@
 \maketitle
 
 \begin{abstract}
-Learned world models distill environment dynamics into a neural substrate
-and act as differentiable surrogates for policy learning and planning.
-Most work to date trains one model per game on visually rich but
-mechanically uniform pixel observations. We instead train a single
-rule-conditioned world model across hundreds of mechanically diverse
-grid-based puzzle games. Foregoing pixels, we model the
-full discrete game state and use a Neural Cellular Automaton (NCA) to
-mirror a general purpose symbolic game engine's repeated application of atomic local rewrites,
-yielding high-fidelity rollouts over long horizons. The NCA
-cross-attends to slot embeddings produced by a jointly-trained
-autoencoder over symbolic game descriptions, enabling adaptation to
-unseen games at runtime.
-We find that rule-encoding 
-By scaling data in this regime we shift from
-modeling a game to modeling an engine---a space of possible worlds
-organized by their dynamics---and propose an evaluation protocol for
-unseen-rule generalization on this corpus.
+Learned world models distill environment dynamics into a neural substrate and act as differentiable surrogates for policy learning and planning.
+Most work to date trains one model per game on visually rich but mechanically uniform pixel observations.
+We instead train a single rule-conditioned world model across hundreds of mechanically diverse grid-based puzzle games, foregoing pixels for the full discrete game state.
+We propose to use a Neural Cellular Automaton (NCA) that mirrors a general-purpose symbolic game engine's repeated application of atomic local rewrites, cross-attending to slot embeddings produced by a jointly-trained autoencoder over symbolic game descriptions and enabling adaptation to unseen games at runtime.
+We measure the model's performance both in-distribution (across training corpora of 14, 59, and 199 games) and out-of-distribution (on a 26-game held-out stratified set).
+By scaling data in this regime we shift from modeling a game to modeling an engine---a space of possible worlds organized by their dynamics---and propose an evaluation protocol for unseen-rule generalization on this corpus.
 
 % The resulting video-based world models suffer well-documented long-horizon drift, which a wave of follow-up work tries to patch externally with memory tokens, retrieval, or explicit latent state.
 
