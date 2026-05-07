@@ -181,7 +181,8 @@ corpora.
     black line is the identity baseline $\hat s_{t+1}{=}s_t$.
     Conditional 1-step error drops $\approx 6\times$ from
     \textsc{Train-14} to \textsc{Train-199}, reaching identity-level
-    error. Cond and uncond are roughly tied OOD at every training
+    error (non-trivial since most cells stay static between steps).
+    Cond and uncond are roughly tied OOD at every training
     scale (similar medians and wins-vs-identity counts; uncond
     \textsc{Train-14} averaged across 3 seeds, all other rows 1
     seed). Random-action AR companions in
