@@ -221,11 +221,11 @@ corpus and the rule-conditioning flag differ.
     14 to 199 games.} Thin lines: per-game trajectories (single
     seed). Bold solid / dashed: aggregate mean / median across the
     14 games. The unconditional model degrades $\approx 25\times$
-    from \textsc{Train-14} to \textsc{Train-59}; the rule-conditional
-    model degrades $\approx 5\times$ over the same range and barely
-    moves to \textsc{Train-199}. \textsc{Train-199} unconditional is
-    pending. The full per-game table is in
-    Appendix~\ref{app:dilution}.}
+    from \textsc{Train-14} to \textsc{Train-59} and the gap to the
+    conditional model widens further at \textsc{Train-199}; the
+    rule-conditional model degrades $\approx 5\times$ over the same
+    range and barely moves to \textsc{Train-199}. The full per-game
+    table is in Appendix~\ref{app:dilution}.}
   \label{fig:intersection-slope}
 \end{figure}
 
@@ -241,10 +241,14 @@ the conditional model at the same scale), with single games like
 \textsc{nekopuzzle} going from $0.000\%$ to $24.4\%$ when the
 encoder is removed. The conditional model grows $\approx 5\times$
 over the same range and is roughly flat from \textsc{Train-59} to
-\textsc{Train-199} ($0.27\% \to 0.37\%$). The encoder amortizes
-shared dynamics across games at fixed capacity, an in-distribution
-benefit on top of its out-of-distribution effect, which we examine
-next in \S\ref{sec:results-encoder-ablation}.
+\textsc{Train-199} ($0.27\% \to 0.37\%$ mean; $0.021\% \to 0.157\%$
+median); the unconditional baseline at \textsc{Train-199} is
+$1.88\%$ mean / $0.46\%$ median, still $\approx 5\times$ the
+conditional model on the mean and $\approx 3\times$ on the median.
+The encoder amortizes shared dynamics across games at fixed
+capacity, an in-distribution benefit on top of its
+out-of-distribution effect, which we examine next in
+\S\ref{sec:results-encoder-ablation}.
 
 \subsection{Effect of scaling on out-of-distribution performance}
 \label{sec:results-encoder-ablation}

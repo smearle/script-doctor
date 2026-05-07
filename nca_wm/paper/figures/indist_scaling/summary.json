@@ -106,7 +106,28 @@
   "multi_scaling_gallery_v4_uncond_match_s0": {
     "preset": "Train-199",
     "model": "uncond",
-    "results": null
+    "results": {
+      "random": {
+        "n_games": 199,
+        "mean": 0.1211870470258657,
+        "median": 0.06057142857142857
+      },
+      "random_tf": {
+        "n_games": 199,
+        "mean": 0.031898954125287364,
+        "median": 0.0069453151609481
+      },
+      "bfs": {
+        "n_games": 197,
+        "mean": 0.1177181970495471,
+        "median": 0.059082892416225746
+      },
+      "astar": {
+        "n_games": 156,
+        "mean": 0.1235581166845706,
+        "median": 0.06707711930926216
+      }
+    }
   },
   "multi_scaling_gallery_v4_cond_match_s0": {
     "preset": "Train-199",

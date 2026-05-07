@@ -130,11 +130,23 @@
     "multi_scaling_gallery_v4_uncond_match_s0": {
       "preset": "Train-199",
       "model": "uncond",
-      "available": false,
+      "available": true,
       "regimes": {
-        "random_tf": null,
-        "bfs": null,
-        "random": null
+        "random_tf": {
+          "n_games": 14,
+          "mean": 0.018759433405109573,
+          "median": 0.0045899999999999995
+        },
+        "bfs": {
+          "n_games": 14,
+          "mean": 0.09489604029882506,
+          "median": 0.05612599206349206
+        },
+        "random": {
+          "n_games": 14,
+          "mean": 0.1085746392189623,
+          "median": 0.08170519498845391
+        }
       }
     }
   }

@@ -79,13 +79,20 @@ heldout() {
         echo "[skip] $save_dir already has heldout_v4_n30/results.json"
         return 0
     fi
-    CUDA_VISIBLE_DEVICES=$GPU .venv/bin/python3 -m nca_wm.scripts.heldout_rollout_per_game \
+    local names
+    names=$(.venv/bin/python3 -c "
+import json
+hd = json.load(open('$HELDOUT_FILE'))
+print(';'.join(h['name'] for h in hd['heldout']))
+")
+    CUDA_VISIBLE_DEVICES=$GPU .venv/bin/python3 -m nca_wm.heldout_eval \
         --load "$save_dir" \
-        --heldout_file "$HELDOUT_FILE" \
+        --heldout_games "$names" \
+        --out_subdir heldout_v4_n30 \
         --max_levels_per_game 2 \
-        --n_random_episodes 2 \
-        --max_steps 20 \
-        --skip_done 2>&1 | tail -30
+        --n_random_episodes 5 \
+        --max_steps 30 \
+        --include_train_sample 0 2>&1 | tail -40
 }
 
 stage() {
