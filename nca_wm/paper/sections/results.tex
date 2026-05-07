@@ -171,52 +171,36 @@ $0.069 \pm 0.003$ for the rest).
   }
 \end{table}
 
-\paragraph{Multi-game \textsc{Train-14}.}
-Both NCA variants outperform all three non-NCA baselines on
-autoregressive rollout (U-Net at $1.8\times$, ViT at $2.3\times$
-NCA-perstep's BFS-AR error); the NCA/non-NCA gap is robust to seed.
-Within the NCA family the per-step body has the lowest BFS-AR error
-($7.05\% \pm 0.87\%$) and one-step error ($0.25\% \pm 0.04\%$), while
-the shared body has $5.8\times$ lower seed-to-seed variance and
-$3.8\times$ better parameter efficiency; at $\pm 1\sigma$ the two
-overlap on aggregate BFS-AR. ViT is again the only architecture
-failing to fit the per-step objective (best loss $\approx 8 \times
-10^{-4}$ vs.\ $\approx 0$), confirming the structural mismatch.
-Per-game breakdowns: Appendix~\ref{app:per-game}.
-
-\paragraph{Single-game Sokoban.}
-The shared-weights NCA wins on BFS-AR cell-error
-($0.003\% \pm 0.004\%$) at the fewest parameters (1.94M), an order
-of magnitude below the same-depth feed-forward CNN
-($0.055\% \pm 0.075\%$, $2.6\times$ more params) and roughly two
-orders of magnitude below the per-step NCA ($0.283\% \pm 0.400\%$,
-$3.8\times$ more params). U-Net's 2-level downsampling loses
-fine-grained player position on small grids ($3.13\%$); ViT's global
-self-attention fails to fit the data even on this single-game
-preset ($9.32\%$ BFS-AR; one-step $1.49\%$ vs.\ $\approx 0$ for the
-rest), confirming that unrestricted global attention does not match
-grid-rule dynamics.
-
-\paragraph{Multi-grid synthetic (memorization-free).}
-With the per-state lookup removed, the shared-weights and per-step
-NCAs are statistically tied ($2.08\% \pm 0.47\%$ vs.\
-$2.09\% \pm 1.75\%$ BFS-AR), but the shared variant matches that
-performance with $2.8\times$ fewer parameters; CNN trails both at
-$2.82\% \pm 1.97\%$ despite roughly twice the depth. ViT fails to
-fit the multi-grid synth data on the per-step training objective
-itself (the only preset where any architecture leaves an
-order-of-magnitude gap on train loss), and that gap shows up
-downstream as a $\geq 4\times$ worse BFS-AR cell-error. Seed-to-seed
-variance on this task is large ($\sigma > 1.5\%$ on BFS-AR for the
-per-step NCA, CNN, and the input-skip-disabled ablation row) but the
-gap to U-Net and ViT remains robust at $\pm 1\sigma$. Longer-form
-architecture findings (per-game grid, hierarchical weight sharing)
-are in Appendix~\ref{app:per-game-arch}.
-
-\paragraph{Per-feature pool and input-skip ablation.}
-We decompose the NCA-shared advantage by individually disabling each
-component of the pool stack (axis max-pool, axis cumulative max,
-global max) and the input-skip connection.
+Both NCA variants outperform all three non-NCA baselines on multi-game
+\textsc{Train-14} BFS-AR (U-Net at $1.8\times$, ViT at $2.3\times$
+NCA-perstep's error; the NCA/non-NCA gap is robust to seed). Within the
+NCA family the per-step body has the lowest BFS-AR error ($7.05\% \pm
+0.87\%$) and one-step error ($0.25\% \pm 0.04\%$), while the shared
+body has $5.8\times$ lower seed-to-seed variance and $3.8\times$ better
+parameter efficiency; at $\pm 1\sigma$ the two overlap on aggregate
+BFS-AR. ViT is the only architecture failing to fit the per-step
+objective (best loss $\approx 8 \times 10^{-4}$ vs.\ $\approx 0$),
+confirming the structural mismatch (per-game breakdowns in
+Appendix~\ref{app:per-game}).
+On single-game Sokoban authored levels the shared-weights NCA wins
+outright on BFS-AR ($0.003\% \pm 0.004\%$) at the fewest parameters
+(1.94M)---an order of magnitude below the same-depth CNN ($0.055\%$,
+$2.6\times$ more params) and two orders below the per-step NCA
+($0.283\%$, $3.8\times$ more params); U-Net's 2-level downsampling
+loses fine-grained player position on small grids ($3.13\%$), and ViT
+fails to fit the data ($9.32\%$ BFS-AR; one-step $1.49\%$ vs.\
+$\approx 0$ for the rest).
+Removing the per-state memorisation crutch (multi-grid synth, 1024
+levels sharing one rule set) ties shared and per-step NCAs ($2.08\%$
+vs.\ $2.09\%$ BFS-AR) but the shared variant gets there with
+$2.8\times$ fewer parameters; CNN trails both at $2.82\%$ despite
+roughly twice the depth. This is the only preset where any
+architecture leaves an order-of-magnitude train-loss gap (ViT), which
+shows up downstream as $\geq 4\times$ worse BFS-AR. Seed variance is
+large ($\sigma > 1.5\%$ on BFS-AR for per-step NCA, CNN, and the
+input-skip-disabled ablation row) but the gap to U-Net/ViT holds at
+$\pm 1\sigma$. Longer-form architecture findings (per-game grid,
+hierarchical weight sharing) are in Appendix~\ref{app:per-game-arch}.
 
 \begin{table}[t]
   \centering
@@ -233,27 +217,20 @@ global max) and the input-skip connection.
   }
 \end{table}
 
-Percentages below are relative BFS-AR increases over the full recipe
-(cf.\ $\Delta$BFS in Table~\ref{tab:ablation-pool}). Pool features
-account for most of the non-local-context handling: dropping all
-three ($+316\%$) costs roughly twice as much as the single most
-important flavour, \emph{global-pool} ($+182\%$). \emph{Axis-pool} is
-next ($+123\%$); \emph{axis-cummax}, designed for axis-aligned
-``rule fires once X is in the same row/column as Y'' patterns,
-contributes a smaller $+48\%$, consistent with the push rule
-\texttt{[ > Player | Crate ] -> [ > Player | > Crate ]} depending
-mostly on the $3{\times}3$ neighbourhood. We expect axis-cummax to
-carry more weight on games like \textit{neko puzzle}, whose rule
-\texttt{[ > Player | ... | Fruit ] -> [ | ... | Player ]} pushes a
-fruit anywhere along the player's row; a multi-game version of this
-ablation is left to future work.
+Decomposing the shared-NCA recipe by ablating each pool flavour and
+input-skip individually (Table~\ref{tab:ablation-pool}, $\Delta$BFS as
+relative BFS-AR increase): pool features carry most of the non-local
+handling---dropping all three ($+316\%$) costs roughly twice removing
+\emph{global-pool} alone ($+182\%$), with \emph{axis-pool} next
+($+123\%$) and \emph{axis-cummax} a smaller $+48\%$. The small
+axis-cummax contribution is consistent with the push rule
+\texttt{[ > Player | Crate ] -> [ > Player | > Crate ]} mostly using
+its $3{\times}3$ neighbourhood; we expect a larger contribution on
+games like \textit{neko puzzle}, whose rule
+\texttt{[ > Player | ... | Fruit ] -> [ | ... | Player ]} reaches
+across the row (multi-game version: future work).
 \emph{Input-skip} raises BFS-AR by $+54\%$ when removed but
-\emph{lowers} the one-step (TF) error ($0.168\%$ vs.\ $0.274\%$).
-Re-injecting $(s_t, a_t)$ at every step anchors the body to the
-input; without that anchor it fits engine transitions tighter at the
-cost of robustness, and the resulting per-step errors compound when
-the rollout feeds them back as off-manifold inputs.
-
-% TODO: rerun per-feature pool ablation on Train-14 (multi-game) to
-% verify global-pool dominance and the small axis-cummax contribution
-% generalize beyond the single Sokoban rule.
+\emph{lowers} one-step (TF) error ($0.168\%$ vs.\ $0.274\%$):
+re-injecting $(s_t, a_t)$ at every step anchors the body to its input,
+trading per-step fit for AR robustness when the rollout feeds back
+slightly-off predictions.
