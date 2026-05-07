@@ -48,18 +48,25 @@
       {\includegraphics[width=2.0cm,height=2.0cm]{#4}};%
 }
 
-% --- Card pair: code box LEFT of state box. State scaled up; code box
-%     made wider in x (so it extends further left on the page) and
-%     same height/depth as state.
+% --- Pair of decoupled boxes: a code/game-spec box LEFT of an input
+%     state box, with a clear gap between them. Code text mimics the
+%     PuzzleScript spec layout used in nca_arch_v1.tex (objects /
+%     rules / winconditions sections, "===" separators).
+%
+%     #1 = name base, #2 = state x, #3 = y,
+%     #4 = state image path, #5 = code/spec text body
 \newcommand{\StateOnCode}[5]{%
-  \pic[shift={({#2 - 0.4}, #3, 0)}] at (0,0,0)
+  % Code spec box, detached: shifted further left so there is visible
+  % blank space between code-east and state-west.
+  \pic[shift={({#2 - 1.6}, #3, 0)}] at (0,0,0)
       {Box={name=#1c, caption=, xlabel={{,}}, zlabel={},
             fill=CodeFill, opacity=0.35,
             height=10, width=2.0, depth=10}};%
-  \node[canvas is zy plane at x={#2}, font=\scriptsize\ttfamily,
-        align=left, inner sep=0pt, text width=1.9cm,
+  \node[canvas is zy plane at x={#2 - 1.2}, font=\tiny\ttfamily,
+        align=left, inner sep=0.5pt, text width=1.9cm,
         anchor=center]
         at (0, #3) {#5};%
+  % State box.
   \pic[shift={(#2, #3, 0)}] at (0,0,0)
       {Box={name=#1g, caption=, xlabel={{,}}, zlabel={},
             fill=PSFrameFill, opacity=0.35,
@@ -105,11 +112,11 @@
 % =============================================================
 
 \StateOnCode{neko}{-7}{ 2.2}{rollouts/nekopuzzle/engine_t0.png}
-    {;nekopuzzle\\{}[>P|...|F]\\->[|...|P]}
+    {objects\\===\\Player Fruit\\Wall\\===\\rules\\===\\{}[>P|...|F]\\{}~->[|...|P]\\===\\winconditions\\===\\no Fruit}
 \StateOnCode{soko}{-7}{ 0.0}{rollouts/sokoban_basic/engine_t0.png}
-    {;sokoban\\{}[>P|C]\\->[>P|>C]}
+    {objects\\===\\Player Crate\\Wall Target\\===\\rules\\===\\{}[>P|C]\\{}~->[>P|>C]\\===\\winconditions\\===\\all Crate on Target}
 \StateOnCode{mod} {-7}{-2.2}{rollouts/Modality/engine_t0.png}
-    {;modality\\{}[>PW|B]\\->CANCEL}
+    {objects\\===\\Player Crate\\Black White\\===\\rules\\===\\{}[>P W|B]\\{}~->CANCEL\\===\\win\\===\\all Crate on Goal}
 
 \EncLatent{id}{-5.4}{4.4}
 
@@ -152,14 +159,14 @@
 %  VERTICAL DASHED BORDER between train and eval
 % =============================================================
 \draw[dashed, line width=0.3mm, color=black!70]
-    (1.6, -3.7) -- (1.6,  12.65);
+    (0.5, -3.7) -- (0.5,  12.65);
 \node[font=\itshape\tiny, color=black!50, anchor=south, rotate=90]
-    at (1.85, 0.4) {trained $\theta \rightarrow \theta^{*}$};
+    at (0.75, 0.4) {trained $\theta \rightarrow \theta^{*}$};
 
 % PuzzleScript engine mascot at bottom-center. (The engine is
 % implemented in JavaScript — flagged in the caption.)
 \node[anchor=center, inner sep=0pt] (mascot)
-    at (1.6, -5.0) {\includegraphics[width=2.0cm]{ps_mascot.png}};
+    at (1.6, -5.0) {\includegraphics[width=1.4cm]{ps_mascot.png}};
 % Invisible "engine" node so the data-flow arrows can target a single
 % logical entity (and we can swap PS+JS back in later if we want to).
 \node[fit=(mascot), inner sep=1pt, draw=none] (engine) {};
@@ -210,13 +217,13 @@
 
 \StateOnCode{inway}{ 2.4}{ 2.2}
     {rollouts/in_the_way_by_giovanni_mota/pred_t0.png}
-    {;in\_the\_way\\{}[>P|F]\\->[|P]}
+    {objects\\===\\Player Fruit\\Wall Block\\===\\rules\\===\\{}[>P|F]\\{}~->[|P]\\===\\winconditions\\===\\no Fruit}
 \StateOnCode{nana}{ 2.4}{ 0.0}
     {rollouts/my_nana_ate_my_kid_brother_by_ruth_williams/pred_t0.png}
-    {;my\_nana\\late[G|.|P]\\->[T|.|G]}
+    {objects\\===\\Player Grave\\Fruit Temp\\===\\rules\\===\\late[G|.|P]\\{}~->[T|.|G]\\{}[P F]->[P]\\===\\win\\===\\no Player}
 \StateOnCode{ham}{ 2.4}{-2.2}
     {rollouts/Hamiltwo/pred_t0.png}
-    {;hamiltwo\\{}[>L|noW]\\->[>L+|noW]}
+    {objects\\===\\LivePlayer\\DeadP Wall\\Digit Sub\\===\\rules\\===\\{}[>L|noW]\\{}~->[>L Sub]\\===\\win\\===\\no Sub}
 
 \EncLatent{ood}{3.4}{4.4}
 
