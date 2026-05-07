@@ -215,17 +215,19 @@ corpus and the rule-conditioning flag differ.
 
 \begin{figure}[t]
   \centering
-  \includegraphics[width=0.78\linewidth]{figures/indist_intersection/intersection_slope.pdf}
+  \includegraphics[width=\linewidth]{figures/indist_intersection/intersection_slope.pdf}
   \caption{\textbf{In-distribution 1-step (TF) cell-error on the 14
     games shared by every training preset, as the corpus grows from
-    14 to 199 games.} Thin lines: per-game trajectories (single
-    seed). Bold solid / dashed: aggregate mean / median across the
-    14 games. The unconditional model degrades $\approx 25\times$
-    from \textsc{Train-14} to \textsc{Train-59} and the gap to the
-    conditional model widens further at \textsc{Train-199}; the
+    14 to 199 games.} \emph{Left:} aggregate mean / median across
+    the 14 games. The unconditional model degrades $\approx
+    25\times$ from \textsc{Train-14} to \textsc{Train-59}; the
     rule-conditional model degrades $\approx 5\times$ over the same
-    range and barely moves to \textsc{Train-199}. The full per-game
-    table is in Appendix~\ref{app:dilution}.}
+    range and barely moves to \textsc{Train-199}.
+    \emph{Right:} per-game heatmap (rows sorted by maximum cell
+    value, descending) on a log color scale; catastrophic
+    unconditional failures (\textsc{nekopuzzle}@T59,
+    \textsc{notsnake}@T199) are visible in the right-hand columns.
+    The per-game numerical table is in Appendix~\ref{app:dilution}.}
   \label{fig:intersection-slope}
 \end{figure}
 

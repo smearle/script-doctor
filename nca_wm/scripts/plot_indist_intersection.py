@@ -70,34 +70,27 @@ def main() -> None:
         aggregate_avail[(scale, model)] = head is not None
 
     plt.rcParams.update({
-        "font.size":        13,
-        "axes.titlesize":   14,
-        "axes.labelsize":   13,
-        "xtick.labelsize":  12,
-        "ytick.labelsize":  12,
-        "legend.fontsize":  11,
+        "font.size":        12,
+        "axes.titlesize":   13,
+        "axes.labelsize":   12,
+        "xtick.labelsize":  11,
+        "ytick.labelsize":  10,
+        "legend.fontsize":  10,
     })
 
-    fig, ax = plt.subplots(1, 1, figsize=(7.2, 4.6))
-    x = np.arange(len(SCALES))
+    fig, (ax_left, ax_right) = plt.subplots(
+        1, 2, figsize=(12.0, 4.8),
+        gridspec_kw={"width_ratios": [1.0, 1.45]},
+    )
 
+    # ---- Left: aggregate slope (mean + median per condition). ----
+    x = np.arange(len(SCALES))
     series = [
         ("cond",   "Rule-conditioned", "#d62728"),
         ("uncond", "Unconditional",    "#1f77b4"),
     ]
     fig_data = {}
     for model, label, color in series:
-        # Thin per-game lines, color-coded by model.
-        for g in games:
-            ys = [per_game[(scale, model)].get(g) for scale in SCALES]
-            xs_p = [xi for xi, yi in zip(x, ys) if yi is not None and yi > 0]
-            ys_p = [100*yi for yi in ys if yi is not None and yi > 0]
-            if len(xs_p) >= 2:
-                ax.plot(xs_p, ys_p, color=color, linewidth=0.7, alpha=0.25,
-                        marker="o", markersize=2.5, zorder=1)
-
-        # Aggregate mean / median across all 14 games at scales where every
-        # game has data (skip otherwise so partial points don't pull the line).
         means, medians, xs_present = [], [], []
         for xi, scale in enumerate(SCALES):
             vals = [per_game[(scale, model)].get(g) for g in games]
@@ -107,44 +100,100 @@ def main() -> None:
                 medians.append(100*float(np.median(vals)))
                 xs_present.append(xi)
         if len(xs_present) >= 1:
-            ax.plot(xs_present, means, color=color, linewidth=2.6,
-                    marker="o", markersize=8, zorder=3,
-                    label=f"{label} (mean)")
-            ax.plot(xs_present, medians, color=color, linewidth=2.0,
-                    marker="s", markersize=7, zorder=3, linestyle="--",
-                    label=f"{label} (median)")
+            ax_left.plot(xs_present, means, color=color, linewidth=2.6,
+                         marker="o", markersize=8, zorder=3,
+                         label=f"{label} (mean)")
+            ax_left.plot(xs_present, medians, color=color, linewidth=2.0,
+                         marker="s", markersize=7, zorder=3, linestyle="--",
+                         label=f"{label} (median)")
             fig_data[model] = {"means": means, "medians": medians, "xs": xs_present}
 
-    ax.set_yscale("log")
-    ax.set_xticks(x)
-    ax.set_xticklabels(SCALES)
-    ax.set_xlabel("Training corpus")
-    ax.set_ylabel("1-step (TF) cell-error (%)")
-    ax.grid(True, which="both", alpha=0.25)
-    ax.set_xlim(-0.25, len(SCALES) - 0.75)
+    ax_left.set_yscale("log")
+    ax_left.set_xticks(x)
+    ax_left.set_xticklabels(SCALES)
+    ax_left.set_xlabel("Training corpus")
+    ax_left.set_ylabel("1-step (TF) cell-error (%)")
+    ax_left.set_title("Aggregate over 14 shared games")
+    ax_left.grid(True, which="both", alpha=0.25)
+    ax_left.set_xlim(-0.25, len(SCALES) - 0.75)
 
-    # Annotate T14 -> T59 multiplicative growth for each condition; this
-    # segment is currently the one where both cond and uncond have data.
+    # T14 -> T59 multiplicative growth annotation for each condition.
     annotations = []
-    for model, label, color in series:
+    for model, label, _color in series:
         d = fig_data.get(model)
         if d is None or len(d["means"]) < 2:
             continue
         m0, m1 = d["means"][0], d["means"][1]
         if m0 > 0 and m1 > 0:
-            annotations.append((label, m1 / m0, color))
+            annotations.append((label, m1 / m0))
     if annotations:
         text_lines = [
             rf"{lab}: $\approx{f:.0f}\times$ T14$\to$T59"
-            for (lab, f, _c) in annotations
+            for (lab, f) in annotations
         ]
-        ax.text(0.02, 0.97, "\n".join(text_lines),
-                transform=ax.transAxes, ha="left", va="top",
-                fontsize=11,
-                bbox=dict(boxstyle="round,pad=0.3", fc="white",
-                          ec="#666666", alpha=0.95))
+        ax_left.text(0.03, 0.97, "\n".join(text_lines),
+                     transform=ax_left.transAxes, ha="left", va="top",
+                     fontsize=10,
+                     bbox=dict(boxstyle="round,pad=0.3", fc="white",
+                               ec="#666666", alpha=0.95))
+    ax_left.legend(loc="lower right", framealpha=0.95)
 
-    ax.legend(loc="lower right", framealpha=0.95)
+    # ---- Right: per-game heatmap. ----
+    # Sort games by their max error across all six cells, descending,
+    # so the visually striking outliers (nekopuzzle, notsnake) appear
+    # at the top.
+    def _row_key(g):
+        cells = []
+        for scale in SCALES:
+            for model in ("cond", "uncond"):
+                v = per_game[(scale, model)].get(g)
+                if v is not None:
+                    cells.append(v)
+        return -max(cells) if cells else 0.0
+    sorted_games = sorted(games, key=_row_key)
+
+    col_labels = []
+    matrix = np.full((len(sorted_games), 2*len(SCALES)), np.nan, dtype=float)
+    for ci, scale in enumerate(SCALES):
+        for cj, model in enumerate(("cond", "uncond")):
+            col = 2*ci + cj
+            col_labels.append(f"{scale}\n{model}")
+            for ri, g in enumerate(sorted_games):
+                v = per_game[(scale, model)].get(g)
+                if v is not None:
+                    matrix[ri, col] = 100*v
+
+    # Log-color scale, clipped at floor for log domain.
+    floor = 1e-3  # 0.001 %
+    matrix_log = np.log10(np.clip(matrix, floor, None))
+    im = ax_right.imshow(matrix_log, aspect="auto", cmap="magma_r",
+                         vmin=np.log10(floor), vmax=np.log10(30.0))
+
+    ax_right.set_yticks(range(len(sorted_games)))
+    ax_right.set_yticklabels([g.replace("_", " ") for g in sorted_games])
+    ax_right.set_xticks(range(len(col_labels)))
+    ax_right.set_xticklabels(col_labels, fontsize=9)
+    ax_right.set_title("Per-game 1-step (TF) cell-error (%)")
+
+    # Vertical separators between scale groups (after every 2 cols).
+    for sep in (1.5, 3.5):
+        ax_right.axvline(sep, color="white", linewidth=1.5)
+
+    # Cell-value annotations (small font, contrast-aware).
+    for ri in range(matrix.shape[0]):
+        for ci in range(matrix.shape[1]):
+            v = matrix[ri, ci]
+            if not np.isfinite(v):
+                continue
+            text_color = "white" if matrix_log[ri, ci] > np.log10(0.3) else "black"
+            ax_right.text(ci, ri, f"{v:.2f}", ha="center", va="center",
+                          fontsize=7.5, color=text_color)
+
+    cbar = fig.colorbar(im, ax=ax_right, fraction=0.045, pad=0.02)
+    cbar.set_label("cell-error (%, log)", fontsize=10)
+    log_ticks = [-3, -2, -1, 0, 1]
+    cbar.set_ticks(log_ticks)
+    cbar.set_ticklabels([f"{10**t:g}" for t in log_ticks])
 
     fig.tight_layout()
 
