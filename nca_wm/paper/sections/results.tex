@@ -179,7 +179,7 @@ Table~\ref{tab:baselines-scaling14} extends the head-to-head to the
 \textsc{Train-14} preset: 14 PuzzleScript games sharing the rule-slot
 encoder, with grid sizes from $4{\times}4$ to $32{\times}24$ and rule
 counts from a handful (Sokoban) to $\approx 30$
-(\texttt{Heroes\_of\_Sokoban}, \texttt{Sokoboros}). 20k updates per
+(\textit{Heroes of Sokoban}, \textit{Sokoboros}). 20k updates per
 seed, $d_h = 256$.
 
 \begin{table}[t]
@@ -234,23 +234,14 @@ token-decoder loss in the training objective.
 \begin{table}[t]
   \centering
   \caption{\textbf{Per-cell rollout error on the 94-game broad-corpus
-  training preset.} Mean and median across all 94 games (each game's
+  training preset.} Mean / median across all 94 games (each game's
   number is the per-rollout-step mean across all authored levels,
   50 steps for autoregressive regimes / level-length for BFS / A*).
   Adding the joint decoder objective is essentially \emph{free} on
   rollout fidelity: every regime ties within 0.5pp.}
   \label{tab:fidelity}
   \small
-  \begin{tabular}{l c c c c}
-    \toprule
-    Regime & v3 mean & v3 median & v3+dec mean & v3+dec median \\
-    \midrule
-    random (AR)        & $7.41\%$ & $2.46\%$ & $8.07\%$ & $2.74\%$ \\
-    random\_tf (1-step)& $1.39\%$ & $\mathbf{0.15\%}$ & $1.38\%$ & $\mathbf{0.14\%}$ \\
-    BFS (oracle)       & $7.00\%$ & $1.86\%$ & $7.59\%$ & $2.35\%$ \\
-    A* (oracle)        & $5.30\%$ & $2.22\%$ & $5.42\%$ & $2.67\%$ \\
-    \bottomrule
-  \end{tabular}
+  \input{figures/fidelity/table}
 \end{table}
 
 The 1-step teacher-forced cell-error of $\approx 0.15\%$ across 94 games

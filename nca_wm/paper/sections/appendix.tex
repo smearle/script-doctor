@@ -26,22 +26,32 @@ splits are defined by explicit game-name lists.
 
 \paragraph{Single-game Sokoban level provenance.}
 The 10 authored Sokoban levels used for the single-game evaluation
-(Table~\ref{tab:baselines-sokoban}) are drawn from the Microban level
-pack, a community-authored set of Sokoban puzzles. Microban shares
-its rule set 1-to-1 with PuzzleScript's basic Sokoban game
-(\textsc{sokoban\_basic}); the only thing it adds is additional
-authored levels for the same dynamics. Wherever this appendix
-references \textsc{Microban} or \textsc{sokoban\_basic} explicitly
-(e.g.\ in the per-game $\times$ per-architecture grid in
-\S\ref{app:per-game-arch}), it refers to this same Sokoban rule set.
+(Table~\ref{tab:baselines-sokoban}) are drawn from the
+\textit{Microban} level pack, a community-authored set of Sokoban
+puzzles. \textit{Microban} shares its rule set 1-to-1 with
+PuzzleScript's basic Sokoban game (the \textit{Simple Block Pushing
+Game} demo by David Skinner, source filename \texttt{sokoban\_basic});
+the only thing it adds is additional authored levels for the same
+dynamics. Wherever this appendix references \textit{Microban} or the
+basic-Sokoban variant explicitly (e.g.\ in the per-game $\times$
+per-architecture grid in \S\ref{app:per-game-arch}), it refers to
+this same Sokoban rule set.
+
+Game titles below are pulled from each source \texttt{.txt}'s
+\texttt{title} field (with \texttt{(Author)} or
+\texttt{(Author; filename)} added wherever a title or
+title$+$author pair is shared by multiple games in the corpus). They
+are auto-generated from
+\texttt{nca\_wm/paper/scripts/extract\_game\_titles.py}.
 
 \paragraph{\textsc{Train-14} (14 games).}
-\textsc{nekopuzzle}, \textsc{notsnake}, \textsc{blocks},
-\textsc{sokoban\_basic}, \textsc{sokoban\_match3},
-\textsc{Zen\_Puzzle\_Garden}, \textsc{Multi-word\_Dictionary\_Game},
-\textsc{kettle}, \textsc{Travelling\_salesman},
-\textsc{Collapsable\_Sokoban}, \textsc{Love\_and\_Pieces},
-\textsc{actiontest}, \textsc{scriptcross}, \textsc{Modality}.
+\textit{neko puzzle (lexaloffle; nekopuzzle)}, \textit{Notsnake},
+\textit{blocks.}, \textit{Simple Block Pushing Game (David Skinner;
+sokoban\_basic)}, \textit{Match 3 Block Push}, \textit{Zen Puzzle
+Garden}, \textit{Multi-word Dictionary Game}, \textit{Kettle},
+\textit{Travelling salesman}, \textit{Collapsable Sokoban},
+\textit{Love and Pieces}, \textit{Simple Action Example (increpare;
+actiontest)}, \textit{ScriptCross}, \textit{Modality}.
 
 \paragraph{\textsc{Train-94} (94 games).}
 The \textsc{Train-94} preset is the deduplicated 57-game gallery
@@ -52,227 +62,145 @@ buckets).
 
 \textit{Deduplicated 57-game gallery base:}
 {\small
-\textsc{nekopuzzle}, \textsc{notsnake}, \textsc{blocks},
-\textsc{sokoban\_basic}, \textsc{sokoban\_match3},
-\textsc{Zen\_Puzzle\_Garden}, \textsc{Multi-word\_Dictionary\_Game},
-\textsc{kettle}, \textsc{Travelling\_salesman}, \textsc{sumo},
-\textsc{the\_undertaking}, \textsc{wrappingrecipe},
-\textsc{Collapsable\_Sokoban}, \textsc{Love\_and\_Pieces},
-\textsc{actiontest}, \textsc{rigidfail1}, \textsc{scriptcross},
-\textsc{Modality}, \textsc{constellationz}, \textsc{randomrobots},
-\textsc{againexample}, \textsc{naughtysprite}, \textsc{randomspawner},
-\textsc{twolittlecrates1}, \textsc{rigid\_11},
-\textsc{Long\_Haul\_Space\_Flight}, \textsc{leftrightnpcs},
-\textsc{twolittlecrates2}, \textsc{twolittlecrates3}, \textsc{octat},
-\textsc{lunar\_lockout}, \textsc{Stairways},
-\textsc{the\_art\_of\_cloning}, \textsc{rigid\_scott1},
-\textsc{rigid\_one\_unlimited},
-\textsc{Some\_lines\_were\_meant\_to\_be\_crossed},
-\textsc{blockfaker}, \textsc{Pushing\_It}, \textsc{2D\_Whale\_World},
-\textsc{MazezaM}, \textsc{Ebony\_\&\_Ivory},
-\textsc{Singleton\_Traffic}, \textsc{mazetest}, \textsc{Slidings},
-\textsc{Lime\_Rick}, \textsc{riverpuzzle}, \textsc{Midas},
-\textsc{rigid\_parallel\_many}, \textsc{Take\_Heart\_Lass},
-\textsc{rigid\_many\_broken}, \textsc{Lightdown},
-\textsc{The\_observer's\_paradox},
-\textsc{rigid\_parallel\_unlimited},
-\textsc{MC\_Escher's\_Equestrian\_Armageddon}, \textsc{Smother},
-\textsc{It\_Dies\_In\_The\_Light}, \textsc{Pushcat\_Jr}.
+\textit{neko puzzle (lexaloffle; nekopuzzle)}, \textit{Notsnake},
+\textit{blocks.}, \textit{Simple Block Pushing Game (David Skinner;
+sokoban\_basic)}, \textit{Match 3 Block Push}, \textit{Zen Puzzle
+Garden}, \textit{Multi-word Dictionary Game}, \textit{Kettle},
+\textit{Travelling salesman}, \textit{Multiple Patterns}, \textit{the
+undertaking}, \textit{Wrapping Recipe}, \textit{Collapsable Sokoban},
+\textit{Love and Pieces}, \textit{Simple Action Example (increpare;
+actiontest)}, \textit{BROKEN Naive Extended Bodies},
+\textit{ScriptCross}, \textit{Modality}, \textit{constellation z},
+\textit{Random Robots}, \textit{Simple Action Example (increpare;
+againexample)}, \textit{Spriteaporter}, \textit{Robot Spawner},
+\textit{Simple Block Pushing Game (increpare; twolittlecrates1)},
+\textit{Extended Body Example: 1 Player, 1 Extended Object},
+\textit{Long Haul Space Flight}, \textit{Simple Block Pushing Game
+(increpare; leftrightnpcs)}, \textit{Simple Block Pushing Game
+(increpare; twolittlecrates2)}, \textit{Simple Block Pushing Game
+(increpare; twolittlecrates3)}, \textit{Octat}, \textit{Lunar
+Lockout}, \textit{Stairways}, \textit{the art of cloning},
+\textit{Extended Body Example: 1 Player, Multiple Extended Objects},
+\textit{One player, unlimited rigidbodies}, \textit{Some lines were
+meant to be crossed}, \textit{Block Faker}, \textit{Pushing It},
+\textit{2D Whale World}, \textit{MazezaM}, \textit{Ebony \& Ivory},
+\textit{Singleton Traffic}, \textit{maze generator},
+\textit{Slidings}, \textit{Lime Rick}, \textit{Cliched River Puzzle},
+\textit{Midas}, \textit{Extended Bodies: Multiple Parallel Players,
+Multiple Extended Object}, \textit{Take Heart Lass}, \textit{Broken
+Rigid Body example}, \textit{Lightdown}, \textit{The observer's
+paradox}, \textit{Many parallel players, unlimited rigidbodies},
+\textit{MC Escher's Equestrian Armageddon}, \textit{Smother},
+\textit{It Dies In The Light}, \textit{Pushcat Jr}.
 }
 
 \textit{Low-rule additions (12):}
 {\small
-\textsc{Time-reversed\_Microban},
-\textsc{clone\_cloned\_clones!\_by\_sammytooch},
-\textsc{bell,\_book,\_and\_candle\_by\_bagenzo},
-\textsc{zombie\_bedtime\_by\_dan}, \textsc{Dot\_Puzzle\_3.1},
-\textsc{cat\_in\_a\_box\_by\_trevor},
-\textsc{no\_name\_yet\_by\_dustin\_lane},
-\textsc{bit\_treats\_by\_barefootengineer1},
-\textsc{Carnival\_Shooter!},
-\textsc{sokobee\_simples\_by\_matteomenapace},
-\textsc{shadow\_by\_unknown\_author},
-\textsc{my\_game\_by\_calvin\_mcnamara}.
+\textit{Time-reversed Microban}, \textit{Clone Cloned Clones!},
+\textit{Bell, Book, and Candle}, \textit{Zombie Bedtime},
+\textit{Dot Puzzle 3.1}, \textit{Cat in a box}, \textit{No Name Yet},
+\textit{Bit Treats}, \textit{Carnival Shooter!}, \textit{SokoBee
+simples}, \textit{Shadow}, \textit{My Game (Calvin McNamara)}.
 }
 
 \textit{Mid-rule additions (15):}
 {\small
-\textsc{neko\_puzzle\_by\_increpare},
-\textsc{division\_by\_paul\_gomez},
-\textsc{el\_laberinto\_dorado\_by\_skyemoure},
-\textsc{simple\_block\_pushing\_game\_by\_maximyzer},
-\textsc{snowman\_game\_by\_yuna},
-\textsc{the\_adventurer\_by\_mose\_e.eckman},
-\textsc{boxob\_by\_randomnamemn},
-\textsc{\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_by\_bagenzo},
-\textsc{pokemon\_gooooo\_by\_drewdrewsan},
-\textsc{simple\_foxes\_by\_torybash},
-\textsc{run\_em\_over\_by\_xxsethyxxxoultraomeg},
-\textsc{encuentra\_a\_tu\_amigo\_by\_tobiasguzzo},
-\textsc{build\_a\_snowman\_v2.0\_by\_arthur\_yi},
-\textsc{constellation\_by\_jere\_majava},
-\textsc{avaruus\_tunkeutujat\_by\_janjulije}.
+\textit{neko puzzle (lexaloffle; neko\_puzzle\_by\_increpare)},
+\textit{Division}, \textit{El laberinto dorado}, \textit{Simple
+Block Pushing Game (David Skinner;
+simple\_block\_pushing\_game\_by\_maximyzer)}, \textit{snowman game},
+\textit{The Adventurer}, \textit{BoxoB},
+\textit{\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_ (\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_by\_bagenzo)},
+\textit{Pokemon GOOOOO}, \textit{Simple Foxes}, \textit{Run em' over},
+\textit{Encuentra a tu amigo}, \textit{Build A Snowman v2.0},
+\textit{Constellation}, \textit{Avaruus tunkeutujat}.
 }
 
 \textit{High-rule additions (8):}
 {\small
-\textsc{Union\_Move}, \textsc{cyber\_sokoban\_by\_eraykaan},
-\textsc{game\_by\_jobiden123},
-\textsc{nabokos\_3\_-\_tech\_demo\_by\_asynartesies},
-\textsc{buny\_hoping\_by\_pickten},
-\textsc{drunkard\_walk\_by\_unknown\_author},
-\textsc{directional\_insanity\_by\_zithral},
-\textsc{tron\_by\_lorapel}.
+\textit{Union Move}, \textit{Cyber Sokoban}, \textit{game},
+\textit{nabokoS 3 - Tech Demo}, \textit{buny hoping},
+\textit{Drunkard walk}, \textit{Directional Insanity}, \textit{tron}.
 }
 
 \textit{Xhigh-rule additions (2):}
 {\small
-\textsc{venganza\_i\_by\_felipe\_gomez},
-\textsc{spell\_by\_beekie18}.
+\textit{Venganza I}, \textit{Spell}.
 }
 
 \paragraph{\textsc{Train-199} (199 games).}
 \textsc{Train-199} is the same 57-game gallery base as
 \textsc{Train-94} extended with 142 additional stratified games drawn
-from the dedup pool under the same filter. The full list is given
-below at \texttt{\textbackslash footnotesize}.
+from the dedup pool under the same filter.
 
 \textit{57-game gallery base:} as in \textsc{Train-94} above.
 
 \textit{142 stratified additions:}
 {\footnotesize
-\textsc{bit\_treat\_by\_barefootengineer1}, \textsc{error\_1\_by\_bvoq},
-\textsc{threat\_level\_midnight\_by\_vignesh},
-\textsc{the\_magic\_broom\_by\_radiosoap},
-\textsc{davib\_by\_thebigfive-381},
-\textsc{cat\_adventure\_deluxe!\_demo\_by\_testethetestcat},
-\textsc{Opposition}, \textsc{my\_eyes!!!\_by\_explodedcoder},
-\textsc{a\_game\_by\_password69},
-\textsc{bombero\_en\_acción\_by\_tevo66},
-\textsc{displacement\_by\_oliverwebsim},
-\textsc{bittle\_bat\_by\_unknown\_author},
-\textsc{match\_threekoban\_by\_ezra\_szanton},
-\textsc{my\_game\_by\_amanda\_howell},
-\textsc{puzzle\_by\_unknown\_author},
-\textsc{super\_mario\_nazi\_killer\_by\_koldo},
-\textsc{ditto\_by\_acercandrito},
-\textsc{the\_far\_away\_danish\_pastry\_is\_always\_deliciouser\_by\_increpare\_[variant\_of\_lexaloffles\_neko\_puzzle]},
-\textsc{prototype\_1\_by\_caurso99},
-\textsc{herding\_cats!!!1!\_by\_docchewkie},
-\textsc{robot\_run\_by\_veeraalt},
-\textsc{sokobad\_by\_noacubestudio},
-\textsc{block\_pushing\_game\_tutorial\_2-4\_by\_unknown\_author},
-\textsc{2to\_by\_yeah-and-no}, \textsc{blockpush\_by\_tapcat},
-\textsc{simple\_block\_pushing\_game\_by\_zaydiscool777},
-\textsc{neko\_puzzle\_by\_increpare},
-\textsc{no\_forbidden\_symbols\_by\_increpare},
-\textsc{All\_These\_Damn\_Crates},
-\textsc{bahçıvanın\_çiçekleri\_by\_harunylc},
-\textsc{t-rex\_hot\_chocolate\_by\_therealeddawson},
-\textsc{zombie\_blocks\_by\_aidan\_quade},
-\textsc{the\_poop\_game\_by\_pontus\_granstrom},
-\textsc{hanoi\_by\_sfiera},
-\textsc{feed\_the\_flames\_by\_callum\_scott},
-\textsc{match\_by\_0creds},
-\textsc{Monster\_block\_push\_game},
-\textsc{welcome\_to\_flatland\_by\_caitlin\_weaver},
-\textsc{switch\_switcher\_by\_increpare},
-\textsc{snow\_day\_by\_forgdeer},
-\textsc{ambiguity\_generalization\_prototype\_by\_thebigfive-381},
-\textsc{avain\_peli\_by\_my\_name\_here},
-\textsc{midnight\_snack\_by\_lilianaaaaaaaa},
-\textsc{de+a+ch\_by\_razthepenguin},
-\textsc{variations\_on\_constellation\_z\_by\_n\_a},
-\textsc{rabbit\_meets\_camel\_by\_james\_wood},
-\textsc{golem\_five\_by\_henketime},
-\textsc{neko\_puzzle\_by\_necrothaum},
-\textsc{puzzle\_script\_random\_game\_by\_jeremy\_labossiere},
-\textsc{custom\_expulsion\_by\_chinbag},
-\textsc{swizzeroony\_by\_increpare},
-\textsc{lumberjack\_run\_by\_nickromancer},
-\textsc{build\_a\_snowman\_v1.0\_by\_kimchi2012},
-\textsc{impossible\_pushing\_-\_level\_2\_by\_stingby12},
-\textsc{push\_pull\_undo\_redo\_by\_11pepi},
-\textsc{trample\_by\_jonathan\_whiting},
-\textsc{simple\_block\_pushing\_game\_by\_mirage-xel},
-\textsc{marathon\_by\_2sman}, \textsc{simple\_puzzle\_by\_paul},
-\textsc{maze\_by\_251119s},
-\textsc{build\_a\_snowman\_v1.0\_by\_minjikim2013},
-\textsc{skyroad\_by\_sorendipitous},
-\textsc{interchange\_by\_pickten},
-\textsc{combo\_by\_nicholas\_udell},
-\textsc{path\_to\_the\_bee\_by\_jonbro},
-\textsc{Game\_One}, \textsc{One\_Way\_Street},
-\textsc{lasers\_by\_franklin\_p.\_dyer},
-\textsc{on\_thin\_ice\_by\_gamez7\_with\_music\_by\_roccow},
-\textsc{robot\_soccer\_by\_weiliuu}, \textsc{Bridge-toggle\_Maze},
-\textsc{flipping\_by\_mlipmanh},
-\textsc{bit\_match!\_by\_unknown\_author},
-\textsc{Lime\_Richard},
-\textsc{naomis\_challenge\_4\_game\_winter\_by\_techythanh},
-\textsc{abocalipc\_zumbi\_br\_by\_robertjesus},
-\textsc{puzz-not\_by\_stew\_hogarth},
-\textsc{simple\_block\_pushing\_game\_by\_zacharybarbanell},
-\textsc{go\_hunt\_$\psi$\texttrademark{}![beta]\_by\_puzzle00},
-\textsc{Festive\_Lights}, \textsc{Rolling-block\_colour-zone\_mazes},
-\textsc{build\_a\_snowball\_v2\_by\_coconana9010},
-\textsc{remote\_sokoban\_by\_poorlydrawncactus},
-\textsc{mr.hooper\_by\_yadel23},
-\textsc{blind\_ninja\_by\_connorses},
-\textsc{sticky\_v0.7\_by\_connorses},
-\textsc{green\_by\_laindey\_denaige},
-\textsc{cathartic\_colours\_by\_ronan\_tumelty},
-\textsc{cow\_rancher\_by\_bagenzo},
-\textsc{buny\_hoping\_by\_pickten}, \textsc{Solitaire},
-\textsc{mini\_grapplenauts\_by\_jesse\_purvis},
-\textsc{telekin\_by\_diego\_cathalifaud},
-\textsc{Carnival\_Shooter!},
-\textsc{minecraft\_v1.0.1\_by\_coconana9010},
-\textsc{my\_game\_by\_dio7225},
-\textsc{feed\_the\_cat\_by\_kim\_cerna},
-\textsc{test\_golfer\_by\_simonskvara},
-\textsc{maze\_by\_meena0303},
-\textsc{move\_3\_crates\_next\_to\_eachother\_by\_alex\_giger},
-\textsc{herding\_cats!\_by\_albert24082408},
-\textsc{j\_by\_jack\_gilbert},
-\textsc{schatkamer\_by\_jan-niestadt},
-\textsc{arregla\_la\_vereda\_by\_marcos-do},
-\textsc{test\_by\_finn\_coffey},
-\textsc{simple\_block\_pushing\_game\_by\_meddlingcactus},
-\textsc{cat\_making\_friends\_by\_wfykitty},
-\textsc{tall\_player\_by\_henry-friedman},
-\textsc{my\_game\_is\_better\_than\_your\_game\_by\_nahcirn},
-\textsc{a\_very\_good\_puzzle\_by\_nahcirn},
-\textsc{double\_message\_by\_sevansevan},
-\textsc{weeeee\_by\_phuongstillhatework},
-\textsc{testi\_by\_janisamuli},
-\textsc{amor\_en\_tiempos\_de\_pandemia\_by\_i.enba},
-\textsc{space\_invaders\_by\_e\_is\_cool\_\_\_edited\_by\_fz0718},
-\textsc{two\_coats\_and\_crates\_by\_henry-friedman},
-\textsc{ea\_sports\_fifa\_2018\_qatar\_world\_cup\_edition!\_by\_john\_q.\_futbol\_and\_ea\_sports\_of\_course},
-\textsc{space\_invaders\_by\_solafson},
-\textsc{platformer\_thing\_by\_thesalamaderboy},
-\textsc{underpuzzle\_by\_pac2005},
-\textsc{eventually\_this\_is\_gonna\_be\_zelda\_by\_soolseem},
-\textsc{endless\_practice\_by\_plurmorant},
-\textsc{player\_move,\_pause,\_badfish\_move,\_pause\_by\_jon-jon},
-\textsc{title\_by\_author},
-\textsc{rgb\_by\_michael\_straeubig},
-\textsc{prototype\_by\_tebrown1011},
-\textsc{full\_bloom\_by\_qwaffles},
-\textsc{beat\_game\_test\_by\_connorses\_[loneship\_games]},
-\textsc{Cell\_Division}, \textsc{test\_by\_katelyn\_delta},
-\textsc{\_\_by\_jennybuckley},
-\textsc{drunkard\_walk\_by\_unknown\_author},
-\textsc{crossing\_the\_gap\_by\_barefootengineer1},
-\textsc{marbles\_by\_jcmiller11},
-\textsc{annoying\_skull\_by\_qwaffles}, \textsc{Colors},
-\textsc{puzzletracker\_by\_puzzlescriptfan34},
-\textsc{card\_by\_lintsungyueh},
-\textsc{ice\_wolrd\_by\_scott\_hughes},
-\textsc{test\_teleportation\_by\_eoniz},
-\textsc{unlink\_by\_zacharybarbanell},
-\textsc{pathfinding\_by\_madball}.
+\textit{Bit Treat}, \textit{ERROR 1}, \textit{Threat Level Midnight},
+\textit{the magic broom}, \textit{Davib}, \textit{Cat Adventure
+Deluxe! Demo.}, \textit{Opposition}, \textit{MY EYES!!!},
+\textit{a game}, \textit{Bombero en acción}, \textit{Displacement},
+\textit{Bittle Bat}, \textit{Match Threekoban}, \textit{My Game
+(Amanda Howell)}, \textit{Puzzle}, \textit{Super Mario Nazi Killer},
+\textit{Ditto}, \textit{The Far Away Danish Pastry is always
+Deliciouser.}, \textit{Prototype 1}, \textit{Herding Cats!!!1!},
+\textit{Robot Run}, \textit{sokobad}, \textit{Block Pushing Game
+Tutorial 2-4}, \textit{2to}, \textit{Blockpush}, \textit{Simple Block
+Pushing Game (David Skinner;
+simple\_block\_pushing\_game\_by\_zaydiscool777)},
+\textit{neko puzzle (lexaloffle; neko\_puzzle\_by\_increpare)},
+\textit{NO FORBIDDEN SYMBOLS}, \textit{All These Damn Crates},
+\textit{Bahçıvanın Çiçekleri}, \textit{T-Rex Hot Chocolate},
+\textit{Zombie Blocks}, \textit{The Poop Game}, \textit{Hanoi},
+\textit{Feed the flames}, \textit{Match}, \textit{Monster block push
+game}, \textit{Welcome to Flatland}, \textit{Switch switcher},
+\textit{snow day}, \textit{ambiguity/generalization prototype},
+\textit{Avain\_peli}, \textit{Midnight Snack}, \textit{de+a+ch},
+\textit{variations on constellation z}, \textit{Rabbit meets Camel},
+\textit{Golem Five}, \textit{neko puzzle (Manuel)}, \textit{Puzzle
+Script Random Game}, \textit{Custom Expulsion}, \textit{SWIZZEROONY},
+\textit{Lumberjack Run}, \textit{Build a Snowman v1.0 (Masataro
+Kimchi)}, \textit{Impossible pushing - Level 2}, \textit{push pull
+undo redo}, \textit{Trample}, \textit{Simple Block Pushing Game
+(Stephen Lavelle; simple\_block\_pushing\_game\_by\_mirage-xel)},
+\textit{Marathon}, \textit{Simple Puzzle}, \textit{Maze (Sophie Wang)},
+\textit{Build a Snowman v1.0 (Minji kim)}, \textit{Skyroad},
+\textit{Interchange}, \textit{Combo}, \textit{Path to the bee},
+\textit{Game One}, \textit{One Way Street}, \textit{Lasers},
+\textit{On Thin Ice}, \textit{Robot Soccer}, \textit{Bridge-toggle
+Maze}, \textit{Flipping}, \textit{Bit Match!}, \textit{Lime Richard},
+\textit{Naomi's challenge 4 game winter}, \textit{abocalipc zumbi BR},
+\textit{Puzz-Not}, \textit{Simple Block Pushing Game (David Skinner;
+simple\_block\_pushing\_game\_by\_zacharybarbanell)},
+\textit{Go Hunt $\Psi$\texttrademark{}![beta]}, \textit{Festive
+Lights}, \textit{Rolling-block colour-zone mazes}, \textit{Build a
+Snowball v2}, \textit{Remote Sokoban}, \textit{MR.Hooper},
+\textit{Blind Ninja}, \textit{Sticky v0.7}, \textit{Green},
+\textit{Cathartic Colours}, \textit{Cow Rancher}, \textit{buny
+hoping}, \textit{Solitaire}, \textit{Mini Grapplenauts},
+\textit{Telekin}, \textit{Carnival Shooter!}, \textit{Minecraft
+v1.0.1}, \textit{My Game (Anonymous)}, \textit{Feed the Cat},
+\textit{Test Golfer}, \textit{Maze (Mina Anderson)}, \textit{Move 3
+Crates Next To Eachother}, \textit{Herding cats!}, \textit{J},
+\textit{Schatkamer}, \textit{Arregla la vereda}, \textit{Test (Finn
+Coffey)}, \textit{Simple Block Pushing Game (Stephen Lavelle;
+simple\_block\_pushing\_game\_by\_meddlingcactus)}, \textit{CAT Making
+Friends}, \textit{Tall Player}, \textit{My Game Is Better Than Your
+Game}, \textit{A Very Good Puzzle}, \textit{Double Message},
+\textit{Weeeee}, \textit{testi}, \textit{Amor en tiempos de
+pandemia}, \textit{Space Invaders (e\_is\_cool $|$ edited by fz0718)},
+\textit{Two Coats and Crates}, \textit{EA SPORTS' FIFA 2018 QATAR
+WORLD CUP EDITION!}, \textit{SPACE INVADERS (Shaun Olafson [not my
+OC])}, \textit{Platformer thing}, \textit{Underpuzzle},
+\textit{Eventually This Is Gonna Be Zelda}, \textit{Endless
+Practice}, \textit{Player Move, pause, Badfish move, pause},
+\textit{title}, \textit{RGB}, \textit{PROTOTYPE}, \textit{Full Bloom},
+\textit{Beat Game Test}, \textit{Cell Division}, \textit{test
+(katelyn delta)}, \textit{?}, \textit{Drunkard walk}, \textit{Crossing
+the Gap}, \textit{marbles}, \textit{Annoying Skull}, \textit{Colors},
+\textit{PuzzleTracker}, \textit{card}, \textit{ICE WOLRD},
+\textit{Test Teleportation}, \textit{Unlink}, \textit{PathFinding}.
 }
 
 \paragraph{\textsc{Heldout-30} (30 games).}
@@ -280,34 +208,20 @@ The held-out evaluation set is disjoint from every training preset by
 filename and by token-sequence hash. Drawn by stratified sampling
 from the dedup pool to span low/mid/high rule counts.
 {\small
-\textsc{in\_the\_way\_by\_giovanni\_mota},
-\textsc{cyberpunk\_2020\_by\_gzhao-jpg},
-\textsc{my\_nana\_ate\_my\_kid\_brother\_by\_ruth\_williams},
-\textsc{ice\_sliding\_by\_by\_ian\_cox},
-\textsc{block\_game\_by\_emily\_dresden},
-\textsc{kitten\_rescue\_by\_unknownprodigy-beep},
-\textsc{kyles\_chesse\_cuisine\_by\_techythanh},
-\textsc{the\_best\_2d\_game\_ever\_created\_by\_cwm\_gaming},
-\textsc{monophobic\_multiban\_by\_increpare},
-\textsc{charge\_the\_bot\_by\_tiddly5},
-\textsc{build\_a\_snowman\_challenges\_by\_flyingfroakie},
-\textsc{the\_single\_flame\_by\_hassan\_masood},
-\textsc{pacman\_\_by\_cora}, \textsc{escape\_by\_shawn\_martin},
-\textsc{megabot\_invades!\_by\_louis\_g},
-\textsc{link\_by\_jeffjeff123456},
-\textsc{\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_by\_ncrecc},
-\textsc{watchers\_ritual\_by\_purpledragon17},
-\textsc{gdd301\_demo\_game\_by\_emma\_hubbell},
-\textsc{Surround\_Yourself\_With\_Dogs},
-\textsc{haberdashery\_by\_lee2sman},
-\textsc{ghosts\_by\_henry-friedman},
-\textsc{a\_snowballs\_chance\_in\_hell\_by\_iznaut},
-\textsc{hedgehogger\_by\_increpare},
-\textsc{cat\_adventure\_2\_by\_whenyoucando}, \textsc{Hamiltwo},
-\textsc{headless\_people\_problems\_by\_monakrom},
-\textsc{break\_out\_of\_the\_mine\_by\_jja\_i.e.\_juan,\_jose\_\&\_andre},
-\textsc{Heroes\_of\_Sokoban\_-\_Ancient\_Japan},
-\textsc{angize\_by\_ali\_nikkhah}.
+\textit{in the way}, \textit{Cyberpunk 2020}, \textit{My Nana Ate My
+Kid Brother}, \textit{Ice Sliding}, \textit{Block game}, \textit{Kitten
+Rescue}, \textit{Kyles chesse cuisine}, \textit{THE BEST 2D GAME EVER
+CREATED}, \textit{Monophobic Multiban}, \textit{Charge The Bot},
+\textit{Build a Snowman Challenges}, \textit{The Single Flame},
+\textit{Pacman?}, \textit{Escape}, \textit{Megabot Invades!},
+\textit{Link},
+\textit{\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_ (\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_by\_ncrecc)},
+\textit{Watchers' Ritual}, \textit{GDD301 Demo Game}, \textit{Surround
+Yourself With Dogs}, \textit{Haberdashery}, \textit{Ghosts}, \textit{A
+Snowball's Chance in Hell}, \textit{hedgehogger}, \textit{Cat
+Adventure 2}, \textit{Hamiltwo}, \textit{Headless People Problems},
+\textit{Break out of the Mine}, \textit{Heroes of Sokoban - Ancient
+Japan}, \textit{Angize}.
 }
 
 \subsection{Per-game \textsc{Train-14} breakdown}
@@ -319,16 +233,16 @@ levels. Three observations beyond the aggregate numbers in
 Table~\ref{tab:baselines-scaling14}:
 
 \begin{itemize}
-  \item \textsc{Travelling\_salesman} is hardest for every architecture
+  \item \textit{Travelling salesman} is hardest for every architecture
     (NCA-perstep best at 38\%); the rule set encodes an NP-hard
     combinatorial problem that no single-step world model is
     expected to solve perfectly.
-  \item Several games (\textsc{nekopuzzle}, \textsc{notsnake},
-    \textsc{sokoban\_basic}, \textsc{blocks}) are fit to zero error
-    by the NCA family but fail badly for U-Net (10--25\%) and ViT
-    (1--33\%). The architecture gap is consistent across diverse
-    rule sets, not an averaged-out artifact.
-  \item \textsc{scriptcross} is a clean ViT-failure case (71\% error
+  \item Several games (\textit{neko puzzle}, \textit{Notsnake}, the
+    basic-Sokoban demo, \textit{blocks.}) are fit to zero error by the
+    NCA family but fail badly for U-Net (10--25\%) and ViT (1--33\%).
+    The architecture gap is consistent across diverse rule sets, not
+    an averaged-out artifact.
+  \item \textit{ScriptCross} is a clean ViT-failure case (71\% error
     vs.\ 11--15\% for the rest), illustrating the structural
     mismatch we discussed in \S\ref{sec:results-scaling}.
 \end{itemize}
@@ -341,7 +255,7 @@ Table~\ref{tab:baselines-scaling14}:
     ascending); columns are architectures. Single seed at 20k updates.
     Both NCA variants beat the three non-NCA baselines on the vast
     majority of games; ViT is the only architecture with a
-    catastrophic failure on a small game (\textsc{scriptcross}).}
+    catastrophic failure on a small game (\textit{ScriptCross}).}
   \label{fig:per-game-heatmap}
 \end{figure}
 
@@ -369,15 +283,15 @@ the released code.
 To check how architecture choice interacts with game type, we train
 one model per (game, architecture-bucket) cell on five games covering
 distinct mechanic classes---%
-\textsc{Microban} (single-step Sokoban-style box pushing: PuzzleScript's
+\textit{Microban} (single-step Sokoban-style box pushing: PuzzleScript's
 basic push rule applies force to the cell directly in front of the
 player, so a row of two boxes is \emph{not} chained-pushed by a single
 action),
-\textsc{Heroes\_of\_Sokoban} (multi-bracket character swap and
+\textit{Heroes of Sokoban} (multi-bracket character swap and
 projectile travel),
-\textsc{Bouncers} (non-axis-aligned looping projectile),
-\textsc{nekopuzzle} (restricted-orientation movement), and
-\textsc{Travelling\_salesman} (multi-bracket all-pairs)---against
+\textit{Bouncers} (non-axis-aligned looping projectile),
+\textit{neko puzzle} (restricted-orientation movement), and
+\textit{Travelling salesman} (multi-bracket all-pairs)---against
 four architecture buckets at $T{=}8$:
 (A) pool ON, shared ($n_r{=}T$);
 (B) pool ON, per-step ($n_r{=}1$);
@@ -387,11 +301,11 @@ Each cell is trained on the game's authored level 0 only with the
 canonical recipe (\S\ref{sec:experiments}); we evaluate BFS rollout
 cell-error on the training level (L0) and on held-out levels
 (L1$+$, mean) separately. Training budget is 15k updates per cell,
-extended to 50k for \textsc{Travelling\_salesman} after observing
+extended to 50k for \textit{Travelling salesman} after observing
 visible loss descent at 15k. Single seed. We also ran the same grid
-on \textsc{sokoban\_basic} (a smaller variant of the same Sokoban
-dynamics as \textsc{Microban}); the numbers are consistent with the
-\textsc{Microban} row and we omit them from the figure to avoid
+on the basic-Sokoban demo (a smaller variant of the same Sokoban
+dynamics as \textit{Microban}); the numbers are consistent with the
+\textit{Microban} row and we omit them from the figure to avoid
 double-counting the same mechanic.
 
 \begin{figure}[t]
@@ -402,7 +316,7 @@ double-counting the same mechanic.
     training-level (L0) cell-error. Right panel: held-out-levels (L1$+$
     mean) cell-error. Cells annotate the percentage. Bucket~D
     (no-pool $+$ input-skip $+$ per-step) wins held-out on five of six
-    games. Bucket~A loses dramatically on \textsc{Travelling\_salesman}
+    games. Bucket~A loses dramatically on \textit{Travelling salesman}
     L0 (45.1\%) despite identical train loss to bucket~D (which fits
     L0 to 0\%); see ``F3 sharpened'' below.}
   \label{fig:per-game-arch-heatmap}
@@ -416,7 +330,7 @@ regime we observe per-step models with $5\times$ lower train loss but
 $3$--$4\times$ higher 50-step rollout error: small but systematic
 per-step errors compound destructively under autoregression. The
 per-game grid pushes the gap to its loudest form yet.
-On \textsc{Travelling\_salesman} at 50k updates all four architecture
+On \textit{Travelling salesman} at 50k updates all four architecture
 buckets converge to within $1\%$ of the same train loss
 ($1.70\times 10^{-3}$ to $1.72\times 10^{-3}$), yet L0 BFS cell-error
 splits $0\% / 0\% / 26.9\% / 45.1\%$ across buckets D / C / B / A.
@@ -436,9 +350,9 @@ remains substantial across every cell ($7.3\%$--$56.8\%$). This is the
 generalization than the OOD-rules / latent-sampling / inverse-fit
 results in Appendix~\ref{app:ood}. Prior single-game work strongly
 predicts that synthetic levels close most of this gap: training
-synth-only \textsc{sokoban\_basic} ($w{=}7$) reached $0\%$ cell-error
-on the 155 held-out \textsc{Microban} / \textsc{Microban\_I} authored
-levels, and multi-grid synth on \textsc{nekopuzzle} closed a
+synth-only on the basic-Sokoban demo ($w{=}7$) reached $0\%$ cell-error
+on 155 held-out \textit{Microban} / \textit{Microban I} authored
+levels, and multi-grid synth on \textit{neko puzzle} closed a
 $3$--$8\%$ gap to $0.3\%$ once the synth widths included the authored
 aspect ratio. Both signals suggest the right-panel gap here is data
 scarcity, not an architectural ceiling.
@@ -455,12 +369,12 @@ on \emph{every} authored level (no L0 / heldout split: all authored
 levels are out of distribution to the training set). We anchor on the
 smallest authored size because (i) size-up generalization carries
 synthetic small-grid training to bigger authored levels (Sokoban
-$w{=}7 \to 0\%$ on 155 \textsc{Microban}/\textsc{Microban\_I}
+$w{=}7 \to 0\%$ on 155 \textit{Microban}/\textit{Microban I}
 authored levels in prior work) while size-down does not; (ii) using
 a single size keeps the per-size data density at $K{=}128$, which
 empirically matters: an early multi-grid variant
 ($K / n_{\text{sizes}}$ per size, $\approx 16$ levels per size for
-Microban) plateaued at $\approx 8\%$ BFS heldout while the same recipe
+\textit{Microban}) plateaued at $\approx 8\%$ BFS heldout while the same recipe
 at fixed $K{=}128$ on a single small size reached $0.60\%$ BFS,
 $0.02\%$ 1-step. We also tried an auto-bounding-box variant that
 picks $\max W \times \max H$ for each game; it failed at $\approx 9\%$
@@ -468,7 +382,7 @@ BFS because many authored levels are much smaller than the bounding
 box, and the synth distribution missed them. Smallest-by-area (rather
 than per-axis $\min W \times \min H$) is used so the chosen size is
 an actually-existing authored shape rather than a per-axis composite
-(\textsc{Microban}'s per-axis minimum is $6{\times}6$, but no authored
+(\textit{Microban}'s per-axis minimum is $6{\times}6$, but no authored
 level is $6{\times}6$; smallest-by-area picks $6{\times}7$, which
 appears in three authored levels).
 
@@ -483,8 +397,8 @@ $\text{BFS-iterations} + 100 \cdot |\text{unique rules fired}|$, and
 at the end of evolution we greedily pick the $K$ levels that maximize
 the \emph{union} of rules covered (rather than top-$K$ by individual
 fitness). For small-rule-set games (e.g.\ Sokoban-class) this is a
-no-op; for multi-bracket games (Heroes\_of\_Sokoban,
-Travelling\_salesman) it materially changes which $K$ levels enter
+no-op; for multi-bracket games (\textit{Heroes of Sokoban},
+\textit{Travelling salesman}) it materially changes which $K$ levels enter
 training. We also report the iterations-only baseline (no coverage
 weighting, no union-greedy selection) as a side-by-side ablation
 column in Table~\ref{tab:within-game-synth}. The pre-registered
@@ -514,11 +428,11 @@ regenerate the per-game/per-architecture heatmap as a 4-panel figure
 synth-train-loss as the bonus panel) and update
 Table~\ref{tab:within-game-synth}.}
 
-\papertodo{If synth-only beats authored-L0-only on \textsc{Microban}
-held-out (Sokoban prior says yes), Heroes\_of\_Sokoban (multi-bracket
-char-swap; less certain), and Bouncers (looping projectile; uncertain),
+\papertodo{If synth-only beats authored-L0-only on \textit{Microban}
+held-out (Sokoban prior says yes), \textit{Heroes of Sokoban} (multi-bracket
+char-swap; less certain), and \textit{Bouncers} (looping projectile; uncertain),
 that closes the within-game OOD-levels claim across three distinct
-mechanic classes. \textsc{Travelling\_salesman} is the canonical hard
+mechanic classes. \textit{Travelling salesman} is the canonical hard
 case: if the synth-only run reproduces the F3 sharpening (same train
 loss, $40{+}$pp rollout split between buckets) it is the cleanest
 demonstration of the per-step-vs-AR decoupling we report, since no
@@ -526,9 +440,9 @@ authored memorization remains to confound the comparison.}
 
 \papertodo{\textbf{Extensions.} (i) Add a depth axis $T \in \{4, 16, 32\}$
 to test whether bucket A's pool-driven AR-rollout failure shrinks at
-larger $T$; (ii) add games covering gravity-chain (\textsc{MazezaM}),
-counter / state aggregation (\textsc{Modality}), and length-state
-(\textsc{Lime\_Rick}) mechanics; (iii) re-run the existing five cells
+larger $T$; (ii) add games covering gravity-chain (\textit{MazezaM}),
+counter / state aggregation (\textit{Modality}), and length-state
+(\textit{Lime Rick}) mechanics; (iii) re-run the existing five cells
 with three seeds, since prior work (F8, \S\ref{app:ceiling})
 showed per-seed variance can dwarf recipe deltas on similar
 single-game multi-grid tasks.}
@@ -544,9 +458,9 @@ the training set and substitute $K{=}64$ purely-synthetic levels per
 game generated by an evolutionary search at the game's authored
 max-dim. Evaluation is unchanged: BFS / A* / random-action rollouts
 on \emph{every} authored level. Five games span distinct mechanic
-classes (\textsc{Microban}, \textsc{Heroes\_of\_Sokoban},
-\textsc{Bouncers}, \textsc{nekopuzzle},
-\textsc{Travelling\_salesman}); each game is trained four times to
+classes (\textit{Microban}, \textit{Heroes of Sokoban},
+\textit{Bouncers}, \textit{neko puzzle},
+\textit{Travelling salesman}); each game is trained four times to
 cover the architecture buckets in Appendix~\ref{app:per-game-arch}
 (pool $\times$ weight-sharing at $T{=}8$). The recipe and launcher
 are documented in \S\ref{app:synth-only}.
@@ -576,7 +490,7 @@ has memorized authored states cannot succeed here.
 
 \paragraph{Anchor result.}
 A pilot run of the validated recipe (\S\ref{app:synth-only}) on
-\textsc{Microban}, bucket D ($T{=}8$, no-pool $+$ input-skip,
+\textit{Microban}, bucket D ($T{=}8$, no-pool $+$ input-skip,
 per-step), at the smallest-by-area authored size, $K{=}128$,
 $30{,}000$ updates produces the rich-metric numbers in
 Table~\ref{tab:within-game-synth-anchor}. Five of the ten authored
@@ -594,7 +508,7 @@ per-authored-state outcomes within a single game.
 \begin{table}[t]
   \centering
   \caption{\textbf{Anchor run for the synth-only recipe.} Mean per-cell
-    error across all 10 authored \textsc{Microban} levels (no level
+    error across all 10 authored \textit{Microban} levels (no level
     enters training).}
   % Auto-regenerated from
   %   nca_wm/logs_per_game_arch_synth/Microban__D_d8_w7_k128_30k
@@ -608,20 +522,20 @@ per-authored-state outcomes within a single game.
 \label{app:within-game-prediction}
 Prior single-game evidence is sharp on at least the Sokoban-class
 subset (cf.\ the Sokoban $w{=}7 \to 0\%$ on 155
-\textsc{Microban}/\textsc{Microban\_I} levels prior;
-\textsc{nekopuzzle} multi-grid closing a $3$--$8\%$ authored gap to
-$0.3\%$). We expect (i) Sokoban-class games (\textsc{Microban}) to
+\textit{Microban}/\textit{Microban I} levels prior;
+\textit{neko puzzle} multi-grid closing a $3$--$8\%$ authored gap to
+$0.3\%$). We expect (i) Sokoban-class games (\textit{Microban}) to
 land at $\leq 1\%$ BFS across all four buckets, replicating the
-\textsc{Microban}-D anchor; (ii) \textsc{Bouncers} and
-\textsc{Heroes\_of\_Sokoban} to show non-trivial transfer with the
+\textit{Microban}-D anchor; (ii) \textit{Bouncers} and
+\textit{Heroes of Sokoban} to show non-trivial transfer with the
 architecture gap (D vs.\ A) at least as large as in the authored
-case; (iii) \textsc{Travelling\_salesman} to fail under pure synth
+case; (iii) \textit{Travelling salesman} to fail under pure synth
 supervision at $5{\times}5$ and require the authored-seeded fallback,
 since the all-pairs combinatorial structure of larger TSP grids is
 not present in the small-grid synth distribution.
 
 \paragraph{Decoupling reprise without memorization.}
-On \textsc{Travelling\_salesman}, the per-game grid in
+On \textit{Travelling salesman}, the per-game grid in
 Appendix~\ref{app:per-game-arch} already showed all four
 architecture buckets converging to within $1\%$ of the same
 synthetic-style train loss while their L0 BFS cell-error split
@@ -651,10 +565,10 @@ information. The per-feature ablation in
 Table~\ref{tab:ablation-pool} isolates which pool flavour does the
 work: removing global-pool alone is as costly as removing all three
 ($+145\%$ relative BFS error), while removing axis-cummax has no
-measurable effect on \textsc{sokoban\_basic} (its target patterns---%
+measurable effect on the basic-Sokoban demo (its target patterns---%
 axis-aligned \texttt{[X | ... | Y]} matches---do not appear in
 that game's rule set). On a 19-game gallery preset and a controlled
-\textsc{collapse} no-pool ablation, turning pool off costs both
+\textit{Collapse} no-pool ablation, turning pool off costs both
 convergence speed and final loss, with the no-pool model collapsing
 into the identity-prediction minimum even at $4{\times}$ the depth.
 
@@ -681,7 +595,7 @@ destructively under autoregression. Reporting only best-loss hides
 the rollout-drift cost of going deeper or wider.
 Appendix~\ref{app:per-game-arch} reports a sharpened version of this
 finding on a per-game $\times$ per-architecture grid: on
-\textsc{Travelling\_salesman} all four buckets converge to within
+\textit{Travelling salesman} all four buckets converge to within
 $1\%$ of the same train loss but split
 $0\% / 0\% / 26.9\% / 45.1\%$ on L0 BFS cell-error.
 
@@ -689,7 +603,7 @@ $0\% / 0\% / 26.9\% / 45.1\%$ on L0 BFS cell-error.
 \label{app:hierarchy}
 
 \papertodo{Add hierarchy figure/table: $T{=}16$ varying
-$n_r \in \{1, 2, 4, 8, 16\}$ on \textsc{microban} multi-grid synth
+$n_r \in \{1, 2, 4, 8, 16\}$ on \textit{Microban} multi-grid synth
 and on the multi-game \textsc{Train-14} preset, reporting
 change-error and parameter count.}
 
@@ -822,6 +736,21 @@ held-out set.
 \subsection{Symbolic decoder: reconstruction and sampling}
 \label{app:autoencoder}
 
+\paragraph{Decoder architecture.}
+$\mathrm{Dec}_\psi$ is a four-layer causal Transformer over the same
+$\approx 140$-symbol vocabulary used by the encoder. Each token position
+self-attends causally to prior positions and cross-attends to the
+$K$ slots at every layer. We train under teacher forcing: the input
+sequence is the right-shifted target tokens with a learned BOS, and
+the per-position loss is masked cross-entropy against the next
+target token. Object names and sprite-RGB tokens are vocab-extended
+on a per-game basis; the decoder treats them as ordinary tokens and
+the detokenizer assigns generic names $\mathrm{Obj}_i$ on round-trip
+to .puzzlescript source. Validity checks (parser-loadable +
+JS-engine-compilable) are reported as separate metrics below, since
+syntactic well-formedness and engine acceptance both diverge from
+exact-token reconstruction in the OOD-sample regime.
+
 The joint encoder + NCA + slot-token decoder is trained on
 \textsc{Train-94} for 150k updates with $\beta = 1.0$ on the decoder
 loss. The decoder converges to per-token cross-entropy
@@ -845,8 +774,9 @@ and compile via the JS engine): $15/25$ engine-loadable PuzzleScript
 programs ($60\%$) from greedy autoregressive decoding from random
 Gaussian-fit slots; $9/9$ engine-loadable programs along a 9-point
 linear interpolation between two endpoint training games
-(\textsc{Ebony\_\&\_Ivory} $\rightarrow$ \textsc{rigidfail1};
-$100\%$). The generations contain plausible push rules of the form
+(\textit{Ebony \& Ivory} $\rightarrow$ \textit{BROKEN Naive Extended
+Bodies}; $100\%$). The generations contain plausible push rules of
+the form
 \verb"[ > Obj2 | Obj4 ] -> [ > Obj2 | > Obj4 ]",
 \texttt{late}-prefixed rules, and per-object $5{\times}5$ pixel
 sprites with palettes consistent across the legend, the collision
@@ -887,9 +817,9 @@ reference encoding of the target.
     \toprule
     held-out target & final BCE & dist.\ to NN train & nearest train game \\
     \midrule
-    \texttt{monophobic\_multiban} & $\mathbf{8.4 \times 10^{-4}}$ & $0.389$ & \texttt{run\_em\_over} \\
-    \texttt{cat\_adventure\_2}    & $\mathbf{8.4 \times 10^{-4}}$ & $0.394$ & \texttt{neko\_puzzle\_by\_increpare} \\
-    \texttt{in\_the\_way}         & $7.2 \times 10^{-3}$         & $0.477$ & \texttt{run\_em\_over} \\
+    \textit{Monophobic Multiban} & $\mathbf{8.4 \times 10^{-4}}$ & $0.389$ & \textit{Run em' over} \\
+    \textit{Cat Adventure 2}     & $\mathbf{8.4 \times 10^{-4}}$ & $0.394$ & \textit{neko puzzle (lexaloffle)} \\
+    \textit{in the way}          & $7.2 \times 10^{-3}$         & $0.477$ & \textit{Run em' over} \\
     \bottomrule
   \end{tabular}
 \end{table}
@@ -905,10 +835,10 @@ test-tape BCE.
 
 On two of three targets the recovered slot's nearest training-game
 neighbour matches a plausible mechanical sibling:
-\texttt{cat\_adventure\_2} (a push-puzzle) lands closest to
-\texttt{neko\_puzzle\_by\_increpare} (also a push-puzzle), and
-\texttt{monophobic\_multiban} (a multi-character chase mechanic)
-lands closest to \texttt{run\_em\_over} (also multi-character /
+\textit{Cat Adventure 2} (a push-puzzle) lands closest to
+\textit{neko puzzle} (also a push-puzzle), and
+\textit{Monophobic Multiban} (a multi-character chase mechanic)
+lands closest to \textit{Run em' over} (also multi-character /
 chase). We do not yet have a systematic enumeration of how often
 the nearest neighbour is mechanically related across the full
 held-out set; the two matches above are illustrative.
