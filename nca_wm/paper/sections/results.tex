@@ -232,18 +232,14 @@ by a tail of persistently-hard games whose state spaces are large or
 whose rule structures involve cascading \texttt{again} loops, which
 we discuss in \S\ref{sec:discussion}.
 
-% TODO: discuss the cond-vs-uncond gap once Train-14 and Train-199
-% uncond evals land. Train-59 alone shows a modest ~1.5pp AR-mean
-% gap (9.04 cond / 10.54 uncond), narrower than the prior
-% Train-14 contrast at $n_h{=}448$; the param-matched relaunch should
-% sharpen this and the comparison in \S\ref{sec:results-encoder-ablation}
-% jointly.
-The cond-vs-uncond contrast at \textsc{Train-59} is modest ($\approx
-1.5$pp on random-AR mean) compared to the larger gap reported under
-the parameter-matched comparison in \S\ref{sec:results-encoder-ablation};
-we read this together with \S\ref{sec:results-encoder-ablation} once
-the in-flight \textsc{Train-14} and \textsc{Train-199} unconditional
-evaluations land.
+% TODO: refresh once the in-flight Train-199 uncond and the planned
+% $n_h{=}448$ uncond relaunches finish.
+The cond-vs-uncond contrast in-distribution is modest at every
+scale we have evaluated: differences of $\le 0.4$pp on $1$-step
+(TF) at \textsc{Train-14} ($1.63 / 0.11$ vs.\ $1.98 / 0.08$
+random-AR mean / median) and $\le 1.5$pp at \textsc{Train-59}.
+Where the encoder pulls its weight is on unseen rule systems,
+which we examine next in \S\ref{sec:results-encoder-ablation}.
 
 \subsection{Effect of scaling on out-of-distribution performance}
 \label{sec:results-encoder-ablation}
@@ -283,57 +279,65 @@ $\hat{s}_{t+1}{=}s_t$.
   \input{figures/cond_vs_uncond_match/match_table}
 \end{table}
 
-% TODO: the cond-vs-uncond contrast at \textsc{Train-14} and the
-% encoder-isolation claim are pending the in-flight Train-14 /
-% Train-199 unconditional evaluations and a planned $n_h{=}448$
-% uncond relaunch. Refresh both this section's wording and the
-% matching wording in the discussion once those land.
+\textbf{Encoder helps OOD; in-distribution it is essentially free.}
+At \textsc{Train-14} scale the rule-conditional and unconditional
+models are tied in-distribution
+(Table~\ref{tab:indist-scaling}: $1.63 / 0.11$ vs.\ $1.98 / 0.08$
+random-AR mean / median; differences within $0.4$pp on every
+regime). On \textsc{Heldout-30}, however, the encoder helps
+meaningfully: the conditional model's 1-step (TF) cell-error is
+$16.2\% / 3.7\%$ mean / median against the unconditional model's
+$22.3\% / 5.2\%$, a $\approx 6$pp mean and $\approx 1.5$pp median
+gap. The unconditional model has nothing to disambiguate which
+rule set is in play and pays for it on unseen rule systems even
+though it fits the training set fine.
 
 \textbf{Out-of-distribution generalization improves with rule
 diversity.} On \textsc{Heldout-30} the \textsc{Train-14} conditional
-model fails catastrophically (median 1-step (TF) cell-error
-$3.7\%$; mean $16.2\%$, $\approx 8\times$ worse than the identity
-baseline's $2.05\%$ mean). With $14\times$ more rule diversity the
-\textsc{Train-199} conditional model drops to $2.11\%$ median /
-$2.91\%$ mean, within $1$pp of identity at the mean, and beats
-identity on $11 / 29$ heldout games on the 1-step (TF) metric
-(\S\ref{sec:experiments}).
+model still fails on most games (mean $1$-step (TF) $16.2\%$,
+$\approx 8\times$ identity's $2.11\%$). With $14\times$ more rule
+diversity the \textsc{Train-199} conditional model drops to $2.91\%$
+mean / $2.11\%$ median, matching identity's mean to within $1$pp
+and beating identity on $11/29$ heldout games at the $1$-step (TF)
+metric (\S\ref{sec:experiments}).
 
-\textbf{Reading mean vs.\ median at \textsc{Train-59}.} The two
-\textsc{Train-59} rows are noteworthy: on the mean the unconditional
-baseline edges out the conditional model ($4.65\%$ vs.\ $5.94\%$
-1-step (TF)), but on the median---a more robust per-game signal---%
-the ordering reverses ($3.19\%$ vs.\ $2.94\%$), and the conditional
-model is closer to identity than the unconditional model on
-$18$ of $29$ heldout games. The mean inversion is driven by a small
-number of games where the conditional model produces wildly off
-predictions (e.g.\ a single heldout game where its 1-step (TF)
-cell-error averages $39.1\%$ against identity's $2.0\%$ on that
-game). One reading is that the rule encoder occasionally lands the
-dynamics body on an off-manifold slot embedding for rule sets that
-look different from anything in training, and the body fires rules
-incorrectly across most cells; the unconditional baseline, having
-no encoder to mislead, falls back to a near-identity predictor on
-unfamiliar inputs (its per-game error correlates more strongly with
-the identity baseline: $0.45$ vs.\ $0.24$). The typical-game median
-is therefore the more informative summary of encoder benefit; we
+\textbf{The \textsc{Train-59} rows reverse on mean vs.\ median.}
+At \textsc{Train-59} the unconditional row's mean edges out the
+conditional row's ($4.65\%$ vs.\ $5.94\%$ $1$-step (TF)), but on
+the median the ordering reverses ($3.19\%$ vs.\ $2.94\%$), and the
+conditional model is closer to identity on $18 / 29$ heldout games
+(per-game; not the same as the wins-vs-identity column). The mean
+inversion is driven by a small number of games where the
+conditional model produces wildly off predictions (e.g.\ a single
+heldout game where its $1$-step (TF) cell-error averages $39.1\%$
+against identity's $2.0\%$ on that game). One reading is that the
+rule encoder occasionally lands the dynamics body on an
+off-manifold slot embedding for rule sets that look different from
+anything in training, and the body fires rules incorrectly across
+most cells; the unconditional baseline, having no encoder to
+mislead, falls back to a near-identity predictor on unfamiliar
+inputs (its per-game error correlates $0.45$ with the identity
+baseline vs.\ $0.24$ for cond). The typical-game median is therefore
+the more informative summary of encoder benefit at this scale; we
 report both.
 
-\textbf{Wins vs.\ identity counted on 1-step (TF) cell-error.} The
+\textbf{Wins vs.\ identity counted on $1$-step (TF) cell-error.} The
 last column of Table~\ref{tab:cond-vs-uncond-match} counts heldout
-games on which the model's 1-step (TF) cell-error---the same
+games on which the model's $1$-step (TF) cell-error---the same
 quantity averaged in the column to its left---is lower than
-identity's. Wins climb on the conditional rows as the corpus grows
-($7 \to 6 \to 11$ across \textsc{Train-14}, \textsc{Train-59},
-\textsc{Train-199}). On the random-action AR rollout, where errors
-compound over the full 30 steps, identity ($\approx 2\%$ mean
-cell-error, the per-step state-change rate) is a much stronger
-baseline: every model accumulates drift to $9$--$24\%$ mean and no
-current checkpoint averages below identity over the full rollout on
-more than a single game. We discuss the implications, including
-the fraction of games on which even \textsc{Train-199} fails
-(e.g.\ pseudo-random spawn games, deeply cascaded \texttt{again}
-rules), in \S\ref{sec:discussion}.
+identity's. Conditional wins are flat at small corpora and step up
+at the broad \textsc{Train-199} scale ($7 \to 6 \to 11$ across
+\textsc{Train-14}, \textsc{Train-59}, \textsc{Train-199}); the
+unconditional baseline tracks within one game on the two scales
+where it has been evaluated ($6$ and $7$). On the random-action AR
+rollout, where errors compound over the full $30$ steps, identity
+($\approx 2\%$ mean, the per-step state-change rate) is a much
+stronger baseline: every model accumulates drift to $9$--$30\%$
+mean and no current checkpoint averages below identity over the
+full rollout on more than a single game. We discuss the
+implications, including the fraction of games on which even
+\textsc{Train-199} fails (e.g.\ pseudo-random spawn games, deeply
+cascaded \texttt{again} rules), in \S\ref{sec:discussion}.
 
 % Generalization-to-unseen-games results (held-out latent geometry,
 % symbolic decoder reconstruction + sampling, frozen-NCA inverse fit
