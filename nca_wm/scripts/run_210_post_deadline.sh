@@ -18,6 +18,25 @@
 #     > /tmp/run_210_post_deadline.log 2>&1 &'
 set -uo pipefail
 
+# Box 210 ships node only via nvm; nca_wm.train -> puzzlescript_cpp ->
+# backends.nodejs requires `node` on PATH. Source nvm if available so
+# the heldout/eval steps don't crash with "Bridge failed to spawn JS
+# process". (See reference_box_210_setup.md memory.)
+if [ -s "$HOME/.nvm/nvm.sh" ]; then
+    export NVM_DIR="$HOME/.nvm"
+    # shellcheck disable=SC1091
+    . "$NVM_DIR/nvm.sh" >/dev/null 2>&1 || true
+fi
+# Fallback: if nvm.sh didn't add node to PATH, try the highest-version
+# install directly.
+if ! command -v node >/dev/null 2>&1; then
+    NODE_BIN=$(ls -d "$HOME"/.nvm/versions/node/*/bin 2>/dev/null | sort -V | tail -1)
+    if [ -n "${NODE_BIN:-}" ]; then
+        export PATH="$NODE_BIN:$PATH"
+    fi
+fi
+echo "node: $(command -v node 2>/dev/null || echo MISSING) ($(node --version 2>/dev/null || true))"
+
 cd "$(dirname "$0")/../.."
 
 GPU=0
