@@ -48,27 +48,17 @@
       {\includegraphics[width=2.8cm,height=2.8cm]{#4}};%
 }
 
-% --- Decoupled card pair: a 3D code/spec Box LEFT of a 3D state
-%     Box, both projected with the same iso style so the code reads
-%     as a "card" matching the state cards. Code text is small black
-%     ttfamily projected on the code box's east face (left-aligned
-%     in a top-anchored text node so it reads top-to-bottom rather
-%     than centered on the face).
+% --- Decoupled pair: a flat code/spec text block (no box, no fill,
+%     just text) LEFT of a 3D state Box. Text is left-aligned,
+%     anchored east at (state_x - 0.5) so it reads naturally toward
+%     the state card.
 %
 %     #1 = name base, #2 = state x, #3 = y,
 %     #4 = state image path, #5 = code/spec text body
 \newcommand{\StateOnCode}[5]{%
-  % Code spec box: solid light gray (matches nca_arch_v1.tex spec
-  % node fill), same height/depth as the state card so they look
-  % like a paired set.
-  \pic[shift={({#2 - 1.6}, #3, 0)}] at (0,0,0)
-      {Box={name=#1c, caption=, xlabel={{,}}, zlabel={},
-            fill=CodeFill, opacity=1.0,
-            height=14, width=2.0, depth=14}};%
-  \node[canvas is zy plane at x={#2 - 1.2}, font=\scriptsize\ttfamily,
-        align=left, inner sep=3pt, text width=2.5cm,
-        text=black, anchor=center]
-        at (0, #3) {#5};%
+  \node[font=\footnotesize\ttfamily, align=left, text=black,
+        inner sep=2pt, anchor=east, name=#1c]
+        at ({#2 - 0.6}, #3) {#5};%
   % State box (3D, transparent).
   \pic[shift={(#2, #3, 0)}] at (0,0,0)
       {Box={name=#1g, caption=, xlabel={{,}}, zlabel={},
@@ -142,9 +132,9 @@
 \draw[lossarrow] (s1_mod-west)  to[out=180,in=  0] (nidn-east);
 
 % Code → encoder fan-in (upward to encoder above rows)
-\draw[condarrow] (nekoc-east) to[out= 60,in=200] (enc_id.south);
-\draw[condarrow] (sokoc-east) to[out= 60,in=215] (enc_id.south);
-\draw[condarrow] (modc-east)  to[out= 60,in=230] (enc_id.south);
+\draw[condarrow] (nekoc.east) to[out= 60,in=200] (enc_id.south);
+\draw[condarrow] (sokoc.east) to[out= 60,in=215] (enc_id.south);
+\draw[condarrow] (modc.east)  to[out= 60,in=230] (enc_id.south);
 
 % Latent z conditions the ID NCA
 \draw[condarrow] (slots_id.south) to[out=-90,in=90] (nidn-north);
@@ -170,7 +160,7 @@
 % PuzzleScript engine mascot at bottom-center. (The engine is
 % implemented in JavaScript — flagged in the caption.)
 \node[anchor=center, inner sep=0pt] (mascot)
-    at (1.6, -5.7) {\includegraphics[width=1.4cm]{ps_mascot.png}};
+    at (1.6, -6.6) {\includegraphics[width=1.4cm]{ps_mascot.png}};
 % Invisible "engine" node so the data-flow arrows can target a single
 % logical entity (and we can swap PS+JS back in later if we want to).
 \node[fit=(mascot), inner sep=1pt, draw=none] (engine) {};
@@ -271,9 +261,9 @@
 \draw[arrow, color=IDColor] (noodn3-east)   to[out=0,in=180] (h3_ham-west);
 
 % Code → encoder
-\draw[condarrow] (inwayc-east) to[out= 60,in=200] (enc_ood.south);
-\draw[condarrow] (nanac-east)  to[out= 60,in=215] (enc_ood.south);
-\draw[condarrow] (hamc-east)   to[out= 60,in=230] (enc_ood.south);
+\draw[condarrow] (inwayc.east) to[out= 60,in=200] (enc_ood.south);
+\draw[condarrow] (nanac.east)  to[out= 60,in=215] (enc_ood.south);
+\draw[condarrow] (hamc.east)   to[out= 60,in=230] (enc_ood.south);
 
 % Latent z conditions every OOD NCA timestep
 \draw[condarrow] (slots_ood.south) to[out=-90,in=90] (noodn1-north);
