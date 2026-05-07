@@ -216,18 +216,24 @@ corpus and the rule-conditioning flag differ.
 \begin{figure}[t]
   \centering
   \includegraphics[width=\linewidth]{figures/indist_intersection/intersection_slope.pdf}
-  \caption{\textbf{In-distribution 1-step (TF) cell-error on the 14
-    games shared by every training preset, as the corpus grows from
-    14 to 199 games.} \emph{Left:} aggregate mean / median across
-    the 14 games. The unconditional model degrades $\approx
+  \caption{\textbf{In-distribution 1-step (TF) cell-error as the
+    training corpus grows from 14 to 199 games}, mean / median
+    aggregated two ways. \emph{Left:} aggregate over the 14 games
+    shared by every preset (the same game set evaluated against
+    every checkpoint). The unconditional model degrades $\approx
     25\times$ from \textsc{Train-14} to \textsc{Train-59}; the
     rule-conditional model degrades $\approx 5\times$ over the same
-    range and barely moves to \textsc{Train-199}.
-    \emph{Right:} per-game heatmap (rows sorted by maximum cell
-    value, descending) on a log color scale; catastrophic
-    unconditional failures (\textsc{nekopuzzle}@T59,
-    \textsc{notsnake}@T199) are visible in the right-hand columns.
-    The per-game numerical table is in Appendix~\ref{app:dilution}.}
+    range and barely moves to \textsc{Train-199}---rule-conditioning
+    slows per-game dilution by an order of magnitude at fixed
+    capacity. \emph{Right:} aggregate over each preset's full
+    training set (the same data as Table~\ref{tab:indist-scaling};
+    different game set per scale). Both rule-conditional and
+    unconditional models grow at similar rates ($\approx 23\text{--}28\times$
+    \textsc{Train-14}$\to$\textsc{Train-59}) because the broader
+    presets contain harder games that pull both up; the per-game
+    encoder benefit visible on the left is washed out by the
+    changing game set. Per-game cells and a stand-alone heatmap are
+    in Appendix~\ref{app:dilution}.}
   \label{fig:intersection-slope}
 \end{figure}
 

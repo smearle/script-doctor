@@ -707,6 +707,22 @@ the same architecture, hidden width $n_h{=}256$, training budget
 (150k updates), batch size, balanced sampling, and recipe; only
 the training corpus differs.
 
+\begin{figure}[t]
+  \centering
+  \includegraphics[width=0.85\linewidth]{figures/indist_intersection/intersection_heatmap.pdf}
+  \caption{\textbf{Per-game 1-step (TF) cell-error (\%) on the 14
+    intersection games, log-color scale.} Rows sorted by maximum
+    cell value, descending; columns grouped by preset (ascending
+    corpus size) with conditional / unconditional paired at each
+    scale. The catastrophic unconditional failures
+    (\textsc{nekopuzzle}@\textsc{Train-59}, $24.4\%$;
+    \textsc{notsnake}@\textsc{Train-199}, $13.1\%$) drive the
+    aggregate mean in Figure~\ref{fig:intersection-slope}'s left
+    panel; the rule-conditional columns at every scale stay an
+    order of magnitude lower across the board.}
+  \label{fig:intersection-heatmap}
+\end{figure}
+
 \begin{table}[t]
   \centering
   \caption{\textbf{Per-game 1-step (teacher-forced) cell-error (\%) on
