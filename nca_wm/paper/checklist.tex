@@ -5,7 +5,7 @@
 \item {\bf Claims}
     \item[] Question: Do the main claims made in the abstract and introduction accurately reflect the paper's contributions and scope?
     \item[] Answer: \answerYes{}
-    \item[] Justification: The abstract claims a rule-conditioned NCA world model that (a) outperforms non-iterative baselines on PuzzleScript dynamics and (b) achieves near-perfect on-distribution fidelity at the multi-game scale; both are quantified in \S\ref{sec:results-baselines} (Tables~\ref{tab:baselines-sokoban}--\ref{tab:baselines-synth}) and \S\ref{sec:results-scaling} (Tables~\ref{tab:baselines-scaling14},~\ref{tab:fidelity}; median 1-step cell-error of $0.15\%$ across 94 games). The ``near-perfect fidelity'' phrasing is explicitly scoped to the on-distribution regime in \S\ref{sec:discussion}, and held-out / multi-grid limitations are flagged there.
+    \item[] Justification: The abstract claims a rule-conditioned NCA world model that (a) outperforms non-iterative baselines on PuzzleScript dynamics and (b) achieves high on-distribution fidelity at the multi-game scale; both are quantified in \S\ref{sec:results-baselines} (Tables~\ref{tab:baselines-sokoban}--\ref{tab:baselines-synth}) and \S\ref{sec:results-scaling} (Tables~\ref{tab:baselines-scaling14},~\ref{tab:indist-scaling}; median 1-step teacher-forced cell-error in the $0.01$--$0.45\%$ range across the \textsc{Train-14}, \textsc{Train-59}, and \textsc{Train-199} checkpoints). Held-out and multi-grid synthetic limitations are flagged in \S\ref{sec:discussion}.
     \item[] Guidelines:
     \begin{itemize}
         \item The answer \answerNA{} means that the abstract and introduction do not include the claims made in the paper.
@@ -17,7 +17,7 @@
 \item {\bf Limitations}
     \item[] Question: Does the paper discuss the limitations of the work performed by the authors?
     \item[] Answer: \answerYes{}
-    \item[] Justification: \S\ref{sec:discussion} contains an explicit ``Limitations'' paragraph (level-independent slot encoder; single-step training only) plus paragraphs ``Memorization as a confound'' and ``Open: escaping the multi-grid ceiling'' that scope the headline fidelity claim and identify the multi-grid synthetic-data ceiling as an unresolved gap. \S\ref{sec:results-encoder-ablation} discusses where rule-conditioning fails to transfer out of distribution at small training scale.
+    \item[] Justification: \S\ref{sec:discussion} contains an explicit ``Limitations'' paragraph (level-independent slot encoder; single-step training only) plus the ``What the iterated local update buys, and the memorization confound'' paragraph that scopes the headline fidelity claim and flags the multi-grid synthetic-data ceiling (quantified by Table~\ref{tab:baselines-synth} and characterized in Appendix~\ref{app:ceiling}) as an unresolved gap. \S\ref{sec:results-encoder-ablation} discusses where rule-conditioning fails to transfer out of distribution at small training scale.
     \item[] Guidelines:
     \begin{itemize}
         \item The answer \answerNA{} means that the paper has no limitation while the answer \answerNo{} means that the paper has limitations, but those are not discussed in the paper.

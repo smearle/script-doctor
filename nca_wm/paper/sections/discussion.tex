@@ -46,57 +46,31 @@ or RL can plan against.
 
 \paragraph{What the iterated local update buys, and the
 memorization confound.}
-The architecture comparison in \S\ref{sec:results-baselines}
-isolates one question: holding the conditioner constant, does the
-NCA's iterated-local-update body outperform a non-iterative body?
-Our findings suggest the answer is yes on tasks where the engine's
-\texttt{again} loop produces non-trivial cascade chains, and roughly
-a wash on tasks where one tick of dynamics resolves in a single rule
-firing. The NCA's parameter efficiency is also striking: shared
-weights with $T \cdot n_\ell$ effective depth use the same parameters
-as a one-step model. A key caveat---raised in \S\ref{app:ceiling}---is
-that the single-level / single-grid setting allows the model to learn
-a per-state lookup table via cross-attention over rich slot
-representations. ``Pool features substitute for depth'' is the
-single-level reading; ``the model memorizes per-state outcomes'' is
-the multi-level reading of the same architectural configuration.
-Both are real, and disentangling them required the multi-grid
-synthetic-data regime that we describe in \S\ref{app:ceiling}.
-We recommend the multi-grid synth setup as a default check for
-future PuzzleScript world-model work: if your model only succeeds at
-the single-grid setting, you may not be learning the dynamics.
-
-\paragraph{The multi-grid synthetic ceiling.}
-Our experiments characterize this ceiling rather than break it, and
-we read it as a probe finding. The setup is deliberately constructed
-so that per-state lookup is unavailable---one rule set is shared
-across $1024$ distinct levels at four widths---and once that crutch
-is removed, current recipes plateau well above the single-grid floor.
-Several mechanisms are consistent with the observation: soft rather
-than sparse routing across rule slots, cells continuing to update
-once they reach a fixed point, training distributions that are sparse
-in long-slide instances, and the absence of an explicit
-``where-to-fire'' factorization. Disentangling them is not the focus
-of this paper; we expect that scaling either model capacity or
-rule-coverage-driven synthetic diversity is the most likely route to
-closing the gap, and view this as the most important remaining
-milestone for an engine-modeling claim.
-
-``Near-perfect fidelity'' refers to the on-distribution regime:
-training on authored levels of human-written games and evaluating on
-the same authored levels gives median 1-step teacher-forced
-cell-error in the $0.01$--$0.45\%$ range across the
-\textsc{Train-14}, \textsc{Train-59}, and \textsc{Train-199}
-checkpoints (Table~\ref{tab:indist-scaling}). The
-multi-grid synthetic ceiling is a separate distribution-shift result:
-when the model is trained on synthetic levels of multiple grid
-sizes \emph{without} access to authored-data memorisation, current
-recipes plateau well above the on-distribution regime. The two are
-consistent---the model interpolates faithfully on authored data
-but does not yet truly learn the underlying rule under multi-grid
-synth---and we believe both are necessary milestones for an
-engine-modelling claim. The candidate fixes outlined above are
-specific to the synth-ceiling gap.
+Holding the conditioner constant, the NCA's iterated-local-update
+body beats every non-iterative baseline (CNN, U-Net, ViT) on
+autoregressive rollout, on every preset we tested
+(Tables~\ref{tab:baselines-sokoban}, \ref{tab:baselines-synth},
+\ref{tab:baselines-scaling14}). Within the NCA family, the
+shared-weight body matches the per-step body's mean BFS rollout
+error at $\pm 1\sigma$ on \textsc{Train-14} with $3.8\times$ fewer
+parameters and $\approx 5.8\times$ lower seed-to-seed variance
+(Table~\ref{tab:baselines-scaling14}). A caveat that motivates the
+multi-grid synthetic preset: the single-level / single-grid setting
+(Table~\ref{tab:baselines-sokoban}) leaves room for the slot
+cross-attention to learn a per-state lookup table, so a
+single-grid win does not by itself establish that the model has
+learned the dynamics. Once that crutch is removed---one rule set
+shared across $1024$ levels at four widths---the same shared-NCA
+architecture climbs from $0.11\%$ BFS final-error on the authored
+set to $4.37\%$ on the multi-grid synthetic set
+(Table~\ref{tab:baselines-synth}), $\approx 40\times$ higher,
+setting a ceiling on what the present recipe extracts from the rule
+alone. Wider grids, capacity scans, and adaptive-halting probes of
+this gap are reported in Appendix~\ref{app:ceiling}; mechanism
+attribution is left to future work. We treat the multi-grid synth
+preset as a default check for future PuzzleScript world-model work:
+if a model only succeeds at the single-grid setting, it may not be
+learning the dynamics.
 
 \paragraph{Beyond PuzzleScript.}
 The architecture is not domain-specific. Any deterministic
