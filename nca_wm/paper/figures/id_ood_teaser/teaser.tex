@@ -31,7 +31,7 @@
 \colorlet{EncColor}{blue!50}
 \colorlet{SlotColor}{yellow!75}
 \colorlet{PSFrameFill}{gray!12}
-\colorlet{CodeFill}{gray!10}
+\colorlet{CodeFill}{gray!22}
 
 \colorlet{IDColor}{blue!55!black}
 \colorlet{OODColor}{red!55!black}
@@ -48,19 +48,23 @@
       {\includegraphics[width=2.8cm,height=2.8cm]{#4}};%
 }
 
-% --- Decoupled pair: code/spec text projected on a flat zy plane
-%     LEFT of the state card. No surrounding Box — just the text
-%     sitting on a virtual plane at x = state_x - 1.0, projected with
-%     the same iso transform as the state image's east face. Anchor
-%     west at z=-1.4 so the text starts at the "left edge" of the
-%     imaginary face and reads left-to-right under the iso tilt.
+% --- Decoupled pair: code/spec text on a small Box pic LEFT of the
+%     state card. Box has a light-gray fill (matches nca_arch_v1.tex
+%     spec node) and shares the state card's iso projection. Text is
+%     projected on its east face, west-anchored so it left-aligns
+%     against the box's left edge.
 %
 %     #1 = name base, #2 = state x, #3 = y,
 %     #4 = state image path, #5 = code/spec text body
 \newcommand{\StateOnCode}[5]{%
-  \node[canvas is zy plane at x={#2 - 1.0}, font=\footnotesize\ttfamily,
-        align=left, text=black, text width=2.8cm,
-        inner sep=2pt, anchor=west, name=#1c]
+  % Solid light-gray spec card just left of the state.
+  \pic[shift={({#2 - 0.8}, #3, 0)}] at (0,0,0)
+      {Box={name=#1c, caption=, xlabel={{,}}, zlabel={},
+            fill=CodeFill, opacity=1.0,
+            height=14, width=2.0, depth=14}};%
+  \node[canvas is zy plane at x={#2 - 0.4}, font=\footnotesize\ttfamily,
+        align=left, text=black, text width=2.4cm,
+        inner sep=4pt, anchor=west]
         at (-1.4, #3) {#5};%
   % State box (3D, transparent).
   \pic[shift={(#2, #3, 0)}] at (0,0,0)
@@ -135,9 +139,9 @@
 \draw[lossarrow] (s1_mod-west)  to[out=180,in=  0] (nidn-east);
 
 % Code → encoder fan-in (upward to encoder above rows)
-\draw[condarrow] (nekoc.east) to[out= 60,in=200] (enc_id.south);
-\draw[condarrow] (sokoc.east) to[out= 60,in=215] (enc_id.south);
-\draw[condarrow] (modc.east)  to[out= 60,in=230] (enc_id.south);
+\draw[condarrow] (nekoc-east) to[out= 60,in=200] (enc_id.south);
+\draw[condarrow] (sokoc-east) to[out= 60,in=215] (enc_id.south);
+\draw[condarrow] (modc-east)  to[out= 60,in=230] (enc_id.south);
 
 % Latent z conditions the ID NCA
 \draw[condarrow] (slots_id.south) to[out=-90,in=90] (nidn-north);
@@ -200,13 +204,13 @@
 \draw[datafl] (engine.north) to[out= 70, in=-90] (s1_soko_s);
 \draw[datafl] (engine.north) to[out= 80, in=-90] (s1_mod_s);
 
-% Tiny labels on the data-flow groups
-\node[font=\scriptsize\itshape, color=black!55]
-    at (-4.0, -4.0) {$s_0$ in};
-\node[font=\scriptsize\itshape, color=black!55]
-    at ( 5.0, -4.0) {$s_0$ in (eval)};
-\node[font=\scriptsize\itshape, color=black!55]
-    at (-1.6, -3.6) {$s_1$ out (train)};
+% Column headers above each state-frame column.
+\node[font=\footnotesize, color=black!75] at (-7.0,  4.9) {$s_0$};
+\node[font=\footnotesize, color=black!75] at (-1.5,  4.9) {$s_1$};
+\node[font=\footnotesize, color=black!75] at ( 2.4,  4.9) {$s_0$};
+\node[font=\footnotesize, color=black!75] at ( 5.9,  4.9) {$\hat s_1$};
+\node[font=\footnotesize, color=black!75] at ( 8.3,  4.9) {$\hat s_2$};
+\node[font=\footnotesize, color=black!75] at (10.7,  4.9) {$\hat s_3$};
 
 % =============================================================
 %  RIGHT HALF: held-out eval — one NCA per TIMESTEP, all rows fan in
@@ -264,9 +268,9 @@
 \draw[arrow, color=IDColor] (noodn3-east)   to[out=0,in=180] (h3_ham-west);
 
 % Code → encoder
-\draw[condarrow] (inwayc.east) to[out= 60,in=200] (enc_ood.south);
-\draw[condarrow] (nanac.east)  to[out= 60,in=215] (enc_ood.south);
-\draw[condarrow] (hamc.east)   to[out= 60,in=230] (enc_ood.south);
+\draw[condarrow] (inwayc-east) to[out= 60,in=200] (enc_ood.south);
+\draw[condarrow] (nanac-east)  to[out= 60,in=215] (enc_ood.south);
+\draw[condarrow] (hamc-east)   to[out= 60,in=230] (enc_ood.south);
 
 % Latent z conditions every OOD NCA timestep
 \draw[condarrow] (slots_ood.south) to[out=-90,in=90] (noodn1-north);
