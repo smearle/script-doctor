@@ -223,13 +223,10 @@ input-skip individually (Table~\ref{tab:ablation-pool}, $\Delta$BFS as
 relative BFS-AR increase): pool features carry most of the non-local
 handling---dropping all three ($+316\%$) costs roughly twice removing
 \emph{global-pool} alone ($+182\%$), with \emph{axis-pool} next
-($+123\%$) and \emph{axis-cummax} a smaller $+48\%$. The small
-axis-cummax contribution is consistent with the push rule
-\texttt{[ > Player | Crate ] -> [ > Player | > Crate ]} mostly using
-its $3{\times}3$ neighbourhood; we expect a larger contribution on
-games like \textit{neko puzzle}, whose rule
-\texttt{[ > Player | ... | Fruit ] -> [ | ... | Player ]} reaches
-across the row (multi-game version: future work).
+($+123\%$) and \emph{axis-cummax} a smaller $+48\%$.
+The axis-cummax contribution is surprising given that Sokoban's push rule
+\texttt{[ > Player | Crate ] -> [ > Player | > Crate ]} only references its $3{\times}3$ neighbourhood and should not need directional prefix-max at all; the seed std on the no-axis-cummax row is large (1.30\% absolute on a 3.07\% mean), so part of the gap is plausibly noise.
+We expect a cleaner axis-cummax win on games like \textit{neko puzzle}, whose rule \texttt{[ > Player | ... | Fruit ] -> [ | ... | Player ]} reaches across the row (multi-game version: future work).
 \emph{Input-skip} raises BFS-AR by $+54\%$ when removed but
 \emph{lowers} one-step (TF) error ($0.168\%$ vs.\ $0.274\%$):
 re-injecting $(s_t, a_t)$ at every step anchors the body to its input,

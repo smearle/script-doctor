@@ -584,23 +584,15 @@ single number per architecture; this appendix expands the underlying
 architectural findings. We label the findings F1--F3 to align with
 the architecture report released alongside the code.
 
-\paragraph{(F1) Global pool is load-bearing; axis-cummax targets a
-narrower rule class.}
+\paragraph{(F1) Global pool is load-bearing; axis-cummax surprisingly
+contributes even on Sokoban.}
 A bare $3{\times}3$ convolution can only propagate one cell of context
-per NCA step. Several PuzzleScript rule patterns reference cells
-arbitrarily far apart along an axis or anywhere on the level
-(\texttt{[X | ... | Y]}, \texttt{[X][Y]}). Without pool features the
-NCA needs $\Omega(\max(H,W))$ steps just to surface non-local
-information. The per-feature ablation in
-Table~\ref{tab:ablation-pool} isolates which pool flavour does the
-work: removing global-pool alone is as costly as removing all three
-($+145\%$ relative BFS error), while removing axis-cummax has no
-measurable effect on the basic-Sokoban demo (its target patterns---%
-axis-aligned \texttt{[X | ... | Y]} matches---do not appear in
-that game's rule set). On a 19-game gallery preset and a controlled
-\textit{Collapse} no-pool ablation, turning pool off costs both
-convergence speed and final loss, with the no-pool model collapsing
-into the identity-prediction minimum even at $4{\times}$ the depth.
+per NCA step.
+Several PuzzleScript rule patterns reference cells arbitrarily far apart along an axis or anywhere on the level (\texttt{[X | ... | Y]}, \texttt{[X][Y]}).
+Without pool features the NCA needs $\Omega(\max(H,W))$ steps just to surface non-local information.
+The per-feature ablation in Table~\ref{tab:ablation-pool} isolates which pool flavour does the work: removing global-pool alone is as costly as removing all three ($+182\%$ relative BFS error).
+Removing axis-cummax also costs $+48\%$ on \textsc{Sokoban-Evolved}, even though its target patterns---axis-aligned \texttt{[X | ... | Y]} matches---do not appear in Sokoban's rule set; seed variance on that row is large (1.30\% absolute), so the effect may be partly noise rather than a genuine inductive-bias contribution from prefix-max.
+On a 19-game gallery preset and a controlled \textit{Collapse} no-pool ablation, turning pool off costs both convergence speed and final loss, with the no-pool model collapsing into the identity-prediction minimum even at $4{\times}$ the depth.
 
 \paragraph{(F2) Shared NCA-body weights are the right inductive bias.}
 The PuzzleScript engine has two natural levels of iteration: an
