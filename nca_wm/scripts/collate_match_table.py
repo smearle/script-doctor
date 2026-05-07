@@ -158,26 +158,35 @@ def _aggregate_heldout(results_json_path: Path) -> dict:
         return {}
     d = json.loads(results_json_path.read_text())
     ho = d.get("heldout", {})
-    per_game_tf_m: dict[str, list[float]] = {}
-    per_game_tf_i: dict[str, list[float]] = {}
-    per_game_ar_m: dict[str, list[float]] = {}
-    per_game_ar_i: dict[str, list[float]] = {}
+    # Per-game accumulators for each rollout kind. The four kinds we
+    # currently support: random AR, random teacher-forced, BFS-optimal
+    # AR, A*-optimal AR. BFS/A* keys only exist on JSONs produced by
+    # `heldout_eval.py` after commit d5ddd82 (ran via the refresh
+    # script); they're skipped silently otherwise.
+    per_game = {
+        "tf": {"model": {}, "identity": {}},
+        "ar": {"model": {}, "identity": {}},
+        "bfs": {"model": {}, "identity": {}},
+        "astar": {"model": {}, "identity": {}},
+    }
+    json_kind = {"tf": "random_tf", "ar": "random", "bfs": "bfs", "astar": "astar"}
     for game, levels in ho.items():
         for li, kinds in levels.items():
-            tf_rec = kinds.get("random_tf") or {}
-            tf_mp = tf_rec.get("model_cell_err_per_step") or []
-            tf_ip = tf_rec.get("identity_cell_err_per_step") or []
-            if tf_mp and tf_ip:
-                per_game_tf_m.setdefault(game, []).append(float(np.mean(tf_mp)))
-                per_game_tf_i.setdefault(game, []).append(float(np.mean(tf_ip)))
-            ar_rec = kinds.get("random") or {}
-            ar_mp = ar_rec.get("model_cell_err_per_step") or []
-            ar_ip = ar_rec.get("identity_cell_err_per_step") or []
-            if ar_mp and ar_ip:
-                per_game_ar_m.setdefault(game, []).append(float(np.mean(ar_mp)))
-                per_game_ar_i.setdefault(game, []).append(float(np.mean(ar_ip)))
-    if not per_game_tf_m and not per_game_ar_m:
+            for short, jkey in json_kind.items():
+                rec = kinds.get(jkey) or {}
+                mp = rec.get("model_cell_err_per_step") or []
+                ip = rec.get("identity_cell_err_per_step") or []
+                if mp and ip:
+                    per_game[short]["model"].setdefault(game, []).append(
+                        float(np.mean(mp)))
+                    per_game[short]["identity"].setdefault(game, []).append(
+                        float(np.mean(ip)))
+    if not any(per_game[k]["model"] for k in per_game):
         return {}
+    per_game_tf_m = per_game["tf"]["model"]
+    per_game_tf_i = per_game["tf"]["identity"]
+    per_game_ar_m = per_game["ar"]["model"]
+    per_game_ar_i = per_game["ar"]["identity"]
     def _summarize(per_m, per_i):
         if not per_m:
             return None
@@ -197,8 +206,14 @@ def _aggregate_heldout(results_json_path: Path) -> dict:
         }
     tf = _summarize(per_game_tf_m, per_game_tf_i)
     ar = _summarize(per_game_ar_m, per_game_ar_i)
-    games = sorted(set((tf or {}).get("per_game_model", {})) |
-                   set((ar or {}).get("per_game_model", {})))
+    bfs = _summarize(per_game["bfs"]["model"], per_game["bfs"]["identity"])
+    astar = _summarize(per_game["astar"]["model"], per_game["astar"]["identity"])
+    games = sorted(
+        set((tf or {}).get("per_game_model", {}))
+        | set((ar or {}).get("per_game_model", {}))
+        | set((bfs or {}).get("per_game_model", {}))
+        | set((astar or {}).get("per_game_model", {}))
+    )
     return {
         "tf_model_mean": (tf or {}).get("model_mean"),
         "tf_model_median": (tf or {}).get("model_median"),
@@ -210,13 +225,29 @@ def _aggregate_heldout(results_json_path: Path) -> dict:
         "ar30_identity_mean": (ar or {}).get("identity_mean"),
         "ar30_identity_median": (ar or {}).get("identity_median"),
         "ar30_wins": (ar or {}).get("wins"),
-        "n_games": (tf or ar or {}).get("n_games"),
+        "bfs_model_mean": (bfs or {}).get("model_mean"),
+        "bfs_model_median": (bfs or {}).get("model_median"),
+        "bfs_identity_mean": (bfs or {}).get("identity_mean"),
+        "bfs_identity_median": (bfs or {}).get("identity_median"),
+        "bfs_wins": (bfs or {}).get("wins"),
+        "bfs_n_games": (bfs or {}).get("n_games"),
+        "astar_model_mean": (astar or {}).get("model_mean"),
+        "astar_model_median": (astar or {}).get("model_median"),
+        "astar_identity_mean": (astar or {}).get("identity_mean"),
+        "astar_identity_median": (astar or {}).get("identity_median"),
+        "astar_wins": (astar or {}).get("wins"),
+        "astar_n_games": (astar or {}).get("n_games"),
+        "n_games": (tf or ar or bfs or astar or {}).get("n_games"),
         "per_game": {
             g: {
                 "tf_model": (tf or {}).get("per_game_model", {}).get(g),
                 "tf_identity": (tf or {}).get("per_game_identity", {}).get(g),
                 "ar30_model": (ar or {}).get("per_game_model", {}).get(g),
                 "ar30_identity": (ar or {}).get("per_game_identity", {}).get(g),
+                "bfs_model": (bfs or {}).get("per_game_model", {}).get(g),
+                "bfs_identity": (bfs or {}).get("per_game_identity", {}).get(g),
+                "astar_model": (astar or {}).get("per_game_model", {}).get(g),
+                "astar_identity": (astar or {}).get("per_game_identity", {}).get(g),
             }
             for g in games
         },
@@ -270,6 +301,18 @@ def collate(runs: list[dict]) -> tuple[list[dict], dict, dict]:
             "ood_ar30_identity_mean": ho.get("ar30_identity_mean"),
             "ood_ar30_identity_median": ho.get("ar30_identity_median"),
             "ood_ar30_wins": ho.get("ar30_wins"),
+            "ood_bfs_model_mean": ho.get("bfs_model_mean"),
+            "ood_bfs_model_median": ho.get("bfs_model_median"),
+            "ood_bfs_identity_mean": ho.get("bfs_identity_mean"),
+            "ood_bfs_identity_median": ho.get("bfs_identity_median"),
+            "ood_bfs_wins": ho.get("bfs_wins"),
+            "ood_bfs_n_games": ho.get("bfs_n_games"),
+            "ood_astar_model_mean": ho.get("astar_model_mean"),
+            "ood_astar_model_median": ho.get("astar_model_median"),
+            "ood_astar_identity_mean": ho.get("astar_identity_mean"),
+            "ood_astar_identity_median": ho.get("astar_identity_median"),
+            "ood_astar_wins": ho.get("astar_wins"),
+            "ood_astar_n_games": ho.get("astar_n_games"),
             "ood_n_games": ho.get("n_games"),
         }
         rows.append(row)
@@ -324,8 +367,10 @@ def write_latex(rows: list[dict], out_path: Path) -> None:
     """OOD cell-error table with the same Preset / Model layout as
     Table 5, plus a wins-vs-identity column.
 
-    Heldout-30 eval currently runs random actions only, so BFS (AR) /
-    A* (AR) render as `--` until those rollouts are added.
+    BFS/A* (AR) cells populate from the heldout JSON's `bfs` / `astar`
+    rollout records (added by `heldout_eval.py` after commit d5ddd82
+    and refilled by `refresh_heldout_with_bfs_astar.sh`). Until a row's
+    JSON is refreshed those cells remain `--`.
     """
     out_path.parent.mkdir(parents=True, exist_ok=True)
 
@@ -370,24 +415,27 @@ def write_latex(rows: list[dict], out_path: Path) -> None:
                           r.get("ood_ar30_model_median")),
                     _cell(r.get("ood_tf_model_mean"),
                           r.get("ood_tf_model_median")),
-                    "--",  # BFS (AR) on heldout: not yet evaluated
-                    "--",  # A* (AR) on heldout: not yet evaluated
+                    _cell(r.get("ood_bfs_model_mean"),
+                          r.get("ood_bfs_model_median")),
+                    _cell(r.get("ood_astar_model_mean"),
+                          r.get("ood_astar_model_median")),
                     _wins(r.get("ood_tf_wins"), r.get("ood_n_games")),
                 ])
                 + r" \\"
             )
 
     if rows:
-        ident_ar = next((
-            (r.get("ood_ar30_identity_mean"), r.get("ood_ar30_identity_median"))
-            for r in rows
-            if r.get("ood_ar30_identity_mean") is not None
-        ), (None, None))
-        ident_tf = next((
-            (r.get("ood_tf_identity_mean"), r.get("ood_tf_identity_median"))
-            for r in rows
-            if r.get("ood_tf_identity_mean") is not None
-        ), (None, None))
+        def _first_identity(prefix: str):
+            return next((
+                (r.get(f"ood_{prefix}_identity_mean"),
+                 r.get(f"ood_{prefix}_identity_median"))
+                for r in rows
+                if r.get(f"ood_{prefix}_identity_mean") is not None
+            ), (None, None))
+        ident_ar = _first_identity("ar30")
+        ident_tf = _first_identity("tf")
+        ident_bfs = _first_identity("bfs")
+        ident_astar = _first_identity("astar")
         body.append("  \\midrule")
         body.append(
             "  "
@@ -395,8 +443,8 @@ def write_latex(rows: list[dict], out_path: Path) -> None:
                 "\\multicolumn{2}{l}{Identity baseline}",
                 _cell(*ident_ar),
                 _cell(*ident_tf),
-                "--",
-                "--",
+                _cell(*ident_bfs),
+                _cell(*ident_astar),
                 "--",
             ])
             + r" \\"
