@@ -39,50 +39,6 @@
         }
       }
     },
-    "multi_scaling_gallery_v2_cond_match_s0": {
-      "preset": "Train-59",
-      "model": "cond",
-      "available": true,
-      "regimes": {
-        "random_tf": {
-          "n_games": 14,
-          "mean": 0.002656507140845914,
-          "median": 0.00021387721755368816
-        },
-        "bfs": {
-          "n_games": 14,
-          "mean": 0.03701675863433899,
-          "median": 0.0026927437641723357
-        },
-        "random": {
-          "n_games": 14,
-          "mean": 0.039188965337711976,
-          "median": 0.005528265851795264
-        }
-      }
-    },
-    "multi_scaling_gallery_v4_cond_match_s0": {
-      "preset": "Train-199",
-      "model": "cond",
-      "available": true,
-      "regimes": {
-        "random_tf": {
-          "n_games": 14,
-          "mean": 0.003665097075828758,
-          "median": 0.0015734126984126985
-        },
-        "bfs": {
-          "n_games": 14,
-          "mean": 0.0727762280949673,
-          "median": 0.007162381965013544
-        },
-        "random": {
-          "n_games": 14,
-          "mean": 0.050689545386622084,
-          "median": 0.024017045120517347
-        }
-      }
-    },
     "multi_scaling_14_uncond_match_s0": {
       "preset": "Train-14",
       "model": "uncond",
@@ -105,6 +61,28 @@
         }
       }
     },
+    "multi_scaling_gallery_v2_cond_match_s0": {
+      "preset": "Train-59",
+      "model": "cond",
+      "available": true,
+      "regimes": {
+        "random_tf": {
+          "n_games": 14,
+          "mean": 0.002656507140845914,
+          "median": 0.00021387721755368816
+        },
+        "bfs": {
+          "n_games": 14,
+          "mean": 0.03701675863433899,
+          "median": 0.0026927437641723357
+        },
+        "random": {
+          "n_games": 14,
+          "mean": 0.039188965337711976,
+          "median": 0.005528265851795264
+        }
+      }
+    },
     "multi_scaling_gallery_v2_uncond_match_s0": {
       "preset": "Train-59",
       "model": "uncond",
@@ -124,6 +102,28 @@
           "n_games": 14,
           "mean": 0.10322281209269832,
           "median": 0.06238428571428571
+        }
+      }
+    },
+    "multi_scaling_gallery_v4_cond_match_s0": {
+      "preset": "Train-199",
+      "model": "cond",
+      "available": true,
+      "regimes": {
+        "random_tf": {
+          "n_games": 14,
+          "mean": 0.003665097075828758,
+          "median": 0.0015734126984126985
+        },
+        "bfs": {
+          "n_games": 14,
+          "mean": 0.0727762280949673,
+          "median": 0.007162381965013544
+        },
+        "random": {
+          "n_games": 14,
+          "mean": 0.050689545386622084,
+          "median": 0.024017045120517347
         }
       }
     },
