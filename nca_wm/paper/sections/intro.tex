@@ -49,18 +49,21 @@ disjoint from training by name and token-sequence hash.
 \begin{figure}[t]
   \centering
   \includegraphics[width=\linewidth]{figures/id_ood_teaser/teaser.pdf}
-  \caption{\textbf{State frames feed the NCA world model from
-    in-distribution training games (top) and held-out OOD games
-    (bottom).} Each row shows BFS-optimal rollout frames from one
-    PuzzleScript game. \emph{Top (blue):} during training the NCA
-    receives $s_t$ together with the rule-encoded latents and
-    predicts $\hat s_{t+1}$, supervised by the engine's $s_{t+1}$;
-    teacher-forced inputs and predicted next-states are also re-fed
-    in to fit autoregressive rollout. \emph{Bottom (red):} at
-    evaluation on held-out games, only the initial $s_0$ is provided
-    and the NCA's own $\hat s_{t+1}$ is fed back as the next input,
-    rolling forward without supervision. The dashed border separates
-    the two regimes.}
+  \caption{\textbf{Engine state frames feed the rule-conditioned NCA
+    world model under two regimes.} \emph{Top (blue, in-distribution
+    training):} for each game $g$, the engine state $s_0$ enters the
+    NCA-WM (parameters $\theta$); the model emits $\hat s_1$, the
+    engine emits ground-truth $s_1$, and the per-cell loss
+    $\|\hat s_1 - s_1\|$ supervises a back-prop update on $\theta$.
+    \emph{Bottom (red, held-out evaluation):} after training
+    ($\theta \!\rightarrow\! \theta^{*}$), only $s_0$ of an unseen
+    held-out game is provided; the NCA-WM rolls forward
+    autoregressively, feeding each $\hat s_t$ back as input to
+    produce $\hat s_{t+1}$ with no further supervision. Predicted OOD
+    frames come from the trained \textsc{Train-199} conditional
+    checkpoint and the per-frame "$k/N$ cells off" caption is the
+    cell-level disagreement vs.\ the engine ground truth. The dashed
+    border separates the two regimes.}
   \label{fig:id-ood-teaser}
 \end{figure}
 
