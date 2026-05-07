@@ -16,50 +16,48 @@ structure and rule-system generalization rather than visual fidelity.
 Toward this end we proposed a rule-conditioned Neural Cellular
 Automaton world model. Three design choices work in concert.
 \textbf{(i) An iterated local-update body.} The dynamics body is a
-single shared local update rule applied for $T$ iterations on a
+single shared local update rule applied for several iterations on a
 hidden grid, mirroring the recursive outer loop of a PuzzleScript
 engine that fires a sequence of atomic local rewrites until
 convergence. This inductive bias yields parameter-efficient world
-models that beat non-iterative CNN, U-Net, and ViT baselines on
-autoregressive rollout fidelity, both for a single rule family and
-across 14 jointly trained games (\S\ref{sec:results-baselines},
-\S\ref{sec:results-scaling}).
+models that outperform non-iterative CNN, U-Net, and ViT baselines
+on autoregressive rollout fidelity, both for a single rule family
+and across many jointly trained games
+(\S\ref{sec:results-baselines}, \S\ref{sec:results-scaling}).
 \textbf{(ii) Rule conditioning.} Cross-attention to slot embeddings
 of each game's tokenized rule text lets a single set of weights
-jointly model many games at once. Scaling the training corpus from
-14 to 199 jointly trained games keeps median 1-step teacher-forced
-cell-error in the $0.01$--$0.45\%$ range
+jointly model many games at once, with in-distribution per-cell
+fidelity remaining high as the corpus widens
 (Table~\ref{tab:indist-scaling}).
-\textbf{(iii) Training-data scaling.} Scaling from 14 to 199 games
-drops the step-1 cell-error on a 30-game held-out set from $7\times$
-worse than identity to within $2.5$pp of identity
-(\S\ref{sec:results-encoder-ablation}), with held-out wins on $9/29$
-games. The headline rule-conditional
-contribution to out-of-distribution generalization is driven
-primarily by broad-corpus rule diversity rather than the encoder
-architecture in isolation, in line with the broader pattern that
-generalization is a function of training-distribution coverage.
+\textbf{(iii) Training-data scaling.} Broadening the training
+corpus markedly improves out-of-distribution performance on an
+unseen-game held-out set, closing most of the gap to the identity
+baseline and yielding held-out wins on a non-trivial fraction of
+games (\S\ref{sec:results-encoder-ablation}). The headline
+rule-conditional contribution to out-of-distribution generalization
+is driven primarily by broad-corpus rule diversity rather than the
+encoder architecture in isolation, in line with the broader pattern
+that generalization is a function of training-distribution coverage.
 
-Conditioning the dynamics on a continuous game embedding turns the
-slot space into a learned manifold of embedded games, and we report
-two preliminary probes of what such a manifold makes possible.
-First, sampling from a Gaussian fit to the empirical slot prior and
-mapping samples back to PuzzleScript program text yields programs
-that the original engine compiles and runs ($15/25$ random samples
-and $9/9$ slot-space interpolation points;
-Appendix~\ref{app:autoencoder}), suggesting that the manifold is
-dense enough to seed novel-game generation. Second, freezing the
-dynamics model and optimizing the slot from a small tape of an
-unseen game's transitions drives per-cell BCE down by two-to-three
-orders of magnitude (Appendix~\ref{app:inverse-fit}), so an
-embedded-game latent can in principle be inferred from few
-interactions---a route to fast adaptation to novel rule systems
-that complements interactive world-model benchmarks where rule
-inference from limited environment interaction is the central
-challenge~\cite{warrier2025benchmarking,arcprize2026arcagi3}. We
-treat both as exploratory signals; scaling these probes to the full
-held-out corpus, and pairing inverse-fit slots with engine-loadable
-program reconstructions, are the obvious next steps.
+A general rule-conditioned world model is desirable for several
+downstream applications: sample-efficient policy learning and
+gradient-based planning across many environments without per-game
+retraining, fast adaptation to novel rule systems on interactive
+world-model benchmarks where rule inference from limited
+interaction is the central
+challenge~\cite{warrier2025benchmarking,arcprize2026arcagi3}, and a
+bridge between neural world models and symbolic program learning
+through a learned latent space that doubles as a search space over
+executable game programs. We report preliminary probes of the
+latter two in the appendix: random samples from a Gaussian fit to
+the empirical slot prior decode to PuzzleScript programs the
+original engine compiles and runs
+(Appendix~\ref{app:autoencoder}), and freezing the dynamics model
+while optimizing the slot from a small tape of an unseen game's
+transitions drives per-cell BCE down by orders of magnitude
+(Appendix~\ref{app:inverse-fit}). Scaling these probes to the full
+held-out corpus and pairing inverse-fit slots with engine-loadable
+program reconstructions remain open.
 
 The combination of an efficient substrate, a domain with non-trivial
 mechanical complexity, and a learned latent space of embedded games
