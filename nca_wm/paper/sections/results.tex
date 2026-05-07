@@ -15,9 +15,17 @@ the model has to learn the slide rule across grid sizes. We then
 ablate the NCA's pool stack and input-skip on the multi-grid synth
 preset to identify which features carry the architecture's advantage.
 
-All runs are trained for 10k updates per seed. We report best train
-cross-entropy, end-of-rollout cell-error rate under three policies
-(random, BFS-optimal, A*-optimal), and final parameter count.
+All runs are trained for 10k updates per seed. We report two
+per-cell error metrics, both averaged across the steps of a 50-step
+rollout: \emph{one-step (TF) cell-error} (teacher-forced, random
+actions; isolates per-step prediction error) and \emph{BFS-AR
+cell-error} (autoregressive rollout under BFS-optimal actions). All
+five architectures fit the training cross-entropy to within $\sim 2\%$
+of each other on every preset except ViT on multi-grid synth (best
+loss $0.084 \pm 0.002$ vs.\ $0.069 \pm 0.003$ for the rest), so we
+omit the train-loss column from the main-body tables and rely on the
+rollout metrics, which the per-step training objective is not
+sensitive to.
 
 \paragraph{Single-game (Sokoban).}
 Table~\ref{tab:baselines-sokoban} reports the head-to-head
@@ -26,27 +34,26 @@ comparison on 10 authored Sokoban levels.
 \begin{table}[t]
   \centering
   \caption{\textbf{Baselines vs.\ rule-conditioned NCA on Sokoban
-    (10 authored levels).} Mean $\pm$ std over 3 seeds
-    at 10k updates. Lower is better for loss and cell-error; A* first-
-    divergence step is higher-is-better. Param count in millions;
-    architectures sorted by BFS final cell-error.}
+    (10 authored levels).} Mean $\pm$ std over 3 seeds at 10k
+    updates. Both error columns are per-cell, averaged across
+    rollout steps; lower is better. Param count in millions;
+    architectures sorted by BFS-AR cell-error.}
   \label{tab:baselines-sokoban}
   \small
   \input{figures/baselines/sokoban_authored}
 \end{table}
 
-The NCA with shared weights wins on BFS rollout
-($0.11\% \pm 0.16\%$) at the fewest parameters (1.94M),
-$2.9\times$ better than the same-depth feed-forward CNN
-($0.32\% \pm 0.24\%$) at $2.6\times$ fewer params and
-$4.3\times$ better than the per-step NCA ($0.47\% \pm 0.66\%$).
-U-Net's 2-level downsampling loses fine-grained player position on
-small grids; ViT's global self-attention diverges before the first
-rollout step (mean first-divergence step under $1$). Best train loss
-is essentially identical ($0.107 \pm 0.002$) across all five
-architectures despite the $\geq 100\times$ swing in autoregressive
-rollout error; we report both metrics throughout because the per-step
-training objective is invisible to compounding rollout drift.
+The NCA with shared weights wins on BFS-AR cell-error
+($0.003\% \pm 0.004\%$) at the fewest parameters (1.94M), an order
+of magnitude below the same-depth feed-forward CNN
+($0.055\% \pm 0.075\%$, $2.6\times$ more params) and roughly two
+orders of magnitude below the per-step NCA ($0.283\% \pm 0.400\%$,
+$3.8\times$ more params). U-Net's 2-level downsampling loses
+fine-grained player position on small grids ($3.13\%$); ViT's global
+self-attention is the only architecture that fails to fit the data
+even on this single-game preset ($9.32\%$ BFS-AR; one-step $1.49\%$
+vs.\ $\approx 0$ for the rest), confirming that unrestricted global
+attention does not match grid-rule dynamics.
 
 \paragraph{Multi-grid synthetic (memorization-free).}
 To force the model to actually learn the rule,
@@ -65,16 +72,19 @@ multi-grid synthetic regime.
   \input{figures/baselines/sokoban_synth}
 \end{table}
 
-The shared-weights NCA again wins on BFS rollout
-($4.37\% \pm 2.02\%$) at the fewest parameters, with the per-step
-variant $1.4\times$ behind despite $2.8\times$ more parameters. ViT
-fails to fit the train loss
-($0.084 \pm 0.002$ vs.\ $0.069 \pm 0.003$ for the rest), confirming
-the structural mismatch we saw in the single-game setting:
-unrestricted global attention does not fit grid-rule dynamics well.
-The seed-to-seed variance on this task is large
-($\sigma > 2\%$ on BFS error for all NCA / CNN variants) but the
-gap to U-Net and ViT is robust to it. Longer-form architecture
+The shared-weights and per-step NCAs are statistically tied on this
+task ($2.08\% \pm 0.47\%$ vs.\ $2.09\% \pm 1.75\%$ BFS-AR
+cell-error), but the shared variant matches that performance with
+$2.8\times$ fewer parameters; CNN trails both at $2.82\% \pm 1.97\%$
+despite roughly twice the depth. ViT fails to fit the multi-grid
+synth data on the per-step training objective itself (best loss
+$0.084 \pm 0.002$ vs.\ $0.069 \pm 0.003$ for the rest, the only
+preset where any architecture leaves an order-of-magnitude gap on
+train loss), and that gap shows up downstream as a $\geq 4\times$
+worse BFS-AR cell-error vs.\ the NCA family. Seed-to-seed variance on
+this task is large ($\sigma > 1.5\%$ on BFS-AR for the per-step NCA,
+CNN, and the input-skip-disabled ablation row) but the gap to U-Net
+and ViT remains robust at $\pm 1\sigma$. Longer-form architecture
 findings (per-game grid, hierarchical weight sharing) are in
 Appendix~\ref{app:per-game-arch}.
 
@@ -93,9 +103,9 @@ $(s_t, a_t)$ at every step.
   \caption{\textbf{Per-feature ablation of the NCA-shared recipe on
     multi-grid synth Sokoban.} Mean $\pm$ std over 3
     seeds at 10k updates. $\Delta$BFS reports the absolute increase
-    in BFS final cell-error vs.\ the full recipe; relative figures
-    in parentheses. Train loss is essentially constant across all
-    configurations.}
+    in BFS-AR cell-error vs.\ the full recipe (relative figures in
+    parentheses); both error columns are per-cell, averaged across
+    rollout steps.}
   \label{tab:ablation-pool}
   \small
   \resizebox{\linewidth}{!}{%
@@ -103,29 +113,33 @@ $(s_t, a_t)$ at every step.
   }
 \end{table}
 
-\emph{Global-pool} is the single most important pool feature: removing
-it alone is as bad as removing all three pool flavours combined
-($+145\%$ relative BFS error in both cases), indicating that
-grid-wide presence-of-X signals are doing all the non-local work on
-this task. \emph{Axis-cummax}---the directional prefix-max designed
-for axis-aligned ``rule fires once X is in the same row/column as
-Y'' patterns---contributes nothing measurable on
-Sokoban: the push rule
-\texttt{[ > Player | Crate ] -> [ > Player | > Crate ]} depends only
-on the immediate $3{\times}3$ neighbourhood, not on a directional
-axial lookup. We expect the cummax feature to recover its
-load-bearing role on games whose rule sets do reference far-apart
-same-axis cells (e.g.\ \textsc{collapse}, \textsc{varislide}); a
-multi-game version of this ablation on \textsc{Train-14} is left to
-future work. \emph{Input-skip} contributes a modest $+36\%$ but with
-the highest variance across configurations ($\sigma = 4.24\%$),
-suggesting it is a stability mechanism rather than an
-information-carrying feature.
+The pool features collectively account for the bulk of the
+architecture's non-local-context handling: removing all three at
+once ($+316\%$ relative BFS-AR error) costs roughly twice as much as
+removing the single most important pool flavour, \emph{global-pool}
+($+182\%$). \emph{Axis-pool} contributes the next-largest
+chunk ($+123\%$); \emph{axis-cummax}---the directional prefix-max
+designed for axis-aligned ``rule fires once X is in the same
+row/column as Y'' patterns---contributes a small but measurable
+$+48\%$, consistent with the push rule
+\texttt{[ > Player | Crate ] -> [ > Player | > Crate ]} depending
+mostly on the immediate $3{\times}3$ neighbourhood and only weakly on
+a directional axial lookup. We expect axis-cummax to carry more
+weight on games whose rule sets do reference far-apart same-axis
+cells (e.g.\ \textsc{collapse}, \textsc{varislide}); a multi-game
+version of this ablation on \textsc{Train-14} is left to future work.
+\emph{Input-skip} contributes $+54\%$ with the highest variance among
+the ablation rows ($\sigma = 2.41\%$ on BFS-AR), and we read it as a
+stability mechanism: removing it actually \emph{lowers} the
+teacher-forced one-step error ($0.168\%$ vs.\ $0.274\%$ baseline)
+while raising the autoregressive rollout error, the signature of an
+ingredient that helps the iterated body remain on-manifold rather
+than fitting per-step transitions tighter.
 
 % TODO: rerun per-feature pool ablation on Train-14 (multi-game) to
-% verify that global-pool dominance and axis-cummax irrelevance
-% generalize beyond the single Sokoban rule. Expected: axis-cummax
-% recovers a measurable role on rules that reference far-apart
+% verify that global-pool dominance and the small axis-cummax
+% contribution generalize beyond the single Sokoban rule. Expected:
+% axis-cummax carries more weight on rules that reference far-apart
 % same-axis cells (e.g. collapse, varislide).
 
 The architecture-axis findings here are derived from a single rule
@@ -153,29 +167,32 @@ seed, $d_h = 256$.
 \begin{table}[t]
   \centering
   \caption{\textbf{Multi-game baselines on \textsc{Train-14}.}
-    Mean $\pm$ std over 3 seeds at 20k updates. Cell-error rate
-    averaged across games and levels. Both NCA variants beat all
-    three non-NCA baselines; within the NCA family, the per-step
-    body wins on BFS rollout while the shared body wins on train loss
-    (parameter-efficient) and has notably lower seed-to-seed variance.}
+    Mean $\pm$ std over 3 seeds at 20k updates. Both error columns
+    are per-cell, averaged across rollout steps and aggregated across
+    games and levels. Both NCA variants beat all three non-NCA
+    baselines; within the NCA family the per-step body has the lowest
+    mean BFS-AR error, while the shared body has notably lower
+    seed-to-seed variance and $3.8\times$ better parameter efficiency.}
   \label{tab:baselines-scaling14}
   \small
   \input{figures/baselines/scaling_14}
 \end{table}
 
 Both NCA variants outperform all three non-NCA baselines on
-autoregressive rollout, with U-Net at $1.6\times$ and ViT at
-$\approx 1.9\times$ NCA-perstep's BFS error; the NCA / non-NCA gap is
-robust to seed (no overlap of $\pm 1\sigma$ intervals). Within the
-NCA family the per-step body has the lowest mean BFS error
-($12.39\% \pm 1.82\%$) while the shared body has $7.6\times$ lower
-seed-to-seed variance and $3.8\times$ better parameter efficiency;
-at $\pm 1\sigma$ the two NCA variants overlap on aggregate BFS
-rollout, so we cannot distinguish them on this metric. ViT's train
-loss is $\approx 10^{4}$ times higher than the NCA / CNN family
-($\approx 8 \times 10^{-4}$ vs.\ $\approx 0$), confirming the structural
-mismatch from the single-game setting. Per-game breakdowns are in
-Appendix~\ref{app:per-game}.
+autoregressive rollout, with U-Net at $1.8\times$ and ViT at
+$2.3\times$ NCA-perstep's BFS-AR cell-error; the NCA / non-NCA gap is
+robust to seed (no overlap of $\pm 1\sigma$ intervals on BFS-AR or on
+one-step error). Within the NCA family the per-step body has the
+lowest mean BFS-AR error ($7.05\% \pm 0.87\%$) and the lowest
+one-step error ($0.25\% \pm 0.04\%$), while the shared body has
+$5.8\times$ lower seed-to-seed variance ($\pm 0.15\%$ vs.\ $\pm
+0.87\%$ on BFS-AR) and $3.8\times$ better parameter efficiency; at
+$\pm 1\sigma$ the two NCA variants overlap on aggregate BFS-AR error,
+so we cannot reliably separate them on this metric. ViT is also the
+only architecture that fails to fit the per-step training objective
+(best loss $\approx 8 \times 10^{-4}$ vs.\ $\approx 0$ for the NCA /
+CNN family), confirming the structural mismatch from the single-game
+setting. Per-game breakdowns are in Appendix~\ref{app:per-game}.
 
 \paragraph{In-distribution mastery as the corpus scales.}
 Rule-conditioning lets a single set of weights master many games at
@@ -264,57 +281,57 @@ $\hat{s}_{t+1}{=}s_t$.
   \input{figures/cond_vs_uncond_match/match_table}
 \end{table}
 
-% TODO: the cond-vs-uncond contrast at \textsc{Train-14} (Section 3.2,
-% Table 5) and the per-game step-1 wins claim are pending the in-flight
-% Train-14 / Train-199 unconditional evaluations and a planned
-% parameter-matched ($n_h{=}448$) uncond relaunch under the current
-% pool topology. Once those land, refresh both this section's
-% "encoder isolates a signal" paragraph and the matching wording in
-% the discussion.
+% TODO: the cond-vs-uncond contrast at \textsc{Train-14} and the
+% encoder-isolation claim are pending the in-flight Train-14 /
+% Train-199 unconditional evaluations and a planned $n_h{=}448$
+% uncond relaunch. Refresh both this section's wording and the
+% matching wording in the discussion once those land.
 
 \textbf{Out-of-distribution generalization improves with rule
 diversity.} On \textsc{Heldout-30} the \textsc{Train-14} conditional
-model fails catastrophically (median step-1 cell-error $4.3\%$;
-mean $16.4\%$, $7\times$ worse than identity). With $14\times$ more
-rule diversity the \textsc{Train-199} conditional model drops to
-$1.96\%$ median (mean $3.17\%$, within $1$pp of identity at the
-mean), and beats identity on $15 / 29$ heldout games at step 1.
+model fails catastrophically (median 1-step (TF) cell-error
+$3.7\%$; mean $16.2\%$, $\approx 8\times$ worse than the identity
+baseline's $2.05\%$ mean). With $14\times$ more rule diversity the
+\textsc{Train-199} conditional model drops to $2.11\%$ median /
+$2.91\%$ mean, within $1$pp of identity at the mean, and beats
+identity on $11 / 29$ heldout games on the 1-step (TF) metric
+(\S\ref{sec:experiments}).
 
 \textbf{Reading mean vs.\ median at \textsc{Train-59}.} The two
 \textsc{Train-59} rows are noteworthy: on the mean the unconditional
-baseline edges out the conditional model ($5.50\%$ vs.\ $6.19\%$
-step-1), but on the median---a more robust per-game signal---the
-ordering reverses ($4.12\%$ vs.\ $3.03\%$ step-1, and the
-conditional model wins on $18$ of $29$ heldout games at step 1
-versus the unconditional model's $10$). The mean inversion is
-driven by a small number of games where the conditional model
-produces wildly off predictions (e.g.\ a single heldout game where
-its step-1 cell-error is $40.7\%$, against identity's $2.3\%$ on
-that game). One reading is that the rule encoder occasionally lands
-the dynamics body on an off-manifold slot embedding for rule sets
-that look different from anything in training, and the body fires
-rules incorrectly across most cells; the unconditional baseline,
-having no encoder to mislead, falls back to a near-identity
-predictor on unfamiliar inputs (its per-game error correlates more
-strongly with the identity baseline: $0.45$ vs.\ $0.24$). The
-typical-game median is therefore the more informative summary of
-encoder benefit; we report both.
+baseline edges out the conditional model ($4.65\%$ vs.\ $5.94\%$
+1-step (TF)), but on the median---a more robust per-game signal---%
+the ordering reverses ($3.19\%$ vs.\ $2.94\%$), and the conditional
+model is closer to identity than the unconditional model on
+$18$ of $29$ heldout games. The mean inversion is driven by a small
+number of games where the conditional model produces wildly off
+predictions (e.g.\ a single heldout game where its 1-step (TF)
+cell-error averages $39.1\%$ against identity's $2.0\%$ on that
+game). One reading is that the rule encoder occasionally lands the
+dynamics body on an off-manifold slot embedding for rule sets that
+look different from anything in training, and the body fires rules
+incorrectly across most cells; the unconditional baseline, having
+no encoder to mislead, falls back to a near-identity predictor on
+unfamiliar inputs (its per-game error correlates more strongly with
+the identity baseline: $0.45$ vs.\ $0.24$). The typical-game median
+is therefore the more informative summary of encoder benefit; we
+report both.
 
-\textbf{Wins vs.\ identity over the full rollout.} Identity is a
-strong baseline as soon as the rollout is long enough for model
-drift to compound: on the random-action AR-30 rollout, identity's
-mean per-cell error (the per-step state-change rate, $\approx 2\%$)
-holds steady while every model accumulates drift to $9$--$24\%$.
-None of the matched checkpoints currently average below identity
-across all $30$ steps on more than a single game (last column of
-Table~\ref{tab:cond-vs-uncond-match}). This makes the step-$1$
-contrast the load-bearing OOD signal: at $1$-step prediction the
-conditional model meaningfully closes the identity gap as the
-training corpus grows, but multi-step rollouts under random actions
-remain dominated by drift. We discuss the implications, including
-the fraction of games on which even \textsc{Train-199}
-fails (e.g.\ pseudo-random spawn games, deeply cascaded
-\texttt{again} rules), in \S\ref{sec:discussion}.
+\textbf{Wins vs.\ identity counted on 1-step (TF) cell-error.} The
+last column of Table~\ref{tab:cond-vs-uncond-match} counts heldout
+games on which the model's 1-step (TF) cell-error---the same
+quantity averaged in the column to its left---is lower than
+identity's. Wins climb on the conditional rows as the corpus grows
+($7 \to 6 \to 11$ across \textsc{Train-14}, \textsc{Train-59},
+\textsc{Train-199}). On the random-action AR rollout, where errors
+compound over the full 30 steps, identity ($\approx 2\%$ mean
+cell-error, the per-step state-change rate) is a much stronger
+baseline: every model accumulates drift to $9$--$24\%$ mean and no
+current checkpoint averages below identity over the full rollout on
+more than a single game. We discuss the implications, including
+the fraction of games on which even \textsc{Train-199} fails
+(e.g.\ pseudo-random spawn games, deeply cascaded \texttt{again}
+rules), in \S\ref{sec:discussion}.
 
 % Generalization-to-unseen-games results (held-out latent geometry,
 % symbolic decoder reconstruction + sampling, frozen-NCA inverse fit

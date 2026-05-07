@@ -103,14 +103,17 @@ seeds.
 
 \subsection{Evaluation}
 
-We report two complementary metrics.
-\textbf{One-step change-error} is the per-cell BCE-thresholded
-error rate on cells that change between $s_t$ and $s_{t+1}$,
-measured under teacher forcing on the held-out portion of each
-cache. \textbf{Autoregressive rollout error} is the same per-cell
-error averaged over a 50-step rollout from each level's start
-state, under three policies: random actions, BFS-optimal, and
-A*-optimal.
+We report two complementary metrics, both computed as the per-cell
+prediction error rate (fraction of cells where the binarized model
+output disagrees with the engine's next state, averaged over all
+cells) and averaged over the steps of a 30--50-step rollout from each
+authored level's start state.
+\textbf{One-step (teacher-forced) cell-error} feeds the real previous
+state $s_t$ at every step, isolating the per-step prediction error
+from compounding rollout drift; actions are drawn uniformly at random.
+\textbf{Autoregressive rollout error} feeds the model's own
+prediction back at every step, under three action policies: random,
+BFS-optimal, and A*-optimal.
 Train loss decouples from autoregressive rollout error in the
 over-capacity regime (\S\ref{app:F3}), so reporting both is essential.
 
