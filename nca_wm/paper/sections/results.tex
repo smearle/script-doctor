@@ -198,16 +198,17 @@ $0.069 \pm 0.003$ for the rest).
 \begin{table}[t]
   \centering
   \caption{\textbf{Architecture baselines across three corpora.}
-    Mean $\pm$ std over 3 seeds. All three error columns are
-    per-cell, averaged across rollout steps and aggregated across
-    games/levels; lower is better. Within each block, rows are
-    sorted by BFS-AR ascending and the per-block BFS winner / fewest
-    parameters are bolded. Params (M) drift across blocks because the
-    slot encoder/heads scale with the preset's vocabulary.}
+    BFS-AR cell-error (mean $\pm$ std over 3 seeds), per-cell,
+    averaged across rollout steps and aggregated across games/levels;
+    lower is better. Architectures sorted by \textsc{Train-14} BFS-AR
+    ascending; per-column BFS winner and fewest parameters bolded.
+    Params (M) are from the \textsc{Train-14} row; the per-preset
+    drift and the random-AR / one-step (TF) columns are reported in
+    Table~\ref{tab:baselines-arch-full} (Appendix~\ref{app:baselines-full}).}
   \label{tab:baselines-arch}
   \small
   \resizebox{\linewidth}{!}{%
-  \input{figures/baselines/architectures}%
+  \input{figures/baselines/architectures_compact}%
   }
 \end{table}
 

@@ -238,6 +238,30 @@ Adventure 2}, \textit{Hamiltwo}, \textit{Headless People Problems},
 Japan}, \textit{Angize}.
 }
 
+\subsection{Architecture baselines: full per-preset table}
+\label{app:baselines-full}
+
+Table~\ref{tab:baselines-arch-full} expands the compact main-body
+Table~\ref{tab:baselines-arch} with the random-AR and one-step (TF)
+columns, plus per-preset parameter counts. Within each preset block,
+rows are sorted by BFS-AR ascending and the per-block BFS winner /
+fewest parameters are bolded. Param counts drift across blocks
+because the input embedding and readout heads scale with each
+preset's object/vocabulary footprint.
+
+\begin{table}[t]
+  \centering
+  \caption{\textbf{Architecture baselines across three corpora ---
+    full version.} Mean $\pm$ std over 3 seeds. All three error
+    columns are per-cell, averaged across rollout steps and
+    aggregated across games/levels; lower is better.}
+  \label{tab:baselines-arch-full}
+  \small
+  \resizebox{\linewidth}{!}{%
+  \input{figures/baselines/architectures}%
+  }
+\end{table}
+
 \subsection{Per-game \textsc{Train-14} breakdown}
 \label{app:per-game}
 
