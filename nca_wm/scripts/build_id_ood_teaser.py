@@ -207,9 +207,10 @@ def build_figure():
     fig_h = 6.4
     fig = plt.figure(figsize=(fig_w, fig_h))
 
-    id_color = "#2A6FB7"  # blue
-    ood_color = "#C0463E"  # red
+    id_color = "#2A6FB7"   # blue (forward, ID inputs)
+    ood_color = "#C0463E"  # red (forward + AR feedback, OOD)
     nca_color = "#E5B800"  # gold (legacy; mini diagram now used in its place)
+    loss_color = "#D2691E" # dark orange (loss feedback to NCA output)
     nca_mini_img = imageio.imread(NCA_MINI_PNG)
 
     # Section vertical extents (figure fraction).
@@ -310,81 +311,39 @@ def build_figure():
             ax_s1.set_title("$\\hat s_1\\;\\;(\\!\\approx\\! s_1)$",
                             fontsize=9, color=id_color, pad=2)
 
-        # Arrow s_0 -> NCA box
-        line_in = Line2D(
+        # Forward arrow: s_0 -> NCA box (blue, rightward)
+        fig.add_artist(Line2D(
             [s0_x + frame_w/2 + 0.005, nca_x - nca_w/2 - 0.003],
             [cy, cy],
             transform=fig.transFigure,
             color=id_color, lw=1.0,
-        )
-        fig.add_artist(line_in)
-        # Arrow NCA box -> ŝ_1
-        fig.add_artist(Line2D(
-            [nca_x + nca_w/2 + 0.003, out_x_id - frame_w/2 - 0.005],
-            [cy, cy],
-            transform=fig.transFigure,
-            color=id_color, lw=1.0,
         ))
-        # Tiny arrowhead indicators (use scatter triangle markers)
         fig.add_artist(plt.matplotlib.lines.Line2D(
             [nca_x - nca_w/2 - 0.003], [cy],
             transform=fig.transFigure, marker=">", color=id_color,
             markersize=5, lw=0,
         ))
+        # Loss arrow: ŝ_1 -> NCA output (dark orange, leftward).
+        fig.add_artist(Line2D(
+            [nca_x + nca_w/2 + 0.003, out_x_id - frame_w/2 - 0.005],
+            [cy, cy],
+            transform=fig.transFigure,
+            color=loss_color, lw=1.2,
+        ))
         fig.add_artist(plt.matplotlib.lines.Line2D(
-            [out_x_id - frame_w/2 - 0.005], [cy],
-            transform=fig.transFigure, marker=">", color=id_color,
-            markersize=5, lw=0,
+            [nca_x + nca_w/2 + 0.003], [cy],
+            transform=fig.transFigure, marker="<", color=loss_color,
+            markersize=6, lw=0,
         ))
 
-    # Loss annotation: thin vertical bar to the right of the ŝ_1 column
-    # collects each row's prediction error into a single "loss" badge,
-    # which then feeds back into the NCA WM via back-prop.
-    loss_box_top = id_centers[0] + frame_h_id/2
-    loss_box_bot = id_centers[-1] - frame_h_id/2
-    cy_mid = (loss_box_top + loss_box_bot) / 2
-    bar_x = out_x_id + frame_w/2 + 0.025
-    badge_x = bar_x + 0.07
-    # Vertical bar collecting all 3 ŝ_1 rows
-    fig.add_artist(Line2D(
-        [bar_x, bar_x], [loss_box_top, loss_box_bot],
-        transform=fig.transFigure, color="#993333", lw=1.2,
-    ))
-    # Per-row tick lines into the bar
-    for cy in id_centers:
-        fig.add_artist(Line2D(
-            [out_x_id + frame_w/2 + 0.001, bar_x],
-            [cy, cy],
-            transform=fig.transFigure, color="#993333", lw=1.0,
-        ))
-    # Horizontal lead from bar midpoint into the loss badge
-    fig.add_artist(Line2D(
-        [bar_x, badge_x - 0.025],
-        [cy_mid, cy_mid],
-        transform=fig.transFigure, color="#993333", lw=1.2,
-    ))
-    fig.text(badge_x, cy_mid,
-             "loss\n$\\| \\hat s_1 - s_1 \\|$",
-             ha="center", va="center", fontsize=9,
-             color="black",
-             bbox=dict(boxstyle="round,pad=0.4", facecolor="#FFEEEE",
-                       edgecolor="#993333", linewidth=1.0),
-             )
-    # Curved back-prop arrow from the loss badge back to the top of the
-    # NCA WM block.
-    fig.patches.append(mpatches.FancyArrowPatch(
-        (badge_x, cy_mid + 0.05),
-        (nca_x + 0.005, nca_y_center + nca_h/2 + 0.001),
-        connectionstyle="arc3,rad=-0.35",
-        arrowstyle="-|>", mutation_scale=14,
-        color="#993333", lw=1.3,
-        transform=fig.transFigure, zorder=3,
-    ))
+    # Single "loss" label centered above the dark-orange ŝ_1->NCA arrows.
+    cy_mid = (id_centers[0] + id_centers[-1]) / 2
     fig.text(
-        (badge_x + nca_x)/2,
-        nca_y_center + nca_h/2 + 0.030,
-        "back-prop  $\\nabla_\\theta$", ha="center", va="bottom",
-        fontsize=8, color="#993333", style="italic", zorder=3,
+        (nca_x + nca_w/2 + out_x_id - frame_w/2) / 2,
+        id_centers[0] + frame_h_id/2 + 0.012,
+        r"loss  $\|\hat s_1 - s_1\|$  $\rightarrow$  back-prop $\nabla_\theta$",
+        ha="center", va="bottom", fontsize=8.5, fontweight="bold",
+        color=loss_color,
     )
 
     # ---- OOD section ----
