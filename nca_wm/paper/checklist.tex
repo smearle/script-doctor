@@ -51,7 +51,7 @@
     \item {\bf Experimental result reproducibility}
     \item[] Question: Does the paper fully disclose all the information needed to reproduce the main experimental results of the paper to the extent that it affects the main claims and/or conclusions of the paper (regardless of whether the code and data are provided or not)?
     \item[] Answer: \answerYes{}
-    \item[] Justification: \S\ref{sec:method} fully specifies the architecture (encoder, NCA body update equation, pool features, heads) and all baselines. \S\ref{sec:experiments} specifies the optimizer, learning-rate schedule, batch size, gradient clipping, change-loss weight, training-step budgets, seed counts, training presets (\textsc{Train-14}, \textsc{Train-59}, \textsc{Train-199}, plus \textsc{Train-94} for appendix-level decoder/latent analyses), and the evaluation protocol. Appendix~\ref{app:reproducibility} describes the dataset-caching pipeline and notes that launchers and aggregators are released with the paper; per-game preset membership and hyper-parameters are listed in the appendix.
+    \item[] Justification: \S\ref{sec:method} fully specifies the architecture (encoder, NCA body update equation, pool features, heads) and all baselines. \S\ref{sec:experiments} specifies the optimizer, learning-rate schedule, batch size, gradient clipping, change-loss weight, training-step budgets, seed counts, training presets (\textsc{Train-14}, \textsc{Train-59}, \textsc{Train-199}, plus \textsc{Train-94} for appendix-level decoder/latent analyses), and the evaluation protocol. Per-game preset membership and hyper-parameters are listed in the appendix; Appendix~\ref{app:reproducibility} describes the dataset-caching pipeline. Code is not released with this submission; we plan to release the codebase upon a reorganization pass.
     \item[] Guidelines:
     \begin{itemize}
         \item The answer \answerNA{} means that the paper does not include experiments.
@@ -70,8 +70,8 @@
 
 \item {\bf Open access to data and code}
     \item[] Question: Does the paper provide open access to the data and code, with sufficient instructions to faithfully reproduce the main experimental results, as described in supplemental material?
-    \item[] Answer: \answerYes{}
-    \item[] Justification: An anonymized supplemental zip containing the codebase, training launchers, result aggregators, and a representative subset of dataset caches accompanies the submission, with end-to-end run instructions per launcher (Appendix~\ref{app:reproducibility}). The PuzzleJax corpus the dataset is built from is itself an open release \cite{earle2025puzzlejax}.
+    \item[] Answer: \answerNo{}
+    \item[] Justification: Code, training launchers, and dataset caches are not included with this submission. We plan to release the codebase upon a reorganization pass. The architecture is fully specified in \S\ref{sec:method} (encoder, NCA body update equation, pool features, heads) and the training / evaluation protocol in \S\ref{sec:experiments} (optimizer, learning-rate schedule, batch size, gradient clipping, change-loss weight, training-step budgets, seed counts, presets, evaluation regimes); the PuzzleJax corpus the dataset is built from is itself an open release~\cite{earle2025puzzlejax}, so the per-game preset memberships in Appendix~\ref{app:data-provenance} together with the C++ A* transition-collection protocol are sufficient to re-derive the data.
     \item[] Guidelines:
     \begin{itemize}
         \item The answer \answerNA{} means that paper does not include experiments requiring code.

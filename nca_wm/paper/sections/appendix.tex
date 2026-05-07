@@ -294,11 +294,15 @@ levels. Three observations beyond the aggregate numbers in the
 \subsection{Reproducibility}
 \label{app:reproducibility}
 
-The codebase, dataset caches, training launchers, and result
-aggregators are released alongside the paper. Each run is reproduced
-end-to-end by re-running its launcher on the same hardware
-(single 24~GB consumer GPU). The full experimental log accompanies
-the released code.
+Code is not included with this submission; we plan to release the
+codebase, training launchers, and result aggregators upon a
+reorganization pass. The architecture and training/evaluation protocol
+are fully specified in \S\ref{sec:method} and \S\ref{sec:experiments};
+the dataset is derived from the open PuzzleJax
+corpus~\cite{earle2025puzzlejax} via the C++ A* transition-collection
+protocol described in \S\ref{sec:experiments}, with per-game preset
+membership listed in Appendix~\ref{app:data-provenance}. Each run was
+trained on a single 24~GB consumer GPU.
 % Internal notes (deanonymized paths kept as comments for the
 % camera-ready / reproducibility supplement):
 %   - Launchers: nca_wm/scripts/run_*.sh
