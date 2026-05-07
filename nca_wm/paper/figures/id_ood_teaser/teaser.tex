@@ -1,26 +1,21 @@
 % ID/OOD teaser figure for the rule-conditioned NCA WM paper.
 %
-% Single-document standalone TikZ figure. The dynamics block (embed →
-% banded NCA body → readout) is copied from ../architecture/nca_wm_mini.tex
-% and placed once per regime (in-distribution training and OOD eval),
-% with PuzzleScript engine frames projected onto small Box pics around
-% it. Each row also has a small "clear" Box just before the s_0 frame
-% containing a miniaturized snippet of the game's PuzzleScript rules,
-% representing the rule-conditioning input the NCA-WM gets alongside s_0.
+% Single-document standalone TikZ figure.
 %
-% Forward (blue/red), loss (dark orange), and autoregressive (dashed
-% red) connections are all drawn natively in TikZ — no external PNG
-% mini-diagram is included.
+% Per game row: a "card" pair — a code Box flush with the back of the
+% PuzzleScript state Box (sharing the back/far face). The state image
+% is projected on the *front* (near, z+) face of the state box; the
+% code text is projected on the *back* (near face of the code box,
+% which sticks out behind the state box because the code box is
+% positioned slightly back in z and slightly larger in y so it peeks
+% out as a "halo" above/below the state box). The code box feeds into
+% the Encoder of the corresponding NCA-WM block; the state feeds into
+% the Embed.
 %
-% Required engine renders (produced by nca_wm/scripts/dump_engine_frames.py
-% and nca_wm/scripts/dump_ood_rollout_frames.py):
-%   rollouts/<game>/engine_t0.png      (ID s_0)
-%   rollouts/<game>/engine_t1.png      (ID s_1)
-%   rollouts/<game>/pred_t{0..3}.png   (OOD s_0 + autoregressive ŝ)
-%
-% Build:
-%   cd nca_wm/paper/figures/id_ood_teaser
-%   pdflatex teaser.tex
+% Each NCA-WM section additionally includes a small PCA scatter of the
+% encoder's latent space next to the Encoder block: train games as
+% gray dots; the OOD half adds the held-out games as red stars
+% (rendered separately by render_latent_scatters.py).
 %
 \documentclass[border=4pt, multi, tikz]{standalone}
 \usepackage{amsmath}
@@ -33,11 +28,12 @@
 \usetikzlibrary{3d}
 \usetikzlibrary{decorations.pathreplacing}
 
-\colorlet{SlotColor}{yellow!75}
 \colorlet{NCAColor}{green!35}
 \colorlet{NCABandColor}{green!70}
 \colorlet{EmbedColor}{green!12}
 \colorlet{ReadoutColor}{red!18}
+\colorlet{EncColor}{blue!18}
+\colorlet{EncBandColor}{blue!50}
 \colorlet{PSFrameFill}{gray!20}
 \colorlet{CodeFill}{white}
 
@@ -46,7 +42,7 @@
 \colorlet{LossColor}{orange!85!black}
 \colorlet{CondColor}{violet!60!black}
 
-% --- PS frame: small Box with image projected on east face. ---
+% --- PS frame: small Box at z=0 with image projected on east face. ---
 \newcommand{\PSframe}[4]{%
   \pic[shift={(#2, #3, 0)}] at (0,0,0)
       {Box={name=#1, caption=, xlabel={{,}}, zlabel={},
@@ -55,33 +51,65 @@
       {\includegraphics[width=0.8cm,height=0.8cm]{#4}};%
 }
 
-% --- Code Box: clear (white) Box with a tiny PS rule snippet on the
-%     east face. Slightly deeper than PS frames so wide rule lines fit.
-%     #1 = pic name, #2 = x_shift, #3 = y_shift, #4 = code text
-\newcommand{\Codebox}[4]{%
-  \pic[shift={(#2, #3, 0)}] at (0,0,0)
-      {Box={name=#1, caption=, xlabel={{,}}, zlabel={},
-            fill=CodeFill, opacity=0.6,
-            height=4, width=1.0, depth=5}};%
+% --- "Card pair": state Box at front, code Box flush with its back.
+%     Both share x,y but the code box is offset in -z so its near face
+%     meets the state box's far face. Image lives on the state box's
+%     east face; code text lives on the code box's near face (z+),
+%     which is the back-of-card surface and is exposed by the iso
+%     projection's z shift.
+%
+%     Anchors: <name>g (game/state box) and <name>c (code box).
+%     #1 = name base, #2 = x, #3 = y,
+%     #4 = state image path, #5 = code text body
+\newcommand{\StateOnCode}[5]{%
+  % code box behind, flush at z = -0.4 (game far face); centered at z=-0.8
+  \pic[shift={(#2, #3, -0.8)}] at (0,0,0)
+      {Box={name=#1c, caption=, xlabel={{,}}, zlabel={},
+            fill=CodeFill, opacity=1.0,
+            height=4, width=1.0, depth=4}};%
+  % code text on the back card's east face — projects up-and-left of
+  % the game card's east face under the iso z shift, so it peeks out.
   \node[canvas is zy plane at x={#2 + 0.2}, font=\tiny\ttfamily,
-        align=left, inner sep=0.6pt, text width=1cm] at (0, #3)
-      {#4};%
+        align=left, inner sep=0.4pt, text width=0.8cm]
+        at (0, #3, -0.8) {#5};%
+  % state box in front
+  \pic[shift={(#2, #3, 0)}] at (0,0,0)
+      {Box={name=#1g, caption=, xlabel={{,}}, zlabel={},
+            fill=PSFrameFill, height=4, width=1.0, depth=4}};%
+  \node[canvas is zy plane at x={#2 + 0.2}] at (0, #3)
+      {\includegraphics[width=0.8cm,height=0.8cm]{#4}};%
 }
 
-% --- NCA-WM block (embed -> 3 NCA bands -> readout) + faint loop arrow.
+% --- NCA-WM block: Encoder + Embed + 3 NCA bands + Readout, plus a
+%     faint loop arrow under the body. The Encoder is a small banded
+%     block reminiscent of nca_arch_v1.tex's perceiver encoder.
 \newcommand{\NCAblock}[3]{%
-  \pic[shift={({#2 - 1.4}, #3, 0)}] at (0,0,0)
+  % Encoder: a small banded box (mimics 2 self-attn + 1 cross-attn).
+  \pic[shift={({#2 - 2.6}, #3, 0)}] at (0,0,0)
+      {RightBandedBox={name=enc_#1, caption=, xlabel={{,,}}, zlabel={},
+            fill=EncColor, bandfill=EncBandColor,
+            height=8, width={0.45,0.45,0.45}, depth=8}};
+  % Embed
+  \pic[shift={({#2 - 1.0}, #3, 0)}] at (0,0,0)
       {Box={name=embed_#1, caption=, xlabel={{,}}, zlabel={},
             fill=EmbedColor, height=8, width=1.5, depth=8}};
-  \pic[shift={({#2 + 0.0}, #3, 0)}] at (0,0,0)
+  % NCA bands
+  \pic[shift={({#2 + 0.4}, #3, 0)}] at (0,0,0)
       {RightBandedBox={name=nca_#1, caption=, xlabel={{,,}}, zlabel={},
             fill=NCAColor, bandfill=NCABandColor,
             height=8, width={1.5,1.5,1.5}, depth=8}};
-  \pic[shift={({#2 + 1.7}, #3, 0)}] at (0,0,0)
+  % Readout
+  \pic[shift={({#2 + 2.1}, #3, 0)}] at (0,0,0)
       {Box={name=readout_#1, caption=, xlabel={{,}}, zlabel={},
             fill=ReadoutColor, height=8, width=1.5, depth=8}};
+  % Forward path through the dynamics row
   \draw[connection, -Stealth] (embed_#1-east) -- (nca_#1-west);
   \draw[connection, -Stealth] (nca_#1-east)   -- (readout_#1-west);
+  % Encoder → NCA bands top (slot conditioning)
+  \draw[condarrow] (enc_#1-east)
+      to[out=20, in=120]
+      ($(nca_#1-north)+(0,0)$);
+  % Iteration loop arrow under the body
   \path let \p1 = (nca_#1-east), \p2 = (nca_#1-west) in
     coordinate (loopOutR_#1)  at (\x1+0.25cm, \y1)
     coordinate (loopOutRD_#1) at (\x1+0.25cm, \y1-1.0cm)
@@ -100,41 +128,41 @@
 \tikzstyle{arrow}=[-Stealth, line width=0.3mm, opacity=0.85]
 \tikzstyle{lossarrow}=[-Stealth, line width=0.3mm, color=LossColor]
 \tikzstyle{condarrow}=[-Stealth, line width=0.3mm, dashed,
-    color=CondColor, opacity=0.85]
+    color=CondColor, opacity=0.9]
 \tikzstyle{ardashed}=[-Stealth, line width=0.25mm, dashed,
     color=OODColor, opacity=0.9]
 
 % =============================================================
-%  LEFT HALF: in-distribution training (NCA-WM at x=-4)
+%  LEFT HALF: in-distribution training (NCA-WM at x=-3)
 % =============================================================
-%
-% Per row: [code box at x=-9] [s_0 at x=-7] -> [NCA-WM @ -4] -> [s_1 at -0.5]
-% Row centers (3 rows): y = +1.5 / 0 / -1.5
+\NCAblock{id}{-3}{0}
 
-\NCAblock{id}{-4}{0}
+\StateOnCode{neko}{-7}{ 1.5}{rollouts/nekopuzzle/engine_t0.png}
+    {;nekopuzzle\\{}[>P|...|F]\\->[|...|P]}
+\StateOnCode{soko}{-7}{ 0.0}{rollouts/sokoban_basic/engine_t0.png}
+    {;sokoban\\{}[>P|C]\\->[>P|>C]}
+\StateOnCode{mod} {-7}{-1.5}{rollouts/Modality/engine_t0.png}
+    {;modality\\{}[>PW|B]\\->CANCEL}
 
-% Code boxes (clear) for ID games
-\Codebox{c_neko}{-9}{ 1.5}{[>P|...|F]\\->[|...|P]}
-\Codebox{c_soko}{-9}{ 0.0}{[>P|C]\\->[>P|>C]}
-\Codebox{c_mod} {-9}{-1.5}{[>PW|B]\\->CANCEL}
+\PSframe{s1_neko}{1.0}{ 1.5}{rollouts/nekopuzzle/engine_t1.png}
+\PSframe{s1_soko}{1.0}{ 0.0}{rollouts/sokoban_basic/engine_t1.png}
+\PSframe{s1_mod} {1.0}{-1.5}{rollouts/Modality/engine_t1.png}
 
-% s_0 / s_1 PS frames
-\PSframe{s0_neko}{-7}{ 1.5}{rollouts/nekopuzzle/engine_t0.png}
-\PSframe{s1_neko}{-0.5}{ 1.5}{rollouts/nekopuzzle/engine_t1.png}
-\PSframe{s0_soko}{-7}{ 0.0}{rollouts/sokoban_basic/engine_t0.png}
-\PSframe{s1_soko}{-0.5}{ 0.0}{rollouts/sokoban_basic/engine_t1.png}
-\PSframe{s0_mod} {-7}{-1.5}{rollouts/Modality/engine_t0.png}
-\PSframe{s1_mod} {-0.5}{-1.5}{rollouts/Modality/engine_t1.png}
+% Latent-space inset below the ID encoder: train-only (no OOD stars)
+\node[anchor=north, inner sep=0pt] (latent_id) at (-5.6, -1.5)
+    {\includegraphics[width=1.4cm]{latent_train_only.pdf}};
+\node[font=\tiny, color=IDColor, anchor=north] at (-5.6, -2.55)
+    {encoder $z$};
 
-% Forward (blue) fan-in to embed: state input
-\draw[arrow, color=IDColor] (s0_neko-east) -- (embed_id-west);
-\draw[arrow, color=IDColor] (s0_soko-east) -- (embed_id-west);
-\draw[arrow, color=IDColor] (s0_mod-east)  -- (embed_id-west);
+% State (blue) fan-in to embed
+\draw[arrow, color=IDColor] (nekog-east) -- (embed_id-west);
+\draw[arrow, color=IDColor] (sokog-east) -- (embed_id-west);
+\draw[arrow, color=IDColor] (modg-east)  -- (embed_id-west);
 
-% Conditioning fan-in (dashed violet): code box -> NCA body (rule slots)
-\draw[condarrow] (c_neko-east) -- (nca_id-west);
-\draw[condarrow] (c_soko-east) -- (nca_id-west);
-\draw[condarrow] (c_mod-east)  -- (nca_id-west);
+% Code (dashed violet) fan-in to encoder
+\draw[condarrow] (nekoc-east) to[out=10,in=170] (enc_id-west);
+\draw[condarrow] (sokoc-east) to[out=10,in=170] (enc_id-west);
+\draw[condarrow] (modc-east)  to[out=10,in=170] (enc_id-west);
 
 % Loss (dark orange) fan-in to readout
 \draw[lossarrow] (s1_neko-west) -- (readout_id-east);
@@ -143,62 +171,66 @@
 
 % ID labels
 \node[font=\footnotesize\bfseries, color=IDColor, anchor=south, align=center]
-    at (-4, 2.5) {Training (in-distribution)};
-\node[font=\tiny, color=IDColor] at (-9.0, 2.0) {rules};
-\node[font=\tiny, color=IDColor] at (-7.0, 2.0) {$s_0$};
-\node[font=\tiny, color=IDColor] at (-0.5, 2.0) {$\hat s_1\;(\!\approx\!s_1)$};
+    at (-3, 2.5) {Training (in-distribution)};
+\node[font=\tiny, color=IDColor] at (-7, 2.15) {state $\!/\!$ rules};
+\node[font=\tiny, color=IDColor] at ( 1.0, 2.15) {$\hat s_1\;(\!\approx\!s_1)$};
 \node[font=\tiny\bfseries, color=LossColor, align=center]
-    at (-2.4, 2.0) {loss $\|\hat s_1 - s_1\|$};
+    at (-1.0, 2.15) {loss};
 
-\node[font=\tiny, color=IDColor, anchor=east] at (-9.6,  1.5) {nekopuzzle};
-\node[font=\tiny, color=IDColor, anchor=east] at (-9.6,  0.0) {sokoban\_basic};
-\node[font=\tiny, color=IDColor, anchor=east] at (-9.6, -1.5) {Modality};
+% Game labels are now folded into the code-box text as a leading comment.
 
 % =============================================================
 %  VERTICAL DASHED BORDER between train and eval
 % =============================================================
 \draw[dashed, line width=0.3mm, color=black!70]
-    (1.0, -2.6) -- (1.0,  2.8);
+    (2.5, -3.2) -- (2.5,  2.8);
 \node[font=\itshape\tiny, color=black!50, anchor=south, rotate=90]
-    at (1.25, 0) {trained $\theta \rightarrow \theta^{*}$};
+    at (2.75, 0.4) {trained $\theta \rightarrow \theta^{*}$};
 
 % =============================================================
-%  RIGHT HALF: held-out eval (NCA-WM at x=+5.5)
+%  RIGHT HALF: held-out eval (NCA-WM at x=+7)
 % =============================================================
-\NCAblock{ood}{5.5}{0}
+\NCAblock{ood}{7}{0}
 
-% OOD code boxes
-\Codebox{c_inway}{ 2.5}{ 1.5}{[>P|F]\\->[|P]}
-\Codebox{c_nana} { 2.5}{ 0.0}{late[G|...|P]\\->[T|...|G]}
-\Codebox{c_ham}  { 2.5}{-1.5}{[>L|noW]\\->[>L Sub|noW]}
+\StateOnCode{inway}{ 3.5}{ 1.5}
+    {rollouts/in_the_way_by_giovanni_mota/pred_t0.png}
+    {;in\_the\_way\\{}[>P|F]\\->[|P]}
+\StateOnCode{nana}{ 3.5}{ 0.0}
+    {rollouts/my_nana_ate_my_kid_brother_by_ruth_williams/pred_t0.png}
+    {;my\_nana\\late[G|.|P]\\->[T|.|G]}
+\StateOnCode{ham}{ 3.5}{-1.5}
+    {rollouts/Hamiltwo/pred_t0.png}
+    {;hamiltwo\\{}[>L|noW]\\->[>L+|noW]}
 
-% OOD PS frames
-\PSframe{s0_inway}{ 4.5}{ 1.5}{rollouts/in_the_way_by_giovanni_mota/pred_t0.png}
-\PSframe{h1_inway}{ 8.0}{ 1.5}{rollouts/in_the_way_by_giovanni_mota/pred_t1.png}
-\PSframe{h2_inway}{ 9.2}{ 1.5}{rollouts/in_the_way_by_giovanni_mota/pred_t2.png}
-\PSframe{h3_inway}{10.4}{ 1.5}{rollouts/in_the_way_by_giovanni_mota/pred_t3.png}
+\PSframe{h1_inway}{10.5}{ 1.5}{rollouts/in_the_way_by_giovanni_mota/pred_t1.png}
+\PSframe{h2_inway}{11.7}{ 1.5}{rollouts/in_the_way_by_giovanni_mota/pred_t2.png}
+\PSframe{h3_inway}{12.9}{ 1.5}{rollouts/in_the_way_by_giovanni_mota/pred_t3.png}
 
-\PSframe{s0_nana}{ 4.5}{ 0.0}{rollouts/my_nana_ate_my_kid_brother_by_ruth_williams/pred_t0.png}
-\PSframe{h1_nana}{ 8.0}{ 0.0}{rollouts/my_nana_ate_my_kid_brother_by_ruth_williams/pred_t1.png}
-\PSframe{h2_nana}{ 9.2}{ 0.0}{rollouts/my_nana_ate_my_kid_brother_by_ruth_williams/pred_t2.png}
-\PSframe{h3_nana}{10.4}{ 0.0}{rollouts/my_nana_ate_my_kid_brother_by_ruth_williams/pred_t3.png}
+\PSframe{h1_nana}{10.5}{ 0.0}{rollouts/my_nana_ate_my_kid_brother_by_ruth_williams/pred_t1.png}
+\PSframe{h2_nana}{11.7}{ 0.0}{rollouts/my_nana_ate_my_kid_brother_by_ruth_williams/pred_t2.png}
+\PSframe{h3_nana}{12.9}{ 0.0}{rollouts/my_nana_ate_my_kid_brother_by_ruth_williams/pred_t3.png}
 
-\PSframe{s0_ham}{ 4.5}{-1.5}{rollouts/Hamiltwo/pred_t0.png}
-\PSframe{h1_ham}{ 8.0}{-1.5}{rollouts/Hamiltwo/pred_t1.png}
-\PSframe{h2_ham}{ 9.2}{-1.5}{rollouts/Hamiltwo/pred_t2.png}
-\PSframe{h3_ham}{10.4}{-1.5}{rollouts/Hamiltwo/pred_t3.png}
+\PSframe{h1_ham}{10.5}{-1.5}{rollouts/Hamiltwo/pred_t1.png}
+\PSframe{h2_ham}{11.7}{-1.5}{rollouts/Hamiltwo/pred_t2.png}
+\PSframe{h3_ham}{12.9}{-1.5}{rollouts/Hamiltwo/pred_t3.png}
 
-% State fan-in to embed
-\draw[arrow, color=OODColor] (s0_inway-east) -- (embed_ood-west);
-\draw[arrow, color=OODColor] (s0_nana-east)  -- (embed_ood-west);
-\draw[arrow, color=OODColor] (s0_ham-east)   -- (embed_ood-west);
+% Latent-space inset below the OOD encoder: train + held-out (red stars)
+\node[anchor=north, inner sep=0pt] (latent_ood) at (4.4, -1.5)
+    {\includegraphics[width=1.4cm]{latent_with_ood.pdf}};
+\node[font=\tiny, color=OODColor, anchor=north] at (4.4, -2.55)
+    {OOD $\bigstar$ in encoder $z$};
 
-% Rule fan-in to NCA body (dashed violet)
-\draw[condarrow] (c_inway-east) -- (nca_ood-west);
-\draw[condarrow] (c_nana-east)  -- (nca_ood-west);
-\draw[condarrow] (c_ham-east)   -- (nca_ood-west);
+% State fan-in
+\draw[arrow, color=OODColor] (inwayg-east) -- (embed_ood-west);
+\draw[arrow, color=OODColor] (nanag-east)  -- (embed_ood-west);
+\draw[arrow, color=OODColor] (hamg-east)   -- (embed_ood-west);
 
-% Forward fan-out from readout to ŝ_1
+% Code fan-in to encoder
+\draw[condarrow] (inwayc-east) to[out=10,in=170] (enc_ood-west);
+\draw[condarrow] (nanac-east)  to[out=10,in=170] (enc_ood-west);
+\draw[condarrow] (hamc-east)   to[out=10,in=170] (enc_ood-west);
+
+% ŝ_1 fan-out
 \draw[arrow, color=OODColor] (readout_ood-east) -- (h1_inway-west);
 \draw[arrow, color=OODColor] (readout_ood-east) -- (h1_nana-west);
 \draw[arrow, color=OODColor] (readout_ood-east) -- (h1_ham-west);
@@ -213,20 +245,17 @@
 
 % OOD labels
 \node[font=\footnotesize\bfseries, color=OODColor, anchor=south, align=center]
-    at (6, 2.5) {Evaluation (held-out / OOD)};
-\node[font=\tiny, color=OODColor] at ( 2.5, 2.0) {rules};
-\node[font=\tiny, color=OODColor] at ( 4.5, 2.0) {$s_0$};
-\node[font=\tiny, color=OODColor] at ( 8.0, 2.0) {$\hat s_1$};
-\node[font=\tiny, color=OODColor] at ( 9.2, 2.0) {$\hat s_2$};
-\node[font=\tiny, color=OODColor] at (10.4, 2.0) {$\hat s_3$};
+    at (8, 2.5) {Evaluation (held-out / OOD)};
+\node[font=\tiny, color=OODColor] at ( 3.5, 2.15) {state $\!/\!$ rules};
+\node[font=\tiny, color=OODColor] at (10.5, 2.15) {$\hat s_1$};
+\node[font=\tiny, color=OODColor] at (11.7, 2.15) {$\hat s_2$};
+\node[font=\tiny, color=OODColor] at (12.9, 2.15) {$\hat s_3$};
 
-\node[font=\tiny, color=OODColor, anchor=east] at ( 1.9,  1.5) {in\_the\_way};
-\node[font=\tiny, color=OODColor, anchor=east] at ( 1.9,  0.0) {my\_nana};
-\node[font=\tiny, color=OODColor, anchor=east] at ( 1.9, -1.5) {Hamiltwo};
+% (game labels embedded in the code box text)
 
 \node[font=\itshape\tiny, color=OODColor, anchor=north, align=center]
-    at (9.2, -2.4)
-    {$\hat s_{t+1}$ fed back as input (autoregressive); no supervision};
+    at (11.7, -2.0)
+    {$\hat s_{t+1}$ fed back (autoregressive); no supervision};
 
 \end{tikzpicture}
 
