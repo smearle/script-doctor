@@ -39,9 +39,14 @@ def _smoothed(arr: np.ndarray, window: int) -> np.ndarray:
 
 
 def _plot_one(run_dir: Path, ax_loss, ax_err, *, color: str, label: str,
-              smooth: int) -> bool:
+              smooth: int, line_alpha: float = 0.85,
+              train_linestyle: str = "-",
+              val_linestyle: str = "--",
+              val_marker: str = "o") -> bool:
     """Draw train (lines) + val (markers) on the two axes. Returns True
-    if any data was plotted."""
+    if any data was plotted. Caller controls line style, so paired
+    (cond, uncond) at the same n can share a color but distinguish via
+    e.g. solid-vs-dashed train and circle-vs-square val markers."""
     npz_path = _latest_curves_npz(run_dir)
     if npz_path is None:
         print(f"  [skip] {run_dir.name}: no curves_step*.npz", file=sys.stderr)
@@ -56,20 +61,22 @@ def _plot_one(run_dir: Path, ax_loss, ax_err, *, color: str, label: str,
         train_loss = _smoothed(train_loss, smooth)
         train_change_err = _smoothed(train_change_err, smooth)
     ax_loss.plot(step_x, train_loss, color=color, linewidth=1.4,
-                 alpha=0.85, label=f"{label} train")
+                 alpha=line_alpha, linestyle=train_linestyle,
+                 label=f"{label} train")
     ax_err.plot(step_x, train_change_err, color=color, linewidth=1.4,
-                alpha=0.85, label=f"{label} train")
+                alpha=line_alpha, linestyle=train_linestyle,
+                label=f"{label} train")
 
     # Val curves (sparser; only present when run was launched with --val_frac > 0).
     if "val_step" in d.files and len(d["val_step"]) > 0:
         v_step = np.asarray(d["val_step"], dtype=np.int64)
         v_loss = np.asarray(d["val_loss"], dtype=np.float64)
         v_change_err = 1.0 - np.asarray(d["val_change_acc"], dtype=np.float64)
-        ax_loss.plot(v_step, v_loss, color=color, linestyle="--",
-                     linewidth=2.0, marker="o", markersize=4,
+        ax_loss.plot(v_step, v_loss, color=color, linestyle=val_linestyle,
+                     linewidth=2.0, marker=val_marker, markersize=4,
                      label=f"{label} val")
-        ax_err.plot(v_step, v_change_err, color=color, linestyle="--",
-                    linewidth=2.0, marker="o", markersize=4,
+        ax_err.plot(v_step, v_change_err, color=color, linestyle=val_linestyle,
+                    linewidth=2.0, marker=val_marker, markersize=4,
                     label=f"{label} val")
         n_val = int(d["val_n_transitions"][-1]) if "val_n_transitions" in d.files and len(d["val_n_transitions"]) > 0 else 0
         print(f"  {run_dir.name}: train n={len(train_loss):,}, "
@@ -78,6 +85,21 @@ def _plot_one(run_dir: Path, ax_loss, ax_err, *, color: str, label: str,
         print(f"  {run_dir.name}: train-only (no val_step in curves)",
               file=sys.stderr)
     return True
+
+
+def _parse_run_name(run_dir: Path) -> tuple[int | None, str]:
+    """Extract (n, kind) from a 'n_per_rule_*' run dir name. Returns
+    (n, 'cond'|'uncond') or (None, 'other') for anything else."""
+    name = run_dir.name
+    if not name.startswith("n_per_rule_"):
+        return None, "other"
+    rest = name[len("n_per_rule_"):]
+    try:
+        n = int(rest.split("_")[0])
+    except (IndexError, ValueError):
+        return None, "other"
+    kind = "cond" if "_cond_" in name else ("uncond" if "_uncond_" in name else "other")
+    return n, kind
 
 
 def main() -> None:
@@ -101,14 +123,36 @@ def main() -> None:
     fig, (ax_loss, ax_err) = plt.subplots(1, 2, figsize=(11.5, 4.6))
 
     cmap = plt.get_cmap("tab10")
+    # If every run is an n_per_rule_* dir, color by n and stylize by
+    # kind (cond=solid+circles, uncond=dashed+squares). Otherwise fall
+    # back to one-color-per-run.
+    parsed = [(Path(rd), *_parse_run_name(Path(rd))) for rd in args.run_dirs]
+    structured = all(n is not None and kind in ("cond", "uncond")
+                     for _rd, n, kind in parsed)
     plotted = 0
-    for i, run_dir in enumerate(args.run_dirs):
-        run_dir = Path(run_dir)
-        label = run_dir.name
-        if _plot_one(run_dir, ax_loss, ax_err,
-                     color=cmap(i % cmap.N), label=label,
-                     smooth=args.smooth):
-            plotted += 1
+    if structured:
+        # One color per distinct n, in ascending order.
+        unique_ns = sorted({n for _rd, n, _k in parsed})
+        n_to_color = {n: cmap(i % cmap.N) for i, n in enumerate(unique_ns)}
+        STYLE = {
+            "cond":   dict(train_linestyle="-",  val_linestyle="--", val_marker="o"),
+            "uncond": dict(train_linestyle=":",  val_linestyle=(0, (5, 2, 1, 2)),
+                            val_marker="s"),
+        }
+        for run_dir, n, kind in parsed:
+            label = f"n={n} {kind}"
+            ok = _plot_one(run_dir, ax_loss, ax_err,
+                            color=n_to_color[n], label=label,
+                            smooth=args.smooth, **STYLE[kind])
+            if ok:
+                plotted += 1
+    else:
+        for i, (run_dir, _n, _k) in enumerate(parsed):
+            label = run_dir.name
+            if _plot_one(run_dir, ax_loss, ax_err,
+                          color=cmap(i % cmap.N), label=label,
+                          smooth=args.smooth):
+                plotted += 1
 
     if plotted == 0:
         sys.exit("no runs had usable data")
