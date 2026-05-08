@@ -3738,6 +3738,470 @@ def _run_eval_rollout(
     }
 
 
+def _run_eval_rollouts_batched(
+    apply_fn, params, json_str: str,
+    level_i: int, n_objs: int,
+    max_C: int, max_H: int, max_W: int,
+    n_episodes: int,
+    max_steps: int = 50,
+    game_tokens: np.ndarray | None = None,
+    game_mask: np.ndarray | None = None,
+    teacher_forced: bool = False,
+    rng_seed: int = 0,
+    actions_2d: np.ndarray | None = None,
+) -> dict:
+    """Batched random-rollout eval — runs ``n_episodes`` random rollouts in
+    parallel through one JIT'd forward per step (batch=n_episodes). Same
+    semantics as ``_run_eval_rollout`` with ``actions=None``, just stacked.
+
+    Returns:
+        wrong_tiles_grid: (n_episodes, T) float — NaN past per-ep termination
+        wrong_cells_grid: (n_episodes, T) float
+        first_div: (n_episodes,) int — first divergent step (-1 if never)
+        per_ep_length: (n_episodes,) int — recorded steps per episode
+        total_tiles, total_cells: ints
+    """
+    conditional = game_tokens is not None
+    if conditional:
+        gt_b = jnp.broadcast_to(jnp.array(game_tokens[None]),
+                                (n_episodes, game_tokens.shape[0]))
+        gm_b = jnp.broadcast_to(jnp.array(game_mask[None]),
+                                (n_episodes, game_mask.shape[0]))
+
+    envs = []
+    initial_obs = None
+    for _ in range(n_episodes):
+        env = CppPuzzleScriptEnv(json_str, level_i=level_i,
+                                 max_episode_steps=max_steps)
+        obs, _ = env.reset()
+        if initial_obs is None:
+            initial_obs = obs
+        envs.append(env)
+    _, H, W = initial_obs.shape
+    total_tiles = n_objs * H * W
+    total_cells = H * W
+
+    pad0 = _pad_state_for_model(initial_obs, max_C, max_H, max_W)  # (1, C, H', W')
+    pred_states = jnp.broadcast_to(pad0, (n_episodes,) + pad0.shape[1:])
+
+    if actions_2d is not None:
+        # Caller-provided (n_eps, max_steps) layout — transpose to (T, n_eps).
+        actions_per_step = np.asarray(actions_2d, dtype=np.int32).T
+    else:
+        rng = np.random.default_rng(rng_seed)
+        actions_per_step = rng.integers(0, N_ACTIONS,
+                                        size=(max_steps, n_episodes), dtype=np.int32)
+    eye = np.eye(N_ACTIONS, dtype=np.float32)
+
+    wrong_tiles_grid = np.full((n_episodes, max_steps), np.nan, dtype=np.float64)
+    wrong_cells_grid = np.full((n_episodes, max_steps), np.nan, dtype=np.float64)
+    first_div = np.full(n_episodes, -1, dtype=np.int64)
+    per_ep_length = np.zeros(n_episodes, dtype=np.int32)
+    done_mask = np.zeros(n_episodes, dtype=bool)
+
+    for t in range(max_steps):
+        was_alive = ~done_mask.copy()
+        if not was_alive.any():
+            break
+
+        a_oh = jnp.array(eye[actions_per_step[t]])  # (n_eps, N_ACTIONS)
+        if conditional:
+            logits, _, _ = apply_fn(params, pred_states, a_oh, gt_b, gm_b)
+        else:
+            logits, _, _ = apply_fn(params, pred_states, a_oh)
+        pred_next = (jax.nn.sigmoid(logits) > 0.5).astype(jnp.float32)
+
+        real_obs_batch = np.zeros((n_episodes, n_objs, H, W), dtype=np.uint8)
+        for i in range(n_episodes):
+            if not was_alive[i]:
+                continue
+            obs, _, done, trunc, _ = envs[i].step(int(actions_per_step[t, i]))
+            real_obs_batch[i] = obs
+            if done or trunc:
+                done_mask[i] = True
+
+        pred_binary = np.array(pred_next[:, :n_objs, :H, :W] > 0.5, dtype=np.uint8)
+        mismatch = (pred_binary != real_obs_batch)
+        n_wrong_bits = mismatch.sum(axis=(1, 2, 3))
+        n_wrong_cells = mismatch.any(axis=1).sum(axis=(1, 2))
+        for i in range(n_episodes):
+            if was_alive[i]:
+                wrong_tiles_grid[i, t] = n_wrong_bits[i]
+                wrong_cells_grid[i, t] = n_wrong_cells[i]
+                per_ep_length[i] = t + 1
+                if first_div[i] == -1 and n_wrong_cells[i] > 0:
+                    first_div[i] = t
+
+        if teacher_forced:
+            new_states = np.zeros((n_episodes, max_C, max_H, max_W), dtype=np.float32)
+            new_states[:, :n_objs, :H, :W] = real_obs_batch
+            pred_states = jnp.array(new_states)
+        else:
+            clean = jnp.zeros_like(pred_next)
+            clean = clean.at[:, :n_objs, :H, :W].set(pred_next[:, :n_objs, :H, :W])
+            pred_states = clean
+
+    max_len = int(per_ep_length.max()) if per_ep_length.max() > 0 else 0
+    return {
+        "wrong_tiles_grid": wrong_tiles_grid[:, :max_len],
+        "wrong_cells_grid": wrong_cells_grid[:, :max_len],
+        "first_div": first_div,
+        "per_ep_length": per_ep_length,
+        "total_tiles": total_tiles,
+        "total_cells": total_cells,
+    }
+
+
+# Module-level cache of JIT'd scan functions, keyed by (id(model), conditional).
+# Hoisting these out of `_run_eval_rollouts_jax` is important: defining them
+# inside the function would create fresh closures (and fresh JIT caches) on
+# every call — so a Python loop over (game, level, mode) would recompile each
+# time and JAX would be slower than the unbatched path.
+_JAX_EVAL_CACHE: dict = {}
+
+
+def _get_jax_eval_fns(model, conditional: bool):
+    key = (id(model), conditional)
+    if key in _JAX_EVAL_CACHE:
+        return _JAX_EVAL_CACHE[key]
+
+    def _trimmed_apply(p, st, a, *cond):
+        out = model.apply(p, st, a, *cond)
+        return out[0]  # logits
+
+    if conditional:
+        @jax.jit
+        def _ar_scan(p, init, a_T, real_T, vmask, cmask, gt_b, gm_b):
+            def body(carry, inp):
+                a_oh, real_next = inp
+                logits = _trimmed_apply(p, carry, a_oh, gt_b, gm_b)
+                pred_next = (jax.nn.sigmoid(logits) > 0.5).astype(jnp.float32)
+                diff = (pred_next != real_next).astype(jnp.float32) * vmask
+                wb = diff.sum(axis=(1, 2, 3))
+                cd = (diff.sum(axis=1) > 0).astype(jnp.float32)
+                wc = (cd * cmask).sum(axis=(1, 2))
+                return pred_next * vmask, (wb, wc)
+            _, outs = jax.lax.scan(body, init, (a_T, real_T))
+            return outs
+
+        @jax.jit
+        def _tf_scan(p, st_T, a_T, real_T, vmask, cmask, gt_b, gm_b):
+            def body(_, inp):
+                states, a_oh, real_next = inp
+                logits = _trimmed_apply(p, states, a_oh, gt_b, gm_b)
+                pred = (jax.nn.sigmoid(logits) > 0.5).astype(jnp.float32)
+                diff = (pred != real_next).astype(jnp.float32) * vmask
+                wb = diff.sum(axis=(1, 2, 3))
+                cd = (diff.sum(axis=1) > 0).astype(jnp.float32)
+                wc = (cd * cmask).sum(axis=(1, 2))
+                return None, (wb, wc)
+            _, outs = jax.lax.scan(body, None, (st_T, a_T, real_T))
+            return outs
+    else:
+        @jax.jit
+        def _ar_scan(p, init, a_T, real_T, vmask, cmask):
+            def body(carry, inp):
+                a_oh, real_next = inp
+                logits = _trimmed_apply(p, carry, a_oh)
+                pred_next = (jax.nn.sigmoid(logits) > 0.5).astype(jnp.float32)
+                diff = (pred_next != real_next).astype(jnp.float32) * vmask
+                wb = diff.sum(axis=(1, 2, 3))
+                cd = (diff.sum(axis=1) > 0).astype(jnp.float32)
+                wc = (cd * cmask).sum(axis=(1, 2))
+                return pred_next * vmask, (wb, wc)
+            _, outs = jax.lax.scan(body, init, (a_T, real_T))
+            return outs
+
+        @jax.jit
+        def _tf_scan(p, st_T, a_T, real_T, vmask, cmask):
+            def body(_, inp):
+                states, a_oh, real_next = inp
+                logits = _trimmed_apply(p, states, a_oh)
+                pred = (jax.nn.sigmoid(logits) > 0.5).astype(jnp.float32)
+                diff = (pred != real_next).astype(jnp.float32) * vmask
+                wb = diff.sum(axis=(1, 2, 3))
+                cd = (diff.sum(axis=1) > 0).astype(jnp.float32)
+                wc = (cd * cmask).sum(axis=(1, 2))
+                return None, (wb, wc)
+            _, outs = jax.lax.scan(body, None, (st_T, a_T, real_T))
+            return outs
+
+    fns = {"ar": _ar_scan, "tf": _tf_scan}
+    _JAX_EVAL_CACHE[key] = fns
+    return fns
+
+
+def _run_eval_rollouts_jax(
+    model, params, json_str: str,
+    level_i: int, n_objs: int,
+    max_C: int, max_H: int, max_W: int,
+    n_episodes: int,
+    max_steps: int = 50,
+    game_tokens: np.ndarray | None = None,
+    game_mask: np.ndarray | None = None,
+    teacher_forced: bool = False,
+    rng_seed: int = 0,
+    actions_2d: np.ndarray | None = None,
+) -> dict:
+    """Fully JAX-side eval: pre-roll the C++ env once, then run the entire
+    model rollout as a single JIT'd ``lax.scan`` over time. Eliminates
+    per-step Python/JAX dispatch.
+
+    Both AR and TF use scan over time, batching only across episodes — so
+    peak memory is the same (n_episodes per-step), no OOM at large max_steps.
+
+    Returns the same dict shape as ``_run_eval_rollouts_batched``.
+    """
+    conditional = game_tokens is not None
+
+    # 1. Generate or accept actions.
+    if actions_2d is not None:
+        actions_2d = np.asarray(actions_2d, dtype=np.int32)
+    else:
+        rng = np.random.default_rng(rng_seed)
+        actions_2d = rng.integers(0, N_ACTIONS,
+                                  size=(n_episodes, max_steps), dtype=np.int32)
+
+    # 2. Pre-roll real envs in C++ (sequential but fast).
+    real_obs_traj = None
+    per_ep_length = np.zeros(n_episodes, dtype=np.int32)
+    H = W = 0
+    for ep_i in range(n_episodes):
+        env = CppPuzzleScriptEnv(json_str, level_i=level_i,
+                                 max_episode_steps=max_steps)
+        obs, _ = env.reset()
+        if real_obs_traj is None:
+            _, H, W = obs.shape
+            real_obs_traj = np.zeros((n_episodes, max_steps + 1, n_objs, H, W),
+                                     dtype=np.uint8)
+        real_obs_traj[ep_i, 0] = obs
+        for t in range(max_steps):
+            obs, _, done, trunc, _ = env.step(int(actions_2d[ep_i, t]))
+            real_obs_traj[ep_i, t + 1] = obs
+            per_ep_length[ep_i] = t + 1
+            if done or trunc:
+                break
+
+    total_tiles = n_objs * H * W
+    total_cells = H * W
+
+    # 3. Pad real trajectory to bucket dims and build masks.
+    real_padded = np.zeros((n_episodes, max_steps + 1, max_C, max_H, max_W),
+                           dtype=np.float32)
+    real_padded[:, :, :n_objs, :H, :W] = real_obs_traj
+    real_padded_jax = jnp.array(real_padded)
+
+    valid_mask = np.zeros((max_C, max_H, max_W), dtype=np.float32)
+    valid_mask[:n_objs, :H, :W] = 1.0
+    valid_mask_jax = jnp.array(valid_mask)
+    cell_valid_mask = np.zeros((max_H, max_W), dtype=np.float32)
+    cell_valid_mask[:H, :W] = 1.0
+    cell_valid_mask_jax = jnp.array(cell_valid_mask)
+
+    # 4. Action one-hots.
+    eye = np.eye(N_ACTIONS, dtype=np.float32)
+    a_oh_traj = jnp.array(eye[actions_2d])  # (n_eps, max_steps, N_ACTIONS)
+
+    # 5. Conditional broadcast.
+    if conditional:
+        gt_b = jnp.broadcast_to(jnp.array(game_tokens[None]),
+                                (n_episodes, game_tokens.shape[0]))
+        gm_b = jnp.broadcast_to(jnp.array(game_mask[None]),
+                                (n_episodes, game_mask.shape[0]))
+
+    fns = _get_jax_eval_fns(model, conditional)
+    a_oh_T = jnp.transpose(a_oh_traj, (1, 0, 2))                     # (T, n_eps, A)
+    real_next_T = jnp.transpose(real_padded_jax[:, 1:],
+                                (1, 0, 2, 3, 4))                     # (T, n_eps, C, H, W)
+
+    if teacher_forced:
+        states_in_T = jnp.transpose(real_padded_jax[:, :max_steps],
+                                    (1, 0, 2, 3, 4))                  # (T, n_eps, C, H, W)
+        if conditional:
+            wb_T, wc_T = fns["tf"](params, states_in_T, a_oh_T, real_next_T,
+                                   valid_mask_jax, cell_valid_mask_jax,
+                                   gt_b, gm_b)
+        else:
+            wb_T, wc_T = fns["tf"](params, states_in_T, a_oh_T, real_next_T,
+                                   valid_mask_jax, cell_valid_mask_jax)
+    else:
+        init_state = real_padded_jax[:, 0]                            # (n_eps, C, H, W)
+        if conditional:
+            wb_T, wc_T = fns["ar"](params, init_state, a_oh_T, real_next_T,
+                                   valid_mask_jax, cell_valid_mask_jax,
+                                   gt_b, gm_b)
+        else:
+            wb_T, wc_T = fns["ar"](params, init_state, a_oh_T, real_next_T,
+                                   valid_mask_jax, cell_valid_mask_jax)
+
+    wrong_bits = jnp.transpose(wb_T, (1, 0))    # (n_eps, T)
+    wrong_cells = jnp.transpose(wc_T, (1, 0))
+
+    # 7. Mask past per-ep termination.
+    wrong_bits_np = np.asarray(wrong_bits)
+    wrong_cells_np = np.asarray(wrong_cells)
+    grid_bits = np.full((n_episodes, max_steps), np.nan, dtype=np.float64)
+    grid_cells = np.full((n_episodes, max_steps), np.nan, dtype=np.float64)
+    for i in range(n_episodes):
+        L = int(per_ep_length[i])
+        grid_bits[i, :L] = wrong_bits_np[i, :L]
+        grid_cells[i, :L] = wrong_cells_np[i, :L]
+
+    first_div = np.full(n_episodes, -1, dtype=np.int64)
+    for i in range(n_episodes):
+        L = int(per_ep_length[i])
+        for t in range(L):
+            if wrong_cells_np[i, t] > 0:
+                first_div[i] = t
+                break
+
+    max_len = int(per_ep_length.max()) if per_ep_length.max() > 0 else 0
+    return {
+        "wrong_tiles_grid": grid_bits[:, :max_len],
+        "wrong_cells_grid": grid_cells[:, :max_len],
+        "first_div": first_div,
+        "per_ep_length": per_ep_length,
+        "total_tiles": total_tiles,
+        "total_cells": total_cells,
+    }
+
+
+def _benchmark_eval_impls(model, params, game_infos,
+                          n_episodes: int = 10, max_steps: int = 50,
+                          rng_seed: int = 0):
+    """Time the three random-rollout eval implementations on the first
+    (game, level=0) using a shared action sequence so metrics agree.
+
+    Reports wall time per implementation per mode (AR + teacher-forced).
+    """
+    from nca_wm.rule_attn_model import RuleAttnNCAWorldModel
+    from nca_wm.baselines import CNNWorldModel, UNetWorldModel, ViTWorldModel
+    conditional = isinstance(
+        model,
+        (ConditionalNCAWorldModel, RuleAttnNCAWorldModel,
+         CNNWorldModel, UNetWorldModel, ViTWorldModel),
+    )
+    info = game_infos[0]
+    name = info["name"]
+    json_str = info["json_str"]
+    n_objs = info["n_objs"]
+    max_C = model.n_out
+    max_H = max(g["H"] for g in game_infos)
+    max_W = max(g["W"] for g in game_infos)
+    apply_fn = make_apply_fn(model)
+
+    if conditional:
+        max_tok_len = max(len(g.get("token_ids", [])) for g in game_infos)
+        max_tok_len = max(max_tok_len, 1)
+        tids = info.get("token_ids", [])
+        gt = np.zeros(max_tok_len, dtype=np.int32)
+        gm = np.zeros(max_tok_len, dtype=np.bool_)
+        gt[:len(tids)] = tids
+        gm[:len(tids)] = True
+        cond_kwargs = {"game_tokens": gt, "game_mask": gm}
+    else:
+        cond_kwargs = {}
+
+    rng = np.random.default_rng(rng_seed)
+    actions_2d = rng.integers(0, N_ACTIONS,
+                              size=(n_episodes, max_steps), dtype=np.int32)
+
+    print(f"\n=== Benchmark on {name} L0 "
+          f"(n_eps={n_episodes}, max_steps={max_steps}, n_objs={n_objs}, "
+          f"bucket={max_C}x{max_H}x{max_W}) ===")
+
+    def _run_seq(tf):
+        all_bits, all_cells, first_divs = [], [], []
+        for ep_i in range(n_episodes):
+            r = _run_eval_rollout(
+                apply_fn, params, json_str, level_i=0, n_objs=n_objs,
+                max_C=max_C, max_H=max_H, max_W=max_W,
+                actions=actions_2d[ep_i].tolist(),
+                max_steps=max_steps,
+                teacher_forced=tf,
+                **cond_kwargs,
+            )
+            all_bits.append(r["wrong_tiles"])
+            all_cells.append(r["wrong_cells"])
+            first_divs.append(r["first_div_step"])
+        return all_bits, all_cells, first_divs, r["total_tiles"]
+
+    def _run_batched(tf):
+        return _run_eval_rollouts_batched(
+            apply_fn, params, json_str, level_i=0, n_objs=n_objs,
+            max_C=max_C, max_H=max_H, max_W=max_W,
+            n_episodes=n_episodes, max_steps=max_steps,
+            teacher_forced=tf, actions_2d=actions_2d,
+            **cond_kwargs,
+        )
+
+    def _run_jax(tf):
+        return _run_eval_rollouts_jax(
+            model, params, json_str, level_i=0, n_objs=n_objs,
+            max_C=max_C, max_H=max_H, max_W=max_W,
+            n_episodes=n_episodes, max_steps=max_steps,
+            teacher_forced=tf, actions_2d=actions_2d,
+            **cond_kwargs,
+        )
+
+    def _block_until_ready(out):
+        # Force any deferred JAX computation to complete before timing stops.
+        try:
+            jax.block_until_ready(out)
+        except Exception:
+            pass
+        return out
+
+    def _time(fn, tf, n_warm=1, n_runs=3):
+        for _ in range(n_warm):
+            _block_until_ready(fn(tf))
+        ts = []
+        for _ in range(n_runs):
+            t0 = time.perf_counter()
+            out = fn(tf)
+            _block_until_ready(out)
+            ts.append(time.perf_counter() - t0)
+        return float(np.mean(ts)), float(np.std(ts)), out
+
+    results = {}
+    for mode_label, tf in [("AR random", False), ("teacher-forced", True)]:
+        seq_t, seq_s, seq_out = _time(_run_seq, tf)
+        bat_t, bat_s, bat_out = _time(_run_batched, tf)
+        jax_t, jax_s, jax_out = _time(_run_jax, tf)
+        results[mode_label] = {
+            "seq": (seq_t, seq_s),
+            "batched": (bat_t, bat_s),
+            "jax": (jax_t, jax_s),
+        }
+
+        # Sanity-check that all three agree on metrics (within tiny float noise).
+        seq_bits = seq_out[0]
+        seq_total_tiles = seq_out[3]
+        max_len_seq = max(len(b) for b in seq_bits)
+        seq_grid = np.full((n_episodes, max_len_seq), np.nan)
+        for i, b in enumerate(seq_bits):
+            seq_grid[i, :len(b)] = b
+        bat_grid = bat_out["wrong_tiles_grid"]
+        jax_grid = jax_out["wrong_tiles_grid"]
+        T = min(seq_grid.shape[1], bat_grid.shape[1], jax_grid.shape[1])
+        # Compare element-wise on overlapping shape
+        diff_seq_bat = np.nanmax(np.abs(
+            np.nan_to_num(seq_grid[:, :T]) - np.nan_to_num(bat_grid[:, :T])))
+        diff_seq_jax = np.nanmax(np.abs(
+            np.nan_to_num(seq_grid[:, :T]) - np.nan_to_num(jax_grid[:, :T])))
+        agree_seq_bat = "OK" if diff_seq_bat < 1e-3 else f"DIFF max={diff_seq_bat}"
+        agree_seq_jax = "OK" if diff_seq_jax < 1e-3 else f"DIFF max={diff_seq_jax}"
+
+        print(f"\n[{mode_label}]")
+        print(f"  per-episode loop:  {seq_t*1000:7.1f} ms  (±{seq_s*1000:.1f})")
+        print(f"  batched:           {bat_t*1000:7.1f} ms  (±{bat_s*1000:.1f})  "
+              f"[{seq_t/bat_t:5.1f}x]  metric vs seq: {agree_seq_bat}")
+        print(f"  JAX-scanned:       {jax_t*1000:7.1f} ms  (±{jax_s*1000:.1f})  "
+              f"[{seq_t/jax_t:5.1f}x]  metric vs seq: {agree_seq_jax}")
+
+    return results
+
+
 def evaluate_multigame(
     model: NCAWorldModel,
     params,
@@ -3798,30 +4262,27 @@ def evaluate_multigame(
             level_results = {}
 
             # --- Random rollouts (autoregressive + teacher-forced) ---
+            # Pre-roll C++ env once, then run the entire rollout as a
+            # single JIT'd lax.scan. ~16x faster than the per-episode loop
+            # and ~3x faster than the simple batched version. See
+            # _benchmark_eval_impls for the comparison.
             for mode_name, tf in [("random", False), ("random_tf", True)]:
-                all_bits = []
-                all_cells = []
-                first_divs = []
-                for _ in range(n_random_episodes):
-                    r = _run_eval_rollout(
-                        apply_fn, params, json_str, level_i, n_objs,
-                        max_C, max_H, max_W, max_steps=max_steps,
-                        teacher_forced=tf, **cond_kwargs,
-                    )
-                    all_bits.append(r["wrong_tiles"])
-                    all_cells.append(r["wrong_cells"])
-                    first_divs.append(r["first_div_step"])
-
-                max_len = max(len(e) for e in all_bits)
-                bits_p = np.full((n_random_episodes, max_len), np.nan)
-                cells_p = np.full((n_random_episodes, max_len), np.nan)
-                for i, (b, c) in enumerate(zip(all_bits, all_cells)):
-                    bits_p[i, :len(b)] = b
-                    cells_p[i, :len(c)] = c
-                mean_bits = np.nanmean(bits_p, axis=0)
-                mean_cells = np.nanmean(cells_p, axis=0)
+                r = _run_eval_rollouts_jax(
+                    model, params, json_str, level_i, n_objs,
+                    max_C, max_H, max_W,
+                    n_episodes=n_random_episodes,
+                    max_steps=max_steps,
+                    teacher_forced=tf, **cond_kwargs,
+                )
+                bits_p = r["wrong_tiles_grid"]
+                cells_p = r["wrong_cells_grid"]
+                max_len = bits_p.shape[1]
+                mean_bits = (np.nanmean(bits_p, axis=0)
+                             if max_len > 0 else np.zeros(0))
+                mean_cells = (np.nanmean(cells_p, axis=0)
+                              if max_len > 0 else np.zeros(0))
                 # First-divergence: treat -1 (no divergence) as max_len (best case)
-                fd = np.array([max_len if x < 0 else x for x in first_divs])
+                fd = np.array([max_len if x < 0 else x for x in r["first_div"]])
                 level_results[mode_name] = {
                     "mean_error_rate": mean_bits / r["total_tiles"],
                     "mean_cell_error_rate": mean_cells / r["total_cells"],
@@ -3902,19 +4363,36 @@ def evaluate_multigame(
                         "source_kind": np.asarray(source_kind),
                     })
 
-                r = _run_eval_rollout(
-                    apply_fn, params, json_str, level_i, n_objs,
-                    max_C, max_H, max_W, actions=sol_actions,
+                # Use the JIT'd lax.scan path the random rollouts already
+                # take (`_run_eval_rollouts_jax`): pre-roll the C++ env once
+                # along the cached solution actions, then scan the model
+                # over the (state, action, real_next) trajectory in a
+                # single JAX call. ~16x faster than the per-step Python
+                # loop (`_run_eval_rollout`) per the comment at the random
+                # rollout site above. Single-episode shape `(1, n_steps)`.
+                actions_2d_search = np.asarray(sol_actions, dtype=np.int32)[None]
+                r_jax = _run_eval_rollouts_jax(
+                    model, params, json_str, level_i, n_objs,
+                    max_C, max_H, max_W,
+                    n_episodes=1,
+                    max_steps=len(sol_actions),
+                    actions_2d=actions_2d_search,
+                    teacher_forced=False,
                     **cond_kwargs,
                 )
+                # Convert the (n_eps, T) JAX-rollout shape back to the
+                # (T,) shape the rest of this code path expects.
+                bits = r_jax["wrong_tiles_grid"][0]    # (T,)
+                cells = r_jax["wrong_cells_grid"][0]   # (T,)
+                first_div = int(r_jax["first_div"][0])
                 level_results[algo] = {
-                    "error_rate": r["tile_error_rate"],
-                    "cell_error_rate": r["cell_error_rate"],
-                    "wrong_tiles": r["wrong_tiles"],
-                    "wrong_cells": r["wrong_cells"],
-                    "first_div_step": r["first_div_step"],
-                    "total_tiles": r["total_tiles"],
-                    "total_cells": r["total_cells"],
+                    "error_rate": bits / max(1, r_jax["total_tiles"]),
+                    "cell_error_rate": cells / max(1, r_jax["total_cells"]),
+                    "wrong_tiles": bits,
+                    "wrong_cells": cells,
+                    "first_div_step": first_div,
+                    "total_tiles": r_jax["total_tiles"],
+                    "total_cells": r_jax["total_cells"],
                     "n_steps": len(sol_actions),
                 }
 
@@ -5124,6 +5602,10 @@ def main():
                         "from save_dir (or --load) and run eval + rendering only. "
                         "Use this alongside the same training args to inspect a "
                         "partially-trained model without disturbing the training run.")
+    p.add_argument("--benchmark_eval", action="store_true",
+                   help="Time the three random-rollout eval implementations "
+                        "(per-episode loop / batched / JAX-scanned) on the first "
+                        "(game, level) and exit. Use with --render_only.")
     p.add_argument("--load", default=None, metavar="DIR",
                    help="Load params from this dir instead of the default save_dir")
     p.add_argument("--play", action="store_true",
@@ -5563,6 +6045,16 @@ def main():
         # Downstream code expects WM-only params (eval/render don't use the
         # token decoder); unwrap if joint training produced a {wm,dec} dict.
         wm_params = _wm_p(params)
+
+        if args.benchmark_eval:
+            _benchmark_eval_impls(
+                model, wm_params, game_infos,
+                n_episodes=10, max_steps=50, rng_seed=0,
+            )
+            print("Benchmark done; skipping full eval.")
+            if wandb.run is not None:
+                wandb.finish()
+            return
 
         # Per-game evaluation
         print("\nEvaluating per-game (autoregressive rollout)...")
