@@ -2888,6 +2888,8 @@ def train(
     halt_kl_weight: float = 0.01,
     halt_mode: str = "ponder",
     mask_padded_loss: bool = False,
+    val_frac: float = 0.0,
+    val_eval_interval: int = 0,
 ):
     """Train (or resume training) the NCA world model.
 
@@ -2968,6 +2970,45 @@ def train(
         tokens_np = dataset["per_game_tokens"]   # (n_games, max_tok_len) int32
         masks_np = dataset["per_game_masks"]     # (n_games, max_tok_len) bool
 
+    # === Per-game train/val split on transitions ===
+    # When val_frac > 0 we hold out a uniform fraction of each game's
+    # transitions, deterministically by `seed`. The held-out indices are
+    # NEVER drawn during training-batch sampling and form a parallel
+    # "test bucket" set that periodic test_eval rolls over for a curve.
+    # val_frac=0.0 (default) preserves legacy behavior end-to-end.
+    val_frac = max(0.0, float(val_frac))
+    per_game_val_idx: dict[int, np.ndarray] = {}
+    per_game_train_mask: dict[int, np.ndarray] = {}  # bool, len=per_game_n[g]
+    val_split_summary = []
+    for g in range(n_games):
+        n_g = int(per_game_n[g])
+        if n_g == 0:
+            continue
+        if val_frac <= 0.0:
+            per_game_train_mask[g] = np.ones(n_g, dtype=bool)
+            continue
+        n_val = int(round(n_g * val_frac))
+        # Always leave at least one training transition per game.
+        n_val = max(0, min(n_g - 1, n_val))
+        if n_val == 0:
+            per_game_train_mask[g] = np.ones(n_g, dtype=bool)
+            continue
+        sub_rng = np.random.RandomState(seed * 7919 + g + 1)
+        val_sel = sub_rng.choice(n_g, size=n_val, replace=False)
+        per_game_val_idx[g] = val_sel.astype(np.int32)
+        mask = np.ones(n_g, dtype=bool); mask[val_sel] = False
+        per_game_train_mask[g] = mask
+        val_split_summary.append((g, n_g, n_val))
+    if val_frac > 0.0 and val_split_summary:
+        n_train_tot = sum(int(per_game_train_mask[g].sum())
+                          for g in range(n_games)
+                          if int(per_game_n[g]) > 0)
+        n_val_tot = sum(len(per_game_val_idx.get(g, []))
+                         for g in range(n_games))
+        print(f"  [val_frac={val_frac:.3f}] held out {n_val_tot:,} / "
+              f"{n_train_tot + n_val_tot:,} transitions across "
+              f"{len(val_split_summary)} games")
+
     # Pre-sample per-game eval subsets (per-game-LOCAL indices into
     # per_game_states[g]) for periodic diagnostics.
     per_game_eval: dict[int, np.ndarray] | None = None
@@ -2981,9 +3022,15 @@ def train(
                 per_game_train_pool_sizes.append(0)
                 continue
             sub_rng = np.random.RandomState(seed + 1000 + g)
-            size = min(n_g, per_game_eval_size)
-            per_game_eval[g] = sub_rng.choice(n_g, size=size, replace=False)
-            per_game_train_pool_sizes.append(n_g)
+            # Only sample from TRAIN indices for the per-game train-eval
+            # printout, so its accuracy reflects fit on training data.
+            train_local = np.nonzero(per_game_train_mask[g])[0].astype(np.int32)
+            if len(train_local) == 0:
+                per_game_train_pool_sizes.append(0)
+                continue
+            size = min(len(train_local), per_game_eval_size)
+            per_game_eval[g] = sub_rng.choice(train_local, size=size, replace=False)
+            per_game_train_pool_sizes.append(len(train_local))
     # The old global-balanced sampler tracked per-game per-batch sizes here.
     # The new size-bucketed sampler computes its own per-bucket sizes below
     # (see `bucket_sizes_per_game`), so this block only handles the no-data
@@ -3030,6 +3077,7 @@ def train(
         return p
 
     _bucket_to_game_indices: dict[tuple[int, int], dict[int, np.ndarray]] = {}
+    _val_bucket_to_game_indices: dict[tuple[int, int], dict[int, np.ndarray]] = {}
     for g in range(n_games):
         if int(per_game_n[g]) == 0:
             continue
@@ -3041,10 +3089,20 @@ def train(
             )
         keys_g = np.array([(_next_pow2(h), _next_pow2(w))
                            for _c, h, w in shapes_g], dtype=np.int32)
+        train_mask = per_game_train_mask.get(g)
         for key_arr in np.unique(keys_g, axis=0):
             key = (int(key_arr[0]), int(key_arr[1]))
-            idx_g = np.nonzero((keys_g[:, 0] == key[0]) & (keys_g[:, 1] == key[1]))[0]
-            _bucket_to_game_indices.setdefault(key, {})[g] = idx_g.astype(np.int32)
+            in_bucket = (keys_g[:, 0] == key[0]) & (keys_g[:, 1] == key[1])
+            # Train-only bucket pool (always built; same as before when
+            # val_frac=0 since train_mask is all True).
+            idx_train = np.nonzero(in_bucket & train_mask)[0]
+            if len(idx_train) > 0:
+                _bucket_to_game_indices.setdefault(key, {})[g] = idx_train.astype(np.int32)
+            # Test bucket pool (only when held-out transitions exist).
+            if val_frac > 0.0:
+                idx_test = np.nonzero(in_bucket & (~train_mask))[0]
+                if len(idx_test) > 0:
+                    _val_bucket_to_game_indices.setdefault(key, {})[g] = idx_test.astype(np.int32)
 
     bucket_hw = sorted(_bucket_to_game_indices.keys())
     bucket_game_indices = [_bucket_to_game_indices[k] for k in bucket_hw]
@@ -3196,6 +3254,17 @@ def train(
     vq_utils: list[float] = []
     # per_game_log[game_id] = list of dicts (step, loss, acc, change_acc)
     per_game_log: dict[int, list[dict]] = {g: [] for g in (per_game_eval or {})}
+    # Held-out per-transition test set: list of {step, loss, acc, change_acc}
+    # aggregated across all test transitions; written to curves npz alongside
+    # the train losses. Empty when val_frac == 0.
+    val_log: list[dict] = []
+    if val_eval_interval <= 0:
+        # Default cadence: tie to log_interval so train/val curves share x.
+        val_eval_interval = log_interval
+    # Cap how many test transitions we evaluate per cadence step. Iterating all
+    # test transitions every step would dominate wallclock once the held-out
+    # set grows. K=512 per game stays cheap and still gives a stable estimate.
+    val_eval_max_per_game = 512
     t0 = time.time()
     np_rng = np.random.RandomState(seed + start_step)
 
@@ -3475,6 +3544,95 @@ def train(
                     print(f"    worst-fit game: {worst[0]}  "
                           f"change_err={1-worst[1]:.3e}  loss={worst[2]:.3e}")
 
+            # === Held-out test eval ===
+            # Per-game per-bucket pass over (a uniform sample of) the
+            # transitions held out at dataset-load time. Same loss/acc
+            # definitions as training, computed on data the model never
+            # sees a gradient on. Empty when val_frac == 0.
+            if (_val_bucket_to_game_indices and
+                    global_step % val_eval_interval == 0):
+                tot_loss = 0.0
+                tot_acc = 0.0
+                tot_cacc = 0.0
+                tot_n = 0
+                va_eye = np.eye(N_ACTIONS, dtype=np.float32)
+                for (H_b, W_b), games_d in _val_bucket_to_game_indices.items():
+                    # Gather (game, local_idx) pairs across games in this bucket.
+                    pairs: list[tuple[int, int]] = []
+                    for g_va, idx_pool in games_d.items():
+                        if len(idx_pool) > val_eval_max_per_game:
+                            sub_rng = np.random.RandomState(seed * 31337 + g_va + global_step)
+                            idx_pool = sub_rng.choice(idx_pool,
+                                                      size=val_eval_max_per_game,
+                                                      replace=False)
+                        pairs.extend((g_va, int(j)) for j in idx_pool)
+                    if not pairs:
+                        continue
+                    # Process in chunks of batch_size to bound peak memory.
+                    for chunk_start in range(0, len(pairs), batch_size):
+                        chunk = pairs[chunk_start:chunk_start + batch_size]
+                        nb = len(chunk)
+                        s_buf_va  = np.zeros((nb, max_C, H_b, W_b), dtype=np.uint8)
+                        ns_buf_va = np.zeros((nb, max_C, H_b, W_b), dtype=np.uint8)
+                        mask_buf_va = (np.zeros((nb, max_C, H_b, W_b), dtype=np.uint8)
+                                       if mask_padded_loss else None)
+                        a_buf_va = np.zeros((nb,), dtype=np.int32)
+                        g_buf_va = np.zeros((nb,), dtype=np.int32)
+                        for i, (g_va, j_va) in enumerate(chunk):
+                            W_store = int(game_CHW[g_va, 2])
+                            C_r, H_r, W_r = (int(x) for x in
+                                             per_game_transition_shapes[g_va][j_va])
+                            s_full = _unpack_states(per_game_states[g_va][j_va], W_store)
+                            ns_full = _unpack_states(per_game_next_states[g_va][j_va], W_store)
+                            oy, _ = _pad_offsets(H_r, s_full.shape[1])
+                            ox, _ = _pad_offsets(W_r, W_store)
+                            s_buf_va[i,  :C_r, :H_r, :W_r] = s_full[:C_r,  oy:oy + H_r, ox:ox + W_r]
+                            ns_buf_va[i, :C_r, :H_r, :W_r] = ns_full[:C_r, oy:oy + H_r, ox:ox + W_r]
+                            if mask_buf_va is not None:
+                                mask_buf_va[i, :C_r, :H_r, :W_r] = 1
+                            a_buf_va[i] = per_game_actions_np[g_va][j_va]
+                            g_buf_va[i] = g_va
+                        s_va = jnp.array(s_buf_va, dtype=jnp.float32)
+                        ns_va = jnp.array(ns_buf_va, dtype=jnp.float32)
+                        a_oh_va = jnp.array(va_eye[a_buf_va])
+                        spatial_mask_va = (jnp.array(mask_buf_va, dtype=jnp.float32)
+                                           if mask_buf_va is not None else None)
+                        if conditional:
+                            gt_va = jnp.array(tokens_np[g_buf_va])
+                            gm_va = jnp.array(masks_np[g_buf_va])
+                            va_loss, va_acc, va_cacc = eval_forward(
+                                params, s_va, a_oh_va, ns_va, gt_va, gm_va,
+                                spatial_mask_va,
+                            )
+                        else:
+                            va_loss, va_acc, va_cacc = eval_forward(
+                                params, s_va, a_oh_va, ns_va, spatial_mask_va,
+                            )
+                        # Weight by chunk size so the average is per-transition.
+                        tot_loss += float(va_loss) * nb
+                        tot_acc += float(va_acc) * nb
+                        tot_cacc += float(va_cacc) * nb
+                        tot_n += nb
+                if tot_n > 0:
+                    va_l = tot_loss / tot_n
+                    va_a = tot_acc / tot_n
+                    va_c = tot_cacc / tot_n
+                    val_log.append({
+                        "step": int(global_step),
+                        "loss": va_l,
+                        "acc": va_a,
+                        "change_acc": va_c,
+                        "n_transitions": int(tot_n),
+                    })
+                    print(f"    val (held-out, n={tot_n:,}):  loss={va_l:.4e}  "
+                          f"err={1-va_a:.4e}  change_err={1-va_c:.4e}")
+                    if wandb.run is not None:
+                        wandb.log({
+                            "val/loss": va_l,
+                            "val/err": 1.0 - va_a,
+                            "val/change_err": 1.0 - va_c,
+                        }, step=global_step)
+
             # Intermittent rollout GIF (true vs pred side-by-side)
             if gif_enabled and global_step % gif_interval == 0 and global_step > 0:
                 _maybe_render_gif(global_step, avg_cerr=avg_cerr)
@@ -3499,6 +3657,14 @@ def train(
                         save_data[f"per_game_{name}_acc"] = np.array([r["acc"] for r in rows])
                         save_data[f"per_game_{name}_change_acc"] = np.array(
                             [r["change_acc"] for r in rows])
+                if val_log:
+                    save_data["val_step"] = np.array([r["step"] for r in val_log])
+                    save_data["val_loss"] = np.array([r["loss"] for r in val_log])
+                    save_data["val_acc"] = np.array([r["acc"] for r in val_log])
+                    save_data["val_change_acc"] = np.array(
+                        [r["change_acc"] for r in val_log])
+                    save_data["val_n_transitions"] = np.array(
+                        [r["n_transitions"] for r in val_log])
                 np.savez(
                     os.path.join(save_dir, f"curves_step{global_step}.npz"),
                     **save_data,
@@ -3575,6 +3741,14 @@ def train(
             save_data[f"per_game_{name}_acc"] = np.array([r["acc"] for r in rows])
             save_data[f"per_game_{name}_change_acc"] = np.array(
                 [r["change_acc"] for r in rows])
+    if val_log:
+        save_data["val_step"] = np.array([r["step"] for r in val_log])
+        save_data["val_loss"] = np.array([r["loss"] for r in val_log])
+        save_data["val_acc"] = np.array([r["acc"] for r in val_log])
+        save_data["val_change_acc"] = np.array(
+            [r["change_acc"] for r in val_log])
+        save_data["val_n_transitions"] = np.array(
+            [r["n_transitions"] for r in val_log])
     np.savez(os.path.join(save_dir, f"curves_step{final_step}.npz"), **save_data)
 
     return params, losses, accs, change_accs, final_step
@@ -5510,6 +5684,14 @@ def main():
                    help="Mask state loss/metrics outside each sampled transition's real "
                         "(C,H,W) region after bucket padding. Hidden activations are "
                         "masked independently by the model's input-derived padding mask.")
+    p.add_argument("--val_frac", type=float, default=0.0,
+                   help="Fraction of each game's transitions held out as the "
+                        "in-distribution test set. Held-out indices are picked "
+                        "deterministically from `seed` and never sampled in "
+                        "training batches. Default 0.0 = no holdout (legacy).")
+    p.add_argument("--val_eval_interval", type=int, default=0,
+                   help="Steps between held-out test-set evals; 0 (default) ties "
+                        "the cadence to --log_interval.")
     # Architectural pool flags (see _pool_features). Independent booleans;
     # any combination may be active.
     p.add_argument("--axis_pool", action=argparse.BooleanOptionalAction, default=True,
@@ -6028,6 +6210,8 @@ def main():
                 halt_kl_weight=args.halt_kl_weight,
                 halt_mode=args.halt_mode,
                 mask_padded_loss=args.mask_padded_loss,
+                val_frac=args.val_frac,
+                val_eval_interval=args.val_eval_interval,
             )
             # (curves saved inside train() with per-game arrays)
             os.makedirs(save_dir, exist_ok=True)
@@ -6168,6 +6352,8 @@ def main():
             win_pos_weight=args.win_pos_weight,
             ckpt_interval=args.ckpt_interval,
             mask_padded_loss=args.mask_padded_loss,
+            val_frac=args.val_frac,
+            val_eval_interval=args.val_eval_interval,
         )
 
         # Save training curves
