@@ -60,7 +60,10 @@ RUNS = [
         "label": "Unconditional, Train-14",  # used for per-game CSV column header
     },
     {
-        "seed_dirs": ["multi_scaling_14_cond_match_s0"],
+        "seed_dirs": [
+            "multi_scaling_14_cond_match_s0",
+            "multi_scaling_14_cond_match_s2",
+        ],
         "preset": "Train-14",
         "n_games": 14,
         "kind": "cond",
@@ -105,6 +108,31 @@ RUNS = [
         "n_games": 199,
         "kind": "cond",
         "label": "Rule-conditional, Train-199",
+    },
+    # Parameter-matched uncond rows. Cond at n_hid=256 has 16.03M total
+    # params; uncond at n_hid=288 has 16.61M (body ~n_hid²), slightly
+    # above cond. Same recipe otherwise. Cells render "--" until each
+    # row's heldout finishes.
+    {
+        "seed_dirs": ["multi_scaling_14_uncond_match_s0_h288"],
+        "preset": "Train-14",
+        "n_games": 14,
+        "kind": r"uncond ($n_h{=}288$, param-matched)",
+        "label": "Unconditional param-matched (n_hid=288), Train-14",
+    },
+    {
+        "seed_dirs": ["multi_scaling_gallery_v2_uncond_match_s0_h288"],
+        "preset": "Train-59",
+        "n_games": 59,
+        "kind": r"uncond ($n_h{=}288$, param-matched)",
+        "label": "Unconditional param-matched (n_hid=288), Train-59",
+    },
+    {
+        "seed_dirs": ["multi_scaling_gallery_v4_uncond_match_s0_h288"],
+        "preset": "Train-199",
+        "n_games": 199,
+        "kind": r"uncond ($n_h{=}288$, param-matched)",
+        "label": "Unconditional param-matched (n_hid=288), Train-199",
     },
 ]
 
