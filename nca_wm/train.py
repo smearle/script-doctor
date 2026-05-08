@@ -943,7 +943,13 @@ MULTI_GAME_PRESETS = {
         "i_made_the_game_where_you_kill_a_goblin_5b028ece_by_connorses",
         "lexoban_007_by_rubzo", "platforming_engine_test_by_gamez7",
         "microban_2.0_by_baba-is-text", "platformer_test_by_bananamath",
-        "rotating_cop_by_playfulsystems", "up_and_down_forces_by_rosden",
+        "rotating_cop_by_playfulsystems",
+        # `up_and_down_forces_by_rosden` removed 2026-05-08: contains
+        # `[ ] -> again` (always-fire, always-restart) which makes the
+        # C++ A* / BFS collector loop indefinitely; same pathology as
+        # `broken_by_beekie18` (see feedback_broken_by_beekie18_hangs).
+        # Hung Train-500 cond data collection at game 481/497 for 4.5h
+        # before the timeout fired. Investigate later.
         "thought_experiment_by_shylicks",
         "simple_block_pushing_game_by_kramff", "connections_by_giles",
         "the_master_zombie_by_seth_archambault", "tbd_by_jackkutilek",

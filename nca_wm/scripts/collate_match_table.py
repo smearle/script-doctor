@@ -103,6 +103,7 @@ RUNS = [
         "seed_dirs": [
             "multi_scaling_gallery_v4_cond_match_s0",
             "multi_scaling_gallery_v4_cond_match_s1",
+            "multi_scaling_gallery_v4_cond_match_s2",
         ],
         "preset": "Train-199",
         "n_games": 199,

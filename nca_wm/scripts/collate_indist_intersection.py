@@ -54,6 +54,7 @@ RUNS = [
     ("Train-199", "cond",   [
         "multi_scaling_gallery_v4_cond_match_s0",
         "multi_scaling_gallery_v4_cond_match_s1",
+        "multi_scaling_gallery_v4_cond_match_s2",
     ]),
     ("Train-199", "uncond", [
         "multi_scaling_gallery_v4_uncond_match_s0",

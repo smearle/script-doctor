@@ -47,7 +47,8 @@ RUNS = [
     (["multi_scaling_gallery_v4_uncond_match_s0",
       "multi_scaling_gallery_v4_uncond_match_s1"], "Train-199", 199, "uncond"),
     (["multi_scaling_gallery_v4_cond_match_s0",
-      "multi_scaling_gallery_v4_cond_match_s1"],   "Train-199", 199, "cond"),
+      "multi_scaling_gallery_v4_cond_match_s1",
+      "multi_scaling_gallery_v4_cond_match_s2"],   "Train-199", 199, "cond"),
     # Parameter-matched uncond legs (n_hid=288 ≈ 16.6M total, slightly
     # above cond at n_hid=256 which is 16.03M). Render as "--" until
     # each row's eval_multigame.npz lands.

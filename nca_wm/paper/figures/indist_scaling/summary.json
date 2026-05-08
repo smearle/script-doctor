@@ -293,70 +293,168 @@
     "results": {
       "random": {
         "n_games": 199,
-        "n_seeds": 2,
-        "mean": 0.10725590193664669,
-        "median": 0.044219865319865326
+        "n_seeds": 3,
+        "mean": 0.09412323807334581,
+        "median": 0.037237739116409756
       },
       "random_tf": {
         "n_games": 199,
-        "n_seeds": 2,
-        "mean": 0.029123336190404758,
-        "median": 0.004152595244261911
+        "n_seeds": 3,
+        "mean": 0.02331103946565878,
+        "median": 0.0034250078375475204
       },
       "bfs": {
         "n_games": 197,
-        "n_seeds": 2,
-        "mean": 0.10551705527158614,
-        "median": 0.04487580871509443
+        "n_seeds": 3,
+        "mean": 0.09279287321616074,
+        "median": 0.03918593174566224
       },
       "astar": {
         "n_games": 156,
-        "n_seeds": 2,
-        "mean": 0.10566087570771886,
-        "median": 0.04733929885727797
+        "n_seeds": 3,
+        "mean": 0.09420666866342804,
+        "median": 0.04149863356246257
       }
     },
     "stds": {
       "random": {
-        "mean_std": 0.0012041124440243685,
-        "median_std": 0.00021434280591810814
+        "mean_std": 0.02276237078663543,
+        "median_std": 0.012094347042406509
       },
       "random_tf": {
-        "mean_std": 0.0026557352432441334,
-        "median_std": 0.00045763276571264474
+        "mean_std": 0.010240841981525882,
+        "median_std": 0.0013011011403250017
       },
       "bfs": {
-        "mean_std": 0.0025489010830957223,
-        "median_std": 0.0010130818635916666
+        "mean_std": 0.022112504953182774,
+        "median_std": 0.009881157179854688
       },
       "astar": {
-        "mean_std": 0.003838301551692361,
-        "median_std": 0.00022709329424160394
+        "mean_std": 0.020024056942620442,
+        "median_std": 0.010117603418810605
       }
     },
-    "n_seeds": 2,
+    "n_seeds": 3,
     "used_seeds": [
       "multi_scaling_gallery_v4_cond_match_s0",
-      "multi_scaling_gallery_v4_cond_match_s1"
+      "multi_scaling_gallery_v4_cond_match_s1",
+      "multi_scaling_gallery_v4_cond_match_s2"
     ],
     "seed_dirs": [
       "multi_scaling_gallery_v4_cond_match_s0",
-      "multi_scaling_gallery_v4_cond_match_s1"
+      "multi_scaling_gallery_v4_cond_match_s1",
+      "multi_scaling_gallery_v4_cond_match_s2"
     ]
   },
   "multi_scaling_14_uncond_match_s0_h288": {
     "preset": "Train-14",
     "model": "uncond ($n_h{=}288$)",
-    "results": null,
-    "n_seeds": 0,
-    "used_seeds": []
+    "results": {
+      "random": {
+        "n_games": 14,
+        "n_seeds": 1,
+        "mean": 0.0169812873695447,
+        "median": 0.0025515873015873017
+      },
+      "random_tf": {
+        "n_games": 14,
+        "n_seeds": 1,
+        "mean": 0.0007107028216864761,
+        "median": 8.94593253968254e-05
+      },
+      "bfs": {
+        "n_games": 14,
+        "n_seeds": 1,
+        "mean": 0.010619204230681911,
+        "median": 0.0017006802721088435
+      },
+      "astar": {
+        "n_games": 13,
+        "n_seeds": 1,
+        "mean": 0.008410498196542849,
+        "median": 0.0
+      }
+    },
+    "stds": {
+      "random": {
+        "mean_std": null,
+        "median_std": null
+      },
+      "random_tf": {
+        "mean_std": null,
+        "median_std": null
+      },
+      "bfs": {
+        "mean_std": null,
+        "median_std": null
+      },
+      "astar": {
+        "mean_std": null,
+        "median_std": null
+      }
+    },
+    "n_seeds": 1,
+    "used_seeds": [
+      "multi_scaling_14_uncond_match_s0_h288"
+    ],
+    "seed_dirs": [
+      "multi_scaling_14_uncond_match_s0_h288"
+    ]
   },
   "multi_scaling_gallery_v2_uncond_match_s0_h288": {
     "preset": "Train-59",
     "model": "uncond ($n_h{=}288$)",
-    "results": null,
-    "n_seeds": 0,
-    "used_seeds": []
+    "results": {
+      "random": {
+        "n_games": 59,
+        "n_seeds": 1,
+        "mean": 0.09071926283375437,
+        "median": 0.025569808201058208
+      },
+      "random_tf": {
+        "n_games": 59,
+        "n_seeds": 1,
+        "mean": 0.0179178004205603,
+        "median": 0.0012744949494949494
+      },
+      "bfs": {
+        "n_games": 58,
+        "n_seeds": 1,
+        "mean": 0.08579635501371624,
+        "median": 0.022751411170528812
+      },
+      "astar": {
+        "n_games": 37,
+        "n_seeds": 1,
+        "mean": 0.07216764044844397,
+        "median": 0.03144217631001288
+      }
+    },
+    "stds": {
+      "random": {
+        "mean_std": null,
+        "median_std": null
+      },
+      "random_tf": {
+        "mean_std": null,
+        "median_std": null
+      },
+      "bfs": {
+        "mean_std": null,
+        "median_std": null
+      },
+      "astar": {
+        "mean_std": null,
+        "median_std": null
+      }
+    },
+    "n_seeds": 1,
+    "used_seeds": [
+      "multi_scaling_gallery_v2_uncond_match_s0_h288"
+    ],
+    "seed_dirs": [
+      "multi_scaling_gallery_v2_uncond_match_s0_h288"
+    ]
   },
   "multi_scaling_gallery_v4_uncond_match_s0_h288": {
     "preset": "Train-199",
