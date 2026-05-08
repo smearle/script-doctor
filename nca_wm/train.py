@@ -1024,7 +1024,7 @@ def _dataset_cache_key(
     """Deterministic hash of all args that affect dataset contents."""
     import hashlib
     blob = json.dumps({
-        "format_version": 16,  # v16: EOS token at sequence tail is mandatory
+        "format_version": 17,  # v17: per-transition real (C,H,W) for masks/buckets
         "games": sorted(game_names),
         "level": level_i,
         "train_levels": sorted(train_levels) if train_levels is not None else None,
@@ -1084,6 +1084,7 @@ def collect_multigame_dataset(
             "per_game_states", "per_game_next_states", "per_game_actions",
             "per_game_wons", "per_game_tokens", "per_game_masks",
             "per_game_sprites", "game_shapes", "per_game_n_transitions",
+            "per_game_transition_shapes",
         )
         cache_valid = all(len(dataset.get(k, [])) == n_games for k in per_game_keys)
         if not cache_valid:
@@ -1177,6 +1178,7 @@ def collect_multigame_dataset(
     per_game_actions = []
     per_game_next_states = []
     per_game_wons = []
+    per_game_transition_shapes = []
     collected_game_infos = []
 
     for game_id, info in enumerate(game_infos):
@@ -1196,6 +1198,7 @@ def collect_multigame_dataset(
         g_W = info["W"]
 
         game_states, game_actions, game_next_states, game_wons = [], [], [], []
+        game_transition_shapes = []
         # Collect once, then refine shapes from what the collector actually
         # returned. Transition collector's id_dict can include more objects
         # than the env-probe reported (objects added by rules/legend not
@@ -1236,12 +1239,21 @@ def collect_multigame_dataset(
             if len(level_data["states"]) == 0:
                 continue
             lW = int(level_data["W"])
+            n_level = len(level_data["states"])
             game_states.append(
                 _pad_packed(level_data["states"], lW, g_C, g_H, g_W))
             game_actions.append(level_data["actions"])
             game_next_states.append(
                 _pad_packed(level_data["next_states"], lW, g_C, g_H, g_W))
             game_wons.append(np.asarray(level_data["wons"], dtype=np.uint8))
+            game_transition_shapes.append(
+                np.tile(
+                    np.array([[level_data["states"].shape[1],
+                               level_data["states"].shape[2],
+                               lW]], dtype=np.int32),
+                    (n_level, 1),
+                )
+            )
 
         if not game_states:
             # No data collected for any level of this game (e.g. all empty).
@@ -1257,6 +1269,7 @@ def collect_multigame_dataset(
         actions = np.concatenate(game_actions)
         next_states = np.concatenate(game_next_states)
         wons = np.concatenate(game_wons)
+        transition_shapes = np.concatenate(game_transition_shapes)
         n_trans = len(states)
 
         # Safety-net cap after concat in case per-level caps didn't quite tally.
@@ -1266,6 +1279,7 @@ def collect_multigame_dataset(
             idx = rng.choice(n_trans, size=max_transitions_per_game, replace=False)
             states = states[idx]; actions = actions[idx]
             next_states = next_states[idx]; wons = wons[idx]
+            transition_shapes = transition_shapes[idx]
             n_trans = len(states)
 
         info["n_transitions"] = n_trans
@@ -1276,6 +1290,7 @@ def collect_multigame_dataset(
         per_game_actions.append(actions)
         per_game_next_states.append(next_states)
         per_game_wons.append(wons)
+        per_game_transition_shapes.append(transition_shapes)
 
         changed = (states != next_states).any(axis=(1, 2, 3))
         print(f"  {name}: {n_trans:,} transitions, {changed.sum():,} with state change "
@@ -1339,6 +1354,7 @@ def collect_multigame_dataset(
         "per_game_next_states": per_game_next_states,
         "per_game_actions": per_game_actions,       # list of (N_g,) int32
         "per_game_wons": per_game_wons,             # list of (N_g,) uint8
+        "per_game_transition_shapes": per_game_transition_shapes,  # list of (N_g,3) real C,H,W
         "per_game_tokens": per_game_tokens,         # (n_games, max_tok_len) int32
         "per_game_masks": per_game_masks,           # (n_games, max_tok_len) bool
         "per_game_sprites": per_game_sprites,       # (n_games, max_C, 5, 5, 4) uint8
@@ -1425,6 +1441,7 @@ def collect_multigame_dataset_synthetic(
     per_game_actions: list[np.ndarray] = []
     per_game_next_states: list[np.ndarray] = []
     per_game_wons: list[np.ndarray] = []
+    per_game_transition_shapes: list[np.ndarray] = []
 
     for game_id, name in enumerate(game_names):
         print(f"\n[synth {game_id+1}/{len(game_names)}] {name}")
@@ -1532,6 +1549,15 @@ def collect_multigame_dataset_synthetic(
         next_states = np.concatenate([_pad_part(p["next_states"]) for p in synth_parts])
         actions = np.concatenate([p["actions"] for p in synth_parts])
         wons = np.concatenate([p["wons"] for p in synth_parts])
+        transition_shapes = np.concatenate([
+            np.tile(
+                np.array([[p["states"].shape[1],
+                           p["states"].shape[2],
+                           p["states"].shape[3]]], dtype=np.int32),
+                (len(p["states"]), 1),
+            )
+            for p in synth_parts
+        ])
         if len(synth_parts) > 1:
             print(f"  multi_grid: {name} merged {len(synth_parts)} sizes "
                   f"→ ({max_C}, {max_H}, {max_W}); {len(states):,} total transitions")
@@ -1543,6 +1569,7 @@ def collect_multigame_dataset_synthetic(
             idx = rng.choice(n_trans, size=max_transitions_per_game, replace=False)
             states = states[idx]; actions = actions[idx]
             next_states = next_states[idx]; wons = wons[idx]
+            transition_shapes = transition_shapes[idx]
             n_trans = len(states)
 
         _, g_C, g_H, g_W = states.shape
@@ -1550,6 +1577,7 @@ def collect_multigame_dataset_synthetic(
         per_game_actions.append(actions)
         per_game_next_states.append(_pack_states(next_states))
         per_game_wons.append(wons)
+        per_game_transition_shapes.append(transition_shapes)
 
         # n_levels is the engine's authored-level count, not the synthetic
         # count: evaluation rolls out via the real engine and uses these
@@ -1619,6 +1647,7 @@ def collect_multigame_dataset_synthetic(
         "per_game_next_states": per_game_next_states,
         "per_game_actions": per_game_actions,
         "per_game_wons": per_game_wons,
+        "per_game_transition_shapes": per_game_transition_shapes,
         "per_game_tokens": per_game_tokens,
         "per_game_masks": per_game_masks,
         "per_game_sprites": per_game_sprites,
@@ -1647,7 +1676,7 @@ def collect_multigame_dataset_synthetic(
 # --------- v7 per-game cache pack/unpack helpers ---------
 PER_GAME_LIST_KEYS = (
     "per_game_states", "per_game_next_states",
-    "per_game_actions", "per_game_wons",
+    "per_game_actions", "per_game_wons", "per_game_transition_shapes",
 )
 
 
@@ -2044,9 +2073,11 @@ class ConditionalNCAWorldModel(nn.Module):
         act = action_onehot[:, None, None, :]
         act = jnp.broadcast_to(act, (B, H, W, N_ACTIONS))
         inp = jnp.concatenate([x, act], axis=-1)
+        mask_bcast = (x.sum(axis=-1, keepdims=True) > 0).astype(jnp.float32)
 
         h = nn.Conv(self.n_hid, (1, 1), padding="SAME", name="embed")(inp)
         h = nn.relu(h)
+        h = h * mask_bcast
 
         nca_conv = nn.Conv(self.n_hid, (3, 3), padding="SAME", name="nca_conv")
         nca_gate = nn.Conv(self.n_hid, (1, 1), padding="SAME", name="nca_gate")
@@ -2076,6 +2107,7 @@ class ConditionalNCAWorldModel(nn.Module):
             h = nn.relu(h)
             if nca_norm is not None:
                 h = nca_norm(h)
+            h = h * mask_bcast
 
             if self.return_intermediates:
                 hidden_steps.append(h)
@@ -2088,7 +2120,9 @@ class ConditionalNCAWorldModel(nn.Module):
         # Win head: pool NCA features, concat z (game-spec latent), MLP -> 1 logit
         win_feat = nn.Conv(self.n_hid, (1, 1), padding="SAME", name="win_conv")(h)
         win_feat = nn.relu(win_feat)
-        win_feat = jnp.mean(win_feat, axis=(1, 2))      # (B, n_hid)
+        win_feat = (win_feat * mask_bcast).sum(axis=(1, 2)) / jnp.maximum(
+            mask_bcast.sum(axis=(1, 2)), 1.0
+        )      # (B, n_hid)
         win_feat = jnp.concatenate([win_feat, z], axis=-1)  # (B, n_hid + d_z)
         win_feat = nn.Dense(self.n_hid, name="win_dense")(win_feat)
         win_feat = nn.relu(win_feat)
@@ -2898,6 +2932,9 @@ def train(
         dataset["per_game_actions"] = [a_flat]
         dataset["per_game_wons"] = [np.asarray(w_flat, dtype=np.uint8)]
         dataset["game_shapes"] = np.array([[C, H, real_W]], dtype=np.int32)
+        dataset["per_game_transition_shapes"] = [
+            np.tile(np.array([[C, H, real_W]], dtype=np.int32), (len(s_flat), 1))
+        ]
         dataset["per_game_n_transitions"] = np.array([len(s_flat)], dtype=np.int64)
         dataset["max_C"] = C
         dataset["max_H"] = H
@@ -2921,6 +2958,12 @@ def train(
     # Per-game native (C, H, W)
     game_CHW = dataset["game_shapes"]   # (n_games, 3) int32
     per_game_n = dataset["per_game_n_transitions"]  # (n_games,) int64
+    per_game_transition_shapes = dataset.get("per_game_transition_shapes")
+    if per_game_transition_shapes is None:
+        per_game_transition_shapes = [
+            np.tile(np.asarray(game_CHW[g], dtype=np.int32), (int(per_game_n[g]), 1))
+            for g in range(n_games)
+        ]
     if conditional:
         tokens_np = dataset["per_game_tokens"]   # (n_games, max_tok_len) int32
         masks_np = dataset["per_game_masks"]     # (n_games, max_tok_len) bool
@@ -2961,21 +3004,23 @@ def train(
         print("  [mask_padded_loss] Loss/metrics ignore batch-padding outside each sample's real (C,H,W).")
 
     # === Size-bucketed batching ===
-    # Quantize each game's native (H, W) up to the nearest power-of-2 anchor,
-    # then group games sharing the same anchor into a bucket. Each batch is
-    # padded only to its bucket's anchor shape, not the global max. Quantizing
-    # (vs exact-shape buckets) caps the number of distinct batch shapes JAX
-    # must JIT-compile train_step for — the difference between "warmup takes
-    # minutes" and "warmup takes hours" on game sets with many distinct shapes
-    # (gallery has 80+ unique (H, W) pairs).
+    # Quantize each transition's real (H, W) up to the nearest power-of-2
+    # anchor. Each batch is padded only to its sampled bucket's anchor shape,
+    # and loss masks are built from the sampled transition's true (C,H,W).
+    # Quantizing (vs exact-shape buckets) caps the number of distinct batch
+    # shapes JAX must JIT-compile train_step for — the difference between
+    # "warmup takes minutes" and "warmup takes hours" on game sets with many
+    # distinct shapes (gallery has 80+ unique (H, W) pairs).
     #
     # Power-of-2 anchors (min 8) cover all gallery games in 4-8 active buckets.
     # max_C stays global because the model's n_out is fixed at construction
     # time and the C-dim padding is "predict 0" — easy auxiliary task.
     #
-    # Per-game expected exposure stays uniform (matches old balanced_sampling
-    # semantics): bucket b is sampled with prob k_b/sum_k where k_b = #games in
-    # bucket b, and within a bucket each game gets batch_size/k_b rows.
+    # Balanced sampling preserves uniform per-game exposure in expectation:
+    # bucket probability is the mean, over games, of that game's transition
+    # fraction in the bucket; games within the bucket are sampled proportional
+    # to the same per-game fractions. Uniform mode samples transitions
+    # uniformly across the whole dataset.
     def _next_pow2(x: int, min_val: int = 8) -> int:
         v = max(min_val, int(x))
         # round up to nearest power of 2
@@ -2984,40 +3029,49 @@ def train(
             p <<= 1
         return p
 
-    _hw_to_games: dict[tuple[int, int], list[int]] = {}
+    _bucket_to_game_indices: dict[tuple[int, int], dict[int, np.ndarray]] = {}
     for g in range(n_games):
         if int(per_game_n[g]) == 0:
             continue
-        H_g = int(game_CHW[g, 1]); W_g = int(game_CHW[g, 2])
-        key = (_next_pow2(H_g), _next_pow2(W_g))
-        _hw_to_games.setdefault(key, []).append(g)
-    bucket_hw = sorted(_hw_to_games.keys())
-    bucket_games_lists = [_hw_to_games[k] for k in bucket_hw]
-    bucket_n_games_arr = np.array([len(gs) for gs in bucket_games_lists], dtype=np.float64)
+        shapes_g = np.asarray(per_game_transition_shapes[g], dtype=np.int32)
+        if len(shapes_g) != int(per_game_n[g]):
+            raise ValueError(
+                f"per_game_transition_shapes[{g}] length {len(shapes_g)} "
+                f"!= per_game_n {int(per_game_n[g])}"
+            )
+        keys_g = np.array([(_next_pow2(h), _next_pow2(w))
+                           for _c, h, w in shapes_g], dtype=np.int32)
+        for key_arr in np.unique(keys_g, axis=0):
+            key = (int(key_arr[0]), int(key_arr[1]))
+            idx_g = np.nonzero((keys_g[:, 0] == key[0]) & (keys_g[:, 1] == key[1]))[0]
+            _bucket_to_game_indices.setdefault(key, {})[g] = idx_g.astype(np.int32)
+
+    bucket_hw = sorted(_bucket_to_game_indices.keys())
+    bucket_game_indices = [_bucket_to_game_indices[k] for k in bucket_hw]
+    bucket_n_games_arr = np.array([len(d) for d in bucket_game_indices], dtype=np.float64)
     bucket_n_trans_arr = np.array(
-        [sum(int(per_game_n[g]) for g in gs) for gs in bucket_games_lists],
+        [sum(len(idx) for idx in d.values()) for d in bucket_game_indices],
         dtype=np.float64,
     )
-    # Bucket selection prob:
-    #   balanced  -> proportional to game-count  (uniform per-game exposure)
-    #   uniform   -> proportional to transition-count (uniform per-transition)
     if balanced_sampling:
-        _bucket_probs = bucket_n_games_arr / bucket_n_games_arr.sum()
-    else:
-        _bucket_probs = bucket_n_trans_arr / bucket_n_trans_arr.sum()
-
-    # Per-bucket per-game per-batch row counts (only for balanced sampling).
-    bucket_sizes_per_game: list[list[int]] = []
-    for gs in bucket_games_lists:
-        n_in = len(gs)
-        if balanced_sampling and n_in >= 1:
-            base = batch_size // n_in
-            rem = batch_size - base * n_in
-            bucket_sizes_per_game.append(
-                [base + (1 if i < rem else 0) for i in range(n_in)]
+        n_nonempty_games = max(1, sum(1 for n in per_game_n if int(n) > 0))
+        bucket_weights = []
+        bucket_game_probs = []
+        for d in bucket_game_indices:
+            weights = np.array(
+                [len(idx) / max(1, int(per_game_n[g])) for g, idx in d.items()],
+                dtype=np.float64,
             )
-        else:
-            bucket_sizes_per_game.append([])  # uniform path doesn't use this
+            bucket_weights.append(weights.sum() / n_nonempty_games)
+            bucket_game_probs.append(weights / weights.sum())
+        _bucket_probs = np.array(bucket_weights, dtype=np.float64)
+        _bucket_probs = _bucket_probs / _bucket_probs.sum()
+    else:
+        bucket_game_probs = []
+        _bucket_probs = bucket_n_trans_arr / bucket_n_trans_arr.sum()
+        for d in bucket_game_indices:
+            weights = np.array([len(idx) for idx in d.values()], dtype=np.float64)
+            bucket_game_probs.append(weights / weights.sum())
 
     # Pre-allocate per-bucket scratch buffers (sized to bucket H, W; global C).
     bucket_buffers = [
@@ -3037,11 +3091,7 @@ def train(
     )
     print(f"  [size_buckets] {len(bucket_hw)} (H,W) bucket(s): {bucket_summary}")
 
-    # Cumulative transitions for uniform-within-bucket sampling.
-    _bucket_cum_n = []
-    for gs in bucket_games_lists:
-        ns = np.array([int(per_game_n[g]) for g in gs], dtype=np.int64)
-        _bucket_cum_n.append(np.concatenate([[0], np.cumsum(ns)]))
+    bucket_games_lists = [list(d.keys()) for d in bucket_game_indices]
 
     # Init or resume model
     rng, init_rng = jax.random.split(rng)
@@ -3216,7 +3266,8 @@ def train(
         batch_s, batch_ns have shape (batch_size, max_C, H_b, W_b)."""
         b_idx = int(np_rng.choice(len(bucket_hw), p=_bucket_probs))
         games_b = bucket_games_lists[b_idx]
-        sizes_b = bucket_sizes_per_game[b_idx]
+        game_indices_b = bucket_game_indices[b_idx]
+        game_probs_b = bucket_game_probs[b_idx]
         s_buf = bucket_buffers[b_idx]["s"]
         ns_buf = bucket_buffers[b_idx]["ns"]
         mask_buf = bucket_buffers[b_idx].get("mask")
@@ -3224,27 +3275,19 @@ def train(
         if mask_buf is not None:
             mask_buf.fill(0)
 
-        # Build game_ids and local_idx for this batch
-        if balanced_sampling and sizes_b:
-            game_ids = np.empty(batch_size, dtype=np.int32)
-            local_idx = np.empty(batch_size, dtype=np.int32)
-            offset = 0
-            for i, g in enumerate(games_b):
-                sz = sizes_b[i]
-                if sz == 0: continue
-                game_ids[offset:offset + sz] = g
-                local_idx[offset:offset + sz] = np_rng.randint(
-                    0, int(per_game_n[g]), size=sz
-                )
-                offset += sz
-        else:
-            # Uniform within bucket: sample over flattened (g, j) pairs
-            cum = _bucket_cum_n[b_idx]
-            n_total_b = int(cum[-1])
-            gi = np_rng.randint(0, n_total_b, size=batch_size)
-            within_b_idx = np.searchsorted(cum[1:], gi, side="right")
-            game_ids = np.array([games_b[k] for k in within_b_idx], dtype=np.int32)
-            local_idx = (gi - cum[within_b_idx]).astype(np.int32)
+        # Build game_ids and local_idx for this true-size bucket. In balanced
+        # mode, `game_probs_b` is proportional to each game's within-game
+        # transition fraction for this bucket; in uniform mode it is
+        # proportional to raw transition count in this bucket.
+        game_choice = np_rng.choice(len(games_b), size=batch_size, p=game_probs_b)
+        game_ids = np.array([games_b[k] for k in game_choice], dtype=np.int32)
+        local_idx = np.empty(batch_size, dtype=np.int32)
+        for k, g in enumerate(games_b):
+            rows = np.nonzero(game_choice == k)[0]
+            if len(rows) == 0:
+                continue
+            idx_pool = game_indices_b[g]
+            local_idx[rows] = idx_pool[np_rng.randint(0, len(idx_pool), size=len(rows))]
 
         # Fill bucket-shaped buffers. per_game_states[g] is bitpacked along W
         # — unpack just the sampled row and write into the (H_g, W_g) corner
@@ -3253,11 +3296,16 @@ def train(
         # in-RAM dataset stays packed.
         for i in range(batch_size):
             g = int(game_ids[i]); j = int(local_idx[i])
-            C_g = int(game_CHW[g, 0]); H_g = int(game_CHW[g, 1]); W_g = int(game_CHW[g, 2])
-            s_buf[i, :C_g, :H_g, :W_g]  = _unpack_states(per_game_states[g][j], W_g)
-            ns_buf[i, :C_g, :H_g, :W_g] = _unpack_states(per_game_next_states[g][j], W_g)
+            C_store = int(game_CHW[g, 0]); W_store = int(game_CHW[g, 2])
+            C_real, H_real, W_real = (int(x) for x in per_game_transition_shapes[g][j])
+            s_full = _unpack_states(per_game_states[g][j], W_store)
+            ns_full = _unpack_states(per_game_next_states[g][j], W_store)
+            oy, _ = _pad_offsets(H_real, s_full.shape[1])
+            ox, _ = _pad_offsets(W_real, W_store)
+            s_buf[i, :C_real, :H_real, :W_real] = s_full[:C_real, oy:oy + H_real, ox:ox + W_real]
+            ns_buf[i, :C_real, :H_real, :W_real] = ns_full[:C_real, oy:oy + H_real, ox:ox + W_real]
             if mask_buf is not None:
-                mask_buf[i, :C_g, :H_g, :W_g] = 1
+                mask_buf[i, :C_real, :H_real, :W_real] = 1
             _batch_a[i] = per_game_actions_np[g][j]
             _batch_w[i] = per_game_wons_np[g][j]
             _batch_g[i] = g
@@ -3380,12 +3428,20 @@ def train(
                     C_g = int(game_CHW[g, 0]); H_g = int(game_CHW[g, 1]); W_g = int(game_CHW[g, 2])
                     s_eval = np.zeros((N_eval, max_C, max_H, max_W), dtype=np.uint8)
                     ns_eval = np.zeros((N_eval, max_C, max_H, max_W), dtype=np.uint8)
-                    s_eval[:, :C_g, :H_g, :W_g]  = _unpack_states(per_game_states[g][idx_g], W_g)
-                    ns_eval[:, :C_g, :H_g, :W_g] = _unpack_states(per_game_next_states[g][idx_g], W_g)
+                    full_s = _unpack_states(per_game_states[g][idx_g], W_g)
+                    full_ns = _unpack_states(per_game_next_states[g][idx_g], W_g)
                     eval_mask = None
                     if mask_padded_loss:
                         eval_mask_np = np.zeros((N_eval, max_C, max_H, max_W), dtype=np.uint8)
-                        eval_mask_np[:, :C_g, :H_g, :W_g] = 1
+                    for ii, j_local in enumerate(idx_g):
+                        C_r, H_r, W_r = (int(x) for x in per_game_transition_shapes[g][j_local])
+                        oy, _ = _pad_offsets(H_r, H_g)
+                        ox, _ = _pad_offsets(W_r, W_g)
+                        s_eval[ii, :C_r, :H_r, :W_r] = full_s[ii, :C_r, oy:oy + H_r, ox:ox + W_r]
+                        ns_eval[ii, :C_r, :H_r, :W_r] = full_ns[ii, :C_r, oy:oy + H_r, ox:ox + W_r]
+                        if mask_padded_loss:
+                            eval_mask_np[ii, :C_r, :H_r, :W_r] = 1
+                    if mask_padded_loss:
                         eval_mask = jnp.array(eval_mask_np, dtype=jnp.float32)
                     s_g = jnp.array(s_eval, dtype=jnp.float32)
                     a_int_g = per_game_actions_np[g][idx_g]
@@ -4761,6 +4817,9 @@ def main():
     g = p.add_mutually_exclusive_group(required=True)
     g.add_argument("--game", help="Single game name (e.g. pipe_bend, sokoban_basic)")
     g.add_argument("--games", help="Comma-separated game names, or a preset name (e.g. 'small')")
+    g.add_argument("--n_per_rule_games", type=int, default=None,
+                   help="Select the first N gallery games sorted by (n_rules asc, "
+                        "name asc). Mutually exclusive with --game/--games.")
     p.add_argument("--level", type=int, default=None,
                    help="Train on a single level index. Default: all levels.")
     p.add_argument("--train_levels", default=None,
@@ -5111,11 +5170,37 @@ def main():
                     f"n_nca_repeats={args.n_nca_repeats} vs n_nca_steps={args.n_nca_steps}")
 
     ps_parser = init_ps_lark_parser()
-    multigame = args.games is not None
+    multigame = args.games is not None or args.n_per_rule_games is not None
 
     if multigame:
         # --- Multi-game path ---
-        if args.games == "gallery":
+        if args.n_per_rule_games is not None:
+            # Sort gallery + NCAWM extras by (n_rules asc, name asc) and take
+            # the first N. Games missing from games_metadata.json are dropped.
+            from puzzlescript_jax.utils import get_list_of_games_for_testing
+            NCAWM_EXTRAS = ["nekopuzzle"]
+            universe = list(get_list_of_games_for_testing(dataset="gallery"))
+            for g in NCAWM_EXTRAS:
+                if g not in universe:
+                    universe.append(g)
+            meta_path = _REPO_ROOT / "data" / "games_metadata.json"
+            meta = json.loads(meta_path.read_text())
+            def _n_rules(g):
+                for cand in (g + ".txt", g.replace(" ", "_") + ".txt",
+                             g.lower() + ".txt"):
+                    if cand in meta:
+                        return int(meta[cand].get("n_rules", -1))
+                return -1
+            ranked = sorted(
+                ((_n_rules(g), g) for g in universe if _n_rules(g) >= 0),
+                key=lambda x: (x[0], x[1]),
+            )
+            game_names = [g for _, g in ranked[:args.n_per_rule_games]]
+            if not game_names:
+                p.error("--n_per_rule_games selected zero games (empty universe "
+                        "or games_metadata.json missing)")
+            preset_tag = f"nrules-{args.n_per_rule_games}"
+        elif args.games == "gallery":
             # Full PuzzleScript gallery dataset via the shared helper.
             # Also add NCAWM-specific extras (games we reference a lot in
             # research but which aren't in games_dat.js or PRIORITY_GAMES).

@@ -413,7 +413,9 @@ class RuleAttnNCAWorldModel(nn.Module):
                 if self.adaptive_halt:
                     step_readout = readout_layer(h)         # (B, H, W, n_out)
                     step_logits = step_readout.transpose(0, 3, 1, 2)
-                    step_pool = h.mean(axis=(1, 2))         # (B, n_hid)
+                    step_pool = (h * mask_bcast).sum(axis=(1, 2)) / jnp.maximum(
+                        mask_bcast.sum(axis=(1, 2)), 1.0
+                    )                                      # (B, n_hid)
                     step_win = win_out(win_ln(step_pool)).squeeze(-1)
                     step_halt = halt_out(halt_ln(step_pool)).squeeze(-1)
                     per_step_logits.append(step_logits)

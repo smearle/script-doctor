@@ -190,13 +190,23 @@ class UNetWorldModel(nn.Module):
         h = h * mb
 
         skips = []
+        skip_masks = []
         cur = h
+        cur_mask = mb
         for lvl in range(self.n_levels):
             cur = nn.gelu(nn.Conv(self.n_hid, (3, 3), padding="SAME",
                                    name=f"down_conv_{lvl}")(cur))
+            cur = cur * cur_mask
             skips.append(cur)
+            skip_masks.append(cur_mask)
             cur = nn.gelu(nn.Conv(self.n_hid, (3, 3), strides=(2, 2),
                                    padding="SAME", name=f"down_pool_{lvl}")(cur))
+            cur_mask = jax.image.resize(
+                cur_mask,
+                (B, cur.shape[1], cur.shape[2], 1),
+                method="nearest",
+            )
+            cur = cur * cur_mask
 
         pooled = slots_dyn.mean(axis=1)
         gamma = nn.Dense(self.n_hid, name="film_gamma")(pooled)[:, None, None, :]
@@ -205,6 +215,7 @@ class UNetWorldModel(nn.Module):
             cn = nn.LayerNorm(name=f"bn_ln_{j}")(cur)
             cur = cur + nn.Conv(self.n_hid, (3, 3), padding="SAME",
                                  name=f"bn_conv_{j}")(nn.gelu(gamma * cn + beta))
+            cur = cur * cur_mask
 
         for lvl in reversed(range(self.n_levels)):
             cur = jax.image.resize(
@@ -214,9 +225,12 @@ class UNetWorldModel(nn.Module):
             )
             sk = skips[lvl]
             cur = cur[:, :sk.shape[1], :sk.shape[2], :]
+            cur_mask = skip_masks[lvl]
+            cur = cur * cur_mask
             cur = jnp.concatenate([cur, sk], axis=-1)
             cur = nn.gelu(nn.Conv(self.n_hid, (3, 3), padding="SAME",
                                     name=f"up_conv_{lvl}")(cur))
+            cur = cur * cur_mask
 
         cur = cur * mb
 
