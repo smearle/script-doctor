@@ -5476,8 +5476,21 @@ def main():
     g.add_argument("--game", help="Single game name (e.g. pipe_bend, sokoban_basic)")
     g.add_argument("--games", help="Comma-separated game names, or a preset name (e.g. 'small')")
     g.add_argument("--n_per_rule_games", type=int, default=None,
-                   help="Select the first N gallery games sorted by (n_rules asc, "
-                        "name asc). Mutually exclusive with --game/--games.")
+                   help="Select the first N games sorted by (n_rules asc, "
+                        "name asc) from --n_per_rule_universe (default: dedup_pool, "
+                        "with max_level_area<=30 filter and Heldout-26 exclusion). "
+                        "Mutually exclusive with --game/--games.")
+    p.add_argument("--n_per_rule_universe", choices=("dedup_pool", "gallery"),
+                   default="dedup_pool",
+                   help="Where --n_per_rule_games draws from. dedup_pool (default): "
+                        "all 3,474 token-deduped games at data/dedup_candidates_v2.json "
+                        "(2,447 games at n_rules<=10 vs gallery's 22). gallery: legacy "
+                        "subset of curated games.")
+    p.add_argument("--n_per_rule_max_area", type=int, default=30,
+                   help="max_level_area cap on --n_per_rule_games selection. Defaults "
+                        "to 30 to match canonical Train-X presets and avoid OOM on "
+                        "large grids (a single 64x64 game balloons activation memory "
+                        "to >20 GiB on n_hid=256, n_nca_steps=8, with all pool features).")
     p.add_argument("--level", type=int, default=None,
                    help="Train on a single level index. Default: all levels.")
     p.add_argument("--train_levels", default=None,
@@ -5845,31 +5858,70 @@ def main():
     if multigame:
         # --- Multi-game path ---
         if args.n_per_rule_games is not None:
-            # Sort gallery + NCAWM extras by (n_rules asc, name asc) and take
-            # the first N. Games missing from games_metadata.json are dropped.
-            from puzzlescript_jax.utils import get_list_of_games_for_testing
-            NCAWM_EXTRAS = ["nekopuzzle"]
-            universe = list(get_list_of_games_for_testing(dataset="gallery"))
-            for g in NCAWM_EXTRAS:
-                if g not in universe:
-                    universe.append(g)
-            meta_path = _REPO_ROOT / "data" / "games_metadata.json"
-            meta = json.loads(meta_path.read_text())
-            def _n_rules(g):
-                for cand in (g + ".txt", g.replace(" ", "_") + ".txt",
-                             g.lower() + ".txt"):
-                    if cand in meta:
-                        return int(meta[cand].get("n_rules", -1))
-                return -1
-            ranked = sorted(
-                ((_n_rules(g), g) for g in universe if _n_rules(g) >= 0),
-                key=lambda x: (x[0], x[1]),
-            )
+            # Build the pool: either the dedup pool (default, broad coverage)
+            # or the gallery (legacy, narrow). Filter by max_level_area to
+            # avoid the single-large-grid OOM blowup, and exclude Heldout-26.
+            heldout_names: set[str] = set()
+            heldout_path = _REPO_ROOT / "data" / "heldout_v4_n30.json"
+            if heldout_path.is_file():
+                heldout_names = {h["name"] for h in
+                                 json.loads(heldout_path.read_text())["heldout"]}
+
+            ranked: list[tuple[int, str]] = []
+            if args.n_per_rule_universe == "dedup_pool":
+                dedup_path = _REPO_ROOT / "data" / "dedup_candidates_v2.json"
+                pool = json.loads(dedup_path.read_text())["candidates"]
+                for c in pool:
+                    name = c["name"]
+                    if name in heldout_names:
+                        continue
+                    n_rules = int(c.get("n_rules", -1))
+                    if n_rules < 1:
+                        continue
+                    area = int(c.get("max_level_area", 999))
+                    if area > args.n_per_rule_max_area:
+                        continue
+                    ranked.append((n_rules, name))
+            else:  # "gallery"
+                from puzzlescript_jax.utils import get_list_of_games_for_testing
+                NCAWM_EXTRAS = ["nekopuzzle"]
+                universe = list(get_list_of_games_for_testing(dataset="gallery"))
+                for g in NCAWM_EXTRAS:
+                    if g not in universe:
+                        universe.append(g)
+                meta_path = _REPO_ROOT / "data" / "games_metadata.json"
+                meta = json.loads(meta_path.read_text())
+                for g in universe:
+                    if g in heldout_names:
+                        continue
+                    m = None
+                    for cand in (g + ".txt", g.replace(" ", "_") + ".txt",
+                                 g.lower() + ".txt"):
+                        if cand in meta:
+                            m = meta[cand]
+                            break
+                    if m is None:
+                        continue
+                    n_rules = int(m.get("n_rules", -1))
+                    if n_rules < 1:
+                        continue
+                    area = int(m.get("max_level_area", 999))
+                    if area > args.n_per_rule_max_area:
+                        continue
+                    ranked.append((n_rules, g))
+
+            ranked.sort(key=lambda x: (x[0], x[1]))
             game_names = [g for _, g in ranked[:args.n_per_rule_games]]
             if not game_names:
                 p.error("--n_per_rule_games selected zero games (empty universe "
-                        "or games_metadata.json missing)")
-            preset_tag = f"nrules-{args.n_per_rule_games}"
+                        "or all filtered out)")
+            preset_tag = (f"nrules-{args.n_per_rule_games}-"
+                          f"{args.n_per_rule_universe}")
+            print(f"[--n_per_rule_games={args.n_per_rule_games} "
+                  f"universe={args.n_per_rule_universe} max_area="
+                  f"{args.n_per_rule_max_area}]: {len(game_names)} games "
+                  f"selected from {len(ranked)} eligible "
+                  f"(rules: {ranked[0][0]}..{ranked[args.n_per_rule_games-1][0] if args.n_per_rule_games <= len(ranked) else ranked[-1][0]})")
         elif args.games == "gallery":
             # Full PuzzleScript gallery dataset via the shared helper.
             # Also add NCAWM-specific extras (games we reference a lot in
