@@ -29,6 +29,10 @@ GPU_FREE_THRESHOLD_MB=${GPU_FREE_THRESHOLD_MB:-3000}
 VAL_FRAC=${VAL_FRAC:-0.10}
 N_UPDATES=${N_UPDATES:-150000}
 export XLA_PYTHON_CLIENT_MEM_FRACTION=${XLA_PYTHON_CLIENT_MEM_FRACTION:-0.95}
+# STAGES selects which subset to run: "cond" | "uncond" | "all" (default).
+# Lets two parallel queues split the work cleanly across GPUs without
+# colliding on shared save_dirs.
+STAGES=${STAGES:-all}
 
 wait_for_gpu() {
     while true; do
@@ -101,19 +105,21 @@ train_n_per_rule() {
 #------------------------------------------------------------------
 echo "=== [$(date '+%F %T')] OOM-retry queue start (GPU $GPU, mem_frac=$XLA_PYTHON_CLIENT_MEM_FRACTION) ==="
 
-# n_per_rule cond at the OOM'd scales
-for n in 20 50; do
-    wait_for_gpu
-    stage "Train n_per_rule_games=$n cond s0 (retry, mem_frac=$XLA_PYTHON_CLIENT_MEM_FRACTION)" \
-        train_n_per_rule "$n" cond 256 0 "nca_wm/logs/n_per_rule_${n}_cond_val${VAL_FRAC}_s0"
-done
+if [ "$STAGES" = "cond" ] || [ "$STAGES" = "all" ]; then
+    for n in 20 50; do
+        wait_for_gpu
+        stage "Train n_per_rule_games=$n cond s0 (retry, mem_frac=$XLA_PYTHON_CLIENT_MEM_FRACTION)" \
+            train_n_per_rule "$n" cond 256 0 "nca_wm/logs/n_per_rule_${n}_cond_val${VAL_FRAC}_s0"
+    done
+fi
 
-# n_per_rule uncond (param-matched n_hid=288) at the OOM'd scales
-for n in 20 50; do
-    wait_for_gpu
-    stage "Train n_per_rule_games=$n uncond_h288 s0 (retry, mem_frac=$XLA_PYTHON_CLIENT_MEM_FRACTION)" \
-        train_n_per_rule "$n" uncond 288 0 "nca_wm/logs/n_per_rule_${n}_uncond_h288_val${VAL_FRAC}_s0"
-done
+if [ "$STAGES" = "uncond" ] || [ "$STAGES" = "all" ]; then
+    for n in 20 50; do
+        wait_for_gpu
+        stage "Train n_per_rule_games=$n uncond_h288 s0 (retry, mem_frac=$XLA_PYTHON_CLIENT_MEM_FRACTION)" \
+            train_n_per_rule "$n" uncond 288 0 "nca_wm/logs/n_per_rule_${n}_uncond_h288_val${VAL_FRAC}_s0"
+    done
+fi
 
 echo
 echo "=== [$(date '+%F %T')] OOM-retry queue done ==="
