@@ -3137,23 +3137,47 @@ def train(
             weights = np.array([len(idx) for idx in d.values()], dtype=np.float64)
             bucket_game_probs.append(weights / weights.sum())
 
-    # Pre-allocate per-bucket scratch buffers (sized to bucket H, W; global C).
-    bucket_buffers = [
-        {"s":  np.zeros((batch_size, max_C, H_b, W_b), dtype=np.uint8),
-         "ns": np.zeros((batch_size, max_C, H_b, W_b), dtype=np.uint8),
-         **({"mask": np.zeros((batch_size, max_C, H_b, W_b), dtype=np.uint8)}
-            if mask_padded_loss else {})}
+    # Per-bucket batch_size: forward+backward activation memory grows
+    # with batch_size * H_b * W_b. A single (64x64) bucket at batch_size=32
+    # blows up to >20 GiB and OOMs even on a 24 GiB card. Cap each bucket
+    # at the same `cells-per-batch` budget as the (16x16) reference shape
+    # (batch_size_default * 16 * 16 = 8192 by default), then floor at
+    # MIN_PER_BUCKET so very-small buckets don't get a meaningless 1-2
+    # element batch. JAX already compiles per-(H_b, W_b) shape, so adding
+    # per-bucket B_b doesn't multiply compile count — it just changes the
+    # already-distinct signature for each bucket.
+    MIN_PER_BUCKET = 4
+    target_cells = batch_size * 16 * 16
+    bucket_batch_sizes = [
+        max(MIN_PER_BUCKET, min(batch_size, target_cells // max(1, H_b * W_b)))
         for (H_b, W_b) in bucket_hw
     ]
-    _batch_a = np.zeros((batch_size,), dtype=np.int32)
-    _batch_w = np.zeros((batch_size,), dtype=np.uint8)
-    _batch_g = np.zeros((batch_size,), dtype=np.int32)
+
+    # Pre-allocate per-bucket scratch buffers (sized to per-bucket batch_size).
+    bucket_buffers = []
+    bucket_a_bufs = []
+    bucket_w_bufs = []
+    bucket_g_bufs = []
+    for (H_b, W_b), bs_b in zip(bucket_hw, bucket_batch_sizes):
+        buf = {
+            "s":  np.zeros((bs_b, max_C, H_b, W_b), dtype=np.uint8),
+            "ns": np.zeros((bs_b, max_C, H_b, W_b), dtype=np.uint8),
+        }
+        if mask_padded_loss:
+            buf["mask"] = np.zeros((bs_b, max_C, H_b, W_b), dtype=np.uint8)
+        bucket_buffers.append(buf)
+        bucket_a_bufs.append(np.zeros((bs_b,), dtype=np.int32))
+        bucket_w_bufs.append(np.zeros((bs_b,), dtype=np.uint8))
+        bucket_g_bufs.append(np.zeros((bs_b,), dtype=np.int32))
 
     bucket_summary = ", ".join(
-        f"({h}x{w}):{int(k)}g/{int(n):,}t"
-        for (h, w), k, n in zip(bucket_hw, bucket_n_games_arr, bucket_n_trans_arr)
+        f"({h}x{w}):{int(k)}g/{int(n):,}t/B={bs}"
+        for (h, w), k, n, bs in zip(bucket_hw, bucket_n_games_arr,
+                                     bucket_n_trans_arr, bucket_batch_sizes)
     )
-    print(f"  [size_buckets] {len(bucket_hw)} (H,W) bucket(s): {bucket_summary}")
+    print(f"  [size_buckets] {len(bucket_hw)} (H,W) bucket(s) [B=per-bucket "
+          f"batch_size, capped at activation budget {target_cells} cells/batch]: "
+          f"{bucket_summary}")
 
     bucket_games_lists = [list(d.keys()) for d in bucket_game_indices]
 
@@ -3334,18 +3358,24 @@ def train(
         _maybe_render_gif(start_step)
 
     def _sample_bucket_batch():
-        """Pick a bucket, sample batch_size rows from games in that bucket,
-        and populate the bucket's preallocated buffers. Returns:
-            (b_idx, batch_s, batch_ns, batch_mask)
-        plus mutates the global _batch_a / _batch_w / _batch_g.
-        batch_s, batch_ns have shape (batch_size, max_C, H_b, W_b)."""
+        """Pick a bucket, sample its per-bucket batch_size rows from games
+        in that bucket, and populate the bucket's preallocated buffers.
+        Returns:
+            (b_idx, batch_s, batch_ns, batch_mask, batch_a, batch_w, batch_g)
+        batch_s, batch_ns have shape (B_b, max_C, H_b, W_b) where B_b
+        depends on the bucket (smaller for large H,W to keep activation
+        memory bounded)."""
         b_idx = int(np_rng.choice(len(bucket_hw), p=_bucket_probs))
+        bs_b = bucket_batch_sizes[b_idx]
         games_b = bucket_games_lists[b_idx]
         game_indices_b = bucket_game_indices[b_idx]
         game_probs_b = bucket_game_probs[b_idx]
         s_buf = bucket_buffers[b_idx]["s"]
         ns_buf = bucket_buffers[b_idx]["ns"]
         mask_buf = bucket_buffers[b_idx].get("mask")
+        a_buf = bucket_a_bufs[b_idx]
+        w_buf = bucket_w_bufs[b_idx]
+        g_buf = bucket_g_bufs[b_idx]
         s_buf.fill(0); ns_buf.fill(0)
         if mask_buf is not None:
             mask_buf.fill(0)
@@ -3354,24 +3384,24 @@ def train(
         # mode, `game_probs_b` is proportional to each game's within-game
         # transition fraction for this bucket; in uniform mode it is
         # proportional to raw transition count in this bucket.
-        game_choice = np_rng.choice(len(games_b), size=batch_size, p=game_probs_b)
-        game_ids = np.array([games_b[k] for k in game_choice], dtype=np.int32)
-        local_idx = np.empty(batch_size, dtype=np.int32)
+        game_choice = np_rng.choice(len(games_b), size=bs_b, p=game_probs_b)
+        local_idx = np.empty(bs_b, dtype=np.int32)
         for k, g in enumerate(games_b):
             rows = np.nonzero(game_choice == k)[0]
             if len(rows) == 0:
                 continue
             idx_pool = game_indices_b[g]
             local_idx[rows] = idx_pool[np_rng.randint(0, len(idx_pool), size=len(rows))]
+        game_ids = np.array([games_b[k] for k in game_choice], dtype=np.int32)
 
         # Fill bucket-shaped buffers. per_game_states[g] is bitpacked along W
         # — unpack just the sampled row and write into the (H_g, W_g) corner
         # of the bucket buffer; surrounding cells stay zero from `s_buf.fill(0)`
         # above. Per-row unpack allocates ~C_g·H_g·W_g uint8s; the merged
         # in-RAM dataset stays packed.
-        for i in range(batch_size):
+        for i in range(bs_b):
             g = int(game_ids[i]); j = int(local_idx[i])
-            C_store = int(game_CHW[g, 0]); W_store = int(game_CHW[g, 2])
+            W_store = int(game_CHW[g, 2])
             C_real, H_real, W_real = (int(x) for x in per_game_transition_shapes[g][j])
             s_full = _unpack_states(per_game_states[g][j], W_store)
             ns_full = _unpack_states(per_game_next_states[g][j], W_store)
@@ -3381,19 +3411,19 @@ def train(
             ns_buf[i, :C_real, :H_real, :W_real] = ns_full[:C_real, oy:oy + H_real, ox:ox + W_real]
             if mask_buf is not None:
                 mask_buf[i, :C_real, :H_real, :W_real] = 1
-            _batch_a[i] = per_game_actions_np[g][j]
-            _batch_w[i] = per_game_wons_np[g][j]
-            _batch_g[i] = g
-        return b_idx, s_buf, ns_buf, mask_buf
+            a_buf[i] = per_game_actions_np[g][j]
+            w_buf[i] = per_game_wons_np[g][j]
+            g_buf[i] = g
+        return b_idx, s_buf, ns_buf, mask_buf, a_buf, w_buf, g_buf
 
     for step in range(n_updates):
-        b_idx, _bs, _bns, _bm = _sample_bucket_batch()
-        game_ids_batch = _batch_g
+        b_idx, _bs, _bns, _bm, _ba, _bw, _bg = _sample_bucket_batch()
+        game_ids_batch = _bg
         s = jnp.array(_bs, dtype=jnp.float32)
-        a_int = _batch_a
+        a_int = _ba
         a_oh = jnp.array(np.eye(N_ACTIONS, dtype=np.float32)[a_int])
         ns = jnp.array(_bns, dtype=jnp.float32)
-        w = jnp.array(_batch_w, dtype=jnp.float32)
+        w = jnp.array(_bw, dtype=jnp.float32)
         spatial_mask = (
             jnp.array(_bm, dtype=jnp.float32)
             if mask_padded_loss and _bm is not None else None
