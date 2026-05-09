@@ -5653,6 +5653,37 @@ def main():
                     ranked.append((n_rules, g))
 
             ranked.sort(key=lambda x: (x[0], x[1]))
+
+            # The metadata `max_level_area` field stores only one dimension
+            # (H), so a 29x65 game still slips through area<=30. Verify the
+            # actual cached canvas (H from states.shape[1]; W from the npz
+            # 'W' field) and reject games where any level exceeds the cap.
+            # Only checks games already cached locally; un-cached games pass
+            # this gate (they'll be cached and the next run will catch them).
+            import glob as _glob
+            cap = args.n_per_rule_max_area
+            ranked_filtered: list[tuple[int, str]] = []
+            n_filtered_canvas = 0
+            for n_rules, name in ranked:
+                files = sorted(_glob.glob(
+                    f"rollout_data/{name}/level_*/astar_transitions_*.npz"))
+                bad = False
+                for fp in files:
+                    try:
+                        with np.load(fp, allow_pickle=True) as d:
+                            H = int(d['states'].shape[1])
+                            W = int(d['W'])
+                            if H > cap or W > cap:
+                                bad = True
+                                break
+                    except Exception:
+                        pass  # corrupt/missing key — let it through
+                if bad:
+                    n_filtered_canvas += 1
+                    continue
+                ranked_filtered.append((n_rules, name))
+            ranked = ranked_filtered
+
             game_names = [g for _, g in ranked[:args.n_per_rule_games]]
             if not game_names:
                 p.error("--n_per_rule_games selected zero games (empty universe "
@@ -5661,12 +5692,14 @@ def main():
                           f"{args.n_per_rule_universe}")
             random_note = (f", filtered {n_filtered_random} random-rule games"
                            if n_filtered_random > 0 else "")
+            canvas_note = (f", filtered {n_filtered_canvas} oversize-canvas games"
+                           if n_filtered_canvas > 0 else "")
             print(f"[--n_per_rule_games={args.n_per_rule_games} "
                   f"universe={args.n_per_rule_universe} max_area="
                   f"{args.n_per_rule_max_area} "
                   f"include_random={args.n_per_rule_include_random}]: "
                   f"{len(game_names)} games selected from {len(ranked)} eligible"
-                  f"{random_note} "
+                  f"{random_note}{canvas_note} "
                   f"(rules: {ranked[0][0]}..{ranked[args.n_per_rule_games-1][0] if args.n_per_rule_games <= len(ranked) else ranked[-1][0]})")
         elif args.games == "gallery":
             # Full PuzzleScript gallery dataset via the shared helper.
