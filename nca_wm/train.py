@@ -5210,6 +5210,14 @@ def main():
                         "to 30 to match canonical Train-X presets and avoid OOM on "
                         "large grids (a single 64x64 game balloons activation memory "
                         "to >20 GiB on n_hid=256, n_nca_steps=8, with all pool features).")
+    p.add_argument("--n_per_rule_include_random", action=argparse.BooleanOptionalAction, default=False,
+                   help="Include games with stochastic dynamics (`random`/`randomDir` "
+                        "rules) in --n_per_rule_games selection. Default False because "
+                        "stochastic games have an irreducible val_cerr floor (no model "
+                        "can perfectly predict random outcomes), which biases the "
+                        "aggregate downward and obscures the cond-vs-uncond comparison. "
+                        "Source of truth: `has_randomness` field in games_metadata.json "
+                        "(populated by the JS engine's compile pass).")
     p.add_argument("--level", type=int, default=None,
                    help="Train on a single level index. Default: all levels.")
     p.add_argument("--train_levels", default=None,
@@ -5586,7 +5594,20 @@ def main():
                 heldout_names = {h["name"] for h in
                                  json.loads(heldout_path.read_text())["heldout"]}
 
+            # `has_randomness` lives in games_metadata.json (populated by the
+            # JS engine's compile pass). Cross-lookup helper used by both
+            # universe branches below.
+            meta_path = _REPO_ROOT / "data" / "games_metadata.json"
+            meta = json.loads(meta_path.read_text())
+            def _meta_for(g: str) -> dict | None:
+                for cand in (g + ".txt", g.replace(' ', '_') + ".txt",
+                             g.lower() + ".txt"):
+                    if cand in meta:
+                        return meta[cand]
+                return None
+
             ranked: list[tuple[int, str]] = []
+            n_filtered_random = 0
             if args.n_per_rule_universe == "dedup_pool":
                 dedup_path = _REPO_ROOT / "data" / "dedup_candidates_v2.json"
                 pool = json.loads(dedup_path.read_text())["candidates"]
@@ -5600,6 +5621,11 @@ def main():
                     area = int(c.get("max_level_area", 999))
                     if area > args.n_per_rule_max_area:
                         continue
+                    if not args.n_per_rule_include_random:
+                        m = _meta_for(name)
+                        if m is not None and m.get("has_randomness", False):
+                            n_filtered_random += 1
+                            continue
                     ranked.append((n_rules, name))
             else:  # "gallery"
                 from puzzlescript_jax.utils import get_list_of_games_for_testing
@@ -5608,17 +5634,10 @@ def main():
                 for g in NCAWM_EXTRAS:
                     if g not in universe:
                         universe.append(g)
-                meta_path = _REPO_ROOT / "data" / "games_metadata.json"
-                meta = json.loads(meta_path.read_text())
                 for g in universe:
                     if g in heldout_names:
                         continue
-                    m = None
-                    for cand in (g + ".txt", g.replace(" ", "_") + ".txt",
-                                 g.lower() + ".txt"):
-                        if cand in meta:
-                            m = meta[cand]
-                            break
+                    m = _meta_for(g)
                     if m is None:
                         continue
                     n_rules = int(m.get("n_rules", -1))
@@ -5626,6 +5645,10 @@ def main():
                         continue
                     area = int(m.get("max_level_area", 999))
                     if area > args.n_per_rule_max_area:
+                        continue
+                    if (not args.n_per_rule_include_random
+                            and m.get("has_randomness", False)):
+                        n_filtered_random += 1
                         continue
                     ranked.append((n_rules, g))
 
@@ -5636,10 +5659,14 @@ def main():
                         "or all filtered out)")
             preset_tag = (f"nrules-{args.n_per_rule_games}-"
                           f"{args.n_per_rule_universe}")
+            random_note = (f", filtered {n_filtered_random} random-rule games"
+                           if n_filtered_random > 0 else "")
             print(f"[--n_per_rule_games={args.n_per_rule_games} "
                   f"universe={args.n_per_rule_universe} max_area="
-                  f"{args.n_per_rule_max_area}]: {len(game_names)} games "
-                  f"selected from {len(ranked)} eligible "
+                  f"{args.n_per_rule_max_area} "
+                  f"include_random={args.n_per_rule_include_random}]: "
+                  f"{len(game_names)} games selected from {len(ranked)} eligible"
+                  f"{random_note} "
                   f"(rules: {ranked[0][0]}..{ranked[args.n_per_rule_games-1][0] if args.n_per_rule_games <= len(ranked) else ranked[-1][0]})")
         elif args.games == "gallery":
             # Full PuzzleScript gallery dataset via the shared helper.
