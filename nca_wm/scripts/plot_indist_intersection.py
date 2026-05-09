@@ -58,27 +58,25 @@ RUN_BY   = {
         "multi_scaling_14_cond_match_s0",
         "multi_scaling_14_cond_match_s2",
     ],
+    # Parameter-matched uncond (n_hid=288, ~16.6M total params) vs cond
+    # (n_hid=256, ~16.03M). Honest equal-capacity baseline.
     ("Train-14",  "uncond"): [
-        "multi_scaling_14_uncond_match_s0",
-        "multi_scaling_14_uncond_match_s1",
-        "multi_scaling_14_uncond_match_s2",
-        "multi_scaling_14_uncond_match_s3",
+        "multi_scaling_14_uncond_match_s0_h288",
     ],
     ("Train-59",  "cond"):   [
         "multi_scaling_gallery_v2_cond_match_s0",
         "multi_scaling_gallery_v2_cond_match_s1",
     ],
     ("Train-59",  "uncond"): [
-        "multi_scaling_gallery_v2_uncond_match_s0",
-        "multi_scaling_gallery_v2_uncond_match_s1",
+        "multi_scaling_gallery_v2_uncond_match_s0_h288",
     ],
     ("Train-199", "cond"):   [
         "multi_scaling_gallery_v4_cond_match_s0",
         "multi_scaling_gallery_v4_cond_match_s1",
+        "multi_scaling_gallery_v4_cond_match_s2",
     ],
     ("Train-199", "uncond"): [
-        "multi_scaling_gallery_v4_uncond_match_s0",
-        "multi_scaling_gallery_v4_uncond_match_s1",
+        "multi_scaling_gallery_v4_uncond_match_s0_h288",
     ],
 }
 SERIES = [

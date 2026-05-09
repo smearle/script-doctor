@@ -34,27 +34,19 @@ OUT_DIR = REPO_ROOT / "nca_wm" / "paper" / "figures" / "indist_scaling"
 # column. Missing eval data renders as "--" (the in-flight uncond runs
 # land here once they finish).
 RUNS = [
-    (["multi_scaling_14_uncond_match_s0",
-      "multi_scaling_14_uncond_match_s1",
-      "multi_scaling_14_uncond_match_s2",
-      "multi_scaling_14_uncond_match_s3"],         "Train-14",  14,  "uncond"),
+    # Parameter-matched uncond at every scale: n_hid=288 (~16.6M) vs
+    # cond@n_hid=256 (~16.03M). Honest equal-capacity comparison; the
+    # n_hid=256 uncond runs are kept on disk but no longer tabled.
+    (["multi_scaling_14_uncond_match_s0_h288"],         "Train-14",  14,  "uncond"),
     (["multi_scaling_14_cond_match_s0",
-      "multi_scaling_14_cond_match_s2"],           "Train-14",  14,  "cond"),
-    (["multi_scaling_gallery_v2_uncond_match_s0",
-      "multi_scaling_gallery_v2_uncond_match_s1"], "Train-59",  59,  "uncond"),
+      "multi_scaling_14_cond_match_s2"],                "Train-14",  14,  "cond"),
+    (["multi_scaling_gallery_v2_uncond_match_s0_h288"], "Train-59",  59,  "uncond"),
     (["multi_scaling_gallery_v2_cond_match_s0",
-      "multi_scaling_gallery_v2_cond_match_s1"],   "Train-59",  59,  "cond"),
-    (["multi_scaling_gallery_v4_uncond_match_s0",
-      "multi_scaling_gallery_v4_uncond_match_s1"], "Train-199", 199, "uncond"),
+      "multi_scaling_gallery_v2_cond_match_s1"],        "Train-59",  59,  "cond"),
+    (["multi_scaling_gallery_v4_uncond_match_s0_h288"], "Train-199", 199, "uncond"),
     (["multi_scaling_gallery_v4_cond_match_s0",
       "multi_scaling_gallery_v4_cond_match_s1",
-      "multi_scaling_gallery_v4_cond_match_s2"],   "Train-199", 199, "cond"),
-    # Parameter-matched uncond legs (n_hid=288 ≈ 16.6M total, slightly
-    # above cond at n_hid=256 which is 16.03M). Render as "--" until
-    # each row's eval_multigame.npz lands.
-    (["multi_scaling_14_uncond_match_s0_h288"],         "Train-14",  14,  r"uncond ($n_h{=}288$)"),
-    (["multi_scaling_gallery_v2_uncond_match_s0_h288"], "Train-59",  59,  r"uncond ($n_h{=}288$)"),
-    (["multi_scaling_gallery_v4_uncond_match_s0_h288"], "Train-199", 199, r"uncond ($n_h{=}288$)"),
+      "multi_scaling_gallery_v4_cond_match_s2"],        "Train-199", 199, "cond"),
 ]
 
 REGIMES = [

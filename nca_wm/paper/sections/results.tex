@@ -123,14 +123,16 @@ both on the same checkpoints by training the canonical recipe
 \textsc{Train-199} and evaluating each against (i) the 14 games
 shared across all three presets, and (ii) \textsc{Heldout-26}, the
 subset of the 30-game stratified held-out set. We isolate the encoder's contribution by
-training a matched unconditional variant (no encoded latents) at every
-scale, and report against the identity baseline
-$\hat s_{t+1}{=}s_t$, which scores zero error on every cell the rules
-leave untouched. Conditional and unconditional models tie in-distribution at
+training a parameter-matched unconditional variant ($n_h{=}288$ for
+uncond, $\approx 16.6$M total params, vs cond's $n_h{=}256$, $16.0$M
+total) at every scale, so any cond benefit cannot be charged to the
+encoder/decoder/slot stack's ${\sim}3$M extra parameters. We also
+report the identity baseline $\hat s_{t+1}{=}s_t$, which scores
+zero error on every cell the rules leave untouched.
+Conditional and unconditional models tie in-distribution at
 \textsc{Train-14} (Table~\ref{tab:indist-scaling}: $1.63 / 0.11$
-vs.\ $1.98 / 0.08$ random-AR mean / median; within $0.4$pp on every
-regime), with the encoder's ID benefit emerging only at larger
-corpora.
+vs.\ $1.70 / 0.26$ random-AR mean / median), with the encoder's ID
+benefit emerging only at larger corpora.
 
 \begin{figure}[t]
   \centering
@@ -167,15 +169,16 @@ corpora.
   \caption{\textbf{1-step (TF) cell-error vs.\ training corpus size}
     (numeric log axis at $14, 59, 199$ games). \emph{(a)} Aggregate
     over the 14 games shared by every preset; rule-conditioning slows
-    per-game dilution by roughly an order of magnitude at fixed
-    capacity. \emph{(b)} Aggregate on \textsc{Heldout-26}; the dotted
-    black line is the identity baseline $\hat s_{t+1}{=}s_t$.
-    Conditional 1-step error drops $\approx 6\times$ from
-    \textsc{Train-14} to \textsc{Train-199}, reaching identity-level
-    error. Cond and uncond are roughly tied OOD at every training
-    scale (similar medians and wins-vs-identity counts; uncond
-    \textsc{Train-14} averaged across 3 seeds, all other rows 1
-    seed). Random-action AR companions in
+    per-game dilution by roughly an order of magnitude at parameter-matched capacity.
+    \emph{(b)} Aggregate on \textsc{Heldout-26}; the dotted
+    black line is the identity baseline. Cond drops $\approx 6\times$
+    from \textsc{Train-14} to \textsc{Train-199}, reaching
+    identity-level error. Uncond rows are parameter-matched
+    ($n_h{=}288$, $\approx 16.6$M params vs cond's $16.0$M): tied OOD
+    at \textsc{Train-14}, cond wins at \textsc{Train-59}, uncond
+    slightly surpasses cond on wins-vs-identity at \textsc{Train-199}.
+    Seeds: cond $N{=}2/2/3$, uncond $N{=}1$ at every scale.
+    Random-action AR companions in
     Appendix~\ref{app:rollout-ar}; per-cell totals (BFS / A*) in
     Appendix~\ref{app:cond-vs-uncond}, Table~\ref{tab:cond-vs-uncond-match};
     per-game ID heatmap in Appendix~\ref{app:dilution}.}
@@ -185,15 +188,14 @@ corpora.
 In-distribution (Figure~\ref{fig:intersection-slope-id}), both models
 degrade on the shared 14 games as the corpus widens, but the
 unconditional 1-step (TF) mean grows much faster than the conditional:
-unconditional jumps from $0.087\%$ (\textsc{Train-14}) to $2.20\%$
-(\textsc{Train-59}), $\approx 25\times$, while conditional grows only
-$\approx 5\times$ over the same range and is roughly flat to
-\textsc{Train-199} ($0.27\% \to 0.37\%$ mean; $0.021\% \to 0.157\%$
-median). At \textsc{Train-199} the unconditional baseline is
-$1.88\% / 0.46\%$, still $\approx 5\times$ the conditional mean and
-$\approx 3\times$ the median; per-game swings can be dramatic
-(\textit{neko puzzle} goes from $0.000\%$ to $24.4\%$ when the encoder
-is removed; per-game cells in Figure~\ref{fig:intersection-heatmap}).
+parameter-matched unconditional jumps from $0.071\%$
+(\textsc{Train-14}) to $1.86\%$ (\textsc{Train-59}), $\approx 26\times$,
+while conditional grows only $\approx 5\times$ over the same range
+($0.053\% \to 0.25\%$ mean) and stays close to that at
+\textsc{Train-199} ($0.31\%$ mean / $0.19\%$ median). At
+\textsc{Train-199} the unconditional baseline is $1.97\% / 0.47\%$,
+still $\approx 6\times$ the conditional mean and $\approx 2.5\times$
+the median; per-game cells in Figure~\ref{fig:intersection-heatmap}.
 Rule-feature buckets at \textsc{Train-199}
 (Figure~\ref{fig:rule-type-heatmap}) span more than an order of
 magnitude in cell-error: \texttt{again} and \texttt{...} buckets sit
@@ -241,22 +243,26 @@ alone is a poor predictor of difficulty.
 Out-of-distribution (Figure~\ref{fig:intersection-slope-ood};
 Appendix~\ref{app:cond-vs-uncond}, Table~\ref{tab:cond-vs-uncond-match}),
 \textsc{Train-14} conditional fails on most heldout games (mean 1-step
-(TF) $14.8\%$, $\approx 7\times$ identity's $2.13\%$); with $14\times$
-more rule diversity, \textsc{Train-199} conditional drops to $2.44\% /
-2.00\%$, matching identity's mean, beating its median, and winning on
-$13/26$ heldout games at 1-step (TF). Conditional and unconditional
-are roughly tied OOD at every training scale, with the per-metric
-ordering shifting between corpora: at
-\textsc{Train-14} (uncond averaged over 3 seeds, cond 1 seed) cond
-mean $14.8\%$ vs.\ uncond $16.9\%$ but with near-identical medians
-($3.45\%$ vs.\ $3.53\%$) and uncond winning on more games ($8$ vs.\
-$7$); at \textsc{Train-59} the means roughly match ($4.69\%$ vs.\
-$4.52\%$); at \textsc{Train-199} uncond has the lower median ($1.52\%$
-vs.\ $2.00\%$) and one more win vs.\ identity ($14$ vs.\ $13$).
-The per-game OOD scatter (Appendix~\ref{app:ood-per-game-scatter},
-Figure~\ref{fig:ood-per-game-scatter}) shows that cond and uncond
-beat identity on largely disjoint subsets at \textsc{Train-199}; we
-return to what the unconditional model is exploiting in
+(TF) $16.4\%$, $\approx 8\times$ identity's $2.13\%$); with $14\times$
+more rule diversity, \textsc{Train-199} conditional drops to $2.72\% /
+2.11\%$, near identity's mean, beating its median, and winning on
+$11/26$ heldout games at 1-step (TF). The cond-vs-uncond ordering
+shifts across scales rather than holding constant: at \textsc{Train-14}
+the two are tied (cond mean $16.4\%$ vs.\ uncond $16.5\%$, medians
+$3.6\%$ vs.\ $4.7\%$, $7$ vs.\ $6$ wins-vs-identity); at
+\textsc{Train-59} cond clearly wins (mean $3.75\%$ vs.\ $4.74\%$;
+$7.5$ vs.\ $7$ wins, both well below identity); at \textsc{Train-199}
+the parameter-matched unconditional wins on every aggregate
+(mean $2.60\%$ vs.\ cond's $2.72\%$, median $1.47\%$ vs.\ $2.11\%$,
+$15$ vs.\ $11$ wins-vs-identity).
+The encoder's ID and OOD gaps diverge at \textsc{Train-199}: cond is
+$\approx 6\times$ better ID but slightly worse OOD, suggesting it
+fits seen rule sets well while its slot representations don't
+transfer to unseen ones. Per-game OOD scatter
+(Appendix~\ref{app:ood-per-game-scatter},
+Figure~\ref{fig:ood-per-game-scatter}) shows cond and uncond beat
+identity on largely disjoint subsets at \textsc{Train-199}; what
+the unconditional model is exploiting is discussed in
 \S\ref{sec:discussion}.
 On random-action AR rollout
 (Appendix~\ref{app:rollout-ar}), where errors compound over 30 steps,

@@ -38,18 +38,18 @@ RUNS = [
         "multi_scaling_14_cond_match_s2",
     ]),
     ("Train-14",  "uncond", [
-        "multi_scaling_14_uncond_match_s0",
-        "multi_scaling_14_uncond_match_s1",
-        "multi_scaling_14_uncond_match_s2",
-        "multi_scaling_14_uncond_match_s3",
+        # Parameter-matched uncond: n_hid=288 ≈ 16.6M total params,
+        # slightly above cond@n_hid=256's 16.03M. Honest comparison
+        # against cond. The non-param-matched runs (n_hid=256, ~13M)
+        # remain on disk but are no longer plotted/tabled.
+        "multi_scaling_14_uncond_match_s0_h288",
     ]),
     ("Train-59",  "cond",   [
         "multi_scaling_gallery_v2_cond_match_s0",
         "multi_scaling_gallery_v2_cond_match_s1",
     ]),
     ("Train-59",  "uncond", [
-        "multi_scaling_gallery_v2_uncond_match_s0",
-        "multi_scaling_gallery_v2_uncond_match_s1",
+        "multi_scaling_gallery_v2_uncond_match_s0_h288",
     ]),
     ("Train-199", "cond",   [
         "multi_scaling_gallery_v4_cond_match_s0",
@@ -57,8 +57,7 @@ RUNS = [
         "multi_scaling_gallery_v4_cond_match_s2",
     ]),
     ("Train-199", "uncond", [
-        "multi_scaling_gallery_v4_uncond_match_s0",
-        "multi_scaling_gallery_v4_uncond_match_s1",
+        "multi_scaling_gallery_v4_uncond_match_s0_h288",
     ]),
 ]
 

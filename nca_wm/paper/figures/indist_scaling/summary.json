@@ -1,63 +1,57 @@
 {
-  "multi_scaling_14_uncond_match_s0": {
+  "multi_scaling_14_uncond_match_s0_h288": {
     "preset": "Train-14",
     "model": "uncond",
     "results": {
       "random": {
         "n_games": 14,
-        "n_seeds": 4,
-        "mean": 0.018143577776129214,
-        "median": 0.0033392851837704776
+        "n_seeds": 1,
+        "mean": 0.0169812873695447,
+        "median": 0.0025515873015873017
       },
       "random_tf": {
         "n_games": 14,
-        "n_seeds": 4,
-        "mean": 0.001106927465614555,
-        "median": 0.00010412846956964604
+        "n_seeds": 1,
+        "mean": 0.0007107028216864761,
+        "median": 8.94593253968254e-05
       },
       "bfs": {
         "n_games": 14,
-        "n_seeds": 4,
-        "mean": 0.014306904226326642,
-        "median": 0.0026887092418995907
+        "n_seeds": 1,
+        "mean": 0.010619204230681911,
+        "median": 0.0017006802721088435
       },
       "astar": {
         "n_games": 13,
-        "n_seeds": 4,
-        "mean": 0.016048863517071337,
-        "median": 0.0017253224410209039
+        "n_seeds": 1,
+        "mean": 0.008410498196542849,
+        "median": 0.0
       }
     },
     "stds": {
       "random": {
-        "mean_std": 0.0018767201473096709,
-        "median_std": 0.003715859049699484
+        "mean_std": null,
+        "median_std": null
       },
       "random_tf": {
-        "mean_std": 0.00022030962225772196,
-        "median_std": 4.4095817918492325e-05
+        "mean_std": null,
+        "median_std": null
       },
       "bfs": {
-        "mean_std": 0.006202931381625857,
-        "median_std": 0.0018382552743185826
+        "mean_std": null,
+        "median_std": null
       },
       "astar": {
-        "mean_std": 0.004474387111235835,
-        "median_std": 0.0016135668261069776
+        "mean_std": null,
+        "median_std": null
       }
     },
-    "n_seeds": 4,
+    "n_seeds": 1,
     "used_seeds": [
-      "multi_scaling_14_uncond_match_s0",
-      "multi_scaling_14_uncond_match_s1",
-      "multi_scaling_14_uncond_match_s2",
-      "multi_scaling_14_uncond_match_s3"
+      "multi_scaling_14_uncond_match_s0_h288"
     ],
     "seed_dirs": [
-      "multi_scaling_14_uncond_match_s0",
-      "multi_scaling_14_uncond_match_s1",
-      "multi_scaling_14_uncond_match_s2",
-      "multi_scaling_14_uncond_match_s3"
+      "multi_scaling_14_uncond_match_s0_h288"
     ]
   },
   "multi_scaling_14_cond_match_s0": {
@@ -117,61 +111,59 @@
       "multi_scaling_14_cond_match_s2"
     ]
   },
-  "multi_scaling_gallery_v2_uncond_match_s0": {
+  "multi_scaling_gallery_v2_uncond_match_s0_h288": {
     "preset": "Train-59",
     "model": "uncond",
     "results": {
       "random": {
         "n_games": 59,
-        "n_seeds": 2,
-        "mean": 0.10536991962097841,
-        "median": 0.038766424797126824
+        "n_seeds": 1,
+        "mean": 0.09071926283375437,
+        "median": 0.025569808201058208
       },
       "random_tf": {
         "n_games": 59,
-        "n_seeds": 2,
-        "mean": 0.01973116982643036,
-        "median": 0.0021059375324078747
+        "n_seeds": 1,
+        "mean": 0.0179178004205603,
+        "median": 0.0012744949494949494
       },
       "bfs": {
         "n_games": 58,
-        "n_seeds": 2,
-        "mean": 0.10886821606010351,
-        "median": 0.03506921284094233
+        "n_seeds": 1,
+        "mean": 0.08579635501371624,
+        "median": 0.022751411170528812
       },
       "astar": {
         "n_games": 37,
-        "n_seeds": 2,
-        "mean": 0.09926089478263117,
-        "median": 0.048954309800441353
+        "n_seeds": 1,
+        "mean": 0.07216764044844397,
+        "median": 0.03144217631001288
       }
     },
     "stds": {
       "random": {
-        "mean_std": 1.174389869230329e-05,
-        "median_std": 0.0034295897170788614
+        "mean_std": null,
+        "median_std": null
       },
       "random_tf": {
-        "mean_std": 0.0006500821732199143,
-        "median_std": 2.4238758734978712e-05
+        "mean_std": null,
+        "median_std": null
       },
       "bfs": {
-        "mean_std": 0.0015476375229222933,
-        "median_std": 0.0030304908369784152
+        "mean_std": null,
+        "median_std": null
       },
       "astar": {
-        "mean_std": 0.0001532864743823327,
-        "median_std": 0.0058832136887916235
+        "mean_std": null,
+        "median_std": null
       }
     },
-    "n_seeds": 2,
+    "n_seeds": 1,
     "used_seeds": [
-      "multi_scaling_gallery_v2_uncond_match_s0",
-      "multi_scaling_gallery_v2_uncond_match_s1"
+      "multi_scaling_gallery_v2_uncond_match_s0_h288"
     ],
     "seed_dirs": [
-      "multi_scaling_gallery_v2_uncond_match_s0",
-      "multi_scaling_gallery_v2_uncond_match_s1"
+      "multi_scaling_gallery_v2_uncond_match_s0_h288"
     ]
   },
   "multi_scaling_gallery_v2_cond_match_s0": {
@@ -231,33 +223,33 @@
       "multi_scaling_gallery_v2_cond_match_s1"
     ]
   },
-  "multi_scaling_gallery_v4_uncond_match_s0": {
+  "multi_scaling_gallery_v4_uncond_match_s0_h288": {
     "preset": "Train-199",
     "model": "uncond",
     "results": {
       "random": {
         "n_games": 199,
         "n_seeds": 1,
-        "mean": 0.1211870470258657,
-        "median": 0.06057142857142857
+        "mean": 0.12646982252514608,
+        "median": 0.06619047619047619
       },
       "random_tf": {
         "n_games": 199,
         "n_seeds": 1,
-        "mean": 0.031898954125287364,
-        "median": 0.0069453151609481
+        "mean": 0.03573587743482596,
+        "median": 0.0074969014194644435
       },
       "bfs": {
         "n_games": 197,
         "n_seeds": 1,
-        "mean": 0.1177181970495471,
-        "median": 0.059082892416225746
+        "mean": 0.11938510243435152,
+        "median": 0.06134259259259259
       },
       "astar": {
         "n_games": 156,
         "n_seeds": 1,
-        "mean": 0.1235581166845706,
-        "median": 0.06707711930926216
+        "mean": 0.126777874846432,
+        "median": 0.06780176803860319
       }
     },
     "stds": {
@@ -280,11 +272,10 @@
     },
     "n_seeds": 1,
     "used_seeds": [
-      "multi_scaling_gallery_v4_uncond_match_s0"
+      "multi_scaling_gallery_v4_uncond_match_s0_h288"
     ],
     "seed_dirs": [
-      "multi_scaling_gallery_v4_uncond_match_s0",
-      "multi_scaling_gallery_v4_uncond_match_s1"
+      "multi_scaling_gallery_v4_uncond_match_s0_h288"
     ]
   },
   "multi_scaling_gallery_v4_cond_match_s0": {
@@ -345,122 +336,5 @@
       "multi_scaling_gallery_v4_cond_match_s1",
       "multi_scaling_gallery_v4_cond_match_s2"
     ]
-  },
-  "multi_scaling_14_uncond_match_s0_h288": {
-    "preset": "Train-14",
-    "model": "uncond ($n_h{=}288$)",
-    "results": {
-      "random": {
-        "n_games": 14,
-        "n_seeds": 1,
-        "mean": 0.0169812873695447,
-        "median": 0.0025515873015873017
-      },
-      "random_tf": {
-        "n_games": 14,
-        "n_seeds": 1,
-        "mean": 0.0007107028216864761,
-        "median": 8.94593253968254e-05
-      },
-      "bfs": {
-        "n_games": 14,
-        "n_seeds": 1,
-        "mean": 0.010619204230681911,
-        "median": 0.0017006802721088435
-      },
-      "astar": {
-        "n_games": 13,
-        "n_seeds": 1,
-        "mean": 0.008410498196542849,
-        "median": 0.0
-      }
-    },
-    "stds": {
-      "random": {
-        "mean_std": null,
-        "median_std": null
-      },
-      "random_tf": {
-        "mean_std": null,
-        "median_std": null
-      },
-      "bfs": {
-        "mean_std": null,
-        "median_std": null
-      },
-      "astar": {
-        "mean_std": null,
-        "median_std": null
-      }
-    },
-    "n_seeds": 1,
-    "used_seeds": [
-      "multi_scaling_14_uncond_match_s0_h288"
-    ],
-    "seed_dirs": [
-      "multi_scaling_14_uncond_match_s0_h288"
-    ]
-  },
-  "multi_scaling_gallery_v2_uncond_match_s0_h288": {
-    "preset": "Train-59",
-    "model": "uncond ($n_h{=}288$)",
-    "results": {
-      "random": {
-        "n_games": 59,
-        "n_seeds": 1,
-        "mean": 0.09071926283375437,
-        "median": 0.025569808201058208
-      },
-      "random_tf": {
-        "n_games": 59,
-        "n_seeds": 1,
-        "mean": 0.0179178004205603,
-        "median": 0.0012744949494949494
-      },
-      "bfs": {
-        "n_games": 58,
-        "n_seeds": 1,
-        "mean": 0.08579635501371624,
-        "median": 0.022751411170528812
-      },
-      "astar": {
-        "n_games": 37,
-        "n_seeds": 1,
-        "mean": 0.07216764044844397,
-        "median": 0.03144217631001288
-      }
-    },
-    "stds": {
-      "random": {
-        "mean_std": null,
-        "median_std": null
-      },
-      "random_tf": {
-        "mean_std": null,
-        "median_std": null
-      },
-      "bfs": {
-        "mean_std": null,
-        "median_std": null
-      },
-      "astar": {
-        "mean_std": null,
-        "median_std": null
-      }
-    },
-    "n_seeds": 1,
-    "used_seeds": [
-      "multi_scaling_gallery_v2_uncond_match_s0_h288"
-    ],
-    "seed_dirs": [
-      "multi_scaling_gallery_v2_uncond_match_s0_h288"
-    ]
-  },
-  "multi_scaling_gallery_v4_uncond_match_s0_h288": {
-    "preset": "Train-199",
-    "model": "uncond ($n_h{=}288$)",
-    "results": null,
-    "n_seeds": 0,
-    "used_seeds": []
   }
 }
