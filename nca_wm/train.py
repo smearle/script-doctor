@@ -1017,6 +1017,24 @@ def _pad_packed(
     return _pack_states(padded)
 
 
+# Merged-dataset cache format version. Bump on any change to dataset
+# layout (new keys, packed-array shape, etc.). Encoded into the cache
+# filename so old-version files are easy to identify and evict.
+DATASET_FORMAT_VERSION = 17  # v17: per-transition real (C,H,W) for masks/buckets
+
+# Skip writing the merged-dataset cache when total transition count
+# is below this threshold. Tiny merged caches (sub-MB) save < 1s on
+# reload but still pollute _merged/ — for the very small n_per_rule
+# experiments (n=1..3) we don't bother.
+MERGED_CACHE_MIN_TRANSITIONS = 50_000
+
+# Cap the number of merged-dataset caches kept per host (LRU). Older
+# caches are deleted after a fresh write. Keep enough for quick
+# diagnostic re-launches across recent experiments without filling
+# disk indefinitely.
+MERGED_CACHE_KEEP_LAST = 10
+
+
 def _dataset_cache_key(
     game_names: list[str],
     level_i: int | None,
@@ -1030,7 +1048,7 @@ def _dataset_cache_key(
     """Deterministic hash of all args that affect dataset contents."""
     import hashlib
     blob = json.dumps({
-        "format_version": 17,  # v17: per-transition real (C,H,W) for masks/buckets
+        "format_version": DATASET_FORMAT_VERSION,
         "games": sorted(game_names),
         "level": level_i,
         "train_levels": sorted(train_levels) if train_levels is not None else None,
@@ -1041,6 +1059,84 @@ def _dataset_cache_key(
         "max_transitions_per_game": max_transitions_per_game,
     }, sort_keys=True)
     return hashlib.sha256(blob.encode()).hexdigest()[:16]
+
+
+def _merged_cache_paths(merged_cache_dir: str, cache_hash: str
+                         ) -> tuple[str, str]:
+    """Return (dataset_npz_path, game_infos_pkl_path), both filename-
+    prefixed with the current DATASET_FORMAT_VERSION so older versions
+    are visible at a glance and easy to evict."""
+    v = DATASET_FORMAT_VERSION
+    return (
+        os.path.join(merged_cache_dir, f"dataset_v{v}_{cache_hash}.npz"),
+        os.path.join(merged_cache_dir, f"game_infos_v{v}_{cache_hash}.pkl"),
+    )
+
+
+def _evict_stale_format_caches(merged_cache_dir: str) -> int:
+    """Delete merged-cache files that don't match the current
+    DATASET_FORMAT_VERSION filename prefix. Returns count deleted.
+
+    Catches both pre-versioning legacy files (`dataset_<hash>.npz` with
+    no version prefix) and explicit older versions (`dataset_v16_*`)."""
+    import glob
+    if not os.path.isdir(merged_cache_dir):
+        return 0
+    keep_prefix_d = f"dataset_v{DATASET_FORMAT_VERSION}_"
+    keep_prefix_i = f"game_infos_v{DATASET_FORMAT_VERSION}_"
+    n_evict = 0
+    for fp in glob.glob(os.path.join(merged_cache_dir, "dataset_*.npz")):
+        if not os.path.basename(fp).startswith(keep_prefix_d):
+            try:
+                os.remove(fp); n_evict += 1
+            except OSError:
+                pass
+    for fp in glob.glob(os.path.join(merged_cache_dir, "game_infos_*.pkl")):
+        if not os.path.basename(fp).startswith(keep_prefix_i):
+            try:
+                os.remove(fp); n_evict += 1
+            except OSError:
+                pass
+    return n_evict
+
+
+def _lru_prune_merged_caches(merged_cache_dir: str,
+                              keep_last: int = MERGED_CACHE_KEEP_LAST) -> int:
+    """Keep only the `keep_last` most-recently-modified merged-cache
+    file pairs (dataset_v* + game_infos_v*); delete older ones.
+    Returns count deleted."""
+    import glob
+    if not os.path.isdir(merged_cache_dir):
+        return 0
+    pairs = []  # list of (mtime, dataset_path, infos_path) for each cache hash
+    for fp in glob.glob(os.path.join(merged_cache_dir,
+                                      f"dataset_v{DATASET_FORMAT_VERSION}_*.npz")):
+        # Recover hash from filename
+        base = os.path.basename(fp)
+        prefix = f"dataset_v{DATASET_FORMAT_VERSION}_"
+        suffix = ".npz"
+        if not (base.startswith(prefix) and base.endswith(suffix)):
+            continue
+        h = base[len(prefix):-len(suffix)]
+        infos = os.path.join(merged_cache_dir,
+                              f"game_infos_v{DATASET_FORMAT_VERSION}_{h}.pkl")
+        try:
+            mt = os.path.getmtime(fp)
+        except OSError:
+            continue
+        pairs.append((mt, fp, infos))
+    # Sort newest-first; drop everything past keep_last
+    pairs.sort(key=lambda x: x[0], reverse=True)
+    to_delete = pairs[keep_last:]
+    n_evict = 0
+    for _mt, ds, infos in to_delete:
+        for fp in (ds, infos):
+            if os.path.isfile(fp):
+                try:
+                    os.remove(fp); n_evict += 1
+                except OSError:
+                    pass
+    return n_evict
 
 
 def collect_multigame_dataset(
@@ -1073,8 +1169,13 @@ def collect_multigame_dataset(
         train_levels=train_levels,
     )
     merged_cache_dir = os.path.join(ROLLOUT_CACHE_DIR, "_merged")
-    dataset_cache = os.path.join(merged_cache_dir, f"dataset_{cache_hash}.npz")
-    infos_cache = os.path.join(merged_cache_dir, f"game_infos_{cache_hash}.pkl")
+    # Auto-evict pre-versioning legacy files and explicit older versions.
+    # Cheap (one stat per matching file) and prevents stale caches from
+    # silently masking format-bump intent.
+    n_evict = _evict_stale_format_caches(merged_cache_dir)
+    if n_evict > 0:
+        print(f"  evicted {n_evict} stale-format-version cache file(s) from {merged_cache_dir}")
+    dataset_cache, infos_cache = _merged_cache_paths(merged_cache_dir, cache_hash)
     if os.path.isfile(dataset_cache) and os.path.isfile(infos_cache):
         print(f"Loading cached dataset from {dataset_cache}")
         t0 = time.time()
@@ -1388,14 +1489,33 @@ def collect_multigame_dataset(
           f"(global max=({max_C}, {max_H}, {max_W})), max_tokens={max_tok_len}, "
           f"{n_wins_tot:,} winning ({100*n_wins_tot/max(1,n_total):.3f}%)")
 
-    # Cache the merged dataset (shared across experiments)
+    # Cache the merged dataset (shared across experiments) — but skip
+    # the npz write for tiny presets (mostly the n_per_rule_games=1..3
+    # case) where the merged file is sub-MB and rebuilding from per-game
+    # caches takes <1s anyway. The game_infos pkl is always cached
+    # because it captures the slow JS-engine compile step.
     os.makedirs(merged_cache_dir, exist_ok=True)
-    print(f"Caching dataset to {dataset_cache}")
-    t0 = time.time()
-    np.savez(dataset_cache, **_pack_v7_cache(merged))
-    with open(infos_cache, "wb") as f:
-        pickle.dump(game_infos, f)
-    print(f"  Cached in {time.time()-t0:.1f}s")
+    if n_total < MERGED_CACHE_MIN_TRANSITIONS:
+        print(f"Caching game_infos only (n_total={n_total:,} < "
+              f"{MERGED_CACHE_MIN_TRANSITIONS:,}; merged dataset npz "
+              f"skipped to keep _merged/ tidy)")
+        t0 = time.time()
+        with open(infos_cache, "wb") as f:
+            pickle.dump(game_infos, f)
+        print(f"  Cached in {time.time()-t0:.1f}s")
+    else:
+        print(f"Caching dataset to {dataset_cache}")
+        t0 = time.time()
+        np.savez(dataset_cache, **_pack_v7_cache(merged))
+        with open(infos_cache, "wb") as f:
+            pickle.dump(game_infos, f)
+        print(f"  Cached in {time.time()-t0:.1f}s")
+        # LRU-prune after write so the disk footprint stays bounded.
+        n_pruned = _lru_prune_merged_caches(merged_cache_dir,
+                                             keep_last=MERGED_CACHE_KEEP_LAST)
+        if n_pruned > 0:
+            print(f"  LRU-pruned {n_pruned} old merged-cache file(s) "
+                  f"(keeping last {MERGED_CACHE_KEEP_LAST})")
 
     return merged, game_infos
 
