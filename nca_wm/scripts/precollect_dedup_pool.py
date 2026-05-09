@@ -83,25 +83,37 @@ def _game_already_cached(game_name: str, n_levels: int, search_algo: str,
 
 
 def _collect_one(game_meta: dict, args, repo_root: str) -> tuple[str, str]:
-    """Worker: run collect_unique_transitions for every level of one game.
-    Returns (name, status_str). Imports are inside the worker so the parent
-    doesn't drag in JAX."""
+    """Worker: compile via CppPuzzleScriptBackend, then run
+    collect_unique_transitions for every level of one game. Returns
+    (name, status_str). Imports are inside the worker so the parent
+    process doesn't drag in JAX."""
     sys.path.insert(0, repo_root)
     os.environ.setdefault("JAX_PLATFORM_NAME", "cpu")
     from nca_wm.train import collect_unique_transitions
-    from puzzlescript_jax.utils import get_game_text
+    from puzzlescript_cpp import CppPuzzleScriptBackend, CppPuzzleScriptEnv
+    from puzzlescript_jax.utils import init_ps_lark_parser
+
+    # ps_parser + backend are per-worker (single-process, no fork-safety
+    # concerns). The parser construction is the slow part (~1s); fold it
+    # into a module-level cache.
+    if not hasattr(_collect_one, "_ps_parser"):
+        _collect_one._ps_parser = init_ps_lark_parser()
+    ps_parser = _collect_one._ps_parser
 
     name = game_meta["name"]
-    n_levels = int(game_meta.get("n_levels", 1))
+    backend = CppPuzzleScriptBackend()
     try:
-        json_str = get_game_text(name)
+        json_str = backend.compile_and_serialize(ps_parser, name)
+        env0 = CppPuzzleScriptEnv(json_str, level_i=0, max_episode_steps=10)
     except Exception as e:
-        return name, f"FAIL_text: {type(e).__name__}: {e}"
+        return name, f"FAIL_compile: {type(e).__name__}: {str(e)[:120]}"
+    # Re-discover n_levels from the compiled env (the dedup-pool field
+    # is not always accurate when the engine post-deduplicates levels).
+    n_levels = env0.num_levels
+    if n_levels < 1:
+        return name, "FAIL_no_levels"
 
-    # Per-level cap matches train.py's per-level-cap logic
-    per_level_cap = (
-        max(1, args.max_transitions_per_game // max(1, n_levels))
-    )
+    per_level_cap = max(1, args.max_transitions_per_game // max(1, n_levels))
     t0 = time.time()
     n_collected = 0
     for li in range(n_levels):
