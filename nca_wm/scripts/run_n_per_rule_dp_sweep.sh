@@ -85,8 +85,14 @@ train_n_per_rule_dp() {
             --decoder_d_model 128 --decoder_n_layers 4 --decoder_n_heads 4
         )
     fi
+    # Disable CUDA command-buffer caching: large per-game eval loops at
+    # n>=100 accumulate hundreds of compiled graphs and OOM on
+    # instantiation (553 alive graphs in the n=100 cond crash). Disabling
+    # command buffers costs a small launch-overhead penalty but is the
+    # only knob that prevents the per-game-eval JIT explosion.
     CUDA_VISIBLE_DEVICES=$GPU PYTHONUNBUFFERED=1 \
         XLA_PYTHON_CLIENT_MEM_FRACTION=$XLA_PYTHON_CLIENT_MEM_FRACTION \
+        XLA_FLAGS="--xla_gpu_enable_command_buffer=" \
         .venv/bin/python3 -u -m nca_wm.train \
         --n_per_rule_games "$n" \
         --n_per_rule_universe dedup_pool \
