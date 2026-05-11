@@ -2585,6 +2585,7 @@ def train(
     mask_padded_loss: bool = False,
     val_frac: float = 0.0,
     val_eval_interval: int = 0,
+    obj_permute_aug: bool = False,
 ):
     """Train (or resume training) the NCA world model.
 
@@ -2955,6 +2956,18 @@ def train(
         halt_kl_weight=halt_kl_weight,
         halt_mode=halt_mode,
     )
+
+    # Object-permutation augmentation: precompute the CH-token id table once.
+    # CH<i> token ids occupy two ranges in the V2 vocab (CH0..63 in BASE,
+    # CH64..MAX_CHANNELS_V2-1 in EXT extension). Building a lookup once means
+    # the per-batch remap is a single numpy fancy-indexing operation.
+    obj_permute_ch_ids = None
+    if obj_permute_aug and conditional:
+        from nca_wm.tokenize_game import VOCAB, MAX_CHANNELS_V2 as _MC
+        obj_permute_ch_ids = np.array(
+            [VOCAB[f"CH{i}"] for i in range(_MC)], dtype=np.int32)
+        print(f"  [obj_permute_aug] enabled: per-batch random permutation of "
+              f"{_MC} object channels (CH-tokens + state/mask axis-1)")
     per_game_sprites_np = dataset.get("per_game_sprites")
     eval_forward = make_eval_forward(model, conditional=conditional)
     apply_fn = make_apply_fn(model)  # reused by intermittent gif rendering
@@ -3108,6 +3121,33 @@ def train(
     for step in range(n_updates):
         b_idx, _bs, _bns, _bm, _ba, _bw, _bg = _sample_bucket_batch()
         game_ids_batch = _bg
+
+        # Object-permutation augmentation: sample one π per batch, apply to
+        # state/next-state/mask channel axis. Token remap is applied below
+        # after gathering tokens_np[game_ids_batch].
+        _gt_remap = None
+        if obj_permute_ch_ids is not None:
+            buf_C = _bs.shape[1]
+            perm_full = np_rng.permutation(obj_permute_ch_ids.shape[0])
+            # Restrict permutation to the subset that actually exists in the
+            # state buffer (channels [0..buf_C-1]); leave higher channels alone.
+            perm_buf = perm_full[:buf_C]
+            # Sanity: ensure perm_buf only references in-buffer channels.
+            in_buf = perm_buf < buf_C
+            # Out-of-buffer slots get identity (i.e. swap with self) so we
+            # don't try to gather from a nonexistent channel.
+            perm_buf = np.where(in_buf, perm_buf, np.arange(buf_C))
+            _bs = _bs[:, perm_buf]
+            _bns = _bns[:, perm_buf]
+            if _bm is not None:
+                _bm = _bm[:, perm_buf]
+            # Build full vocab-size remap table for token rewrite below.
+            _gt_remap = np.arange(int(obj_permute_ch_ids.max()) + 1, dtype=np.int32)
+            # Allocate at least vocab-max + 1 by re-allocating against actual gt range
+            # — easier: build a dict-style remap and apply via np.where chain.
+            # Cleaner: use ch_token_ids as both src/dst to make a sparse remap.
+            _gt_remap = obj_permute_ch_ids  # used by remap closure below.
+
         s = jnp.array(_bs, dtype=jnp.float32)
         a_int = _ba
         a_oh = jnp.array(np.eye(N_ACTIONS, dtype=np.float32)[a_int])
@@ -3119,7 +3159,19 @@ def train(
         )
 
         if conditional:
-            gt = jnp.array(tokens_np[game_ids_batch])
+            _gt_np = tokens_np[game_ids_batch]
+            if obj_permute_ch_ids is not None:
+                # Apply CH-token remap: build a sparse lookup table over the
+                # vocab, then use np.take. Vocab-size is small (~640) and
+                # the lookup happens once per batch, so this is cheap.
+                vocab_size = int(_gt_np.max()) + 1
+                vocab_size = max(vocab_size, int(obj_permute_ch_ids.max()) + 1)
+                lut = np.arange(vocab_size, dtype=_gt_np.dtype)
+                src_ids = obj_permute_ch_ids
+                dst_ids = obj_permute_ch_ids[perm_full]
+                lut[src_ids] = dst_ids
+                _gt_np = lut[_gt_np]
+            gt = jnp.array(_gt_np)
             gm = jnp.array(masks_np[game_ids_batch])
             # Gather per-batch target sprites by game_id when sprite loss is on.
             target_sprites = None
@@ -5320,6 +5372,15 @@ def main():
                         "(replaces uniform-over-transitions sampling). Compensates "
                         "for per-game dataset-size imbalance. Pass --no-balanced_sampling "
                         "to fall back to uniform-over-transitions.")
+    p.add_argument("--obj_permute_aug", action=argparse.BooleanOptionalAction, default=False,
+                   help="Conditional only: per-batch random permutation of object "
+                        "channels at training time. Permutes axis-1 of state/next-state/"
+                        "spatial-mask tensors AND remaps CH<i> tokens in game_tokens "
+                        "(and decoder target) to CH<perm[i]>. Forces the encoder to "
+                        "represent rule structure rather than memorizing per-game "
+                        "channel-to-object identities. Per-batch (one π for all samples) "
+                        "for vmap efficiency; over training, every channel sees every "
+                        "object role. Free at inference: π is identity at eval.")
     p.add_argument("--encode_sprites", action="store_true",
                    help="Include each object's palette + 5x5 sprite in the "
                         "game-spec token sequence (uses VOCAB_SIZE_EXT and a "
@@ -6049,6 +6110,7 @@ def main():
                 mask_padded_loss=args.mask_padded_loss,
                 val_frac=args.val_frac,
                 val_eval_interval=args.val_eval_interval,
+                obj_permute_aug=args.obj_permute_aug,
             )
             # (curves saved inside train() with per-game arrays)
             os.makedirs(save_dir, exist_ok=True)
@@ -6191,6 +6253,7 @@ def main():
             mask_padded_loss=args.mask_padded_loss,
             val_frac=args.val_frac,
             val_eval_interval=args.val_eval_interval,
+            obj_permute_aug=args.obj_permute_aug,
         )
 
         # Save training curves
