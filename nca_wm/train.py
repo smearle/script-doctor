@@ -46,6 +46,68 @@ from nca_wm.tokenize_game import (
 N_ACTIONS = 5
 TRANSITIONS_CACHE_VERSION = 5
 
+# Bounded per-level transition cache (on disk + in the per-level RAM array).
+# Levels are cached up to this many transitions; the per-GAME train/val budgets
+# are then water-filled across levels at dataset-assembly time (see
+# collect_multigame_dataset). Keeps disk bounded while letting complex levels
+# receive far more than an equal split when the per-game budget allows.
+TRANSITIONS_CACHE_CAP = 200_000
+
+
+def _water_fill(counts, budget: int):
+    """Max-min fair allocation of an integer ``budget`` across bins with
+    capacities ``counts``. Each round splits the remaining budget equally among
+    not-yet-full bins, capping at each bin's capacity and recycling the leftover
+    from bins that fill up — so a simple level's slack flows to complex levels
+    instead of being wasted (unlike ``budget // n_levels``).
+
+    Returns an int array ``alloc`` with ``alloc[i] <= counts[i]`` and
+    ``sum(alloc) == min(budget, sum(counts))``.
+    """
+    counts = np.asarray(counts, dtype=np.int64)
+    alloc = np.zeros(len(counts), dtype=np.int64)
+    remaining = int(budget)
+    active = counts > 0
+    while remaining > 0 and active.any():
+        share = remaining // int(active.sum())
+        if share == 0:
+            # Hand out the sub-bin remainder one at a time to bins with room.
+            for j in np.where(active)[0]:
+                if remaining <= 0:
+                    break
+                if alloc[j] < counts[j]:
+                    alloc[j] += 1
+                    remaining -= 1
+            break
+        progressed = False
+        for j in np.where(active)[0]:
+            give = min(share, int(counts[j] - alloc[j]))
+            if give > 0:
+                alloc[j] += give
+                remaining -= give
+                progressed = True
+            if alloc[j] >= counts[j]:
+                active[j] = False
+        if not progressed:
+            break
+    return alloc
+
+
+def _enabled_action_count(json_str: str) -> int:
+    """Number of *enabled* actions for a game: 4 if it declares ``noaction``
+    (the X/"action" key is disabled), else N_ACTIONS (5).
+
+    Mirrors ``actionCount()`` in puzzlescript_cpp/src/solver.cpp, which the C++
+    search/transition collector uses — so random-rollout eval samples the SAME
+    action set the training data was collected over and never feeds a disabled
+    "action" key the model could not have learned. The action one-hot width
+    stays N_ACTIONS; only the sampled range shrinks."""
+    try:
+        meta = json.loads(json_str).get("metadata", {})
+    except Exception:
+        return N_ACTIONS
+    return N_ACTIONS - 1 if "noaction" in meta else N_ACTIONS
+
 
 # ---------------------------------------------------------------------------
 # 1. Data collection with per-game cache
@@ -102,7 +164,6 @@ def _solution_from_sol_dir(
     sol_root: str,
     game_name: str,
     level_i: int,
-    translate_js_to_jax: bool = False,
     algos: tuple[str, ...] = ("astar", "bfs", "gbfs", "mcts"),
 ) -> list[int] | None:
     """Look for a pre-computed winning solution under
@@ -111,11 +172,10 @@ def _solution_from_sol_dir(
     gbfs > mcts; within each algorithm, larger search budgets first. Pass
     `algos=(algo,)` when an evaluation cache is algorithm-specific.
 
-    Solutions under `data/cpp_sols/` use the same C++-backend action IDs as
-    eval rollouts (no translation). Solutions under `data/js_sols/` use the
-    JS-engine convention; pass `translate_js_to_jax=True` to remap to the
-    JAX/CPP convention via the table in
-    `.claude/projects/.../memory/reference_action_mappings.md`.
+    Both `data/cpp_sols/` and `data/js_sols/` store actions in the C++-backend
+    action convention used by eval rollouts, so they are read as-is. (Verified
+    empirically 2026-05-21: identity replay wins on 26/26 (game,level) js_sols
+    across 14 games; the former JS→JAX remap corrupted already-correct actions.)
     """
     import glob
     import json
@@ -133,8 +193,6 @@ def _solution_from_sol_dir(
                                        if re.search(r"_(\d+)-steps_", p) else 0,
                         reverse=True)
         candidates.extend(files)
-    # JS → JAX action-ID remap: js[0,1,2,3,4]=L,R,U,D,A → jax[0,2,3,1,4]=L,D,R,U,A.
-    JS2JAX = [0, 2, 3, 1, 4]
     for path in candidates:
         try:
             with open(path) as f:
@@ -146,11 +204,6 @@ def _solution_from_sol_dir(
         actions = d.get("actions") or []
         if not actions:
             continue
-        if translate_js_to_jax:
-            try:
-                actions = [JS2JAX[int(a)] for a in actions]
-            except (IndexError, ValueError):
-                continue
         return [int(a) for a in actions]
     return None
 
@@ -1020,7 +1073,7 @@ def _pad_packed(
 # Merged-dataset cache format version. Bump on any change to dataset
 # layout (new keys, packed-array shape, etc.). Encoded into the cache
 # filename so old-version files are easy to identify and evict.
-DATASET_FORMAT_VERSION = 17  # v17: per-transition real (C,H,W) for masks/buckets
+DATASET_FORMAT_VERSION = 18  # v18: water-filled per-game budget + val carved from full explored set (per_game_val_idx)
 
 # Skip writing the merged-dataset cache when total transition count
 # is below this threshold. Tiny merged caches (sub-MB) save < 1s on
@@ -1044,6 +1097,7 @@ def _dataset_cache_key(
     encode_sprites: bool = False,
     max_transitions_per_game: int | None = None,
     train_levels: list[int] | None = None,
+    val_frac: float = 0.0,
 ) -> str:
     """Deterministic hash of all args that affect dataset contents."""
     import hashlib
@@ -1057,6 +1111,7 @@ def _dataset_cache_key(
         "search_timeout_ms": search_timeout_ms,
         "encode_sprites": encode_sprites,
         "max_transitions_per_game": max_transitions_per_game,
+        "val_frac": round(float(val_frac), 6),
     }, sort_keys=True)
     return hashlib.sha256(blob.encode()).hexdigest()[:16]
 
@@ -1149,15 +1204,22 @@ def collect_multigame_dataset(
     encode_sprites: bool = False,
     max_transitions_per_game: int | None = None,
     train_levels: list[int] | None = None,
+    val_frac: float = 0.0,
 ) -> tuple[dict, list[dict]]:
     """Collect padded transitions from multiple games via search-based unique-transition exploration.
 
     Args:
         level_i: If None (default), collect from all levels. If int, collect from that level only.
+        max_transitions_per_game: per-game TRAIN budget, water-filled across the
+            game's levels (a simple level's slack flows to complex levels —
+            see ``_water_fill``), not an equal ``// n_levels`` split.
+        val_frac: fraction held out for validation, carved from the FULL
+            explored set per level (so val is representative of the true
+            distribution, not of the capped train subsample). Held-out indices
+            are returned as ``per_game_val_idx``; train() consumes them.
 
     Returns:
-        dataset: merged dict with keys "states", "actions", "next_states", "game_ids"
-            all padded to (max_n_objs, max_H, max_W).
+        dataset: merged dict with per-game packed states + ``per_game_val_idx``.
         game_infos: list of per-game metadata dicts.
     """
     # Check for cached merged dataset (shared across experiments)
@@ -1167,6 +1229,7 @@ def collect_multigame_dataset(
         encode_sprites=encode_sprites,
         max_transitions_per_game=max_transitions_per_game,
         train_levels=train_levels,
+        val_frac=val_frac,
     )
     merged_cache_dir = os.path.join(ROLLOUT_CACHE_DIR, "_merged")
     # Auto-evict pre-versioning legacy files and explicit older versions.
@@ -1286,6 +1349,7 @@ def collect_multigame_dataset(
     per_game_next_states = []
     per_game_wons = []
     per_game_transition_shapes = []
+    per_game_val_idx = []   # list of (n_val_g,) int32 — held-out indices per game
     collected_game_infos = []
 
     for game_id, info in enumerate(game_infos):
@@ -1311,10 +1375,11 @@ def collect_multigame_dataset(
         # than the env-probe reported (objects added by rules/legend not
         # present at level spawn), so we re-pad all levels at the end once
         # we know the true max.
-        per_level_cap = (
-            max(1, max_transitions_per_game // max(1, len(levels)))
-            if max_transitions_per_game is not None else None
-        )
+        #
+        # Each level is cached up to TRANSITIONS_CACHE_CAP (bounded disk/RAM);
+        # the per-GAME train/val budgets are water-filled across levels below,
+        # so a complex level can draw far more than an equal split.
+        per_level_cap = TRANSITIONS_CACHE_CAP
         raw_levels = []
         for li in levels:
             print(f"  Level {li}:")
@@ -1339,32 +1404,62 @@ def collect_multigame_dataset(
                 g_W = max(g_W, lW)
             raw_levels.append(level_data)
 
-        # Second pass: pad all levels to the refined per-game max and concat.
-        # Each pad happens in unpacked space (per-level RAM cost ≤ per-level
-        # cap × g_C × g_H × g_W bytes), then immediately repacks.
-        for level_data in raw_levels:
-            if len(level_data["states"]) == 0:
+        # Second pass: water-fill the per-game train + val budgets across this
+        # game's levels (a simple level's slack flows to complex levels), carve
+        # val from the FULL explored set per level, then pad the selected rows
+        # to the refined per-game max and concat. Per-game array layout: each
+        # level contributes its train rows then its val rows; val positions are
+        # recorded (global indices into the concatenated per-game array).
+        level_counts = [len(ld["states"]) for ld in raw_levels]
+        total_explored = int(sum(level_counts))
+        if total_explored == 0:
+            print(f"  {name}: skipping — no transitions across any level")
+            continue
+        train_budget = (max_transitions_per_game if max_transitions_per_game
+                        is not None else total_explored)
+        rng = np.random.RandomState(42 + game_id)
+
+        # Hold out val_frac of EACH level's full explored set (a uniform
+        # per-level fraction — representative of the true distribution and never
+        # consuming a whole small level), then water-fill the per-game TRAIN
+        # budget over what remains so complex levels draw more than an equal share.
+        train_pool_idx, val_pick = [], []
+        for i in range(len(raw_levels)):
+            ci = level_counts[i]
+            if ci == 0:
+                train_pool_idx.append(np.empty(0, np.int64))
+                val_pick.append(np.empty(0, np.int64))
                 continue
-            lW = int(level_data["W"])
-            n_level = len(level_data["states"])
-            game_states.append(
-                _pad_packed(level_data["states"], lW, g_C, g_H, g_W))
-            game_actions.append(level_data["actions"])
-            game_next_states.append(
-                _pad_packed(level_data["next_states"], lW, g_C, g_H, g_W))
-            game_wons.append(np.asarray(level_data["wons"], dtype=np.uint8))
-            game_transition_shapes.append(
-                np.tile(
-                    np.array([[level_data["states"].shape[1],
-                               level_data["states"].shape[2],
-                               lW]], dtype=np.int32),
-                    (n_level, 1),
-                )
-            )
+            vi = max(0, min(ci - 1, int(round(ci * val_frac)))) if val_frac > 0 else 0
+            perm = rng.permutation(ci)
+            val_pick.append(perm[:vi])
+            train_pool_idx.append(perm[vi:])
+        train_alloc = _water_fill([len(p) for p in train_pool_idx], train_budget)
+
+        val_positions, offset = [], 0
+        for i, ld in enumerate(raw_levels):
+            if level_counts[i] == 0:
+                continue
+            train_sel = train_pool_idx[i][:int(train_alloc[i])]
+            val_sel = val_pick[i]
+            sel = np.concatenate([train_sel, val_sel]).astype(np.int64)
+            if len(sel) == 0:
+                continue
+            lW = int(ld["W"])
+            game_states.append(_pad_packed(ld["states"][sel], lW, g_C, g_H, g_W))
+            game_next_states.append(_pad_packed(ld["next_states"][sel], lW, g_C, g_H, g_W))
+            game_actions.append(np.asarray(ld["actions"])[sel])
+            game_wons.append(np.asarray(ld["wons"], dtype=np.uint8)[sel])
+            game_transition_shapes.append(np.tile(
+                np.array([[ld["states"].shape[1], ld["states"].shape[2], lW]],
+                         dtype=np.int32), (len(sel), 1)))
+            # val rows are the tail of this level's block
+            val_positions.append(
+                offset + len(train_sel) + np.arange(len(val_sel), dtype=np.int64))
+            offset += len(sel)
 
         if not game_states:
-            # No data collected for any level of this game (e.g. all empty).
-            print(f"  {name}: skipping — no transitions across any level")
+            print(f"  {name}: skipping — no transitions selected")
             continue
 
         # Record refined shape so game_infos is accurate for later code paths.
@@ -1377,17 +1472,9 @@ def collect_multigame_dataset(
         next_states = np.concatenate(game_next_states)
         wons = np.concatenate(game_wons)
         transition_shapes = np.concatenate(game_transition_shapes)
+        val_idx_g = (np.concatenate(val_positions) if val_positions
+                     else np.empty(0, np.int64)).astype(np.int32)
         n_trans = len(states)
-
-        # Safety-net cap after concat in case per-level caps didn't quite tally.
-        if (max_transitions_per_game is not None
-                and n_trans > max_transitions_per_game):
-            rng = np.random.RandomState(42 + game_id)
-            idx = rng.choice(n_trans, size=max_transitions_per_game, replace=False)
-            states = states[idx]; actions = actions[idx]
-            next_states = next_states[idx]; wons = wons[idx]
-            transition_shapes = transition_shapes[idx]
-            n_trans = len(states)
 
         info["n_transitions"] = n_trans
         info["n_wins"] = int(wons.sum())
@@ -1398,12 +1485,14 @@ def collect_multigame_dataset(
         per_game_next_states.append(next_states)
         per_game_wons.append(wons)
         per_game_transition_shapes.append(transition_shapes)
+        per_game_val_idx.append(val_idx_g)
 
         changed = (states != next_states).any(axis=(1, 2, 3))
-        print(f"  {name}: {n_trans:,} transitions, {changed.sum():,} with state change "
+        print(f"  {name}: {n_trans:,} kept ({n_trans - len(val_idx_g):,} train + "
+              f"{len(val_idx_g):,} val) of {total_explored:,} explored over "
+              f"{len(levels)} levels; {changed.sum():,} changed "
               f"({100*changed.mean():.1f}%), {wons.sum():,} winning "
-              f"({100*wons.mean():.3f}%), "
-              f"shape=({g_C}, {g_H}, {g_W})")
+              f"({100*wons.mean():.3f}%), shape=({g_C}, {g_H}, {g_W})")
 
     game_infos = collected_game_infos
     if not game_infos:
@@ -1462,6 +1551,9 @@ def collect_multigame_dataset(
         "per_game_actions": per_game_actions,       # list of (N_g,) int32
         "per_game_wons": per_game_wons,             # list of (N_g,) uint8
         "per_game_transition_shapes": per_game_transition_shapes,  # list of (N_g,3) real C,H,W
+        # Held-out val indices per game (carved from the FULL explored set, not
+        # the capped train subsample) — consumed by train()'s val split.
+        "per_game_val_idx": per_game_val_idx,       # list of (n_val_g,) int32
         "per_game_tokens": per_game_tokens,         # (n_games, max_tok_len) int32
         "per_game_masks": per_game_masks,           # (n_games, max_tok_len) bool
         "per_game_sprites": per_game_sprites,       # (n_games, max_C, 5, 5, 4) uint8
@@ -1813,6 +1905,7 @@ def collect_multigame_dataset_synthetic(
 PER_GAME_LIST_KEYS = (
     "per_game_states", "per_game_next_states",
     "per_game_actions", "per_game_wons", "per_game_transition_shapes",
+    "per_game_val_idx",
 )
 
 
@@ -2677,18 +2770,33 @@ def train(
         masks_np = dataset["per_game_masks"]     # (n_games, max_tok_len) bool
 
     # === Per-game train/val split on transitions ===
-    # When val_frac > 0 we hold out a uniform fraction of each game's
-    # transitions, deterministically by `seed`. The held-out indices are
-    # NEVER drawn during training-batch sampling and form a parallel
-    # "test bucket" set that periodic test_eval rolls over for a curve.
-    # val_frac=0.0 (default) preserves legacy behavior end-to-end.
+    # Prefer the dataset's pre-carved val indices (`per_game_val_idx`), which
+    # collect_multigame_dataset carves from the FULL explored set per level
+    # (representative of the true distribution, not the capped train subsample).
+    # Datasets without them (single-game flat dict, synthetic) fall back to a
+    # deterministic per-game uniform split by `seed`. Held-out indices are NEVER
+    # drawn during training-batch sampling. val_frac=0 ⇒ no holdout.
     val_frac = max(0.0, float(val_frac))
+    provided_val = dataset.get("per_game_val_idx")
+    use_provided = provided_val is not None
     per_game_val_idx: dict[int, np.ndarray] = {}
     per_game_train_mask: dict[int, np.ndarray] = {}  # bool, len=per_game_n[g]
     val_split_summary = []
     for g in range(n_games):
         n_g = int(per_game_n[g])
         if n_g == 0:
+            continue
+        if use_provided:
+            vs = (np.asarray(provided_val[g], dtype=np.int64)
+                  if g < len(provided_val) else np.empty(0, np.int64))
+            vs = vs[(vs >= 0) & (vs < n_g)]
+            if 0 < len(vs) < n_g:
+                per_game_val_idx[g] = vs.astype(np.int32)
+                mask = np.ones(n_g, dtype=bool); mask[vs] = False
+                per_game_train_mask[g] = mask
+                val_split_summary.append((g, n_g, len(vs)))
+            else:
+                per_game_train_mask[g] = np.ones(n_g, dtype=bool)
             continue
         if val_frac <= 0.0:
             per_game_train_mask[g] = np.ones(n_g, dtype=bool)
@@ -2705,13 +2813,15 @@ def train(
         mask = np.ones(n_g, dtype=bool); mask[val_sel] = False
         per_game_train_mask[g] = mask
         val_split_summary.append((g, n_g, n_val))
-    if val_frac > 0.0 and val_split_summary:
+    if val_split_summary:
         n_train_tot = sum(int(per_game_train_mask[g].sum())
                           for g in range(n_games)
                           if int(per_game_n[g]) > 0)
         n_val_tot = sum(len(per_game_val_idx.get(g, []))
                          for g in range(n_games))
-        print(f"  [val_frac={val_frac:.3f}] held out {n_val_tot:,} / "
+        src = "dataset-carved val (full explored set)" if use_provided \
+            else f"val_frac={val_frac:.3f}"
+        print(f"  [{src}] held out {n_val_tot:,} / "
               f"{n_train_tot + n_val_tot:,} transitions across "
               f"{len(val_split_summary)} games")
 
@@ -3558,6 +3668,7 @@ def evaluate_world_model(
     env = CppPuzzleScriptEnv(json_str, level_i=level_i, max_episode_steps=max_steps)
     apply_fn = make_apply_fn(model)
 
+    n_act = _enabled_action_count(json_str)
     all_l1_errors = []
     for ep_i in range(n_episodes):
         real_obs, _ = env.reset()
@@ -3565,7 +3676,7 @@ def evaluate_world_model(
         ep_errors = []
 
         for t in range(max_steps):
-            action = np.random.randint(N_ACTIONS)
+            action = np.random.randint(n_act)
             a_oh = jnp.array(np.eye(N_ACTIONS, dtype=np.float32)[action][None])
 
             # World model prediction
@@ -3639,11 +3750,12 @@ def _run_eval_rollout(
     pred_state = _pad_state_for_model(real_obs, max_C, max_H, max_W)
 
     n_steps = len(actions) if actions else max_steps
+    n_act = _enabled_action_count(json_str)
     wrong_tiles = []
     wrong_cells = []
     first_div = -1
     for t in range(n_steps):
-        action = actions[t] if actions else np.random.randint(N_ACTIONS)
+        action = actions[t] if actions else np.random.randint(n_act)
         a_oh = jnp.array(np.eye(N_ACTIONS, dtype=np.float32)[action][None])
 
         if conditional:
@@ -3744,7 +3856,7 @@ def _run_eval_rollouts_batched(
         actions_per_step = np.asarray(actions_2d, dtype=np.int32).T
     else:
         rng = np.random.default_rng(rng_seed)
-        actions_per_step = rng.integers(0, N_ACTIONS,
+        actions_per_step = rng.integers(0, _enabled_action_count(json_str),
                                         size=(max_steps, n_episodes), dtype=np.int32)
     eye = np.eye(N_ACTIONS, dtype=np.float32)
 
@@ -3897,6 +4009,7 @@ def _run_eval_rollouts_jax(
     teacher_forced: bool = False,
     rng_seed: int = 0,
     actions_2d: np.ndarray | None = None,
+    return_both: bool = False,
 ) -> dict:
     """Fully JAX-side eval: pre-roll the C++ env once, then run the entire
     model rollout as a single JIT'd ``lax.scan`` over time. Eliminates
@@ -3905,7 +4018,15 @@ def _run_eval_rollouts_jax(
     Both AR and TF use scan over time, batching only across episodes — so
     peak memory is the same (n_episodes per-step), no OOM at large max_steps.
 
-    Returns the same dict shape as ``_run_eval_rollouts_batched``.
+    With ``return_both=True`` the SAME pre-rolled real trajectory and SAME
+    action sequence feed both the autoregressive and teacher-forced scans, so
+    the two sets of metrics describe the identical random rollout (and the
+    env is pre-rolled only once). Returned keys are then prefixed ``ar_`` /
+    ``tf_`` (``ar_wrong_tiles_grid``, ``tf_first_div``, …). The action grid is
+    always returned under ``actions_2d`` for reproducible re-rendering.
+
+    Returns the same dict shape as ``_run_eval_rollouts_batched`` (single
+    mode) or the prefixed form (``return_both``).
     """
     conditional = game_tokens is not None
 
@@ -3914,7 +4035,7 @@ def _run_eval_rollouts_jax(
         actions_2d = np.asarray(actions_2d, dtype=np.int32)
     else:
         rng = np.random.default_rng(rng_seed)
-        actions_2d = rng.integers(0, N_ACTIONS,
+        actions_2d = rng.integers(0, _enabled_action_count(json_str),
                                   size=(n_episodes, max_steps), dtype=np.int32)
 
     # 2. Pre-roll real envs in C++ (sequential but fast).
@@ -3968,57 +4089,65 @@ def _run_eval_rollouts_jax(
     a_oh_T = jnp.transpose(a_oh_traj, (1, 0, 2))                     # (T, n_eps, A)
     real_next_T = jnp.transpose(real_padded_jax[:, 1:],
                                 (1, 0, 2, 3, 4))                     # (T, n_eps, C, H, W)
+    states_in_T = jnp.transpose(real_padded_jax[:, :max_steps],
+                                (1, 0, 2, 3, 4))                     # (T, n_eps, C, H, W)
+    init_state = real_padded_jax[:, 0]                              # (n_eps, C, H, W)
+    cond_args = (gt_b, gm_b) if conditional else ()
 
-    if teacher_forced:
-        states_in_T = jnp.transpose(real_padded_jax[:, :max_steps],
-                                    (1, 0, 2, 3, 4))                  # (T, n_eps, C, H, W)
-        if conditional:
-            wb_T, wc_T = fns["tf"](params, states_in_T, a_oh_T, real_next_T,
-                                   valid_mask_jax, cell_valid_mask_jax,
-                                   gt_b, gm_b)
-        else:
-            wb_T, wc_T = fns["tf"](params, states_in_T, a_oh_T, real_next_T,
-                                   valid_mask_jax, cell_valid_mask_jax)
-    else:
-        init_state = real_padded_jax[:, 0]                            # (n_eps, C, H, W)
-        if conditional:
-            wb_T, wc_T = fns["ar"](params, init_state, a_oh_T, real_next_T,
-                                   valid_mask_jax, cell_valid_mask_jax,
-                                   gt_b, gm_b)
-        else:
-            wb_T, wc_T = fns["ar"](params, init_state, a_oh_T, real_next_T,
-                                   valid_mask_jax, cell_valid_mask_jax)
+    def _run_tf():
+        return fns["tf"](params, states_in_T, a_oh_T, real_next_T,
+                         valid_mask_jax, cell_valid_mask_jax, *cond_args)
 
-    wrong_bits = jnp.transpose(wb_T, (1, 0))    # (n_eps, T)
-    wrong_cells = jnp.transpose(wc_T, (1, 0))
-
-    # 7. Mask past per-ep termination.
-    wrong_bits_np = np.asarray(wrong_bits)
-    wrong_cells_np = np.asarray(wrong_cells)
-    grid_bits = np.full((n_episodes, max_steps), np.nan, dtype=np.float64)
-    grid_cells = np.full((n_episodes, max_steps), np.nan, dtype=np.float64)
-    for i in range(n_episodes):
-        L = int(per_ep_length[i])
-        grid_bits[i, :L] = wrong_bits_np[i, :L]
-        grid_cells[i, :L] = wrong_cells_np[i, :L]
-
-    first_div = np.full(n_episodes, -1, dtype=np.int64)
-    for i in range(n_episodes):
-        L = int(per_ep_length[i])
-        for t in range(L):
-            if wrong_cells_np[i, t] > 0:
-                first_div[i] = t
-                break
+    def _run_ar():
+        return fns["ar"](params, init_state, a_oh_T, real_next_T,
+                         valid_mask_jax, cell_valid_mask_jax, *cond_args)
 
     max_len = int(per_ep_length.max()) if per_ep_length.max() > 0 else 0
-    return {
-        "wrong_tiles_grid": grid_bits[:, :max_len],
-        "wrong_cells_grid": grid_cells[:, :max_len],
-        "first_div": first_div,
+
+    def _postprocess(wb_T, wc_T):
+        # (T, n_eps) -> (n_eps, T), mask past per-ep termination, first-div.
+        wb = np.asarray(jnp.transpose(wb_T, (1, 0)))
+        wc = np.asarray(jnp.transpose(wc_T, (1, 0)))
+        grid_bits = np.full((n_episodes, max_steps), np.nan, dtype=np.float64)
+        grid_cells = np.full((n_episodes, max_steps), np.nan, dtype=np.float64)
+        first_div = np.full(n_episodes, -1, dtype=np.int64)
+        for i in range(n_episodes):
+            L = int(per_ep_length[i])
+            grid_bits[i, :L] = wb[i, :L]
+            grid_cells[i, :L] = wc[i, :L]
+            for t in range(L):
+                if wc[i, t] > 0:
+                    first_div[i] = t
+                    break
+        return {
+            "wrong_tiles_grid": grid_bits[:, :max_len],
+            "wrong_cells_grid": grid_cells[:, :max_len],
+            "first_div": first_div,
+        }
+
+    common = {
         "per_ep_length": per_ep_length,
         "total_tiles": total_tiles,
         "total_cells": total_cells,
+        "actions_2d": actions_2d[:, :max_len] if max_len > 0 else actions_2d,
     }
+
+    if return_both:
+        # Same pre-rolled trajectory + same actions feed BOTH scans, so AR and
+        # TF describe the identical rollout. With shared actions the per-episode
+        # invariant is exact: if TF is correct at every step, AR re-derives the
+        # same states it would be fed under TF, so AR is correct too — any AR
+        # error therefore coincides with a nonzero 1-step (TF) error.
+        out = dict(common)
+        for prefix, res in (("ar", _postprocess(*_run_ar())),
+                            ("tf", _postprocess(*_run_tf()))):
+            for k, v in res.items():
+                out[f"{prefix}_{k}"] = v
+        return out
+
+    out = _postprocess(*(_run_tf() if teacher_forced else _run_ar()))
+    out.update(common)
+    return out
 
 
 def _benchmark_eval_impls(model, params, game_infos,
@@ -4058,7 +4187,7 @@ def _benchmark_eval_impls(model, params, game_infos,
         cond_kwargs = {}
 
     rng = np.random.default_rng(rng_seed)
-    actions_2d = rng.integers(0, N_ACTIONS,
+    actions_2d = rng.integers(0, _enabled_action_count(json_str),
                               size=(n_episodes, max_steps), dtype=np.int32)
 
     print(f"\n=== Benchmark on {name} L0 "
@@ -4217,35 +4346,38 @@ def evaluate_multigame(
             level_results = {}
 
             # --- Random rollouts (autoregressive + teacher-forced) ---
-            # Pre-roll C++ env once, then run the entire rollout as a
-            # single JIT'd lax.scan. ~16x faster than the per-episode loop
-            # and ~3x faster than the simple batched version. See
-            # _benchmark_eval_impls for the comparison.
-            for mode_name, tf in [("random", False), ("random_tf", True)]:
-                r = _run_eval_rollouts_jax(
-                    model, params, json_str, level_i, n_objs,
-                    max_C, max_H, max_W,
-                    n_episodes=n_random_episodes,
-                    max_steps=max_steps,
-                    teacher_forced=tf, **cond_kwargs,
-                )
-                bits_p = r["wrong_tiles_grid"]
-                cells_p = r["wrong_cells_grid"]
+            # ONE pre-roll of the C++ env feeds BOTH scans (return_both), so
+            # AR ("random") and TF ("random_tf") report on the identical
+            # action sequence and real trajectory — directly comparable
+            # per-step/per-episode, and the env is rolled only once. The
+            # rollout itself is a single JIT'd lax.scan; see
+            # _benchmark_eval_impls for the per-impl timing comparison.
+            r_both = _run_eval_rollouts_jax(
+                model, params, json_str, level_i, n_objs,
+                max_C, max_H, max_W,
+                n_episodes=n_random_episodes,
+                max_steps=max_steps,
+                return_both=True, **cond_kwargs,
+            )
+            for mode_name, prefix in [("random", "ar"), ("random_tf", "tf")]:
+                bits_p = r_both[f"{prefix}_wrong_tiles_grid"]
+                cells_p = r_both[f"{prefix}_wrong_cells_grid"]
                 max_len = bits_p.shape[1]
                 mean_bits = (np.nanmean(bits_p, axis=0)
                              if max_len > 0 else np.zeros(0))
                 mean_cells = (np.nanmean(cells_p, axis=0)
                               if max_len > 0 else np.zeros(0))
                 # First-divergence: treat -1 (no divergence) as max_len (best case)
-                fd = np.array([max_len if x < 0 else x for x in r["first_div"]])
+                fd = np.array([max_len if x < 0 else x
+                               for x in r_both[f"{prefix}_first_div"]])
                 level_results[mode_name] = {
-                    "mean_error_rate": mean_bits / r["total_tiles"],
-                    "mean_cell_error_rate": mean_cells / r["total_cells"],
+                    "mean_error_rate": mean_bits / r_both["total_tiles"],
+                    "mean_cell_error_rate": mean_cells / r_both["total_cells"],
                     "mean_wrong_tiles": mean_bits,
                     "mean_wrong_cells": mean_cells,
                     "mean_first_div": float(fd.mean()),
-                    "total_tiles": r["total_tiles"],
-                    "total_cells": r["total_cells"],
+                    "total_tiles": r_both["total_tiles"],
+                    "total_cells": r_both["total_cells"],
                 }
 
             # --- Search rollouts ---
@@ -4279,20 +4411,18 @@ def evaluate_multigame(
                     )
                     source_kind = "transitions_cache" if sol_actions is not None else ""
                 if sol_actions is None:
-                    # Pre-computed solutions from prior search_cpp / search_nodejs
-                    # runs. cpp_sols use the same C++-backend action IDs as eval.
+                    # Pre-computed solutions from prior search runs. Both
+                    # cpp_sols and js_sols store the C++-backend action IDs eval
+                    # uses (read as-is — see _solution_from_sol_dir).
                     sol_actions = _solution_from_sol_dir(
                         os.path.join(_REPO_ROOT, "data", "cpp_sols"),
-                        name, level_i, translate_js_to_jax=False,
-                        algos=(algo,),
+                        name, level_i, algos=(algo,),
                     )
                     source_kind = "cpp_sols" if sol_actions is not None else ""
                 if sol_actions is None:
-                    # js_sols use the JS-engine action convention; remap to JAX/CPP.
                     sol_actions = _solution_from_sol_dir(
                         os.path.join(_REPO_ROOT, "data", "js_sols"),
-                        name, level_i, translate_js_to_jax=True,
-                        algos=(algo,),
+                        name, level_i, algos=(algo,),
                     )
                     source_kind = "js_sols" if sol_actions is not None else ""
                 if sol_actions is None:
@@ -4411,8 +4541,31 @@ def evaluate_multigame(
                         save_dict[f"{key}_first_div_step"] = np.array(
                             metrics["first_div_step"])
         np.savez(os.path.join(save_dir, "eval_multigame.npz"), **save_dict)
+        _write_run_scorecard(save_dir)
 
     return results
+
+
+def _write_run_scorecard(save_dir: str) -> None:
+    """Render the train/val curve + per-level eval scorecard into ``save_dir``
+    so every finished run carries its own figures/tables. Decoupled from the
+    training process (subprocess, isolated matplotlib) and never fatal."""
+    import subprocess
+    scripts_dir = os.path.join(os.path.dirname(__file__), "scripts")
+    jobs = [
+        ([sys.executable, os.path.join(scripts_dir, "plot_train_val_curves.py"),
+          save_dir, "--out", os.path.join(save_dir, "train_val_curves.pdf"),
+          "--title", os.path.basename(save_dir.rstrip("/"))],
+         "train_val_curves"),
+        ([sys.executable, os.path.join(scripts_dir, "summarize_run.py"), save_dir],
+         "eval_summary"),
+    ]
+    for cmd, label in jobs:
+        try:
+            subprocess.run(cmd, check=True, capture_output=True, text=True, timeout=600)
+            print(f"  wrote {label} into {save_dir}")
+        except Exception as e:
+            print(f"  [warn] {label} generation failed: {e}")
 
 
 def _render_training_gif(
@@ -4426,15 +4579,24 @@ def _render_training_gif(
     conditional: bool,
     game_tokens=None, game_mask=None,
     banner_text: str = "",
+    level_i: int = 0,
+    actions: list[int] | None = None,
 ):
-    """Render a short (real | predicted) side-by-side rollout GIF.
+    """Render a (real | NCA prediction | diff) side-by-side rollout GIF.
 
     Designed to be fast enough to run intermittently during training — a
     single short rollout (default 15 steps) rendered at native resolution.
+    Works for any architecture (rule_attn included) since it only calls the
+    model's own ``apply_fn`` — no viz/intermediates rebuild.
 
-    Uses the game's declared sprites for BOTH real and predicted states;
-    the "prediction" is the model's autoregressive rollout, thresholded to
-    multihot, with each cell rendered by its top set channel.
+    Left panel = real env rollout (declared sprites). Middle = the model's
+    autoregressive prediction, thresholded to multihot and rendered with the
+    same sprites (learned sprite kernels if the model has a decoder). Right =
+    the real frame with mispredicted cells tinted red, so AR drift is visible.
+
+    ``actions`` (if given) replaces the seeded random action sequence — pass
+    the exact action row used by eval to render the rollout behind a metric.
+    ``level_i`` selects the level (default 0).
     """
     import imageio.v2 as imageio
     from puzzlescript_jax.font import (
@@ -4444,14 +4606,15 @@ def _render_training_gif(
     rng = np.random.RandomState(seed)
     json_str = game_info["json_str"]
     n_objs = game_info["n_objs"]
+    n_loop = len(actions) if actions is not None else n_steps
 
-    env = CppPuzzleScriptEnv(json_str, level_i=0, max_episode_steps=n_steps)
+    env = CppPuzzleScriptEnv(json_str, level_i=level_i, max_episode_steps=n_loop)
     real_obs, _ = env.reset()
     _, H, W = real_obs.shape
 
     # Load this level into the provided renderer (sprite data was pre-loaded
     # by the caller via compile_game).
-    backend_render.load_level(game_text="", level_i=0)
+    backend_render.load_level(game_text="", level_i=level_i)
 
     # Fetch learned sprite kernels once for the whole rollout. Only active
     # when the underlying model has sprite_decoder=True (otherwise the
@@ -4463,10 +4626,14 @@ def _render_training_gif(
         dummy_state = _pad_state_for_model(real_obs, max_C, max_H, max_W)
         dummy_action = jnp.zeros((1, N_ACTIONS), dtype=jnp.float32)
         _, _, sprite_logits = apply_fn(params, dummy_state, dummy_action, gt0, gm0)
-        sprite_probs = np.asarray(jax.nn.sigmoid(sprite_logits[0]))  # (n_out, 5, 5, 4)
-        # Anything non-trivially non-zero? Treat zeros as "decoder off".
-        if float(np.abs(sprite_probs).max()) > 1e-4:
-            learned_sprites_u8 = (sprite_probs[:n_objs] * 255.0).clip(0, 255).astype(np.uint8)
+        sprite_logits_np = np.asarray(sprite_logits[0])  # (n_out, 5, 5, 4)
+        # Decoder-off models (encode_sprites=False, e.g. rule_attn here) emit
+        # identically-zero sprite logits — sigmoid(0)=0.5 is a uniform grey, so
+        # gate on the RAW logits, not the sigmoid. Otherwise the prediction
+        # panel renders as grey mush instead of the game's declared sprites.
+        if float(np.abs(sprite_logits_np).max()) > 1e-4:
+            sp = 1.0 / (1.0 + np.exp(-sprite_logits_np[:n_objs]))
+            learned_sprites_u8 = (sp * 255.0).clip(0, 255).astype(np.uint8)
 
     action_names = {0: "up", 1: "left", 2: "down", 3: "right", 4: "action"}
 
@@ -4483,61 +4650,44 @@ def _render_training_gif(
             mh.astype(np.float32), learned_sprites_u8
         )
 
-    def _render_soft_declared(logits_np: np.ndarray, n_objs: int) -> np.ndarray:
-        """Per-channel sigmoid-weighted alpha composite of the game's
-        declared sprites. Used when no learned decoder is active."""
-        probs = 1.0 / (1.0 + np.exp(-logits_np))
-        out = np.zeros((H * 5, W * 5, 3), dtype=np.float32)
-        for c in range(n_objs):
-            channel_mh = np.zeros((n_objs, H, W), dtype=np.uint8)
-            channel_mh[c] = 1
-            sprite_frame = backend_render.render_frame_from_objects(
-                _multihot_to_objects(channel_mh), W, H
-            )[..., :3].astype(np.float32)
-            p = probs[c]
-            p_up = np.kron(p, np.ones((5, 5), dtype=np.float32))[..., None]
-            out = out * (1.0 - p_up) + sprite_frame * p_up
+    def _tint_diff(real_img: np.ndarray, mismatch_hw: np.ndarray) -> np.ndarray:
+        """Real render with mispredicted cells tinted red — makes AR drift
+        visible at a glance (a cell is 'wrong' if ANY object channel differs)."""
+        out = real_img.astype(np.float32)
+        mask = np.kron(mismatch_hw.astype(np.float32),
+                       np.ones((5, 5), dtype=np.float32))[..., None]
+        red = np.array([255.0, 40.0, 40.0], dtype=np.float32)
+        out = out * (1.0 - 0.6 * mask) + red * (0.6 * mask)
         return np.clip(out, 0, 255).astype(np.uint8)
 
-    def _render_soft_learned(logits_np: np.ndarray, n_objs: int) -> np.ndarray:
-        """Soft render using learned sprite kernels and per-channel sigmoid
-        weights. Pure numpy lookup-table compositing."""
-        probs = 1.0 / (1.0 + np.exp(-logits_np))   # (n_objs, H, W)
-        dummy_mh = np.ones_like(probs)             # obs ignored (soft_probs wins)
-        return _render_obs_with_sprite_kernels(
-            dummy_mh, learned_sprites_u8, soft_probs=probs,
-        )
+    # Prediction render: learned sprite kernels if the model has a sprite
+    # decoder, else the game's declared sprites. (The old soft sigmoid-composite
+    # panel was dropped — for decoder-free models like rule_attn it just blended
+    # all object sprites at ~0.5 alpha into grey mush.)
+    _render_pred_hard = (_render_multihot_learned if learned_sprites_u8 is not None
+                         else _render_multihot_declared)
 
-    # Select renderer: learned sprites if decoder is active, declared otherwise.
-    if learned_sprites_u8 is not None:
-        _render_pred_hard = _render_multihot_learned
-        _render_pred_soft = _render_soft_learned
-    else:
-        _render_pred_hard = _render_multihot_declared
-        _render_pred_soft = _render_soft_declared
-
-    def render_triptych(real_obs_raw, pred_logits_np, pred_hard, step_i, action):
-        # Real panel always uses the game's declared sprites (the ground truth).
-        # Pred panels use learned sprites when the decoder is active — shows the
-        # model's visual output, not the backend's.
+    def render_panels(real_obs_raw, pred_hard, step_i, action):
+        """real | NCA prediction | diff (red = mispredicted cell), all using
+        the same sprites so the two rollouts are directly comparable."""
         real_img = _render_multihot_declared(real_obs_raw)
-        soft_img = _render_pred_soft(pred_logits_np, n_objs)
-        hard_img = _render_pred_hard(pred_hard)
+        pred_img = _render_pred_hard(pred_hard)
+        mismatch = (pred_hard.astype(np.uint8)
+                    != real_obs_raw.astype(np.uint8)).any(axis=0)
+        diff_img = _tint_diff(real_img, mismatch)
 
         gap = 4
         banner_h = GLYPH_H_COMPACT + 4
         hR, wR = real_img.shape[:2]
-        H_total = hR + banner_h
-        W_total = wR * 3 + gap * 2
-        canvas = np.zeros((H_total, W_total, 3), dtype=np.uint8)
+        canvas = np.zeros((hR + banner_h, wR * 3 + gap * 2, 3), dtype=np.uint8)
         canvas[banner_h:banner_h + hR, :wR] = real_img
-        canvas[banner_h:banner_h + hR, wR + gap: 2 * wR + gap] = soft_img
-        canvas[banner_h:banner_h + hR, 2 * (wR + gap):] = hard_img
+        canvas[banner_h:banner_h + hR, wR + gap: 2 * wR + gap] = pred_img
+        canvas[banner_h:banner_h + hR, 2 * (wR + gap):] = diff_img
         # Short action codes that render readable in the PuzzleScript font.
         # Lowercase 'v' is drawn as a left-leaning slash here, so use 'V'.
         short_act = {0: "^", 1: "<", 2: "V", 3: ">", 4: "x"}
         a_str = short_act.get(action, "-") if step_i > 0 else "r"
-        line = f"t{step_i:02d} {a_str} {banner_text}"
+        line = f"t{step_i:02d} {a_str} d{int(mismatch.sum())} {banner_text}"
         _ps_draw_text(canvas, line, x=2, y=2, color=(255, 255, 255),
                       compact=True)
         return canvas
@@ -4545,17 +4695,15 @@ def _render_training_gif(
     # Pad real_obs to model shape for the prediction stream
     pred_state = _pad_state_for_model(real_obs, max_C, max_H, max_W)
 
-    # At t=0 the "prediction" is just a copy of real (no model call yet);
-    # render soft version from a dummy logits that will resolve to the real
-    # state (all ones/zeros).
-    dummy_logits = np.log(np.where(real_obs, 1e6, 1e-6)).astype(np.float32)
-    frames = [render_triptych(real_obs, dummy_logits, real_obs, 0, -1)]
+    # At t=0 the "prediction" is just a copy of real (no model call yet).
+    frames = [render_panels(real_obs, real_obs, 0, -1)]
     if conditional:
         gt = jnp.array(game_tokens[None])
         gm = jnp.array(game_mask[None])
 
-    for t in range(n_steps):
-        action = int(rng.randint(N_ACTIONS))
+    n_act = _enabled_action_count(json_str)
+    for t in range(n_loop):
+        action = int(actions[t]) if actions is not None else int(rng.randint(n_act))
         a_oh = jnp.array(np.eye(N_ACTIONS, dtype=np.float32)[action][None])
         if conditional:
             logits, _, _sprite_logits = apply_fn(params, pred_state, a_oh, gt, gm)
@@ -4565,12 +4713,10 @@ def _render_training_gif(
         real_obs, _, done, truncated, _ = env.step(action)
         # Slice pred back to real (top-left-aligned) extent — matches the
         # top-left padding done by _pad_state_for_model.
-        logits_np = np.array(logits[0, :n_objs, :H, :W])
         pred_crop = np.array(
             pred_state[0, :n_objs, :H, :W] > 0.5, dtype=np.uint8,
         )
-        frames.append(render_triptych(real_obs, logits_np, pred_crop,
-                                       t + 1, action))
+        frames.append(render_panels(real_obs, pred_crop, t + 1, action))
         if done or truncated:
             break
 
@@ -4665,9 +4811,10 @@ def _render_rollout_frames(
         return np.concatenate(parts, axis=0)
 
     max_steps = len(actions) if actions else n_steps
+    n_act = _enabled_action_count(json_str)
     last_obj_img = None
     for t in range(max_steps):
-        action = actions[t] if actions else np.random.randint(N_ACTIONS)
+        action = actions[t] if actions else np.random.randint(n_act)
         a_oh = jnp.array(np.eye(N_ACTIONS, dtype=np.float32)[action][None])
 
         # --- Game renders ---
@@ -5169,8 +5316,9 @@ def render_rollout_comparison(
         return np.concatenate([np.array(banner), img], axis=0)
 
     pred_won_prob = 0.0
+    n_act = _enabled_action_count(json_str)
     for t in range(max_steps):
-        action = actions[t] if actions else np.random.randint(N_ACTIONS)
+        action = actions[t] if actions else np.random.randint(n_act)
         a_oh = jnp.array(np.eye(N_ACTIONS, dtype=np.float32)[action][None])
 
         real_frame = backend.render_frame_from_objects(
@@ -6034,6 +6182,7 @@ def main():
                     encode_sprites=args.encode_sprites,
                     max_transitions_per_game=(args.max_transitions_per_game or None),
                     train_levels=parsed_train_levels,
+                    val_frac=args.val_frac,
                 )
             with open(infos_path, "wb") as f:
                 pickle.dump(game_infos, f)

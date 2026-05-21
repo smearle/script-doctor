@@ -36,6 +36,7 @@ from nca_wm.train import (
     ConditionalNCAWorldModel,
     NCAWorldModel,
     N_ACTIONS,
+    _enabled_action_count,
     _pad_offsets,
     _pad_state_for_model,
     _wm_p,
@@ -267,8 +268,9 @@ def _rollout_with_identity(
     model_first_div = -1
 
     prev_real = real_obs.copy()
+    n_act = _enabled_action_count(info["json_str"])
     for t in range(n_steps):
-        action = actions[t] if actions else int(rng.randint(N_ACTIONS))
+        action = actions[t] if actions else int(rng.randint(n_act))
         a_oh = jnp.array(np.eye(N_ACTIONS, dtype=np.float32)[action][None])
 
         if conditional:
@@ -351,19 +353,17 @@ def _get_heldout_search_actions(
     if cache_valid:
         return cached["actions"].tolist()
 
-    # cpp_sols use the C++-backend action convention; drop-in compatible.
+    # Both cpp_sols and js_sols store the C++-backend action convention; read
+    # as-is (see _solution_from_sol_dir — no translation).
     sol_actions = _solution_from_sol_dir(
         os.path.join(_REPO_ROOT, "data", "cpp_sols"),
-        name, level_i, translate_js_to_jax=False,
-        algos=(algo,),
+        name, level_i, algos=(algo,),
     )
     source_kind = "cpp_sols" if sol_actions is not None else ""
-    # js_sols use the JS-engine action convention; remap to JAX/CPP.
     if sol_actions is None:
         sol_actions = _solution_from_sol_dir(
             os.path.join(_REPO_ROOT, "data", "js_sols"),
-            name, level_i, translate_js_to_jax=True,
-            algos=(algo,),
+            name, level_i, algos=(algo,),
         )
         source_kind = "js_sols" if sol_actions is not None else ""
 

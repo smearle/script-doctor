@@ -96,3 +96,10 @@ nca_wm/figures/heldout_scaling/median_1nn_*
 nca_wm/figures/neko_arch/all_metrics_grouped.*
 nca_wm/figures/neko_arch/by_depth_*
 nca_wm/figures/varislide_depth_extrap/fig_*
+nca_wm/figures/tsm_pool_diag/ar_gifs/
+
+# Regenerable dataset/search caches
+nca_wm/data_cache/
+
+# LaTeX scratch output
+texput.log
