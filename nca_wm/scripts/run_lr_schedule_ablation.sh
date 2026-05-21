@@ -26,10 +26,12 @@ PY="$REPO/.venv/bin/python3"
 LOGDIR="$REPO/nca_wm/logs/lr_sched_ablation"
 mkdir -p "$LOGDIR"
 export JAX_COMPILATION_CACHE_DIR="$REPO/.jax_compile_cache"
+# Cap per-process GPU memory so MAXJOBS runs fit on one device (JAX otherwise
+# preallocates ~75-90%, and two unbounded runs already saturate a 24GB card).
+export XLA_PYTHON_CLIENT_MEM_FRACTION="${XLA_PYTHON_CLIENT_MEM_FRACTION:-0.45}"
 GPU="${GPU:-0}"
 N_UPDATES="${N_UPDATES:-30000}"
 GAMES="${GAMES:-Travelling_salesman sokoban_basic nekopuzzle}"
-# Run conditions sequentially per game by default; set MAXJOBS>1 to overlap.
 MAXJOBS="${MAXJOBS:-2}"
 
 COMMON=(
@@ -65,12 +67,18 @@ launch() {
         --save_dir "$save_dir" > "$log" 2>&1
 }
 
-for game in $GAMES; do
-    for cond in cosine constant; do
+# Condition-major with a hard barrier between waves. The cosine wave builds each
+# game's per-level A*/dataset cache (distinct games => distinct files => safe to
+# overlap MAXJOBS at a time). The barrier guarantees every cache is fully written
+# before any constant run starts, so the constant wave only ever READS caches.
+# Running both conditions of the SAME game concurrently corrupts the shared
+# per-game cache (concurrent writers -> truncated npz -> EOFError), which is what
+# this ordering prevents.
+for cond in cosine constant; do
+    for game in $GAMES; do
         launch "$game" "$cond" &
-        # Throttle to MAXJOBS concurrent runs on the single GPU.
         while [ "$(jobs -rp | wc -l)" -ge "$MAXJOBS" ]; do wait -n; done
     done
+    wait   # barrier: finish all of this condition before starting the next
 done
-wait
 echo "[GPU $GPU] === all done $(date '+%H:%M:%S') ==="
