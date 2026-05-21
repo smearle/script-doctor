@@ -3,7 +3,7 @@
 Reads each completed run under nca_wm/logs_per_game_arch/<game>__<bucket>_d<D>/
 and aggregates per-cell:
   - best/final train loss (from latest curves_step*.npz)
-  - rollout cell-error from eval_multigame[_tlfix].npz, split by oracle
+  - rollout cell-error from eval_multigame.npz, split by oracle
     policy (bfs / astar / random / random_tf) and by L0 vs heldout
 
 Outputs:
@@ -70,13 +70,8 @@ def _rollout_err(run_dir, all_authored_as_heldout=False):
     value to both bfs_err_l0 and bfs_err_heldout so downstream plotting code
     can render the same heatmap layout without special-casing this run.
     """
-    p = None
-    for cand in ("eval_multigame_tlfix.npz", "eval_multigame.npz"):
-        cp = os.path.join(run_dir, cand)
-        if os.path.exists(cp):
-            p = cp
-            break
-    if p is None:
+    p = os.path.join(run_dir, "eval_multigame.npz")
+    if not os.path.exists(p):
         return {}
     z = np.load(p, allow_pickle=True)
     pat = re.compile(r"^(?P<game>.+)_L(?P<lvl>\d+)_(?P<kind>bfs|astar|random|random_tf)_cell_error_rate$")

@@ -1549,6 +1549,11 @@ def collect_multigame_dataset_synthetic(
     track_rules_fired: bool = False,
     rule_coverage_weight: float = 0.0,
     coverage_select_topk: bool = False,
+    seed_from_authored: bool = False,
+    seed_level_indices: list[int] | None = None,
+    selection: str = "fitness",
+    nslc_k: int = 5,
+    nslc_archive_size: int = 500,
 ) -> tuple[dict, list[dict]]:
     """Synthetic-level variant of collect_multigame_dataset.
 
@@ -1646,11 +1651,16 @@ def collect_multigame_dataset_synthetic(
                 evolve_max_generations=evolve_max_generations,
                 evolve_n_mutations_min=evolve_n_mutations_min,
                 evolve_n_mutations_max=evolve_n_mutations_max,
+                seed_from_authored=seed_from_authored,
+                seed_level_indices=seed_level_indices,
                 fallback_dynamics=fallback_dynamics,
                 no_a_count_max=no_a_count_max,
                 track_rules_fired=track_rules_fired,
                 rule_coverage_weight=rule_coverage_weight,
                 coverage_select_topk=coverage_select_topk,
+                selection=selection,
+                nslc_k=nslc_k,
+                nslc_archive_size=nslc_archive_size,
                 verbose=True,
             )
             s_states = np.asarray(synth["states"], dtype=np.uint8)
@@ -3644,12 +3654,6 @@ def _run_eval_rollout(
 
         real_obs, _, done, truncated, _ = env.step(action)
 
-        # Slice predicted to the real (top-left-aligned) extent. Training-time
-        # bucket padding via _pad_state_for_model writes obs to padded[:C,:H,:W],
-        # so the prediction's "real" region is also top-left, NOT centered. A
-        # prior version used _pad_offsets here (centered slicing) and reported
-        # ~85% cell-error on small authored levels evaluated against bucket-
-        # padded predictions; that was a slicing bug, not a learning failure.
         pred_binary = np.array(
             pred_next[0, :n_objs, :H, :W] > 0.5, dtype=np.uint8,
         )
@@ -5270,6 +5274,20 @@ def main():
                         "aggregate downward and obscures the cond-vs-uncond comparison. "
                         "Source of truth: `has_randomness` field in games_metadata.json "
                         "(populated by the JS engine's compile pass).")
+    p.add_argument("--n_per_rule_strategy", choices=("sorted", "stratified"),
+                   default="sorted",
+                   help="How --n_per_rule_games selects from the pool. 'sorted' "
+                        "(default, legacy): take first N from (n_rules asc, name asc) "
+                        "ranked list — yields rule-complexity-truncated training set "
+                        "(at n=800 the max n_rules is only 3, vs Heldout-26 median 6). "
+                        "'stratified': bucket by n_rules in [1..n_per_rule_max_bucket], "
+                        "take ceil(N/n_buckets) from each bucket sorted by name, then "
+                        "trim to N. This covers higher-complexity games at the cost "
+                        "of training-time A* on slower games.")
+    p.add_argument("--n_per_rule_max_bucket", type=int, default=10,
+                   help="For --n_per_rule_strategy=stratified: cap the highest n_rules "
+                        "bucket. Bucket K means n_rules>=K are pooled together. "
+                        "Default 10 covers ~83%% of Heldout-26 (median 6, 90th pct 14).")
     p.add_argument("--level", type=int, default=None,
                    help="Train on a single level index. Default: all levels.")
     p.add_argument("--train_levels", default=None,
@@ -5558,6 +5576,27 @@ def main():
     p.add_argument("--synthetic_evolve_max_generations", type=int, default=200)
     p.add_argument("--synthetic_evolve_n_mutations_min", type=int, default=1)
     p.add_argument("--synthetic_evolve_n_mutations_max", type=int, default=3)
+    p.add_argument("--synthetic_seed_from_authored", action="store_true",
+                   help="Seed the evolve population with cropped authored levels (instead "
+                        "of random init). Only meaningful when --synthetic_mode=evolve.")
+    p.add_argument("--synthetic_seed_level_indices", type=str, default=None,
+                   help="Comma-separated authored-level indices used as evolve seeds "
+                        "(e.g. '0' or '0,1,2,3,4,5,6,7'). Default = all authored levels. "
+                        "Only meaningful with --synthetic_seed_from_authored.")
+    p.add_argument("--synthetic_evolve_selection",
+                   choices=("fitness", "nslc"), default="fitness",
+                   help="Evolve selection mode. 'fitness' (default): top-K elites by "
+                        "raw fitness. 'nslc': novelty search with local competition — "
+                        "elites are the non-dominated front in (novelty, local_competition) "
+                        "space, where novelty = mean Hamming distance over the dat to k "
+                        "nearest neighbours in (pop union archive), and local_competition "
+                        "= how many of those neighbours the candidate beats on fitness. "
+                        "Pressures the GA for structural diversity in addition to raw "
+                        "BFS-depth/coverage fitness.")
+    p.add_argument("--synthetic_nslc_k", type=int, default=5,
+                   help="kNN count for NSLC novelty/local-competition (default 5).")
+    p.add_argument("--synthetic_nslc_archive_size", type=int, default=500,
+                   help="Cap on the NSLC novelty archive; oldest entries drop first.")
     p.add_argument("--synthetic_track_rules_fired", action="store_true",
                    help="Collect per-step rule-firing telemetry from the engine while "
                         "evolving levels. Required to activate either of the two "
@@ -5745,12 +5784,41 @@ def main():
                 ranked_filtered.append((n_rules, name))
             ranked = ranked_filtered
 
-            game_names = [g for _, g in ranked[:args.n_per_rule_games]]
+            if args.n_per_rule_strategy == "stratified":
+                from collections import defaultdict as _dd, Counter as _Counter
+                buckets: dict[int, list[tuple[int, str]]] = _dd(list)
+                K = args.n_per_rule_max_bucket
+                for n_rules, name in ranked:
+                    if n_rules > K:
+                        continue  # exclude games beyond cap (no pooling)
+                    buckets[n_rules].append((n_rules, name))
+                bucket_keys = sorted(buckets)
+                per_bucket = max(1, args.n_per_rule_games // len(bucket_keys))
+                picked: list[tuple[int, str]] = []
+                for k in bucket_keys:
+                    picked.extend(buckets[k][:per_bucket])
+                if len(picked) < args.n_per_rule_games:
+                    extras = []
+                    for k in bucket_keys:
+                        extras.extend(buckets[k][per_bucket:])
+                    extras.sort(key=lambda x: (x[0], x[1]))
+                    picked.extend(extras[:args.n_per_rule_games - len(picked)])
+                picked = picked[:args.n_per_rule_games]
+                game_names = [g for _, g in picked]
+                _cnt = _Counter(p[0] for p in picked)
+                _hist = " ".join(f"{nr}:{_cnt[nr]}" for nr in sorted(_cnt))
+                rule_summary = (f"strat (K={K}): {len(bucket_keys)} buckets x "
+                                f"{per_bucket}/bucket -> hist {_hist}")
+            else:  # sorted
+                game_names = [g for _, g in ranked[:args.n_per_rule_games]]
+                rule_summary = (f"sorted: rules "
+                                f"{ranked[0][0]}..{ranked[args.n_per_rule_games-1][0] if args.n_per_rule_games <= len(ranked) else ranked[-1][0]}")
             if not game_names:
                 p.error("--n_per_rule_games selected zero games (empty universe "
                         "or all filtered out)")
             preset_tag = (f"nrules-{args.n_per_rule_games}-"
-                          f"{args.n_per_rule_universe}")
+                          f"{args.n_per_rule_universe}-"
+                          f"{args.n_per_rule_strategy}")
             random_note = (f", filtered {n_filtered_random} random-rule games"
                            if n_filtered_random > 0 else "")
             canvas_note = (f", filtered {n_filtered_canvas} oversize-canvas games"
@@ -5758,10 +5826,10 @@ def main():
             print(f"[--n_per_rule_games={args.n_per_rule_games} "
                   f"universe={args.n_per_rule_universe} max_area="
                   f"{args.n_per_rule_max_area} "
-                  f"include_random={args.n_per_rule_include_random}]: "
+                  f"include_random={args.n_per_rule_include_random} "
+                  f"strategy={args.n_per_rule_strategy}]: "
                   f"{len(game_names)} games selected from {len(ranked)} eligible"
-                  f"{random_note}{canvas_note} "
-                  f"(rules: {ranked[0][0]}..{ranked[args.n_per_rule_games-1][0] if args.n_per_rule_games <= len(ranked) else ranked[-1][0]})")
+                  f"{random_note}{canvas_note} ({rule_summary})")
         elif args.games == "gallery":
             # Full PuzzleScript gallery dataset via the shared helper.
             # Also add NCAWM-specific extras (games we reference a lot in
@@ -5944,6 +6012,14 @@ def main():
                     evolve_max_generations=args.synthetic_evolve_max_generations,
                     evolve_n_mutations_min=args.synthetic_evolve_n_mutations_min,
                     evolve_n_mutations_max=args.synthetic_evolve_n_mutations_max,
+                    seed_from_authored=args.synthetic_seed_from_authored,
+                    seed_level_indices=(
+                        [int(x) for x in args.synthetic_seed_level_indices.split(",")]
+                        if args.synthetic_seed_level_indices else None
+                    ),
+                    selection=args.synthetic_evolve_selection,
+                    nslc_k=args.synthetic_nslc_k,
+                    nslc_archive_size=args.synthetic_nslc_archive_size,
                     encode_sprites=args.encode_sprites,
                     kernel_sep=getattr(args, "kernel_sep", False),
                     max_transitions_per_game=(args.max_transitions_per_game or None),

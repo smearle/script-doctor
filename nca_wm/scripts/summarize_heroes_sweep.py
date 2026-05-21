@@ -47,7 +47,7 @@ def _final_train_metrics(run_dir):
     return out
 
 
-def _bfs_rollout_err(run_dir, npz_name="eval_multigame_tlfix.npz"):
+def _bfs_rollout_err(run_dir):
     """Read eval npz with flat keys '<game>_L<lvl>_<kind>_cell_error_rate'
     and aggregate per-step cell error per kind.
 
@@ -57,12 +57,9 @@ def _bfs_rollout_err(run_dir, npz_name="eval_multigame_tlfix.npz"):
       {kind}_cell_err_heldout — mean over L1+ (transfer to other authored levels)
     """
     import re
-    p = os.path.join(run_dir, npz_name)
+    p = os.path.join(run_dir, "eval_multigame.npz")
     if not os.path.exists(p):
-        # fall back to the buggy file if tlfix not yet written
-        p = os.path.join(run_dir, "eval_multigame.npz")
-        if not os.path.exists(p):
-            return {}
+        return {}
     z = np.load(p, allow_pickle=True)
     pat = re.compile(r"^(?P<game>.+)_L(?P<lvl>\d+)_(?P<kind>bfs|astar|random|random_tf)_cell_error_rate$")
     by_kind_all = defaultdict(list)

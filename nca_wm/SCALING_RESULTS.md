@@ -684,11 +684,8 @@ Recipe: rule_attn, h=256, n_slots=16, n_app_slots=1, batch=16, lr=3e-4,
 **The original numbers in this section were inflated by the centered-vs-top-left
 slicing bug fixed 2026-05-04** (`train.py` `_run_eval_rollout` was extracting
 predictions from the centered position of the padded grid, but training-time
-predictions live at the top-left). All 16 checkpoints were re-evaluated via
-`reeval_via_render_only.sh` and the corrected numbers below replace the
-prior table. The original buggy npz is preserved at
-`logs_heroes/heroes_*/eval_multigame_buggy.npz`; corrected at
-`eval_multigame_tlfix.npz`.
+predictions live at the top-left). All 16 checkpoints were re-evaluated in
+place and the corrected numbers below replace the prior table.
 
 The re-eval also revealed that the original eval iterated over **every**
 authored level (L0–L21), not just L0. Since training only saw L0, the

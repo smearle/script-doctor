@@ -159,7 +159,7 @@ def _eval_run(run_dir, ps_parser, n_steps_eval=30, n_eps=5, seed=0):
             "ar_mean": float(np.nanmean(ar_curve)) if ar_curve is not None else None,
         }
 
-    npz_path = os.path.join(run_dir, "authored_eval_tlfix.npz")
+    npz_path = os.path.join(run_dir, "authored_eval.npz")
     np.savez(npz_path, summary=np.array([out], dtype=object))
     return out
 

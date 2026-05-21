@@ -1092,6 +1092,120 @@ def _eval_candidate_fitness(
     return fitness, payload
 
 
+def _compute_pairwise_hamming(
+    pop_arr: np.ndarray,
+    archive_arr: Optional[np.ndarray],
+) -> tuple[np.ndarray, np.ndarray]:
+    """Return (P×N) distance matrix and the N×L matrix it indexes into.
+
+    Distance is per-tile-word Hamming on int64-cast dat sequences (each tile
+    holds one or more int32 layer-bitmask words; differing word counts as 1).
+    """
+    if archive_arr is not None and len(archive_arr) > 0:
+        all_arr = np.concatenate([pop_arr, archive_arr], axis=0)
+    else:
+        all_arr = pop_arr
+    P = pop_arr.shape[0]
+    # Distances: pop (P, L) vs all (N, L) → (P, N)
+    diffs = np.sum(pop_arr[:, None, :] != all_arr[None, :, :], axis=2)
+    # Mark self-distance (i, i) so it doesn't enter the kNN.
+    for i in range(P):
+        diffs[i, i] = np.iinfo(diffs.dtype).max
+    return diffs, all_arr
+
+
+def _nslc_scores(
+    pop_dats: list[list[int]],
+    pop_fits: list[float],
+    archive_dats: list[list[int]],
+    archive_fits: list[float],
+    k: int,
+) -> tuple[list[float], list[int]]:
+    """Compute (novelty, local_competition) per pop member.
+
+    novelty[i]            = mean Hamming distance to i's k nearest neighbors
+                            in (pop ∪ archive)
+    local_competition[i]  = count of those k neighbors that i beats on fitness
+    """
+    if not pop_dats:
+        return [], []
+    pop_arr = np.asarray(pop_dats, dtype=np.int64)
+    arch_arr = (np.asarray(archive_dats, dtype=np.int64)
+                if archive_dats else None)
+    diffs, _ = _compute_pairwise_hamming(pop_arr, arch_arr)
+    all_fits = np.array(list(pop_fits) + list(archive_fits), dtype=np.float64)
+    P = pop_arr.shape[0]
+    # Number of available neighbours = N - 1 (excluding self).
+    k_eff = min(k, diffs.shape[1] - 1)
+    novelties: list[float] = []
+    local_comps: list[int] = []
+    for i in range(P):
+        if k_eff <= 0:
+            novelties.append(0.0)
+            local_comps.append(0)
+            continue
+        row = diffs[i]
+        idx = np.argpartition(row, k_eff - 1)[:k_eff] if k_eff > 1 \
+            else np.array([int(np.argmin(row))])
+        novelties.append(float(np.mean(row[idx])))
+        local_comps.append(int(np.sum(all_fits[idx] < pop_fits[i])))
+    return novelties, local_comps
+
+
+def _nsga2_2obj_select(scores: list[tuple[float, float]], n: int) -> list[int]:
+    """Select ``n`` indices from a list of 2-objective scores (both maximized)
+    by non-dominated sorting; the final front is trimmed by crowding distance.
+    """
+    if not scores or n <= 0:
+        return []
+    n = min(n, len(scores))
+    fronts: list[list[int]] = []
+    remaining = set(range(len(scores)))
+    while remaining:
+        front: list[int] = []
+        for i in remaining:
+            ai0, ai1 = scores[i]
+            dominated = False
+            for j in remaining:
+                if i == j:
+                    continue
+                aj0, aj1 = scores[j]
+                if (aj0 >= ai0 and aj1 >= ai1
+                        and (aj0 > ai0 or aj1 > ai1)):
+                    dominated = True
+                    break
+            if not dominated:
+                front.append(i)
+        if not front:
+            front = list(remaining)
+        fronts.append(front)
+        remaining -= set(front)
+    selected: list[int] = []
+    for front in fronts:
+        if len(selected) + len(front) <= n:
+            selected.extend(front)
+            continue
+        # Crowding distance within this front
+        slots = n - len(selected)
+        cd = {i: 0.0 for i in front}
+        for obj_idx in (0, 1):
+            sorted_front = sorted(front, key=lambda i: scores[i][obj_idx])
+            lo = scores[sorted_front[0]][obj_idx]
+            hi = scores[sorted_front[-1]][obj_idx]
+            span = hi - lo if hi > lo else 1.0
+            cd[sorted_front[0]] = float("inf")
+            cd[sorted_front[-1]] = float("inf")
+            for k_i in range(1, len(sorted_front) - 1):
+                cd[sorted_front[k_i]] += (
+                    scores[sorted_front[k_i + 1]][obj_idx]
+                    - scores[sorted_front[k_i - 1]][obj_idx]
+                ) / span
+        front_by_cd = sorted(front, key=lambda i: -cd[i])
+        selected.extend(front_by_cd[:slots])
+        break
+    return selected
+
+
 def _evolve_levels(
     engine: Engine,
     json_state: dict,
@@ -1114,6 +1228,9 @@ def _evolve_levels(
     track_rules_fired: bool = False,
     rule_coverage_weight: float = 0.0,
     coverage_select_topk: bool = False,
+    selection: str = "fitness",
+    nslc_k: int = 5,
+    nslc_archive_size: int = 500,
     verbose: bool = True,
 ) -> tuple[list[list[int]], list[dict]]:
     """Population-based GA that finds valid levels via fitness =
@@ -1163,6 +1280,12 @@ def _evolve_levels(
     accepted_payloads: list[dict] = []
     seen: set[tuple] = set()
 
+    # NSLC archive (only populated when selection == "nslc"): tracks
+    # behaviourally-novel pop members from prior generations so novelty is
+    # measured against a wider reference set than the current population.
+    archive_dats: list[list[int]] = []
+    archive_fits: list[float] = []
+
     t0 = time.time()
     for gen_idx in range(max_generations):
         scored: list[tuple[float, dict | None, list[int]]] = []
@@ -1201,13 +1324,46 @@ def _evolve_levels(
         if not coverage_select_topk and len(accepted_dats) >= n_target:
             break
 
-        # Selection: top-K elites, sort by fitness descending; -inf goes last.
-        scored.sort(key=lambda x: x[0], reverse=True)
-        elites = [s[2] for s in scored[:n_elites]]
-        # If nearly all elites have -inf fitness (population collapsed),
-        # reseed with fresh random levels to escape.
-        n_real = sum(1 for s in scored[:n_elites] if s[0] != -float("inf"))
-        if n_real == 0:
+        # Selection.
+        if selection == "nslc":
+            # Novelty Search with Local Competition. Elites are the
+            # non-dominated front in (novelty, local_competition) space —
+            # rewards both structural diversity and per-neighbourhood
+            # competence. -inf-fitness candidates can still survive if their
+            # behaviour is novel, which is desirable when the population
+            # collapses around a single solvable-but-narrow region.
+            pop_fits_all = [s[0] for s in scored]
+            pop_dats_all = [s[2] for s in scored]
+            novelties, local_comps = _nslc_scores(
+                pop_dats_all, pop_fits_all,
+                archive_dats, archive_fits,
+                k=nslc_k,
+            )
+            scores2obj = list(zip(novelties, local_comps))
+            elite_idx = _nsga2_2obj_select(scores2obj, n_elites)
+            elites = [pop_dats_all[i] for i in elite_idx]
+            # Archive update: append every pop member whose novelty is above
+            # the population median this gen (cheap heuristic — keeps the
+            # archive biased toward outliers); cap at nslc_archive_size by
+            # dropping oldest entries.
+            if novelties:
+                median_nov = float(np.median(novelties))
+                for i, nov in enumerate(novelties):
+                    if nov >= median_nov:
+                        archive_dats.append(list(pop_dats_all[i]))
+                        archive_fits.append(float(pop_fits_all[i]))
+                if len(archive_dats) > nslc_archive_size:
+                    archive_dats[:] = archive_dats[-nslc_archive_size:]
+                    archive_fits[:] = archive_fits[-nslc_archive_size:]
+        else:
+            # Top-K elites by raw fitness; -inf goes last.
+            scored.sort(key=lambda x: x[0], reverse=True)
+            elites = [s[2] for s in scored[:n_elites]]
+        # If every scored candidate this gen has -inf fitness (total population
+        # collapse — no valid dynamics anywhere), reseed with fresh random
+        # levels to escape. NSLC keeps novel-but-invalid layouts on purpose, so
+        # this safety net only triggers on full collapse, not per-elite.
+        if all(s[0] == -float("inf") for s in scored):
             elites = []
             for _ in range(n_elites):
                 for _ in range(20):
@@ -1327,11 +1483,15 @@ def collect_synthetic_dataset(
     evolve_n_mutations_min: int = 1,
     evolve_n_mutations_max: int = 3,
     seed_from_authored: bool = False,
+    seed_level_indices: Optional[list[int]] = None,
     fallback_dynamics: bool = False,
     no_a_count_max: int = 3,
     track_rules_fired: bool = False,
     rule_coverage_weight: float = 0.0,
     coverage_select_topk: bool = False,
+    selection: str = "fitness",
+    nslc_k: int = 5,
+    nslc_archive_size: int = 500,
     cache_root: str = "rollout_data",
     verbose: bool = True,
 ) -> dict:
@@ -1354,7 +1514,13 @@ def collect_synthetic_dataset(
     mode_tag = mode if mode != "evolve" else (
         f"evolve-p{evolve_pop_size}-g{evolve_max_generations}"
     )
-    seed_tag = "-sa" if seed_from_authored else ""
+    if seed_from_authored:
+        if seed_level_indices is not None:
+            seed_tag = "-sa[" + ",".join(str(i) for i in seed_level_indices) + "]"
+        else:
+            seed_tag = "-sa"
+    else:
+        seed_tag = ""
     # Only suffix the cache key with K when it's not the default, to keep
     # existing v8 caches at K=3 readable without rename.
     k_tag = f"_k{no_a_count_max}" if no_a_count_max != 3 else ""
@@ -1367,10 +1533,14 @@ def collect_synthetic_dataset(
     )
     if coverage_select_topk:
         rc_tag += "_cstop"
+    sel_tag = (
+        f"_sel-nslc-k{nslc_k}-a{nslc_archive_size}"
+        if (mode == "evolve" and selection == "nslc") else ""
+    )
     cache_path = os.path.join(
         cache_dir,
         f"seed{seed}_n{n_levels}_v{CACHE_VERSION}"
-        f"_mode-{mode_tag}{seed_tag}_solv{int(require_solvable)}"
+        f"_mode-{mode_tag}{seed_tag}{sel_tag}_solv{int(require_solvable)}"
         f"_mi{max_iters_search}_tmo{timeout_ms_search}_ms{min_states}{k_tag}{rc_tag}.npz",
     )
     if os.path.isfile(cache_path):
@@ -1408,7 +1578,7 @@ def collect_synthetic_dataset(
 
     init_dats: list[list[int]] | None = None
     if seed_from_authored:
-        seeds = extract_authored_dats(json_state)
+        seeds = extract_authored_dats(json_state, level_indices=seed_level_indices)
         init_dats = []
         # Detect swarm-style games (authored levels with >1 player tile) so we
         # know whether to enforce "exactly 1 player" on seeds or not.
@@ -1459,6 +1629,9 @@ def collect_synthetic_dataset(
             track_rules_fired=track_rules_fired,
             rule_coverage_weight=rule_coverage_weight,
             coverage_select_topk=coverage_select_topk,
+            selection=selection,
+            nslc_k=nslc_k,
+            nslc_archive_size=nslc_archive_size,
             verbose=verbose,
         )
         # Bookkeeping: in evolve mode "attempts" tracks total BFS calls.
@@ -1613,11 +1786,15 @@ def collect_synthetic_dataset(
             evolve_n_mutations_min=evolve_n_mutations_min,
             evolve_n_mutations_max=evolve_n_mutations_max,
             seed_from_authored=seed_from_authored,
+            seed_level_indices=seed_level_indices,
             fallback_dynamics=False,  # don't recurse
             no_a_count_max=no_a_count_max,
             track_rules_fired=track_rules_fired,
             rule_coverage_weight=rule_coverage_weight,
             coverage_select_topk=coverage_select_topk,
+            selection=selection,
+            nslc_k=nslc_k,
+            nslc_archive_size=nslc_archive_size,
             cache_root=cache_root,
             verbose=verbose,
         )

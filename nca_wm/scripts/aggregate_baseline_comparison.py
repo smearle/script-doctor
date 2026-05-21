@@ -64,13 +64,9 @@ def load_curves(save_dir):
 
 
 def load_eval(save_dir):
-    candidates = [
-        os.path.join(save_dir, "eval_multigame_tlfix.npz"),
-        os.path.join(save_dir, "eval_multigame.npz"),
-    ]
-    for p in candidates:
-        if os.path.isfile(p):
-            return dict(np.load(p, allow_pickle=True))
+    p = os.path.join(save_dir, "eval_multigame.npz")
+    if os.path.isfile(p):
+        return dict(np.load(p, allow_pickle=True))
     return None
 
 

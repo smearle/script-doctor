@@ -170,9 +170,8 @@ Shared training-time defaults (unless overridden in the recipe column):
    "Heroes_of_Sokoban L0–L7 → L8–L21 transfer" for full table.
 - **Heroes_of_Sokoban L0 depth × sharing × pool sweep** (2026-05-04, RE-EVAL):
    DONE + corrected. The first pass used buggy centered-vs-top-left
-   slicing in `train.py` `_run_eval_rollout` — corrected via re-eval
-   (`scripts/reeval_via_render_only.sh`, npz files saved as
-   `eval_multigame_tlfix.npz`). Corrected headline:
+   slicing in `train.py` `_run_eval_rollout`; npz files were re-evaluated
+   in place after the fix. Corrected headline:
    - **L0 fit:** C and D (pool OFF + input_skip) achieve **0.00% at every
      depth**; A degrades 0→0.38→1.54% as d grows; **B collapses to 91.35%
      at d=32**.

@@ -1,0 +1,14 @@
+run,steps,final_loss,final_acc,final_change_acc,conditional
+multi_scaling_gallery_v2_cond_match_s0,150000,0.0167998,0.993697,1.000000,True
+multi_scaling_gallery_v2_cond_match_s1,30000,0.0225975,0.998467,0.986486,True
+multi_scaling_gallery_v2_uncond_match_s0,150000,0.0168588,0.993697,1.000000,False
+multi_scaling_gallery_v2_uncond_match_s0_legacy_pool_in_conv,150000,0.0022748,0.999564,0.996429,False
+multi_scaling_gallery_v2_uncond_match_s1,150000,0.00171065,0.999313,0.986207,False
+multi_scaling_gallery_v3,150000,0.0100388,0.996927,1.000000,True
+multi_scaling_gallery_v3_decoder,150000,0.0100416,0.996927,1.000000,True
+multi_scaling_gallery_v3_decoder_sprites_eos,150000,0.000781376,0.999866,1.000000,True
+multi_scaling_gallery_v4_cond_match_s0,150000,0.00438332,0.998689,0.953488,True
+multi_scaling_gallery_v4_cond_match_s1,150000,0.00673615,0.999604,1.000000,True
+multi_scaling_gallery_v4_decoder,120000,0.00716335,0.997322,1.000000,True
+multi_scaling_gallery_v4_decoder_sprites_eos,150000,0.00618506,0.998563,0.852713,True
+multi_scaling_gallery_v4_uncond_match_s0,150000,0.00480105,0.998525,0.906977,False
