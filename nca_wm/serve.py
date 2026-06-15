@@ -166,6 +166,17 @@ def serve_world_model(
         pred_bin = (state["pred_state"] > 0.5).astype(jnp.uint8)
         return _unpad_pred(pred_bin, state["n_objs"], state["grid_h"], state["grid_w"])
 
+    def _feedback_pred(logits):
+        """Threshold model logits and crop+re-pad to zero every off-grid padding
+        cell before feeding back as the next AR state. Without this, content the
+        model paints in the padding (left unconstrained because the training
+        loss always masks padding cells) persists across steps — the player can "leave" through a wall
+        into the padding and be carried back later. Mirrors the train/eval AR path."""
+        pred_bin = (jax.nn.sigmoid(logits) > 0.5).astype(jnp.uint8)
+        pred_native = _unpad_pred(pred_bin, state["n_objs"],
+                                  state["grid_h"], state["grid_w"])
+        return _pad_state_for_model(pred_native, max_C, max_H, max_W)
+
     def _apply_step(action):
         a_oh = jnp.array(np.eye(N_ACTIONS, dtype=np.float32)[action][None])
         if conditional:
@@ -222,7 +233,7 @@ def serve_world_model(
             return jsonify(error="invalid action"), 400
         _snapshot()
         logits, win_logit = _apply_step(action)
-        state["pred_state"] = (jax.nn.sigmoid(logits) > 0.5).astype(jnp.float32)
+        state["pred_state"] = _feedback_pred(logits)
         state["pred_won"] = float(jax.nn.sigmoid(win_logit)[0])
         state["last_action"] = action
         state["real_obs"], _, done, _, info = state["env"].step(action)
@@ -245,7 +256,7 @@ def serve_world_model(
             return jsonify(error="invalid action"), 400
         _snapshot()
         logits, win_logit = _apply_step(action)
-        state["pred_state"] = (jax.nn.sigmoid(logits) > 0.5).astype(jnp.float32)
+        state["pred_state"] = _feedback_pred(logits)
         state["pred_won"] = float(jax.nn.sigmoid(win_logit)[0])
         state["step"] += 1
         state["diverged"] = True
