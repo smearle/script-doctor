@@ -2176,15 +2176,10 @@ def make_train_step(model, optimizer, conditional=False,
         bce = optax.sigmoid_binary_cross_entropy(logits, next_states)
         preds = (jax.nn.sigmoid(logits) > 0.5).astype(jnp.float32)
         correct = (preds == next_states).astype(jnp.float32)
-        if spatial_mask is not None:
-            mask = spatial_mask.astype(bce.dtype)
-            mask_sum = jnp.maximum(mask.sum(), 1.0)
-            acc = (correct * mask).sum() / mask_sum
-            changed = (states != next_states) & (spatial_mask > 0)
-        else:
-            mask = None
-            acc = correct.mean()
-            changed = (states != next_states)
+        mask = spatial_mask.astype(bce.dtype)
+        mask_sum = jnp.maximum(mask.sum(), 1.0)
+        acc = (correct * mask).sum() / mask_sum
+        changed = (states != next_states) & (spatial_mask > 0)
         n_changed = changed.sum()
         changed_correct = ((preds == next_states) & changed).sum()
         change_acc = jnp.where(n_changed > 0, changed_correct / n_changed, 1.0)
@@ -2194,13 +2189,10 @@ def make_train_step(model, optimizer, conditional=False,
         # to uniform mean. At c_l_w=10, changed cells count 11× as much.
         if change_loss_weight > 0:
             weight = 1.0 + change_loss_weight * changed.astype(bce.dtype)
-            if mask is not None:
-                weight = weight * mask
+            weight = weight * mask
             state_loss = (bce * weight).sum() / jnp.maximum(weight.sum(), 1.0)
-        elif mask is not None:
-            state_loss = (bce * mask).sum() / mask_sum
         else:
-            state_loss = bce.mean()
+            state_loss = (bce * mask).sum() / mask_sum
         # Win-head BCE with pos_weight to counter class imbalance
         wons_f = wons.astype(jnp.float32)
         win_bce = _weighted_bce_with_logits(win_logit, wons_f, win_pos_weight).mean()
@@ -2269,25 +2261,18 @@ def make_train_step(model, optimizer, conditional=False,
         next_b = next_states[None]                              # (1, B, n_out, H, W)
         states_b = states[None]
         bce = optax.sigmoid_binary_cross_entropy(per_step_logits, jnp.broadcast_to(next_b, per_step_logits.shape))
-        if spatial_mask is not None:
-            mask_b = spatial_mask[None].astype(bce.dtype)
-            mask_b = jnp.broadcast_to(mask_b, per_step_logits.shape)
-            mask_sum_per_b = jnp.maximum(mask_b.sum(axis=(2, 3, 4)), 1.0)
-        else:
-            mask_b = None
-            mask_sum_per_b = None
+        mask_b = spatial_mask[None].astype(bce.dtype)
+        mask_b = jnp.broadcast_to(mask_b, per_step_logits.shape)
+        mask_sum_per_b = jnp.maximum(mask_b.sum(axis=(2, 3, 4)), 1.0)
         if change_loss_weight > 0:
             changed = (states_b != next_b).astype(bce.dtype)
             changed = jnp.broadcast_to(changed, per_step_logits.shape)
             weight = 1.0 + change_loss_weight * changed
-            if mask_b is not None:
-                weight = weight * mask_b
+            weight = weight * mask_b
             # (T, B): weighted-mean BCE per (step, batch-element).
             state_loss_per_step_per_b = (bce * weight).sum(axis=(2, 3, 4)) / jnp.maximum(weight.sum(axis=(2, 3, 4)), 1.0)
-        elif mask_b is not None:
-            state_loss_per_step_per_b = (bce * mask_b).sum(axis=(2, 3, 4)) / mask_sum_per_b
         else:
-            state_loss_per_step_per_b = bce.mean(axis=(2, 3, 4))  # (T, B)
+            state_loss_per_step_per_b = (bce * mask_b).sum(axis=(2, 3, 4)) / mask_sum_per_b
 
         # Per-step, per-batch-element win BCE.
         wons_f = wons.astype(jnp.float32)
@@ -2336,11 +2321,7 @@ def make_train_step(model, optimizer, conditional=False,
             # diff[k] = fraction of cells changing between step k and k-1
             # for k=1..T-1.
             pred_diff = (preds[1:] != preds[:-1]).astype(jnp.float32)
-            if mask_b is not None:
-                diff = (pred_diff * mask_b[:-1]).sum(axis=(2, 3, 4)) / mask_sum_per_b[:-1]
-            else:
-                n_cells = preds.shape[2] * preds.shape[3] * preds.shape[4]
-                diff = pred_diff.sum(axis=(2, 3, 4)) / n_cells       # (T-1, B)
+            diff = (pred_diff * mask_b[:-1]).sum(axis=(2, 3, 4)) / mask_sum_per_b[:-1]
             converged = diff < halt_prior_p                        # (T-1, B)
             # Stack a sentinel "always converged" row at the end so argmax
             # finds the latest step if no earlier convergence happened.
@@ -2384,12 +2365,8 @@ def make_train_step(model, optimizer, conditional=False,
         next_b_full = jnp.broadcast_to(next_b, per_step_logits.shape)
         states_b_full = jnp.broadcast_to(states_b, per_step_logits.shape)
         correct = (preds == next_b_full).astype(jnp.float32)
-        if mask_b is not None:
-            acc_k = ((correct * mask_b).sum(axis=(2, 3, 4)) / mask_sum_per_b).mean(axis=1)
-            changed_full = ((states_b_full != next_b_full) & (mask_b > 0)).astype(jnp.float32)
-        else:
-            acc_k = correct.mean(axis=(1, 2, 3, 4))              # (T,)
-            changed_full = (states_b_full != next_b_full).astype(jnp.float32)
+        acc_k = ((correct * mask_b).sum(axis=(2, 3, 4)) / mask_sum_per_b).mean(axis=1)
+        changed_full = ((states_b_full != next_b_full) & (mask_b > 0)).astype(jnp.float32)
         changed_correct_k = (correct * changed_full).sum(axis=(1, 2, 3, 4))
         n_changed_k = changed_full.sum(axis=(1, 2, 3, 4))
         change_acc_k = jnp.where(n_changed_k > 0, changed_correct_k / n_changed_k, 1.0)
@@ -2571,17 +2548,12 @@ def make_eval_forward(model, conditional: bool):
     def _metrics(logits, states, next_states, spatial_mask=None):
         preds = (jax.nn.sigmoid(logits) > 0.5).astype(jnp.float32)
         correct = (preds == next_states).astype(jnp.float32)
-        if spatial_mask is not None:
-            mask = spatial_mask.astype(jnp.float32)
-            mask_sum = jnp.maximum(mask.sum(), 1.0)
-            acc = (correct * mask).sum() / mask_sum
-            changed = (states != next_states) & (spatial_mask > 0)
-            bce = optax.sigmoid_binary_cross_entropy(logits, next_states)
-            bce = (bce * mask).sum() / mask_sum
-        else:
-            acc = correct.mean()
-            changed = (states != next_states)
-            bce = optax.sigmoid_binary_cross_entropy(logits, next_states).mean()
+        mask = spatial_mask.astype(jnp.float32)
+        mask_sum = jnp.maximum(mask.sum(), 1.0)
+        acc = (correct * mask).sum() / mask_sum
+        changed = (states != next_states) & (spatial_mask > 0)
+        bce = optax.sigmoid_binary_cross_entropy(logits, next_states)
+        bce = (bce * mask).sum() / mask_sum
         n_changed = changed.sum()
         changed_correct = ((preds == next_states) & changed).sum()
         change_acc = jnp.where(n_changed > 0, changed_correct / n_changed, 1.0)
@@ -2685,7 +2657,6 @@ def train(
     halt_prior_p: float = 0.1,
     halt_kl_weight: float = 0.01,
     halt_mode: str = "ponder",
-    mask_padded_loss: bool = False,
     val_frac: float = 0.0,
     val_eval_interval: int = 0,
     obj_permute_aug: bool = False,
@@ -2863,8 +2834,7 @@ def train(
           f"batch_size={batch_size}, lr={lr}, wins={n_wins:,}/{n_data:,} "
           f"({100*n_wins/max(1,n_data):.3f}%)")
     print(f"  win_loss_weight={win_loss_weight}, win_pos_weight={win_pos_weight}")
-    if mask_padded_loss:
-        print("  [mask_padded_loss] Loss/metrics ignore batch-padding outside each sample's real (C,H,W).")
+    print("  [padding mask] Loss/metrics always ignore batch-padding outside each sample's real (C,H,W).")
 
     # === Size-bucketed batching ===
     # Quantize each transition's real (H, W) up to the nearest power-of-2
@@ -2972,9 +2942,8 @@ def train(
         buf = {
             "s":  np.zeros((bs_b, max_C, H_b, W_b), dtype=np.uint8),
             "ns": np.zeros((bs_b, max_C, H_b, W_b), dtype=np.uint8),
+            "mask": np.zeros((bs_b, max_C, H_b, W_b), dtype=np.uint8),
         }
-        if mask_padded_loss:
-            buf["mask"] = np.zeros((bs_b, max_C, H_b, W_b), dtype=np.uint8)
         bucket_buffers.append(buf)
         bucket_a_bufs.append(np.zeros((bs_b,), dtype=np.int32))
         bucket_w_bufs.append(np.zeros((bs_b,), dtype=np.uint8))
@@ -3194,13 +3163,12 @@ def train(
         game_probs_b = bucket_game_probs[b_idx]
         s_buf = bucket_buffers[b_idx]["s"]
         ns_buf = bucket_buffers[b_idx]["ns"]
-        mask_buf = bucket_buffers[b_idx].get("mask")
+        mask_buf = bucket_buffers[b_idx]["mask"]
         a_buf = bucket_a_bufs[b_idx]
         w_buf = bucket_w_bufs[b_idx]
         g_buf = bucket_g_bufs[b_idx]
         s_buf.fill(0); ns_buf.fill(0)
-        if mask_buf is not None:
-            mask_buf.fill(0)
+        mask_buf.fill(0)
 
         # Build game_ids and local_idx for this true-size bucket. In balanced
         # mode, `game_probs_b` is proportional to each game's within-game
@@ -3231,8 +3199,7 @@ def train(
             ox, _ = _pad_offsets(W_real, W_store)
             s_buf[i, :C_real, :H_real, :W_real] = s_full[:C_real, oy:oy + H_real, ox:ox + W_real]
             ns_buf[i, :C_real, :H_real, :W_real] = ns_full[:C_real, oy:oy + H_real, ox:ox + W_real]
-            if mask_buf is not None:
-                mask_buf[i, :C_real, :H_real, :W_real] = 1
+            mask_buf[i, :C_real, :H_real, :W_real] = 1
             a_buf[i] = per_game_actions_np[g][j]
             w_buf[i] = per_game_wons_np[g][j]
             g_buf[i] = g
@@ -3273,10 +3240,7 @@ def train(
         a_oh = jnp.array(np.eye(N_ACTIONS, dtype=np.float32)[a_int])
         ns = jnp.array(_bns, dtype=jnp.float32)
         w = jnp.array(_bw, dtype=jnp.float32)
-        spatial_mask = (
-            jnp.array(_bm, dtype=jnp.float32)
-            if mask_padded_loss and _bm is not None else None
-        )
+        spatial_mask = jnp.array(_bm, dtype=jnp.float32)
 
         if conditional:
             _gt_np = tokens_np[game_ids_batch]
@@ -3396,19 +3360,15 @@ def train(
                     ns_eval = np.zeros((N_eval, max_C, max_H, max_W), dtype=np.uint8)
                     full_s = _unpack_states(per_game_states[g][idx_g], W_g)
                     full_ns = _unpack_states(per_game_next_states[g][idx_g], W_g)
-                    eval_mask = None
-                    if mask_padded_loss:
-                        eval_mask_np = np.zeros((N_eval, max_C, max_H, max_W), dtype=np.uint8)
+                    eval_mask_np = np.zeros((N_eval, max_C, max_H, max_W), dtype=np.uint8)
                     for ii, j_local in enumerate(idx_g):
                         C_r, H_r, W_r = (int(x) for x in per_game_transition_shapes[g][j_local])
                         oy, _ = _pad_offsets(H_r, H_g)
                         ox, _ = _pad_offsets(W_r, W_g)
                         s_eval[ii, :C_r, :H_r, :W_r] = full_s[ii, :C_r, oy:oy + H_r, ox:ox + W_r]
                         ns_eval[ii, :C_r, :H_r, :W_r] = full_ns[ii, :C_r, oy:oy + H_r, ox:ox + W_r]
-                        if mask_padded_loss:
-                            eval_mask_np[ii, :C_r, :H_r, :W_r] = 1
-                    if mask_padded_loss:
-                        eval_mask = jnp.array(eval_mask_np, dtype=jnp.float32)
+                        eval_mask_np[ii, :C_r, :H_r, :W_r] = 1
+                    eval_mask = jnp.array(eval_mask_np, dtype=jnp.float32)
                     s_g = jnp.array(s_eval, dtype=jnp.float32)
                     a_int_g = per_game_actions_np[g][idx_g]
                     a_oh_g = jnp.array(np.eye(N_ACTIONS, dtype=np.float32)[a_int_g])
@@ -3471,8 +3431,7 @@ def train(
                         nb = len(chunk)
                         s_buf_va  = np.zeros((nb, max_C, H_b, W_b), dtype=np.uint8)
                         ns_buf_va = np.zeros((nb, max_C, H_b, W_b), dtype=np.uint8)
-                        mask_buf_va = (np.zeros((nb, max_C, H_b, W_b), dtype=np.uint8)
-                                       if mask_padded_loss else None)
+                        mask_buf_va = np.zeros((nb, max_C, H_b, W_b), dtype=np.uint8)
                         a_buf_va = np.zeros((nb,), dtype=np.int32)
                         g_buf_va = np.zeros((nb,), dtype=np.int32)
                         for i, (g_va, j_va) in enumerate(chunk):
@@ -3485,15 +3444,13 @@ def train(
                             ox, _ = _pad_offsets(W_r, W_store)
                             s_buf_va[i,  :C_r, :H_r, :W_r] = s_full[:C_r,  oy:oy + H_r, ox:ox + W_r]
                             ns_buf_va[i, :C_r, :H_r, :W_r] = ns_full[:C_r, oy:oy + H_r, ox:ox + W_r]
-                            if mask_buf_va is not None:
-                                mask_buf_va[i, :C_r, :H_r, :W_r] = 1
+                            mask_buf_va[i, :C_r, :H_r, :W_r] = 1
                             a_buf_va[i] = per_game_actions_np[g_va][j_va]
                             g_buf_va[i] = g_va
                         s_va = jnp.array(s_buf_va, dtype=jnp.float32)
                         ns_va = jnp.array(ns_buf_va, dtype=jnp.float32)
                         a_oh_va = jnp.array(va_eye[a_buf_va])
-                        spatial_mask_va = (jnp.array(mask_buf_va, dtype=jnp.float32)
-                                           if mask_buf_va is not None else None)
+                        spatial_mask_va = jnp.array(mask_buf_va, dtype=jnp.float32)
                         if conditional:
                             gt_va = jnp.array(tokens_np[g_buf_va])
                             gm_va = jnp.array(masks_np[g_buf_va])
@@ -5653,10 +5610,6 @@ def main():
                    help="Cap per-game transition count (uniformly subsample). "
                         "0 disables. Essential for scaling to many games with "
                         "disparate sizes — prevents dataset OOM.")
-    p.add_argument("--mask_padded_loss", action=argparse.BooleanOptionalAction, default=True,
-                   help="Mask state loss/metrics outside each sampled transition's real "
-                        "(C,H,W) region after bucket padding. Hidden activations are "
-                        "masked independently by the model's input-derived padding mask.")
     p.add_argument("--val_frac", type=float, default=0.0,
                    help="Fraction of each game's transitions held out as the "
                         "in-distribution test set. Held-out indices are picked "
@@ -6004,7 +5957,6 @@ def main():
         if not args.axis_cummax: parts.append("no-ac")
         if not args.global_pool: parts.append("no-gp")
         if args.encode_sprites: parts.append("spr")
-        if args.mask_padded_loss: parts.append("maskpad")
         if args.change_loss_weight != 5.0: parts.append(f"clw{args.change_loss_weight:g}")
         if args.architecture != "rule_attn": parts.append(f"arch-{args.architecture}")
         if args.n_nca_repeats != 1: parts.append(f"rep{args.n_nca_repeats}")
@@ -6332,7 +6284,6 @@ def main():
                 halt_prior_p=args.halt_prior_p,
                 halt_kl_weight=args.halt_kl_weight,
                 halt_mode=args.halt_mode,
-                mask_padded_loss=args.mask_padded_loss,
                 val_frac=args.val_frac,
                 val_eval_interval=args.val_eval_interval,
                 obj_permute_aug=args.obj_permute_aug,
@@ -6475,7 +6426,6 @@ def main():
             win_loss_weight=args.win_loss_weight,
             win_pos_weight=args.win_pos_weight,
             ckpt_interval=args.ckpt_interval,
-            mask_padded_loss=args.mask_padded_loss,
             val_frac=args.val_frac,
             val_eval_interval=args.val_eval_interval,
             obj_permute_aug=args.obj_permute_aug,
