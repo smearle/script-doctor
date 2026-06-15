@@ -1,0 +1,7 @@
+game                   cond       final_val_cerr  first_perm_zero  max_cerr_last20%   steps
+Travelling_salesman    cosine          0.000e+00            26500         5.590e-10   30000
+Travelling_salesman    constant        3.607e-04             3000         1.427e-02   30000
+nekopuzzle             cosine          0.000e+00             1000         0.000e+00   30000
+nekopuzzle             constant        0.000e+00             1000         0.000e+00   30000
+sokoban_basic          cosine          0.000e+00            16500         0.000e+00   30000
+sokoban_basic          constant        0.000e+00            25000         1.202e-03   30000

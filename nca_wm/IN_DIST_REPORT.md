@@ -215,3 +215,99 @@ any architecture (rule_attn included) — it uses the model's own apply_fn rathe
 than rebuilding a viz model, and gates learned-sprite rendering on raw (not
 sigmoid) sprite logits so decoder-free models render declared sprites instead of
 grey mush.
+
+---
+
+## Per-game transition budget: water-fill across levels (2026-05-21)
+
+`--max_transitions_per_game` previously capped a game's training transitions by
+truncating greedily, which let a few large levels eat the whole budget and starve
+small ones — the Take_Heart_Lass starvation failure mode
+([[project_thl_subsampling_starvation]]). Replaced the greedy cap with a
+**water-fill** allocation (commit `69cb775`): the per-game budget is distributed
+across that game's levels by repeatedly raising a uniform per-level ceiling until
+the budget is spent, so small levels keep all their transitions and only the
+largest levels get subsampled. This is the allocation used by every in-dist run
+below (THL is run at `--max_transitions_per_game 300000`, TSM at `100000`).
+
+---
+
+## LR schedule: cosine vs constant (2026-05-21)
+
+Question (commits `2b882c3`, `1b2a51e`): the default cosine-to-`1e-7` schedule
+ties LR decay to a fixed `n_updates`, which makes resuming/extending a run
+awkward. Does a **constant** LR reach *and hold* the same perfect val
+`change_err`? If so the schedule isn't load-bearing and we can drop it for
+resume-friendliness.
+
+Result (`figures/lr_sched_ablation/`, plotter
+`scripts/plot_lr_sched_ablation.py`):
+
+| game | cond | final val cerr | first val=0 | max cerr (last 20%) |
+|---|---|---|---|---|
+| Travelling_salesman | cosine | 0.0 | 26500 | 5.6e-10 |
+| Travelling_salesman | constant | 3.6e-4 | 3000 | 1.4e-2 |
+| nekopuzzle | cosine | 0.0 | 1000 | 0.0 |
+| nekopuzzle | constant | 0.0 | 1000 | 0.0 |
+| sokoban_basic | cosine | 0.0 | 16500 | 0.0 |
+| sokoban_basic | constant | 0.0 | 25000 | 1.2e-3 |
+
+**Verdict — cosine ≥ constant; keep cosine.** Constant LR *reaches* zero val
+`change_err` (often faster — TSM at 3k vs 26.5k) but does not reliably *hold* it:
+it leaves a residual on TSM (3.6e-4 final, 1.4e-2 jitter in the last 20%) and
+jitters on sokoban_basic (1.2e-3). nekopuzzle is perfect either way. The cosine
+decay is doing real work — annealing into a stable zero-error fixed point that
+constant LR keeps bouncing out of. For resume/extension we should warm-restart
+the cosine schedule against the new horizon rather than switch to constant.
+
+---
+
+## LayerNorm ablation: keep it OFF (2026-05-21)
+
+`--use_layernorm` adds a shared pre-norm LayerNorm on `h` at the start of every
+NCA step (the attn/slot/win LayerNorms are always present). It defaults OFF. The
+only prior evidence (ARCHITECTURE F4, Bouncers+Collapse, multi-game) called LN
+"at best neutral, at worst harmful," but that predates `input_skip` becoming the
+default and the in-dist pivot. This sweep regenerates it under the canonical
+single-game recipe (launcher `scripts/run_ln_ablation.sh`, analyzer
+`scripts/analyze_ln_ablation.py`; figures `figures/ln_ablation/`). Grid: TSM and
+Take_Heart_Lass × depth {8, 32} (`n_nca_steps == n_nca_repeats`, max-shared) ×
+LN {off, on}, plus a TSM pool-OFF stress regime (skip on/off) where bare deep
+training historically diverged and LN gave partial recovery.
+
+| group | depth | LN | best val cerr | conv@ | bfs | astar | rand-AR |
+|---|---|---|---|---|---|---|---|
+| TSM pool-ON+skip | 8 | off | 0.000% | 3000 | 0.000% | 0.000% | 0.001% |
+| TSM pool-ON+skip | 8 | **on** | 0.000% | 8500 | 0.034% | 0.000% | 0.040% |
+| TSM pool-ON+skip | 32 | off | 0.000% | 3500 | 0.000% | 0.000% | 0.000% |
+| TSM pool-ON+skip | 32 | **on** | 0.000% | 4000 | 0.011% | 0.000% | 0.065% |
+| THL pool-ON+skip | 8 | off | 0.000% | 19500 | 0.435% | 0.552% | 0.134% |
+| THL pool-ON+skip | 8 | **on** | 0.000% | 14500 | **4.882%** | **5.534%** | **2.970%** |
+| THL pool-ON+skip | 32 | off | 0.000% | 17000 | 2.995% | 3.002% | 0.920% |
+| THL pool-ON+skip | 32 | **on** | 0.000% | 22000 | 2.908% | 4.024% | **5.269%** |
+| TSM pool-OFF+skip | 32 | off | 0.000% | 3500 | 1.066% | 0.000% | 1.397% |
+| TSM pool-OFF+skip | 32 | **on** | 0.000% | 2000 | 0.000% | 0.000% | 0.000% |
+| TSM pool-OFF,no-skip | 32 | off | 0.000% | 3500 | 0.000% | 0.000% | 1.647% |
+| TSM pool-OFF,no-skip | 32 | **on** | 0.000% | 3500 | 0.000% | 0.000% | 0.727% |
+
+**Verdict — keep LN OFF (the current default is correct).** Three reads:
+1. **1-step held-out val is perfect (0%) in every cell**, LN on or off. LN never
+   affects the quantity we actually optimize; the differences are entirely on
+   autoregressive rollouts.
+2. **In the shipped regime (pool-ON + skip), LN is neutral-to-harmful.** On TSM
+   it's a wash (sub-0.1% rollout noise, and it slows convergence: 3k→8.5k at
+   d8). On the harder Take_Heart_Lass it is clearly harmful: at d8 it inflates
+   BFS rollout error 0.4%→4.9%, A\* 0.6%→5.5%, random-AR 0.13%→2.97% — a ~10×
+   regression — and at d32 it triples random-AR (0.92%→5.27%). The 1-step map is
+   identical; LN just makes the deep unroll less robust off the val distribution.
+3. **The historical "LN partially recovers divergent training" only applied to
+   the bare pool-OFF/no-skip regime that is no longer the default.** There LN
+   does help (pool-OFF+skip rollouts 1.4%→0%), but `input_skip` already supplies
+   that stabilization, so LN is redundant rather than additive under the current
+   defaults.
+
+So `--use_layernorm` stays off. Note THL is *not yet perfectly modeled even with
+LN off* (BFS/A\* rollout 0.4–3.0%) — that residual is the separate
+data-starvation axis ([[project_thl_subsampling_starvation]]), now mitigated but
+not eliminated by the water-fill budget; it is the next thing to push on, not an
+LN effect.
