@@ -367,3 +367,35 @@ padding-masking issues surfaced:
    spatial_mask is now always built and passed. Hidden-state masking was already
    unconditional in all model classes. Behavior is identical to the prior default
    (it defaulted True). See [[feedback_padding_always_masked]].
+
+### Heroes: longer training closes most of the gap (2026-06-15)
+
+The Heroes residual is **rare-transition underfitting, not a coverage gap**. Train
+change_err reads exactly 0 on most batches (the model fits the common transitions);
+the nonzero val is a small set of *rare* states — notably the 3-crate **chain
+push** in L1 — that appear infrequently in batches and stay underfit, flipping
+right/wrong across checkpoints (the val "descent" was really oscillation around a
+floor, [[feedback_train_change_err_misleading]]).
+
+Tested by extending training (`Heroes_long`, torch job 10882807): 150k steps,
+600k data cap, depth-8, cosine-to-150k — isolating step count vs the 60k
+`Heroes_2xdata` run (same data/code).
+
+| run | steps / data cap | val change_err | levels perfect | L1 chain-push (bfs / astar) |
+|---|---|---|---|---|
+| Heroes (baseline) | 30k / 300k | 2.8e-3 | 5/22 | RESIDUAL (3 wrong cells) |
+| Heroes_2xdata | 60k / 600k | 7.4e-4 | 8/22 | RESIDUAL (1) |
+| **Heroes_long** | **150k / 600k** | **≈0** | **15/22** | **0 / 0 — on-policy perfect** |
+
+**Verdict — training longer substantially helps.** 8→15/22 perfect levels at fixed
+data, val change_err → 0, and L1's chain push is now on-policy-perfect (bfs/astar
+both 0; only a 0.12-cell random-AR off-policy residual). 20/22 levels reach
+bfs_wc=0; the genuine on-policy holdouts shrink to L12/L13. The mechanism matches
+the LR-schedule ablation: the val oscillation is set by rare transitions at
+moderate LR, and **stretching the cosine anneal to 150k gives a long low-LR
+refinement phase that settles them to zero** — it is "more steps *with the
+schedule stretched to match*," not raw step count. More data also helped
+(30k/300k→60k/600k took 5→8/22), but the dominant lever for Heroes was annealed
+training length. Practical implication: for rare-mechanic games, prefer a longer
+run with a full-length cosine schedule over short runs; the prior 30k default
+under-trained them.
