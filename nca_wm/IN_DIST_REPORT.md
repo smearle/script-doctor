@@ -311,3 +311,59 @@ LN off* (BFS/A\* rollout 0.4–3.0%) — that residual is the separate
 data-starvation axis ([[project_thl_subsampling_starvation]]), now mitigated but
 not eliminated by the water-fill budget; it is the next thing to push on, not an
 LN effect.
+
+---
+
+## Next mechanic-ladder set: Microban / Heroes / Bouncers (2026-06-15)
+
+Climbing past the already-perfect games (sokoban_basic, nekopuzzle, TSM) along
+three axes. Canonical recipe (rule_attn h256, depth-8 `input_skip`, LN off,
+cosine LR, water-fill 300k cap, 30k steps, `val_frac 0.1`). Launcher:
+`scripts/run_in_dist_next.sh`. Run across local GPU 1, ssh 210, and the torch
+SLURM cluster (`scripts/torch_in_dist.sbatch`).
+
+| game | axis | val change_err | AR rollout | verdict |
+|---|---|---|---|---|
+| Microban | data-scale (~150 levels) | **0.0** | — | **perfect** ✓ |
+| Bouncers (d8) | iterative `again` | **0.0** | 3/5 levels perfect | val perfect; small rollout residual |
+| Bouncers (d16) | iterative `again`, deeper | **0.0** | 3/5 levels perfect | **= d8; depth doesn't help** |
+| Heroes_of_Sokoban | local-rule richness | 2.8e-3 | 5/22 perfect | residual (data + mechanics) |
+| Heroes_2xdata (600k, 60k) | Heroes + 2× data/steps | 7.4e-4 | 8/22 perfect | improved ~4×, still not perfect |
+
+Findings:
+- **Microban is perfect** — the water-fill budget handles a large authored level
+  bank (~150 small levels) with zero held-out error. Data-scale axis is clean.
+- **Bouncers: depth-8 is enough.** Both depth-8 and depth-16 reach val
+  change_err 0 and an identical 3/5-levels-perfect AR rollout (the 2 residual
+  levels have ≤1-cell errors at both depths). The iteration-extrapolation
+  hypothesis ([[project_nca_iter_extrap]]) — that `again`-heavy games need
+  deeper shared unrolls — is **not supported here**: deeper did not move the
+  residual. Bouncers' again-chains resolve within 8 steps at these level sizes.
+- **Heroes is the live frontier.** Doubling data (300k→600k cap) and steps
+  (30k→60k) improved val change_err 2.8e-3→7.4e-4 and perfect levels 5→8/22, so
+  data scarcity is a real factor — but 14/22 levels still carry residual, with
+  the worst AR drift concentrated on specific levels (16, 17, 3) that likely
+  exercise rarer hero-unit mechanics. So Heroes is part data-coverage, part
+  mechanics-coverage; more raw data alone won't close it. The May synth-level
+  experiments (`logs_heroes_synth`: novelty/rule-coverage/solvability seeding)
+  are the relevant prior art for closing the mechanics-coverage gap.
+
+### Interactive WM server + two padding-masking fixes (2026-06-15)
+
+While serving the Heroes checkpoint for interactive play (`serve_wm.py`), two
+padding-masking issues surfaced:
+1. **`serve.py` AR-feedback leak** (commit `dd352f4`): the interactive rollout
+   fed the full padded prediction back without cropping to the real `(n_objs,
+   H, W)`. Because the architectural mask is **input-derived** (`x.sum>0`),
+   nonzero junk the model paints in off-grid padding (loss never penalizes it)
+   was read as "real" next step — the player could "leave" through a wall into
+   padding and be carried back later (off-screen memory). Fixed by routing both
+   `/api/step` and `/api/step_dream` through `_feedback_pred()` (crop + re-pad
+   with zeros), mirroring the train/eval AR path. See [[feedback_ar_padding_leak]].
+2. **`--mask_padded_loss` made mandatory** (commit `d7e4c3b`): the flag had crept
+   back as a CLI option; padding-loss masking should never be optional. Removed
+   the flag and every unmasked fallback branch in the jitted loss/metrics
+   (`_heads_loss`/`_ponder_loss`/`_metrics`) and the mask builders; a real
+   spatial_mask is now always built and passed. Hidden-state masking was already
+   unconditional in all model classes. Behavior is identical to the prior default
+   (it defaulted True). See [[feedback_padding_always_masked]].
