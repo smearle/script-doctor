@@ -43,7 +43,7 @@ if str(_REPO_ROOT) not in sys.path:
 from puzzlescript_cpp._puzzlescript_cpp import Engine
 from puzzlescript_cpp import CppPuzzleScriptBackend, CppPuzzleScriptEnv
 from puzzlescript_jax.utils import init_ps_lark_parser
-from evolve_level_cpp import LevelMutator
+from puzzlejax.evolve_level_cpp import LevelMutator
 
 from nca_wm.synthetic_levels import (
     LevelGenerator,
