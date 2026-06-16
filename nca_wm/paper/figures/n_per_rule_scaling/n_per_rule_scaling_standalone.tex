@@ -34,12 +34,23 @@ median. The shaded band is a bootstrap 95\% confidence interval of the mean
 vertical error bars show the \emph{across-seed} spread (min--max of the
 per-seed mean), drawn only at corpus sizes with at least two training seeds;
 they measure run-to-run reproducibility and are distinct from the
-across-game band. The dotted black reference is the identity (copy-last-state)
-baseline---per-corpus state churn in-distribution (${\approx}2\%$) and
-$2.60\%$ on Heldout-26.
+across-game band.
+Two model-independent references are shown.
+The dotted black line is the identity (copy-last-state) baseline---per-corpus
+state churn in-distribution (${\approx}2\%$) and $2.60\%$ on Heldout-26.
+The brown dash-dot line is the no-rule baseline, which predicts the next state
+by stepping the game with its rules removed: any player object moves in the
+direction of the applied force unless a collision blocks it, and nothing else
+moves.
+This isolates plain force-driven movement from rule-driven behavior, and is a
+much stronger reference than identity: ${\approx}0.4\%$ per corpus
+in-distribution and $1.15\%$ on Heldout-26.
 In-distribution error stays near zero and dilutes only mildly as the corpus
 widens at fixed capacity, with the rule-conditioned mean degrading more slowly
-than the unconditional one; out-of-distribution error falls toward the
-identity baseline as the corpus grows.}
+than the unconditional one.
+Out-of-distribution mean error falls toward the identity baseline as the
+corpus grows but stays above the no-rule baseline, so on average the model
+still trails a movement-only predictor on unseen games, even though its median
+drops below the no-rule baseline at the largest corpus.}
 
 \end{document}

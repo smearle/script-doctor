@@ -82,6 +82,18 @@ BOOT_SEED = 0
 # compute_n_per_rule_id_identity.py.
 ID_IDENTITY_JSON = OUT_DIR / "id_identity.json"
 
+# No-rule baseline (force-driven player movement with collision, empty RULES
+# section), cached by compute_n_per_rule_id_norule.py (per training game) and
+# compute_n_per_rule_ood_norule.py (per Heldout-26 (game, level) pair).
+ID_NORULE_JSON  = OUT_DIR / "id_norule.json"
+OOD_NORULE_JSON = OUT_DIR / "ood_norule.json"
+
+# Baseline reference styling (identity: black dotted; no-rule: brown dash-dot).
+IDENTITY_COLOR = "black"
+NORULE_COLOR   = "#8c564b"
+IDENTITY_LABEL = "identity (copy last state)"
+NORULE_LABEL   = "no-rule (force-only movement)"
+
 # Shared y-axis label: cell_error_rate = wrong_cells / (H*W) per step, i.e.
 # the fraction of grid cells whose predicted object-stack differs from ground
 # truth (a cell counts as wrong if ANY object channel is wrong), averaged over
@@ -170,6 +182,25 @@ def _id_identity_by_n(id_names: dict[str, dict[int, list[str]]]
     return out
 
 
+def _id_norule_by_n(id_names: dict[str, dict[int, list[str]]]
+                    ) -> dict[int, float]:
+    """Per-cell no-rule error (%) averaged over each scale's own training
+    games, using the cond game sets (widest coverage). {} if the cache is
+    absent."""
+    if not ID_NORULE_JSON.exists():
+        return {}
+    per_game = json.loads(ID_NORULE_JSON.read_text())
+    out: dict[int, float] = {}
+    for n in NS:
+        gnames = id_names.get("cond", {}).get(n) or id_names.get("uncond", {}).get(n)
+        if not gnames:
+            continue
+        vs = [per_game[g] for g in gnames if g in per_game]
+        if vs:
+            out[n] = float(np.mean(vs)) * 100.0
+    return out
+
+
 # --------------------------------------------------------------------------- #
 # Out-of-distribution: mean/median TF cell-error over common Heldout-26 pairs.
 # --------------------------------------------------------------------------- #
@@ -192,15 +223,28 @@ def _ood_load_pairs(run: str) -> dict[tuple[str, str], tuple[float, float]]:
     return out
 
 
-def _ood_aggregates() -> tuple[dict[str, dict[int, np.ndarray]], float,
+def _ood_norule_flat(common: list[tuple[str, str]]) -> float:
+    """Mean per-cell no-rule error (%) over the common Heldout-26 pairs, from
+    the ood_norule.json cache. NaN if the cache is absent or covers no common
+    pair."""
+    if not OOD_NORULE_JSON.exists():
+        return float("nan")
+    cache = json.loads(OOD_NORULE_JSON.read_text())
+    vs = [cache[f"{g}|{lvl}"]["norule"] * 100.0
+          for (g, lvl) in common if f"{g}|{lvl}" in cache]
+    return float(np.mean(vs)) if vs else float("nan")
+
+
+def _ood_aggregates() -> tuple[dict[str, dict[int, np.ndarray]], float, float,
                                dict[str, dict[int, np.ndarray]]]:
     """({model: {n: seed_avg_per_pair_pct}}, identity_mean_pct,
-        {model: {n: per_seed_mean_pct}}).
+        norule_mean_pct, {model: {n: per_seed_mean_pct}}).
 
     Restricts to the (game, level) pairs scored by *every* loaded run (all
     seeds, all cells), so the aggregate is over a fixed Heldout-26 set. Per
     pair we seed-average; per_seed_mean is the mean over the common pairs for
-    each seed (for the across-seed error bar).
+    each seed (for the across-seed error bar). The no-rule baseline is averaged
+    over the same common pairs from the ood_norule.json cache.
     """
     loaded: dict[tuple[str, int], list[dict]] = {}
     for model in ("cond", "uncond"):
@@ -210,7 +254,8 @@ def _ood_aggregates() -> tuple[dict[str, dict[int, np.ndarray]], float,
             if seeds:
                 loaded[(model, n)] = seeds
     if not loaded:
-        return {"cond": {}, "uncond": {}}, float("nan"), {"cond": {}, "uncond": {}}
+        return ({"cond": {}, "uncond": {}}, float("nan"), float("nan"),
+                {"cond": {}, "uncond": {}})
     all_pair_sets = [set(s.keys()) for seeds in loaded.values() for s in seeds]
     common = sorted(set.intersection(*all_pair_sets))
 
@@ -224,7 +269,8 @@ def _ood_aggregates() -> tuple[dict[str, dict[int, np.ndarray]], float,
         seedm[model][n] = np.asarray(seed_means, dtype=np.float64)
         ident_vals.extend([seeds[0][k][1] * 100.0 for k in common])
     identity = float(np.mean(ident_vals)) if ident_vals else float("nan")
-    return out, identity, seedm
+    norule = _ood_norule_flat(common)
+    return out, identity, norule, seedm
 
 
 def _boot_ci(vals: np.ndarray) -> tuple[float, float, float]:
@@ -247,7 +293,9 @@ def _boot_ci(vals: np.ndarray) -> tuple[float, float, float]:
 def _draw_panel(ax, agg: dict[str, dict[int, np.ndarray]], *, title: str,
                 seedm: dict[str, dict[int, np.ndarray]] | None = None,
                 identity_flat: float | None = None,
-                identity_by_n: dict[int, float] | None = None) -> None:
+                identity_by_n: dict[int, float] | None = None,
+                norule_flat: float | None = None,
+                norule_by_n: dict[int, float] | None = None) -> None:
     """Plot cond/uncond mean (solid) + median (dashed) per corpus size, plus
     an identity reference. The shaded band is the bootstrap 95% CI across the
     aggregation units (games for ID, heldout pairs for OOD). Solid capped
@@ -290,15 +338,24 @@ def _draw_panel(ax, agg: dict[str, dict[int, np.ndarray]], *, title: str,
             ax.errorbar(bar_x, bar_y, yerr=[bar_lo, bar_hi], fmt="none",
                         ecolor=color, elinewidth=1.6, capsize=4, capthick=1.6,
                         zorder=5, label="_nolegend_")
+    if norule_by_n:
+        xs = sorted(norule_by_n.keys())
+        ys = [max(norule_by_n[n], floor) for n in xs]
+        ax.plot(xs, ys, color=NORULE_COLOR, linewidth=1.6, linestyle="-.",
+                marker="^", markersize=5, alpha=0.85, zorder=2,
+                label=NORULE_LABEL)
+    elif norule_flat is not None and np.isfinite(norule_flat):
+        ax.axhline(max(norule_flat, floor), color=NORULE_COLOR, linewidth=1.6,
+                   linestyle="-.", alpha=0.85, zorder=2, label=NORULE_LABEL)
     if identity_by_n:
         xs = sorted(identity_by_n.keys())
         ys = [identity_by_n[n] for n in xs]
-        ax.plot(xs, ys, color="black", linewidth=1.6, linestyle=":",
+        ax.plot(xs, ys, color=IDENTITY_COLOR, linewidth=1.6, linestyle=":",
                 alpha=0.8, zorder=2,
-                label="identity (copy last state)")
+                label=IDENTITY_LABEL)
     elif identity_flat is not None and np.isfinite(identity_flat):
-        ax.axhline(identity_flat, color="black", linewidth=1.6, linestyle=":",
-                   alpha=0.8, zorder=2, label="identity (copy last state)")
+        ax.axhline(identity_flat, color=IDENTITY_COLOR, linewidth=1.6,
+                   linestyle=":", alpha=0.8, zorder=2, label=IDENTITY_LABEL)
     ax.set_xscale("log")
     ax.set_yscale("log")
     ax.set_xticks(NS)
@@ -311,18 +368,21 @@ def _draw_panel(ax, agg: dict[str, dict[int, np.ndarray]], *, title: str,
     ax.grid(True, which="both", alpha=0.25)
 
 
-def _make_id_panel(ax, id_agg, id_identity_by_n, id_seedm=None, draw_legend=True):
+def _make_id_panel(ax, id_agg, id_identity_by_n, id_norule_by_n,
+                   id_seedm=None, draw_legend=True):
     _draw_panel(ax, id_agg, seedm=id_seedm,
                 title="In-distribution (training games)",
-                identity_by_n=id_identity_by_n)
+                identity_by_n=id_identity_by_n,
+                norule_by_n=id_norule_by_n)
     if draw_legend:
         ax.legend(loc="lower left", framealpha=0.95, fontsize=8)
 
 
-def _make_ood_panel(ax, ood_agg, identity, ood_seedm=None, draw_legend=True):
+def _make_ood_panel(ax, ood_agg, identity, norule, ood_seedm=None,
+                    draw_legend=True):
     _draw_panel(ax, ood_agg, seedm=ood_seedm,
                 title="Out-of-distribution (Heldout-26)",
-                identity_flat=identity)
+                identity_flat=identity, norule_flat=norule)
     if draw_legend:
         ax.legend(loc="upper right", framealpha=0.95, fontsize=8)
 
@@ -335,10 +395,17 @@ def main() -> None:
 
     id_agg, id_names, id_seedm = _id_aggregates()
     id_identity_by_n = _id_identity_by_n(id_names)
-    ood_agg, identity, ood_seedm = _ood_aggregates()
+    id_norule_by_n = _id_norule_by_n(id_names)
+    ood_agg, identity, norule, ood_seedm = _ood_aggregates()
     if not id_identity_by_n:
         print("WARNING: id_identity.json missing; run "
               "compute_n_per_rule_id_identity.py for the ID identity baseline.")
+    if not id_norule_by_n:
+        print("WARNING: id_norule.json missing; run "
+              "compute_n_per_rule_id_norule.py for the ID no-rule baseline.")
+    if not np.isfinite(norule):
+        print("WARNING: ood_norule.json missing; run "
+              "compute_n_per_rule_ood_norule.py for the OOD no-rule baseline.")
 
     # Report seed counts per cell so multi-seed coverage is explicit.
     print("seeds per (model, n):")
@@ -350,8 +417,10 @@ def main() -> None:
     # Combined two-panel figure with a SINGLE shared legend (the panels have
     # identical series) placed below, centered.
     fig, (axl, axr) = plt.subplots(1, 2, figsize=(11.5, 5.2))
-    _make_id_panel(axl, id_agg, id_identity_by_n, id_seedm, draw_legend=False)
-    _make_ood_panel(axr, ood_agg, identity, ood_seedm, draw_legend=False)
+    _make_id_panel(axl, id_agg, id_identity_by_n, id_norule_by_n, id_seedm,
+                   draw_legend=False)
+    _make_ood_panel(axr, ood_agg, identity, norule, ood_seedm,
+                    draw_legend=False)
     handles, labels = axl.get_legend_handles_labels()
     fig.legend(handles, labels, loc="lower center", ncol=len(labels),
                framealpha=0.95, fontsize=9, bbox_to_anchor=(0.5, -0.01))
@@ -362,22 +431,24 @@ def main() -> None:
 
     # Single-panel subfigures.
     fig_id, ax_id = plt.subplots(figsize=(5.8, 4.8))
-    _make_id_panel(ax_id, id_agg, id_identity_by_n, id_seedm)
+    _make_id_panel(ax_id, id_agg, id_identity_by_n, id_norule_by_n, id_seedm)
     fig_id.tight_layout()
     for ext, kw in ((".pdf", {}), (".png", {"dpi": 160})):
         fig_id.savefig(OUT_DIR / f"n_per_rule_slope_id{ext}", bbox_inches="tight", **kw)
     plt.close(fig_id)
 
     fig_ood, ax_ood = plt.subplots(figsize=(5.8, 4.8))
-    _make_ood_panel(ax_ood, ood_agg, identity, ood_seedm)
+    _make_ood_panel(ax_ood, ood_agg, identity, norule, ood_seedm)
     fig_ood.tight_layout()
     for ext, kw in ((".pdf", {}), (".png", {"dpi": 160})):
         fig_ood.savefig(OUT_DIR / f"n_per_rule_slope_ood{ext}", bbox_inches="tight", **kw)
     plt.close(fig_ood)
 
     # Console summary (mean [95% CI], median).
-    print(f"OOD identity (Heldout-26 TF mean): {identity:.3f}%")
+    print(f"OOD identity (Heldout-26 TF mean): {identity:.3f}%   "
+          f"OOD no-rule (Heldout-26 TF mean): {norule:.3f}%")
     print(f"\n{'n':>5} | {'cond mean (CI)':>22} {'cond med':>8} {'ID ident':>8} "
+          f"{'ID norule':>9} "
           f"| {'unc mean (CI)':>22} {'unc med':>8} "
           f"|| {'cond OOD (CI)':>22} {'unc OOD (CI)':>22}")
     def fci(d, n):
@@ -389,7 +460,9 @@ def main() -> None:
         return f"{np.median(d[n]):8.3f}" if n in d else f"{'--':>8}"
     for n in NS:
         idi = f"{id_identity_by_n[n]:8.2f}" if n in id_identity_by_n else f"{'--':>8}"
+        nri = f"{id_norule_by_n[n]:9.2f}" if n in id_norule_by_n else f"{'--':>9}"
         print(f"{n:>5} | {fci(id_agg['cond'], n)} {fmed(id_agg['cond'], n)} {idi} "
+              f"{nri} "
               f"| {fci(id_agg['uncond'], n)} {fmed(id_agg['uncond'], n)} "
               f"|| {fci(ood_agg['cond'], n)} {fci(ood_agg['uncond'], n)}")
 
