@@ -499,7 +499,7 @@ def _depth_order_for_results(results_by_depth: dict[int, dict]) -> list[int]:
     return preferred_depth_order + fallback_depth_order
 
 
-@hydra.main(version_base="1.3", config_path="conf", config_name="plot_standalone_bfs_config")
+@hydra.main(version_base="1.3", config_path='../../conf', config_name="plot_standalone_bfs_config")
 def main(cfg: PlotSearch):
     if cfg.aggregate:
         aggregate_results(cfg)
@@ -2114,7 +2114,7 @@ def generate_expanded_heatmap(
         plt.close()
 
 
-@hydra.main(version_base="1.3", config_path="conf", config_name="plot_standalone_bfs_config")
+@hydra.main(version_base="1.3", config_path='../../conf', config_name="plot_standalone_bfs_config")
 def old_plot(cfg: PlotSearch):
     with open(STANDALONE_NODEJS_RESULTS_PATH, 'r') as f:
         results = json.load(f)

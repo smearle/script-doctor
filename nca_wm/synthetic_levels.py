@@ -1245,7 +1245,7 @@ def _evolve_levels(
     Mutations come from evolve_level_cpp.LevelMutator, which guarantees a
     valid player count after each step.
     """
-    from evolve_level_cpp import LevelMutator
+    from puzzlejax.evolve_level_cpp import LevelMutator
 
     mutator = LevelMutator(
         json_state, width=width, height=height,

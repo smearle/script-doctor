@@ -12,7 +12,7 @@ VLLM_ENABLE_PREFIX_CACHING ?= 1
 VLLM_MAX_NUM_BATCHED_TOKENS ?= 4096
 
 llm-agent:
-	python llm_agent_loop.py \
+	python -m puzzlejax.llm_agent_loop_jax \
 		--model vllm-qwen3 \
 		--num_runs 1
 
@@ -24,7 +24,7 @@ LLM_SLURM ?=
 
 # Launch vLLM server + llm_agent_loop_nodejs.py (local or SLURM)
 llm-agent-nodejs:
-	python launch_llm_agent.py \
+	python -m scripts.llm.launch_llm_agent \
 		--models $(LLM_MODEL) \
 		--vllm_model "$(VLLM_MODEL)" \
 		--vllm_port $(VLLM_PORT) \

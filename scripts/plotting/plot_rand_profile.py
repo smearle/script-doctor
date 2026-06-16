@@ -6,7 +6,7 @@ import hydra
 from matplotlib import pyplot as plt
 
 from conf.config import PlotRandProfileConfig
-from profile_rand_jax import get_level_int, get_step_int, get_vmap
+from scripts.benchmarks.profile_rand_jax import get_level_int, get_step_int, get_vmap
 from puzzlescript_jax.globals import (
     CPP_PROFILING_RESULTS_DIR,
     GAMES_TO_N_RULES_PATH,
@@ -523,7 +523,7 @@ def _set_log_axes(ax, all_series: list[dict]) -> None:
     ax.set_ylim(bottom=min(positive_y))
 
 
-@hydra.main(version_base="1.3", config_path="conf", config_name="plot_rand_profile_config")
+@hydra.main(version_base="1.3", config_path='../../conf', config_name="plot_rand_profile_config")
 def main(cfg: PlotRandProfileConfig):
     os.makedirs(PROFILING_PLOTS_DIR, exist_ok=True)
     games_to_n_rules = _load_games_to_n_rules()

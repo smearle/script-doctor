@@ -21,20 +21,20 @@ But first! Make sure the lines requiring `jax` or `jax[cuda]` are (un)commented 
 
 First, collect games, both from the original PuzzleScript website/editor/javascript-engine repository, (which is checkpointed here under `script_doctor/puzzlescript_deprecated_hack`) and an online archive with the following command:
 ```
-python collect_games.py
+python -m puzzlejax.collect_games
 ```
 This will also attempt to scrape a dataset of ~900 games from an online database. For this, you will need a Github REST API key saved in `.env`.
 
 To preprocess these files, so that we can validate, profile and benchmark them in the jax, nodejs, and javascript versions of PuzzleScript, run:
 ```
-python preprocess_games.py
+python -m scripts.data.preprocess_games
 ```
 
 ## Interactive playtesting 
 
 To play a game interactively on a local machine, using the jax environment to run the engine, run, e.g.:
 ```
-python human_env.py game=sokoban_basic jit=True debug=False
+python -m scripts.serve.human_env game=sokoban_basic jit=True debug=False
 ```
 You can add new/custom games to the `custom_games` folder and refer to them in the above command line argument to playtest them yourself, or similarly supply the game as a command line argument to the RL training script below.
 
@@ -44,7 +44,7 @@ You can toggle the `jit` and `debug` command line arguments to replace jitted fu
 
 Similarly, you can launch the javascript PuzzleScript editor with:
 ```
-python server.py mode=None headless=False auto_launch_client=True port=8002
+python -m scripts.serve.server mode=None headless=False auto_launch_client=True port=8002
 ```
 , then copy games into the editor and compile and playtest them there as well.
 
@@ -79,10 +79,10 @@ That keeps search, validation, and tooling logic shared while backends differ on
 
 ## Profiling the speed of random actions
 ```
-python profile_rand_jax.py
+python -m scripts.benchmarks.profile_rand_jax
 ```
 ```
-python profile_rand_nodejs.py
+python -m scripts.benchmarks.profile_rand_nodejs
 ```
 
 
@@ -90,18 +90,18 @@ python profile_rand_nodejs.py
 
 To train an agent using reinforcement learning to play a particular game level, run, e.g.:
 ```
-python train.py game=sokoban_basic level=0 n_envs=600 model=conv2 render_freq=5 hidden_dims=[128,128] seed=0
+python -m puzzlejax.train_jax game=sokoban_basic level=0 n_envs=600 model=conv2 render_freq=5 hidden_dims=[128,128] seed=0
 ```
 This will log plots and gifs to wandb.
 
 ## LLM player agent
 
-To run the LLM agent, use the `llm_agent_loop.py` script. This script iterates through a predefined list of games, running each one for a specified number of trials (`--num_runs`) across all its levels.
+To run the LLM agent, use the `puzzlejax.llm_agent_loop_jax` module. This script iterates through a predefined list of games, running each one for a specified number of trials (`--num_runs`) across all its levels.
 
 ### Basic Usage
 To run the agent for all priority games with a specific model for a certain number of runs:
 ```bash
-python llm_agent_loop.py --model gemini --num_runs 10
+python -m puzzlejax.llm_agent_loop_jax --model gemini --num_runs 10
 ```
 Supported models are `4o-mini`, `o3-mini`, `gemini`, `deepseek`, `qwen`, and `deepseek-r1`.
 

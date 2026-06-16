@@ -100,7 +100,7 @@ def get_effective_steps(n_steps: int, n_envs: int, min_steps: int) -> int:
     return max(n_steps // n_envs, min_steps)
 
 
-@hydra.main(version_base="1.3", config_path='./conf', config_name='profile_jax')
+@hydra.main(version_base="1.3", config_path='../../conf', config_name='profile_jax')
 def main_launch(cfg: ProfileJaxRandConfig):
     if cfg.slurm:
         if cfg.game is None:

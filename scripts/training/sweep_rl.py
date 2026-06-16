@@ -23,10 +23,10 @@ from puzzlescript_jax.env import PJParams
 from puzzlescript_jax.preprocessing import get_env_from_ps_file
 from puzzlejax.train_jax import main as main_train
 def _lazy_pytorch_imports():
-    from train_pytorch import train as pytorch_train, TrainPytorchConfig, get_exp_dir as pytorch_get_exp_dir
+    from scripts.training.train_pytorch import train as pytorch_train, TrainPytorchConfig, get_exp_dir as pytorch_get_exp_dir
     return pytorch_train, TrainPytorchConfig, pytorch_get_exp_dir
 from puzzlejax.eval_rl import main_enjoy
-from sweep_rl_configs import _NAMED_SWEEPS
+from scripts.training.sweep_rl_configs import _NAMED_SWEEPS
 from puzzlescript_jax.utils import get_list_of_games_for_testing, get_n_levels_per_game, init_ps_lark_parser
 from puzzlejax.utils_rl import init_config
 from puzzlescript_jax.globals import JS_TO_JAX_ACTIONS, JS_SOLS_DIR, SOLUTION_REWARDS_PATH
@@ -467,7 +467,7 @@ def _apply_backend_defaults(
     return resolved_cfg
 
 
-@hydra.main(version_base="1.3", config_path="conf", config_name="sweep_rl_config")
+@hydra.main(version_base="1.3", config_path='../../conf', config_name="sweep_rl_config")
 def main(sweep_cfg: SweepRLConfig):
     sweep_cfg = _apply_named_sweep(sweep_cfg)
     backend = str(getattr(sweep_cfg, "backend", "jax")).lower()

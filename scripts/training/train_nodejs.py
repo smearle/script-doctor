@@ -236,7 +236,7 @@ def make_train(config: TrainConfig):
     return train
 
 
-@hydra.main(version_base="1.3", config_path="conf", config_name="train_nodejs")
+@hydra.main(version_base="1.3", config_path='../../conf', config_name="train_nodejs")
 def main(config: TrainConfig):
     logging.getLogger().setLevel(logging.WARNING)
     config = init_config(config)

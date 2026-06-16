@@ -714,7 +714,7 @@ def train(cfg: TrainPytorchConfig) -> None:
             env.close()
 
 
-@hydra.main(version_base="1.3", config_path="conf", config_name="train_pytorch")
+@hydra.main(version_base="1.3", config_path='../../conf', config_name="train_pytorch")
 def main(cfg: TrainPytorchConfig):
     train(cfg)
 

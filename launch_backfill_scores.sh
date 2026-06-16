@@ -13,4 +13,4 @@ cd "$(dirname "$0")"
 
 export SLURM_ACCOUNT="${SLURM_ACCOUNT:-torch_pr_84_tandon_advanced}"
 
-.venv/bin/python3 backfill_initial_scores.py slurm=True "$@"
+.venv/bin/python3 -m scripts.data.backfill_initial_scores slurm=True "$@"

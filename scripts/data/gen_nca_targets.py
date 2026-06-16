@@ -18,7 +18,7 @@ from utils import get_list_of_games_for_testing, init_ps_lark_parser, level_to_i
 from puzzlejax.validate_sols_jax import JS_SOLS_DIR, multihot_level_from_js_state, JAX_VALIDATED_JS_SOLS_DIR
 
 
-@hydra.main(version_base="1.3", config_path='./conf', config_name='search_nodejs_config')
+@hydra.main(version_base="1.3", config_path='../../conf', config_name='search_nodejs_config')
 def main(cfg: SearchNodeJSConfig):
     parser = init_ps_lark_parser()
     engine = require('./puzzlescript_nodejs/puzzlescript/engine.js')

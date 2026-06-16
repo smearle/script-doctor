@@ -18,7 +18,7 @@ from puzzlescript_jax.utils import get_list_of_games_for_testing, init_ps_lark_p
 dotenv.load_dotenv()
 
 
-@hydra.main(version_base="1.3", config_path='conf', config_name='search_nodejs_config')
+@hydra.main(version_base="1.3", config_path='../../conf', config_name='search_nodejs_config')
 def main_launch(cfg: SearchNodeJSConfig):
     if cfg.slurm:
         games = get_list_of_games_for_testing(dataset=cfg.dataset, random_order=cfg.random_order)

@@ -320,7 +320,7 @@ def generate_plots(df: pd.DataFrame, output_dir: str, dataset: str = "priority")
     import matplotlib.pyplot as plt
     import seaborn as sns
 
-    from plot_llm_results import (
+    from scripts.plotting.plot_llm_results import (
         get_search_game_order,
         build_expanded_heatmap_columns,
         draw_game_dividers,

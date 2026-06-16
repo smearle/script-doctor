@@ -165,7 +165,7 @@ def extract_game_metadata(ps_tree) -> dict:
     return meta
 
 
-@hydra.main(version_base="1.3", config_path="conf", config_name="preprocess_config")
+@hydra.main(version_base="1.3", config_path='../../conf', config_name="preprocess_config")
 def main_launch(cfg: PreprocessConfig):
     if cfg.slurm:
         if cfg.game is not None:

@@ -428,7 +428,7 @@ def _profile_batched_rollout(
     }
 
 
-@hydra.main(version_base="1.3", config_path="./", config_name="profile_rand_cpp_config")
+@hydra.main(version_base="1.3", config_path='../../conf', config_name="profile_rand_cpp_config")
 def main_launch(cfg: ProfileRandCppConfig):
     if cfg.slurm:
         if cfg.game is None:

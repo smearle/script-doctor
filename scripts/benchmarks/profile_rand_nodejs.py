@@ -518,7 +518,7 @@ def _run_nodejs_native_pool(
     return runs
 
 
-@hydra.main(version_base="1.3", config_path="./", config_name="profile_rand_nodejs_config")
+@hydra.main(version_base="1.3", config_path='../../conf', config_name="profile_rand_nodejs_config")
 def main_launch(cfg: ProfileRandNodeJSConfig):
     if cfg.slurm:
         if cfg.game is None:

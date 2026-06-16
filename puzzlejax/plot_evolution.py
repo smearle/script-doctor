@@ -197,7 +197,7 @@ def _reconstruct_champion_states_cpp(
     from puzzlescript_cpp import CppPuzzleScriptBackend
     from puzzlescript_cpp._puzzlescript_cpp import LevelBackup, solve_astar, solve_bfs
     from puzzlescript_jax.utils import init_ps_lark_parser
-    from evolve_level_cpp import LevelMutator, extract_tile_patterns, _to_i32
+    from puzzlejax.evolve_level_cpp import LevelMutator, extract_tile_patterns, _to_i32
 
     # Parse run directory name for hyperparameters
     run_name = os.path.basename(run_dir)

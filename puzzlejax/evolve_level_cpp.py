@@ -736,7 +736,7 @@ def main(cfg: EvolveLevelCppConfig) -> None:
     )
 
 
-@hydra.main(version_base="1.3", config_path="conf", config_name="evolve_level_cpp")
+@hydra.main(version_base="1.3", config_path='../conf', config_name="evolve_level_cpp")
 def main_launch(cfg: EvolveLevelCppConfig) -> None:
     main(cfg)
 

@@ -24,8 +24,8 @@ from puzzlescript_jax.globals import GAMES_METADATA_PATH, PLOTS_DIR
 from puzzlescript_jax.utils import game_names_remap, get_list_of_games_for_testing
 
 # Local scripts (not packages), so Pylance may not resolve them
-from plot_llm_results import collect_results  # type: ignore[import-not-found]
-from plot_rl_results import collect_results_data as collect_rl_results  # type: ignore[import-not-found]
+from scripts.plotting.plot_llm_results import collect_results  # type: ignore[import-not-found]
+from scripts.plotting.plot_rl_results import collect_results_data as collect_rl_results  # type: ignore[import-not-found]
 
 ALGO_NAMES = ['astar', 'gbfs', 'bfs', 'mcts']
 HEATMAP_SEARCH_DEPTHS = [1_000_000]

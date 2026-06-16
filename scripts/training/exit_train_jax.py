@@ -1226,7 +1226,7 @@ def _run_exit_job(cfg: ExitTrainConfig, jobs: List[tuple[str, int]], multi_run: 
 # CLI (Hydra)
 # ---------------------------------------------------------------------------
 
-@hydra.main(version_base="1.3", config_path="./", config_name="exit_train_jax_config")
+@hydra.main(version_base="1.3", config_path='../../conf', config_name="exit_train_jax_config")
 def main(cfg: ExitTrainConfig):
     jobs = _build_jobs(cfg)
     if not jobs:

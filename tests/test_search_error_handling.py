@@ -290,7 +290,7 @@ class TestAggregationErrorPickup:
         })
 
         with patch("plot_search_results.JS_SOLS_DIR", sols_dir):
-            from plot_search_results import _collect_results_for_algo
+            from scripts.plotting.plot_search_results import _collect_results_for_algo
             results_by_depth, per_level_by_depth = _collect_results_for_algo([game], algo)
 
         assert n_steps in results_by_depth
@@ -315,7 +315,7 @@ class TestAggregationErrorPickup:
             })
 
         with patch("plot_search_results.JS_SOLS_DIR", sols_dir):
-            from plot_search_results import _collect_results_for_algo
+            from scripts.plotting.plot_search_results import _collect_results_for_algo
             results_by_depth, _ = _collect_results_for_algo([game], algo)
 
         game_result = results_by_depth[n_steps][game]

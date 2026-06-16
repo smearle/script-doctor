@@ -831,7 +831,7 @@ def main(cfg: EvolveLevelConfig):
     )
 
 
-@hydra.main(version_base="1.3", config_path="conf", config_name="evolve_level")
+@hydra.main(version_base="1.3", config_path='../../conf', config_name="evolve_level")
 def main_launch(cfg: EvolveLevelConfig):
     main(cfg)
 

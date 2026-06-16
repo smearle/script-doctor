@@ -249,7 +249,7 @@ def save_stats(results, val_results_path, games, n_levels, n_success, n_compile_
         json.dump(results, f, indent=2)
 
 
-@hydra.main(version_base="1.3", config_path="conf", config_name="cpp_validation_config")
+@hydra.main(version_base="1.3", config_path='../../conf', config_name="cpp_validation_config")
 def main_launch(cfg: CppValidationConfig):
     if cfg.slurm:
         games = get_list_of_games_for_testing(dataset=cfg.dataset)

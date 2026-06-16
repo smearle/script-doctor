@@ -69,7 +69,7 @@ def _sols_dir(backend_name: str) -> str:
     return JS_SOLS_DIR if backend_name == "js" else CPP_SOLS_DIR
 
 
-@hydra.main(version_base="1.3", config_path="./", config_name="backfill_config")
+@hydra.main(version_base="1.3", config_path='../../conf', config_name="backfill_config")
 def main_launch(cfg: BackfillConfig):
     if cfg.slurm:
         games = get_list_of_games_for_testing(dataset=cfg.dataset)

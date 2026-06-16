@@ -21,7 +21,7 @@ from puzzlescript_jax.utils import GAMES_N_RULES_SORTED_PATH
 from puzzlescript_jax.globals import GAMES_TO_N_RULES_PATH, GAMES_N_RULES_SORTED_PATH, LARK_SYNTAX_PATH
 
 
-@hydra.main(version_base="1.3", config_path="conf", config_name="preprocess_config")
+@hydra.main(version_base="1.3", config_path='../../conf', config_name="preprocess_config")
 def main(cfg: PreprocessConfig):
     with open(LARK_SYNTAX_PATH, "r", encoding='utf-8') as file:
         puzzlescript_grammar = file.read()

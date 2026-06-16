@@ -278,5 +278,5 @@ if __name__ == '__main__':
     elif args.command == 'pedro':
         collect_pedro(update=args.update)
     elif args.command == 'dedup':
-        import dedup_games
+        import puzzlejax.dedup_games as dedup_games
         dedup_games.main()

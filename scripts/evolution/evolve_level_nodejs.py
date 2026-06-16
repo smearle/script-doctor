@@ -547,7 +547,7 @@ def main(cfg: EvolveLevelNodeJSConfig) -> None:
     )
 
 
-@hydra.main(version_base="1.3", config_path="conf", config_name="evolve_level_nodejs")
+@hydra.main(version_base="1.3", config_path='../../conf', config_name="evolve_level_nodejs")
 def main_launch(cfg: EvolveLevelNodeJSConfig) -> None:
     main(cfg)
 
