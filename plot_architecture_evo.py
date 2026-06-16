@@ -257,7 +257,7 @@ def draw_architecture(ax):
                 fontweight='bold', color='black', family='sans-serif')
 
     try:
-        github_img = mpimg.imread('github_mark_transparent.png')
+        github_img = mpimg.imread('paper/assets/github_mark_transparent.png')
         github_box = OffsetImage(github_img, zoom=0.055)
         gists_label_x = ds_base_x + ds_gists_w - 0.8
         gists_label_y = ds_base_y + ds_gists_h / 2
@@ -564,7 +564,7 @@ def plot_combined(run_dir, backend="cpp", n_rows=2, n_cols=3,
 
     # Save
     if out_path is None:
-        out_path = "codebase_architecture_evo.png"
+        out_path = "paper/codebase_architecture_evo.png"
     fig.savefig(out_path, dpi=dpi, bbox_inches='tight',
                 pad_inches=0.05, facecolor='white', edgecolor='none')
     plt.close(fig)

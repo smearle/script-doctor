@@ -238,7 +238,7 @@ for name, frac, alpha in ds_info:
             fontweight='bold', color='black', family='sans-serif')
 
 # GitHub logo to the right of "gists" label — snug inside the dataset node
-github_img = mpimg.imread('github_mark_transparent.png')
+github_img = mpimg.imread('paper/assets/github_mark_transparent.png')
 github_box = OffsetImage(github_img, zoom=0.055)
 # gists label is at upper-right of the outermost box
 gists_label_x = ds_base_x + ds_gists_w - 0.8
@@ -269,10 +269,10 @@ ax.text(lcx - 1.8 + line_len, ly, legend_text, fontsize=FONT_LABEL, va='center',
         ha='left', color='#666', family='sans-serif', fontweight='bold')
 
 plt.tight_layout()
-plt.savefig('codebase_architecture_simple.png', dpi=300, bbox_inches='tight',
+plt.savefig('paper/codebase_architecture_simple.png', dpi=300, bbox_inches='tight',
             pad_inches=0.05, facecolor='white', edgecolor='none')
-plt.savefig('codebase_architecture_simple.pdf', bbox_inches='tight',
+plt.savefig('paper/codebase_architecture_simple.pdf', bbox_inches='tight',
             pad_inches=0.05, facecolor='white', edgecolor='none')
-plt.savefig('codebase_architecture_simple.svg', bbox_inches='tight',
+plt.savefig('paper/codebase_architecture_simple.svg', bbox_inches='tight',
             pad_inches=0.05, facecolor='white', edgecolor='none')
-print("Saved codebase_architecture_simple.png, .pdf, and .svg")
+print("Saved paper/codebase_architecture_simple.png, .pdf, and .svg")
