@@ -285,9 +285,11 @@ def _draw_panel(ax, agg: dict[str, dict[int, np.ndarray]], *, title: str,
         ax.plot(xs, medians, color=color, linewidth=1.8, linestyle="--",
                 marker="s", markersize=6, zorder=3, label=f"{label} (median)")
         if bar_x:
+            # Across-seed range bars; intentionally not in the legend (the
+            # standalone caption explains them).
             ax.errorbar(bar_x, bar_y, yerr=[bar_lo, bar_hi], fmt="none",
                         ecolor=color, elinewidth=1.6, capsize=4, capthick=1.6,
-                        zorder=5, label=f"{label} (seed range, n≤{max_seeds})")
+                        zorder=5, label="_nolegend_")
     if identity_by_n:
         xs = sorted(identity_by_n.keys())
         ys = [identity_by_n[n] for n in xs]
@@ -296,8 +298,7 @@ def _draw_panel(ax, agg: dict[str, dict[int, np.ndarray]], *, title: str,
                 label="identity (copy last state)")
     elif identity_flat is not None and np.isfinite(identity_flat):
         ax.axhline(identity_flat, color="black", linewidth=1.6, linestyle=":",
-                   alpha=0.8, zorder=2,
-                   label=f"identity (copy last state, {identity_flat:.2f}%)")
+                   alpha=0.8, zorder=2, label="identity (copy last state)")
     ax.set_xscale("log")
     ax.set_yscale("log")
     ax.set_xticks(NS)
@@ -310,18 +311,20 @@ def _draw_panel(ax, agg: dict[str, dict[int, np.ndarray]], *, title: str,
     ax.grid(True, which="both", alpha=0.25)
 
 
-def _make_id_panel(ax, id_agg, id_identity_by_n, id_seedm=None):
+def _make_id_panel(ax, id_agg, id_identity_by_n, id_seedm=None, draw_legend=True):
     _draw_panel(ax, id_agg, seedm=id_seedm,
                 title="In-distribution (training games)",
                 identity_by_n=id_identity_by_n)
-    ax.legend(loc="lower left", framealpha=0.95, fontsize=8)
+    if draw_legend:
+        ax.legend(loc="lower left", framealpha=0.95, fontsize=8)
 
 
-def _make_ood_panel(ax, ood_agg, identity, ood_seedm=None):
+def _make_ood_panel(ax, ood_agg, identity, ood_seedm=None, draw_legend=True):
     _draw_panel(ax, ood_agg, seedm=ood_seedm,
                 title="Out-of-distribution (Heldout-26)",
                 identity_flat=identity)
-    ax.legend(loc="upper right", framealpha=0.95, fontsize=8)
+    if draw_legend:
+        ax.legend(loc="upper right", framealpha=0.95, fontsize=8)
 
 
 def main() -> None:
@@ -344,11 +347,15 @@ def main() -> None:
                 if _seed_run_dirs(model, n)}
         print(f"  {model:7s}: " + "  ".join(f"n{n}={c}" for n, c in cnts.items()))
 
-    # Combined two-panel figure.
-    fig, (axl, axr) = plt.subplots(1, 2, figsize=(11.5, 4.8))
-    _make_id_panel(axl, id_agg, id_identity_by_n, id_seedm)
-    _make_ood_panel(axr, ood_agg, identity, ood_seedm)
-    fig.tight_layout()
+    # Combined two-panel figure with a SINGLE shared legend (the panels have
+    # identical series) placed below, centered.
+    fig, (axl, axr) = plt.subplots(1, 2, figsize=(11.5, 5.2))
+    _make_id_panel(axl, id_agg, id_identity_by_n, id_seedm, draw_legend=False)
+    _make_ood_panel(axr, ood_agg, identity, ood_seedm, draw_legend=False)
+    handles, labels = axl.get_legend_handles_labels()
+    fig.legend(handles, labels, loc="lower center", ncol=len(labels),
+               framealpha=0.95, fontsize=9, bbox_to_anchor=(0.5, -0.01))
+    fig.tight_layout(rect=(0, 0.07, 1, 1))
     for ext, kw in ((".pdf", {}), (".png", {"dpi": 160})):
         fig.savefig(OUT_DIR / f"n_per_rule_slope{ext}", bbox_inches="tight", **kw)
     plt.close(fig)
