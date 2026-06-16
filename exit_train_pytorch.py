@@ -27,8 +27,8 @@ import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
 
-from exit_train_backend_common import build_backend_runtime, save_rollout_gif, write_json
-from exit_training_config import build_run_config, run_subdir_name
+from puzzlejax.exit_train_backend_common import build_backend_runtime, save_rollout_gif, write_json
+from puzzlejax.exit_training_config import build_run_config, run_subdir_name
 from puzzlescript_cpp import CppPuzzleScriptEnv
 from puzzlescript_nodejs.rl_env import NodeJSEnvState, NodeJSPuzzleEnv
 

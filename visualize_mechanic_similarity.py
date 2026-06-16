@@ -24,7 +24,7 @@ from puzzlescript_jax.gen_tree import GenPSTree
 from puzzlescript_jax.globals import TREES_DIR
 from puzzlescript_jax.utils import get_list_of_games_for_testing
 
-from mechanic_graph import build_mechanic_graph, canonical_label_vector
+from puzzlejax.mechanic_graph import build_mechanic_graph, canonical_label_vector
 
 
 def load_game_tree(game):

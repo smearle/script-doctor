@@ -11,7 +11,7 @@ import seaborn as sns
 
 from conf.config import PlotSearch
 from puzzlescript_jax.globals import PLOTS_DIR, STANDALONE_NODEJS_RESULTS_PATH, JS_SOLS_DIR, CPP_SOLS_DIR, GAMES_TO_N_RULES_PATH, GAMES_METADATA_PATH
-from search_nodejs import get_standalone_run_params_from_name
+from puzzlejax.search_nodejs import get_standalone_run_params_from_name
 from puzzlescript_jax.utils import get_list_of_games_for_testing, game_names_remap
 
 

@@ -23,7 +23,7 @@ from puzzlescript_jax.env import PJState
 from puzzlescript_jax.env_switch import PuzzleJaxEnvSwitch
 from puzzlescript_jax.globals import JAX_PROFILING_RESULTS_DIR
 from puzzlescript_jax.utils import get_list_of_games_for_testing, load_games_n_rules_sorted, init_ps_lark_parser, get_tree_from_txt, distribute_slurm_jobs
-from utils_rl import get_env_params_from_config, init_ps_env
+from puzzlejax.utils_rl import get_env_params_from_config, init_ps_env
 
 
 # game_paths = glob.glob(os.path.join('data', 'scraped_games', '*.txt'))

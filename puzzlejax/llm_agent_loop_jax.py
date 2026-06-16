@@ -9,11 +9,11 @@ from concurrent.futures import ThreadPoolExecutor, wait, FIRST_COMPLETED
 import jax
 import jax.numpy as jnp
 from lark import Lark
-from env_wrappers import RepresentationWrapper
+from puzzlejax.env_wrappers import RepresentationWrapper
 from puzzlescript_jax.env import PJParams
 from puzzlescript_jax.preprocessing import LARK_SYNTAX_PATH, get_tree_from_txt
 from puzzlescript_jax.utils import save_gif_from_states
-from LLM_agent import LLMGameAgent
+from puzzlejax.LLM_agent import LLMGameAgent
 from puzzlescript_jax.globals import PRIORITY_GAMES
 
 
@@ -515,7 +515,7 @@ def process_game_level(agent, game_info, level_index, run_id, save_dir, model,
     """
     game_name = game_info["game_name"]
     # Reconstruct env inside the worker process
-    from env_wrappers import RepresentationWrapper
+    from puzzlejax.env_wrappers import RepresentationWrapper
     tree = game_info["tree"]
     env = RepresentationWrapper(tree, debug=False, print_score=False)
     rules = game_info["rules"]

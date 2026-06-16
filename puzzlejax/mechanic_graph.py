@@ -14,7 +14,7 @@ We build a node-and-edge-attributed multigraph, then compute a Weisfeiler-Lehman
 hash for a canonical fingerprint.
 
 Usage:
-    from mechanic_graph import build_mechanic_graph, canonical_hash
+    from puzzlejax.mechanic_graph import build_mechanic_graph, canonical_hash
     G = build_mechanic_graph(tree)
     h = canonical_hash(G)
 """

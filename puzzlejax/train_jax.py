@@ -22,7 +22,7 @@ import wandb
 
 from conf.config import RLConfig, TrainConfig
 from purejaxrl.wrappers import LogWrapper
-from utils_rl import get_ckpt_dir, get_env_params_from_config, get_exp_dir, init_config, init_network, init_ps_env
+from puzzlejax.utils_rl import get_ckpt_dir, get_env_params_from_config, get_exp_dir, init_config, init_network, init_ps_env
 
 
 class RunnerState(struct.PyTreeNode):
@@ -681,7 +681,7 @@ def init_checkpointer(config: RLConfig) -> Tuple[Any, dict]:
     return checkpoint_manager, restored_ckpt, wandb_run_id
 
     
-@hydra.main(version_base="1.3", config_path='conf', config_name='train')
+@hydra.main(version_base="1.3", config_path='../conf', config_name='train')
 def main(config: TrainConfig):
     logging.getLogger().setLevel(logging.WARNING)
     config = init_config(config)

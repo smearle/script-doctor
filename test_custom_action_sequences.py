@@ -9,7 +9,7 @@ import pytest
 
 from backends import NodeJSPuzzleScriptBackend
 from puzzlescript_jax.utils import init_ps_lark_parser
-from validate_actions import (
+from puzzlejax.validate_actions import (
     ACTION_SEQUENCES_DIR,
     discover_test_cases,
     get_action_file_comments,

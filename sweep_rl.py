@@ -21,14 +21,14 @@ import submitit
 from conf.config import SweepRLConfig, TrainConfig, EnjoyConfig
 from puzzlescript_jax.env import PJParams
 from puzzlescript_jax.preprocessing import get_env_from_ps_file
-from train_jax import main as main_train
+from puzzlejax.train_jax import main as main_train
 def _lazy_pytorch_imports():
     from train_pytorch import train as pytorch_train, TrainPytorchConfig, get_exp_dir as pytorch_get_exp_dir
     return pytorch_train, TrainPytorchConfig, pytorch_get_exp_dir
-from eval_rl import main_enjoy
+from puzzlejax.eval_rl import main_enjoy
 from sweep_rl_configs import _NAMED_SWEEPS
 from puzzlescript_jax.utils import get_list_of_games_for_testing, get_n_levels_per_game, init_ps_lark_parser
-from utils_rl import init_config
+from puzzlejax.utils_rl import init_config
 from puzzlescript_jax.globals import JS_TO_JAX_ACTIONS, JS_SOLS_DIR, SOLUTION_REWARDS_PATH
 
 

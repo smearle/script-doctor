@@ -52,13 +52,13 @@ python server.py mode=None headless=False auto_launch_client=True port=8002
 
 To generate solutions PuzzleScript games by applying tree search to the original engine, run:
 ```
-python search_nodejs.py
+python -m puzzlejax.search_nodejs
 ```
 This will run a standalone NodeJS version of the original PuzzleScript engine and save solutions (and terminal states) to disk.
 
 We can then validate that these solutions lead to the same win conditions and level states in PuzzleJAX with:
 ```
-python validate_sols.py overwrite=True
+python -m puzzlejax.validate_sols_jax overwrite=True
 ```
 This will run the solutions generated above in PuzzleJAX, and ensure that they lead to the same results.
 

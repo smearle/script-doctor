@@ -30,7 +30,7 @@ import openai
 import pandas as pd
 import requests
 
-from client import open_browser
+from puzzlejax.client import open_browser
 from puzzlescript_jax.globals import LARK_SYNTAX_PATH
 from puzzlescript_jax.preprocessing import MIN_GAMES_DIR, PrintPuzzleScript, RepairPuzzleScript, StripPuzzleScript, add_empty_sounds_section, preprocess_ps, TEST_GAMES
 from script_doctor.prompts import *

@@ -56,7 +56,7 @@ from neural_util.modules import DTYPE, HEAD_DTYPE, get_norm_fn, get_activation_f
 from neural_util.param_manager import save_params_with_metadata, load_params_with_metadata
 from train_util.optimizer import setup_optimizer, get_eval_params, get_learning_rate
 from helpers.visualization import PathStep, build_path_steps_from_actions
-from exit_training_config import EXIT_TRAINING_RELATIVE_DIR, build_run_config, run_subdir_name
+from puzzlejax.exit_training_config import EXIT_TRAINING_RELATIVE_DIR, build_run_config, run_subdir_name
 
 
 EXIT_TRAINING_DIR = os.path.join(SCRIPT_DIR, EXIT_TRAINING_RELATIVE_DIR)

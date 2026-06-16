@@ -34,7 +34,7 @@ from puzzlescript_jax.preprocessing import PJParseErrors, get_tree_from_txt
 from puzzlescript_jax.env_utils import multihot_to_desc
 from puzzlescript_nodejs.utils import replay_actions_js
 from puzzlescript_jax.utils import get_list_of_games_for_testing, level_to_int_arr, to_binary_vectors, distribute_slurm_jobs
-from utils_rl import get_env_params_from_config
+from puzzlejax.utils_rl import get_env_params_from_config
 
 
 scratch_dir = 'scratch'
@@ -161,7 +161,7 @@ def format_state_for_log(state, env):
     )
 
 
-@hydra.main(version_base="1.3", config_path='conf', config_name='jax_validation_config')
+@hydra.main(version_base="1.3", config_path='../conf', config_name='jax_validation_config')
 def main_launch(cfg: JaxValidationConfig):
     if cfg.slurm:
         games = get_list_of_games_for_testing(dataset=cfg.dataset)

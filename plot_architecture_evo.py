@@ -19,7 +19,7 @@ from matplotlib.patches import FancyBboxPatch, FancyArrowPatch, ConnectionPatch
 from matplotlib.offsetbox import OffsetImage, AnnotationBbox
 
 # Reuse data-loading from plot_evolution
-from plot_evolution import (
+from puzzlejax.plot_evolution import (
     _get_champion_improvement_gens,
     _select_evenly_spaced,
     _composite_ghost_trail,

@@ -16,7 +16,7 @@ from conf.config import SearchCppConfig
 from puzzlescript_jax.globals import CPP_SOLS_DIR, STANDALONE_CPP_RESULTS_PATH
 from puzzlescript_jax.utils import get_list_of_games_for_testing, init_ps_lark_parser, distribute_slurm_jobs
 from puzzlescript_cpp import CppPuzzleScriptBackend
-from search_nodejs import _classify_error, write_level_error_log
+from puzzlejax.search_nodejs import _classify_error, write_level_error_log
 
 
 dotenv.load_dotenv()

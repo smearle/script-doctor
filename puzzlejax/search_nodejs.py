@@ -102,7 +102,7 @@ def should_skip_existing_level_result(path: str) -> bool:
     return True
 
 
-@hydra.main(version_base="1.3", config_path='./', config_name='search_nodejs_config')
+@hydra.main(version_base="1.3", config_path='../conf', config_name='search_nodejs_config')
 def main_launch(cfg: SearchNodeJSConfig):
     if cfg.slurm:
         games = get_list_of_games_for_testing(

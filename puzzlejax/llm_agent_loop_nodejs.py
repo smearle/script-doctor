@@ -4,9 +4,9 @@ import os
 import json
 from dataclasses import dataclass, field
 
-from LLM_agent import LLMGameAgent
-from ascii_prompting import ASCIIStateFormatter
-from llm_agent_loop_jax import (
+from puzzlejax.LLM_agent import LLMGameAgent
+from puzzlejax.ascii_prompting import ASCIIStateFormatter
+from puzzlejax.llm_agent_loop_jax import (
     CUSTOM_GAMES_DIR,
     STATE_FILE_BASENAME,
     claim_next_job,

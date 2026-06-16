@@ -17,7 +17,7 @@ from hydra.core.config_store import ConfigStore
 from dataclasses import dataclass
 
 # Import LLM agent
-from LLM_agent import LLMAgent
+from puzzlejax.LLM_agent import LLMAgent
 @dataclass
 class Config:
     port: int = 8000

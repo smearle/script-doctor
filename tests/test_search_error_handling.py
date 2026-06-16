@@ -24,7 +24,7 @@ from unittest.mock import patch, MagicMock
 import pytest
 
 from backends.base import SearchResult
-from search_nodejs import (
+from puzzlejax.search_nodejs import (
     _classify_error,
     write_level_error_log,
     TIMEOUT_ERROR_PATTERNS,
@@ -198,7 +198,7 @@ class TestSearchLoopErrorHandling:
             patch("search_nodejs.STANDALONE_NODEJS_RESULTS_PATH",
                   str(tmp_path / "results.json")),
         ):
-            from search_nodejs import main
+            from puzzlejax.search_nodejs import main
             main(cfg)
 
         game_dir = os.path.join(sols_dir, "sokoban_basic")
@@ -240,7 +240,7 @@ class TestSearchLoopErrorHandling:
             patch("search_nodejs.STANDALONE_NODEJS_RESULTS_PATH",
                   str(tmp_path / "results.json")),
         ):
-            from search_nodejs import main
+            from puzzlejax.search_nodejs import main
             with pytest.raises(ValueError, match="something unexpected"):
                 main(cfg)
 
@@ -427,21 +427,21 @@ class TestSkipExistingWithErrors:
     """Error logs should be treated as existing results (skip on re-run)."""
 
     def test_error_log_is_skipped_on_rerun(self, tmp_path):
-        from search_nodejs import should_skip_existing_level_result
+        from puzzlejax.search_nodejs import should_skip_existing_level_result
 
         path = str(tmp_path / "error_result.json")
         write_level_error_log(path, "oom", "crash")
         assert should_skip_existing_level_result(path) is True
 
     def test_missing_file_is_not_skipped(self, tmp_path):
-        from search_nodejs import should_skip_existing_level_result
+        from puzzlejax.search_nodejs import should_skip_existing_level_result
 
         path = str(tmp_path / "nonexistent.json")
         assert should_skip_existing_level_result(path) is False
 
     def test_corrupt_json_is_skipped(self, tmp_path):
         """Corrupt files are skipped (not re-attempted) to avoid infinite loops."""
-        from search_nodejs import should_skip_existing_level_result
+        from puzzlejax.search_nodejs import should_skip_existing_level_result
 
         path = str(tmp_path / "corrupt.json")
         with open(path, "w") as f:

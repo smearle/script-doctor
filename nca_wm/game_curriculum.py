@@ -49,7 +49,7 @@ from puzzlescript_jax.utils import init_ps_lark_parser
 from nca_wm.tokenize_game import get_game_tree_from_js, tokenize_game
 
 # Reuse the mature vLLM, code-extraction, Node compile, and BFS-search helpers.
-from evolve_games_agentic import (
+from puzzlejax.evolve_games_agentic import (
     CROSSOVER_PROMPT,
     GENERATE_PROMPT,
     MUTATE_PROMPT,

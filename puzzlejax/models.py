@@ -2,7 +2,7 @@ import math
 from timeit import default_timer as timer
 from typing import Sequence, Tuple
 
-from categorical import Categorical
+from puzzlejax.categorical import Categorical
 from flax.linen.initializers import constant, orthogonal
 import numpy as np
 import flax.linen as nn

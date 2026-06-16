@@ -18,7 +18,7 @@ from omegaconf import OmegaConf
 
 from conf.config import TrainConfig
 from puzzlescript_nodejs.rl_env import NodeJSPuzzleEnv
-from utils_rl import get_exp_dir, init_config, init_network
+from puzzlejax.utils_rl import get_exp_dir, init_config, init_network
 
 
 @dataclass

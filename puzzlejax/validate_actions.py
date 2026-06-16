@@ -43,7 +43,7 @@ from puzzlescript_jax.env_utils import multihot_to_desc
 from puzzlescript_jax.globals import JS_TO_JAX_ACTIONS, LARK_SYNTAX_PATH
 from puzzlescript_jax.preprocessing import PJParseErrors, get_tree_from_txt
 from puzzlescript_nodejs.utils import replay_actions_js
-from validate_sols_jax import multihot_level_from_js_state
+from puzzlejax.validate_sols_jax import multihot_level_from_js_state
 
 ACTION_SEQUENCES_DIR = "custom_action_sequences"
 VALIDATED_ACTION_SEQUENCES_DIR = os.path.join("data", "jax_validated_action_sequences")

@@ -19,7 +19,7 @@ import jax
 from lark import Lark
 
 from puzzlescript_jax.globals import LARK_SYNTAX_PATH
-from env_wrappers import RepresentationWrapper
+from puzzlejax.env_wrappers import RepresentationWrapper
 from puzzlescript_jax.env import PJParams
 from puzzlescript_jax.preprocessing import get_tree_from_txt
 

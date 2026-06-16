@@ -6,7 +6,7 @@ import jax
 from lark import Lark
 import numpy as np
 
-from ascii_prompting import (
+from puzzlejax.ascii_prompting import (
     ASCIIStateFormatter,
     get_braille_chars,
     get_box_drawing_and_shapes,

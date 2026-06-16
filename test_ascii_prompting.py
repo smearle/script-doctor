@@ -1,8 +1,8 @@
 from pathlib import Path
 
-from ascii_prompting import ASCIIStateFormatter, build_human_like_prompt
+from puzzlejax.ascii_prompting import ASCIIStateFormatter, build_human_like_prompt
 from backends.nodejs import NodeJSPuzzleScriptBackend
-from llm_agent_loop_nodejs import _extract_char_mapping_from_state, _get_level_message, collect_game_info
+from puzzlejax.llm_agent_loop_nodejs import _extract_char_mapping_from_state, _get_level_message, collect_game_info
 
 
 def test_ascii_state_formatter_filters_legend_to_visible_maps():

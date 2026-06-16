@@ -17,7 +17,7 @@ from time import perf_counter
 
 from conf.config import RLConfig, TrainConfig
 from puzzlescript_jax.env import PuzzleJaxEnv, PSObs, PJState, PJParams
-from models import NCA, AutoEncoder, ConvForward, ConvForward2, SeqNCA, ActorCriticPS, Dense
+from puzzlejax.models import NCA, AutoEncoder, ConvForward, ConvForward2, SeqNCA, ActorCriticPS, Dense
 
 N_AGENTS = 1
 
