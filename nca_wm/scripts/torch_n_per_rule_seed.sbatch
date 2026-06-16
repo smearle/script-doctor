@@ -11,7 +11,11 @@
 #   done
 # (a submit helper, torch_n_per_rule_submit.sh, wraps the budget map.)
 #SBATCH --account=torch_pr_84_tandon_advanced
-#SBATCH --partition=h200_tandon
+# GPU-agnostic: each tandon partition has its own per-user GPU QOS cap, so
+# listing all three lets SLURM place each job wherever a slot frees first and
+# multiplies the effective concurrent-GPU allowance. Any of A100/H100/H200 has
+# ample memory for these jobs (n_hid<=288, batch 32).
+#SBATCH --partition=a100_tandon,h100_tandon,h200_tandon
 #SBATCH --gres=gpu:1
 #SBATCH --cpus-per-task=8
 #SBATCH --mem=48000
