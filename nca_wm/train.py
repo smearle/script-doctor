@@ -1737,7 +1737,8 @@ def train(
 # 5. Main
 # ---------------------------------------------------------------------------
 
-def main():
+def build_parser() -> argparse.ArgumentParser:
+    """Construct the train.py CLI argument parser (see main() for dispatch)."""
     p = argparse.ArgumentParser(description="Train NCA world model on a PuzzleScript game")
     g = p.add_mutually_exclusive_group(required=True)
     g.add_argument("--game", help="Single game name (e.g. pipe_bend, sokoban_basic)")
@@ -2154,6 +2155,11 @@ def main():
     p.add_argument("--wandb_name", default=None, help="wandb run name (auto-generated if not set)")
     p.add_argument("--sweep_name", default=None,
                    help="Tag for grouping runs in sweep_nca_wm.py cross-evaluation")
+    return p
+
+
+def main():
+    p = build_parser()
     args = p.parse_args()
     parsed_train_levels = None
     if args.train_levels:
