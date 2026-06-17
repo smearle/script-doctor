@@ -19,6 +19,8 @@ Notes:
 from __future__ import annotations
 
 import argparse
+import hashlib
+import json
 import os
 import re
 import sys
@@ -32,6 +34,7 @@ import requests
 from bs4 import BeautifulSoup
 
 OUT_DIR = Path("data/scraped_games_itchio")
+ITCH_MANIFEST = OUT_DIR / "_itch_manifest.jsonl"
 
 UA = (
     "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 "
@@ -252,6 +255,100 @@ def extract_ps_from_gist(gist_url: str) -> Optional[str]:
     return None
 
 # ----------------------------
+# Gist id resolution + verification
+# ----------------------------
+
+_GH_TOKEN_CACHE: List[Optional[str]] = []
+_TITLE_RE = re.compile(r"(?im)^\s*title\s+(.+?)\s*$")
+
+
+def get_gh_token() -> Optional[str]:
+    if _GH_TOKEN_CACHE:
+        return _GH_TOKEN_CACHE[0]
+    tok = os.environ.get("GITHUB_TOKEN")
+    if not tok:
+        hosts = Path.home() / ".config" / "gh" / "hosts.yml"
+        if hosts.is_file():
+            for line in hosts.read_text().splitlines():
+                line = line.strip()
+                if line.startswith("oauth_token:"):
+                    tok = line.split(":", 1)[1].strip()
+                    break
+    _GH_TOKEN_CACHE.append(tok)
+    return tok
+
+
+def gist_id_from_url(url: str) -> Optional[str]:
+    """Pull the raw gist id from a gist.github.com or gist.githubusercontent.com URL."""
+    m = re.search(r"gist\.github\.com/[A-Za-z0-9_.-]+/([0-9a-fA-F]{20,32}|[0-9]+)", url)
+    if m:
+        return m.group(1).lower()
+    m = re.search(r"gist\.githubusercontent\.com/[A-Za-z0-9_.-]+/([0-9a-fA-F]{20,32}|[0-9]+)/", url)
+    return m.group(1).lower() if m else None
+
+
+def fetch_gist_source_api(gist_id: str) -> Tuple[Optional[str], Optional[str]]:
+    """Return (ps_source, gist_description) for a gist id via the GitHub API, or (None, None)."""
+    headers = {"Accept": "application/vnd.github+json", "X-GitHub-Api-Version": "2022-11-28"}
+    tok = get_gh_token()
+    if tok:
+        headers["Authorization"] = f"Bearer {tok}"
+    try:
+        r = SESSION.get(f"https://api.github.com/gists/{gist_id}", headers=headers, timeout=60)
+    except requests.RequestException:
+        return None, None
+    if not r.ok:
+        return None, None
+    gist = r.json()
+    desc = gist.get("description")
+    files = gist.get("files", {})
+    if "script.txt" in files and files["script.txt"].get("content"):
+        return normalize_ps_source(files["script.txt"]["content"]), desc
+    for f in files.values():
+        c = f.get("content")
+        if c and looks_like_ps_source(c):
+            return normalize_ps_source(c), desc
+    return None, desc
+
+
+def _norm_cmp(s: str) -> str:
+    lines = [ln.rstrip() for ln in s.replace("\r\n", "\n").replace("\r", "\n").split("\n")]
+    while lines and not lines[0].strip():
+        lines.pop(0)
+    while lines and not lines[-1].strip():
+        lines.pop()
+    return hashlib.sha1("\n".join(lines).encode("utf-8", "replace")).hexdigest()
+
+
+def _ps_title(src: str) -> Optional[str]:
+    m = _TITLE_RE.search(src)
+    return m.group(1).strip().lower() if m else None
+
+
+def verify_gist(embedded_src: Optional[str], gist_src: Optional[str], itch_title: str) -> str:
+    """Classify how confidently a candidate gist corresponds to this itch game.
+
+    'exact'   - gist source matches the source actually embedded on the itch page
+    'title'   - no embedded source to compare, but the gist's TITLE matches the itch title
+    'mismatch'- both present but contents differ (likely a stale/miscopied link)
+    'unverified' - gist is the only source available; nothing to cross-check against
+    """
+    if gist_src is None:
+        return "no_gist_source"
+    if embedded_src is not None:
+        if _norm_cmp(embedded_src) == _norm_cmp(gist_src):
+            return "exact"
+        gt = _ps_title(gist_src)
+        if gt and gt == (_ps_title(embedded_src) or itch_title.strip().lower()):
+            return "mismatch_title_ok"  # same game title, different content (version drift)
+        return "mismatch"
+    gt = _ps_title(gist_src)
+    if gt and gt == itch_title.strip().lower():
+        return "title"
+    return "unverified"
+
+
+# ----------------------------
 # Standalone HTML -> source extraction
 # ----------------------------
 
@@ -312,6 +409,27 @@ def extract_ps_from_standalone_html(html: str) -> Optional[str]:
 # Main scrape logic
 # ----------------------------
 
+def log_itch(record: dict):
+    with ITCH_MANIFEST.open("a", encoding="utf-8") as f:
+        f.write(json.dumps(record, ensure_ascii=False) + "\n")
+
+
+def get_embedded_source(game_html: str, game_url: str) -> Optional[str]:
+    """Extract the PuzzleScript source actually embedded in the itch HTML5 iframe."""
+    iframe = find_iframe_src(game_html, game_url)
+    if not iframe:
+        return None
+    rr = try_get(iframe)
+    # Sometimes the iframe is a container that itself embeds another iframe.
+    if rr and ("<iframe" in rr.text.lower()) and ("hwcdn.net" not in iframe):
+        nested = find_iframe_src(rr.text, iframe)
+        if nested:
+            rrr = try_get(nested)
+            if rrr:
+                rr = rrr
+    return extract_ps_from_standalone_html(rr.text) if rr else None
+
+
 def scrape_one_game(game_url: str, out_dir: Path, used: Dict[str, int], delay: float, save_html_on_fail: bool) -> bool:
     r = try_get(game_url)
     if not r:
@@ -321,59 +439,66 @@ def scrape_one_game(game_url: str, out_dir: Path, used: Dict[str, int], delay: f
     base_name = safe_filename(f"{title}_by_{author}")
     base_path = out_dir / base_name
 
-    # 1) Try to find gist links (highest signal)
-    gist_urls = find_gist_urls(r.text)
-    for gu in gist_urls:
-        breakpoint()
-        src = extract_ps_from_gist(gu)
-        if src:
-            out_path = ensure_unique_path(base_path, ".txt", used)
-            out_path.write_text(src, encoding="utf-8")
-            return True
+    # Candidate gist ids advertised on the itch page: explicit gist links and
+    # puzzlescript.net/play.html?p=<gist_id> links (the play id IS the gist id).
+    candidate_ids = []
+    for gu in find_gist_urls(r.text):
+        gid = gist_id_from_url(gu)
+        if gid and gid not in candidate_ids:
+            candidate_ids.append(gid)
+    for pid in find_play_ids(r.text):
+        pid = pid.lower()
+        if pid not in candidate_ids:
+            candidate_ids.append(pid)
 
-    # 2) Try to find puzzlescript.net play ids (optional; often implies gist)
-    #    We do not know a stable, official mapping from play id -> gist without replicating editor logic,
-    #    so we treat this as a hint only and continue to iframe download.
-    _play_ids = find_play_ids(r.text)  # retained for future extension
+    # Ground truth: the source actually embedded/playable on the itch page.
+    embedded_src = get_embedded_source(r.text, game_url)
 
-    # 3) Download iframe HTML (standalone) and extract
-    iframe = find_iframe_src(r.text, game_url)
-    if iframe:
-        rr = try_get(iframe)
-        # Sometimes iframe is a container page that itself includes another iframe;
-        # one more hop often resolves to hwcdn index.html.
-        if rr and ("<iframe" in rr.text.lower()) and ("hwcdn.net" not in iframe):
-            nested = find_iframe_src(rr.text, iframe)
-            if nested:
-                rrr = try_get(nested)
-                if rrr:
-                    rr = rrr
-                    iframe = nested
+    # Verify each candidate gist against the embedded source (or the title).
+    gist_evidence = []
+    best = None  # (rank, gist_id, gist_src, verdict)
+    rank = {"exact": 4, "title": 3, "unverified": 2, "mismatch_title_ok": 1, "mismatch": 0, "no_gist_source": -1}
+    for gid in candidate_ids:
+        gist_src, _ = fetch_gist_source_api(gid)
+        verdict = verify_gist(embedded_src, gist_src, title)
+        gist_evidence.append({"gist_id": gid, "verdict": verdict})
+        cand = (rank.get(verdict, -1), gid, gist_src, verdict)
+        if best is None or cand[0] > best[0]:
+            best = cand
 
-        if rr:
-            ps = extract_ps_from_standalone_html(rr.text)
-            if ps:
-                out_path = ensure_unique_path(base_path, ".txt", used)
-                out_path.write_text(ps, encoding="utf-8")
-                sleep_polite(delay)
-                return True
-            else:
-                if save_html_on_fail:
-                    html_path = ensure_unique_path(base_path, ".html", used)
-                    html_path.write_text(rr.text, encoding="utf-8")
-                    (html_path.with_suffix(".failed")).write_text(
-                        f"Failed to extract PS source from iframe HTML.\nGame: {game_url}\nIframe: {iframe}\n",
-                        encoding="utf-8",
-                    )
-                sleep_polite(delay)
-                return False
+    # Choose what to save: prefer the embedded itch source (ground truth); else a
+    # gist source only if it is the sole source available.
+    if embedded_src is not None:
+        saved_src, saved_from = embedded_src, "embedded"
+    elif best is not None and best[2] is not None:
+        saved_src, saved_from = best[2], "gist"
+    else:
+        saved_src, saved_from = None, None
 
-    # Nothing worked
-    if save_html_on_fail:
-        fail_path = ensure_unique_path(base_path, ".failed", used)
-        fail_path.write_text(f"Failed to find gist or iframe HTML.\nGame: {game_url}\n", encoding="utf-8")
+    # Only attach a gist id we actually trust (matches the embedded source, or the
+    # only source with a title match). Mismatches are recorded but NOT trusted.
+    trusted_gist_id = None
+    if best is not None and best[3] in ("exact", "title", "unverified"):
+        trusted_gist_id = best[1]
+
+    if saved_src is None:
+        log_itch({"itch_url": game_url, "title": title, "author": author,
+                  "saved_file": None, "saved_from": None,
+                  "gist_candidates": gist_evidence, "trusted_gist_id": None})
+        if save_html_on_fail:
+            fail_path = ensure_unique_path(base_path, ".failed", used)
+            fail_path.write_text(f"No extractable source.\nGame: {game_url}\n", encoding="utf-8")
+        sleep_polite(delay)
+        return False
+
+    out_path = ensure_unique_path(base_path, ".txt", used)
+    out_path.write_text(saved_src, encoding="utf-8")
+    log_itch({"itch_url": game_url, "title": title, "author": author,
+              "saved_file": out_path.name, "saved_from": saved_from,
+              "gist_candidates": gist_evidence, "trusted_gist_id": trusted_gist_id,
+              "content_sha1": _norm_cmp(saved_src)})
     sleep_polite(delay)
-    return False
+    return True
 
 def scrape_listing(base_listing_url: str, pages: int, delay: float, save_html_on_fail: bool):
     OUT_DIR.mkdir(parents=True, exist_ok=True)
