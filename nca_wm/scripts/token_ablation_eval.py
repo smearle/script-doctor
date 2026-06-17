@@ -33,9 +33,9 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspa
 
 from nca_wm.train import (
     _run_eval_rollout, _pad_offsets, _pad_state_for_model,
-    VOCAB_SIZE_BASE, VOCAB_SIZE_EXT, N_ACTIONS,
+    N_ACTIONS,
 )
-from nca_wm.tokenize_game import VOCAB_SIZE_BASE as _VBASE
+from nca_wm.tokenize_game import VOCAB_SIZE_BASE, VOCAB_SIZE_EXT
 
 
 def build_model(cfg, max_C, max_tok_len, vocab_size_override=None, max_seq_override=None):
