@@ -149,15 +149,27 @@ def _split_games(raw: str) -> list[str]:
 
 
 def _load_train_presets() -> dict[str, list[str]]:
-    """Read nca_wm.train.MULTI_GAME_PRESETS without importing train.py."""
+    """Resolve nca_wm.train.MULTI_GAME_PRESETS without importing train.py.
+
+    train.py is too heavy to import here (jax / C++ backend), so its base
+    presets are read from the literal ``MULTI_GAME_PRESETS`` assignment via the
+    AST. The curated ``scaling_gallery_v*`` presets live in the dependency-free
+    ``scaling_gallery_presets`` module and are merged in directly — this also
+    captures the code-built ``scaling_gallery_v5`` superset, which the AST pass
+    cannot see.
+    """
+    from nca_wm.scaling_gallery_presets import SCALING_GALLERY_PRESETS
+
+    presets: dict[str, list[str]] = {}
     train_path = _REPO_ROOT / "nca_wm" / "train.py"
     tree = ast.parse(train_path.read_text(encoding="utf-8"))
     for node in tree.body:
         if isinstance(node, ast.Assign):
             for target in node.targets:
                 if isinstance(target, ast.Name) and target.id == "MULTI_GAME_PRESETS":
-                    return ast.literal_eval(node.value)
-    return {}
+                    presets.update(ast.literal_eval(node.value))
+    presets.update(SCALING_GALLERY_PRESETS)
+    return presets
 
 
 def _source_for_game(parser, game_name: str) -> str:
