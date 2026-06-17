@@ -98,19 +98,21 @@ Completed runs:
 - `w0`: no usage regularizer.
 - `w0p001`: `--vq_usage_loss_weight 0.001`.
 - `w0p01`: `--vq_usage_loss_weight 0.01`, launched in parallel on GPU 1.
-
-The `w0p05` run is still in progress. Around 120k/200k steps it remained
-stable, with decoder accuracy at 1.000, soft perplexity near 1024, and hard
-batch code utilization around 4 active entries.
+- `w0p05`: `--vq_usage_loss_weight 0.05`.
 
 Readout so far:
 
 - `0.001` and `0.01` both push soft assignment perplexity to about the full
   1024-entry codebook.
-- They do not solve hard nearest-code collapse: hard `vq_util` is still about
-  3 active entries for the completed nonzero-weight runs.
-- Transition loss and decoder accuracy do not visibly regress at `0.001` or
-  `0.01`.
+- `0.05` also keeps soft perplexity at 1024 and raises hard `vq_util` further,
+  to about 4.2 active entries over the final 1000 train steps.
+- None of the tested weights fully solves hard nearest-code collapse: even
+  `0.05` still uses only a tiny fraction of the 1024-entry codebook.
+- Transition loss and decoder accuracy do not visibly regress for any nonzero
+  weight in the teacher-forced training curves; `0.05` gets the lowest final
+  and best training loss.
+- Autoregressive rollout quality does not monotonically follow training loss:
+  final eval averages favor `0.01` over `0.05`.
 - Token ablation still matters more for the regularized runs than for `w0`,
   especially under zeroed tokens, so the regularizer has not destroyed semantic
   conditioning.
@@ -118,11 +120,22 @@ Readout so far:
   `inverse_fit_slot.py`, which makes the regularizer worth keeping even though
   hard code collapse remains.
 
+Final 200k-step summary:
+
+| weight | best loss | final train loss | final change err | hard `vq_util` | soft `vq_perp` | avg random eval | avg astar eval |
+|---:|---:|---:|---:|---:|---:|---:|---:|
+| `0` | 0.005959 | 0.006096 | 4.52e-05 | 2.15 | 739.4 | 0.00116 | 0.00089 |
+| `0.001` | 0.004344 | 0.004486 | 4.17e-05 | 2.58 | 1023.9 | 0.00127 | 0.00090 |
+| `0.01` | 0.005418 | 0.005677 | 3.33e-05 | 2.15 | 1024.0 | 0.00103 | 0.00065 |
+| `0.05` | 0.000494 | 0.000569 | 2.22e-05 | 4.21 | 1024.0 | 0.00180 | 0.00100 |
+
 Working interpretation: the current regularizer broadens soft code assignment
 mass and improves adaptation behavior, but it is not a complete hard-code
-usage fix. The next VQ-specific follow-up should test either a stronger
-straight-through/code-assignment pressure or discrete code fitting, not just a
-larger soft entropy coefficient.
+usage fix. Use `0.01` as the best default for rollout-sensitive follow-up, and
+keep `0.05` only as a diagnostic for whether stronger usage pressure helps
+training loss or inverse-fit. The next VQ-specific follow-up should test either
+a stronger straight-through/code-assignment pressure or discrete code fitting,
+not just a larger soft entropy coefficient.
 
 ## Machine Setup Checklist
 

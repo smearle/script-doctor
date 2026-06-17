@@ -134,13 +134,28 @@ New code adds a differentiable usage-entropy regularizer to the VQ slots:
 - Training curves now log `vq_usage_losses` and `vq_soft_perplexities` in
   addition to hard code utilization.
 
-Early `scaling_14` results are mixed but useful. Weights `0.001` and `0.01`
-raise soft codebook perplexity to about 1024 without hurting decoder accuracy
-or transition error, but hard nearest-code utilization remains collapsed at
-about 3 active entries. The `0.05` run is still in progress and was stable
-past 120k/200k steps, with hard utilization around 4. This means the current
-regularizer improves the soft latent geometry and adaptation diagnostics, but
-it is not yet a complete hard-code collapse fix.
+Final `scaling_14` results are mixed but useful. All nonzero weights raise
+soft codebook perplexity to about 1024 without hurting decoder accuracy or
+teacher-forced transition error. Hard nearest-code utilization remains highly
+collapsed: `0.001` and `0.01` stay around 2-3 active entries, while `0.05`
+only rises to about 4.2 active entries over the final 1000 train steps. The
+`0.05` run gets the best training loss, but its autoregressive eval is worse
+than `0.01`, so larger soft-entropy weight is not automatically better. This
+means the current regularizer improves the soft latent geometry and adaptation
+diagnostics, but it is not yet a complete hard-code collapse fix.
+
+Final 200k-step sweep summary:
+
+| weight | best loss | final train loss | final change err | hard `vq_util` | soft `vq_perp` | avg random eval | avg astar eval |
+|---:|---:|---:|---:|---:|---:|---:|---:|
+| `0` | 0.005959 | 0.006096 | 4.52e-05 | 2.15 | 739.4 | 0.00116 | 0.00089 |
+| `0.001` | 0.004344 | 0.004486 | 4.17e-05 | 2.58 | 1023.9 | 0.00127 | 0.00090 |
+| `0.01` | 0.005418 | 0.005677 | 3.33e-05 | 2.15 | 1024.0 | 0.00103 | 0.00065 |
+| `0.05` | 0.000494 | 0.000569 | 2.22e-05 | 4.21 | 1024.0 | 0.00180 | 0.00100 |
+
+Use `0.01` as the default for rollout-sensitive follow-up. Keep `0.05` as a
+diagnostic/checkpoint for training-loss or inverse-fit questions, not as the
+main rollout candidate.
 
 Short token-ablation and inverse-fit pilots after this change are the main
 reason to keep the branch:
