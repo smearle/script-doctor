@@ -199,7 +199,9 @@ Use these files as the authoritative docs:
 - `nca_wm/SUPPLEMENT_README.md` - paper/supplement reproduction notes.
 - `nca_wm/VQ_REGULARIZATION_PLAN.md` - current VQ usage-regularization
   experiment plan and runbook.
-- `nca_wm/CLAUDE.md` - compact subproject guide, currently untracked.
+- `nca_wm/LATENT_AE_COMPARISON.md` - deterministic slot AE vs Gaussian VAE
+  vs VQ-VAE token-reconstruction comparison.
+- `nca_wm/CLAUDE.md` - compact subproject guide.
 
 Be careful with these:
 
