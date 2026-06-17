@@ -30,6 +30,51 @@ import flax.linen as nn
 # module doesn't depend on train.py at import time).
 N_ACTIONS = 5
 
+
+def build_input_with_history(x, act, hist_states, hist_actions):
+    """Build the NHWC per-cell input by concatenating the current
+    (state, action) with an optional history of preceding transitions.
+
+    This is the single injection point for the ``--history`` feature
+    ("Option A": history as extra input channels). All three NCA variants
+    (uncond / conditional / rule-attn) call this so the layout is identical.
+
+    Args:
+        x: (B, H, W, C) current state, already NHWC.
+        act: (B, H, W, N_ACTIONS) current action, already broadcast to grid.
+        hist_states: None, or (B, k, C, H, W) the k states preceding the
+            current one, ordered oldest→newest. NCHW per step (matches the
+            ``state`` argument layout the model receives).
+        hist_actions: None, or (B, k) int32 actions that produced each
+            history step (the action taken *from* hist_states[:, j]).
+
+    Returns:
+        inp: (B, H, W, C + N_ACTIONS + k*(C + N_ACTIONS)) input tensor.
+        When ``hist_states`` is None (history=0), this is exactly
+        ``concatenate([x, act])`` — byte-identical to the no-history path,
+        so the embed layer's input width and params are unchanged.
+
+    Per-history-step validity is derived from the history state itself: a
+    step that is all-zero is padding — either bucket padding or a near-root
+    transition with fewer than k ancestors — and is masked to zero (both its
+    state and its action channels). This mirrors how the models already
+    derive the per-cell padding mask, so no separate mask array is threaded.
+    """
+    parts = [x, act]
+    if hist_states is not None and hist_states.shape[1] > 0:
+        B, H, W, _ = x.shape
+        k = hist_states.shape[1]
+        for j in range(k):
+            hs = hist_states[:, j].transpose(0, 2, 3, 1)        # (B, H, W, C)
+            # A history step is valid iff it has any set cell anywhere.
+            valid = (hs.sum(axis=(1, 2, 3), keepdims=True) > 0).astype(x.dtype)
+            ha = jax.nn.one_hot(hist_actions[:, j], N_ACTIONS, dtype=x.dtype)
+            ha = ha[:, None, None, :]
+            ha = jnp.broadcast_to(ha, (B, H, W, N_ACTIONS))
+            parts.append(hs * valid)
+            parts.append(ha * valid)
+    return jnp.concatenate(parts, axis=-1)
+
 # ---------------------------------------------------------------------------
 # 2. NCA world model (Flax/JAX)
 # ---------------------------------------------------------------------------
@@ -112,13 +157,21 @@ class NCAWorldModel(nn.Module):
     # weight sets, each applied n_repeats times. Default n_repeats=1 mirrors
     # the cond model's per-step body (no weight sharing across steps).
     n_repeats: int = 1
+    # Number of preceding (state, action) transitions fed as history channels
+    # (Option A). Forward derives k from the input tensors; this field is
+    # config metadata so eval/rollout helpers know the width to supply.
+    history: int = 0
 
     @nn.compact
-    def __call__(self, state, action_onehot):
+    def __call__(self, state, action_onehot, hist_states=None,
+                 hist_actions=None):
         """
         Args:
             state: (B, C, H, W) float32 multihot level.
             action_onehot: (B, 5) float32 one-hot action.
+            hist_states: optional (B, k, C, H, W) preceding states
+                (oldest→newest); None when --history is 0.
+            hist_actions: optional (B, k) int32 actions for each history step.
         Returns:
             (logits, win_logit, sprite_logits) where
               logits: (B, C, H, W) next-state logits
@@ -138,7 +191,8 @@ class NCAWorldModel(nn.Module):
         x = state.transpose(0, 2, 3, 1)  # (B, H, W, C)
         act = action_onehot[:, None, None, :]
         act = jnp.broadcast_to(act, (B, H, W, N_ACTIONS))
-        inp = jnp.concatenate([x, act], axis=-1)  # (B, H, W, C+5)
+        # (B, H, W, C+5) with no history; +k*(C+5) when history is on.
+        inp = build_input_with_history(x, act, hist_states, hist_actions)
 
         # 1. Dense embed (mirrors rule_attn)
         h_inp = nn.Dense(self.n_hid, name="embed")(inp)
@@ -340,22 +394,36 @@ class ConditionalNCAWorldModel(nn.Module):
     n_enc_layers: int = 2
     d_z: int = 64
     max_seq_len: int = 192
+    # History width metadata (see NCAWorldModel.history).
+    history: int = 0
 
     @nn.compact
     def __call__(self, state, action_onehot, game_tokens, game_mask,
-                 z_override=None):
+                 z_override=None, hist_states=None, hist_actions=None,
+                 cond_dropout_mask=None):
         """
         Args:
             state: (B, C, H, W) float32 multihot level.
             action_onehot: (B, 5) float32 one-hot action.
             game_tokens: (B, S) int32 tokenized game spec.
             game_mask: (B, S) bool mask (True for real tokens).
+            hist_states: optional (B, k, C, H, W) preceding states
+                (oldest→newest); None when --history is 0.
+            hist_actions: optional (B, k) int32 actions for each history step.
             z_override: optional (B, d_z) latent to substitute for the
                 encoder's output. When provided, the FiLM/NCA path uses
                 this z; the encoder is still invoked (with the supplied
                 tokens) so its params are exercised, then its output is
                 discarded. Used by interpolation/sampling tools to roll
                 out under custom latents without rebuilding the module.
+            cond_dropout_mask: optional (B,) bool. Classifier-free-guidance-
+                style rule dropout (training only). For flagged examples the
+                game latent z is zeroed before FiLM and the win head. With the
+                zero-initialized gamma/beta projections this collapses to a
+                learned-constant (unconditional) modulation, so the same
+                weights learn both the conditional and the marginal dynamics.
+                None (default) = no dropout; the forward pass is then
+                bit-identical to the pre-feature model.
         Returns:
             (logits, win_logit) or (logits, win_logit, intermediates).
         """
@@ -373,6 +441,8 @@ class ConditionalNCAWorldModel(nn.Module):
         )(game_tokens, game_mask)  # (B, d_z)
         if z_override is not None:
             z = z_override
+        if cond_dropout_mask is not None:
+            z = jnp.where(cond_dropout_mask[:, None], 0.0, z)
 
         # --- FiLM parameters from z (shared across NCA steps) ---
         # Initialize gamma near 1, beta near 0 for identity-like start
@@ -394,7 +464,7 @@ class ConditionalNCAWorldModel(nn.Module):
 
         act = action_onehot[:, None, None, :]
         act = jnp.broadcast_to(act, (B, H, W, N_ACTIONS))
-        inp = jnp.concatenate([x, act], axis=-1)
+        inp = build_input_with_history(x, act, hist_states, hist_actions)
         mask_bcast = (x.sum(axis=-1, keepdims=True) > 0).astype(jnp.float32)
 
         h = nn.Conv(self.n_hid, (1, 1), padding="SAME", name="embed")(inp)

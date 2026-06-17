@@ -25,6 +25,8 @@ import jax
 import jax.numpy as jnp
 import flax.linen as nn
 
+from nca_wm.models import build_input_with_history
+
 
 N_ACTIONS = 5
 
@@ -223,16 +225,25 @@ class RuleAttnNCAWorldModel(nn.Module):
     # (controlled by --halt_prior_p / --halt_kl_weight in train.py).
     # Default off; old checkpoints unaffected.
     adaptive_halt: bool = False
+    # History width metadata (Option A); forward derives k from input tensors.
+    history: int = 0
+    # Emit per-NCA-step hidden states + readouts (for activation-viz gifs).
+    # Off by default so the standard return signatures are unchanged.
+    return_intermediates: bool = False
 
     @nn.compact
     def __call__(self, state, action_onehot, game_tokens, game_mask,
                  return_slots: bool = False, return_vq_aux: bool = False,
-                 slots_override=None):
+                 slots_override=None, hist_states=None, hist_actions=None,
+                 cond_dropout_mask=None):
         """
         state: (B, C, H, W) multihot input.
         action_onehot: (B, N_ACTIONS).
         game_tokens: (B, S) int32.
         game_mask: (B, S) bool.
+        hist_states: optional (B, k, C, H, W) preceding states
+            (oldest→newest); None when --history is 0.
+        hist_actions: optional (B, k) int32 actions for each history step.
         return_slots: if True, also return the full (B, n_slots, d_slot) slot
             matrix (dyn + app) for downstream use (e.g. token decoder).
         slots_override: if provided ((B, n_slots, d_slot) float32), skip the
@@ -240,6 +251,16 @@ class RuleAttnNCAWorldModel(nn.Module):
             and latent-sampling tools to bypass the encoder. game_tokens /
             game_mask are still required for shape compatibility with the
             init/apply path but are unused on the forward pass.
+        cond_dropout_mask: optional (B,) bool. Classifier-free-guidance-style
+            rule dropout (training only). For flagged examples the dynamics
+            slots the NCA attends to are zeroed; the cross-attention then
+            collapses to a learned per-layer constant (uniform attention over
+            identical zero keys), giving a well-defined "no rules" signal so
+            the same weights learn both conditional and marginal dynamics. The
+            full slot tensor returned for the token decoder is left intact, so
+            the encoder still trains on every example. None (default) = no
+            dropout; the forward pass is then bit-identical to the pre-feature
+            model.
         Returns: (logits, win_logit, sprite_logits[, all_slots])
           - logits: (B, C, H, W) next-state logits
           - win_logit: (B,)
@@ -312,11 +333,19 @@ class RuleAttnNCAWorldModel(nn.Module):
         n_dyn = self.n_slots - self.n_app_slots
         slots_dyn = slots[:, :n_dyn, :]
 
+        # Classifier-free-guidance-style rule dropout (training only): zero the
+        # dynamics slots for flagged examples. Applied to slots_dyn only, so
+        # the full `slots` returned below for the token decoder is untouched.
+        if cond_dropout_mask is not None:
+            slots_dyn = jnp.where(
+                cond_dropout_mask[:, None, None], 0.0, slots_dyn)
+
         # 2. Embed input: (state, action) -> hidden state (B, H, W, n_hid)
         x = state.transpose(0, 2, 3, 1)  # (B, H, W, C)
         act = action_onehot[:, None, None, :]
         act = jnp.broadcast_to(act, (B, H, W, N_ACTIONS))
-        inp = jnp.concatenate([x, act], axis=-1)  # (B, H, W, C+5)
+        # (B, H, W, C+5) with no history; +k*(C+5) when history is on.
+        inp = build_input_with_history(x, act, hist_states, hist_actions)
         h_inp = nn.Dense(self.n_hid, name="embed")(inp)
         h = h_inp
 
@@ -390,6 +419,10 @@ class RuleAttnNCAWorldModel(nn.Module):
         per_step_win = []      # each (B,)
         per_step_halt = []     # each (B,) — raw logit, sigmoid → halt prob
 
+        # Buffers for activation-viz intermediates (only when requested).
+        hidden_steps = []      # each (B, H, W, n_hid)
+        readout_steps = []     # each (B, n_out, H, W)
+
         # 3. NCA steps. Each step:
         #    (a) 3x3 conv over hidden state (neighbor interaction)
         #    (b) optional global pool concatenation
@@ -442,6 +475,11 @@ class RuleAttnNCAWorldModel(nn.Module):
                 if mask_bcast is not None:
                     h = h * mask_bcast
 
+                if self.return_intermediates:
+                    hidden_steps.append(h)
+                    readout_steps.append(
+                        readout_layer(h).transpose(0, 3, 1, 2))
+
                 if self.adaptive_halt:
                     step_readout = readout_layer(h)         # (B, H, W, n_out)
                     step_logits = step_readout.transpose(0, 3, 1, 2)
@@ -478,6 +516,14 @@ class RuleAttnNCAWorldModel(nn.Module):
             vq_usage_loss,
             vq_soft_perplexity,
         )
+
+        # Activation-viz path: return per-step hidden/readouts. Used only by
+        # the gif renderer (return_intermediates set at construction), never
+        # combined with the slots/vq/halt return flags below.
+        if self.return_intermediates:
+            return logits, win_logit, sprite_logits, {
+                "hidden": hidden_steps, "readouts": readout_steps,
+            }
 
         # When adaptive_halt is on, append per-step (logits, win, halt_logit)
         # as the final return element. When off, return shapes are

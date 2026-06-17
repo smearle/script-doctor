@@ -26,19 +26,26 @@ import jax
 import jax.numpy as jnp
 import flax.linen as nn
 
+from nca_wm.models import build_input_with_history
 from nca_wm.rule_attn_model import RuleSlotEncoder
 
 
 N_ACTIONS = 5
 
 
-def _embed_input(state, action_onehot, n_hid, name="embed"):
-    """(B, C, H, W) + (B, A) -> (B, H, W, n_hid). Mirrors RuleAttnNCAWorldModel."""
+def _embed_input(state, action_onehot, n_hid, name="embed",
+                 hist_states=None, hist_actions=None):
+    """(B, C, H, W) + (B, A) -> (B, H, W, n_hid). Mirrors RuleAttnNCAWorldModel.
+
+    With --history on, hist_states (B, k, C, H, W) / hist_actions (B, k) add
+    k masked (state, action) channels via the shared helper; history=0 is
+    byte-identical to the no-history path.
+    """
     B, C, H, W = state.shape
     x = state.transpose(0, 2, 3, 1)
     act = action_onehot[:, None, None, :]
     act = jnp.broadcast_to(act, (B, H, W, N_ACTIONS))
-    inp = jnp.concatenate([x, act], axis=-1)
+    inp = build_input_with_history(x, act, hist_states, hist_actions)
     return nn.Dense(n_hid, name=name)(inp), x
 
 
@@ -116,16 +123,19 @@ class CNNWorldModel(nn.Module):
     axis_pool: bool = False
     axis_cummax: bool = False
     global_pool: bool = False
+    history: int = 0
 
     @nn.compact
     def __call__(self, state, action_onehot, game_tokens, game_mask,
-                 return_slots: bool = False, return_vq_aux: bool = False):
+                 return_slots: bool = False, return_vq_aux: bool = False,
+                 hist_states=None, hist_actions=None):
         B, C, H, W = state.shape
         slots = _slot_encoder_module(self)(game_tokens, game_mask)
         n_dyn = self.n_slots - self.n_app_slots
         slots_dyn = slots[:, :n_dyn, :]
 
-        h, _x = _embed_input(state, action_onehot, self.n_hid, name="embed")
+        h, _x = _embed_input(state, action_onehot, self.n_hid, name="embed",
+                             hist_states=hist_states, hist_actions=hist_actions)
         _, mb = _padding_mask(state)
         h = h * mb
 
@@ -182,16 +192,19 @@ class UNetWorldModel(nn.Module):
     n_app_slots: int = 0
     d_slot: int = 64
     n_attn_heads: int = 4
+    history: int = 0
 
     @nn.compact
     def __call__(self, state, action_onehot, game_tokens, game_mask,
-                 return_slots: bool = False, return_vq_aux: bool = False):
+                 return_slots: bool = False, return_vq_aux: bool = False,
+                 hist_states=None, hist_actions=None):
         B, C, H, W = state.shape
         slots = _slot_encoder_module(self)(game_tokens, game_mask)
         n_dyn = self.n_slots - self.n_app_slots
         slots_dyn = slots[:, :n_dyn, :]
 
-        h, _x = _embed_input(state, action_onehot, self.n_hid, name="embed")
+        h, _x = _embed_input(state, action_onehot, self.n_hid, name="embed",
+                             hist_states=hist_states, hist_actions=hist_actions)
         _, mb = _padding_mask(state)
         h = h * mb
 
@@ -268,16 +281,19 @@ class ViTWorldModel(nn.Module):
     n_app_slots: int = 0
     d_slot: int = 64
     n_attn_heads: int = 4
+    history: int = 0
 
     @nn.compact
     def __call__(self, state, action_onehot, game_tokens, game_mask,
-                 return_slots: bool = False, return_vq_aux: bool = False):
+                 return_slots: bool = False, return_vq_aux: bool = False,
+                 hist_states=None, hist_actions=None):
         B, C, H, W = state.shape
         slots = _slot_encoder_module(self)(game_tokens, game_mask)
         n_dyn = self.n_slots - self.n_app_slots
         slots_dyn = slots[:, :n_dyn, :]
 
-        h, _x = _embed_input(state, action_onehot, self.n_hid, name="embed")
+        h, _x = _embed_input(state, action_onehot, self.n_hid, name="embed",
+                             hist_states=hist_states, hist_actions=hist_actions)
         mask2, mb = _padding_mask(state)
         h = h * mb
 
