@@ -20,6 +20,12 @@
 #SBATCH --cpus-per-task=8
 #SBATCH --mem=48000
 #SBATCH --time=12:00:00
+# Auto-requeue on preemption: these partitions preempt at ~2:20h, but train.py
+# resumes from the latest periodic checkpoint (params.pkl + train_meta.json's
+# total_steps), so a requeued job continues instead of restarting. Long runs
+# (n>=400, 200k+ steps) converge over a few preemption cycles this way.
+#SBATCH --requeue
+#SBATCH --open-mode=append
 #SBATCH --output=nca_wm/logs/n_per_rule_slurm/%x.slurm.out
 set -u
 cd /scratch/se2161/script-doctor
@@ -59,5 +65,5 @@ echo "host=$(hostname) node=$(command -v node) cell=$KIND n=$N seed=$SEED nup=$N
   --change_loss_weight 5.0 --balanced_sampling --max_transitions_per_game 200000 \
   --search_timeout_ms 60000 --n_search_steps 100000 \
   --input_skip --axis_pool --axis_cummax --global_pool \
-  --patience 0 --ckpt_interval 5000 --log_interval 250 \
+  --patience 0 --ckpt_interval 2000 --log_interval 250 \
   --val_frac "$VAL_FRAC" --seed "$SEED" --save_dir "$SAVE" "${EXTRA[@]}"
