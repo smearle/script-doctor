@@ -1,4 +1,4 @@
-"""Inverse-fit a game's slot embedding from its (state, action, next_state)
+r"""Inverse-fit a game's slot embedding from its (state, action, next_state)
 transitions, using a frozen joint-trained NCA + SlotTokenDecoder.
 
 Given observations $\mathcal{D}=\{(s_t,a_t,s_{t+1})\}$ from an unknown game
@@ -171,6 +171,10 @@ def main():
         input_skip=cfg.get("input_skip", False),
         n_repeats=cfg.get("n_nca_repeats", 1),
         adaptive_halt=cfg.get("adaptive_halt", False),
+        use_vq=cfg.get("vq_codebook", False),
+        vq_codebook_size=cfg.get("vq_codebook_size", 512),
+        vq_commitment_weight=cfg.get("vq_commitment_weight", 0.25),
+        vq_entropy_temp=cfg.get("vq_entropy_temp", 1.0),
         **pool_kwargs,
     )
 
@@ -220,13 +224,48 @@ def main():
     train_slots = np.stack(train_slots)  # (N, K, d)
     train_mean = train_slots.mean(axis=0)
 
+    def _encode_target_slots():
+        from nca_wm.tokenize_game import tokenize_game, get_game_tree_from_js
+        from puzzlescript_jax.utils import init_ps_lark_parser
+
+        try:
+            parser = init_ps_lark_parser()
+            tree, canonical_ids = get_game_tree_from_js(parser, args.target_game)
+            tids = tokenize_game(
+                tree, canonical_ids,
+                encode_sprites=cfg.get("encode_sprites", False),
+            )
+            pad = np.zeros(enc_max_seq_len, dtype=np.int32)
+            mask = np.zeros(enc_max_seq_len, dtype=np.bool_)
+            L = min(len(tids), enc_max_seq_len)
+            pad[:L] = tids[:L]
+            mask[:L] = True
+            return np.array(_enc(jnp.array(pad), jnp.array(mask))[0])
+        except Exception as e:
+            print(f"WARN: target token encoding failed for KNN init: {e}",
+                  file=sys.stderr)
+            return None
+
     # Initialize slot
     rng_np = np.random.default_rng(args.seed)
     if args.init == "mean":
         slot_init = train_mean.copy()
     elif args.init == "knn":
-        # Use a default fallback: just pick a random training slot
-        slot_init = train_slots[rng_np.integers(len(train_slots))].copy()
+        target_slots = _encode_target_slots()
+        if target_slots is None:
+            slot_init = train_mean.copy()
+        else:
+            flat_target = target_slots.reshape(-1)
+            flat_train = train_slots.reshape(len(train_slots), -1)
+            cos = (flat_train @ flat_target) / (
+                (np.linalg.norm(flat_train, axis=1) + 1e-9) *
+                (np.linalg.norm(flat_target) + 1e-9)
+            )
+            init_idx = int(np.argmax(cos))
+            slot_init = train_slots[init_idx].copy()
+            print(f"  KNN init: {train_names_list[init_idx]} "
+                  f"(cos_dist={1.0 - float(cos[init_idx]):.3f})",
+                  file=sys.stderr)
     else:  # random
         slot_init = (
             train_mean + 0.1 * rng_np.standard_normal(
@@ -266,20 +305,45 @@ def main():
         log_1mp = -jax.nn.softplus(logits)
         bce = -(next_state * log_p + (1 - next_state) * log_1mp)
         change = jnp.abs(next_state - state)  # (B, C, H, W) in [0, 1]
-        weights = 1.0 + (change_weight - 1.0) * change
+        weights = 1.0 + change_weight * change
         return (bce * weights).mean()
 
     grad_fn = jax.jit(jax.value_and_grad(per_cell_loss))
+
+    @jax.jit
+    def eval_metrics(slots, state, action_oh, next_state):
+        logits, _ = forward(slots, state, action_oh)
+        loss = per_cell_loss(slots, state, action_oh, next_state)
+        pred = (jax.nn.sigmoid(logits) > 0.5).astype(jnp.float32)
+        bit_err = jnp.mean(pred != next_state)
+        cell_err = jnp.mean(jnp.any(pred != next_state, axis=1))
+        identity_bit_err = jnp.mean(state != next_state)
+        identity_cell_err = jnp.mean(jnp.any(state != next_state, axis=1))
+        return {
+            "loss": loss,
+            "bit_err": bit_err,
+            "cell_err": cell_err,
+            "identity_bit_err": identity_bit_err,
+            "identity_cell_err": identity_cell_err,
+        }
 
     # Pre-build batches for fitting
     states_j = jnp.array(states.astype(np.float32))
     actions_oh_j = jnp.array(actions_oh)
     next_j = jnp.array(next_states.astype(np.float32))
+    pre_metrics = {
+        k: float(v) for k, v in
+        eval_metrics(slot_init, states_j, actions_oh_j, next_j).items()
+    }
 
     print(f"\nFitting slot ({K}×{d_slot}) for "
           f"{n_train} transitions of {args.target_game}...", file=sys.stderr)
     print(f"  init mode: {args.init}", file=sys.stderr)
     print(f"  optimizer: Adam lr={args.lr}", file=sys.stderr)
+    print(f"  pre-fit loss={pre_metrics['loss']:.4e}, "
+          f"cell_err={pre_metrics['cell_err']:.4f}, "
+          f"identity_cell_err={pre_metrics['identity_cell_err']:.4f}",
+          file=sys.stderr)
 
     import optax
     slots_var = slot_init.copy()
@@ -307,6 +371,14 @@ def main():
                   file=sys.stderr)
 
     fitted = np.array(slots_var)
+    post_metrics = {
+        k: float(v) for k, v in
+        eval_metrics(slots_var, states_j, actions_oh_j, next_j).items()
+    }
+    print(f"  post-fit loss={post_metrics['loss']:.4e}, "
+          f"cell_err={post_metrics['cell_err']:.4f}, "
+          f"identity_cell_err={post_metrics['identity_cell_err']:.4f}",
+          file=sys.stderr)
 
     # 1-NN train game
     flat_fit = fitted.reshape(-1)
@@ -356,6 +428,8 @@ def main():
         "init": args.init,
         "loss_curve": losses,
         "final_loss": losses[-1]["loss"] if losses else None,
+        "pre_fit_metrics": pre_metrics,
+        "post_fit_metrics": post_metrics,
         "nn_train_name": nn_name,
         "nn_cos_dist": nn_dist,
         "decoded_text_file": out_txt,

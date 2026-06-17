@@ -2159,6 +2159,7 @@ def make_train_step(model, optimizer, conditional=False,
                     use_vq: bool = False,
                     vq_commitment_weight: float = 0.25,
                     vq_loss_weight: float = 1.0,
+                    vq_usage_loss_weight: float = 0.0,
                     adaptive_halt: bool = False,
                     halt_prior_p: float = 0.1,
                     halt_kl_weight: float = 0.01,
@@ -2416,7 +2417,8 @@ def make_train_step(model, optimizer, conditional=False,
                         wm_p, states, action_onehots, game_tokens, game_masks,
                         return_slots=True, return_vq_aux=True,
                     )
-                    vq_cb_loss, vq_commit_loss, vq_indices = vq_aux
+                    (vq_cb_loss, vq_commit_loss, vq_indices,
+                     vq_usage_loss, vq_soft_perplexity) = vq_aux
                     vq_util = _vq_utilization(vq_indices)
                 else:
                     logits, win_logit, sprite_logits, all_slots = model.apply(
@@ -2425,6 +2427,7 @@ def make_train_step(model, optimizer, conditional=False,
                     )
                     z = jnp.asarray(0.0, dtype=jnp.float32)
                     vq_cb_loss, vq_commit_loss, vq_util = z, z, z
+                    vq_usage_loss, vq_soft_perplexity = z, z
                 heads_total, aux = _heads_loss(
                     logits, win_logit, sprite_logits,
                     states, next_states, wons,
@@ -2442,8 +2445,10 @@ def make_train_step(model, optimizer, conditional=False,
                     total = total + vq_loss_weight * (
                         vq_cb_loss + vq_commitment_weight * vq_commit_loss
                     )
+                    total = total + vq_usage_loss_weight * vq_usage_loss
                 return total, aux + (
                     dec_loss_v, dec_acc_v, vq_cb_loss, vq_commit_loss, vq_util,
+                    vq_usage_loss, vq_soft_perplexity,
                 )
 
             (loss, aux), grads = jax.value_and_grad(loss_fn, has_aux=True)(params)
@@ -2461,7 +2466,8 @@ def make_train_step(model, optimizer, conditional=False,
                         params, states, action_onehots, game_tokens, game_masks,
                         return_vq_aux=True,
                     )
-                    vq_cb_loss, vq_commit_loss, vq_indices = vq_aux
+                    (vq_cb_loss, vq_commit_loss, vq_indices,
+                     vq_usage_loss, vq_soft_perplexity) = vq_aux
                     vq_util = _vq_utilization(vq_indices)
                 elif adaptive_halt:
                     logits, win_logit, sprite_logits, halt_aux = model.apply(
@@ -2469,12 +2475,14 @@ def make_train_step(model, optimizer, conditional=False,
                     )
                     z = jnp.asarray(0.0, dtype=jnp.float32)
                     vq_cb_loss, vq_commit_loss, vq_util = z, z, z
+                    vq_usage_loss, vq_soft_perplexity = z, z
                 else:
                     logits, win_logit, sprite_logits = model.apply(
                         params, states, action_onehots, game_tokens, game_masks
                     )
                     z = jnp.asarray(0.0, dtype=jnp.float32)
                     vq_cb_loss, vq_commit_loss, vq_util = z, z, z
+                    vq_usage_loss, vq_soft_perplexity = z, z
                 if adaptive_halt:
                     per_step_logits, per_step_win, per_step_halt = halt_aux
                     heads_total, aux, _ = _ponder_loss(
@@ -2494,10 +2502,14 @@ def make_train_step(model, optimizer, conditional=False,
                     total = total + vq_loss_weight * (
                         vq_cb_loss + vq_commitment_weight * vq_commit_loss
                     )
+                    total = total + vq_usage_loss_weight * vq_usage_loss
                 # Pad dec losses with zeros so the loop unpack is independent
                 # of the joint-decoder branch.
                 z = jnp.asarray(0.0, dtype=jnp.float32)
-                return total, aux + (z, z, vq_cb_loss, vq_commit_loss, vq_util)
+                return total, aux + (
+                    z, z, vq_cb_loss, vq_commit_loss, vq_util,
+                    vq_usage_loss, vq_soft_perplexity,
+                )
 
             (loss, aux), grads = jax.value_and_grad(loss_fn, has_aux=True)(params)
             updates, opt_state_new = optimizer.update(grads, opt_state, params)
@@ -2518,7 +2530,7 @@ def make_train_step(model, optimizer, conditional=False,
                     spatial_mask=spatial_mask,
                 )
                 z = jnp.asarray(0.0, dtype=jnp.float32)
-                return heads_total, aux + (z, z, z, z, z)
+                return heads_total, aux + (z, z, z, z, z, z, z)
 
             (loss, aux), grads = jax.value_and_grad(loss_fn, has_aux=True)(params)
             updates, opt_state_new = optimizer.update(grads, opt_state, params)
@@ -2654,6 +2666,7 @@ def train(
     use_vq: bool = False,
     vq_commitment_weight: float = 0.25,
     vq_loss_weight: float = 1.0,
+    vq_usage_loss_weight: float = 0.0,
     halt_prior_p: float = 0.1,
     halt_kl_weight: float = 0.01,
     halt_mode: str = "ponder",
@@ -3040,6 +3053,7 @@ def train(
         use_vq=use_vq,
         vq_commitment_weight=vq_commitment_weight,
         vq_loss_weight=vq_loss_weight,
+        vq_usage_loss_weight=vq_usage_loss_weight,
         adaptive_halt=getattr(model, "adaptive_halt", False),
         halt_prior_p=halt_prior_p,
         halt_kl_weight=halt_kl_weight,
@@ -3073,6 +3087,8 @@ def train(
     vq_cb_losses: list[float] = []
     vq_commit_losses: list[float] = []
     vq_utils: list[float] = []
+    vq_usage_losses: list[float] = []
+    vq_soft_perplexities: list[float] = []
     # per_game_log[game_id] = list of dicts (step, loss, acc, change_acc)
     per_game_log: dict[int, list[dict]] = {g: [] for g in (per_game_eval or {})}
     # Held-out per-transition test set: list of {step, loss, acc, change_acc}
@@ -3268,7 +3284,8 @@ def train(
                 (params, opt_state, loss, state_loss, acc, change_acc,
                  win_loss, win_acc, win_recall, sprite_mse,
                  dec_loss, dec_acc,
-                 vq_cb_loss, vq_commit_loss, vq_util) = train_step(
+                 vq_cb_loss, vq_commit_loss, vq_util,
+                 vq_usage_loss, vq_soft_perplexity) = train_step(
                     params, opt_state, s, a_oh, ns, w, gt, gm,
                     target_sprites, tgt_tokens, tgt_mask, spatial_mask,
                 )
@@ -3276,7 +3293,8 @@ def train(
                 (params, opt_state, loss, state_loss, acc, change_acc,
                  win_loss, win_acc, win_recall, sprite_mse,
                  dec_loss, dec_acc,
-                 vq_cb_loss, vq_commit_loss, vq_util) = train_step(
+                 vq_cb_loss, vq_commit_loss, vq_util,
+                 vq_usage_loss, vq_soft_perplexity) = train_step(
                     params, opt_state, s, a_oh, ns, w, gt, gm, target_sprites,
                     spatial_mask,
                 )
@@ -3284,7 +3302,8 @@ def train(
             (params, opt_state, loss, state_loss, acc, change_acc,
              win_loss, win_acc, win_recall, sprite_mse,
              dec_loss, dec_acc,
-             vq_cb_loss, vq_commit_loss, vq_util) = train_step(
+             vq_cb_loss, vq_commit_loss, vq_util,
+             vq_usage_loss, vq_soft_perplexity) = train_step(
                 params, opt_state, s, a_oh, ns, w, spatial_mask
             )
         losses.append(float(loss))
@@ -3300,6 +3319,8 @@ def train(
         vq_cb_losses.append(float(vq_cb_loss))
         vq_commit_losses.append(float(vq_commit_loss))
         vq_utils.append(float(vq_util))
+        vq_usage_losses.append(float(vq_usage_loss))
+        vq_soft_perplexities.append(float(vq_soft_perplexity))
 
         global_step = start_step + step + 1
         # Atomic periodic checkpoint so a concurrent --render_only process can load
@@ -3319,12 +3340,15 @@ def train(
             avg_vq_cb = np.mean(vq_cb_losses[-log_interval:]) if vq_cb_losses else 0.0
             avg_vq_commit = np.mean(vq_commit_losses[-log_interval:]) if vq_commit_losses else 0.0
             avg_vq_util = np.mean(vq_utils[-log_interval:]) if vq_utils else 0.0
+            avg_vq_usage = np.mean(vq_usage_losses[-log_interval:]) if vq_usage_losses else 0.0
+            avg_vq_perp = np.mean(vq_soft_perplexities[-log_interval:]) if vq_soft_perplexities else 0.0
             elapsed = time.time() - t0
             sprite_bit = f"  sprite_mse={avg_sprite_mse:.4e}" if sprite_loss_weight > 0 else ""
             dec_bit = (f"  dec_loss={avg_dec_loss:.4e}  dec_acc={avg_dec_acc:.3f}"
                        if joint_decoder is not None else "")
             vq_bit = (f"  vq_cb={avg_vq_cb:.4e}  vq_commit={avg_vq_commit:.4e}"
-                      f"  vq_util={avg_vq_util:.1f}"
+                      f"  vq_util={avg_vq_util:.1f}  vq_usage={avg_vq_usage:.4e}"
+                      f"  vq_perp={avg_vq_perp:.1f}"
                       if use_vq else "")
             print(f"  step {global_step:,}/{start_step + n_updates:,}  loss={avg_loss:.4e}  "
                   f"state_loss={avg_state_loss:.4e}  err={avg_err:.4e}  "
@@ -3347,6 +3371,8 @@ def train(
                     wandb_log["vq/codebook_loss"] = avg_vq_cb
                     wandb_log["vq/commit_loss"] = avg_vq_commit
                     wandb_log["vq/codebook_utilization"] = avg_vq_util
+                    wandb_log["vq/usage_loss"] = avg_vq_usage
+                    wandb_log["vq/soft_perplexity"] = avg_vq_perp
                 wandb.log(wandb_log, step=global_step)
 
             # Per-game diagnostic pass (multi-game only, with game_names known).
@@ -3500,6 +3526,8 @@ def train(
                     "vq_cb_losses": np.array(vq_cb_losses),
                     "vq_commit_losses": np.array(vq_commit_losses),
                     "vq_utils": np.array(vq_utils),
+                    "vq_usage_losses": np.array(vq_usage_losses),
+                    "vq_soft_perplexities": np.array(vq_soft_perplexities),
                 }
                 if per_game_log:
                     for g, rows in per_game_log.items():
@@ -3584,6 +3612,8 @@ def train(
         "vq_cb_losses": np.array(vq_cb_losses),
         "vq_commit_losses": np.array(vq_commit_losses),
         "vq_utils": np.array(vq_utils),
+        "vq_usage_losses": np.array(vq_usage_losses),
+        "vq_soft_perplexities": np.array(vq_soft_perplexities),
     }
     if per_game_log:
         for g, rows in per_game_log.items():
@@ -5462,6 +5492,13 @@ def main():
                    help="Beta in vq_total = codebook_loss + beta*commitment_loss.")
     p.add_argument("--vq_loss_weight", type=float, default=1.0,
                    help="Multiplier on vq_total when added to the training loss.")
+    p.add_argument("--vq_usage_loss_weight", type=float, default=0.0,
+                   help="Multiplier on a differentiable soft-assignment "
+                        "entropy penalty that discourages codebook collapse. "
+                        "0.0 preserves historical VQ behavior.")
+    p.add_argument("--vq_entropy_temp", type=float, default=1.0,
+                   help="Temperature for the soft assignment distribution used "
+                        "only by --vq_usage_loss_weight diagnostics/loss.")
     # Joint token-decoder training (encoder is shared with WM; decoder
     # cross-attends to ALL slots, while NCA only sees the dyn slots).
     p.add_argument("--token_decoder_loss_weight", type=float, default=0.0,
@@ -6187,6 +6224,7 @@ def main():
                     use_vq=args.vq_codebook,
                     vq_codebook_size=args.vq_codebook_size,
                     vq_commitment_weight=args.vq_commitment_weight,
+                    vq_entropy_temp=args.vq_entropy_temp,
                     use_layernorm=args.use_layernorm,
                     input_skip=args.input_skip,
                     n_repeats=args.n_nca_repeats,
@@ -6281,6 +6319,7 @@ def main():
                 use_vq=args.vq_codebook,
                 vq_commitment_weight=args.vq_commitment_weight,
                 vq_loss_weight=args.vq_loss_weight,
+                vq_usage_loss_weight=args.vq_usage_loss_weight,
                 halt_prior_p=args.halt_prior_p,
                 halt_kl_weight=args.halt_kl_weight,
                 halt_mode=args.halt_mode,
@@ -6453,7 +6492,7 @@ def main():
         backend_render.compile_game(ps_parser, args.game)
         render_post_training_gifs(
             model, params, json_str, backend_render,
-            search_data=search_data, level_i=args.level,
+            search_data=dataset, level_i=args.level,
             save_dir=save_dir,
         )
 

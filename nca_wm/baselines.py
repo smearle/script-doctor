@@ -63,7 +63,13 @@ def _heads(h, n_out, mask_bcast):
 def _wrap_returns(logits, win_logit, sprite_logits, slots,
                   return_slots, return_vq_aux):
     z = jnp.asarray(0.0, dtype=jnp.float32)
-    vq_aux = (z, z, jnp.zeros(slots.shape[:-1], dtype=jnp.int32))
+    vq_aux = (
+        z,
+        z,
+        jnp.zeros(slots.shape[:-1], dtype=jnp.int32),
+        z,
+        z,
+    )
     if return_slots and return_vq_aux:
         return logits, win_logit, sprite_logits, slots, vq_aux
     if return_slots:

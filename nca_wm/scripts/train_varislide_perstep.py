@@ -206,7 +206,8 @@ def build_game_info(game: str, states: np.ndarray, max_H: int, max_W: int,
 def make_model(n_hid: int, n_steps: int, n_out: int, n_slots: int,
                src_cfg: dict, max_seq_len: int, input_skip: bool,
                use_vq: bool = False, vq_codebook_size: int = 512,
-               vq_commitment_weight: float = 0.25):
+               vq_commitment_weight: float = 0.25,
+               vq_entropy_temp: float = 1.0):
     return RuleAttnNCAWorldModel(
         n_hid=n_hid, n_steps=n_steps, n_out=n_out,
         vocab_size=src_cfg["vocab_size"] + 1,
@@ -218,6 +219,7 @@ def make_model(n_hid: int, n_steps: int, n_out: int, n_slots: int,
         use_vq=use_vq,
         vq_codebook_size=vq_codebook_size,
         vq_commitment_weight=vq_commitment_weight,
+        vq_entropy_temp=vq_entropy_temp,
         use_layernorm=False, input_skip=input_skip,
         n_repeats=n_steps,           # fully shared body
         adaptive_halt=True,          # to expose per-step logits
@@ -254,6 +256,8 @@ def main():
     p.add_argument("--vq_codebook_size", type=int, default=512)
     p.add_argument("--vq_commitment_weight", type=float, default=0.25)
     p.add_argument("--vq_loss_weight", type=float, default=1.0)
+    p.add_argument("--vq_usage_loss_weight", type=float, default=0.0)
+    p.add_argument("--vq_entropy_temp", type=float, default=1.0)
     args = p.parse_args()
 
     os.makedirs(args.save_dir, exist_ok=True)
@@ -330,7 +334,8 @@ def main():
                         src_cfg, eff_len + 1, args.input_skip,
                         use_vq=args.vq_codebook,
                         vq_codebook_size=args.vq_codebook_size,
-                        vq_commitment_weight=args.vq_commitment_weight)
+                        vq_commitment_weight=args.vq_commitment_weight,
+                        vq_entropy_temp=args.vq_entropy_temp)
 
     rng = jax.random.PRNGKey(args.seed)
     rng, subkey = jax.random.split(rng)
@@ -366,7 +371,9 @@ def main():
             final_logits = out[0]                 # (B, C, H, W)
             halt_aux = out[-1]
             if args.vq_codebook:
-                vq_cb_loss, vq_commit_loss, vq_indices = out[-2]
+                vq_aux = out[-2]
+                vq_cb_loss, vq_commit_loss, vq_indices = vq_aux[:3]
+                vq_usage_loss = vq_aux[3] if len(vq_aux) > 3 else jnp.asarray(0.0)
                 vq_util = jnp.count_nonzero(jnp.bincount(
                     vq_indices.reshape(-1),
                     length=args.vq_codebook_size,
@@ -374,6 +381,7 @@ def main():
             else:
                 vq_cb_loss = jnp.asarray(0.0)
                 vq_commit_loss = jnp.asarray(0.0)
+                vq_usage_loss = jnp.asarray(0.0)
                 vq_util = jnp.asarray(0)
             per_step_logits = halt_aux[0]          # (T, B, C, H, W)
             T = per_step_logits.shape[0]
@@ -409,6 +417,7 @@ def main():
             if args.vq_codebook:
                 total = total + args.vq_loss_weight * (
                     vq_cb_loss + args.vq_commitment_weight * vq_commit_loss)
+                total = total + args.vq_usage_loss_weight * vq_usage_loss
             # Diagnostics
             preds_final = (jax.nn.sigmoid(final_logits) > 0.5).astype(jnp.float32)
             chg = (s_b != final_target)
@@ -416,7 +425,8 @@ def main():
             chg_correct = ((preds_final == final_target) & chg).sum()
             change_acc = jnp.where(n_chg > 0, chg_correct / n_chg, 1.0)
             return total, (final_loss, per_step_loss_mean, change_acc,
-                           vq_cb_loss, vq_commit_loss, vq_util)
+                           vq_cb_loss, vq_commit_loss, vq_util,
+                           vq_usage_loss)
         (loss, aux), grads = jax.value_and_grad(loss_fn, has_aux=True)(params)
         updates, opt_state = optimizer.update(grads, opt_state, params)
         params = optax.apply_updates(params, updates)
@@ -445,12 +455,12 @@ def main():
             with open(os.path.join(args.save_dir, "params_best.pkl"), "wb") as f:
                 pickle.dump(params, f)
         if step % args.log_interval == 0 or step == 1:
-            final_loss, per_step_loss, chg_acc, vq_cb, vq_commit, vq_util = [
+            final_loss, per_step_loss, chg_acc, vq_cb, vq_commit, vq_util, vq_usage = [
                 float(x) for x in aux
             ]
             elapsed = time.time() - t_start
             vq_bit = (f"  vq_cb={vq_cb:.2e}  vq_commit={vq_commit:.2e}"
-                      f"  vq_util={vq_util:.0f}"
+                      f"  vq_util={vq_util:.0f}  vq_usage={vq_usage:.2e}"
                       if args.vq_codebook else "")
             print(f"  step {step:>5d}/{args.n_updates}  loss={loss_v:.4e}  "
                   f"final={final_loss:.4e}  per_step={per_step_loss:.4e}  "

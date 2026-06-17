@@ -44,22 +44,27 @@ class VectorQuantizer(nn.Module):
     codebook_size: int = 512
     d_slot: int = 64
     commitment_weight: float = 0.25
+    entropy_temp: float = 1.0
 
     @nn.compact
     def __call__(self, slots):
         """
         slots: (..., d_slot) — typically (B, K, d_slot) for rule slots.
-        Returns: (slots_q, codebook_loss, commitment_loss, indices)
+        Returns: (slots_q, codebook_loss, commitment_loss, indices,
+                  usage_loss, soft_perplexity)
             slots_q: same shape as slots, post-quantization (with STE).
             codebook_loss: scalar (pulls codebook entries to encoder outputs).
             commitment_loss: scalar (pulls encoder outputs to codebook entries).
             indices: same leading shape as slots, int32 codebook indices.
+            usage_loss: differentiable entropy penalty on average soft code use.
+            soft_perplexity: exp(entropy), useful for diagnostics.
         """
         codebook = self.param(
             "codebook",
             nn.initializers.normal(stddev=1.0 / (self.d_slot ** 0.5)),
             (self.codebook_size, self.d_slot),
         )
+        codebook = jnp.asarray(codebook)
         flat = slots.reshape(-1, self.d_slot)                  # (N, d)
         # squared L2 distance: ||x||^2 - 2 x·c + ||c||^2
         x_sq = jnp.sum(flat ** 2, axis=-1, keepdims=True)       # (N, 1)
@@ -67,9 +72,15 @@ class VectorQuantizer(nn.Module):
         xc   = flat @ codebook.T                                # (N, K_cb)
         dists = x_sq - 2.0 * xc + c_sq                          # (N, K_cb)
         idx_flat = jnp.argmin(dists, axis=-1)                    # (N,)
-        quantized_flat = codebook[idx_flat]                      # (N, d)
+        quantized_flat = jnp.take(codebook, idx_flat, axis=0)     # (N, d)
         quantized = quantized_flat.reshape(slots.shape)
         indices = idx_flat.reshape(slots.shape[:-1])
+        temp = jnp.maximum(jnp.asarray(self.entropy_temp, dtype=slots.dtype), 1e-6)
+        soft_probs = jax.nn.softmax(-dists / temp, axis=-1)
+        avg_probs = jnp.mean(soft_probs, axis=0)
+        entropy = -jnp.sum(avg_probs * jnp.log(jnp.clip(avg_probs, 1e-9, 1.0)))
+        usage_loss = jnp.log(float(self.codebook_size)) - entropy
+        soft_perplexity = jnp.exp(entropy)
 
         codebook_loss   = jnp.mean((jax.lax.stop_gradient(slots) - quantized) ** 2)
         commitment_loss = jnp.mean((slots - jax.lax.stop_gradient(quantized)) ** 2)
@@ -77,7 +88,7 @@ class VectorQuantizer(nn.Module):
         # Straight-through: forward pass uses quantized; backward pass passes
         # gradient straight through to slots.
         slots_q = slots + jax.lax.stop_gradient(quantized - slots)
-        return slots_q, codebook_loss, commitment_loss, indices
+        return slots_q, codebook_loss, commitment_loss, indices, usage_loss, soft_perplexity
 
 
 class RuleSlotEncoder(nn.Module):
@@ -175,6 +186,7 @@ class RuleAttnNCAWorldModel(nn.Module):
     use_vq: bool = False
     vq_codebook_size: int = 512
     vq_commitment_weight: float = 0.25
+    vq_entropy_temp: float = 1.0
     # Deep-unroll stabilization knobs. Both default-off so existing checkpoints
     # load unchanged. Enable when running large n_steps (≥8) where the bare
     # residual stack starts to diverge.
@@ -246,12 +258,13 @@ class RuleAttnNCAWorldModel(nn.Module):
             n_heads=self.n_attn_heads,
             name="game_encoder",
         )
+        encoded_slots = None
         if slots_override is not None:
             # Still call the encoder so its params are registered with this
             # module's variable scope (otherwise apply with the saved
             # checkpoint complains about unused params). The output is
             # discarded.
-            _ = encoder(game_tokens, game_mask)
+            encoded_slots = encoder(game_tokens, game_mask)
             slots = slots_override
         else:
             slots = encoder(game_tokens, game_mask)  # (B, K, d_slot), K = n_slots
@@ -265,14 +278,33 @@ class RuleAttnNCAWorldModel(nn.Module):
                 codebook_size=self.vq_codebook_size,
                 d_slot=self.d_slot,
                 commitment_weight=self.vq_commitment_weight,
+                entropy_temp=self.vq_entropy_temp,
                 name="slot_vq",
             )
-            slots, vq_codebook_loss, vq_commitment_loss, vq_indices = vq(slots)
+            if slots_override is not None:
+                # Inverse-fit optimizes a continuous slot matrix directly.
+                # The saved VQ codebook still needs to be registered for
+                # checkpoint compatibility, but quantizing the override makes
+                # the optimization piecewise-constant and can fail under JIT
+                # tracing on older checkpoints. Keep normal encoder paths
+                # bit-identical; only bypass VQ for explicit overrides.
+                _ = vq(encoded_slots)
+                zero = jnp.asarray(0.0, dtype=jnp.float32)
+                vq_codebook_loss = zero
+                vq_commitment_loss = zero
+                vq_indices = jnp.zeros(slots.shape[:-1], dtype=jnp.int32)
+                vq_usage_loss = zero
+                vq_soft_perplexity = zero
+            else:
+                (slots, vq_codebook_loss, vq_commitment_loss, vq_indices,
+                 vq_usage_loss, vq_soft_perplexity) = vq(slots)
         else:
             zero = jnp.asarray(0.0, dtype=jnp.float32)
             vq_codebook_loss = zero
             vq_commitment_loss = zero
             vq_indices = jnp.zeros(slots.shape[:-1], dtype=jnp.int32)
+            vq_usage_loss = zero
+            vq_soft_perplexity = zero
 
         # Split off appearance slots (last n_app_slots) — only the dyn slots
         # condition the NCA. The full slot tensor is returned for the
@@ -439,7 +471,13 @@ class RuleAttnNCAWorldModel(nn.Module):
         # Sprite placeholder (signature-compatible with ConditionalNCAWorldModel).
         sprite_logits = jnp.zeros((B, self.n_out, 5, 5, 4))
 
-        vq_aux = (vq_codebook_loss, vq_commitment_loss, vq_indices)
+        vq_aux = (
+            vq_codebook_loss,
+            vq_commitment_loss,
+            vq_indices,
+            vq_usage_loss,
+            vq_soft_perplexity,
+        )
 
         # When adaptive_halt is on, append per-step (logits, win, halt_logit)
         # as the final return element. When off, return shapes are
