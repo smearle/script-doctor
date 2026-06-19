@@ -17,16 +17,35 @@ here.
 ## Files
 
 ### Models & training
-- **`train.py`** (~4.2k lines) — main entry point. Defines:
-  - Data collection: `collect_random_rollouts` and solver-based
-    `collect_unique_transitions` (BFS / A*), each writing per-game caches.
-  - Models: `NCAWorldModel` (unconditional), `ConditionalNCAWorldModel`
-    (FiLM-modulated by a `GameSpecEncoder` over game tokens), with optional
-    `axis_pool` / `axis_cummax` / `global_pool` global-context flags for
-    multi-bracket / axis-aligned rules.
-  - Training loop: per-game partitioned datasets, balanced sampling,
-    gradient clipping, periodic per-game eval, early stopping, W&B logging,
-    checkpointing.
+- **`train.py`** (~2.9k lines) — main entry point (`main()` + `build_parser()`
+  CLI, the `train()` loop, `make_train_step`, and `MULTI_GAME_PRESETS`). Much
+  of what used to live here has been split into the cohesive modules below;
+  train.py re-imports the names it still uses so existing
+  `from nca_wm.train import …` call sites keep resolving.
+  - Models defined in `models.py`: `NCAWorldModel` (unconditional),
+    `ConditionalNCAWorldModel` (FiLM-modulated by a `GameSpecEncoder` over game
+    tokens), with optional `axis_pool` / `axis_cummax` / `global_pool`
+    global-context flags for multi-bracket / axis-aligned rules.
+  - Training loop: per-game partitioned datasets, balanced sampling, gradient
+    clipping, periodic per-game eval, early stopping, W&B logging,
+    checkpointing. Optional `--history`, `--cond_mask`, and VQ flags.
+- **`state_ops.py`** — dependency-free pure-numpy leaf helpers: bitpack /
+  unpack (`_pack_states` / `_unpack_states`), padding (`_pad_obs` /
+  `_pad_packed`), and multihot conversion (`_dats_to_multihot_batch` /
+  `_multihot_to_objects`). Imported everywhere; imports nothing from the package.
+- **`data_collection.py`** — solver-based transition collection
+  (`collect_unique_transitions`, BFS / A* via the C++ backend), per-level and
+  merged-dataset caches, `collect_multigame_dataset[_synthetic]`, the
+  predecessor-graph helpers for `--history` sampling, and `_build_sprite_tensor`.
+- **`inference.py`** — training-loop-independent `model.apply` wrappers shared
+  by training / eval / rendering (`make_apply_fn`, `make_eval_forward`, `_wm_p`,
+  `_pad_state_for_model`, `_unpad_pred`).
+- **`eval.py`** — autoregressive multi-step rollout evaluation
+  (`evaluate_multigame`, the numpy / jitted-jax rollout impls, scorecard).
+- **`gif_rendering.py`** — training-time and post-training visualization
+  (rollout GIFs, activation grids, sprite overlays, interactive playback).
+- **`scaling_gallery_presets.py`** — curated `scaling_gallery_v{1..5}` game
+  lists (superseded by `--n_per_rule_games`); merged into `MULTI_GAME_PRESETS`.
 - **`rule_attn_model.py`** — Perceiver-style alternative. `RuleSlotEncoder`
   turns game tokens into K rule slots; `RuleAttnNCAWorldModel` does
   per-cell cross-attention to those slots at every NCA step. Selected via
@@ -80,9 +99,10 @@ and are appended to when more episodes are requested. Search caches are
 keyed by `(algo, budget, timeout)` and reused as-is when present.
 
 ### State representation
-Bitpacked engine state → `(C, H, W)` `uint8` multihot via `_dat_to_multihot`.
-Channels are canonical object indices (deduped against `raw_to_canonical`)
-so they match the model's input shape across games.
+Bitpacked engine state → `(C, H, W)` `uint8` multihot via
+`_dats_to_multihot_batch` (in `state_ops.py`). Channels are canonical object
+indices (deduped against `raw_to_canonical`) so they match the model's input
+shape across games.
 
 ### Conditional model
 `GameSpecEncoder` consumes `(tokens, mask)` → latent `z`. A `FiLMAdapter`
