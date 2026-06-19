@@ -52,6 +52,174 @@ Key artifacts:
   and
   `nca_wm/refine-logs/vq_gumbelst_anneal_kmeans_layernorm_w0p01_20k_t2_to_0p05_s0`.
 
+## Reproduction Guide
+
+Run all commands from the repository root with the repo virtualenv available:
+
+```bash
+source .venv/bin/activate
+test -d nca_wm/logs/vq_usage_ablation_scaling_14_s0/w0p01
+```
+
+The source checkpoint above must contain `config.json`, `game_infos.pkl`, and
+the encoder weights used by `train_slot_ae.py --init_from`. To reproduce GPU
+results, set both `JAX_PLATFORMS=cuda` and `CUDA_VISIBLE_DEVICES=<gpu_id>`.
+To reproduce CPU results, either omit those variables or set
+`JAX_PLATFORMS=cpu`. CPU and GPU hard argmin results are intentionally tracked
+separately because near-tie assignments are backend-sensitive.
+
+Static checks:
+
+```bash
+.venv/bin/python -m py_compile \
+    nca_wm/train_slot_ae.py \
+    nca_wm/scripts/diagnose_slot_vq.py \
+    nca_wm/scripts/eval_slot_latent_ablation.py
+bash -n nca_wm/scripts/run_vq_collapse_pilots.sh
+```
+
+Recompute diagnostics for any existing run:
+
+```bash
+RUN=nca_wm/refine-logs/vq_kmeans_layernorm_w0p01_5k_s0_gpu
+.venv/bin/python -m nca_wm.scripts.diagnose_slot_vq "$RUN/slot_ae.pkl"
+.venv/bin/python -m nca_wm.scripts.eval_slot_latent_ablation "$RUN" --out_dir "$RUN"
+```
+
+Reproduce the 2k AE/VAE/VQ-VAE baseline:
+
+```bash
+SAVE_ROOT=nca_wm/refine-logs/slot_latent_compare_w0p01_2k \
+N_UPDATES=2000 \
+DEC_D_MODEL=64 DEC_N_LAYERS=2 DEC_N_HEADS=4 \
+nca_wm/scripts/run_slot_latent_compare.sh
+```
+
+Reproduce the six 500-step VQ collapse pilots:
+
+```bash
+SAVE_ROOT=nca_wm/refine-logs/vq_collapse_pilots_w0p01_500 \
+N_UPDATES=500 \
+DEC_D_MODEL=64 DEC_N_LAYERS=2 DEC_N_HEADS=4 \
+nca_wm/scripts/run_vq_collapse_pilots.sh
+```
+
+Reproduce the GPU 5k `kmeans + layernorm` no-margin baseline:
+
+```bash
+CUDA_VISIBLE_DEVICES=0 JAX_PLATFORMS=cuda \
+.venv/bin/python -m nca_wm.train_slot_ae \
+    --init_from nca_wm/logs/vq_usage_ablation_scaling_14_s0/w0p01 \
+    --freeze_encoder \
+    --latent_model vqvae \
+    --vq_init kmeans \
+    --slot_pre_norm layernorm \
+    --vq_usage_loss_weight 0.01 \
+    --n_updates 5000 \
+    --log_interval 500 \
+    --dec_d_model 64 \
+    --dec_n_layers 2 \
+    --dec_n_heads 4 \
+    --seed 0 \
+    --save_dir nca_wm/refine-logs/vq_kmeans_layernorm_w0p01_5k_s0_gpu
+```
+
+Reproduce the GPU 5k margin run:
+
+```bash
+CUDA_VISIBLE_DEVICES=0 JAX_PLATFORMS=cuda \
+.venv/bin/python -m nca_wm.train_slot_ae \
+    --init_from nca_wm/logs/vq_usage_ablation_scaling_14_s0/w0p01 \
+    --freeze_encoder \
+    --latent_model vqvae \
+    --vq_init kmeans \
+    --slot_pre_norm layernorm \
+    --vq_usage_loss_weight 0.01 \
+    --vq_margin_loss_weight 0.1 \
+    --vq_margin_target 0.01 \
+    --n_updates 5000 \
+    --log_interval 500 \
+    --dec_d_model 64 \
+    --dec_n_layers 2 \
+    --dec_n_heads 4 \
+    --seed 0 \
+    --save_dir nca_wm/refine-logs/vq_margin_kmeans_layernorm_w0p01_5k_w0p1_m0p01_s0
+```
+
+Reproduce the GPU 5k hard-balance runs:
+
+```bash
+COMMON_ARGS=(
+  --init_from nca_wm/logs/vq_usage_ablation_scaling_14_s0/w0p01
+  --freeze_encoder
+  --latent_model vqvae
+  --vq_init kmeans
+  --slot_pre_norm layernorm
+  --vq_usage_loss_weight 0.01
+  --n_updates 5000
+  --log_interval 500
+  --dec_d_model 64
+  --dec_n_layers 2
+  --dec_n_heads 4
+  --seed 0
+)
+
+CUDA_VISIBLE_DEVICES=0 JAX_PLATFORMS=cuda \
+.venv/bin/python -m nca_wm.train_slot_ae "${COMMON_ARGS[@]}" \
+    --vq_hard_balance_loss_weight 0.1 \
+    --vq_hard_balance_target 64 \
+    --save_dir nca_wm/refine-logs/vq_balance_kmeans_layernorm_w0p01_5k_bal0p1_t64_s0
+
+CUDA_VISIBLE_DEVICES=0 JAX_PLATFORMS=cuda \
+.venv/bin/python -m nca_wm.train_slot_ae "${COMMON_ARGS[@]}" \
+    --vq_hard_balance_loss_weight 1.0 \
+    --vq_hard_balance_target 64 \
+    --save_dir nca_wm/refine-logs/vq_balance_kmeans_layernorm_w0p01_5k_bal1p0_t64_s0
+
+CUDA_VISIBLE_DEVICES=0 JAX_PLATFORMS=cuda \
+.venv/bin/python -m nca_wm.train_slot_ae "${COMMON_ARGS[@]}" \
+    --vq_hard_balance_loss_weight 0.1 \
+    --vq_hard_balance_target 64 \
+    --vq_margin_loss_weight 0.1 \
+    --vq_margin_target 0.01 \
+    --save_dir nca_wm/refine-logs/vq_balance_margin_kmeans_layernorm_w0p01_5k_bal0p1_t64_margin0p1_m0p01_s0
+```
+
+Reproduce the GPU 20k soft-to-hard and Gumbel-ST annealing runs:
+
+```bash
+for MODE in soft_st soft gumbel_st; do
+  case "$MODE" in
+    soft_st) NAME=softst ;;
+    gumbel_st) NAME=gumbelst ;;
+    *) NAME="$MODE" ;;
+  esac
+  CUDA_VISIBLE_DEVICES=0 JAX_PLATFORMS=cuda \
+  .venv/bin/python -m nca_wm.train_slot_ae \
+      --init_from nca_wm/logs/vq_usage_ablation_scaling_14_s0/w0p01 \
+      --freeze_encoder \
+      --latent_model vqvae \
+      --vq_init kmeans \
+      --slot_pre_norm layernorm \
+      --vq_usage_loss_weight 0.01 \
+      --vq_assign_mode "$MODE" \
+      --vq_assign_temp_start 2.0 \
+      --vq_assign_temp_end 0.05 \
+      --vq_assign_anneal_steps 20000 \
+      --n_updates 20000 \
+      --log_interval 2000 \
+      --dec_d_model 64 \
+      --dec_n_layers 2 \
+      --dec_n_heads 4 \
+      --seed 0 \
+      --save_dir "nca_wm/refine-logs/vq_${NAME}_anneal_kmeans_layernorm_w0p01_20k_t2_to_0p05_s0"
+done
+```
+
+After every reproduced training run, regenerate diagnostics and latent
+ablations with the `RUN=...` commands above before comparing against the
+tables in this document.
+
 ## Background: What The Current VQ Model Is
 
 The world-model `--vq_codebook` path is VQ-VAE-style, not a full probabilistic
@@ -414,32 +582,73 @@ can remain broad without creating a stable diverse nearest-code partition.
 
 ## Next Steps
 
-Use the strongest fast-pilot setting as the next default VQ-VAE token-AE
-configuration:
+The next experiment should change the discrete representation, not just the
+assignment loss. The current evidence says the single-codebook nearest-neighbor
+bottleneck forms backend-sensitive near-ties and saves only a few hard codes on
+GPU, even when soft assignment statistics look healthy.
 
-```bash
---latent_model vqvae \
---vq_init kmeans \
---slot_pre_norm layernorm \
---vq_usage_loss_weight 0.01
+### 1. Add Residual VQ First
+
+Implement a residual/product-capacity path in `train_slot_ae.py`, starting with
+residual quantization because it is the smallest change from the current
+single-codebook VQ code path.
+
+Recommended first knobs:
+
+```text
+--vq_quantizer single|residual
+--vq_num_quantizers 2
+--vq_residual_codebook_size 256
 ```
 
-The 5k result shows that this setting prevents the two-code hard collapse, but
-it does not fix the near-tie margin issue. Before promoting this as a final
-discrete bottleneck, run either:
+First pilot:
 
-- a small seed check with seeds `1` and `2` to measure how reproducible the
-  high hard utilization is; or
-- a stronger assignment experiment if the goal is to fix the margin rather
-  than only improve hard-utilization counts.
+- frozen encoder from `nca_wm/logs/vq_usage_ablation_scaling_14_s0/w0p01`;
+- `--vq_init kmeans`;
+- `--slot_pre_norm layernorm`;
+- `--vq_usage_loss_weight 0.01`;
+- `--vq_quantizer residual --vq_num_quantizers 2`;
+- 5k GPU run, seed `0`, decoder `64/2/4`.
 
-The direct margin objective, the straight-through hard-balance objective, and
-the soft-to-hard/Gumbel-ST annealing objectives all fail to produce a
-backend-stable, high-utilization hard codebook. Do not use these settings as
-the default if the goal is a discrete adaptation interface. The next model
-class to test should change the representation capacity instead of only the
-assignment loss: residual/product quantization is the next best candidate,
-followed by explicit discrete code assignment search. For each run, compare
-saved hard utilization, recomputed hard utilization, token accuracy,
-zero-slot drop, shuffled-across-games drop, and both training-time and
-diagnostic distance margins.
+Compare against the GPU 5k single-codebook baseline:
+
+- token accuracy and mean per-game accuracy;
+- saved hard utilization per residual stage;
+- joint code-pair utilization;
+- residual norm after each stage;
+- diagnostic nearest/second-nearest margins per stage;
+- zero-slot drop and shuffled-across-games drop.
+
+Promote to seeds `0,1,2` only if the 5k seed-0 run improves saved hard usage
+without losing token accuracy or latent-ablation sensitivity.
+
+### 2. Try Product Quantization If Residual VQ Is Ambiguous
+
+If residual VQ still collapses, split the 64-dimensional slot into fixed
+subspaces and quantize each subspace independently.
+
+Recommended pilot:
+
+```text
+--vq_quantizer product
+--vq_num_quantizers 4
+--vq_residual_codebook_size 256
+```
+
+Track per-subspace hard usage and the joint tuple usage. Product quantization
+is useful only if multiple subspaces carry nontrivial assignment diversity; a
+single active subspace with three collapsed subspaces is not a meaningful fix.
+
+### 3. Use Explicit Assignment Search Last
+
+If residual and product quantization both fail, stop treating the bottleneck as
+a smooth nearest-code training problem. The next fallback is alternating
+discrete assignment search:
+
+- freeze the encoder slots;
+- assign per-game/per-slot discrete codes by nearest code or local search;
+- train the token decoder and codebook against those fixed assignments;
+- periodically refresh assignments.
+
+This is more intrusive than residual or product quantization, so it should
+come after testing whether extra discrete capacity solves the near-tie failure.
