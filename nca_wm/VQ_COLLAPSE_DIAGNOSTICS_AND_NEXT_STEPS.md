@@ -52,6 +52,7 @@ Key artifacts:
 - Fast pilots: `nca_wm/scripts/run_vq_collapse_pilots.sh`
 - Main pilot root: `nca_wm/refine-logs/vq_collapse_pilots_w0p01_500`
 - GPU soft/Gumbel roots:
+  `nca_wm/refine-logs/vq_hard_kmeans_layernorm_w0p01_20k_s0_gpu`,
   `nca_wm/refine-logs/vq_softst_anneal_kmeans_layernorm_w0p01_20k_t2_to_0p05_s0`,
   `nca_wm/refine-logs/vq_soft_anneal_kmeans_layernorm_w0p01_20k_t2_to_0p05_s0`,
   and
@@ -196,6 +197,23 @@ CUDA_VISIBLE_DEVICES=0 JAX_PLATFORMS=cuda \
 Reproduce the GPU 20k soft-to-hard and Gumbel-ST annealing runs:
 
 ```bash
+CUDA_VISIBLE_DEVICES=0 JAX_PLATFORMS=cuda \
+.venv/bin/python -m nca_wm.train_slot_ae \
+    --init_from nca_wm/logs/vq_usage_ablation_scaling_14_s0/w0p01 \
+    --freeze_encoder \
+    --latent_model vqvae \
+    --vq_init kmeans \
+    --slot_pre_norm layernorm \
+    --vq_usage_loss_weight 0.01 \
+    --vq_assign_mode hard \
+    --n_updates 20000 \
+    --log_interval 2000 \
+    --dec_d_model 64 \
+    --dec_n_layers 2 \
+    --dec_n_heads 4 \
+    --seed 0 \
+    --save_dir nca_wm/refine-logs/vq_hard_kmeans_layernorm_w0p01_20k_s0_gpu
+
 for MODE in soft_st soft gumbel_st; do
   case "$MODE" in
     soft_st) NAME=softst ;;
@@ -616,6 +634,7 @@ using temperature `2.0 -> 0.05`:
 Output roots:
 
 ```text
+nca_wm/refine-logs/vq_hard_kmeans_layernorm_w0p01_20k_s0_gpu
 nca_wm/refine-logs/vq_softst_anneal_kmeans_layernorm_w0p01_20k_t2_to_0p05_s0
 nca_wm/refine-logs/vq_soft_anneal_kmeans_layernorm_w0p01_20k_t2_to_0p05_s0
 nca_wm/refine-logs/vq_gumbelst_anneal_kmeans_layernorm_w0p01_20k_t2_to_0p05_s0
@@ -624,13 +643,24 @@ nca_wm/refine-logs/vq_gumbelst_anneal_kmeans_layernorm_w0p01_20k_t2_to_0p05_s0
 | run | token acc | mean game acc | saved hard util | final temp | assign perplexity | train margin | recomputed util | diagnostic margin | zero drop | shuffle-game drop |
 |---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
 | GPU hard 5k | 0.9973 | 0.9967 | 5 | - | - | 0.003181 | 41 | -0.001040 | 0.3658 | 0.0081 |
+| GPU hard 20k | 0.9973 | 0.9968 | 6 | - | - | 0.006211 | 45 | -0.000351 | 0.1559 | 0.0121 |
 | GPU soft-ST 20k | 0.9973 | 0.9968 | 5 | 0.050 | 1001.1 | 0.004917 | 52 | -0.000731 | 0.1384 | 0.0098 |
 | GPU soft 20k | 0.9997 | 0.9996 | 5 | 0.050 | 753.5 | 0.072637 | 8 | 0.065270 | 0.1516 | 0.0152 |
 | GPU Gumbel-ST 20k | 0.9970 | 0.9965 | 5 | 0.050 | 974.2 | 0.001331 | 51 | -0.000634 | 0.2711 | 0.0071 |
 
-Annealing improves some secondary metrics but not the main target. The soft
-forward run reaches the best reconstruction accuracy and a positive diagnostic
-margin, but it still saves only 5 hard codes. Soft-ST and Gumbel-ST keep high
+The matched hard 20k control removes the update-count confound: plain hard VQ
+does not close the reconstruction gap to the soft-forward run. It stays at
+token accuracy `0.9973`, while soft-forward reaches `0.9997`. Hard utilization
+also remains collapsed at 5-6 saved codes. Soft-forward is therefore a real
+reconstruction improvement in this token-AE setup, but it is not a hard-code
+collapse fix because the saved deterministic hard codebook still uses only 5
+codes.
+
+The remaining objective/capacity comparisons are already matched at 5k updates
+against the GPU hard 5k baseline. The 500-step table should be interpreted
+only as a fast-pilot matrix, not as a final long-training comparison.
+
+Soft-ST and Gumbel-ST also do not help the main target. They keep high
 assignment perplexity during training, but deterministic hard utilization at
 the end is still 5 active codes. This means the soft assignment distribution
 can remain broad without creating a stable diverse nearest-code partition.
@@ -715,6 +745,9 @@ is already near saturation:
 
 - GPU single-codebook 5k reaches token accuracy `0.9973` with saved hard util
   `5`.
+- GPU single-codebook hard 20k still reaches only `0.9973` with saved hard
+  util `6`, so the soft-forward `0.9997` result is not explained away by
+  training for more updates.
 - GPU residual-2 5k reaches `0.9980`, but still has collapsed per-stage hard
   usage `[5, 6]`.
 - GPU product-4 5k returns to `0.9973` and also remains collapsed.
@@ -722,11 +755,12 @@ is already near saturation:
   deterministic hard codes.
 
 That pattern means token reconstruction accuracy can improve without solving
-hard collapse, and solving hard collapse is not currently proven to be the
-limiting factor for reconstruction. The more plausible reason to fix collapse
-is not raw token-AE accuracy; it is to create a stable discrete adaptation
-interface for downstream world-model fitting, inverse fitting, and few-shot
-novel-game adaptation.
+hard collapse. The matched hard 20k control makes the soft-forward improvement
+real for reconstruction, but the soft-forward model still does not provide a
+usable deterministic hard-code interface. The more plausible reason to fix
+collapse is therefore not raw token-AE accuracy alone; it is to create a stable
+discrete adaptation interface for downstream world-model fitting, inverse
+fitting, and few-shot novel-game adaptation.
 
 To answer the accuracy question rigorously, the next useful evaluation is not
 another token-AE table alone. It should compare downstream transition metrics
