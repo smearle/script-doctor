@@ -157,6 +157,11 @@ Use `0.01` as the default for rollout-sensitive follow-up. Keep `0.05` as a
 diagnostic/checkpoint for training-loss or inverse-fit questions, not as the
 main rollout candidate.
 
+For the latest VQ hard-collapse diagnostics, slot AE/VAE/VQ-VAE comparison,
+GPU follow-up runs, failed assignment-objective attempts, and next model
+recommendation, see
+`nca_wm/VQ_COLLAPSE_DIAGNOSTICS_AND_NEXT_STEPS.md`.
+
 Short token-ablation and inverse-fit pilots after this change are the main
 reason to keep the branch:
 
@@ -199,8 +204,10 @@ Use these files as the authoritative docs:
 - `nca_wm/SUPPLEMENT_README.md` - paper/supplement reproduction notes.
 - `nca_wm/VQ_REGULARIZATION_PLAN.md` - current VQ usage-regularization
   experiment plan and runbook.
-- `nca_wm/LATENT_AE_COMPARISON.md` - deterministic slot AE vs Gaussian VAE
-  vs VQ-VAE token-reconstruction comparison.
+- `nca_wm/VQ_COLLAPSE_DIAGNOSTICS_AND_NEXT_STEPS.md` - handoff for the VQ
+  hard-collapse investigation, including slot AE/VAE/VQ-VAE baselines,
+  diagnostics, GPU follow-ups, failed assignment-objective attempts, and the
+  next recommended model direction.
 - `nca_wm/CLAUDE.md` - compact subproject guide.
 
 Be careful with these:

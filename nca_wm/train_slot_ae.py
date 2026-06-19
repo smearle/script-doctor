@@ -35,6 +35,7 @@ import jax.numpy as jnp
 import flax.linen as nn
 import numpy as np
 import optax
+from flax.core import unfreeze
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -82,6 +83,196 @@ def _load_encoder_params(ckpt_dir: str):
         f"No game_encoder subtree in {params_path}; "
         f"top-level keys: {list(enc_params.keys())}"
     )
+
+
+def _apply_slot_pre_norm(slots, mode: str, eps: float = 1e-6):
+    """Optional parameter-free normalization before vector quantization."""
+    if mode == "none":
+        return slots
+    if mode == "layernorm":
+        mean = jnp.mean(slots, axis=-1, keepdims=True)
+        var = jnp.mean(jnp.square(slots - mean), axis=-1, keepdims=True)
+        return (slots - mean) * jax.lax.rsqrt(var + eps)
+    if mode == "l2":
+        norm = jnp.linalg.norm(slots, axis=-1, keepdims=True)
+        return slots / jnp.maximum(norm, eps) * jnp.sqrt(float(slots.shape[-1]))
+    raise ValueError(f"Unknown slot_pre_norm={mode}")
+
+
+def _apply_slot_pre_norm_np(slots: np.ndarray, mode: str, eps: float = 1e-6):
+    """Numpy equivalent used for VQ codebook initialization diagnostics."""
+    if mode == "none":
+        return slots
+    if mode == "layernorm":
+        mean = slots.mean(axis=-1, keepdims=True)
+        var = np.square(slots - mean).mean(axis=-1, keepdims=True)
+        return (slots - mean) / np.sqrt(var + eps)
+    if mode == "l2":
+        norm = np.linalg.norm(slots, axis=-1, keepdims=True)
+        return slots / np.maximum(norm, eps) * np.sqrt(float(slots.shape[-1]))
+    raise ValueError(f"Unknown slot_pre_norm={mode}")
+
+
+def _sample_rows_with_fill(flat: np.ndarray, n_rows: int, rng: np.random.Generator):
+    """Sample data rows, then fill any extra codebook entries with jitter."""
+    n_data, d = flat.shape
+    if n_data == 0:
+        raise ValueError("Cannot initialize VQ codebook from an empty slot set")
+    n_base = min(n_rows, n_data)
+    base_idx = rng.choice(n_data, size=n_base, replace=False)
+    rows = flat[base_idx].astype(np.float32, copy=True)
+    if n_base < n_rows:
+        fill_idx = rng.choice(n_data, size=n_rows - n_base, replace=True)
+        scale = max(float(flat.std()), 1e-3) * 1e-3
+        filler = flat[fill_idx] + rng.normal(0.0, scale, size=(n_rows - n_base, d))
+        rows = np.concatenate([rows, filler.astype(np.float32)], axis=0)
+    rng.shuffle(rows, axis=0)
+    return rows
+
+
+def _kmeans_codebook(flat: np.ndarray, n_rows: int, rng: np.random.Generator,
+                     n_iter: int = 25):
+    """Small numpy k-means initializer; caps clusters at available slots."""
+    n_data, d = flat.shape
+    k = min(n_rows, n_data)
+    centers = _sample_rows_with_fill(flat, k, rng)
+    for _ in range(n_iter):
+        dists = (
+            np.square(flat).sum(axis=1, keepdims=True)
+            - 2.0 * flat @ centers.T
+            + np.square(centers).sum(axis=1, keepdims=True).T
+        )
+        labels = dists.argmin(axis=1)
+        new_centers = centers.copy()
+        for i in range(k):
+            assigned = flat[labels == i]
+            if len(assigned):
+                new_centers[i] = assigned.mean(axis=0)
+        if np.allclose(new_centers, centers, rtol=1e-5, atol=1e-6):
+            centers = new_centers
+            break
+        centers = new_centers
+    if k < n_rows:
+        fill_idx = rng.choice(n_data, size=n_rows - k, replace=True)
+        scale = max(float(flat.std()), 1e-3) * 1e-3
+        filler = flat[fill_idx] + rng.normal(0.0, scale, size=(n_rows - k, d))
+        centers = np.concatenate([centers, filler.astype(np.float32)], axis=0)
+    rng.shuffle(centers, axis=0)
+    return centers.astype(np.float32)
+
+
+def _vq_code_histogram_np(indices: np.ndarray, codebook_size: int):
+    counts = np.bincount(indices.reshape(-1), minlength=codebook_size)
+    return {str(int(i)): int(c) for i, c in enumerate(counts) if c > 0}
+
+
+def _vq_assignment_losses(latent_p, slots, margin_target: float,
+                          balance_target: int, balance_temp: float):
+    """Diagnostics/losses for fragile and imbalanced hard VQ assignments.
+
+    The balance term uses straight-through hard one-hot assignments: the
+    forward value is based on hard counts, while gradients flow through soft
+    distances. This keeps the diagnostic aligned with saved hard code use.
+    """
+    codebook = jnp.asarray(latent_p["params"]["codebook"])
+    flat = slots.reshape(-1, slots.shape[-1])
+    x_sq = jnp.sum(jnp.square(flat), axis=-1, keepdims=True)
+    c_sq = jnp.sum(jnp.square(codebook), axis=-1)[None, :]
+    dists = x_sq - 2.0 * (flat @ codebook.T) + c_sq
+    nearest_two = jnp.sort(dists, axis=-1)[:, :2]
+    margins = nearest_two[:, 1] - nearest_two[:, 0]
+    target = jnp.asarray(margin_target, dtype=slots.dtype)
+    margin_loss = jnp.mean(jax.nn.relu(target - margins))
+    mean_margin = jnp.mean(margins)
+
+    idx = jnp.argmin(dists, axis=-1)
+    hard_probs = jax.nn.one_hot(idx, codebook.shape[0], dtype=slots.dtype)
+    temp = jnp.maximum(jnp.asarray(balance_temp, dtype=slots.dtype), 1e-6)
+    soft_probs = jax.nn.softmax(-dists / temp, axis=-1)
+    st_probs = hard_probs + soft_probs - jax.lax.stop_gradient(soft_probs)
+    avg_probs = jnp.mean(st_probs, axis=0)
+    entropy = -jnp.sum(avg_probs * jnp.log(jnp.clip(avg_probs, 1e-9, 1.0)))
+    max_target = min(int(balance_target), int(flat.shape[0]), int(codebook.shape[0]))
+    target_entropy = jnp.log(jnp.asarray(max(max_target, 1), dtype=slots.dtype))
+    balance_loss = jax.nn.relu(target_entropy - entropy)
+    balance_perplexity = jnp.exp(entropy)
+    return margin_loss, mean_margin, balance_loss, balance_perplexity
+
+
+def _vq_quantize(latent_p, slots, codebook_size: int, entropy_temp: float,
+                 assign_mode: str, assign_temp, rng_key, deterministic: bool):
+    """VQ quantization with optional soft/straight-through soft assignment."""
+    codebook = jnp.asarray(latent_p["params"]["codebook"])
+    flat = slots.reshape(-1, slots.shape[-1])
+    x_sq = jnp.sum(jnp.square(flat), axis=-1, keepdims=True)
+    c_sq = jnp.sum(jnp.square(codebook), axis=-1)[None, :]
+    dists = x_sq - 2.0 * (flat @ codebook.T) + c_sq
+    idx_flat = jnp.argmin(dists, axis=-1)
+    hard_probs = jax.nn.one_hot(idx_flat, codebook_size, dtype=slots.dtype)
+
+    assign_temp = jnp.maximum(jnp.asarray(assign_temp, dtype=slots.dtype), 1e-6)
+    assign_logits = -dists
+    if assign_mode == "gumbel_st" and not deterministic:
+        assign_logits = assign_logits + jax.random.gumbel(
+            rng_key, assign_logits.shape, dtype=assign_logits.dtype
+        )
+    assign_soft = jax.nn.softmax(assign_logits / assign_temp, axis=-1)
+    if assign_mode == "hard":
+        assign = hard_probs
+    elif assign_mode == "soft":
+        assign = assign_soft
+    elif assign_mode in ("soft_st", "gumbel_st"):
+        if assign_mode == "gumbel_st" and not deterministic:
+            sample_idx = jnp.argmax(assign_logits, axis=-1)
+            sample_hard = jax.nn.one_hot(
+                sample_idx, codebook_size, dtype=slots.dtype
+            )
+        else:
+            sample_hard = hard_probs
+        assign = sample_hard + assign_soft - jax.lax.stop_gradient(assign_soft)
+    else:
+        raise ValueError(f"Unknown vq_assign_mode={assign_mode}")
+
+    quantized_flat = assign @ codebook
+    quantized = quantized_flat.reshape(slots.shape)
+    indices = idx_flat.reshape(slots.shape[:-1])
+
+    temp = jnp.maximum(jnp.asarray(entropy_temp, dtype=slots.dtype), 1e-6)
+    usage_soft = jax.nn.softmax(-dists / temp, axis=-1)
+    avg_probs = jnp.mean(usage_soft, axis=0)
+    entropy = -jnp.sum(avg_probs * jnp.log(jnp.clip(avg_probs, 1e-9, 1.0)))
+    usage_loss = jnp.log(float(codebook_size)) - entropy
+    soft_perplexity = jnp.exp(entropy)
+
+    assign_avg_probs = jnp.mean(assign_soft, axis=0)
+    assign_entropy = -jnp.sum(
+        assign_avg_probs * jnp.log(jnp.clip(assign_avg_probs, 1e-9, 1.0))
+    )
+    assign_perplexity = jnp.exp(assign_entropy)
+
+    codebook_loss = jnp.mean(
+        (jax.lax.stop_gradient(slots) - quantized) ** 2
+    )
+    commitment_loss = jnp.mean(
+        (slots - jax.lax.stop_gradient(quantized)) ** 2
+    )
+    if assign_mode == "soft":
+        slots_q = quantized
+    else:
+        slots_q = slots + jax.lax.stop_gradient(quantized - slots)
+    return (
+        slots_q, codebook_loss, commitment_loss, indices,
+        usage_loss, soft_perplexity, assign_perplexity,
+    )
+
+
+def _annealed_value(step: int, start: float, end: float, n_steps: int):
+    if n_steps <= 0:
+        return float(end)
+    frac = min(max(float(step) / float(n_steps), 0.0), 1.0)
+    if start > 0.0 and end > 0.0:
+        return float(np.exp(np.log(start) * (1.0 - frac) + np.log(end) * frac))
+    return float(start * (1.0 - frac) + end * frac)
 
 
 class SlotGaussianBottleneck(nn.Module):
@@ -160,6 +351,45 @@ def main():
     p.add_argument("--vq_loss_weight", type=float, default=1.0)
     p.add_argument("--vq_usage_loss_weight", type=float, default=0.0)
     p.add_argument("--vq_entropy_temp", type=float, default=1.0)
+    p.add_argument("--vq_margin_loss_weight", type=float, default=0.0,
+                   help="Optional hard-assignment margin loss weight. The loss "
+                        "penalizes nearest/second-nearest squared-distance "
+                        "gaps below --vq_margin_target.")
+    p.add_argument("--vq_margin_target", type=float, default=0.05,
+                   help="Target squared-distance gap for the optional VQ "
+                        "assignment margin loss.")
+    p.add_argument("--vq_hard_balance_loss_weight", type=float, default=0.0,
+                   help="Optional straight-through hard-assignment balance "
+                        "loss weight. Encourages hard assignment perplexity "
+                        "to reach --vq_hard_balance_target.")
+    p.add_argument("--vq_hard_balance_target", type=int, default=64,
+                   help="Target number of active hard VQ codes for the "
+                        "optional hard-assignment balance loss.")
+    p.add_argument("--vq_hard_balance_temp", type=float, default=1.0,
+                   help="Softmax temperature for gradients of the optional "
+                        "straight-through hard balance loss.")
+    p.add_argument("--vq_assign_mode", choices=["hard", "soft", "soft_st", "gumbel_st"],
+                   default="hard",
+                   help="Assignment used by VQ-VAE token AE. 'hard' preserves "
+                        "the original argmin VQ path; 'soft' uses annealed "
+                        "soft assignments; 'soft_st' uses hard forward values "
+                        "with soft assignment gradients; 'gumbel_st' samples "
+                        "hard codes during training with Gumbel-softmax "
+                        "gradients.")
+    p.add_argument("--vq_assign_temp_start", type=float, default=1.0,
+                   help="Initial temperature for soft/soft_st VQ assignment.")
+    p.add_argument("--vq_assign_temp_end", type=float, default=0.05,
+                   help="Final temperature for soft/soft_st VQ assignment.")
+    p.add_argument("--vq_assign_anneal_steps", type=int, default=5000,
+                   help="Number of updates over which to anneal the VQ "
+                        "assignment temperature.")
+    p.add_argument("--vq_init", choices=["random", "slot_sample", "kmeans"],
+                   default="random",
+                   help="VQ codebook initializer. Non-random modes initialize "
+                        "from the encoder slots after optional slot_pre_norm.")
+    p.add_argument("--slot_pre_norm", choices=["none", "layernorm", "l2"],
+                   default="none",
+                   help="Parameter-free normalization applied before VQ only.")
     # Optimization
     p.add_argument("--lr", type=float, default=3e-4)
     p.add_argument("--weight_decay", type=float, default=1e-4)
@@ -264,6 +494,33 @@ def main():
         except Exception as e:
             print(f"WARNING: encoder shape mismatch ({e}); using random init.")
 
+    if vq_bottleneck is not None and args.vq_init != "random":
+        init_slots = encoder.apply(
+            enc_params, jnp.array(tokens_np), jnp.array(mask_np),
+            deterministic=True,
+        )
+        init_slots_np = np.array(_apply_slot_pre_norm(
+            init_slots, args.slot_pre_norm
+        )).reshape(-1, args.d_slot)
+        np_rng = np.random.default_rng(args.seed)
+        if args.vq_init == "slot_sample":
+            codebook_np = _sample_rows_with_fill(
+                init_slots_np, args.vq_codebook_size, np_rng
+            )
+        elif args.vq_init == "kmeans":
+            codebook_np = _kmeans_codebook(
+                init_slots_np, args.vq_codebook_size, np_rng
+            )
+        else:
+            raise ValueError(f"Unknown vq_init={args.vq_init}")
+        latent_mut = unfreeze(latent_params)
+        latent_mut["params"]["codebook"] = jnp.asarray(codebook_np)
+        latent_params = latent_mut
+        print(
+            f"Initialized VQ codebook with {args.vq_init} from "
+            f"{init_slots_np.shape[0]} slots (slot_pre_norm={args.slot_pre_norm})"
+        )
+
     n_enc = sum(p.size for p in jax.tree_util.tree_leaves(enc_params))
     n_dec = sum(p.size for p in jax.tree_util.tree_leaves(dec_params))
     print(f"Encoder params: {n_enc:,}   Decoder params: {n_dec:,}")
@@ -280,41 +537,64 @@ def main():
     optimizer = optax.adamw(learning_rate=args.lr, weight_decay=args.weight_decay)
     opt_state = optimizer.init(trainable)
 
-    def encode_bottleneck(latent_p, slots, rng_key, deterministic):
+    def encode_bottleneck(latent_p, slots, rng_key, deterministic, assign_temp):
         z = jnp.asarray(0.0, dtype=slots.dtype)
         if args.latent_model == "ae":
             zero = jnp.asarray(0.0, dtype=slots.dtype)
-            return slots, (zero, zero, zero, zero, zero, zero)
+            return slots, (
+                zero, zero, zero, zero, zero, zero, zero, zero, zero, zero, zero,
+            )
         if args.latent_model == "vae":
             z_slots, kl_total, kl_per_dim, sigma_mean = vae_bottleneck.apply(
                 latent_p, slots, rng_key, deterministic=deterministic
             )
-            return z_slots, (kl_total, kl_per_dim, sigma_mean, z, z, z)
-        (z_slots, vq_cb, vq_commit, vq_indices,
-         vq_usage, vq_perp) = vq_bottleneck.apply(latent_p, slots)
+            return z_slots, (
+                kl_total, kl_per_dim, sigma_mean, z, z, z, z, z, z, z, z,
+            )
+        slots = _apply_slot_pre_norm(slots, args.slot_pre_norm)
+        if args.vq_assign_mode == "hard":
+            (z_slots, vq_cb, vq_commit, vq_indices,
+             vq_usage, vq_perp) = vq_bottleneck.apply(latent_p, slots)
+            vq_assign_perp = vq_perp
+        else:
+            (z_slots, vq_cb, vq_commit, vq_indices, vq_usage,
+             vq_perp, vq_assign_perp) = _vq_quantize(
+                latent_p, slots, args.vq_codebook_size, args.vq_entropy_temp,
+                args.vq_assign_mode, assign_temp, rng_key, deterministic,
+            )
         vq_util = jnp.count_nonzero(jnp.bincount(
             vq_indices.reshape(-1), length=args.vq_codebook_size,
         ))
-        return z_slots, (vq_cb, vq_commit, vq_usage, vq_perp, vq_util, z)
+        (vq_margin_loss, vq_mean_margin,
+         vq_balance_loss, vq_balance_perp) = _vq_assignment_losses(
+            latent_p, slots, args.vq_margin_target,
+            args.vq_hard_balance_target, args.vq_hard_balance_temp,
+        )
+        return z_slots, (
+            vq_cb, vq_commit, vq_usage, vq_perp, vq_util,
+            vq_margin_loss, vq_mean_margin, vq_balance_loss, vq_balance_perp,
+            jnp.asarray(assign_temp, dtype=slots.dtype), vq_assign_perp,
+        )
 
     def forward(enc_p, latent_p, dec_p, tokens, mask, rng_key,
-                deterministic: bool):
+                deterministic: bool, assign_temp):
         slots = encoder.apply(enc_p, tokens, mask, deterministic=True)
         latent_slots, latent_aux = encode_bottleneck(
-            latent_p, slots, rng_key, deterministic
+            latent_p, slots, rng_key, deterministic, assign_temp
         )
         inputs = shift_right(tokens, bos_id=0)
         logits = decoder.apply(dec_p, inputs, latent_slots, deterministic=True)
         loss, acc = decoder_loss(logits, tokens, mask)
         return loss, (acc, logits, latent_slots, latent_aux)
 
-    def loss_fn(trainable_params, frozen_params, tokens, mask, rng_key):
+    def loss_fn(trainable_params, frozen_params, tokens, mask, rng_key,
+                assign_temp):
         enc_p = trainable_params.get("enc", frozen_params.get("enc"))
         latent_p = trainable_params.get("latent")
         dec_p = trainable_params["dec"]
         recon_loss, (acc, _, _, latent_aux) = forward(
             enc_p, latent_p, dec_p, tokens, mask, rng_key,
-            deterministic=False,
+            deterministic=False, assign_temp=assign_temp,
         )
         total = recon_loss
         if args.latent_model == "vae":
@@ -324,14 +604,17 @@ def main():
                 latent_aux[0] + args.vq_commitment_weight * latent_aux[1]
             )
             total = total + args.vq_usage_loss_weight * latent_aux[2]
+            total = total + args.vq_margin_loss_weight * latent_aux[5]
+            total = total + args.vq_hard_balance_loss_weight * latent_aux[7]
         return total, (recon_loss, acc, latent_aux)
 
     grad_fn = jax.value_and_grad(loss_fn, has_aux=True)
 
     @jax.jit
-    def update(trainable_params, opt_state, frozen_params, tokens, mask, rng_key):
+    def update(trainable_params, opt_state, frozen_params, tokens, mask,
+               rng_key, assign_temp):
         (loss, aux), grads = grad_fn(
-            trainable_params, frozen_params, tokens, mask, rng_key
+            trainable_params, frozen_params, tokens, mask, rng_key, assign_temp
         )
         updates, new_opt = optimizer.update(grads, opt_state, trainable_params)
         new_params = optax.apply_updates(trainable_params, updates)
@@ -351,12 +634,23 @@ def main():
         "vq_usage": [],
         "vq_perp": [],
         "vq_util": [],
+        "vq_margin_loss": [],
+        "vq_mean_margin": [],
+        "vq_hard_balance_loss": [],
+        "vq_hard_balance_perp": [],
+        "vq_assign_temp": [],
+        "vq_assign_perp": [],
     }
     t0 = time.time()
     for step in range(args.n_updates):
         rng, step_rng = jax.random.split(rng)
+        assign_temp = _annealed_value(
+            step, args.vq_assign_temp_start, args.vq_assign_temp_end,
+            args.vq_assign_anneal_steps,
+        )
         trainable, opt_state, loss, aux = update(
-            trainable, opt_state, frozen, tokens_j, mask_j, step_rng
+            trainable, opt_state, frozen, tokens_j, mask_j, step_rng,
+            jnp.asarray(assign_temp, dtype=jnp.float32),
         )
         recon_loss, acc, latent_aux = aux
         history["loss"].append(float(loss))
@@ -372,6 +666,12 @@ def main():
             history["vq_usage"].append(float(latent_aux[2]))
             history["vq_perp"].append(float(latent_aux[3]))
             history["vq_util"].append(float(latent_aux[4]))
+            history["vq_margin_loss"].append(float(latent_aux[5]))
+            history["vq_mean_margin"].append(float(latent_aux[6]))
+            history["vq_hard_balance_loss"].append(float(latent_aux[7]))
+            history["vq_hard_balance_perp"].append(float(latent_aux[8]))
+            history["vq_assign_temp"].append(float(latent_aux[9]))
+            history["vq_assign_perp"].append(float(latent_aux[10]))
         if step % args.log_interval == 0 or step == args.n_updates - 1:
             extra = ""
             if args.latent_model == "vae":
@@ -381,7 +681,11 @@ def main():
             elif args.latent_model == "vqvae":
                 extra = (f"  vq_util={float(latent_aux[4]):.1f}"
                          f"  vq_perp={float(latent_aux[3]):.1f}"
-                         f"  vq_usage={float(latent_aux[2]):.2e}")
+                         f"  vq_usage={float(latent_aux[2]):.2e}"
+                         f"  vq_margin={float(latent_aux[6]):.2e}"
+                         f"  vq_bal_perp={float(latent_aux[8]):.1f}"
+                         f"  vq_assign_temp={float(latent_aux[9]):.3f}"
+                         f"  vq_assign_perp={float(latent_aux[10]):.1f}")
             print(f"step {step:6d}/{args.n_updates}  loss={float(loss):.4e}  "
                   f"recon={float(recon_loss):.4e}  acc={float(acc):.4f}"
                   f"{extra}  ({time.time()-t0:.0f}s)")
@@ -390,9 +694,13 @@ def main():
     latent_p = trainable.get("latent")
     dec_p = trainable["dec"]
     rng, eval_rng = jax.random.split(rng)
+    eval_assign_temp = _annealed_value(
+        args.n_updates, args.vq_assign_temp_start, args.vq_assign_temp_end,
+        args.vq_assign_anneal_steps,
+    )
     loss_final, (acc_final, _, _, latent_aux_final) = forward(
         enc_p, latent_p, dec_p, tokens_j, mask_j, eval_rng,
-        deterministic=True,
+        deterministic=True, assign_temp=jnp.asarray(eval_assign_temp, dtype=jnp.float32),
     )
     print(f"\nFinal deterministic recon: loss={float(loss_final):.4e}  "
           f"acc={float(acc_final):.4f}")
@@ -400,8 +708,20 @@ def main():
     # Per-game reconstruction
     raw_slots_all = encoder.apply(enc_p, tokens_j, mask_j, deterministic=True)
     slots_all, _ = encode_bottleneck(
-        latent_p, raw_slots_all, eval_rng, deterministic=True
+        latent_p, raw_slots_all, eval_rng, deterministic=True,
+        assign_temp=jnp.asarray(eval_assign_temp, dtype=jnp.float32),
     )
+    vq_indices_final = None
+    vq_hist_final = None
+    if args.latent_model == "vqvae":
+        norm_slots_all = _apply_slot_pre_norm(raw_slots_all, args.slot_pre_norm)
+        (_, _, _, vq_indices_final, _, _) = vq_bottleneck.apply(
+            latent_p, norm_slots_all
+        )
+        vq_indices_final_np = np.array(vq_indices_final)
+        vq_hist_final = _vq_code_histogram_np(
+            vq_indices_final_np, args.vq_codebook_size
+        )
     inputs = shift_right(tokens_j, bos_id=0)
     logits_all = decoder.apply(dec_p, inputs, slots_all, deterministic=True)
     preds = jnp.argmax(logits_all, axis=-1)
@@ -427,6 +747,7 @@ def main():
         "game_names": [info["name"] for info in game_infos],
         "raw_slots_all": np.array(raw_slots_all),
         "slots_all": np.array(slots_all),
+        "vq_indices": None if vq_indices_final is None else vq_indices_final_np,
         "tokens": tokens_np,
         "mask": mask_np,
         "final_acc": float(acc_final),
@@ -472,6 +793,13 @@ def main():
             "vq_usage_loss": float(latent_aux_final[2]),
             "vq_soft_perplexity": float(latent_aux_final[3]),
             "vq_hard_util": float(latent_aux_final[4]),
+            "vq_margin_loss": float(latent_aux_final[5]),
+            "vq_mean_margin": float(latent_aux_final[6]),
+            "vq_hard_balance_loss": float(latent_aux_final[7]),
+            "vq_hard_balance_perp": float(latent_aux_final[8]),
+            "vq_assign_temp": float(latent_aux_final[9]),
+            "vq_assign_perplexity": float(latent_aux_final[10]),
+            "vq_hard_histogram": vq_hist_final,
             "loss_with_vq": float(
                 loss_final
                 + args.vq_loss_weight * (
@@ -479,6 +807,8 @@ def main():
                     + args.vq_commitment_weight * latent_aux_final[1]
                 )
                 + args.vq_usage_loss_weight * latent_aux_final[2]
+                + args.vq_margin_loss_weight * latent_aux_final[5]
+                + args.vq_hard_balance_loss_weight * latent_aux_final[7]
             ),
         })
     with open(os.path.join(args.save_dir, "summary.json"), "w") as f:
