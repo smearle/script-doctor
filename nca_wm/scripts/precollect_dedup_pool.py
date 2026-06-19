@@ -49,13 +49,15 @@ def _build_pool(args) -> list[dict]:
     if heldout_path.is_file():
         heldout = {h["name"] for h in
                    json.loads(heldout_path.read_text())["heldout"]}
-    pool_path = REPO_ROOT / "data" / "dedup_candidates_v2.json"
+    _v3 = REPO_ROOT / "data" / "dedup_candidates_v3.json"
+    pool_path = (_v3 if _v3.is_file()
+                 else REPO_ROOT / "data" / "dedup_candidates_v2.json")
     raw = json.loads(pool_path.read_text())["candidates"]
     out = []
     for c in raw:
         if c["name"] in heldout:
             continue
-        if int(c.get("n_rules", -1)) < 1:
+        if int(c.get("n_rules", -1)) < 0:
             continue
         if int(c.get("max_level_area", 999)) > args.max_area:
             continue
@@ -65,14 +67,20 @@ def _build_pool(args) -> list[dict]:
 
 
 def _game_already_cached(game_name: str, n_levels: int, search_algo: str,
-                          n_search_steps: int, max_transitions: int) -> bool:
+                          n_search_steps: int, max_transitions: int,
+                          ancestor_closed: bool = False) -> bool:
     """All `n_levels` levels have at least one matching cache file?"""
     cache_dir_root = REPO_ROOT / "rollout_data" / game_name
     if not cache_dir_root.is_dir():
         return False
     for li in range(n_levels):
         # Cap_tag matches collect_unique_transitions naming.
-        cap_tag = "all" if max_transitions is None else str(int(max_transitions))
+        if max_transitions is None:
+            cap_tag = "all"
+        elif ancestor_closed:
+            cap_tag = f"ac{int(max_transitions)}"
+        else:
+            cap_tag = str(int(max_transitions))
         # Glob over timeout (any timeout cache for the same algo+iters+cap is OK)
         pattern = (f"{cache_dir_root}/level_{li}/{search_algo}_transitions_v*"
                    f"_{n_search_steps}_*_cap{cap_tag}.npz")
@@ -89,7 +97,8 @@ def _collect_one(game_meta: dict, args, repo_root: str) -> tuple[str, str]:
     process doesn't drag in JAX."""
     sys.path.insert(0, repo_root)
     os.environ.setdefault("JAX_PLATFORM_NAME", "cpu")
-    from nca_wm.train import collect_unique_transitions
+    from nca_wm.data_collection import (
+        collect_unique_transitions, TRANSITIONS_CACHE_CAP)
     from puzzlescript_cpp import CppPuzzleScriptBackend, CppPuzzleScriptEnv
     from puzzlescript_jax.utils import init_ps_lark_parser
 
@@ -113,7 +122,12 @@ def _collect_one(game_meta: dict, args, repo_root: str) -> tuple[str, str]:
     if n_levels < 1:
         return name, "FAIL_no_levels"
 
-    per_level_cap = max(1, args.max_transitions_per_game // max(1, n_levels))
+    # Ancestor-closed mode caps each level at TRANSITIONS_CACHE_CAP to match
+    # the training assembler (collect_multigame_dataset), so the ac caches
+    # written here are the exact files training will load.
+    ac = bool(getattr(args, "ancestor_closed", False))
+    per_level_cap = (TRANSITIONS_CACHE_CAP if ac
+                     else max(1, args.max_transitions_per_game // max(1, n_levels)))
     t0 = time.time()
     n_collected = 0
     for li in range(n_levels):
@@ -124,6 +138,7 @@ def _collect_one(game_meta: dict, args, repo_root: str) -> tuple[str, str]:
                 timeout_ms=args.search_timeout_ms,
                 search_algo=args.search_algo,
                 max_transitions=per_level_cap,
+                ancestor_closed=ac,
             )
             n_collected += len(data["actions"])
         except Exception as e:
@@ -150,9 +165,28 @@ def main() -> None:
     ap.add_argument("--skip_cached", action=argparse.BooleanOptionalAction, default=True,
                     help="If set, fast-skip games that already have all "
                          "level cache files. Default True.")
+    ap.add_argument("--ancestor_closed", action=argparse.BooleanOptionalAction,
+                    default=False,
+                    help="Write ancestor-closed (predecessor-chain-preserving) "
+                         "caches (cap tag 'ac{N}', cap=TRANSITIONS_CACHE_CAP per "
+                         "level) for the --history training pipeline. Uncapped "
+                         "games reuse existing uniform caches (no re-search).")
+    ap.add_argument("--n_shards", type=int, default=1,
+                    help="Split the (n_max-capped) game list into this many "
+                         "interleaved shards; run one process per shard for "
+                         "process-level parallelism (the JS-compile bridge does "
+                         "not work inside ProcessPoolExecutor workers, so use "
+                         "separate processes + --workers 1 instead).")
+    ap.add_argument("--shard_idx", type=int, default=0,
+                    help="Which shard (0..n_shards-1) this process handles.")
     args = ap.parse_args()
+    from nca_wm.data_collection import TRANSITIONS_CACHE_CAP
 
     games = _build_pool(args)
+    if args.n_shards > 1:
+        games = games[args.shard_idx::args.n_shards]
+        print(f"[shard {args.shard_idx}/{args.n_shards}] handling "
+              f"{len(games)} interleaved games")
     print(f"dedup_pool eligible (n_rules>=1, area<={args.max_area}, "
           f"not in Heldout-26): pre-collect order length = {len(games)}")
     print(f"  cap: {args.n_max}; will process up to {min(args.n_max, len(games))}")
@@ -161,10 +195,13 @@ def main() -> None:
 
     todo = []
     for g in games:
+        nlv = max(1, int(g.get("n_levels", 1)))
+        check_cap = (TRANSITIONS_CACHE_CAP if args.ancestor_closed
+                     else args.max_transitions_per_game // nlv)
         if args.skip_cached and _game_already_cached(
                 g["name"], int(g.get("n_levels", 1)),
                 args.search_algo, args.n_search_steps,
-                args.max_transitions_per_game // max(1, int(g.get("n_levels", 1)))):
+                check_cap, ancestor_closed=args.ancestor_closed):
             continue
         todo.append(g)
     n_skipped = len(games) - len(todo)

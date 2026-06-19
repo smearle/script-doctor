@@ -1809,6 +1809,14 @@ def build_parser() -> argparse.ArgumentParser:
                         "only, byte-identical to the no-history model. >0 "
                         "requires contiguous trajectory windows from the data "
                         "pipeline; intended for in-context dynamics inference.")
+    p.add_argument("--ancestor_closed_subsample",
+                   action=argparse.BooleanOptionalAction, default=None,
+                   help="Use ancestor-closed (predecessor-chain-preserving) "
+                        "subsampling instead of uniform when capping a game's "
+                        "transitions. Keeps history backward-chains intact "
+                        "(no holes). Default: on when --history>0, off "
+                        "otherwise. Force on for both arms of a history "
+                        "comparison so they train on identical target data.")
     p.add_argument("--cond_mask_prob", type=float, default=0.0,
                    help="Classifier-free-guidance-style rule dropout: per "
                         "training example, probability of withholding the rule "
@@ -2225,14 +2233,21 @@ def main():
             ranked: list[tuple[int, str]] = []
             n_filtered_random = 0
             if args.n_per_rule_universe == "dedup_pool":
-                dedup_path = _REPO_ROOT / "data" / "dedup_candidates_v2.json"
+                # Prefer the level-aware pool (v3) when present: it keeps
+                # mechanically-identical games with different levels as distinct
+                # entries (each supplies unique transitions). Falls back to the
+                # mechanics-only v2 pool otherwise.
+                v3 = _REPO_ROOT / "data" / "dedup_candidates_v3.json"
+                v2 = _REPO_ROOT / "data" / "dedup_candidates_v2.json"
+                dedup_path = v3 if v3.is_file() else v2
+                print(f"  [n_per_rule] universe pool: {dedup_path.name}")
                 pool = json.loads(dedup_path.read_text())["candidates"]
                 for c in pool:
                     name = c["name"]
                     if name in heldout_names:
                         continue
                     n_rules = int(c.get("n_rules", -1))
-                    if n_rules < 1:
+                    if n_rules < 0:
                         continue
                     area = int(c.get("max_level_area", 999))
                     if area > args.n_per_rule_max_area:
@@ -2257,7 +2272,7 @@ def main():
                     if m is None:
                         continue
                     n_rules = int(m.get("n_rules", -1))
-                    if n_rules < 1:
+                    if n_rules < 0:
                         continue
                     area = int(m.get("max_level_area", 999))
                     if area > args.n_per_rule_max_area:
@@ -2538,6 +2553,8 @@ def main():
                     encode_sprites=args.encode_sprites,
                     kernel_sep=getattr(args, "kernel_sep", False),
                     max_transitions_per_game=(args.max_transitions_per_game or None),
+                    history=args.history,
+                    ancestor_closed=args.ancestor_closed_subsample,
                 )
             else:
                 dataset, game_infos = collect_multigame_dataset(
@@ -2550,6 +2567,8 @@ def main():
                     max_transitions_per_game=(args.max_transitions_per_game or None),
                     train_levels=parsed_train_levels,
                     val_frac=args.val_frac,
+                    history=args.history,
+                    ancestor_closed=args.ancestor_closed_subsample,
                 )
             with open(infos_path, "wb") as f:
                 pickle.dump(game_infos, f)

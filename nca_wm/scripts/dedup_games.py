@@ -48,7 +48,7 @@ METADATA_JSON = os.path.join(REPO, "data", "games_metadata.json")
 GAME_TREES_DIR = os.path.join(REPO, "data", "game_trees")
 
 
-def passes_filter(meta: dict, name: str) -> bool:
+def passes_filter(meta: dict, name: str, min_rules: int = 1) -> bool:
     if not isinstance(meta, dict):
         return False
     n_rules = meta.get("n_rules")
@@ -58,23 +58,33 @@ def passes_filter(meta: dict, name: str) -> bool:
     if (n_rules is None or n_objects is None or n_levels is None
             or max_area is None):
         return False
+    # min_rules=0 admits games with only the default movement/collision
+    # dynamics (e.g. `blocks`): no explicit rules, but their walking/pushing
+    # transitions are still valid world-model training data. The n_levels>=1
+    # floor still excludes contentless template games.
     if name == "v2":
-        return (1 <= n_rules <= 20 and n_objects <= 20
+        return (min_rules <= n_rules <= 20 and n_objects <= 20
                 and 1 <= n_levels <= 30 and max_area <= 30)
     if name == "v1":
-        return (1 <= n_rules <= 8 and n_objects <= 12
+        return (min_rules <= n_rules <= 8 and n_objects <= 12
                 and 1 <= n_levels <= 20 and max_area <= 20)
     if name == "wide":
-        return (1 <= n_rules <= 30 and n_objects <= 30
+        return (min_rules <= n_rules <= 30 and n_objects <= 30
                 and 1 <= n_levels <= 50 and max_area <= 50)
     raise ValueError(name)
 
 
-def tokenize_stem(stem: str, gen_tree, tokenize_game):
+def tokenize_stem(stem: str, gen_tree, tokenize_game, level_aware: bool = False):
     """Return (token_hash_hex16, n_tokens, n_objects) or None on failure.
 
     Uses cached Lark tree at data/game_trees/{stem}.pkl, transforms via
     GenPSTree, tokenizes with encode_sprites=False.
+
+    level_aware: if True, the token stream also includes a name-invariant
+    fingerprint of the levels, so games with identical mechanics but
+    different level layouts hash differently (kept as distinct training
+    data). Mechanically-and-level identical games (incl. renamed copies)
+    still collapse.
     """
     pkl_path = os.path.join(GAME_TREES_DIR, stem + ".pkl")
     if not os.path.exists(pkl_path):
@@ -88,7 +98,8 @@ def tokenize_stem(stem: str, gen_tree, tokenize_game):
             canonical_ids = list(objs.keys())
         else:
             canonical_ids = [o.name for o in objs]
-        tokens = tokenize_game(ps_tree, canonical_ids, encode_sprites=False)
+        tokens = tokenize_game(ps_tree, canonical_ids, encode_sprites=False,
+                               include_levels=level_aware)
     except Exception:
         return None
     h = hashlib.sha256(
@@ -103,6 +114,14 @@ def main():
     ap.add_argument("--out", required=True)
     ap.add_argument("--limit", type=int, default=None,
                     help="Stop after this many files (debug).")
+    ap.add_argument("--min-rules", dest="min_rules", type=int, default=1,
+                    help="Minimum explicit rule count to keep a game. Set 0 to "
+                         "admit default-movement-only games (e.g. blocks).")
+    ap.add_argument("--level-aware", dest="level_aware", action="store_true",
+                    help="Include a name-invariant level fingerprint in the "
+                         "dedup hash, so mechanically-identical games with "
+                         "different levels are kept as distinct (each provides "
+                         "unique transitions for world-model training).")
     args = ap.parse_args()
 
     # Lazy imports so --help doesn't pay the JAX startup cost
@@ -158,7 +177,8 @@ def main():
         if meta is None:
             n_no_meta += 1
             continue
-        if args.filter != "none" and not passes_filter(meta, args.filter):
+        if args.filter != "none" and not passes_filter(meta, args.filter,
+                                                        min_rules=args.min_rules):
             n_filtered += 1
             continue
         candidates.append({
@@ -178,7 +198,8 @@ def main():
     for i, c in enumerate(candidates):
         if i % 500 == 0:
             print(f"  tokenizing {i}/{len(candidates)}...", file=sys.stderr)
-        res = tokenize_stem(c["name"], gen_tree, tokenize_game)
+        res = tokenize_stem(c["name"], gen_tree, tokenize_game,
+                            level_aware=args.level_aware)
         if res is None:
             pkl_path = os.path.join(GAME_TREES_DIR, c["name"] + ".pkl")
             if not os.path.exists(pkl_path):

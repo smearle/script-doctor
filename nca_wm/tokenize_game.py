@@ -260,6 +260,7 @@ def tokenize_game(
     tree: PSGameTree,
     canonical_ids: list[str],
     encode_sprites: bool = False,
+    include_levels: bool = False,
 ) -> list[int]:
     """Tokenize a PSGameTree into a sequence of integer token IDs.
 
@@ -510,6 +511,33 @@ def tokenize_game(
             tokens.append(V["WC_ON"])
             tokens.extend(_resolve_name(wc.trg_obj))
         tokens.append(V["SEP"])
+
+    # --- Levels (opt-in; used by level-aware dedup, NOT by game-spec
+    # conditioning) ---
+    # Each cell is resolved through the legend to canonical channel/group
+    # tokens, so the fingerprint is name-invariant (renamed-but-identical
+    # games still collapse) while genuinely different level layouts produce
+    # different token streams. Cell/row/level boundaries reuse existing
+    # separator tokens, so no vocab change is needed.
+    if include_levels:
+        import numpy as _np
+        levels = getattr(tree, "levels", None)
+        if levels is None:
+            levels = []
+        for level in levels:
+            arr = _np.asarray(level)
+            # Levels come as (1, H, W) (or (H, W)) single-char arrays; collapse
+            # to a 2-D (H, W) char grid (last two axes are the grid).
+            if arr.ndim >= 2:
+                grid = arr.reshape(arr.shape[-2], arr.shape[-1])
+            else:
+                continue
+            tokens.append(V["SEP"])          # level boundary
+            for r in range(grid.shape[0]):
+                for cc in range(grid.shape[1]):
+                    tokens.extend(_resolve_name(str(grid[r, cc])))
+                    tokens.append(V["CELL_SEP"])
+                tokens.append(V["PIXEL_ROW_SEP"])  # row boundary
 
     tokens.append(EOS_ID)
     return tokens

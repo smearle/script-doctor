@@ -154,6 +154,68 @@ def sample_backward_paths(pred_lists, target_rows, k, rng):
     return hist_rows, miss
 
 
+def ancestor_closed_subsample(states, next_states, budget, seed=0):
+    """Subsample a transition set to ~``budget`` rows that are
+    ancestor-closed: every kept transition has at least one kept predecessor
+    (a transition whose next_state equals this transition's state) all the way
+    back to a root (episode-start) state.
+
+    This replaces uniform subsampling for the --history pipeline: uniform
+    subsampling drops predecessors and breaks the backward chains the history
+    sampler walks, producing "holes" (masked history steps). Keeping whole
+    predecessor chains instead guarantees the per-game adjacency built later is
+    hole-free except at true episode-starts.
+
+    Strategy: randomly order rows, then greedily keep each row plus one
+    predecessor chain to its root until the budget is reached. Connected
+    ancestor-closed subtrees, sampled uniformly at their leaves — preserves a
+    representative spread of states (not depth-biased), unlike keeping a single
+    shallow subtree.
+
+    Args:
+        states, next_states: (N, C, H, W) arrays (hashed by row bytes).
+        budget: target number of kept rows (may overshoot slightly to finish
+            the final chain).
+        seed: RNG seed for the row ordering.
+
+    Returns:
+        int64 ndarray of kept row indices (sorted), length ~min(N, budget).
+    """
+    n = len(states)
+    if budget is None or n <= budget:
+        return np.arange(n, dtype=np.int64)
+    sflat = states.reshape(n, -1)
+    nflat = next_states.reshape(n, -1)
+    sb = [sflat[i].tobytes() for i in range(n)]
+    nb = [nflat[i].tobytes() for i in range(n)]
+    # First predecessor row per state (deterministic); -1 if none. No-op edges
+    # (next == state) are excluded so a state can't be its own predecessor.
+    by_next: dict[bytes, int] = {}
+    for j in range(n):
+        if nb[j] == sb[j]:
+            continue
+        by_next.setdefault(nb[j], j)
+    pred = np.fromiter((by_next.get(sb[i], -1) for i in range(n)),
+                       dtype=np.int64, count=n)
+    rng = np.random.RandomState(seed)
+    order = rng.permutation(n)
+    keep = np.zeros(n, dtype=bool)
+    n_keep = 0
+    for t in order:
+        if n_keep >= budget:
+            break
+        cur = int(t)
+        guard = 0
+        while cur != -1 and not keep[cur]:
+            keep[cur] = True
+            n_keep += 1
+            cur = int(pred[cur])
+            guard += 1
+            if guard > n:
+                break
+    return np.nonzero(keep)[0]
+
+
 def _rollout_history(hist_buf, k, chw):
     """Build (hist_states, hist_actions) jnp tensors from a rolling list of
     recent (state, action) pairs for autoregressive rollout.
@@ -345,6 +407,7 @@ def collect_unique_transitions(
     timeout_ms: int = -1,
     search_algo: str = "astar",
     max_transitions: int | None = None,
+    ancestor_closed: bool = False,
 ) -> dict:
     """Collect unique transitions via C++ state-space exploration.
 
@@ -372,7 +435,14 @@ def collect_unique_transitions(
     }[search_algo]
 
     # v5: bitpacked states (axis=-1) + per-level write-time transition cap.
-    cap_tag = "all" if max_transitions is None else str(int(max_transitions))
+    # Ancestor-closed capping gets a distinct "ac" tag so its caches never
+    # collide with the uniform-subsample caches the rest of the pipeline uses.
+    if max_transitions is None:
+        cap_tag = "all"
+    elif ancestor_closed:
+        cap_tag = f"ac{int(max_transitions)}"
+    else:
+        cap_tag = str(int(max_transitions))
     cache_dir = _cache_dir(game_name, level_i)
     cache_path = os.path.join(
         cache_dir,
@@ -397,6 +467,30 @@ def collect_unique_transitions(
                 print(f"  reusing cache from differing timeout: {os.path.basename(alt)}")
                 break
             cached = None
+    # Ancestor-closed reuse: if no ac-cache exists, a uniform cache that was
+    # NOT capped (size < max_transitions) is byte-identical to what ac would
+    # produce (no subsample happened), so reuse it instead of re-searching.
+    # Only genuinely-capped (large) games then need the expensive re-collection.
+    if cached is None and ancestor_closed and max_transitions is not None:
+        import glob
+        uni_pattern = os.path.join(
+            cache_dir,
+            f"{search_algo}_transitions_v{TRANSITIONS_CACHE_VERSION}_{max_iters}_*_cap*.npz",
+        )
+        for alt in sorted(glob.glob(uni_pattern)):
+            if "_capac" in os.path.basename(alt):
+                continue  # skip other ac-caches
+            alt_d = _load_npz_dict(alt)
+            if alt_d is None:
+                continue
+            n_alt = len(alt_d["states"])
+            # Strict <: a uniform cache with exactly max_transitions rows may
+            # itself have been capped (holey), so it can't be assumed identical.
+            if 0 < n_alt < int(max_transitions):
+                cached = alt_d
+                print(f"  ancestor-closed: reusing uncapped uniform cache "
+                      f"({n_alt:,} < cap; identical) {os.path.basename(alt)}")
+                break
     if cached is not None and len(cached["states"]) > 0:
         n = len(cached["states"])
         print(f"  {search_algo} transitions: {n:,} from cache")
@@ -451,13 +545,23 @@ def collect_unique_transitions(
     # actions / wons) so we never materialize the full multihot tensor for
     # transitions we'll throw away.
     if max_transitions is not None and n_trans > max_transitions:
-        rng = np.random.RandomState(42 + level_i)
-        keep = np.sort(rng.choice(n_trans, size=int(max_transitions), replace=False))
+        if ancestor_closed:
+            # Keep whole predecessor chains so history backward-walks never hit
+            # a subsample hole. Operates on the raw engine state words (hashed
+            # by row bytes) before multihot conversion.
+            keep = np.sort(ancestor_closed_subsample(
+                all_states, all_next, int(max_transitions), seed=42 + level_i))
+            print(f"    ancestor-closed capping {n_trans:,} → {len(keep):,} "
+                  f"at write-time")
+        else:
+            rng = np.random.RandomState(42 + level_i)
+            keep = np.sort(rng.choice(n_trans, size=int(max_transitions),
+                                      replace=False))
+            print(f"    capping {n_trans:,} → {len(keep):,} at write-time")
         keep_states = all_states[keep]
         keep_next = all_next[keep]
         keep_actions = all_actions[keep]
         keep_wons = all_wons[keep]
-        print(f"    capping {n_trans:,} → {len(keep):,} at write-time")
         n_trans = len(keep)
     else:
         keep_states = all_states
@@ -515,10 +619,11 @@ def _dataset_cache_key(
     max_transitions_per_game: int | None = None,
     train_levels: list[int] | None = None,
     val_frac: float = 0.0,
+    ancestor_closed: bool = False,
 ) -> str:
     """Deterministic hash of all args that affect dataset contents."""
     import hashlib
-    blob = json.dumps({
+    key = {
         "format_version": DATASET_FORMAT_VERSION,
         "games": sorted(game_names),
         "level": level_i,
@@ -529,7 +634,12 @@ def _dataset_cache_key(
         "encode_sprites": encode_sprites,
         "max_transitions_per_game": max_transitions_per_game,
         "val_frac": round(float(val_frac), 6),
-    }, sort_keys=True)
+    }
+    # Only perturb the key when ancestor-closed is on, so existing (uniform)
+    # caches stay valid for the default path.
+    if ancestor_closed:
+        key["ancestor_closed"] = True
+    blob = json.dumps(key, sort_keys=True)
     return hashlib.sha256(blob.encode()).hexdigest()[:16]
 
 
@@ -622,6 +732,8 @@ def collect_multigame_dataset(
     max_transitions_per_game: int | None = None,
     train_levels: list[int] | None = None,
     val_frac: float = 0.0,
+    history: int = 0,
+    ancestor_closed: bool | None = None,
 ) -> tuple[dict, list[dict]]:
     """Collect padded transitions from multiple games via search-based unique-transition exploration.
 
@@ -639,6 +751,10 @@ def collect_multigame_dataset(
         dataset: merged dict with per-game packed states + ``per_game_val_idx``.
         game_infos: list of per-game metadata dicts.
     """
+    # Ancestor-closed subsampling preserves history backward-chains (no holes);
+    # default on when history>0. It changes the kept transition set, so it must
+    # participate in the cache key.
+    use_ac = ancestor_closed if ancestor_closed is not None else (history > 0)
     # Check for cached merged dataset (shared across experiments)
     cache_hash = _dataset_cache_key(
         game_names, level_i, search_algo,
@@ -647,6 +763,7 @@ def collect_multigame_dataset(
         max_transitions_per_game=max_transitions_per_game,
         train_levels=train_levels,
         val_frac=val_frac,
+        ancestor_closed=use_ac,
     )
     merged_cache_dir = os.path.join(ROLLOUT_CACHE_DIR, "_merged")
     # Auto-evict pre-versioning legacy files and explicit older versions.
@@ -808,6 +925,7 @@ def collect_multigame_dataset(
                 timeout_ms=search_timeout_ms,
                 search_algo=search_algo,
                 max_transitions=per_level_cap,
+                ancestor_closed=use_ac,
             )
             # Refine per-game max shape from actual collected data. Transition
             # collector may report more objects than the env-probe did.
@@ -836,22 +954,48 @@ def collect_multigame_dataset(
                         is not None else total_explored)
         rng = np.random.RandomState(42 + game_id)
 
-        # Hold out val_frac of EACH level's full explored set (a uniform
-        # per-level fraction — representative of the true distribution and never
-        # consuming a whole small level), then water-fill the per-game TRAIN
-        # budget over what remains so complex levels draw more than an equal share.
-        train_pool_idx, val_pick = [], []
-        for i in range(len(raw_levels)):
-            ci = level_counts[i]
-            if ci == 0:
-                train_pool_idx.append(np.empty(0, np.int64))
-                val_pick.append(np.empty(0, np.int64))
-                continue
-            vi = max(0, min(ci - 1, int(round(ci * val_frac)))) if val_frac > 0 else 0
-            perm = rng.permutation(ci)
-            val_pick.append(perm[:vi])
-            train_pool_idx.append(perm[vi:])
-        train_alloc = _water_fill([len(p) for p in train_pool_idx], train_budget)
+        # Per-level selection. Two modes:
+        #  - uniform (default): hold out val_frac of each level's full explored
+        #    set, then water-fill the per-game TRAIN budget over the remainder.
+        #  - ancestor-closed (history): water-fill a per-level keep budget over
+        #    the FULL level counts, select an ancestor-closed set of that size
+        #    (whole predecessor chains, so history backward-walks never hit a
+        #    subsample hole), then carve val from within the kept set.
+        if use_ac:
+            keep_alloc = _water_fill(level_counts, train_budget)
+            train_pool_idx = [None] * len(raw_levels)
+            val_pick = [None] * len(raw_levels)
+            for i, ld in enumerate(raw_levels):
+                if level_counts[i] == 0:
+                    train_pool_idx[i] = np.empty(0, np.int64)
+                    val_pick[i] = np.empty(0, np.int64)
+                    continue
+                kept = ancestor_closed_subsample(
+                    ld["states"], ld["next_states"], int(keep_alloc[i]),
+                    seed=42 + game_id + i)
+                permk = rng.permutation(len(kept))
+                vi = (max(0, min(len(kept) - 1, int(round(len(kept) * val_frac))))
+                      if val_frac > 0 else 0)
+                val_pick[i] = kept[permk[:vi]]
+                train_pool_idx[i] = kept[permk[vi:]]
+            train_alloc = np.array([len(p) for p in train_pool_idx], dtype=np.int64)
+        else:
+            # Hold out val_frac of EACH level's full explored set (a uniform
+            # per-level fraction — representative of the true distribution and
+            # never consuming a whole small level), then water-fill the per-game
+            # TRAIN budget over what remains so complex levels draw more.
+            train_pool_idx, val_pick = [], []
+            for i in range(len(raw_levels)):
+                ci = level_counts[i]
+                if ci == 0:
+                    train_pool_idx.append(np.empty(0, np.int64))
+                    val_pick.append(np.empty(0, np.int64))
+                    continue
+                vi = max(0, min(ci - 1, int(round(ci * val_frac)))) if val_frac > 0 else 0
+                perm = rng.permutation(ci)
+                val_pick.append(perm[:vi])
+                train_pool_idx.append(perm[vi:])
+            train_alloc = _water_fill([len(p) for p in train_pool_idx], train_budget)
 
         val_positions, offset = [], 0
         for i, ld in enumerate(raw_levels):
@@ -1063,6 +1207,8 @@ def collect_multigame_dataset_synthetic(
     selection: str = "fitness",
     nslc_k: int = 5,
     nslc_archive_size: int = 500,
+    history: int = 0,
+    ancestor_closed: bool | None = None,
 ) -> tuple[dict, list[dict]]:
     """Synthetic-level variant of collect_multigame_dataset.
 
@@ -1208,10 +1354,20 @@ def collect_multigame_dataset_synthetic(
                   f"→ ({max_C}, {max_H}, {max_W}); {len(states):,} total transitions")
 
         n_trans = len(states)
+        use_ac = ancestor_closed if ancestor_closed is not None else (history > 0)
         if (max_transitions_per_game is not None
                 and n_trans > max_transitions_per_game):
-            rng = np.random.RandomState(42 + game_id)
-            idx = rng.choice(n_trans, size=max_transitions_per_game, replace=False)
+            if use_ac:
+                # Ancestor-closed subsample so history backward-chains stay
+                # intact (no holes). Keeps whole predecessor chains rather than
+                # uniformly-dropped transitions.
+                idx = ancestor_closed_subsample(
+                    states, next_states, max_transitions_per_game,
+                    seed=42 + game_id)
+            else:
+                rng = np.random.RandomState(42 + game_id)
+                idx = rng.choice(n_trans, size=max_transitions_per_game,
+                                 replace=False)
             states = states[idx]; actions = actions[idx]
             next_states = next_states[idx]; wons = wons[idx]
             transition_shapes = transition_shapes[idx]
