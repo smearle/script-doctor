@@ -8,7 +8,9 @@ import os
 import pickle
 import sys
 
-os.environ.setdefault("JAX_PLATFORMS", "cpu")
+os.environ["JAX_PLATFORMS"] = "cpu"
+os.environ["JAX_PLATFORM_NAME"] = "cpu"
+os.environ["CUDA_VISIBLE_DEVICES"] = ""
 
 import jax
 import jax.numpy as jnp

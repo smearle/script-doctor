@@ -29,16 +29,21 @@ Most important results:
 - Direct margin loss, straight-through hard-balance loss, soft-to-hard
   annealing, and Gumbel-ST annealing all failed to create a robust diverse
   hard nearest-code partition.
+- Residual VQ and product VQ also failed to produce a robust diverse saved
+  hard codebook on GPU. Residual VQ slightly improved reconstruction and joint
+  hard utilization, but still used only `[5, 6]` active codes across its two
+  stages.
 
 Recommended next model direction:
 
 ```text
-residual/product quantization first, then explicit discrete code assignment search
+explicit discrete code assignment search
 ```
 
 Do not spend more time only increasing soft usage entropy, hard-balance weight,
-or assignment annealing duration unless there is a new diagnostic explaining
-why those objectives should overcome the saved hard-code collapse.
+assignment annealing duration, or simple residual/product capacity unless
+there is a new diagnostic explaining why those objectives should overcome the
+saved hard-code collapse.
 
 Key artifacts:
 
@@ -51,6 +56,9 @@ Key artifacts:
   `nca_wm/refine-logs/vq_soft_anneal_kmeans_layernorm_w0p01_20k_t2_to_0p05_s0`,
   and
   `nca_wm/refine-logs/vq_gumbelst_anneal_kmeans_layernorm_w0p01_20k_t2_to_0p05_s0`.
+- Residual/product roots:
+  `nca_wm/refine-logs/vq_residual2_kmeans_layernorm_w0p01_5k_s0_gpu` and
+  `nca_wm/refine-logs/vq_product4_kmeans_layernorm_w0p01_5k_s0_gpu`.
 
 ## Reproduction Guide
 
@@ -220,6 +228,48 @@ After every reproduced training run, regenerate diagnostics and latent
 ablations with the `RUN=...` commands above before comparing against the
 tables in this document.
 
+Reproduce the GPU residual and product VQ pilots:
+
+```bash
+CUDA_VISIBLE_DEVICES=0 JAX_PLATFORMS=cuda \
+.venv/bin/python -m nca_wm.train_slot_ae \
+    --init_from nca_wm/logs/vq_usage_ablation_scaling_14_s0/w0p01 \
+    --freeze_encoder \
+    --latent_model vqvae \
+    --vq_quantizer residual \
+    --vq_num_quantizers 2 \
+    --vq_residual_codebook_size 256 \
+    --vq_init kmeans \
+    --slot_pre_norm layernorm \
+    --vq_usage_loss_weight 0.01 \
+    --n_updates 5000 \
+    --log_interval 500 \
+    --dec_d_model 64 \
+    --dec_n_layers 2 \
+    --dec_n_heads 4 \
+    --seed 0 \
+    --save_dir nca_wm/refine-logs/vq_residual2_kmeans_layernorm_w0p01_5k_s0_gpu
+
+CUDA_VISIBLE_DEVICES=1 JAX_PLATFORMS=cuda \
+.venv/bin/python -m nca_wm.train_slot_ae \
+    --init_from nca_wm/logs/vq_usage_ablation_scaling_14_s0/w0p01 \
+    --freeze_encoder \
+    --latent_model vqvae \
+    --vq_quantizer product \
+    --vq_num_quantizers 4 \
+    --vq_residual_codebook_size 256 \
+    --vq_init kmeans \
+    --slot_pre_norm layernorm \
+    --vq_usage_loss_weight 0.01 \
+    --n_updates 5000 \
+    --log_interval 500 \
+    --dec_d_model 64 \
+    --dec_n_layers 2 \
+    --dec_n_heads 4 \
+    --seed 0 \
+    --save_dir nca_wm/refine-logs/vq_product4_kmeans_layernorm_w0p01_5k_s0_gpu
+```
+
 ## Background: What The Current VQ Model Is
 
 The world-model `--vq_codebook` path is VQ-VAE-style, not a full probabilistic
@@ -302,10 +352,15 @@ Implemented VQ-VAE training knobs:
 - `--vq_assign_mode {hard,soft,soft_st,gumbel_st}` and the
   `--vq_assign_temp_*` flags add soft-to-hard and Gumbel-ST assignment
   annealing.
+- `--vq_quantizer {single,residual,product}`, `--vq_num_quantizers`, and
+  `--vq_residual_codebook_size` add residual VQ and fixed-subspace product VQ
+  for the slot-token AE diagnostic path.
 - VQ-VAE summaries now include the final hard assignment histogram, and saved
   checkpoints include the final hard VQ indices for reproducible diagnostics.
   Margin and balance runs also record `vq_margin_loss`, `vq_mean_margin`,
   `vq_hard_balance_loss`, and `vq_hard_balance_perp`.
+  Residual/product runs also record per-stage hard utilization, per-stage
+  margins, and joint code-tuple histograms.
 
 ## 2k-Step Result
 
@@ -580,75 +635,134 @@ assignment perplexity during training, but deterministic hard utilization at
 the end is still 5 active codes. This means the soft assignment distribution
 can remain broad without creating a stable diverse nearest-code partition.
 
+### Residual And Product VQ Capacity
+
+The next follow-up changed the discrete representation capacity rather than
+only the assignment loss:
+
+- `residual`: two 256-entry codebooks applied sequentially to slot residuals.
+- `product`: four 256-entry codebooks applied to fixed 16-dimensional slot
+  subspaces and concatenated back to 64 dimensions.
+
+Output roots:
+
+```text
+nca_wm/refine-logs/vq_residual2_kmeans_layernorm_w0p01_5k_s0_gpu
+nca_wm/refine-logs/vq_product4_kmeans_layernorm_w0p01_5k_s0_gpu
+```
+
+| run | token acc | mean game acc | saved hard util | stage hard utils | soft perp | train margin | diagnostic hard util | recomputed util | diagnostic margin | zero drop | shuffle-game drop |
+|---|---:|---:|---:|---|---:|---:|---:|---:|---:|---:|---:|
+| GPU single 5k | 0.9973 | 0.9967 | 5 | - | 1021.7 | 0.003181 | 5 | 41 | -0.001040 | 0.3658 | 0.0081 |
+| GPU residual-2 5k | 0.9980 | 0.9974 | 11 | `[5, 6]` | 256.0 | 0.005487 | 11 | 44 | -0.000006 | 0.2839 | 0.0115 |
+| GPU product-4 5k | 0.9973 | 0.9968 | 2 | `[5, 5, 5, 5]` | 255.4 | 0.005637 | 5 | 5 | -0.000077 | 0.3014 | 0.0104 |
+
+Residual VQ improves token reconstruction slightly and raises the saved joint
+code-tuple count from 5 to 11, but the per-stage hard usage remains collapsed:
+the two stages use only 5 and 6 active codes. The diagnostic margin is still
+near zero, and CPU recomputation still finds many alternative tuples. This is
+not enough to justify a seed sweep.
+
+Product VQ does not help. Each subspace uses only about 5 active codes, and
+the saved joint tuple count is still tiny. The final summary and diagnostic
+even disagree on the exact joint count (`2` vs `5`), which is another symptom
+of fragile near-tie assignments rather than a stable partition.
+
+The representation-capacity variants therefore do not solve the hard-collapse
+failure. The next change should stop relying on smooth nearest-code training.
+
+## State Coverage Question
+
+The current world-model training states do not come from an RL gameplay agent
+trajectory. They come from C++ engine search over each authored level:
+
+- `collect_unique_transitions` initializes the engine with `load_level`, then
+  calls either `collect_transitions_astar` or `collect_transitions_bfs`.
+- The C++ collectors start from `engine.backupLevel()` after the level is
+  loaded, expand a frontier of changed successor states, and record every
+  `(state, action, next_state)` triple for each expanded state, including
+  no-op identity transitions.
+- `collect_multigame_dataset` repeats that per game and per selected level,
+  then samples minibatches from the cached `per_game_states`,
+  `per_game_actions`, and `per_game_next_states` arrays.
+
+So the training distribution is broader than "states visited by one gameplay
+agent", but it is not the full set of arbitrary valid PuzzleScript states. It
+is the set of states reachable from authored level starts under the search
+budget, timeout, cache cap, and any per-game train budget. If a valid state is
+not reachable from a level start, or if it is reachable but not explored before
+the budget/cap, the current training loop does not train on it.
+
+For the long-term goal of replacing the engine, this matters. A true engine
+replacement should be correct for any valid state in the game state space, not
+only the reachable subset sampled by A*/BFS from authored starts. The current
+setup is closer to a learned transition model over a search-collected reachable
+state distribution. To test engine replacement quality, add an explicit
+out-of-distribution state eval:
+
+- random-walk starts that are held out from training;
+- synthetic valid states generated from the game object's type constraints;
+- full BFS reachable-state evaluation for small levels where exhaustive
+  coverage is tractable;
+- per-state membership checks distinguishing train-cache states, reachable
+  but held-out states, and generated valid-but-unseen states.
+
+## Accuracy Question
+
+The current evidence does not show that fixing hard-code collapse will
+materially improve token reconstruction accuracy by itself. The token decoder
+is already near saturation:
+
+- GPU single-codebook 5k reaches token accuracy `0.9973` with saved hard util
+  `5`.
+- GPU residual-2 5k reaches `0.9980`, but still has collapsed per-stage hard
+  usage `[5, 6]`.
+- GPU product-4 5k returns to `0.9973` and also remains collapsed.
+- The earlier soft-forward 20k run reached `0.9997` while still saving only 5
+  deterministic hard codes.
+
+That pattern means token reconstruction accuracy can improve without solving
+hard collapse, and solving hard collapse is not currently proven to be the
+limiting factor for reconstruction. The more plausible reason to fix collapse
+is not raw token-AE accuracy; it is to create a stable discrete adaptation
+interface for downstream world-model fitting, inverse fitting, and few-shot
+novel-game adaptation.
+
+To answer the accuracy question rigorously, the next useful evaluation is not
+another token-AE table alone. It should compare downstream transition metrics
+after using the same encoder source with different latent treatments:
+
+- teacher-forced transition error and changed-cell error;
+- autoregressive rollout error;
+- token/slot ablation sensitivity;
+- few-shot inverse-fit performance on held-out games;
+- reachable-state versus held-out/random-valid-state accuracy.
+
+If a non-collapsed discrete latent improves those downstream metrics while
+token reconstruction changes little, that still counts as a success for this
+research direction.
+
 ## Next Steps
 
-The next experiment should change the discrete representation, not just the
-assignment loss. The current evidence says the single-codebook nearest-neighbor
-bottleneck forms backend-sensitive near-ties and saves only a few hard codes on
-GPU, even when soft assignment statistics look healthy.
-
-### 1. Add Residual VQ First
-
-Implement a residual/product-capacity path in `train_slot_ae.py`, starting with
-residual quantization because it is the smallest change from the current
-single-codebook VQ code path.
-
-Recommended first knobs:
-
-```text
---vq_quantizer single|residual
---vq_num_quantizers 2
---vq_residual_codebook_size 256
-```
-
-First pilot:
-
-- frozen encoder from `nca_wm/logs/vq_usage_ablation_scaling_14_s0/w0p01`;
-- `--vq_init kmeans`;
-- `--slot_pre_norm layernorm`;
-- `--vq_usage_loss_weight 0.01`;
-- `--vq_quantizer residual --vq_num_quantizers 2`;
-- 5k GPU run, seed `0`, decoder `64/2/4`.
-
-Compare against the GPU 5k single-codebook baseline:
-
-- token accuracy and mean per-game accuracy;
-- saved hard utilization per residual stage;
-- joint code-pair utilization;
-- residual norm after each stage;
-- diagnostic nearest/second-nearest margins per stage;
-- zero-slot drop and shuffled-across-games drop.
-
-Promote to seeds `0,1,2` only if the 5k seed-0 run improves saved hard usage
-without losing token accuracy or latent-ablation sensitivity.
-
-### 2. Try Product Quantization If Residual VQ Is Ambiguous
-
-If residual VQ still collapses, split the 64-dimensional slot into fixed
-subspaces and quantize each subspace independently.
-
-Recommended pilot:
-
-```text
---vq_quantizer product
---vq_num_quantizers 4
---vq_residual_codebook_size 256
-```
-
-Track per-subspace hard usage and the joint tuple usage. Product quantization
-is useful only if multiple subspaces carry nontrivial assignment diversity; a
-single active subspace with three collapsed subspaces is not a meaningful fix.
-
-### 3. Use Explicit Assignment Search Last
-
-If residual and product quantization both fail, stop treating the bottleneck as
-a smooth nearest-code training problem. The next fallback is alternating
-discrete assignment search:
+Stop treating the bottleneck as a smooth nearest-code training problem. The
+next experiment should be alternating discrete assignment search:
 
 - freeze the encoder slots;
 - assign per-game/per-slot discrete codes by nearest code or local search;
 - train the token decoder and codebook against those fixed assignments;
 - periodically refresh assignments.
 
-This is more intrusive than residual or product quantization, so it should
-come after testing whether extra discrete capacity solves the near-tie failure.
+Acceptance criteria for that next experiment:
+
+- saved hard utilization should be high by construction and remain stable
+  after saving/reloading;
+- token accuracy should stay at least comparable to the GPU single-codebook
+  baseline;
+- zero-slot and shuffled-across-games ablations should still show that the
+  decoder relies on the latent;
+- assignments should not change under CPU diagnostic recomputation unless the
+  search objective explicitly allows reassignment.
+
+If explicit assignment search also fails to improve latent usefulness, stop
+optimizing token-AE reconstruction and move the VQ question back into the
+downstream world-model/adaptation objective.
