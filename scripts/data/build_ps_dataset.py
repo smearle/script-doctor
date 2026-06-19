@@ -110,21 +110,24 @@ def content_hash(text: str) -> str:
     return hashlib.sha1(norm.encode("utf-8", "replace")).hexdigest()
 
 
-# Canonical PuzzleScript section headers; >=3 present marks a file as PS source.
-# This is marker-independent, so it catches games regardless of which editor/share
-# comment (classic, https, PuzzleScript Next, ...) they were published with.
-PS_SECTIONS = ("OBJECTS", "LEGEND", "SOUNDS", "COLLISIONLAYERS", "RULES", "WINCONDITIONS", "LEVELS")
 # Extensions that are never PuzzleScript source; skip fetching these during enumeration.
 NON_PS_EXTS = {"py", "js", "ts", "json", "md", "html", "htm", "css", "c", "cpp", "h", "hpp",
                "java", "rb", "go", "rs", "sh", "yml", "yaml", "xml", "csv", "png", "jpg",
                "jpeg", "gif", "svg", "pdf", "zip", "ipynb", "lock", "toml", "cfg", "ini"}
 
 
+PS_SECTION_HEADER_RE = re.compile(
+    r"(?im)^\s*(OBJECTS|LEGEND|SOUNDS|COLLISIONLAYERS|RULES|WINCONDITIONS|LEVELS)\s*$")
+
+
 def is_ps_source(text: str) -> bool:
+    """True if >=3 distinct PuzzleScript section names appear as standalone header
+    lines. Anchoring to whole lines rejects engine/minified JS that merely mentions
+    OBJECTS/LEGEND/RULES inside code (the itch extractor's failure mode)."""
     if not text:
         return False
-    up = text.upper()
-    return sum(1 for s in PS_SECTIONS if s in up) >= 3
+    found = {m.group(1).upper() for m in PS_SECTION_HEADER_RE.finditer(text)}
+    return len(found) >= 3
 
 
 # Title-named corpora to reconcile against the gist-keyed master, by method tag.
@@ -455,14 +458,40 @@ def _iter_sources(staging: Path):
                 yield gid.lower(), Path(sp), "search", rec.get("author")
 
 
+def _load_owner_map(staging: Path) -> dict:
+    """gist_id -> GitHub owner login, from the staging/trawl scrape manifests
+    (Lavelle filenames carry the owner inline; these sources record it separately)."""
+    out = {}
+    manifests = [staging / "pedro" / "_manifest.jsonl",
+                 staging / "users" / "_manifest.jsonl",
+                 staging / "wayback" / "_manifest.jsonl",
+                 TRAWL_DIR / "manifest.jsonl"]
+    for mf in manifests:
+        if not mf.is_file():
+            continue
+        for line in mf.read_text().splitlines():
+            if not line.strip():
+                continue
+            try:
+                r = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            gid, o = r.get("gist_id"), r.get("owner")
+            if gid and o and str(o).lower() not in ("anonymous", "invalid-email-address"):
+                out[gid.lower()] = o
+    return out
+
+
 def cmd_consolidate(master: Path, staging: Path):
     master.mkdir(parents=True, exist_ok=True)
+    owner_map = _load_owner_map(staging)
     records = {}      # gist_id -> dict
     misfits = []
     for gid, path, tag, owner in _iter_sources(staging):
         if gid is None:
             misfits.append(str(path))
             continue
+        owner = owner or owner_map.get(gid)  # backfill from scrape manifests
         rec = records.get(gid)
         if rec is None:
             try:
@@ -604,7 +633,8 @@ def cmd_reconcile(master: Path, add: bool):
                 buckets[res] += 1
 
                 kept_as = None
-                if add and res in ("variant_same_title", "variant_new_title") and h not in added_hash:
+                if (add and res in ("variant_same_title", "variant_new_title")
+                        and h not in added_hash and is_ps_source(text)):
                     trusted = itch_gist.get(fn) if tag == "itch" else None
                     if trusted and not (master / f"{trusted}.txt").exists():
                         dest = master / f"{trusted}.txt"
