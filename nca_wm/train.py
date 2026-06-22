@@ -649,6 +649,10 @@ def train(
     obj_permute_aug: bool = False,
     history: int = 0,
     cond_mask_prob: float = 0.0,
+    priority_sampling: bool = False,
+    priority_alpha: float = 1.0,
+    priority_uniform_mix: float = 0.25,
+    priority_mode: str = "loss",
 ):
     """Train (or resume training) the NCA world model.
 
@@ -673,6 +677,10 @@ def train(
         (ConditionalNCAWorldModel, RuleAttnNCAWorldModel,
          CNNWorldModel, UNetWorldModel, ViTWorldModel),
     )
+    if priority_sampling and conditional:
+        raise NotImplementedError(
+            "--priority_sampling is implemented for the unconditional model "
+            "only (v1). It needs a token-free per-sample BCE forward.")
 
     # Single-game callers (`collect_unique_transitions` directly into train())
     # hand us a flat dict with packed `states` / `next_states`, plus the
@@ -1206,6 +1214,29 @@ def train(
     if gif_enabled and start_step == 0:
         _maybe_render_gif(start_step)
 
+    # --- Priority (error-seeking) sampling state ----------------------------
+    # prio[g][j] = last-seen per-sample BCE for transition j of game g. A large
+    # sentinel marks not-yet-seen transitions so every transition is drawn at
+    # least once before priority weighting kicks in. Only train-split indices
+    # are ever updated (the sampler draws from train-only bucket pools).
+    PRIO_SENTINEL = 1e3
+    prio = None
+    if priority_sampling:
+        prio = {g: np.full(len(per_game_actions_np[g]), PRIO_SENTINEL,
+                            dtype=np.float64)
+                for g in range(len(per_game_actions_np))}
+
+        @jax.jit
+        def _per_sample_bce(params, states, action_onehots, next_states,
+                             spatial_mask, hist_states, hist_actions):
+            logits, _wl, _sl = model.apply(
+                params, states, action_onehots,
+                hist_states=hist_states, hist_actions=hist_actions)
+            bce = optax.sigmoid_binary_cross_entropy(logits, next_states)
+            num = (bce * spatial_mask).sum(axis=(1, 2, 3))
+            den = jnp.maximum(spatial_mask.sum(axis=(1, 2, 3)), 1.0)
+            return num / den
+
     def _sample_bucket_batch():
         """Pick a bucket, sample its per-bucket batch_size rows from games
         in that bucket, and populate the bucket's preallocated buffers.
@@ -1239,7 +1270,35 @@ def train(
             if len(rows) == 0:
                 continue
             idx_pool = game_indices_b[g]
-            local_idx[rows] = idx_pool[np_rng.randint(0, len(idx_pool), size=len(rows))]
+            if prio is None:
+                local_idx[rows] = idx_pool[
+                    np_rng.randint(0, len(idx_pool), size=len(rows))]
+            else:
+                # Error-seeking draw: a uniform fraction for coverage, the rest
+                # in proportion to current per-sample loss^alpha. Unseen
+                # transitions carry PRIO_SENTINEL so they dominate until drawn.
+                n_pick = len(rows)
+                n_unif = int(round(priority_uniform_mix * n_pick))
+                n_prio = n_pick - n_unif
+                picks = np.empty(n_pick, dtype=np.int32)
+                if n_prio > 0:
+                    raw = prio[g][idx_pool]
+                    if priority_mode == "coverage":
+                        # error-blind: unseen (sentinel) dominate, all seen equal
+                        wts = np.where(raw >= PRIO_SENTINEL, PRIO_SENTINEL, 1.0)
+                    else:
+                        wts = raw ** priority_alpha
+                    wsum = wts.sum()
+                    if np.isfinite(wsum) and wsum > 0:
+                        p = wts / wsum
+                        picks[:n_prio] = np_rng.choice(idx_pool, size=n_prio, p=p)
+                    else:
+                        picks[:n_prio] = idx_pool[
+                            np_rng.randint(0, len(idx_pool), size=n_prio)]
+                if n_unif > 0:
+                    picks[n_prio:] = idx_pool[
+                        np_rng.randint(0, len(idx_pool), size=n_unif)]
+                local_idx[rows] = picks
         game_ids = np.array([games_b[k] for k in game_choice], dtype=np.int32)
 
         # Fill bucket-shaped buffers. per_game_states[g] is bitpacked along W
@@ -1268,10 +1327,12 @@ def train(
             pairs = [(int(game_ids[i]), int(local_idx[i])) for i in range(bs_b)]
             hist_s, hist_a = _gather_history(
                 pairs, s_buf.shape[1], s_buf.shape[2], s_buf.shape[3], np_rng)
-        return b_idx, s_buf, ns_buf, mask_buf, a_buf, w_buf, g_buf, hist_s, hist_a
+        return (b_idx, s_buf, ns_buf, mask_buf, a_buf, w_buf, g_buf, hist_s,
+                hist_a, local_idx.copy())
 
     for step in range(n_updates):
-        b_idx, _bs, _bns, _bm, _ba, _bw, _bg, _bhs, _bha = _sample_bucket_batch()
+        (b_idx, _bs, _bns, _bm, _ba, _bw, _bg, _bhs, _bha,
+         _blocal) = _sample_bucket_batch()
         game_ids_batch = _bg
 
         # Object-permutation augmentation: sample one π per batch, apply to
@@ -1377,6 +1438,19 @@ def train(
                 params, opt_state, s, a_oh, ns, w, spatial_mask,
                 hist_states=hist_states_j, hist_actions=hist_actions_j,
             )
+        # Refresh priorities for the transitions just trained on. In loss mode,
+        # store the updated per-sample BCE (one extra masked forward). In the
+        # coverage control, just mark them seen (no forward needed).
+        if prio is not None:
+            if priority_mode == "coverage":
+                for i in range(len(_blocal)):
+                    prio[int(game_ids_batch[i])][int(_blocal[i])] = 0.0
+            else:
+                psl = np.asarray(_per_sample_bce(
+                    params, s, a_oh, ns, spatial_mask,
+                    hist_states_j, hist_actions_j))
+                for i in range(len(_blocal)):
+                    prio[int(game_ids_batch[i])][int(_blocal[i])] = psl[i]
         losses.append(float(loss))
         accs.append(float(acc))
         change_accs.append(float(change_acc))
@@ -2036,6 +2110,24 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--val_eval_interval", type=int, default=0,
                    help="Steps between held-out test-set evals; 0 (default) ties "
                         "the cadence to --log_interval.")
+    # Active-learning style sampling: bias within-game batch draws toward
+    # transitions the model currently predicts worst (last-seen per-sample BCE),
+    # mixed with a uniform fraction to retain coverage. Unconditional only.
+    p.add_argument("--priority_sampling", action="store_true",
+                   help="Sample training transitions in proportion to their "
+                        "current per-sample BCE^alpha instead of uniformly "
+                        "(error-seeking curriculum). Unconditional model only.")
+    p.add_argument("--priority_alpha", type=float, default=1.0,
+                   help="Exponent on per-sample loss for priority weights "
+                        "(1.0 = proportional). Only used with --priority_sampling.")
+    p.add_argument("--priority_mode", choices=["loss", "coverage"], default="loss",
+                   help="loss = error-seeking (draw high per-sample BCE). "
+                        "coverage = error-blind control: prefer never-seen "
+                        "transitions, all seen equal (isolates coverage effect "
+                        "from error-targeting). Only used with --priority_sampling.")
+    p.add_argument("--priority_uniform_mix", type=float, default=0.25,
+                   help="Fraction of each batch drawn uniformly (vs by priority) "
+                        "to guard against collapse/forgetting on the hard tail.")
     # Architectural pool flags (see _pool_features). Independent booleans;
     # any combination may be active.
     p.add_argument("--axis_pool", action=argparse.BooleanOptionalAction, default=True,
@@ -2569,6 +2661,8 @@ def main():
                     val_frac=args.val_frac,
                     history=args.history,
                     ancestor_closed=args.ancestor_closed_subsample,
+                    max_grid_dim=(args.n_per_rule_max_area
+                                  if args.n_per_rule_games is not None else None),
                 )
             with open(infos_path, "wb") as f:
                 pickle.dump(game_infos, f)
@@ -2729,6 +2823,10 @@ def main():
                 obj_permute_aug=args.obj_permute_aug,
                 history=args.history,
                 cond_mask_prob=args.cond_mask_prob,
+                priority_sampling=args.priority_sampling,
+                priority_alpha=args.priority_alpha,
+                priority_uniform_mix=args.priority_uniform_mix,
+                priority_mode=args.priority_mode,
             )
             # (curves saved inside train() with per-game arrays)
             os.makedirs(save_dir, exist_ok=True)
@@ -2878,6 +2976,10 @@ def main():
             obj_permute_aug=args.obj_permute_aug,
             history=args.history,
             cond_mask_prob=args.cond_mask_prob,
+            priority_sampling=args.priority_sampling,
+            priority_alpha=args.priority_alpha,
+            priority_uniform_mix=args.priority_uniform_mix,
+            priority_mode=args.priority_mode,
         )
 
         # Save training curves

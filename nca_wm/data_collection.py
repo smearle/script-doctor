@@ -630,6 +630,7 @@ def _dataset_cache_key(
     train_levels: list[int] | None = None,
     val_frac: float = 0.0,
     ancestor_closed: bool = False,
+    max_grid_dim: int | None = None,
 ) -> str:
     """Deterministic hash of all args that affect dataset contents."""
     import hashlib
@@ -649,6 +650,8 @@ def _dataset_cache_key(
     # caches stay valid for the default path.
     if ancestor_closed:
         key["ancestor_closed"] = True
+    if max_grid_dim is not None:
+        key["max_grid_dim"] = int(max_grid_dim)
     blob = json.dumps(key, sort_keys=True)
     return hashlib.sha256(blob.encode()).hexdigest()[:16]
 
@@ -744,6 +747,7 @@ def collect_multigame_dataset(
     val_frac: float = 0.0,
     history: int = 0,
     ancestor_closed: bool | None = None,
+    max_grid_dim: int | None = None,
 ) -> tuple[dict, list[dict]]:
     """Collect padded transitions from multiple games via search-based unique-transition exploration.
 
@@ -774,6 +778,7 @@ def collect_multigame_dataset(
         train_levels=train_levels,
         val_frac=val_frac,
         ancestor_closed=use_ac,
+        max_grid_dim=max_grid_dim,
     )
     merged_cache_dir = os.path.join(ROLLOUT_CACHE_DIR, "_merged")
     # Auto-evict pre-versioning legacy files and explicit older versions.
@@ -959,6 +964,16 @@ def collect_multigame_dataset(
         total_explored = int(sum(level_counts))
         if total_explored == 0:
             print(f"  {name}: skipping — no transitions across any level")
+            continue
+        # Enforce the grid-size cap on the ACTUAL collected dims (the
+        # games_metadata `max_level_area` field is unreliable — it records max
+        # level *height*, not area, so wide grids slip past the upstream
+        # selection filter). max_grid_dim caps the longest axis (H and W),
+        # bounding NCA compute + bucket padding. Skip oversized games here so
+        # the cap is actually honored regardless of stale metadata.
+        if max_grid_dim is not None and max(g_H, g_W) > max_grid_dim:
+            print(f"  {name}: skipping — grid {g_H}x{g_W} exceeds "
+                  f"max_grid_dim={max_grid_dim}")
             continue
         train_budget = (max_transitions_per_game if max_transitions_per_game
                         is not None else total_explored)
