@@ -477,19 +477,29 @@ def collect_unique_transitions(
             cache_dir,
             f"{search_algo}_transitions_v{TRANSITIONS_CACHE_VERSION}_{max_iters}_*_cap*.npz",
         )
+        import re as _re
         for alt in sorted(glob.glob(uni_pattern)):
-            if "_capac" in os.path.basename(alt):
+            base = os.path.basename(alt)
+            if "_capac" in base:
                 continue  # skip other ac-caches
             alt_d = _load_npz_dict(alt)
             if alt_d is None:
                 continue
             n_alt = len(alt_d["states"])
-            # Strict <: a uniform cache with exactly max_transitions rows may
-            # itself have been capped (holey), so it can't be assumed identical.
-            if 0 < n_alt < int(max_transitions):
+            # Only reuse if the alt cache holds the COMPLETE explored set (not
+            # itself capped), so it is byte-identical to what ac would produce.
+            # Parse the alt's own cap from its filename: "capall" = uncapped;
+            # "cap{N}" = capped at N, complete iff it found fewer than N rows.
+            m = _re.search(r"_cap(all|\d+)\.npz$", base)
+            if m is None:
+                continue
+            alt_cap = m.group(1)
+            complete = (alt_cap == "all") or (n_alt < int(alt_cap))
+            # ...and it must fit the current cap (else ac would subsample it).
+            if complete and 0 < n_alt <= int(max_transitions):
                 cached = alt_d
-                print(f"  ancestor-closed: reusing uncapped uniform cache "
-                      f"({n_alt:,} < cap; identical) {os.path.basename(alt)}")
+                print(f"  ancestor-closed: reusing complete uniform cache "
+                      f"({n_alt:,} rows, cap={alt_cap}) {base}")
                 break
     if cached is not None and len(cached["states"]) > 0:
         n = len(cached["states"])
