@@ -340,6 +340,88 @@ def cmd_authors(master: Path, staging: Path, limit):
 
 
 # --------------------------------------------------------------------------- #
+# forum: recover gist ids from the PuzzleScript Google Group threads
+# --------------------------------------------------------------------------- #
+_GIST_LINK_RE = re.compile(
+    r"(?:play\.html\?p=|editor\.html\?hack=|gist\.github\.com/[A-Za-z0-9_.-]+/)"
+    r"([0-9a-fA-F]{20,32}|[0-9]+)")
+_UA = ("Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 "
+       "(KHTML, like Gecko) Chrome/120 Safari/537.36")
+
+
+def _forum_topic_ids() -> set:
+    """Topic ids for groups.google.com/g/puzzlescript: recent ones embedded in the
+    live group page + historical ones from the Wayback Machine. (Exhaustive history
+    would need Google's batchexecute RPC; this captures recent + archived.)"""
+    tids = set()
+    try:
+        gp = requests.get("https://groups.google.com/g/puzzlescript",
+                          headers={"User-Agent": _UA}, timeout=60)
+        tids |= set(re.findall(r"/g/puzzlescript/c/([A-Za-z0-9_-]{8,})", gp.text))
+    except requests.RequestException:
+        pass
+    for pat in ("groups.google.com/g/puzzlescript", "groups.google.com/d/topic/puzzlescript"):
+        try:
+            d = requests.get("https://web.archive.org/cdx/search/cdx",
+                params={"url": pat, "matchType": "prefix", "collapse": "urlkey",
+                        "fl": "original", "output": "json", "limit": "50000"}, timeout=180).json()
+        except (requests.RequestException, ValueError):
+            continue
+        for row in d[1:]:
+            for m in re.finditer(r"puzzlescript/(?:c|topic)/([A-Za-z0-9_-]{8,})", row[0]):
+                tids.add(m.group(1))
+    return tids
+
+
+def cmd_forum(master: Path, staging: Path):
+    token = get_token()
+    out = staging / "forum"
+    out.mkdir(parents=True, exist_ok=True)
+    manifest = out / "_manifest.jsonl"
+    have = {p.stem for p in master.glob("*.txt")} | {p.stem for p in out.glob("*.txt")}
+
+    tids = _forum_topic_ids()
+    print(f"{len(tids)} forum topics to scan")
+    found = {}  # gist_id -> topic_id
+    for i, tid in enumerate(sorted(tids)):
+        try:
+            r = requests.get(f"https://groups.google.com/g/puzzlescript/c/{tid}",
+                             headers={"User-Agent": _UA}, timeout=60)
+        except requests.RequestException:
+            continue
+        if r.ok:
+            for m in _GIST_LINK_RE.finditer(r.text):
+                found.setdefault(m.group(1).lower(), tid)
+        time.sleep(0.3)
+        if (i + 1) % 25 == 0:
+            print(f"  scanned {i + 1}/{len(tids)} topics, {len(found)} gist ids so far")
+    new = [g for g in found if g not in have]
+    print(f"{len(found)} distinct gist ids linked in forum, {len(new)} not already held")
+
+    headers = {"Accept": "application/vnd.github+json", "Authorization": f"Bearer {token}",
+               "X-GitHub-Api-Version": "2022-11-28"}
+    saved = 0
+    for gid in new:
+        try:
+            r = requests.get(f"https://api.github.com/gists/{gid}", headers=headers, timeout=60)
+        except requests.RequestException:
+            continue
+        if not r.ok:
+            continue
+        script = next((f["content"] for f in (r.json().get("files") or {}).values()
+                       if f.get("content") and is_ps_source(f["content"])), None)
+        if not script:
+            continue
+        (out / f"{gid}.txt").write_text(script, encoding="utf-8")
+        saved += 1
+        with manifest.open("a", encoding="utf-8") as mf:
+            mf.write(json.dumps({"gist_id": gid, "owner": (r.json().get("owner") or {}).get("login"),
+                                 "title": parse_title(script), "forum_topic": found[gid],
+                                 "source": "forum"}) + "\n")
+    print(f"forum done: {saved} new PS gists -> {out}")
+
+
+# --------------------------------------------------------------------------- #
 # wayback: recover gist ids from archived puzzlescript.net play/editor links
 # --------------------------------------------------------------------------- #
 def cdx_gist_ids() -> dict:
@@ -440,7 +522,8 @@ def _iter_sources(staging: Path):
             yield (gid, p, "lavelle", owner) if gid else (None, p, "lavelle", owner)
     # trawl + pedro staging: filename is already the gist id
     for d, tag in ((TRAWL_DIR, "trawl"), (staging / "pedro", "pedro"),
-                   (staging / "users", "users"), (staging / "wayback", "wayback")):
+                   (staging / "users", "users"), (staging / "wayback", "wayback"),
+                   (staging / "forum", "forum")):
         if d.is_dir():
             for p in d.glob("*.txt"):
                 gid = p.stem.lower()
@@ -690,6 +773,7 @@ if __name__ == "__main__":
     au.add_argument("--limit", type=int, default=None, help="Only scan the first N authors (for testing)")
 
     sub.add_parser("wayback", help="Recover gist ids from archived puzzlescript.net play links (Internet Archive)")
+    sub.add_parser("forum", help="Recover gist ids linked in the PuzzleScript Google Group threads")
 
     rc = sub.add_parser("reconcile", help="Provenance/collision report for title-named corpora")
     rc.add_argument("--add", action="store_true", help="Fold novel games into MASTER (Title_by_author.txt)")
@@ -701,6 +785,8 @@ if __name__ == "__main__":
         cmd_authors(args.master, args.staging, args.limit)
     elif args.cmd == "wayback":
         cmd_wayback(args.master, args.staging)
+    elif args.cmd == "forum":
+        cmd_forum(args.master, args.staging)
     elif args.cmd == "consolidate":
         cmd_consolidate(args.master, args.staging)
     elif args.cmd == "reconcile":
