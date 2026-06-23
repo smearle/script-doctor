@@ -238,6 +238,17 @@ User: "press blue button then place -> WM places purple not blue." Investigated:
    action (press-then-IMMEDIATELY-place = 0 steps since) is the WORST case (0.35). So balancing data fixes the bias
    but not the lag; a clean fix needs a faster-latching mode mechanism (gating / explicit mode channel), still open.
 
+### CAPSTONE: one conditional recurrent model matches the per-game specialists (2026-06-23)
+Finished the dangling cond_rec_v1 thread — evaluated the SINGLE conditional recurrent NCA (9 games, FiLM+rule-slot
+cross-attn, pool=meanmax) per-game vs the per-game recurrent models. Teacher-forced changed-cell / autoregressive:
+mario 0.996/0.971, sand 0.996/0.945, pacman 0.989/0.925, charge 0.999/0.995, disease 0.982/0.877, gravity 0.985/0.826,
+waterplug 0.993/0.898 -> **one model MATCHES the per-game specialists on 7/9** (tf_ch >=0.98), spanning Markovian +
+history + recurrent classes in ONE program-conditioned model. Holdouts: paint 0.690 (currColor 5-cycle, partial),
+snake 0.000 = BROKEN DATA (snake_seq has 0 changed cells across all transitions — degenerate collection, exclude/recollect).
+=> the per-game hidden-state taxonomy largely COLLAPSES into a single conditional model; per-game specialization is
+not required for these 8 games. AR fidelity drops more (disease 0.88, gravity 0.83, waterplug 0.90) = the hard part.
+Eval script /tmp/eval_cond_rec.py. NEXT (if pursued): fix paint conditioning, recollect snake, add held-out games.
+
 ### Breadth sweep: 10 new environments baselined (2026-06-23)
 AutumnBench has 59 programs; expanded from ~22 modeled. Collected (agent, 400 rollouts) + single-frame trained on 210:
 SOLVED Markovian (>=0.99, noop 1.0): ice 0.999, nim 1.000, bottle 1.000, balloon 1.000, twiddle 1.000 (3x3),
