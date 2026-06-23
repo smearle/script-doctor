@@ -56,7 +56,7 @@ echo "host=$(hostname) node=$(command -v node) cell=$KIND hist=$HIST seed=$SEED"
   --max_transitions_per_game 20000 --n_nca_steps 8 --batch_size 32 --n_updates 50000 \
   --lr 3e-4 --lr_schedule cosine --lr_min 1e-7 --grad_clip 0.5 \
   --input_skip --axis_pool --axis_cummax --global_pool \
-  --val_frac "$VAL_FRAC" --val_eval_interval 10000 --per_game_eval_interval 1000000 \
+  --val_frac "$VAL_FRAC" --val_eval_interval 10000 \
   --ancestor_closed_subsample --search_timeout_ms 60000 \
   --patience 0 --ckpt_interval 2000 --log_interval 250 \
   $COND_FLAG --history "$HIST" --seed "$SEED" --save_dir "$SAVE" "${EXTRA[@]}"
