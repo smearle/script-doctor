@@ -37,10 +37,8 @@ def load_model(name):
     reset_all()
 
 
-def reset_all():
-    # NB: seed 0 is degenerate in the Autumn interpreter (randomPositions -> (0,0),
-    # e.g. ants food always top-left); use a fresh non-zero seed each reset.
-    S["seed_ctr"] = S.get("seed_ctr", 0) + 1
+def _init_episode():
+    # (Re)build engine + WM at the CURRENT seed (no increment), frame 0.
     env = infer.make_engine(S["cfg"]["game"], seed=S["seed_ctr"])
     S["env"] = env
     if S["cfg"].get("multihot"):
@@ -51,6 +49,41 @@ def reset_all():
     S["wm_prev"] = S["wm_board"].copy()
     S["h"] = None  # recurrent hidden state (re-init at episode start)
     S["frame"] = 0
+
+
+def reset_all():
+    # NB: seed 0 is degenerate in the Autumn interpreter (randomPositions -> (0,0),
+    # e.g. ants food always top-left); use a fresh non-zero seed each reset.
+    S["seed_ctr"] = S.get("seed_ctr", 0) + 1
+    S["actlog"] = []           # actions since reset — replayed for undo
+    _init_episode()
+
+
+def apply_step(act, smp=False):
+    infer.engine_apply(S["env"], act)
+    if S["cfg"].get("multihot"):
+        nxt, S["h"] = infer.object_step(S["model"], S["cfg"], S["wm_board"], act, S["wm_prev"], S["h"], sample=smp)
+    elif S["cfg"].get("recurrent"):
+        nxt, S["h"] = infer.recurrent_step(S["model"], S["cfg"], S["wm_board"], act, S["h"])
+    else:
+        nxt = infer.wm_step(S["model"], S["cfg"], S["wm_board"], act, prev_board=S["wm_prev"], sample=smp)
+    S["wm_prev"], S["wm_board"] = S["wm_board"], nxt
+    S["frame"] += 1
+
+
+def undo():
+    # Undo by replay: rebuild engine + WM from the same seed and replay all but the
+    # last action. The Autumn interpreter is deterministic given (seed, actions) —
+    # verified to reproduce exactly, including seeded-random spawns (ants food etc).
+    # Cheap: only the small action log is stored (no hidden-state tensors). The one
+    # caveat is "sample WM" mode, which re-samples on replay (engine stays exact).
+    if not S.get("actlog"):
+        return
+    log = S["actlog"][:-1]
+    _init_episode()
+    for a in log:
+        apply_step(a)
+    S["actlog"] = log
 
 
 def snapshot():
@@ -95,6 +128,8 @@ def action():
     a = request.args.get("a", "noop")
     if a == "reset":
         reset_all(); return jsonify(snapshot())
+    if a == "undo":
+        undo(); return jsonify(snapshot())
     if a == "resync":
         S["wm_board"] = infer.engine_board(S["env"], S["pal_index"])
         S["wm_prev"] = S["wm_board"].copy()
@@ -106,15 +141,8 @@ def action():
     else:
         act = ("noop",)
     smp = request.args.get("sample") == "1"
-    infer.engine_apply(S["env"], act)
-    if S["cfg"].get("multihot"):
-        nxt, S["h"] = infer.object_step(S["model"], S["cfg"], S["wm_board"], act, S["wm_prev"], S["h"], sample=smp)
-    elif S["cfg"].get("recurrent"):
-        nxt, S["h"] = infer.recurrent_step(S["model"], S["cfg"], S["wm_board"], act, S["h"])
-    else:
-        nxt = infer.wm_step(S["model"], S["cfg"], S["wm_board"], act, prev_board=S["wm_prev"], sample=smp)
-    S["wm_prev"], S["wm_board"] = S["wm_board"], nxt
-    S["frame"] += 1
+    S.setdefault("actlog", []).append(act)
+    apply_step(act, smp)
     return jsonify(snapshot())
 
 
@@ -137,6 +165,7 @@ HTML = """<!doctype html><html><head><meta charset=utf-8><title>Engine vs World 
    <option value=150>fast</option>
  </select>
  <button onclick="act('reset')">reset (R)</button>
+ <button onclick="act('undo')">&#8630; undo (Z)</button>
  <button onclick="act('resync')">resync WM&rarr;engine</button>
  <button onclick="act('noop')">step once</button>
  <label title="sample the WM from its predicted distribution instead of taking the most-likely state (shows random outcomes like food spawns)">
@@ -149,7 +178,7 @@ HTML = """<!doctype html><html><head><meta charset=utf-8><title>Engine vs World 
 </div>
 <p>Auto-plays (ticks noop in the background). <span class=key>click</span>=click(x,y) &nbsp;
    <span class=key>arrows</span>=move &nbsp; <span class=key>space</span>=play/pause &nbsp;
-   <span class=key>R</span>=reset</p>
+   <span class=key>Z</span>=undo &nbsp; <span class=key>R</span>=reset</p>
 <script>
 async function j(u){return await (await fetch(u)).json()}
 function fill(tbl,grid){tbl.innerHTML='';
@@ -205,6 +234,8 @@ document.addEventListener('keydown',e=>{
  const m={ArrowLeft:'left',ArrowRight:'right',ArrowUp:'up',ArrowDown:'down'};
  if(m[e.key]){e.preventDefault();act(m[e.key])}
  else if(e.key===' '){e.preventDefault();togglePlay()}   // space toggles play/pause
+ else if(e.key.toLowerCase()==='z'){e.preventDefault();playing=false;  // pause so it doesn't immediately re-step
+   document.getElementById('play').innerHTML='&#9654; Play';act('undo')}
  else if(e.key.toLowerCase()==='r'){act('reset')}});
 init();
 </script></body></html>"""
