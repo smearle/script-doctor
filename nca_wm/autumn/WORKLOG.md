@@ -248,6 +248,13 @@ snake 0.000 = BROKEN DATA (snake_seq has 0 changed cells across all transitions 
 => the per-game hidden-state taxonomy largely COLLAPSES into a single conditional model; per-game specialization is
 not required for these 8 games. AR fidelity drops more (disease 0.88, gravity 0.83, waterplug 0.90) = the hard part.
 Eval script /tmp/eval_cond_rec.py. NEXT (if pursued): fix paint conditioning, recollect snake, add held-out games.
+**TOKEN-SWAP ABLATION confirms the conditioning is REAL** (not multi-task memorization): feeding a game's data with
+ANOTHER game's program tokens collapses tf_ch — gravity 0.992->0.096, mario 0.998->0.455, pacman 0.992->0.636,
+disease 0.987->0.714 (charge 1.000->0.987 = robust, simple jumper motion predictable w/o conditioning). So the single
+model routes behavior through the program tokens = a genuine program-conditioned WM. Capstone validated: one model,
+truly conditioned, matches the per-game specialists. /tmp/tokenswap.py. The remaining frontier = zero-shot held-out
+generalization to UNSEEN games (needs a fresh ~3h conditional train with held-out split; likely hard per PuzzleScript
+OOD experience).
 
 ### Breadth sweep: 10 new environments baselined (2026-06-23)
 AutumnBench has 59 programs; expanded from ~22 modeled. Collected (agent, 400 rollouts) + single-frame trained on 210:
