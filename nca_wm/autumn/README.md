@@ -61,23 +61,63 @@ Figures: `figures/taxonomy_levers.*` (the lever framework), `figures/rollout_sta
 blindspot GIFs `figures/{gravity,disease,pacman}_blindspot.gif`. All trained models
 are selectable in the `serve_compare` dropdown.
 
-## Visualizations (`figures/`)
+## Visualizations
 
-Side-by-side **engine vs world-model** GIFs (`figures/*.gif`) — each fix turns a
-blindspot off; red tints disagreements:
+Each environment's residual is a *kind of hidden state*, and each needs a distinct
+architectural lever. The summary:
 
-| GIF | shows |
-|---|---|
-| `gravity_blindspot.gif` | hidden direction: single-frame guesses "down" (6/6 wrong) vs +history reads the motion (0/6) |
-| `disease_blindspot.gif` | hidden active-particle identity under arrows: single-frame 37/61 wrong vs recurrent 0/61 |
-| `pacman_blindspot.gif` | hidden mod-3 ghost clock: single-frame 41/61 wrong vs recurrent 4/61 |
-| `waterplug_maxpool.gif` | spatial-locality mode button: mean-pool 11/13 wrong (places default color) vs **max-pool 0/13** |
-| `mario_singleframe_patrol.gif` → `mario_history_mario_patrol.gif` / `mario_complete.gif` | enemy direction fixed by history; `mario_recurrent_fire.gif` = bullet counter |
-| `paint_singleframe.gif` → `paint_recurrent.gif` | hidden `currColor` cycle fixed by recurrent |
-| `sand_drop.gif`, `gameOfLife_glider.gif` | falling dynamics / OOD Game-of-Life patterns |
+![Lever taxonomy](figures/taxonomy_levers.png)
 
-Summary figures: `taxonomy_levers.*` (lever framework + before→after per game),
-`rollout_stability.*` (30-step autoregressive exact-match ≥0.91), `scaling_reducible.*`.
+The GIFs below are **engine vs world-model, side by side** (red tints the cells where
+they disagree). Each shows a blindspot and the lever that turns it off.
+
+**Hidden direction → 1-frame history.** A single frame can't tell which way gravity
+points (set by edge buttons, invisible in the grid), so it guesses "down" and is wrong
+on 6/6 frames; history reads the blobs' motion and is perfect.
+
+![gravity: single-frame vs +history](figures/gravity_blindspot.gif)
+
+**Hidden counter/identity → recurrent hidden grid.** In disease, arrows move "the
+active particle", but once the disease spreads you can't tell *which* darkgreen cell is
+active from one frame — the single-frame model is wrong on 37/61 steps, the recurrent
+model 0/61.
+
+![disease: single-frame vs recurrent](figures/disease_blindspot.gif)
+
+In pacman the ghosts chase only when `timestep % 3 == 0` — a hidden period-3 clock. The
+single-frame model can't place itself in the cycle (41/61 wrong); the recurrent model
+tracks the clock (4/61).
+
+![pacman: single-frame vs recurrent](figures/pacman_blindspot.gif)
+
+**Spatial-locality mode → max pooling.** Waterplug's mode buttons set what a click
+places (vessel/plug/water), but pressing a corner button changes no visible cell. With
+mean pooling the one-cell signal is diluted ~100× and never reaches the placement cell
+(11/13 wrong — it places the default color); max pooling broadcasts it undiluted (0/13).
+
+![waterplug: mean-pool vs max-pool](figures/waterplug_maxpool.gif)
+
+**Mario — all blindspots at once.** Enemy patrol direction (history) + bullet counter
+(recurrent) + Mario-under-coin overlap (object channels):
+
+![mario: enemy direction fix](figures/mario_history_mario_patrol.gif)
+![mario: complete](figures/mario_complete.gif)
+
+**Paint — hidden `currColor` cycle (recurrent).** Single-frame can't track the 5-cycle
+brush color; recurrent does:
+
+![paint: single-frame](figures/paint_singleframe.gif)
+![paint: recurrent](figures/paint_recurrent.gif)
+
+**World-model quality:** fed their own predictions for 30 steps, the models barely
+drift (whole-grid exact-match ≥0.91, cell-accuracy ≈1.0):
+
+![rollout stability](figures/rollout_stability.png)
+
+More GIFs in `figures/`: `mario_singleframe_patrol` (the blindspot before the fix),
+`mario_recurrent_fire`, `sand_drop`, `gameOfLife_glider`, `got_clust_*`. Other summary
+figures: `scaling_reducible.*` (data/compute helps reducible error, not irreducible),
+`blindspot_taxonomy.*`, `overlap_fix.png`, `aleatoric_foodmap.png`.
 
 ## Model (`model.py`)
 Shared-weight conv NCA: embed → `n_steps` × (3×3 perception + global-pool summary
