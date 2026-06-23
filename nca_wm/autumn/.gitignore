@@ -1,0 +1,7 @@
+# Large regenerable binaries — rebuild via the collect/train pipeline (see README/AGENTS)
+runs/
+data/
+__pycache__/
+
+# Keep the figures/GIFs (the visual record of trained models)
+!figures/
