@@ -68,6 +68,11 @@ architectural lever. The summary:
 
 ![Lever taxonomy](figures/taxonomy_levers.png)
 
+Coverage across 42 of AutumnBench's 59 programs (the rest are interpreter-error
+games or 100×100 grids), colored by the lever each one's dynamics require:
+
+![Breadth coverage](figures/breadth_coverage.png)
+
 The GIFs below are **engine vs world-model, side by side** (red tints the cells where
 they disagree). Each shows a blindspot and the lever that turns it off.
 

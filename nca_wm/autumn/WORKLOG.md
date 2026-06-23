@@ -238,6 +238,49 @@ User: "press blue button then place -> WM places purple not blue." Investigated:
    action (press-then-IMMEDIATELY-place = 0 steps since) is the WORST case (0.35). So balancing data fixes the bias
    but not the lag; a clean fix needs a faster-latching mode mechanism (gating / explicit mode channel), still open.
 
+### Breadth sweep: 10 new environments baselined (2026-06-23)
+AutumnBench has 59 programs; expanded from ~22 modeled. Collected (agent, 400 rollouts) + single-frame trained on 210:
+SOLVED Markovian (>=0.99, noop 1.0): ice 0.999, nim 1.000, bottle 1.000, balloon 1.000, twiddle 1.000 (3x3),
+lights_new 1.000. noop-PERFECT minor action residual: dino 0.969, logic_gates 0.992 (place chg-cell 0.54 = gate eval).
+noop-IMPERFECT => HIDDEN STATE: **hatch 0.946 (noop 0.882)** — hidden `broken`/`hidden` Bools (egg hatch timer);
+**tetris 0.887 (noop 0.889, up/rotate 0.721)** — active piece = 4 block positions + rotation (hard global spatial op)
++ lock/respawn (maybe random next-piece). peg_solitaire FAILS (interpreter empty-list err, like sokoban). 10 new
+models in viewer.
+**tetris RE-CLASSIFIED (sexp): NOT memory.** Lines 12/31/32-34: on piece-lock the next piece's SHAPE and POSITION are
+both `uniformChoice` = IRREDUCIBLE randomness (like ants food). So tetris = mixed: deterministic-hard (rotation=hard
+global spatial op, up 0.72; + falling) + aleatoric next-piece. Single-frame 0.887 is near the achievable ceiling
+(can't predict the random spawn); deterministic parts improvable with capacity, NOT memory. -> focus memory effort on
+hatch (genuine hidden `broken`/`hidden` Bools). NEXT: hatch history/recurrent; breadth batch 2 (balls/boids/etc).
+hatch recurrent INCONCLUSIVE: changed_cell_acc=0.000 (val_cell_acc 0.9998) — agent-profile seqs have ~no hatching
+events (dynamics too sparse to eval this way); single-frame 0.946 stands, residual = rare autonomous hatch events.
+Batch-2 collection: OK = balls, carrace, colour_lines, gravity_2, masters_logic, buoyancy, space_invaders (training
+on 210); FAIL = boids + mobileMagnet (interpreter CORE DUMP), ricochet_robots (hang/timeout) — add to the
+sokoban/peg_solitaire exclusion list (interpreter errors on random actions).
+**Batch-2 baselines** (mean-exact/noop): masters_logic 1.000 (solved), buoyancy 0.921, gravity_2 0.823, carrace 0.824,
+space_invaders 0.695 (noop 0.698 -> hidden march direction), colour_lines 0.422 (place 0.016 = complex placement),
+balls 0.332 (noop 0.343 -> hidden per-ball VELOCITY).
+**balls history fix (identical data): no_history 0.245 -> history 0.937 (+0.69)** = biggest history gain yet; balls is
+a pure hidden-velocity game. Confirms history generalizes to per-object velocity. NEXT: space_invaders memory fix. ~39/59.
+**space_invaders history: 0.688 -> 0.742 (+0.05 only)** = PARTIAL. Multi-variable hidden state (march direction + drop
+timing + bullets), like pacman — history catches one variable; full fix would need recurrent. Noted, not over-invested.
+**Batch-3**: viable = arc_slack, count_2, count_3, particle_1, particle_2, particles, gravity_3, gravity_4,
+exp_particles, bbq (training on 210); FAIL = rink, chaos_game (interpreter err). Coverage -> ~49/59.
+**Batch-3 results + diagnoses** (val mean-exact): arc_slack 0.973, particle_1 1.000, bbq 0.935 (good);
+particle_2 0.003 + particles 0.003 = IRREDUCIBLE random walk (sexp: `uniformChoice(adjPositions)` -> each particle
+steps to a random adjacent cell; whole-grid 0.003 is near ceiling, per-cell marginal calibrated; NOT a memory fix);
+gravity_3 0.045 = hidden `xVel`/`yVel` accumulators (genuine hidden velocity -> history/recurrent candidate);
+exp_particles 0.167 = hidden `click_count` counter + particle motion (recurrent candidate); count_2/count_3/gravity_4
+NO OUTPUT = 100x100 grids (too big for default config, deferred). Framework again separates irreducible (particle_2/
+particles) from hidden-state (gravity_3, exp_particles). NEXT: gravity_3 hidden-velocity fix; 100x100 handling.
+**gravity_3 history: no_history 0.068 -> history 0.245 (+0.18)** = PARTIAL, as predicted: xVel/yVel ACCUMULATE
+(acceleration = 2nd-order hidden state), so 2-frame history reveals velocity but not acceleration -> recurrent-class,
+capped at 0.245. **100x100 games** (count_2/count_3/gravity_4) DO train with reduced config (n_hid 48, batch 8, no
+OOM); whole-grid mean-exact is punishing on 10k cells (count_2 0.040, count_3 0.042, gravity_4 0.199) -> use cell-acc
+for big grids, not whole-grid-exact. Coverage ~49/59 (93 viewer models). Remaining unmodeled = interpreter-error games
+(sokoban/sokoban_ii/peg_solitaire/boids/mobileMagnet/ricochet_robots*/rink/chaos_game) + count_1/4/5/balls2. Breadth
+sweep substantially complete; diagnostic framework validated across ~49 environments (Markovian/history/recurrent/
+maxpool/irreducible all represented with worked examples).
+
 ### Mario over-firing (task #9): blocked on hard platforming navigation — diagnosed, deferred (2026-06-23)
 The recurrent mario over-fires because the bullet DECREMENT is undersampled. Root cause is a DATA bottleneck:
 firing needs bullets, bullets come ONLY from collecting coins (mario.sexp L37-39), and multi-fire needs >=2 coins.
