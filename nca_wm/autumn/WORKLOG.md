@@ -280,6 +280,13 @@ for big grids, not whole-grid-exact. Coverage ~49/59 (93 viewer models). Remaini
 (sokoban/sokoban_ii/peg_solitaire/boids/mobileMagnet/ricochet_robots*/rink/chaos_game) + count_1/4/5/balls2. Breadth
 sweep substantially complete; diagnostic framework validated across ~49 environments (Markovian/history/recurrent/
 maxpool/irreducible all represented with worked examples).
+**Recurrent passes on the partial-history games (boundary of the lever):**
+- space_invaders: history 0.742 -> **recurrent changed-cell 0.981** = CLEAN WIN (multi-variable march direction +
+  drop timing, like pacman — recurrent tracks all hidden vars).
+- exp_particles: **recurrent 0.627** changed-cell = partial (hard particle-explosion dynamics).
+- gravity_3: INCONCLUSIVE (agent-profile seqs near-static -> changed_cell 0.000 degenerate metric, like hatch).
+BOUNDARY: recurrent solves single-variable AND multi-variable hidden state cleanly (pacman, charge, disease,
+space_invaders all >=0.98); 2nd-order (acceleration: gravity_3) and explosion/chaotic-particle dynamics stay partial.
 
 ### Mario over-firing (task #9): blocked on hard platforming navigation — diagnosed, deferred (2026-06-23)
 The recurrent mario over-fires because the bullet DECREMENT is undersampled. Root cause is a DATA bottleneck:
