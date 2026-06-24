@@ -32,16 +32,18 @@ def discover_runs(runs_dir):
 
 
 def load_best(runs_dir, runs):
-    """best.json maps game -> best run (the lever-fixed model). Returns
+    """best.json maps game -> best run (the lever-fixed model). Lives in the
+    autumn module dir (version-controlled), with a runs_dir fallback. Returns
     {game: run} filtered to runs that actually exist."""
-    p = os.path.join(runs_dir, "best.json")
-    if not os.path.exists(p):
-        return {}
-    try:
-        best = json.load(open(p))
-    except Exception:
-        return {}
-    return {g: r for g, r in sorted(best.items()) if r in runs}
+    for p in (os.path.join(os.path.dirname(__file__), "best.json"),
+              os.path.join(runs_dir, "best.json")):
+        if os.path.exists(p):
+            try:
+                best = json.load(open(p))
+            except Exception:
+                continue
+            return {g: r for g, r in sorted(best.items()) if r in runs}
+    return {}
 
 
 def load_model(name):
