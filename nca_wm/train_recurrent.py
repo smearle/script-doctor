@@ -168,47 +168,60 @@ def load_dataset_from_caches(game_names, max_transitions_per_game, val_frac,
     for name in game_names:
         fs = sorted(_glob.glob(
             f"rollout_data/{name}/level_*/astar_transitions_*.npz"))
-        levels = []
+        # First pass: just shapes/W (cheap headers) to find the game's max dims.
+        metas = []  # (path, C, H, W, N)
         for f in fs:
             try:
                 with np.load(f, allow_pickle=True) as d:
-                    s = d["states"]
-                    ns = d["next_states"]
-                    a = np.asarray(d["actions"], dtype=np.int64)
+                    sh = d["states"].shape
                     W = int(d["W"])
+                if sh[0] > 0:
+                    metas.append((f, sh[1], sh[2], W, sh[0]))
             except Exception:
                 continue
-            if len(s) == 0:
-                continue
-            levels.append((_unpack_states(s, W), _unpack_states(ns, W), a))
-        if not levels:
+        if not metas:
             n_empty += 1
             continue
-        gC = max(l[0].shape[1] for l in levels)
-        gH = max(l[0].shape[2] for l in levels)
-        gW = max(l[0].shape[3] for l in levels)
+        gC = max(m[1] for m in metas)
+        gH = max(m[2] for m in metas)
+        gW = max(m[3] for m in metas)
         if max(gH, gW) > max_grid_dim:
             n_skip_size += 1
             continue
-
-        def _pad(x):  # (N,C,H,W) -> (N,gC,gH,gW); zero-pad is masked downstream
-            return np.pad(x, ((0, 0), (0, gC - x.shape[1]),
-                              (0, gH - x.shape[2]), (0, gW - x.shape[3])))
-        S = np.concatenate([_pad(l[0]) for l in levels])
-        Nx = np.concatenate([_pad(l[1]) for l in levels])
-        A = np.concatenate([l[2] for l in levels])
-        if cap and len(S) > cap:
+        uniform = all((m[1], m[2], m[3]) == (gC, gH, gW) for m in metas)
+        # Stay in PACKED space (8x smaller than unpacked) to bound RAM: concat
+        # packed level arrays directly when uniform; only unpack-pad-repack the
+        # (rare) mismatched levels, pre-capping huge ones to avoid a spike.
+        Sp, Np, A = [], [], []
+        for f, C, H, W, N in metas:
+            with np.load(f, allow_pickle=True) as d:
+                s = d["states"]
+                ns = d["next_states"]
+                a = np.asarray(d["actions"], dtype=np.int64)
+            if not uniform:
+                if cap and N > cap:
+                    sel = rng.choice(N, cap, replace=False)
+                    s, ns, a = s[sel], ns[sel], a[sel]
+                pad = ((0, 0), (0, gC - C), (0, gH - H), (0, gW - W))
+                s = _pack_states(np.pad(_unpack_states(s, W), pad).astype(np.uint8))
+                ns = _pack_states(np.pad(_unpack_states(ns, W), pad).astype(np.uint8))
+            Sp.append(s)
+            Np.append(ns)
+            A.append(a)
+        Sp = np.concatenate(Sp)
+        Np = np.concatenate(Np)
+        A = np.concatenate(A)
+        if cap and len(Sp) > cap:
             if ancestor_closed:
-                keep = ancestor_closed_subsample(S, Nx, cap, seed)
+                keep = ancestor_closed_subsample(Sp, Np, cap, seed)
             else:
-                keep = rng.choice(len(S), cap, replace=False)
-            S, Nx, A = S[keep], Nx[keep], A[keep]
-        n = len(S)
+                keep = rng.choice(len(Sp), cap, replace=False)
+            Sp, Np, A = Sp[keep], Np[keep], A[keep]
+        n = len(Sp)
         n_val = int(round(val_frac * n))
-        perm = rng.permutation(n)
-        val_idx = np.sort(perm[:n_val]).astype(np.int64)
-        per_states.append(_pack_states(S.astype(np.uint8)))
-        per_next.append(_pack_states(Nx.astype(np.uint8)))
+        val_idx = np.sort(rng.permutation(n)[:n_val]).astype(np.int64)
+        per_states.append(Sp)
+        per_next.append(Np)
         per_actions.append(A)
         per_val.append(val_idx)
         game_infos.append({"name": name, "n_objs": gC, "H": gH, "W": gW})
