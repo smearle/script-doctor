@@ -170,3 +170,19 @@ the Python wrapper and `backends`.
 
 (A) is the faster route to M1–M3 results; (B) buys the Puffer tooling. The env
 adapter + policy above are shared by both.
+
+**Decision: went with (A).** Also fixed the jax-drag: `backends/__init__.py` now
+lazy-imports the nodejs backend (PEP 562), so `import puzzlescript_cpp` loads
+neither jax nor javascript.
+
+**M1/M2 RESULT (path A, `puffer_train.py`):** single-game Slidings learns in
+seconds (no compile). The **win4 generalist (4 games, game-id embed, 8M steps)
+converged to ~1.00 on ALL four games** (kettle/Slidings/sokodig/TSP), *beating*
+the JAX generalist (which had sokodig 0.57, TSP 0.75) — at ~10k SPS, 8M steps in
+~13 min, starting instantly (no XLA wall). Caveat: the C++ env reward
+(`score_delta + win - 0.01`) differs from the JAX heuristic reward, so this is not
+a perfectly controlled comparison, but it removes the compute bottleneck and
+matches-or-exceeds quality. Next: M2 scale to many games (gen9/20/40 — the regime
+JAX couldn't compile), M3 meta-RL at scale, and throughput (parallelize the
+per-game engines / single multi-game C++ engine; currently they step
+sequentially in Python).
