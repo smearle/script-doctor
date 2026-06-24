@@ -267,6 +267,14 @@ OOD FAILURE MODE characterized: on unseen programs the model GRACEFULLY FALLS BA
 garbage — gravity tf_cell 0.968 vs copy-baseline 0.978, disease 0.997 vs 0.997. So an unseen program's tokens activate
 no useful learned dynamics and the NCA reverts to its copy prior ("knows it doesn't know"). Conditioning learned
 per-train-game mappings, not composable primitives. /tmp/eval_howfail.py.
+**FEW-SHOT ADAPTATION (positive!):** fine-tune held-out model on gravity vs from-scratch — gravity tf_ch by step:
+pretrained 200:0.986 500:0.990 1000:0.992; from-scratch 200:0.795 500:0.957 1000:0.988. The 6-game pretraining gives a
+BIG head start (0.986 vs 0.795 @200 updates), converging by ~1000. Multi-game pretraining IS valuable — not as zero-shot
+rule-composition but as a strong INITIALIZATION (transferable copy-escape + general motion/spawn primitives) -> fast
+few-shot adapt. /tmp/fewshot.py. COMPLETE conditional-generalization picture: (1) in-dist one model matches specialists
+7/9; (2) conditioning real (token-swap); (3) zero-shot to unseen programs FAILS (graceful copy-fallback); (4) few-shot
+adaptation FAST (positive transfer as init). Verdict: neural WMs do multi-game memorization-via-conditioning + useful
+pretrained init, NOT yet zero-shot compositional rule-transfer (the open problem vs program-synthesis).
 
 ### Breadth sweep: 10 new environments baselined (2026-06-23)
 AutumnBench has 59 programs; expanded from ~22 modeled. Collected (agent, 400 rollouts) + single-frame trained on 210:
