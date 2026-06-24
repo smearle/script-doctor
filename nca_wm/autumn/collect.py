@@ -143,6 +143,18 @@ def collect(game, rollouts, rollout_len, seed, profile="ca", arrows=True,
 
     def sample_action(density):
         menu, w = [], []
+        if profile == "spamclick":
+            # adversarial: heavy clicking at varied positions (empty/occupied/edges) +
+            # occasional arrows — covers spawn/placement dynamics the agent profile misses
+            # (fixes click-spawn divergences; see DIVERGENCES.md).
+            for _ in range(3):
+                menu.append(("click", int(rng.integers(gs)), int(rng.integers(gs)))); w.append(0.25)
+            menu.append(("click", int(rng.integers(gs)), 0)); w.append(0.10)   # top row (buttons live here)
+            for a in arrow_acts:
+                menu.append(a); w.append(0.04)
+            menu.append(("noop", -1, -1)); w.append(0.05)
+            w = np.array(w); w /= w.sum()
+            return menu[rng.choice(len(menu), p=w)]
         if profile == "agent":
             # arrow/agent-driven (e.g. mario): no seeding, arrows + occasional click(shoot)
             menu.append(("noop", -1, -1)); w.append(0.15)
@@ -364,7 +376,7 @@ def main():
     ap.add_argument("--rollout_len", type=int, default=200)
     ap.add_argument("--seed", type=int, default=0)
     ap.add_argument("--profile", default="ca",
-                    choices=["ca", "generic", "agent", "mario_heuristic", "snake_heuristic",
+                    choices=["ca", "generic", "agent", "spamclick", "mario_heuristic", "snake_heuristic",
                              "waterplug_heuristic"])
     ap.add_argument("--no_arrows", action="store_true")
     ap.add_argument("--reseed_every", type=int, default=12)

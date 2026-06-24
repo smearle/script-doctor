@@ -105,7 +105,24 @@ policy), plus DAgger.
 4. **Viewer**: a few-frame warm-up before scoring, and a "first-divergence" readout so
    divergences are visible/measurable, not just felt.
 
-The honest summary: the aggregate metrics were measuring the wrong thing for
+## Demonstration: adversarial collection partially fixes gravity (honest result)
+Added a `spamclick` collection profile (heavy varied clicking), collected 35k gravity
+transitions, augmented gravity's history data (79k→114k), retrained. Re-measured the
+spam-click divergence (3 seeds): the **small coverage-gap divergence was fixed**
+(seed 11: diverge@7 → none) with **no accuracy regression** (0.964), but the **large
+divergences were unchanged** (seeds 3/7: 49–93 cells, still diverge @14/29).
+**Why:** the big divergences are NOT a coverage gap — by step 14–29 of spam-clicking,
+dozens of blobs have spawned and the model's tiny per-blob errors **compound
+autoregressively** into 49–93 wrong cells. So:
+- **Coverage-gap divergences** (a state-type the agent profile never visits) → one
+  round of adversarial collection fixes them.
+- **AR-accumulation catastrophes** (slightly-wrong-per-object × many objects) → need
+  **iterated DAgger** (re-roll the improved model, collect its *new* failure states,
+  repeat) and/or a near-perfect per-step model so errors don't compound. One round
+  isn't enough; this is the genuinely hard residual.
+
+## The honest summary
+The aggregate metrics were measuring the wrong thing for
 interactive use. Under a human's targeted, autoregressive poking, **most models
 diverge within ~5–20 steps**, via four well-defined mechanisms — all addressable with
 divergence-targeted (DAgger) collection + a recurrent cold-start fix, none requiring
