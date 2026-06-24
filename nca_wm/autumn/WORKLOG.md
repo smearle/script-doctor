@@ -273,6 +273,24 @@ chaotic ~floor). RULE: capacity helps ONLY when standard recurrent is stuck in t
 general boost. Promotions: gravity_3->_recurrent_hicap (0.955), gravity_2->_recurrent (0.938), exp_particles->_recurrent
 (0.652, partial but >> singleframe 0.167). Remaining non-perfect = genuinely hard (exp_particles chaotic) or IRREDUCIBLE
 PRNG (ants, particle_2/particles, colour_lines, tetris) = true floor, documented not chased. Perfection loop near done.
+bbq hi-cap 0.813 vs std 0.826 = NO help -> capacity-only-helps-copy-stuck CONFIRMED across 4 games (only gravity_3
+benefited). bbq/gravity_2/exp_particles at their recurrent floor (multi-variable, genuinely hard). logic_gates is
+NOT hidden-state (combinational circuit, powered states VISIBLE) -> residual = logic-signal PROPAGATION through wires
+-> testing depth lever (n_steps24 single-frame, like waterplug-flow). Last reducible lever to test.
+logic_gates_deep (n_steps24): 0.992 = NO improvement (place chg-cell 0.31; combinational logic computation over varied
+circuit topologies is genuinely hard, at floor). 
+=== PERFECTION LOOP CONVERGED ===
+Every reducible lever (data/coverage, history, recurrent, capacity, depth) tested on every imperfect game. Outcomes:
+- PERFECTED/clean-fixed: carrace 0.96, bbq 0.83, gravity_2 0.94, gravity_3 0.96 (capacity-cracked), exp_particles 0.65,
+  + all earlier (disease/pacman/charge/sand/paint/mario/gravity/balls/space_invaders/waterplug/...).
+- AT FLOOR, not chased (HONEST): (a) irreducible PRNG = ants 0.76, particle_2/particles 0.003, colour_lines 0.42,
+  tetris 0.89; (b) recurrent boundary (multi-variable, capacity/depth don't help) = bbq 0.83, gravity_2 0.94,
+  exp_particles 0.65; (c) genuinely-hard-but-near-perfect = logic_gates 0.992 (logic compute), grow 0.967, arc_slack
+  0.973, dino 0.969, hatch 0.946, wind 0.85; (d) metric artifact = count_* (100x100 whole-grid-exact).
+KEY GENERALIZABLE FINDINGS from the loop: (1) "imperfect deterministic" almost always = hidden state (the diagnostic
+holds); (2) capacity is a COPY-ESCAPE rescue (helps only copy-stuck models, gravity_3), not a general boost; (3) always
+before/after vs baseline — the recurrent train metric overstates (egg/buoyancy false positives caught). Further gains
+need the open-problem compositional/rule-learning architecture, not more of the existing levers.
 
 ### CAPSTONE: one conditional recurrent model matches the per-game specialists (2026-06-23)
 Finished the dangling cond_rec_v1 thread — evaluated the SINGLE conditional recurrent NCA (9 games, FiLM+rule-slot
