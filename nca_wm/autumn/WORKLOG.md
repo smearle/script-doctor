@@ -263,6 +263,10 @@ rule-primitives for a new program. BOUNDARY of the whole approach: in-distributi
 ONE program-conditioned model (matches specialists 7/9, conditioning is real); OUT-of-distribution (zero-shot to unseen
 games) it fails — multi-game memorization-via-conditioning works, compositional rule-transfer does not. (Matches
 PuzzleScript weak-OOD [[project_ood_transfer_weak_v3combined]].) The real open problem: rule-compositional generalization.
+OOD FAILURE MODE characterized: on unseen programs the model GRACEFULLY FALLS BACK TO COPY (predicts identity), not
+garbage — gravity tf_cell 0.968 vs copy-baseline 0.978, disease 0.997 vs 0.997. So an unseen program's tokens activate
+no useful learned dynamics and the NCA reverts to its copy prior ("knows it doesn't know"). Conditioning learned
+per-train-game mappings, not composable primitives. /tmp/eval_howfail.py.
 
 ### Breadth sweep: 10 new environments baselined (2026-06-23)
 AutumnBench has 59 programs; expanded from ~22 modeled. Collected (agent, 400 rollouts) + single-frame trained on 210:
