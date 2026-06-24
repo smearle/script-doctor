@@ -245,6 +245,25 @@ class RLConfig(PSConfig):
 
     model: str = "conv2"
 
+    # Generalist (multi-game) recurrent agent: per-game embedding dimension.
+    game_embed_dim: int = 32
+
+    # Add a "restart" action (reset the level to its initial state without ending
+    # the episode), to let the agent recover from dead-ends. Single-level only.
+    restart_action: bool = False
+
+    # Meta-RL (RL^2) multi-trial episodes for the generalist: a meta-episode is
+    # `trials_per_meta` trials. The level resets each trial (on win or the
+    # per-trial step budget = max_episode_steps) but the RNN carry persists
+    # across trials; it only resets at meta-episode boundaries. With
+    # use_game_id=False the agent must infer the game in-context (few-shot).
+    trials_per_meta: int = 1
+    use_game_id: bool = True
+    # Control-permutation meta-RL: run one game under N different action->direction
+    # permutations (visually identical, mechanically different) so the agent must
+    # probe to identify its controls. The few-shot payoff should appear here.
+    n_control_variants: int = 4
+
     # How many milliseconds to wait between frames of the rendered gifs
     gif_frame_duration: float = 0.05
 

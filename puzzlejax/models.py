@@ -1,4 +1,5 @@
 import math
+from functools import partial
 from timeit import default_timer as timer
 from typing import Sequence, Tuple
 
@@ -353,7 +354,7 @@ class AutoEncoder(nn.Module):
 
 
 class ActorCriticPS(nn.Module):
-    """Transform the action output into a distribution. Do some pre- and post-processing specific to the 
+    """Transform the action output into a distribution. Do some pre- and post-processing specific to the
     PS environments."""
     subnet: nn.Module
 
@@ -365,6 +366,144 @@ class ActorCriticPS(nn.Module):
         pi = Categorical(logits=act)
 
         return pi, val
+
+
+class ConvEncoder(nn.Module):
+    """Spatial encoder shared by the recurrent actor-critic. Maps a batch of
+    multi-hot levels (N, C, H, W) to a fixed-size embedding (N, hidden_dim)."""
+    hidden_dim: int = 256
+    activation: str = "relu"
+
+    @nn.compact
+    def __call__(self, map_x):
+        activation = nn.relu if self.activation == "relu" else nn.tanh
+        # obs stored CHW; Flax Conv expects NHWC.
+        x = jnp.transpose(map_x, (0, 2, 3, 1)).astype(jnp.float32)
+        x = nn.Conv(features=64, kernel_size=(3, 3), padding="SAME",
+                    kernel_init=orthogonal(np.sqrt(2)), bias_init=constant(0.0))(x)
+        x = activation(x)
+        x = nn.Conv(features=64, kernel_size=(3, 3), padding="SAME",
+                    kernel_init=orthogonal(np.sqrt(2)), bias_init=constant(0.0))(x)
+        x = activation(x)
+        x = x.reshape((x.shape[0], -1))
+        x = nn.Dense(self.hidden_dim, kernel_init=orthogonal(np.sqrt(2)),
+                     bias_init=constant(0.0))(x)
+        x = activation(x)
+        return x
+
+
+class ScannedRNN(nn.Module):
+    """GRU scanned over a (time, batch, feat) sequence with per-step carry
+    resets at episode boundaries (PureJaxRL-style)."""
+
+    @partial(
+        nn.scan,
+        variable_broadcast="params",
+        split_rngs={"params": False},
+        in_axes=0,
+        out_axes=0,
+    )
+    @nn.compact
+    def __call__(self, carry, x):
+        rnn_state = carry
+        ins, resets = x
+        # Reset the carry to zeros wherever an episode has just ended.
+        rnn_state = jnp.where(
+            resets[:, None],
+            self.initialize_carry(ins.shape[0], ins.shape[1]),
+            rnn_state,
+        )
+        new_rnn_state, y = nn.GRUCell(features=ins.shape[1])(rnn_state, ins)
+        return new_rnn_state, y
+
+    @staticmethod
+    def initialize_carry(batch_size, hidden_size):
+        cell = nn.GRUCell(features=hidden_size)
+        return cell.initialize_carry(jax.random.PRNGKey(0), (batch_size, hidden_size))
+
+
+class ActorCriticRNN(nn.Module):
+    """Recurrent actor-critic for PuzzleScript. Takes a hidden state and a
+    tuple (PSObs, dones) where the leading axis of each leaf is time."""
+    action_dim: int
+    hidden_dim: int = 256
+    activation: str = "relu"
+
+    @nn.compact
+    def __call__(self, hidden, x):
+        obs, dones = x
+        map_x = obs.multihot_level  # (T, B, C, H, W)
+        T, B = map_x.shape[0], map_x.shape[1]
+        flat = map_x.reshape((T * B,) + map_x.shape[2:])
+        emb = ConvEncoder(self.hidden_dim, self.activation)(flat)
+        emb = emb.reshape((T, B, self.hidden_dim))
+
+        rnn_in = (emb, dones)
+        hidden, emb = ScannedRNN()(hidden, rnn_in)
+
+        activation = nn.relu if self.activation == "relu" else nn.tanh
+
+        actor = nn.Dense(self.hidden_dim, kernel_init=orthogonal(np.sqrt(2)),
+                         bias_init=constant(0.0))(emb)
+        actor = activation(actor)
+        logits = nn.Dense(self.action_dim, kernel_init=orthogonal(0.01),
+                          bias_init=constant(0.0))(actor)
+        pi = Categorical(logits=logits)
+
+        critic = nn.Dense(self.hidden_dim, kernel_init=orthogonal(np.sqrt(2)),
+                          bias_init=constant(0.0))(emb)
+        critic = activation(critic)
+        value = nn.Dense(1, kernel_init=orthogonal(1.0), bias_init=constant(0.0))(critic)
+
+        return hidden, pi, jnp.squeeze(value, axis=-1)
+
+
+class ActorCriticRNNMulti(nn.Module):
+    """Generalist recurrent actor-critic shared across games. Observations are
+    multi-hot levels padded to a common (C_max, H_max, W_max) shape; a learned
+    per-game embedding (looked up from a game id carried in obs.flat_obs)
+    conditions the policy. The id embedding is a lookup-table stand-in for a
+    richer rule encoding (rule_attn / FiLM)."""
+    action_dim: int
+    n_games: int
+    hidden_dim: int = 128
+    game_embed_dim: int = 32
+    activation: str = "relu"
+
+    @nn.compact
+    def __call__(self, hidden, x):
+        obs, dones = x
+        map_x = obs.multihot_level          # (T, B, C, H, W)
+        game_id = obs.flat_obs              # (T, B) int game index
+        T, B = map_x.shape[0], map_x.shape[1]
+        flat = map_x.reshape((T * B,) + map_x.shape[2:])
+        emb = ConvEncoder(self.hidden_dim, self.activation)(flat)   # (T*B, hidden)
+
+        gid = game_id.reshape((T * B,)).astype(jnp.int32)
+        gemb = nn.Embed(self.n_games, self.game_embed_dim)(gid)     # (T*B, ge)
+
+        activation = nn.relu if self.activation == "relu" else nn.tanh
+        emb = jnp.concatenate([emb, gemb], axis=-1)
+        emb = nn.Dense(self.hidden_dim, kernel_init=orthogonal(np.sqrt(2)),
+                       bias_init=constant(0.0))(emb)
+        emb = activation(emb)
+        emb = emb.reshape((T, B, self.hidden_dim))
+
+        hidden, emb = ScannedRNN()(hidden, (emb, dones))
+
+        actor = nn.Dense(self.hidden_dim, kernel_init=orthogonal(np.sqrt(2)),
+                         bias_init=constant(0.0))(emb)
+        actor = activation(actor)
+        logits = nn.Dense(self.action_dim, kernel_init=orthogonal(0.01),
+                          bias_init=constant(0.0))(actor)
+        pi = Categorical(logits=logits)
+
+        critic = nn.Dense(self.hidden_dim, kernel_init=orthogonal(np.sqrt(2)),
+                          bias_init=constant(0.0))(emb)
+        critic = activation(critic)
+        value = nn.Dense(1, kernel_init=orthogonal(1.0), bias_init=constant(0.0))(critic)
+
+        return hidden, pi, jnp.squeeze(value, axis=-1)
 
 if __name__ == '__main__':
     n_trials = 100

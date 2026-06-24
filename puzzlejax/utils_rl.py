@@ -17,7 +17,7 @@ from time import perf_counter
 
 from conf.config import RLConfig, TrainConfig
 from puzzlescript_jax.env import PuzzleJaxEnv, PSObs, PJState, PJParams
-from puzzlejax.models import NCA, AutoEncoder, ConvForward, ConvForward2, SeqNCA, ActorCriticPS, Dense
+from puzzlejax.models import NCA, AutoEncoder, ConvForward, ConvForward2, SeqNCA, ActorCriticPS, ActorCriticRNN, Dense
 
 N_AGENTS = 1
 
@@ -34,6 +34,14 @@ def get_exp_dir(config: TrainConfig):
     if not np.isclose(lr_value, float(default_lr)):
         lr_slug = f"_lr-{lr_value:.8g}"
 
+    restart_slug = "_restart" if getattr(config, "restart_action", False) else ""
+
+    meta_slug = ""
+    if getattr(config, "trials_per_meta", 1) > 1:
+        meta_slug += f"_K{config.trials_per_meta}"
+    if not getattr(config, "use_game_id", True):
+        meta_slug += "_noid"
+
     exp_dir = os.path.join(
         "rl_logs_jax",
         f"{config.game}",
@@ -44,6 +52,8 @@ def get_exp_dir(config: TrainConfig):
             f"seed-{config.seed}"
             f"{episode_len_slug}"
             f"{lr_slug}"
+            f"{restart_slug}"
+            f"{meta_slug}"
         )
     )
     return exp_dir
@@ -101,6 +111,13 @@ def linear_schedule(config, count):
 def init_network(env: PuzzleJaxEnv, env_params: PJParams, config: RLConfig):
     action_dim = env.action_space.n
 
+    if config.model == "rnn":
+        # Recurrent actor-critic is self-contained (not wrapped in ActorCriticPS).
+        return ActorCriticRNN(
+            action_dim=action_dim,
+            hidden_dim=config.hidden_dims[0],
+            activation=config.activation,
+        )
     if config.model == "dense":
         network = Dense(
             action_dim, activation=config.activation,

@@ -140,6 +140,55 @@ class LogWrapper(GymnaxWrapper):
 #         )
 
 
+class RestartActionWrapper(GymnaxWrapper):
+    """Add a "restart" action (index == base action count) that resets the
+    level to its initial state without ending the episode, so the agent can
+    recover from dead-ends ("multiple resets"). Intended for single-level games
+    (level>=0): reset() returns the same fixed initial level, so a restart is a
+    true reset of the current puzzle. The step counter keeps advancing, so the
+    agent still faces the episode time limit.
+
+    Wrap INSIDE LogWrapper: LogWrapper(RestartActionWrapper(env)).
+    """
+
+    def __init__(self, env, restart_penalty: float = 0.0):
+        super().__init__(env)
+        self._base_n = env.action_space.n
+        self.restart_penalty = restart_penalty
+        self.action_space = spaces.Discrete(self._base_n + 1)
+
+    @partial(jax.jit, static_argnums=(0,))
+    def step(self, key, state, action, params=None):
+        is_restart = action == self._base_n
+        # Normal branch: map the restart action to a no-op so env.step is valid.
+        safe_action = jnp.where(is_restart, self._base_n - 1, action)
+        obs_n, state_n, reward_n, done_n, info_n = self._env.step(key, state, safe_action, params)
+
+        # Restart branch: reset to the (fixed) initial level, episode continues.
+        key, kr = jax.random.split(key)
+        obs_r, state_r = self._env.reset(kr, params)
+        new_step_i = state.step_i + 1
+        state_r = state_r.replace(step_i=new_step_i)
+        done_r = new_step_i >= self._env.max_steps
+        reward_r = jnp.asarray(-0.01 - self.restart_penalty, dtype=reward_n.dtype)
+        # On a restart that hits the time limit, auto-reset like env.step does.
+        obs_r2, state_r2 = self._env.reset(key, params)
+        state_r = jax.tree.map(lambda x, y: jax.lax.select(done_r, x, y), state_r2, state_r)
+        obs_r = jax.tree.map(lambda x, y: jax.lax.select(done_r, x, y), obs_r2, obs_r)
+        info_r = {
+            "won": jnp.asarray(False),
+            "score": state_r.score,
+            "steps": new_step_i,
+        }
+
+        obs = jax.tree.map(lambda x, y: jax.lax.select(is_restart, x, y), obs_r, obs_n)
+        state = jax.tree.map(lambda x, y: jax.lax.select(is_restart, x, y), state_r, state_n)
+        reward = jax.lax.select(is_restart, reward_r, reward_n)
+        done = jax.lax.select(is_restart, done_r, done_n)
+        info = jax.tree.map(lambda x, y: jax.lax.select(is_restart, x, y), info_r, info_n)
+        return obs, state, reward, done, info
+
+
 class ClipAction(GymnaxWrapper):
     def __init__(self, env, low=-1.0, high=1.0):
         super().__init__(env)
