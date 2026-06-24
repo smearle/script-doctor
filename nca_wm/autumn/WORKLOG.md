@@ -255,6 +255,14 @@ model routes behavior through the program tokens = a genuine program-conditioned
 truly conditioned, matches the per-game specialists. /tmp/tokenswap.py. The remaining frontier = zero-shot held-out
 generalization to UNSEEN games (needs a fresh ~3h conditional train with held-out split; likely hard per PuzzleScript
 OOD experience).
+**ZERO-SHOT HELD-OUT RESULT (honest negative):** trained cond_rec_heldout on {mario,sand,paint,pacman,charge,waterplug},
+held out gravity+disease, eval zero-shot (model saw only their program TOKENS, never their data). Train games 0.999/
+1.000 tf_ch; **HELD-OUT gravity 0.077, disease 0.048 = FAILS.** So the conditional model does NOT generalize to unseen
+programs — it learns train games near-perfectly + genuinely conditions on them (token-swap), but cannot compose learned
+rule-primitives for a new program. BOUNDARY of the whole approach: in-distribution the per-game taxonomy collapses into
+ONE program-conditioned model (matches specialists 7/9, conditioning is real); OUT-of-distribution (zero-shot to unseen
+games) it fails — multi-game memorization-via-conditioning works, compositional rule-transfer does not. (Matches
+PuzzleScript weak-OOD [[project_ood_transfer_weak_v3combined]].) The real open problem: rule-compositional generalization.
 
 ### Breadth sweep: 10 new environments baselined (2026-06-23)
 AutumnBench has 59 programs; expanded from ~22 modeled. Collected (agent, 400 rollouts) + single-frame trained on 210:
