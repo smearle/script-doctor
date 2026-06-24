@@ -143,6 +143,85 @@ def select_n_per_rule_games(n_games: int, max_area: int = N_PER_RULE_MAX_AREA):
 
 
 # ---------------------------------------------------------------------------
+# Parser-free dataset loader (read cached transitions directly; no JS parse)
+# ---------------------------------------------------------------------------
+def load_dataset_from_caches(game_names, max_transitions_per_game, val_frac,
+                             ancestor_closed, max_grid_dim, seed):
+    """Build the dataset directly from cached A* transition npz files — NO JS
+    parsing — for the recurrent (unconditional) model, which needs only the
+    transition arrays + grid shape (not game tokens). This can't hang on
+    pathological games (the parser-loop we hit) and scales to the whole cached
+    corpus; RAM is governed by max_transitions_per_game * len(game_names).
+
+    Per game: merge level caches (zero-pad to the game's max C/H/W — masked
+    downstream), drop games whose grid exceeds max_grid_dim, ancestor-closed-
+    subsample to the cap, split val_frac. Returns (dataset, game_infos) in the
+    same format as collect_multigame_dataset.
+    """
+    from nca_wm.state_ops import _pack_states, _unpack_states
+    from nca_wm.data_collection import ancestor_closed_subsample
+    cap = max_transitions_per_game
+    rng = np.random.default_rng(seed)
+    per_states, per_next, per_actions, per_val = [], [], [], []
+    game_infos = []
+    n_skip_size = n_empty = 0
+    for name in game_names:
+        fs = sorted(_glob.glob(
+            f"rollout_data/{name}/level_*/astar_transitions_*.npz"))
+        levels = []
+        for f in fs:
+            try:
+                with np.load(f, allow_pickle=True) as d:
+                    s = d["states"]
+                    ns = d["next_states"]
+                    a = np.asarray(d["actions"], dtype=np.int64)
+                    W = int(d["W"])
+            except Exception:
+                continue
+            if len(s) == 0:
+                continue
+            levels.append((_unpack_states(s, W), _unpack_states(ns, W), a))
+        if not levels:
+            n_empty += 1
+            continue
+        gC = max(l[0].shape[1] for l in levels)
+        gH = max(l[0].shape[2] for l in levels)
+        gW = max(l[0].shape[3] for l in levels)
+        if max(gH, gW) > max_grid_dim:
+            n_skip_size += 1
+            continue
+
+        def _pad(x):  # (N,C,H,W) -> (N,gC,gH,gW); zero-pad is masked downstream
+            return np.pad(x, ((0, 0), (0, gC - x.shape[1]),
+                              (0, gH - x.shape[2]), (0, gW - x.shape[3])))
+        S = np.concatenate([_pad(l[0]) for l in levels])
+        Nx = np.concatenate([_pad(l[1]) for l in levels])
+        A = np.concatenate([l[2] for l in levels])
+        if cap and len(S) > cap:
+            if ancestor_closed:
+                keep = ancestor_closed_subsample(S, Nx, cap, seed)
+            else:
+                keep = rng.choice(len(S), cap, replace=False)
+            S, Nx, A = S[keep], Nx[keep], A[keep]
+        n = len(S)
+        n_val = int(round(val_frac * n))
+        perm = rng.permutation(n)
+        val_idx = np.sort(perm[:n_val]).astype(np.int64)
+        per_states.append(_pack_states(S.astype(np.uint8)))
+        per_next.append(_pack_states(Nx.astype(np.uint8)))
+        per_actions.append(A)
+        per_val.append(val_idx)
+        game_infos.append({"name": name, "n_objs": gC, "H": gH, "W": gW})
+    print(f"[load_caches] {len(game_infos)} games loaded; "
+          f"skipped {n_skip_size} oversize, {n_empty} empty/missing")
+    dataset = {"per_game_states": per_states,
+               "per_game_next_states": per_next,
+               "per_game_actions": per_actions,
+               "per_game_val_idx": per_val}
+    return dataset, game_infos
+
+
+# ---------------------------------------------------------------------------
 # Per-game trajectory infra
 # ---------------------------------------------------------------------------
 class GameData:
@@ -322,9 +401,11 @@ def main():
 
     print(f"[train_recurrent] devices: {jax.devices()}")
 
-    # --- Game selection + dataset (reuses history-run merged cache) ---
-    from puzzlescript_jax.utils import init_ps_lark_parser
-    ps_parser = init_ps_lark_parser()
+    # --- Game selection + dataset ---
+    # games_list_file: load cached transitions DIRECTLY (no JS parse — can't
+    # hang, scales to the full corpus). n_per_rule path: reuse the parsed
+    # merged cache (needs the JS parser for game_infos).
+    t0 = time.time()
     if args.games_list_file is not None:
         list_path = Path(args.games_list_file)
         game_names = [ln.strip() for ln in list_path.read_text().splitlines()
@@ -332,24 +413,27 @@ def main():
         if not game_names:
             raise RuntimeError(f"empty games_list_file: {args.games_list_file}")
         print(f"[train_recurrent] games_list_file={args.games_list_file}: "
-              f"{len(game_names)} games")
+              f"{len(game_names)} games (parser-free direct cache load)")
+        dataset, game_infos = load_dataset_from_caches(
+            game_names, (args.max_transitions_per_game or None), args.val_frac,
+            ancestor_closed=True, max_grid_dim=args.max_grid_dim, seed=args.seed)
     else:
+        from puzzlescript_jax.utils import init_ps_lark_parser
+        ps_parser = init_ps_lark_parser()
         game_names = select_n_per_rule_games(args.n_games, args.max_grid_dim)
-
-    t0 = time.time()
-    dataset, game_infos = collect_multigame_dataset(
-        game_names, ps_parser,
-        level_i=None,
-        n_search_steps=N_SEARCH_STEPS,
-        search_timeout_ms=args.search_timeout_ms,
-        search_algo=SEARCH_ALGO,
-        encode_sprites=False,
-        max_transitions_per_game=(args.max_transitions_per_game or None),
-        val_frac=args.val_frac,
-        history=0,
-        ancestor_closed=True,
-        max_grid_dim=args.max_grid_dim,
-    )
+        dataset, game_infos = collect_multigame_dataset(
+            game_names, ps_parser,
+            level_i=None,
+            n_search_steps=N_SEARCH_STEPS,
+            search_timeout_ms=args.search_timeout_ms,
+            search_algo=SEARCH_ALGO,
+            encode_sprites=False,
+            max_transitions_per_game=(args.max_transitions_per_game or None),
+            val_frac=args.val_frac,
+            history=0,
+            ancestor_closed=True,
+            max_grid_dim=args.max_grid_dim,
+        )
     print(f"[train_recurrent] dataset ready in {time.time()-t0:.1f}s; "
           f"{len(game_infos)} games")
 
