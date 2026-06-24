@@ -52,6 +52,44 @@ def unroll(model, states, actions, n_colors, device):
     return torch.stack(logits_seq, dim=1)  # (B,L,C,H,W)
 
 
+def _encode_t(state_long, actions_t, n_colors, device):
+    """Like encode_step but the state is already a (B,H,W) long tensor on device."""
+    oh = F.one_hot(state_long, n_colors).permute(0, 3, 1, 2).float()
+    B, _, H, W = oh.shape
+    at = torch.as_tensor(actions_t[:, 0], dtype=torch.long, device=device)
+    atype_oh = F.one_hot(at, N_ATYPES).float()
+    cm = torch.zeros(B, 1, H, W, device=device)
+    cx = torch.as_tensor(actions_t[:, 1], dtype=torch.long, device=device)
+    cy = torch.as_tensor(actions_t[:, 2], dtype=torch.long, device=device)
+    idx = torch.nonzero(at == ATYPE_IDX["click"], as_tuple=True)[0]
+    if idx.numel():
+        cm[idx, 0, cy[idx], cx[idx]] = 1.0
+    return oh, atype_oh, cm
+
+
+def unroll_ss(model, states, actions, n_colors, device, p):
+    """Scheduled-sampling unroll: with prob p (per step, t>0) feed the model its OWN
+    previous prediction instead of the ground-truth frame, so it learns to recover from
+    its own errors (fixes autoregressive accumulation + cold-start phase lock-in; loss is
+    still vs the ground-truth next frame). See DIVERGENCES.md."""
+    B, Lp1, H, W = states.shape
+    L = actions.shape[1]
+    gt = torch.as_tensor(states, dtype=torch.long, device=device)
+    h = model.init_hidden(B, H, W, device)
+    logits_seq = []
+    prev_pred = None
+    for t in range(L):
+        if t == 0 or prev_pred is None or float(torch.rand(())) >= p:
+            in_state = gt[:, t]
+        else:
+            in_state = prev_pred           # model's own prediction (detached)
+        oh, at_oh, cm = _encode_t(in_state, actions[:, t], n_colors, device)
+        logits, h = model.step(oh, at_oh, cm, h)
+        prev_pred = logits.argmax(1).detach()
+        logits_seq.append(logits)
+    return torch.stack(logits_seq, dim=1)
+
+
 @torch.no_grad()
 def evaluate(model, states, actions, n_colors, device, purple_idx, bs=16):
     model.eval()
@@ -94,6 +132,10 @@ def main():
                     help="grid-wide reduction; max/meanmax preserve sparse global signals "
                          "(e.g. a corner button press) that mean dilutes. meanmax default: fixes "
                          "spatial-locality mode-latch (waterplug, sand) at no cost on globally-pooled games")
+    ap.add_argument("--sched_samp", type=float, default=0.0,
+                    help="max scheduled-sampling prob (ramped 0->this over training): feed the "
+                         "model its own predictions during the unroll so it learns to recover from "
+                         "its own errors (reduces autoregressive divergence; see DIVERGENCES.md)")
     ap.add_argument("--seq_len", type=int, default=0,
                     help="truncate episodes to this many steps for cheaper BPTT (0=full)")
     ap.add_argument("--val_frac", type=float, default=0.1)
@@ -130,7 +172,11 @@ def main():
     best = -1.0
     for step in range(1, args.updates + 1):
         b = rng.choice(train, size=args.batch_size)
-        logits = unroll(model, states[b], actions[b], n_colors, device)
+        if args.sched_samp > 0:
+            p = args.sched_samp * min(1.0, step / max(1, args.updates // 2))  # ramp 0->max over first half
+            logits = unroll_ss(model, states[b], actions[b], n_colors, device, p)
+        else:
+            logits = unroll(model, states[b], actions[b], n_colors, device)
         tgt = torch.as_tensor(states[b, 1:], dtype=torch.long, device=device)  # (B,L,H,W)
         loss = F.cross_entropy(logits.reshape(-1, n_colors, H, W),
                                tgt.reshape(-1, H, W))
