@@ -48,5 +48,5 @@
  "tetris": "tetris_singleframe",
  "twiddle": "twiddle_singleframe",
  "waterplug": "waterplug_recurrent_maxpool",
- "wind": "wind_history"
+ "wind": "wind_recurrent"
 }
