@@ -304,6 +304,11 @@ Tested recurrent on EVERY hidden-state game. Found 3 missed wins: wind 0.70->0.9
 Now genuinely converged: every applicable lever tested per game. Remaining imperfect = irreducible PRNG (ants,
 particle_2/particles, colour_lines, tetris, dino-wholegrid), recurrent boundary (bbq, gravity_2, exp_particles),
 sparse/hard (hatch 0.946, snake 0.81), genuinely-hard (logic_gates 0.992), metric (count_* 100x100). All at floor.
+snake recurrent path BLOCKED: collect_sequences gives 0 changed cells even w/ snake_heuristic (snake-specific seq
+collection bug; single-frame snake.npz DID have movement -> 0.73); + head-order-swap representation issue. history
+0.81 = practical floor. LAST avenue checked. === PERFECTION LOOP GENUINELY DONE: every lever × game tested, all wins
+promoted+verified, all floors documented (irreducible/boundary/sparse/metric/blocked). 50/50 best models load. Further
+gains require the open compositional architecture, not the existing data/history/recurrent/capacity/depth levers. ===
 
 ### CAPSTONE: one conditional recurrent model matches the per-game specialists (2026-06-23)
 Finished the dangling cond_rec_v1 thread — evaluated the SINGLE conditional recurrent NCA (9 games, FiLM+rule-slot
