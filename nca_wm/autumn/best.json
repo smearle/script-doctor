@@ -1,6 +1,6 @@
 {
  "ants": "ants_big",
- "arc_slack": "arc_slack_singleframe",
+ "arc_slack": "arc_slack_recurrent",
  "balloon": "balloon_singleframe",
  "balls": "balls_history",
  "balls2": "balls2_singleframe",
@@ -26,7 +26,7 @@
  "gravity_2": "gravity_2_recurrent",
  "gravity_3": "gravity_3_recurrent_hicap",
  "gravity_4": "gravity_4_singleframe",
- "grow": "grow_big25k",
+ "grow": "grow_recurrent",
  "hatch": "hatch_singleframe",
  "ice": "ice_singleframe",
  "lights": "lights_singleframe",

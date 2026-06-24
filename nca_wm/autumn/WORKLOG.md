@@ -291,6 +291,11 @@ KEY GENERALIZABLE FINDINGS from the loop: (1) "imperfect deterministic" almost a
 holds); (2) capacity is a COPY-ESCAPE rescue (helps only copy-stuck models, gravity_3), not a general boost; (3) always
 before/after vs baseline — the recurrent train metric overstates (egg/buoyancy false positives caught). Further gains
 need the open-problem compositional/rule-learning architecture, not more of the existing levers.
+**LOOP NOT DONE — untested-recurrent scan found more wins (2026-06-24):** premature "convergence" missed games where
+only single-frame/history was tried but recurrent (untested lever) helps. Verified before/after: **wind 0.702->0.999**
+(arrow-set direction), **grow 0.962->0.995** (sun direction), **arc_slack 0.955->0.979** (particle active/green state).
+All promoted. LESSON: systematically test EVERY applicable lever per game before declaring floor; the recurrent lever
+on hidden-state games I'd only single-frame'd kept paying off. Testing last candidates dino/hatch.
 
 ### CAPSTONE: one conditional recurrent model matches the per-game specialists (2026-06-23)
 Finished the dangling cond_rec_v1 thread — evaluated the SINGLE conditional recurrent NCA (9 games, FiLM+rule-slot
