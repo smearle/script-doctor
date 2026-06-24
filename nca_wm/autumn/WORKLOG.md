@@ -238,6 +238,18 @@ User: "press blue button then place -> WM places purple not blue." Investigated:
    action (press-then-IMMEDIATELY-place = 0 steps since) is the WORST case (0.35). So balancing data fixes the bias
    but not the lag; a clean fix needs a faster-latching mode mechanism (gating / explicit mode channel), still open.
 
+### PERFECTION LOOP (2026-06-24): drive every imperfect REDUCIBLE model to ~1.0
+Cycle = localize errors (per-action + sexp) -> apply the matched lever (coverage/history/recurrent/capacity) ->
+retrain -> repeat. HARD RULE: only chase REDUCIBLE error; irreducible (seeded-PRNG) games have a floor, document don't chase.
+Triage (random-hits): REDUCIBLE = gravity_2, carrace, buoyancy, egg, bbq, hatch, logic_gates, arc_slack, grow.
+IRREDUCIBLE/mixed (skip-to-floor) = ants, tetris, particle_2, particles, exp_particles, colour_lines, dino (verify).
+Cycle 1: gravity_2 (place 0.142 = hidden blobColor counter + gravity dir) and carrace (noop/up chg-cell 0.000 = hidden
+frameCount clock + speed) -> both HIDDEN-STATE -> "relevant data" = sequences -> recurrent+meanmax fix (training).
+Cycle 1 RESULT: **carrace 0.585 -> 0.960** (clean win, frameCount clock tracked; best.json updated). gravity_2 recurrent
+~0.51 = NO clean win (triple hidden state: gravity dir + blobColor counter + 2x2 multi-cell blobs = recurrent boundary,
+like the earlier 2nd-order/multi-var hard cases). Cycle 2 (audit -> all hidden-state): buoyancy (addWeight), egg
+(gravity+height), bbq (gas/cooked/health counters) -> recurrent fix training; hatch skipped (sparse dynamics).
+
 ### CAPSTONE: one conditional recurrent model matches the per-game specialists (2026-06-23)
 Finished the dangling cond_rec_v1 thread — evaluated the SINGLE conditional recurrent NCA (9 games, FiLM+rule-slot
 cross-attn, pool=meanmax) per-game vs the per-game recurrent models. Teacher-forced changed-cell / autoregressive:
