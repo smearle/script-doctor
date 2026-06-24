@@ -296,6 +296,14 @@ only single-frame/history was tried but recurrent (untested lever) helps. Verifi
 (arrow-set direction), **grow 0.962->0.995** (sun direction), **arc_slack 0.955->0.979** (particle active/green state).
 All promoted. LESSON: systematically test EVERY applicable lever per game before declaring floor; the recurrent lever
 on hidden-state games I'd only single-frame'd kept paying off. Testing last candidates dino/hatch.
+dino: single-frame ALREADY 0.996 changed-cell (recurrent 0.994 no help; whole-grid residual = irreducible randomness)
+-> keep singleframe. hatch: recurrent 0.031 collapsed (sparse hatch events) vs singleframe 0.648 -> keep singleframe.
+=== RECURRENT-LEVER SCAN COMPLETE (this time for real) ===
+Tested recurrent on EVERY hidden-state game. Found 3 missed wins: wind 0.70->0.999, grow 0.96->0.995, arc_slack
+0.96->0.979 (all promoted). Confirmed no-help: dino (already good+random), hatch (sparse), egg/buoyancy (already good).
+Now genuinely converged: every applicable lever tested per game. Remaining imperfect = irreducible PRNG (ants,
+particle_2/particles, colour_lines, tetris, dino-wholegrid), recurrent boundary (bbq, gravity_2, exp_particles),
+sparse/hard (hatch 0.946, snake 0.81), genuinely-hard (logic_gates 0.992), metric (count_* 100x100). All at floor.
 
 ### CAPSTONE: one conditional recurrent model matches the per-game specialists (2026-06-23)
 Finished the dangling cond_rec_v1 thread — evaluated the SINGLE conditional recurrent NCA (9 games, FiLM+rule-slot
