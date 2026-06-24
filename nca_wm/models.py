@@ -286,6 +286,161 @@ class NCAWorldModel(nn.Module):
 
 
 # ---------------------------------------------------------------------------
+# 1b. Recurrent NCA world model (memory carried across env ticks — Option B)
+# ---------------------------------------------------------------------------
+
+class RecurrentNCAWorldModel(nn.Module):
+    """NCA world model with a hidden grid carried ACROSS env ticks ("memory").
+
+    Unlike :class:`NCAWorldModel` (stateless ``f(state, action) -> next``),
+    this maintains a hidden grid ``h`` that persists between env ticks. Each
+    tick injects the observed frame + action *additively* into ``h``, runs the
+    same conv → pool-projection → residual body, reads out the next frame, and
+    carries ``h`` forward. ``h`` is reset to zeros at trajectory start and the
+    model is trained over ordered trajectories with BPTT (teacher-forced on the
+    observed frame each tick).
+
+    Two motivations (mirrors ``nca_wm/autumn`` findings):
+      * within-game *hidden state* — episode-long counters/modes that no single
+        frame reveals (history channels cannot integrate these);
+      * across a *context* of transitions — accumulate an unbounded belief about
+        the game's rules, an alternative to the fixed ``--history`` window for
+        in-context rule inference.
+
+    The body mirrors :class:`NCAWorldModel` exactly (same Dense embed, conv,
+    pool features, GELU residual, optional pre-step LayerNorm, input_skip, and
+    n_layers×n_repeats factoring) so the memory-vs-history/cond comparison is
+    apples-to-apples. The one recurrent-specific addition is a GroupNorm on the
+    carried ``h`` at the end of each tick: our base body has no per-step
+    normalization, so without it the additive carry blows up over ticks.
+
+    NOTE: submodules are pre-instantiated ONCE in ``__call__`` and reused across
+    ticks (the recurrence). A factored ``nn.remat``-wrapped per-tick submodule
+    was tried to cut BPTT memory for batch 32, but it failed to learn (control
+    confirmed it stalls at change_err~0.6 where this inline version descends);
+    use higher-VRAM hardware for larger batches instead of checkpointing.
+    """
+    n_hid: int = 128
+    n_steps: int = 4
+    n_out: int = 1  # set to n_objs at init time
+    return_intermediates: bool = False
+    axis_pool: bool = False
+    axis_cummax: bool = False
+    global_pool: bool = False
+    use_layernorm: bool = False
+    input_skip: bool = True
+    n_repeats: int = 1
+    # Config parity with NCAWorldModel; the recurrent path uses memory, not
+    # history channels, so this stays 0 (asserted at init in train.py).
+    history: int = 0
+    # Truncated BPTT: with bptt_window>0, the hidden grid is carried across ALL
+    # L ticks but stop-gradient'd at tick (L - bptt_window), so backward only
+    # flows through the last bptt_window ticks. This bounds activation memory to
+    # the window regardless of context length L, letting the recurrence span a
+    # long context (large k) that accumulates the game's dynamics. 0 = full BPTT.
+    bptt_window: int = 0
+
+    @nn.compact
+    def __call__(self, states, actions_onehot):
+        """Unroll over an ordered trajectory.
+
+        Args:
+            states: (B, L, C, H, W) float32 multihot observed frames
+                (teacher-forced inputs, oldest→newest).
+            actions_onehot: (B, L, 5) float32 one-hot action per tick.
+        Returns:
+            (logits, win_logits, sprite_logits) where
+              logits:  (B, L, C, H, W) per-tick next-state logits
+              win_logits: (B, L)
+              sprite_logits: (B, L, C, 5, 5, 4) zeros placeholder.
+        """
+        B, L, C, H, W = states.shape
+        if self.n_steps % self.n_repeats != 0:
+            raise ValueError(
+                f"n_steps ({self.n_steps}) must be divisible by n_repeats "
+                f"({self.n_repeats})"
+            )
+        n_layers = self.n_steps // self.n_repeats
+
+        # Pre-instantiate body modules ONCE; reused every tick (recurrent).
+        obs_embed = nn.Dense(self.n_hid, name="embed")
+        step_norm = nn.LayerNorm(name="step_ln") if self.use_layernorm else None
+        convs = [
+            nn.Conv(self.n_hid, kernel_size=(3, 3), padding="SAME",
+                    name=f"conv_{i}")
+            for i in range(n_layers)
+        ]
+        has_pool = self.axis_pool or self.axis_cummax or self.global_pool
+        pool_projs = (
+            [nn.Dense(self.n_hid, name=f"pool_proj_{i}")
+             for i in range(n_layers)]
+            if has_pool else [None] * n_layers
+        )
+        outs = [nn.Dense(self.n_hid, name=f"out_{i}")
+                for i in range(n_layers)]
+        carry_norm = nn.GroupNorm(num_groups=1, name="carry_gn")
+        readout_layer = nn.Dense(self.n_out, name="readout")
+        win_ln = nn.LayerNorm(name="win_ln")
+        win_out = nn.Dense(1, name="win_out")
+
+        def body(h, h_inp, mask_bcast):
+            for r in range(self.n_repeats):
+                for i in range(n_layers):
+                    h_step = step_norm(h) if step_norm is not None else h
+                    conv_in = (jnp.concatenate([h_step, h_inp], axis=-1)
+                               if self.input_skip else h_step)
+                    h_conv = convs[i](conv_in)
+                    pool_feats = []
+                    if self.axis_pool:
+                        pool_feats.append(jnp.broadcast_to(
+                            h.max(axis=2, keepdims=True), h.shape))
+                        pool_feats.append(jnp.broadcast_to(
+                            h.max(axis=1, keepdims=True), h.shape))
+                    if self.axis_cummax:
+                        pool_feats.append(jnp.maximum.accumulate(h, axis=2))
+                        pool_feats.append(jnp.maximum.accumulate(h, axis=1))
+                    if self.global_pool:
+                        pool_feats.append(jnp.broadcast_to(
+                            h.max(axis=(1, 2), keepdims=True), h.shape))
+                    if pool_feats:
+                        h_conv = pool_projs[i](
+                            jnp.concatenate([h_conv] + pool_feats, axis=-1))
+                    delta = outs[i](nn.gelu(h_conv))
+                    h = h + delta
+                    h = h * mask_bcast
+            return h
+
+        h = jnp.zeros((B, H, W, self.n_hid), dtype=jnp.float32)
+        logits_seq, win_seq = [], []
+        cut = (L - self.bptt_window) if self.bptt_window else 0
+        for t in range(L):
+            # Truncated BPTT: detach the carried context at the window boundary
+            # so backward only flows through the last `bptt_window` ticks.
+            if self.bptt_window and t == cut:
+                h = jax.lax.stop_gradient(h)
+            x = states[:, t].transpose(0, 2, 3, 1)  # (B, H, W, C)
+            mask_bcast = (x.sum(axis=-1, keepdims=True) > 0).astype(jnp.float32)
+            act = jnp.broadcast_to(
+                actions_onehot[:, t][:, None, None, :], (B, H, W, N_ACTIONS))
+            h_inp = obs_embed(jnp.concatenate([x, act], axis=-1))
+            # Inject the observed transition into the persistent hidden grid.
+            h = (h + h_inp) * mask_bcast
+            h = body(h, h_inp, mask_bcast)
+            # Per-tick carry normalization keeps the recurrence bounded.
+            h = carry_norm(h) * mask_bcast
+
+            logits_seq.append(readout_layer(h).transpose(0, 3, 1, 2))
+            pooled = (h * mask_bcast).sum(axis=(1, 2)) / jnp.maximum(
+                mask_bcast.sum(axis=(1, 2)), 1.0)
+            win_seq.append(win_out(win_ln(pooled)).squeeze(-1))
+
+        logits = jnp.stack(logits_seq, axis=1)          # (B, L, C, H, W)
+        win_logits = jnp.stack(win_seq, axis=1)         # (B, L)
+        sprite_logits = jnp.zeros((B, L, self.n_out, 5, 5, 4), dtype=jnp.float32)
+        return logits, win_logits, sprite_logits
+
+
+# ---------------------------------------------------------------------------
 # 2a. Conditional NCA world model (game-spec encoder + FiLM)
 # ---------------------------------------------------------------------------
 
