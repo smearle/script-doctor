@@ -261,6 +261,18 @@ train metric [[feedback_train_change_err_misleading]]. CONVERGENCE: the perfecti
 cleanly-reducible (single hidden var) games fixed to ~1.0; remaining error is multi-variable/2nd-order BOUNDARY
 (gravity_2/3, exp_particles, bbq partial — need better architecture, the open problem) or IRREDUCIBLE (ants, particle_2/
 particles, colour_lines, tetris = PRNG floor). Markovian + clean-lever games already perfect.
+**CAPACITY CRACKS THE BOUNDARY (2026-06-24):** hi-cap recurrent (n_hid192, n_micro6, 12k) on gravity_3:
+standard-recurrent **0.000** (stuck in copy basin) -> **hi-cap 0.955** (verified before/after). The 2nd-order
+accumulating-velocity dynamics needed more capacity+depth to ESCAPE copy; the boundary was capacity-limited, NOT
+fundamental. Promoted gravity_3 -> gravity_3_recurrent_hicap. Running same hi-cap on exp_particles + gravity_2.
+-> Revised loop verdict: the "recurrent boundary" partly dissolves with capacity; only the IRREDUCIBLE PRNG games
+(ants, particle_2/particles, colour_lines, tetris) are a true floor. Re-run standard-recurrent boundary games at hi-cap.
+CONSOLIDATED capacity verdict (clean before/after): gravity_3 0.000->0.955 (hi-cap CRACKED a copy-stuck model);
+gravity_2 standard-recurrent ALREADY 0.938 (hi-cap 0.920, no help); exp_particles 0.652 std vs 0.625 hi-cap (no help,
+chaotic ~floor). RULE: capacity helps ONLY when standard recurrent is stuck in the copy basin (escape aid), not a
+general boost. Promotions: gravity_3->_recurrent_hicap (0.955), gravity_2->_recurrent (0.938), exp_particles->_recurrent
+(0.652, partial but >> singleframe 0.167). Remaining non-perfect = genuinely hard (exp_particles chaotic) or IRREDUCIBLE
+PRNG (ants, particle_2/particles, colour_lines, tetris) = true floor, documented not chased. Perfection loop near done.
 
 ### CAPSTONE: one conditional recurrent model matches the per-game specialists (2026-06-23)
 Finished the dangling cond_rec_v1 thread — evaluated the SINGLE conditional recurrent NCA (9 games, FiLM+rule-slot
