@@ -158,9 +158,27 @@ def load_dataset_from_caches(game_names, max_transitions_per_game, val_frac,
     subsample to the cap, split val_frac. Returns (dataset, game_infos) in the
     same format as collect_multigame_dataset.
     """
+    import hashlib
+    import pickle as _pickle
     from nca_wm.state_ops import _pack_states, _unpack_states
     from nca_wm.data_collection import ancestor_closed_subsample
     cap = max_transitions_per_game
+    # Disk cache so repeated runs (different k / arms) don't re-pay the slow
+    # single-threaded subsample over the whole corpus.
+    _ckey = hashlib.sha256(json.dumps({
+        "games": sorted(game_names), "cap": cap,
+        "val_frac": round(float(val_frac), 6), "ac": bool(ancestor_closed),
+        "mgd": max_grid_dim, "seed": int(seed), "v": 1}, sort_keys=True
+    ).encode()).hexdigest()[:16]
+    _cpath = _REPO_ROOT / "rollout_data" / "_merged" / f"recurrent_ds_{_ckey}.pkl"
+    if _cpath.is_file():
+        try:
+            with open(_cpath, "rb") as _f:
+                _d, _gi = _pickle.load(_f)
+            print(f"[load_caches] reused {_cpath.name}: {len(_gi)} games")
+            return _d, _gi
+        except Exception:
+            pass
     rng = np.random.default_rng(seed)
     per_states, per_next, per_actions, per_val = [], [], [], []
     game_infos = []
@@ -231,6 +249,13 @@ def load_dataset_from_caches(game_names, max_transitions_per_game, val_frac,
                "per_game_next_states": per_next,
                "per_game_actions": per_actions,
                "per_game_val_idx": per_val}
+    try:
+        _cpath.parent.mkdir(parents=True, exist_ok=True)
+        with open(_cpath, "wb") as _f:
+            _pickle.dump((dataset, game_infos), _f, protocol=4)
+        print(f"[load_caches] wrote {_cpath.name}")
+    except Exception as _e:
+        print(f"[load_caches] cache write skipped: {_e}")
     return dataset, game_infos
 
 
