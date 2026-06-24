@@ -131,3 +131,42 @@ clean_pufferl PPO + RecurrentPolicy (PyTorch)   # GRU actor-critic on GPU
 M0: add `puzzlejax/puffer_ps_env.py` wrapping `CppBatchedPuzzleScriptEnv` as a
 PufferEnv, plus a 30-line random-rollout + throughput script, gated behind a
 `pufferlib` install. Everything downstream reuses the existing C++ engine.
+
+## STATUS / findings (2026-06-24)
+
+**Dependency conflict (important).** `pufferlib==3.0.0` hard-pins `numpy<2.0` and
+`gymnasium<=0.29.1`, which conflict with this repo's JAX stack (`numpy>=2`,
+`gymnasium 1.2.3`). Installing it into the main `.venv` downgraded numpy and
+broke jax/nca_wm; the main venv has been **restored** (numpy 2.2.6, gymnasium
+1.2.3, gym 0.26.2; pufferlib removed). Worse, importing the `puzzlescript_cpp`
+*wrapper* pulls in `backends.nodejs` → `from javascript import require` and
+`puzzlescript_jax.utils` (→ jax → numpy>=2), so the wrapper can't even import in a
+numpy<2 venv. ⇒ A true in-pufferlib run needs an **isolated venv** that uses the
+raw `_puzzlescript_cpp` .so (Engine/BatchedEngine/Renderer) directly, bypassing
+the Python wrapper and `backends`.
+
+**Built and validated in the main venv (conflict-free, no pufferlib import):**
+- `puzzlejax/puffer_ps_env.py` — `PuzzleScriptVecEnv`: multi-game batched env over
+  the C++ engine (one `CppBatchedPuzzleScriptEnv` per game, obs padded to a common
+  (C,H,W), per-env `game_ids`), gym-vector / PufferEnv-shaped API
+  (`single_observation_space`, `single_action_space`, `reset`, `step`). Smoke: 4
+  games padded to (12,19,20), 4096 envs, ~33k env-steps/s (the per-game engines
+  step sequentially in Python — parallelizing them, or a single multi-game C++
+  engine, is the obvious throughput win).
+- `puzzlejax/puffer_models.py` — `RecurrentPolicy` (torch): conv→GRU→actor/critic
+  with done-masked carry reset + optional game-id embedding. End-to-end
+  env(CPU)↔policy(GPU) smoke passes (obs→encode→GRU→sample→step), 3.3M params, no
+  XLA compile. Precompiled game JSON cached under `puffer_assets/games_json/`.
+
+**Recommended path (decision point):**
+- **(A) No-pufferlib, main venv:** write a cleanrl-style torch recurrent PPO loop
+  directly on `PuzzleScriptVecEnv` (the C++ env already provides the
+  vectorization). Zero dependency conflict, uses existing torch 2.10+cu128, ready
+  now. Gets the full compute win (fast C++ envs, no compile wall).
+- **(B) True PufferLib, isolated venv:** create `.venv_puffer` (numpy<2 + pufferlib
+  + torch), import the raw `_puzzlescript_cpp` .so (no wrapper/backends), wrap as a
+  PufferEnv, drive `clean_pufferl`. More setup + a duplicate torch, but gets the
+  puffer ecosystem (tuned PPO, sweeps, dashboards).
+
+(A) is the faster route to M1–M3 results; (B) buys the Puffer tooling. The env
+adapter + policy above are shared by both.
