@@ -7,7 +7,7 @@
  "bbq": "bbq_recurrent",
  "bottle": "bottle_singleframe",
  "buoyancy": "buoyancy_singleframe",
- "carrace": "carrace_singleframe",
+ "carrace": "carrace_recurrent",
  "charge": "charge_meanmax",
  "chomp": "chomp_singleframe",
  "coins": "coins_singleframe",
