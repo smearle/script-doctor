@@ -249,6 +249,18 @@ Cycle 1 RESULT: **carrace 0.585 -> 0.960** (clean win, frameCount clock tracked;
 ~0.51 = NO clean win (triple hidden state: gravity dir + blobColor counter + 2x2 multi-cell blobs = recurrent boundary,
 like the earlier 2nd-order/multi-var hard cases). Cycle 2 (audit -> all hidden-state): buoyancy (addWeight), egg
 (gravity+height), bbq (gas/cooked/health counters) -> recurrent fix training; hatch skipped (sparse dynamics).
+COVERAGE CLOSED: collected+baselined the 4 untried-missing games — balls2 1.000 (Markovian), count_1/4/5 (100x100,
+whole-grid-exact unfair; cell-acc metric). best.json = 50 games = ALL interpreter-supported. Only 9 remain unmodeled
+= interpreter-blocked (boids/chaos_game/mobileMagnet/peg_solitaire/ricochet_robots[_random_walls]/rink/sokoban/sokoban_ii
+crash/hang on random actions). figures/error_per_game.png = log-y error per game (irreducible floors vs reducible targets).
+Cycle 2 RESULT (rigorous before/after on seq-val, NOT the misleading train metric): **bbq 0.111->0.826** (recurrent
+win, gas/cooked/health counters; promoted; partial=multi-counter boundary). egg single-frame ALREADY 1.000 changed-cell
+(recurrent 0.994 no help; 0.92 whole-grid residual is non-dynamics) -> KEEP singleframe. buoyancy single-frame 0.950 >
+recurrent 0.911 -> KEEP singleframe. DISCIPLINE confirmed: always before/after vs single-frame, never trust the recurrent
+train metric [[feedback_train_change_err_misleading]]. CONVERGENCE: the perfection loop is hitting its natural limit —
+cleanly-reducible (single hidden var) games fixed to ~1.0; remaining error is multi-variable/2nd-order BOUNDARY
+(gravity_2/3, exp_particles, bbq partial — need better architecture, the open problem) or IRREDUCIBLE (ants, particle_2/
+particles, colour_lines, tetris = PRNG floor). Markovian + clean-lever games already perfect.
 
 ### CAPSTONE: one conditional recurrent model matches the per-game specialists (2026-06-23)
 Finished the dangling cond_rec_v1 thread — evaluated the SINGLE conditional recurrent NCA (9 games, FiLM+rule-slot
