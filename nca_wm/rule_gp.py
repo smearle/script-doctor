@@ -15,6 +15,19 @@ from dataclasses import dataclass, field
 
 
 VALID_OBJECT_MODIFIERS = {"", ">", "<", "^", "v", "no", "random", "randomDir"}
+
+# Stochastic constructs (random / randomDir) make transitions irreducibly
+# unpredictable -- a cheap way to inflate world-model loss without adding any
+# learnable mechanics. ALLOW_RANDOM (set by the GP driver) gates them out.
+ALLOW_RANDOM = True
+STOCHASTIC_MODIFIERS = {"random", "randomDir"}
+
+
+def object_modifier_pool():
+    """Sampleable object modifiers (deterministic order), minus stochastic ones
+    when ALLOW_RANDOM is False."""
+    pool = VALID_OBJECT_MODIFIERS if ALLOW_RANDOM else (VALID_OBJECT_MODIFIERS - STOCHASTIC_MODIFIERS)
+    return sorted(pool)
 VALID_RULE_PREFIXES = {"", "late", "random", "horizontal", "vertical",
                        "left", "right", "up", "down"}
 VALID_COMMANDS = {"again", "cancel", "checkpoint", "restart", "win"}
@@ -196,11 +209,11 @@ def random_mutate_rule(rule: Rule, rng) -> Rule:
     ])
     if op == "set_modifier_lhs":
         target = rng.choice(["Player", "ObjA", "ObjB", "ObjC"])
-        mod = rng.choice(list(VALID_OBJECT_MODIFIERS))
+        mod = rng.choice(object_modifier_pool())
         return set_object_modifier(rule, target, mod, side="lhs")
     if op == "set_modifier_rhs":
         target = rng.choice(["Player", "ObjA", "ObjB", "ObjC"])
-        mod = rng.choice(list(VALID_OBJECT_MODIFIERS))
+        mod = rng.choice(object_modifier_pool())
         return set_object_modifier(rule, target, mod, side="rhs")
     if op == "toggle_again":
         return set_command(rule, "" if "again" in rule.commands else "again")

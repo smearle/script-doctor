@@ -86,10 +86,20 @@ std::vector<int> actionsForEngine(const Engine& engine) {
     return actions;
 }
 
+// Cap on consecutive 'again' ticks resolved within a single transition. Matches
+// BatchedEngine::step and the JS single_step_controller (MAX_AGAIN=50): without
+// it, a game whose rules keep modifying the level every tick (e.g. a `random`
+// flood with `[X] -> again`) spins forever, hanging the search on one
+// (state, action). Interactive play already bounds this to 50, so capping here
+// makes collected transitions match what a player actually experiences.
+static constexpr int MAX_AGAIN = 50;
+
 bool processInputSearch(Engine& engine, int action) {
     bool changed = engine.processInput(action);
-    while (engine.isAgaining()) {
+    int ag = 0;
+    while (engine.isAgaining() && ag < MAX_AGAIN) {
         changed = engine.processInput(-1) || changed;
+        ++ag;
     }
     return changed;
 }
