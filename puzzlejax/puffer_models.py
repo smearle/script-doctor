@@ -21,7 +21,7 @@ def _ortho(layer, gain=1.0):
 
 class RecurrentPolicy(nn.Module):
     def __init__(self, n_objs: int, n_actions: int = 5, hidden: int = 128,
-                 n_games: int = 1, game_embed: int = 0):
+                 n_games: int = 1, game_embed: int = 0, pool: int = 12):
         super().__init__()
         self.hidden = hidden
         self.game_embed = game_embed
@@ -29,6 +29,10 @@ class RecurrentPolicy(nn.Module):
             _ortho(nn.Conv2d(n_objs, 64, 3, padding=1), 2 ** 0.5), nn.ReLU(),
             _ortho(nn.Conv2d(64, 64, 3, padding=1), 2 ** 0.5), nn.ReLU(),
         )
+        # Adaptive pool caps the flattened dim regardless of (padded) board size,
+        # so the net scales to many varied-size games. For boards smaller than
+        # `pool` this is a no-op (pool>=size keeps full resolution).
+        self.pool = nn.AdaptiveMaxPool2d(pool)
         self._enc_dim = None  # lazily sized dense after flatten
         self.proj = None
         if game_embed > 0:
@@ -42,6 +46,10 @@ class RecurrentPolicy(nn.Module):
     def encode(self, obs):
         # obs: (B, C, H, W) float
         x = self.conv(obs)
+        H, W = x.shape[2], x.shape[3]
+        # Cap spatial size only when the board is larger than the pool target.
+        if H > self.pool.output_size or W > self.pool.output_size:
+            x = self.pool(x)
         x = x.reshape(x.shape[0], -1)
         if self.proj is None:
             self.proj = _ortho(nn.Linear(x.shape[1], self.hidden), 2 ** 0.5).to(x.device)

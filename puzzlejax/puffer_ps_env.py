@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import json
 import os
+from concurrent.futures import ThreadPoolExecutor
 from typing import List, Optional
 
 import numpy as np
@@ -82,6 +83,8 @@ class PuzzleScriptVecEnv:
         self.single_observation_space = gym.spaces.Box(
             low=0, high=1, shape=(self.Cmax, self.Hmax, self.Wmax), dtype=np.uint8)
         self.single_action_space = gym.spaces.Discrete(int(self._engines[0].num_actions))
+        # Step the per-game C++ engines in parallel (each step releases the GIL).
+        self._pool = ThreadPoolExecutor(max_workers=self.N) if self.N > 1 else None
 
     def _pad(self, obs, ci, hi, wi):
         if (ci, hi, wi) == (self.Cmax, self.Hmax, self.Wmax):
@@ -98,16 +101,22 @@ class PuzzleScriptVecEnv:
         self._obs = np.concatenate(obs_parts, axis=0)
         return self._obs, {}
 
+    def _step_one(self, gi, a):
+        o, r, d, t, _ = self._engines[gi].step(a)
+        return (self._pad(np.asarray(o), *self._shapes[gi]),
+                np.asarray(r, np.float32), np.asarray(d, bool), np.asarray(t, bool))
+
     def step(self, actions):
         actions = np.asarray(actions, dtype=np.int32)
-        obs_parts, rew_parts, done_parts, trunc_parts = [], [], [], []
-        for gi, e in enumerate(self._engines):
-            a = actions[gi * self.epg:(gi + 1) * self.epg]
-            o, r, d, t, _ = e.step(a)
-            obs_parts.append(self._pad(np.asarray(o), *self._shapes[gi]))
-            rew_parts.append(np.asarray(r, np.float32))
-            done_parts.append(np.asarray(d, bool))
-            trunc_parts.append(np.asarray(t, bool))
+        slices = [actions[gi * self.epg:(gi + 1) * self.epg] for gi in range(self.N)]
+        if self._pool is not None:
+            results = list(self._pool.map(lambda gi: self._step_one(gi, slices[gi]), range(self.N)))
+        else:
+            results = [self._step_one(gi, slices[gi]) for gi in range(self.N)]
+        obs_parts = [r[0] for r in results]
+        rew_parts = [r[1] for r in results]
+        done_parts = [r[2] for r in results]
+        trunc_parts = [r[3] for r in results]
         self._obs = np.concatenate(obs_parts, axis=0)
         rewards = np.concatenate(rew_parts)
         dones = np.concatenate(done_parts)
