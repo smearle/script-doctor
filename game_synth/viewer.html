@@ -1,0 +1,351 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta http-equiv="Content-Type" content="text/html;charset=utf-8" >
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<meta name="description" content="PuzzleScript game editor.">
+
+    <title>PuzzleScript</title>
+<link rel="stylesheet" href="/PuzzleScript/src/css/docs.css">
+<link rel="stylesheet" href="/PuzzleScript/src/css/codemirror.css">
+<link rel="stylesheet" href="/PuzzleScript/src/css/midnight.css">
+<link rel="stylesheet" href="/PuzzleScript/src/css/dialog.css">
+<link rel="stylesheet" href="/PuzzleScript/src/css/console.css">
+<link rel="stylesheet" href="/PuzzleScript/src/css/gamecanvas.css">
+<link rel="stylesheet" href="/PuzzleScript/src/css/soundbar.css">
+<link rel="stylesheet" href="/PuzzleScript/src/css/layout.css">
+<link rel="stylesheet" href="/PuzzleScript/src/css/toolbar.css">
+<link rel="stylesheet" href="/PuzzleScript/src/css/show-hint.css">
+
+<!--CSSREPLACE-->
+<link rel="shortcut icon" type="image/x-icon" href="/PuzzleScript/src/Documentation/ico/favicon.ico" />
+
+</head>
+<body>
+
+<div id="leftpanel">
+<form id="form1" name="form1"  action="javascript:void(0);"><textarea id="code" class="codeform" name="code" rows="20" cols="20" style="display:none;">
+title My Game
+author My Name Here
+homepage www.puzzlescript.net
+
+========
+OBJECTS
+========
+
+Background
+green
+
+Target
+darkblue
+
+Wall
+brown
+
+Player
+blue
+
+Crate
+orange
+
+=======
+LEGEND
+=======
+
+. = Background
+# = Wall
+P = Player
+* = Crate
+@ = Crate and Target
+O = Target
+
+=======
+SOUNDS
+=======
+
+================
+COLLISIONLAYERS
+================
+
+Background
+Target
+Player, Wall, Crate
+
+======
+RULES
+======
+
+[ > Player | Crate ] -> [ > Player | > Crate ]
+
+==============
+WINCONDITIONS
+==============
+
+all Target on Crate
+
+=======
+LEVELS
+=======
+
+#########
+#.......#
+#.....@.#
+#.P.*.O.#
+#.......#
+#.......#
+#########
+</textarea></form>
+</div>
+<div id="verticaldragbar"></div>
+
+<div id="uppertoolbar">
+	&nbsp;&nbsp;&nbsp;<a class="nocolorlink" href="/PuzzleScript/src/index.html"><h2>PuzzleScript</h2></a> - <a id="synthGamesLink" title="Browse synthesized games" href="javascript:void('Synthesized Games');" style="color:#7cf;font-weight:bold;">SYNTH&nbsp;GAMES</a> - <a id="saveClickLink" href="javascript:void(0);">SAVE</a> -
+
+	<form action="" style="display:inline;"><select id="loadDropDown" name="default" style="display:inline; width:100px"> 
+		<optgroup label="user saves" id="loadDropdown_userSaves"> - </optgroup>
+		<optgroup label="autosaves" id="loadDropdown_autosaves"> </optgroup>
+</select></form> - <form action="" style="display:inline;"> <select  id="exampleDropdown"  name="default" style="display:inline; width:150px">
+<option value="sokoban_basic">Load Example</option>
+<optgroup label="Tutorial">
+<option value="sokoban_basic">Basic</option>
+<option value="sokoban_eyeball">Eyeball</option>
+<option value="sokoban_match3">Match 3</option>
+<option value="randomrobots">Random Robots</option>
+<option value="randomspawner">Random Robot Spawner</option>
+</optgroup>
+<optgroup label="Elementary">
+<option value="blockfaker">Block Faker (Droqen)</option>
+<option value="byyourside">By Your Side (Draknek)</option>
+<option value="kettle">Kettle (increpare)</option>
+<option value="microban">Microban (D. Skinner)</option>
+<option value="nekopuzzle">Neko Puzzle (Lexaloffle)</option>
+<option value="notsnake">Notsnake (Terry Cavanagh)</option>
+<option value="zenpuzzlegarden">Zen Puzzle Garden (Lexaloffle)</option>
+</optgroup>
+<optgroup label="Intermediate">
+<option value="limerick">Lime Rick (kissmaj7)</option>
+<option value="octat">Octat (increpare)</option>
+<option value="constellationz">Constellation Z (increpare)</option>
+</optgroup>
+<optgroup label="Advanced">
+<option value="midas">Midas (Wanderlands)</option>
+<option value="whaleworld">2D Whale World (increpare)</option>
+<option value="blank">Blank Project</option>
+</optgroup>
+</select>
+</form>- <a id="runClickLink" title="Compiles and runs the current game in the editor pane (keyboard shortcut: cmd/ctrl+shift+enter)." href="javascript:void('Run the Game');">RUN</a> - <a title="Rebuilds the program life (keyboard shortcut: cmd/ctrl+enter)." id="rebuildClickLink" href="javascript:void('Rebuild without restarting');">REBUILD</a> - <a id="levelEditorClickLink" title="Toggle the level editor (keyboard shortcut: E)." href="javascript:void('Open Level Editor');">LEVEL EDITOR</a> - <a id="exportClickLink" title="Export a standalone HTML Build of your game." href="javascript:void('Export Standalone HTML Build');">EXPORT</a> - <a id="shareClickLink" title="Generate a shareable link to a playable copy of your game." href="javascript:void('Generate Link To Game');">SHARE</a> - <a href="/PuzzleScript/src/Documentation/documentation.html" title="How Puzzlescript Works."  target="Puzzle_Script_Documentation">DOCS</a>  - <a title="Come hang out!" href="https://groups.google.com/forum/#!forum/puzzlescript">FORUM</a> - <a  id="toggleThemeClickLinks" title="Toggle Light/Dark mode" href="javascript:void('Toggle Light/Dark mode');"><img src="/PuzzleScript/src/images/themechange.gif"></a>
+</div>
+
+<div id="righttophalf">	
+	<div class="upperarea">
+		<canvas id="gameCanvas" ></canvas>
+	</div>
+</div>
+<div id="horizontaldragbar"></div>
+<div id="rightbottomhalf">
+	<div class="lowertoolbar">
+<div id="soundbar">
+	&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="soundbutton"><a id="clearConsoleClick" title="clears the console" href="javascript:void('Clear Console');"><img class="toolbaricon" width="18" height="18" src="/PuzzleScript/src/images/clearConsole.gif" alt="clear console contents"></a></span>
+	&nbsp;&nbsp;&nbsp;
+	<span class="soundbutton"><a id="newsound0" title="collect item sound" href="javascript:void('Generate Collect Item Sound');"><img width="18" height="18" src="/PuzzleScript/src/images/audio1.gif"  alt="collect item sound"></a></span>
+	<span class="soundbutton"><a  id="newsound7" title="push sounds" href="javascript:void('Generate Push Sound');" ><img width="18" height="18" src="/PuzzleScript/src/images/audio2.gif" alt="push sounds"></a></span>
+	<span class="soundbutton"><a id="newsound2" title="explosion sound" href="javascript:void('Generate Explosion Sound');" ><img width="18" height="18" src="/PuzzleScript/src/images/audio3.gif" alt="explosion sound"></a></span>
+	<span class="soundbutton"><a id="newsound3" title="powerup sound" href="javascript:void('Generate Power-Up Sound');" ><img width="18" height="18" src="/PuzzleScript/src/images/audio4.gif" alt="powerup sound"></a></span>
+	<span class="soundbutton"><a id="newsound9" title="bird tweet sound" href="javascript:void('Generate Bird Tweet Sound');"><img width="18" height="18" src="/PuzzleScript/src/images/audio5.gif"  alt="bird tweet sound"></a></span>
+	<span class="soundbutton"><a id="newsound4" title="hurt sound" href="javascript:void('Generate Hurt Sound');" ><img width="18" height="18" src="/PuzzleScript/src/images/audio6.gif" alt="hurt sound"></a></span>
+	<span class="soundbutton"><a id="newsound5" title="jump sound" href="javascript:void('Generate Jump Sound');"><img width="18" height="18" src="/PuzzleScript/src/images/audio7.gif"  alt="jump sound"></a></span>
+	<span class="soundbutton"><a id="newsound1" title="pew pew sound" href="javascript:void('Generate Pew Pew Sound');"><img width="18" height="18" src="/PuzzleScript/src/images/audio8.gif"  alt="pew pew pew"></a></span>
+	<span class="soundbutton"><a id="newsound6" title="selection sound" href="javascript:void('Generate Selection Sound');"><img width="18" height="18" src="/PuzzleScript/src/images/audio9.gif"  alt="selection sound"></a></span>
+	<span class="soundbutton"><a id="newsound8" title="random sound" href="javascript:void('Generate Random Sound');"><img width="18" height="18" src="/PuzzleScript/src/images/audio10.gif"  alt="random sound"></a></span>
+	</div></div>
+	<div class="lowerarea" id="lowerarea">
+<div id = "consoletextarea" >
+=================================<br>
+&nbsp;&nbsp;&nbsp;PuzzleScript Terminal<br>
+&nbsp;&nbsp;&nbsp;<!--BUILDNUMBER--><br>
+=================================<br><br>
+( Support the Project : <a href="https://github.com/sponsors/increpare" target="_blank">github sponsors</a> | <a href="https://www.paypal.com/donate/?hosted_button_id=YA56567J52BM4" target="_blank">paypal</a> )
+<br>
+</div>
+	</div>
+</div>
+
+<!--___SCRIPTINSERT___-->
+<script src="/PuzzleScript/src/js/Blob.js"></script>
+<script src="/PuzzleScript/src/js/FileSaver.js"></script>
+
+<script src="/PuzzleScript/src/js/jsgif/LZWEncoder.js"></script>
+<script src="/PuzzleScript/src/js/jsgif/NeuQuant.js"></script>
+<script src="/PuzzleScript/src/js/jsgif/GIFEncoder.js"></script>
+
+<script src="/PuzzleScript/src/js/storagewrapper.js"></script>
+<script src="/PuzzleScript/src/js/debug.js"></script>
+<script src="/PuzzleScript/src/js/bitvec.js"></script>
+<script src="/PuzzleScript/src/js/level.js"></script>
+<script src="/PuzzleScript/src/js/languageConstants.js"></script>
+<script src="/PuzzleScript/src/js/globalVariables.js"></script>
+<script src="/PuzzleScript/src/js/font.js"></script>
+<script src="/PuzzleScript/src/js/rng.js"></script>
+<script src="/PuzzleScript/src/js/riffwave.js"></script>
+<script src="/PuzzleScript/src/js/sfxr.js"></script>
+<script src="/PuzzleScript/src/js/codemirror/codemirror.js"></script>
+<script src="/PuzzleScript/src/js/codemirror/active-line.js"></script>
+<script src="/PuzzleScript/src/js/codemirror/dialog.js"></script>
+<script src="/PuzzleScript/src/js/codemirror/searchcursor.js"></script>
+<script src="/PuzzleScript/src/js/codemirror/search.js"></script>
+<script src="/PuzzleScript/src/js/codemirror/match-highlighter.js"></script>
+<script src="/PuzzleScript/src/js/codemirror/show-hint.js"></script>
+<script src="/PuzzleScript/src/js/codemirror/anyword-hint.js"></script>
+<script src="/PuzzleScript/src/js/codemirror/comment.js"></script>
+<script src="/PuzzleScript/src/js/colors.js"></script>
+<script src="/PuzzleScript/src/js/graphics.js"></script>
+<script src="/PuzzleScript/src/js/mobile.js"></script>
+<script src="/PuzzleScript/src/js/inputoutput.js"></script>
+
+<script src="/PuzzleScript/src/js/console.js"></script>
+<script src="/PuzzleScript/src/js/buildStandalone.js"></script>
+<script src="/PuzzleScript/src/js/engine.js"></script>
+<script src="/PuzzleScript/src/js/parser.js"></script>
+<script src="/PuzzleScript/src/js/github.js"></script>
+<script src="/PuzzleScript/src/js/editor.js"></script>
+<script src="/PuzzleScript/src/js/compiler.js"></script>
+<script src="/PuzzleScript/src/js/soundbar.js"></script>
+<script src="/PuzzleScript/src/js/toolbar.js"></script>
+<script src="/PuzzleScript/src/js/layout.js"></script>
+<script src="/PuzzleScript/src/js/addlisteners.js"></script>
+<script src="/PuzzleScript/src/js/addlisteners_editor.js"></script>
+<script src="/PuzzleScript/src/js/makegif.js"></script>
+
+<!--<script src="/PuzzleScript/src/js/scripts.js"></script>-->
+
+<!-- ===== Synthesized-games browser (extension) ===== -->
+<style>
+  #synthPanel{position:fixed;top:0;left:0;height:100%;width:340px;z-index:9999;
+    background:#1b1b1b;border-right:2px solid #444;box-shadow:3px 0 12px rgba(0,0,0,.6);
+    display:none;flex-direction:column;font-family:"Courier New",monospace;color:#ddd}
+  #synthPanel.open{display:flex}
+  #synthPanel .hd{padding:10px 12px;border-bottom:1px solid #333;display:flex;align-items:center;gap:8px}
+  #synthPanel .hd b{color:#7cf;flex:1;font-size:14px}
+  #synthPanel .hd a{color:#aaa;cursor:pointer;text-decoration:none;font-size:18px}
+  #synthPanel input,#synthPanel select{width:100%;box-sizing:border-box;margin:3px 12px;
+    width:calc(100% - 24px);background:#262626;color:#ddd;border:1px solid #444;padding:5px;font-family:inherit}
+  #synthCount{font-size:11px;color:#888;padding:2px 12px}
+  #synthList{flex:1;overflow-y:auto}
+  #synthList .it{padding:6px 12px;cursor:pointer;border-bottom:1px solid #242424;font-size:12px;
+    white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  #synthList .it:hover{background:#2a3a4a;color:#cef}
+  #synthList .bdg{font-size:9px;padding:1px 4px;border-radius:3px;margin-right:5px}
+  #synthList .gp{background:#3a3a55;color:#bbf} #synthList .llm{background:#553a3a;color:#fbb}
+  #synthList .solv{background:#2a5a2a;color:#bfb}
+  #synthFab{position:fixed;left:12px;bottom:12px;z-index:9998;background:#2a3a4a;color:#cef;
+    border:1px solid #567;border-radius:6px;padding:8px 12px;cursor:pointer;font-family:"Courier New",monospace}
+</style>
+<div id="synthFab" onclick="synthToggle(true)">🎲 synth games</div>
+<div id="synthPanel">
+  <div class="hd"><b>Synthesized games</b><a onclick="synthToggle(false)" title="close">✕</a></div>
+  <select id="synthDataset">
+    <option value="/game_synth/dataset/viewer_index.json">Main dataset (1000, deduped)</option>
+    <option value="/game_synth/coevolve_pool/viewer_index.json">Co-evolution pool (220)</option>
+    <option value="/game_synth/gated_loss2/viewer_index.json">Evolve: gated_loss2 (plain-loss, det, non-trivial, LIVE)</option>
+    <option value="/game_synth/gated_progress2/viewer_index.json">Evolve: gated_progress2 (Δloss, det, non-trivial, LIVE)</option>
+    <option value="/game_synth/gated_loss/viewer_index.json">Evolve: gated_loss (plain-loss, det, non-trivial)</option>
+    <option value="/game_synth/gated_progress/viewer_index.json">Evolve: gated_progress (Δloss, det, non-trivial)</option>
+    <option value="/game_synth/big_loss_norand/viewer_index.json">Evolve: big_loss (plain-loss, cap8, NO random)</option>
+    <option value="/game_synth/big_progress_norand/viewer_index.json">Evolve: big_progress (Δloss, cap8, NO random)</option>
+    <option value="/game_synth/big_loss/viewer_index.json">Evolve: big_loss (plain-loss, cap8, +random)</option>
+    <option value="/game_synth/big_progress/viewer_index.json">Evolve: big_progress (Δloss, cap8, +random)</option>
+    <option value="/game_synth/evolve_lossw0/viewer_index.json">Evolve: lossw0 (plain-loss, cap4)</option>
+  </select>
+  <input id="synthSearch" placeholder="search title…" autocomplete="off">
+  <select id="synthFilter">
+    <option value="all">all sources</option>
+    <option value="gp">GP (search-validated)</option>
+    <option value="llm">LLM (ELM)</option>
+    <option value="solv">solvable-tagged</option>
+  </select>
+  <select id="synthSort">
+    <option value="recency">sort: recency (newest first)</option>
+    <option value="gen">sort: generation (newest first)</option>
+    <option value="fitness">sort: fitness (WM loss, high first)</option>
+    <option value="mechanics">sort: activated mechanics (most first)</option>
+    <option value="states">sort: state-space size (largest first)</option>
+    <option value="none">sort: index order</option>
+  </select>
+  <label style="display:block;font-size:11px;color:#aaa;padding:2px 12px"><input type="checkbox" id="synthHideTrivial" style="width:auto;margin:0 6px 0 0">hide trivial (winnable in &le;1 step)</label>
+  <div id="synthCount"></div>
+  <div id="synthList"></div>
+</div>
+<script>
+(function(){
+  var GAMES=[];
+  function synthLoad(g){
+    fetch(g.file).then(function(r){return r.text();}).then(function(code){
+      // canonical editor load sequence (cf editor.js tryLoadGist) -> full input/play works
+      editor.setValue(code); editor.clearHistory();
+      if(typeof clearConsole==="function") clearConsole();
+      if(typeof setEditorClean==="function") setEditorClean();
+      if(typeof unloadGame==="function") unloadGame();
+      compile(["restart"], code);
+      synthToggle(false);
+      try{ document.getElementById("gameCanvas").focus(); }catch(e){}
+    }).catch(function(e){ if(typeof consoleError==="function") consoleError("load failed: "+e); });
+  }
+  function visible(){
+    var q=document.getElementById("synthSearch").value.toLowerCase();
+    var f=document.getElementById("synthFilter").value;
+    var s=document.getElementById("synthSort").value;
+    var hideTrivial=document.getElementById("synthHideTrivial").checked;
+    var v=GAMES.filter(function(g){
+      if(hideTrivial && g.sol_len!=null && g.sol_len>=0 && g.sol_len<=1) return false;
+      return (f==="all"||g.source===f||(f==="solv"&&g.solvable)) &&
+             (!q||g.title.toLowerCase().indexOf(q)>=0); });
+    var key={recency:"recency",gen:"gen",fitness:"fitness",mechanics:"mechanics",states:"states"}[s];
+    if(key){ v=v.slice().sort(function(a,b){
+      var av=a[key], bv=b[key];
+      av=(av==null?-Infinity:av); bv=(bv==null?-Infinity:bv);
+      return bv-av; }); }
+    return v;
+  }
+  function render(){
+    var v=visible();
+    document.getElementById("synthCount").textContent=v.length+" / "+GAMES.length+" games";
+    var list=document.getElementById("synthList"); list.innerHTML="";
+    var frag=document.createDocumentFragment();
+    v.slice(0,800).forEach(function(g){
+      var d=document.createElement("div"); d.className="it";
+      d.innerHTML='<span class="bdg '+g.source+'">'+g.source+'</span>'+
+                  (g.solvable?'<span class="bdg solv">✓'+(g.sol_len!=null&&g.sol_len>=0?g.sol_len:'')+'</span>':'')+
+                  (g.gen!=null?'<span class="bdg" style="background:#334;color:#9cf">g'+g.gen+'</span>':'')+
+                  (g.mechanics!=null?'<span class="bdg" style="background:#444;color:#cc9">'+g.mechanics+'m</span>':'')+
+                  (g.fitness!=null?'<span class="bdg" style="background:#353;color:#9c9">'+g.fitness.toFixed(1)+'</span>':'')+
+                  g.title.replace(/</g,"&lt;");
+      d.onclick=function(){ synthLoad(g); };
+      frag.appendChild(d);
+    });
+    list.appendChild(frag);
+    if(v.length>800){ var m=document.createElement("div"); m.className="it"; m.style.color="#666";
+      m.textContent="… "+(v.length-800)+" more (refine search)"; list.appendChild(m); }
+  }
+  window.synthToggle=function(open){
+    document.getElementById("synthPanel").classList.toggle("open", open!==false ? !!open : false);
+    if(open){ document.getElementById("synthSearch").focus(); }
+  };
+  var link=document.getElementById("synthGamesLink");
+  if(link) link.onclick=function(){ synthToggle(true); };
+  function loadIndex(){
+    var url=document.getElementById("synthDataset").value;
+    document.getElementById("synthCount").textContent="loading…";
+    fetch(url).then(function(r){return r.json();})
+      .then(function(g){ GAMES=g; render(); })
+      .catch(function(e){ document.getElementById("synthCount").textContent="index load failed: "+e; });
+  }
+  loadIndex();
+  document.getElementById("synthDataset").onchange=loadIndex;
+  document.getElementById("synthSearch").oninput=render;
+  document.getElementById("synthFilter").onchange=render;
+  document.getElementById("synthSort").onchange=render;
+  document.getElementById("synthHideTrivial").onchange=render;
+})();
+</script>
+</body>
+</html>

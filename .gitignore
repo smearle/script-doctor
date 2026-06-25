@@ -103,3 +103,8 @@ nca_wm/data_cache/
 
 # LaTeX scratch output
 texput.logpuffer_assets/
+
+# game_synth: keep code (*.py, *.sbatch) but ignore generated run artifacts
+game_synth/*/
+game_synth/*.pt
+game_synth/*.log
