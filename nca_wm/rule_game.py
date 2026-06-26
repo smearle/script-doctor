@@ -106,7 +106,9 @@ def _legend_section(objects: list[str]) -> str:
     return "\n".join(lines) + "\n"
 
 
-def _collisionlayers_section(objects: list[str]) -> str:
+def _collisionlayers_section(objects: list[str], layers: list[list[str]] | None = None) -> str:
+    if layers:
+        return "Background\n" + "\n".join(", ".join(L) for L in layers) + "\n"
     interactives = ["Player", "Wall"] + list(objects)
     return "Background\n" + ", ".join(interactives) + "\n"
 
@@ -129,6 +131,7 @@ def assemble_game(
     level: str | None = None,
     levels: list[str] | None = None,
     wins: list[WinCondition] | None = None,
+    layers: list[list[str]] | None = None,
 ) -> str:
     """Assemble a complete PuzzleScript game string.
 
@@ -160,7 +163,7 @@ def assemble_game(
         f"================\n"
         f"COLLISIONLAYERS\n"
         f"================\n\n"
-        f"{_collisionlayers_section(objs)}\n"
+        f"{_collisionlayers_section(objs, layers)}\n"
         f"======\n"
         f"RULES\n"
         f"======\n\n"

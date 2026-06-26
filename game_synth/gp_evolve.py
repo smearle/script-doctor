@@ -47,15 +47,17 @@ OBJS = ["ObjA", "ObjB", "ObjC"]
 # ---------- genome ops ----------
 def random_genome(rng, max_rules=4):
     return {"rules": GP._sample_rules(rng, max_rules=max_rules), "wins": GP._sample_wins(rng),
-            "levels": GP._sample_levels(rng)}
+            "levels": GP._sample_levels(rng), "layers": rule_gp.sample_layers(rng, OBJS)}
 
 
 def to_code(g):
-    return rule_game.assemble_game(g["rules"], objects=OBJS, levels=g["levels"], wins=g["wins"])
+    return rule_game.assemble_game(g["rules"], objects=OBJS, levels=g["levels"],
+                                   wins=g["wins"], layers=g.get("layers"))
 
 
 def mutate(g, rng, max_rules=4):
-    c = {"rules": copy.deepcopy(g["rules"]), "wins": list(g["wins"]), "levels": list(g["levels"])}
+    c = {"rules": copy.deepcopy(g["rules"]), "wins": list(g["wins"]),
+         "levels": list(g["levels"]), "layers": g.get("layers")}
     for _ in range(rng.randint(1, 3)):
         c["rules"] = rule_gp.mutate_ruleset(c["rules"], rng, max_rules=max_rules)
     if rng.random() < 0.5:
@@ -66,6 +68,8 @@ def mutate(g, rng, max_rules=4):
         c["wins"] = rule_gp.mutate_wins(c["wins"], rng)
     if rng.random() < 0.3:
         c["levels"] = GP._sample_levels(rng)
+    if rng.random() < 0.2:
+        c["layers"] = rule_gp.sample_layers(rng, OBJS)
     return c
 
 
@@ -75,7 +79,8 @@ def crossover(a, b, rng, max_rules=4):
     if not rules:
         rules = copy.deepcopy(ra) or copy.deepcopy(rb)
     src = a if rng.random() < 0.5 else b
-    return {"rules": rules, "wins": list(src["wins"]), "levels": list(src["levels"])}
+    return {"rules": rules, "wins": list(src["wins"]), "levels": list(src["levels"]),
+            "layers": src.get("layers")}
 
 
 # ---------- validate / fitness ----------
@@ -139,11 +144,29 @@ def fitness(model, ent, device, n=6, seed=0):
     return float(np.mean(m))
 
 
-def train_batch(model, pop, device, rng, bs=48):
-    jsons = {e["name"]: (e["json"], e["idd"]) for e in pop}
+def _lp_weight(e, default, floor):
+    """Replay-sampling weight for an archived game: its (absolute) learning
+    progress, or `default` if never measured (so fresh archive entries get
+    sampled and measured), plus a uniform `floor` so nothing starves."""
+    lp = e.get("lp")
+    return (default if lp is None else lp) + floor
+
+
+def train_batch(model, pop, archive, device, rng, bs=48, replay_frac=0.0,
+                lp_default=1.0, lp_floor=0.05):
+    """One training batch. `replay_frac` of the samples are drawn from the
+    archive of ALL distinct past games (sampled proportional to |learning
+    progress|), the rest from the current frontier pop. replay_frac=0 trains on
+    pop only (old behavior)."""
+    arch = list(archive.values()) if archive else []
+    n_replay = int(round(bs * replay_frac)) if arch else 0
+    samp = [rng.choice(pop) for _ in range(bs - n_replay)]
+    if n_replay:
+        w = [_lp_weight(e, lp_default, lp_floor) for e in arch]
+        samp += rng.choices(arch, weights=w, k=n_replay)
+    jsons = {e["name"]: (e["json"], e["idd"]) for e in samp}
     S, A, NX, codes = [], [], [], []
-    for _ in range(bs):
-        e = rng.choice(pop)
+    for e in samp:
         o, a, _ = sample_traj(jsons, e["name"], rng.randint(2, 6), rng)
         t = rng.randrange(len(a))
         S.append(o[t]); A.append(a[t]); NX.append(o[t + 1]); codes.append(e["tok"])
@@ -225,6 +248,17 @@ def main():
                          "(learning progress; deprioritizes both mastered AND unlearnable games)")
     ap.add_argument("--activation-weight", type=float, default=0.0,
                     help="add lambda * (#activated mechanics) to the fitness")
+    # archive + learning-progress replay (combat catastrophic forgetting of culled games)
+    ap.add_argument("--replay-frac", type=float, default=0.5,
+                    help="fraction of each training batch drawn from the archive of ALL "
+                         "distinct past games (vs. the current frontier pop); 0 = no replay")
+    ap.add_argument("--archive-cap", type=int, default=4000,
+                    help="max games kept in the replay archive (evict lowest learning-progress)")
+    ap.add_argument("--archive-refresh", type=int, default=64,
+                    help="non-pop archived games to re-measure each gen to refresh learning progress")
+    ap.add_argument("--signed-lp", action="store_true",
+                    help="use signed loss-decrease for learning progress instead of |Δloss| "
+                         "(default abs, per Oudeyer: catches FORGETTING where loss rises)")
     ap.add_argument("--operator", default="gp", choices=["gp", "llm", "mixed"])
     ap.add_argument("--llm-frac", type=float, default=0.5, help="(mixed) fraction of LLM offspring")
     ap.add_argument("--llm-backend", default="endpoint", choices=["endpoint", "hf"])
@@ -253,6 +287,7 @@ def main():
              "min_action_effect": args.min_action_effect}
     pop, sigs = [], set()
     all_sigs = set()   # all-time DISTINCT games ever accepted (never decremented) -> novelty
+    archive = {}       # sig -> entry, ALL distinct games ever accepted (survives culling)
     ctr = [0]
 
     def make_entry(code, genome, gen):
@@ -265,9 +300,11 @@ def main():
         if r is None:
             return None
         sigs.add(sig); all_sigs.add(sig)
-        return {"name": name, "genome": genome, "code": code, "json": r[0], "idd": r[1],
-                "tok": r[2], "activated": r[3], "quality": r[4], "sig": sig,
-                "fitness": 0.0, "born": gen, "op": "init"}
+        ent = {"name": name, "genome": genome, "code": code, "json": r[0], "idd": r[1],
+               "tok": r[2], "activated": r[3], "quality": r[4], "sig": sig,
+               "fitness": 0.0, "born": gen, "op": "init", "lp": None, "wm_loss": None}
+        archive[sig] = ent   # same object as the pop entry; persists after culling
+        return ent
 
     # variation operators -> child (code, genome). GP ops keep a rule_gp genome
     # (further GP-mutable); the LLM op returns code-only (genome=None).
@@ -311,29 +348,37 @@ def main():
         # LEARN
         model.train()
         for _ in range(args.updates_per_gen):
-            loss = train_batch(model, pop, device, rng)
+            loss = train_batch(model, pop, archive, device, rng, replay_frac=args.replay_frac)
             opt.zero_grad(set_to_none=True); loss.backward()
             nn.utils.clip_grad_norm_(model.parameters(), 1.0); opt.step()
         # RE-EVALUATE fitness of the whole pop (non-stationary)
         model.eval()
 
         def score(e):
-            """Set e['wm_loss'] to current loss; return fitness per the objective.
-            loss: raw model_NLL (high=hard). progress: per-gen DECREASE in loss
-            (loss_before - now). Birth-gen entries (no loss_before history) fall
-            back to current loss as entry-potential so new games get a chance to
-            be measured next gen rather than being culled at zero progress."""
+            """Re-measure loss; set e['wm_loss','lp'] and return fitness per the
+            objective. loss: raw model_NLL (high=hard). progress: learning
+            progress = |Δloss| across gens (signed loss-decrease under --signed-lp).
+            Birth-gen entries (no prior loss) fall back to current loss as
+            entry-potential so new games get measured rather than culled at zero."""
+            prev = e.get("wm_loss")
             now = fitness(model, e, device)
-            if args.fitness == "progress" and "loss_before" in e:
-                base = e["loss_before"] - now
+            e["lp"] = (now if prev is None else
+                       (prev - now) if args.signed_lp else abs(prev - now))
+            if args.fitness == "progress" and prev is not None:
+                base = (prev - now) if args.signed_lp else abs(prev - now)
             else:
                 base = now
             e["wm_loss"] = now
-            e["loss_before"] = now
             return base + args.activation_weight * e["activated"]
 
         for e in pop:
             e["fitness"] = score(e)
+        # Refresh learning progress on a random slice of the ARCHIVE (culled games
+        # not in the current pop) so replay weighting tracks forgetting/relearning.
+        non_pop = [e for s, e in archive.items() if s not in sigs]
+        if non_pop and args.archive_refresh:
+            for e in random.sample(non_pop, min(args.archive_refresh, len(non_pop))):
+                score(e)
         pop.sort(key=lambda e: e["fitness"], reverse=True)
         # VARY: tournament-select high-fitness parents -> offspring (GP or LLM op)
         accepted = 0
@@ -354,8 +399,13 @@ def main():
         pop.sort(key=lambda e: e["fitness"], reverse=True)
         culled = pop[args.pop:]
         for e in culled:
-            sigs.discard(e["sig"])
+            sigs.discard(e["sig"])   # leaves pop dedup; entry stays in archive
         pop = pop[:args.pop]
+        # Evict lowest-learning-progress games if the archive exceeds its cap.
+        if len(archive) > args.archive_cap:
+            ranked = sorted(archive.values(), key=lambda e: _lp_weight(e, 1.0, 0.0))
+            for e in ranked[:len(archive) - args.archive_cap]:
+                archive.pop(e["sig"], None)
         fits = np.array([e["fitness"] for e in pop])
         act = np.array([e["activated"] for e in pop])
         nstates = np.array([e["quality"]["n_states"] for e in pop])
@@ -372,14 +422,17 @@ def main():
                "mean_states": float(nstates.mean()), "mean_effect": float(effect.mean()),
                "frac_solvable": frac_solv,
                "accepted": accepted, "ops": dict(opc), "alltime": ctr[0],
-               "distinct": len(all_sigs), "t": time.time() - t0}
+               "distinct": len(all_sigs), "archive": len(archive),
+               "mean_lp": float(np.mean([e["lp"] for e in archive.values()
+                                         if e.get("lp") is not None]) if archive else 0.0),
+               "t": time.time() - t0}
         metrics.append(row); log.write(json.dumps(row) + "\n"); log.flush()
         (out / "metrics.json").write_text(json.dumps(metrics, indent=2))
         print(f"gen {gen:2d} | pop {len(pop)} | fit mean {row['mean_fit']:+.2f} | "
               f"act mean {row['mean_activated']:.2f} max {row['max_activated']} | "
               f"states {row['mean_states']:.0f} effect {row['mean_effect']:.2f} "
               f"solv {row['frac_solvable']:.0%} | new {accepted} | distinct {len(all_sigs)} "
-              f"| {row['t']:.0f}s", flush=True)
+              f"| arch {len(archive)} lp {row['mean_lp']:.3f} | {row['t']:.0f}s", flush=True)
     log.close()
     torch.save({"model_state": model.state_dict()}, out / "wm.pt")
 

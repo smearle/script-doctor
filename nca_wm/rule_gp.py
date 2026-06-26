@@ -14,11 +14,15 @@ import itertools
 from dataclasses import dataclass, field
 
 
-VALID_OBJECT_MODIFIERS = {"", ">", "<", "^", "v", "no", "random", "randomDir"}
+VALID_OBJECT_MODIFIERS = {"", ">", "<", "^", "v", "no",
+                          "moving", "stationary", "action",
+                          "up", "down", "left", "right",
+                          "random", "randomDir"}
 
-# Stochastic constructs (random / randomDir) make transitions irreducibly
-# unpredictable -- a cheap way to inflate world-model loss without adding any
-# learnable mechanics. ALLOW_RANDOM (set by the GP driver) gates them out.
+# Stochastic constructs (random / randomDir / the `random` rule prefix) make
+# transitions irreducibly unpredictable -- a cheap way to inflate world-model
+# loss without adding any learnable mechanics. ALLOW_RANDOM (set by the GP
+# driver) gates them out.
 ALLOW_RANDOM = True
 STOCHASTIC_MODIFIERS = {"random", "randomDir"}
 
@@ -33,6 +37,13 @@ VALID_RULE_PREFIXES = {"", "late", "random", "horizontal", "vertical",
 VALID_COMMANDS = {"again", "cancel", "checkpoint", "restart", "win"}
 
 
+def rule_prefix_pool():
+    """Sampleable rule prefixes, minus the stochastic `random` prefix when
+    ALLOW_RANDOM is False."""
+    pool = VALID_RULE_PREFIXES if ALLOW_RANDOM else (VALID_RULE_PREFIXES - {"random"})
+    return sorted(pool)
+
+
 @dataclass
 class CellContent:
     obj: str
@@ -45,8 +56,11 @@ class CellContent:
 @dataclass
 class Cell:
     contents: list[CellContent] = field(default_factory=list)
+    is_ellipsis: bool = False        # `...` spacer cell (matches arbitrary distance)
 
     def unparse(self) -> str:
+        if self.is_ellipsis:
+            return "..."
         return " ".join(c.unparse() for c in self.contents)
 
 
@@ -72,6 +86,18 @@ class Rule:
         toks.extend(p.unparse() for p in self.rhs_parts)
         toks.extend(self.commands)
         return " ".join(toks)
+
+
+@dataclass
+class RuleGroup:
+    """A ``startloop`` ... ``endloop`` block: its rules are re-applied to a
+    fixpoint each turn (chain reactions / propagation). Lives in a ruleset's
+    rule list alongside plain Rules; unparses to the loop block."""
+    rules: list[Rule] = field(default_factory=list)
+
+    def unparse(self) -> str:
+        body = "\n".join(r.unparse() for r in self.rules)
+        return f"startloop\n{body}\nendloop"
 
 
 @dataclass
@@ -188,25 +214,106 @@ def base_delete_rule(obj: str = "ObjA") -> Rule:
     )
 
 
+def base_multi_bracket_rule(a: str = "ObjA", b: str = "ObjB", c: str = "ObjC") -> Rule:
+    """``[ A ] [ Player | B ] -> [ A ] [ Player | C ]`` — a multi-bracket rule:
+    fire only when ``A`` exists *somewhere*, then convert an adjacent ``B``.
+    Needs grid-wide context (the WM's global_pool) to model."""
+    return Rule(
+        lhs=[RulePart(cells=[Cell([CellContent(a)])]),
+             RulePart(cells=[Cell([CellContent("Player")]), Cell([CellContent(b)])])],
+        rhs_parts=[RulePart(cells=[Cell([CellContent(a)])]),
+                   RulePart(cells=[Cell([CellContent("Player")]), Cell([CellContent(c)])])],
+    )
+
+
+def base_ellipsis_rule(a: str = "Player", b: str = "ObjA") -> Rule:
+    """``[ A | ... | B ] -> [ A | ... | B ]`` skeleton (no-op until mutated) —
+    an arbitrary-distance pattern along a line. Needs axis context to model."""
+    return Rule(
+        lhs=[RulePart(cells=[Cell([CellContent(a)]), Cell(is_ellipsis=True),
+                             Cell([CellContent(b)])])],
+        rhs_parts=[RulePart(cells=[Cell([CellContent(a)]), Cell(is_ellipsis=True),
+                                   Cell([CellContent(b)])])],
+    )
+
+
 BASE_RULE_FACTORIES = {
     "convert_a_to_b": lambda: base_two_cell_rule(),
     "push_a":         lambda: base_push_rule("ObjA"),
     "push_b":         lambda: base_push_rule("ObjB"),
     "delete_a":       lambda: base_delete_rule("ObjA"),
     "delete_b":       lambda: base_delete_rule("ObjB"),
+    "multi_bracket":  lambda: base_multi_bracket_rule(),
+    "ellipsis":       lambda: base_ellipsis_rule(),
 }
+
+
+_OBJ_CHOICES = ("Player", "ObjA", "ObjB", "ObjC")
+
+
+def add_bracket(rule: Rule, rng) -> Rule:
+    """Append a single-cell condition bracket (present on both sides) -> a
+    multi-bracket rule that fires only when the extra object exists somewhere."""
+    out = copy.deepcopy(rule)
+    obj = rng.choice(_OBJ_CHOICES)
+    out.lhs.append(RulePart(cells=[Cell([CellContent(obj)])]))
+    out.rhs_parts.append(RulePart(cells=[Cell([CellContent(obj)])]))
+    return out
+
+
+def add_cell(rule: Rule, rng) -> Rule:
+    """Extend one LHS bracket (and its aligned RHS) by one cell."""
+    out = copy.deepcopy(rule)
+    cand = [i for i in range(len(out.lhs)) if not any(c.is_ellipsis for c in out.lhs[i].cells)]
+    if not cand:
+        return out
+    i = rng.choice(cand)
+    obj = rng.choice(_OBJ_CHOICES)
+    out.lhs[i].cells.append(Cell([CellContent(obj)]))
+    if i < len(out.rhs_parts) and len(out.rhs_parts[i].cells) == len(out.lhs[i].cells) - 1:
+        out.rhs_parts[i].cells.append(Cell([CellContent(obj)]))
+    return out
+
+
+def add_ellipsis(rule: Rule, rng) -> Rule:
+    """Insert a ``...`` spacer between two cells of an aligned LHS/RHS bracket
+    pair (an arbitrary-distance pattern)."""
+    out = copy.deepcopy(rule)
+    cand = [i for i in range(min(len(out.lhs), len(out.rhs_parts)))
+            if len(out.lhs[i].cells) == len(out.rhs_parts[i].cells) >= 2
+            and not any(c.is_ellipsis for c in out.lhs[i].cells)]
+    if not cand:
+        return out
+    i = rng.choice(cand)
+    pos = rng.randint(1, len(out.lhs[i].cells) - 1)
+    out.lhs[i].cells.insert(pos, Cell(is_ellipsis=True))
+    out.rhs_parts[i].cells.insert(pos, Cell(is_ellipsis=True))
+    return out
 
 
 # ---------------------------------------------------------------------------
 # Random ruleset mutation for the evolutionary loop.
 # ---------------------------------------------------------------------------
 
-def random_mutate_rule(rule: Rule, rng) -> Rule:
-    """Apply one random mutation to a single rule."""
+def random_mutate_rule(rule, rng):
+    """Apply one random mutation to a single rule (or recurse into a RuleGroup)."""
+    if isinstance(rule, RuleGroup):
+        out = copy.deepcopy(rule)
+        if out.rules:
+            i = rng.randrange(len(out.rules))
+            out.rules[i] = random_mutate_rule(out.rules[i], rng)
+        return out
     op = rng.choice([
         "set_modifier_lhs", "set_modifier_rhs", "toggle_again",
         "toggle_prefix", "swap_obj_in_rhs",
+        "add_bracket", "add_cell", "add_ellipsis",
     ])
+    if op == "add_bracket":
+        return add_bracket(rule, rng)
+    if op == "add_cell":
+        return add_cell(rule, rng)
+    if op == "add_ellipsis":
+        return add_ellipsis(rule, rng)
     if op == "set_modifier_lhs":
         target = rng.choice(["Player", "ObjA", "ObjB", "ObjC"])
         mod = rng.choice(object_modifier_pool())
@@ -220,10 +327,9 @@ def random_mutate_rule(rule: Rule, rng) -> Rule:
     if op == "toggle_prefix":
         if rule.prefixes:
             return set_prefix(rule, "")
-        return set_prefix(rule, rng.choice(["late", "right", "left", "up", "down"]))
+        return set_prefix(rule, rng.choice([p for p in rule_prefix_pool() if p]))
     if op == "swap_obj_in_rhs":
         # Replace one RHS object with a random different one.
-        import copy
         out = copy.deepcopy(rule)
         for part in out.rhs_parts:
             for cell in part.cells:
@@ -292,11 +398,12 @@ def mutate_wins(wins: list[WinCondition], rng, *,
 
 def mutate_ruleset(rules: list[Rule], rng, *,
                    max_rules: int = 4) -> list[Rule]:
-    """Apply one random ruleset-level mutation."""
+    """Apply one random ruleset-level mutation. ``rules`` may contain plain
+    Rules and RuleGroups (startloop/endloop blocks)."""
     rules = list(rules)
     op = rng.choices(
-        ["mutate_one", "add", "drop"],
-        weights=[0.6, 0.3, 0.1],
+        ["mutate_one", "add", "drop", "wrap_loop", "unwrap_loop"],
+        weights=[0.5, 0.25, 0.1, 0.1, 0.05],
         k=1,
     )[0]
     if op == "drop" and len(rules) > 1:
@@ -306,6 +413,21 @@ def mutate_ruleset(rules: list[Rule], rng, *,
         factory = rng.choice(list(BASE_RULE_FACTORIES.values()))
         rules.append(factory())
         return rules
+    if op == "wrap_loop":
+        idxs = [i for i, r in enumerate(rules) if isinstance(r, Rule)]
+        if idxs:
+            i = rng.choice(idxs)
+            j = min(i + rng.randint(0, 1), len(rules) - 1)
+            seg = rules[i:j + 1]
+            if seg and all(isinstance(r, Rule) for r in seg):
+                rules[i:j + 1] = [RuleGroup(rules=copy.deepcopy(seg))]
+        return rules
+    if op == "unwrap_loop":
+        gidxs = [i for i, r in enumerate(rules) if isinstance(r, RuleGroup)]
+        if gidxs:
+            i = rng.choice(gidxs)
+            rules[i:i + 1] = rules[i].rules
+        return rules
     if not rules:
         # Fallback: ensure at least one rule.
         factory = rng.choice(list(BASE_RULE_FACTORIES.values()))
@@ -314,6 +436,23 @@ def mutate_ruleset(rules: list[Rule], rng, *,
     i = rng.randrange(len(rules))
     rules[i] = random_mutate_rule(rules[i], rng)
     return rules
+
+
+def sample_layers(rng, objs=("ObjA", "ObjB", "ObjC")):
+    """Pick a collision-layer partition. Player+Wall always share the first
+    interactive layer (so walls keep blocking the player); the remaining objects
+    are split into one or more further layers. Objects on DIFFERENT layers may
+    occupy the same cell (overlay/floor mechanics); same-layer objects block.
+    Returns list[list[str]] (each a layer) or None for the all-in-one default."""
+    objs = list(objs)
+    variants = [
+        None,                                                  # all interactives one layer
+        [["Player", "Wall"]] + [[o] for o in objs],           # every obj overlayable
+        [["Player", "Wall", objs[0]]] + [[o] for o in objs[1:]],
+        [["Player", "Wall"] + objs[:1], objs[1:]] if len(objs) > 1 else None,
+    ]
+    variants = [v for v in variants if v is not None] + [None]
+    return rng.choice(variants)
 
 
 def enumerate_smoketest_rulesets() -> list[tuple[dict, list[Rule]]]:

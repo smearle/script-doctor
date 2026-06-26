@@ -94,21 +94,60 @@ class RuleAttnCodeWorldModel(nn.Module):
         return lo, logpi
 
 
+def _pool_features(h, axis_pool, axis_cummax, global_pool):
+    """Global-context features from NCHW hidden state, broadcast back to (N,C,H,W).
+    Each op preserves the channel dim (one summary value per channel), adds no
+    parameters. These give the otherwise-local conv body the reach to represent
+    long-range PuzzleScript rules:
+      axis_pool   (2): row max (over W) / col max (over H) -> "X exists in my row/col"
+      axis_cummax (4): directional prefix max L->R / R->L / T->B / B->T (ellipsis/dir)
+      global_pool (1): grid max -> "X exists somewhere" (multi-bracket [X] [Y])."""
+    feats = []
+    if axis_pool:
+        feats.append(h.amax(dim=3, keepdim=True).expand_as(h))   # max over W (per row)
+        feats.append(h.amax(dim=2, keepdim=True).expand_as(h))   # max over H (per col)
+    if axis_cummax:
+        feats.append(h.cummax(dim=3).values)                     # L->R along W
+        feats.append(h.flip(3).cummax(dim=3).values.flip(3))     # R->L
+        feats.append(h.cummax(dim=2).values)                     # T->B along H
+        feats.append(h.flip(2).cummax(dim=2).values.flip(2))     # B->T
+    if global_pool:
+        feats.append(h.amax(dim=(2, 3), keepdim=True).expand_as(h))
+    return torch.cat(feats, dim=1) if feats else None
+
+
 class CodeCondWorldModel(nn.Module):
-    """f(state, action, code) -> distribution over next state (K-mode mixture)."""
-    def __init__(self, n_obj=6, n_act=5, d_b=128, d_tok=96, d_cond=64, K=16, vocab=VOCAB_SIZE_BASE):
+    """f(state, action, code) -> distribution over next state (K-mode mixture).
+
+    The spatial body is an iterated, weight-shared NCA with global/axis pooling
+    (not the old single local-conv pass), so it CAN represent ellipsis,
+    multi-bracket, and chain-reaction (startloop) dynamics that a fixed ~7x7
+    receptive field cannot. The action enters the body (one-hot planes) so the
+    propagation is direction-aware; code conditions the body via FiLM."""
+    def __init__(self, n_obj=6, n_act=5, d_b=128, d_tok=96, d_cond=64, K=16,
+                 vocab=VOCAB_SIZE_BASE, n_steps=6, axis_pool=True, axis_cummax=True,
+                 global_pool=True, input_skip=True, use_layernorm=True):
         super().__init__()
         self.K = K
+        self.n_act = n_act
+        self.n_steps = n_steps
+        self.axis_pool, self.axis_cummax, self.global_pool = axis_pool, axis_cummax, global_pool
+        self.input_skip = input_skip
         self.cfg = BeliefConfig(n_obj=n_obj, n_act=n_act, d_b=d_b, d_cond=d_cond, K=K)
         # code encoder: token transformer -> pooled code vector
         self.tok_emb = nn.Embedding(vocab, d_tok)
         self.pos = nn.Parameter(torch.zeros(1, MAX_TOK, d_tok))
         layer = nn.TransformerEncoderLayer(d_tok, 4, d_tok * 2, batch_first=True)
         self.code_enc = nn.TransformerEncoder(layer, 2)
-        # state encoder + code FiLM
-        self.state_enc = nn.Sequential(nn.Conv2d(n_obj, d_b, 3, padding=1), nn.ReLU(),
-                                       nn.Conv2d(d_b, d_b, 3, padding=1), nn.ReLU())
+        # NCA body: embed (state + action planes) -> code-FiLM -> iterated update
+        self.embed = nn.Conv2d(n_obj + n_act, d_b, 3, padding=1)
         self.code_film = nn.Linear(d_tok, 2 * d_b)
+        n_pool = (2 if axis_pool else 0) + (4 if axis_cummax else 0) + (1 if global_pool else 0)
+        self.step_conv = nn.Conv2d(d_b, d_b, 3, padding=1)      # weight-shared across steps
+        upd_in = d_b * (1 + n_pool) + (d_b if input_skip else 0)
+        self.step_update = nn.Conv2d(upd_in, d_b, 1)
+        self.ln = nn.GroupNorm(1, d_b) if use_layernorm else None
+        # K-mode decoder
         self.emb_a = nn.Embedding(n_act, d_cond)
         self.emb_z = nn.Embedding(K, d_cond)
         self.prior = nn.Sequential(nn.Linear(d_b + d_cond + d_tok, d_b), nn.ReLU(),
@@ -121,11 +160,29 @@ class CodeCondWorldModel(nn.Module):
         m = mask.float()[..., None]
         return (h * m).sum(1) / m.sum(1).clamp_min(1)         # (N,d_tok)
 
+    def _body(self, state, action, c):
+        """Iterated NCA body -> per-cell context (N,d_b,H,W)."""
+        N, _, H, W = state.shape
+        a_oh = F.one_hot(action, self.n_act).float()[..., None, None].expand(-1, -1, H, W)
+        h0 = self.embed(torch.cat([state, a_oh], 1))          # (N,d_b,H,W)
+        g, b = self.code_film(c).chunk(2, -1)
+        h0 = h0 * (1 + g[..., None, None]) + b[..., None, None]
+        msk = (state.sum(1, keepdim=True) > 0).float()        # real cells (zero out padding)
+        h = h0 * msk
+        for _ in range(self.n_steps):
+            hn = self.ln(h) if self.ln is not None else h
+            parts = [self.step_conv(hn)]
+            pf = _pool_features(hn, self.axis_pool, self.axis_cummax, self.global_pool)
+            if pf is not None:
+                parts.append(pf)
+            if self.input_skip:
+                parts.append(h0)
+            h = (h + self.step_update(torch.cat(parts, 1))) * msk
+        return h
+
     def logits(self, state, action, tok, mask):
         c = self.encode_code(tok, mask)                       # (N,d_tok)
-        ctx = self.state_enc(state)                           # (N,d_b,H,W)
-        g, b = self.code_film(c).chunk(2, -1)
-        ctx = ctx * (1 + g[..., None, None]) + b[..., None, None]
+        ctx = self._body(state, action, c)                    # (N,d_b,H,W)
         N, K = ctx.shape[0], self.K
         a_emb = self.emb_a(action)
         cond = a_emb[:, None] + self.emb_z.weight[None]       # (N,K,d_cond)
