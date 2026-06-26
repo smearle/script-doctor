@@ -53,7 +53,7 @@ PYBIND11_MODULE(_puzzlescript_cpp, m) {
              "Seed the RNG (RC4-based, matching JS PuzzleScript)")
         .def("process_input", &Engine::processInput,
              py::arg("direction"),
-             "Process input. dir: 0=up, 1=left, 2=down, 3=right, 4=action, -1=tick. Returns True if anything changed.")
+             "Process input. dir: 0=up, 1=left, 2=down, 3=right, 4=action. Any other value (-1 or no-op id 5) is a no-force tick. Returns True if anything changed.")
         .def("check_win", &Engine::checkWin,
              "Check win conditions. Returns True if won.")
         .def("get_score", &Engine::getScore,

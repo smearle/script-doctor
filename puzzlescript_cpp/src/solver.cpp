@@ -74,16 +74,28 @@ bool timedOut(const Clock::time_point& start, int timeoutMs) {
     return std::chrono::duration_cast<std::chrono::milliseconds>(Clock::now() - start).count() > timeoutMs;
 }
 
-int actionCount(const Engine& engine) {
-    return engine.hasMetadata("noaction") ? 4 : 5;
-}
+// Action ids the world-model dataset/model use:
+//   0=up 1=left 2=down 3=right 4=action button 5=no-op real-time tick.
+// Movement is always available; the action button is dropped when the game
+// declares `noaction`; the no-op tick is added only for real-time games
+// (`realtime_interval`), whose world advances on its own between key presses.
+// Id 5 maps to a no-force engine tick inside Engine::processInput, so it flows
+// through processInputSearch unchanged.
+constexpr int NOOP_TICK_ACTION = 5;
 
 std::vector<int> actionsForEngine(const Engine& engine) {
-    std::vector<int> actions(actionCount(engine));
-    for (int i = 0; i < static_cast<int>(actions.size()); ++i) {
-        actions[i] = i;
+    std::vector<int> actions = {0, 1, 2, 3};
+    if (!engine.hasMetadata("noaction")) {
+        actions.push_back(4);
+    }
+    if (engine.hasMetadata("realtime_interval")) {
+        actions.push_back(NOOP_TICK_ACTION);
     }
     return actions;
+}
+
+int actionCount(const Engine& engine) {
+    return static_cast<int>(actionsForEngine(engine).size());
 }
 
 // Cap on consecutive 'again' ticks resolved within a single transition. Matches
@@ -248,10 +260,11 @@ double simulateMCTS(
         return useScore ? engine.getScoreNormalized() : 0.0;
     }
 
-    std::uniform_int_distribution<int> actionDist(0, actionCount(engine) - 1);
+    const std::vector<int> actions = actionsForEngine(engine);
+    std::uniform_int_distribution<int> actionDist(0, static_cast<int>(actions.size()) - 1);
     int changes = 0;
     for (int i = 0; i < maxSimLength; ++i) {
-        const bool changed = processInputSearch(engine, actionDist(rng));
+        const bool changed = processInputSearch(engine, actions[actionDist(rng)]);
         if (changed) {
             changes += 1;
         }
@@ -271,7 +284,8 @@ RandomRolloutResult randomRolloutRaw(Engine& engine, int maxIters, int timeoutMs
     RandomRolloutResult result;
     const auto start = Clock::now();
     std::mt19937 rng(std::random_device{}());
-    std::uniform_int_distribution<int> actionDist(0, actionCount(engine) - 1);
+    const std::vector<int> actions = actionsForEngine(engine);
+    std::uniform_int_distribution<int> actionDist(0, static_cast<int>(actions.size()) - 1);
 
     for (int i = 0; i < maxIters; ++i) {
         if (i % 1000 == 0 && timedOut(start, timeoutMs)) {
@@ -281,7 +295,7 @@ RandomRolloutResult randomRolloutRaw(Engine& engine, int maxIters, int timeoutMs
             return result;
         }
 
-        processInputSearch(engine, actionDist(rng));
+        processInputSearch(engine, actions[actionDist(rng)]);
         if (engine.isWinning()) {
             engine.restart();
         }
@@ -295,7 +309,8 @@ RandomRolloutResult randomRolloutRaw(Engine& engine, int maxIters, int timeoutMs
 SolverResult solveRandom(Engine& engine, int maxLength, int maxIters, int timeoutMs) {
     const auto start = Clock::now();
     std::mt19937 rng(std::random_device{}());
-    std::uniform_int_distribution<int> actionDist(0, actionCount(engine) - 1);
+    const std::vector<int> actions = actionsForEngine(engine);
+    std::uniform_int_distribution<int> actionDist(0, static_cast<int>(actions.size()) - 1);
 
     std::vector<int> solution;
     double bestScore = engine.getScore();
@@ -311,7 +326,7 @@ SolverResult solveRandom(Engine& engine, int maxLength, int maxIters, int timeou
             solution.clear();
         }
 
-        const int action = actionDist(rng);
+        const int action = actions[actionDist(rng)];
         solution.push_back(action);
         const bool changed = processInputSearch(engine, action);
         if (!changed) {

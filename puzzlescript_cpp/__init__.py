@@ -528,7 +528,15 @@ class CppPuzzleScriptEnv:
 
     @property
     def num_actions(self) -> int:
-        return 5
+        # 0-3 movement (always), 4 action button (unless `noaction`), 5 no-op
+        # real-time tick (only for `realtime_interval` games, whose world
+        # advances on its own between inputs). Matches actionsForEngine() in
+        # src/solver.cpp and _enabled_actions() in nca_wm/data_collection.py.
+        meta = self._compiled.get("metadata", {})
+        n = 4 if "noaction" in meta else 5
+        if "realtime_interval" in meta:
+            n += 1
+        return n
 
     @property
     def num_levels(self) -> int:

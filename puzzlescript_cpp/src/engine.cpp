@@ -1383,9 +1383,16 @@ bool Engine::processInput(int dir) {
 
     LevelBackup bak = backupLevel();
 
+    // Only 0..4 are player forces (up/left/down/right/action). Anything else
+    // (-1, and the world model's no-op action id 5) is a no-force "tick": run
+    // the rule pipeline with no player input, exactly what realtime_interval
+    // emits between key presses. A tick is never subject to
+    // require_player_movement (the world advances regardless of the player).
+    const bool isForce = (dir >= 0 && dir <= 4);
+
     // Capture player positions BEFORE movement for require_player_movement check
     std::vector<int> playerPositions;
-    if (dir >= 0) {
+    if (isForce) {
         playerPositions = getPlayerPositions();
         int dirMask;
         switch (dir) {
@@ -1457,7 +1464,7 @@ bool Engine::processInput(int dir) {
     // Check for require_player_movement
     // Uses pre-movement playerPositions captured before startMovement
     // JS checks if player is no longer at ANY of the original positions
-    if (dir >= 0 && metadata_.count("require_player_movement") && !playerPositions.empty()) {
+    if (isForce && metadata_.count("require_player_movement") && !playerPositions.empty()) {
         bool someMoved = false;
         for (int pos : playerPositions) {
             int base = pos * STRIDE_OBJ_;

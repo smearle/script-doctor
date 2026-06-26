@@ -102,7 +102,15 @@ nca_wm/figures/tsm_pool_diag/ar_gifs/
 nca_wm/data_cache/
 
 # LaTeX scratch output
-texput.logpuffer_assets/
+texput.log
+nca_wm/figures/*.log
+nca_wm/paper/figures/**/*.log
+
+# compiled/regenerable pufferlib game JSONs
+puffer_assets/
+
+# local Notion-export reference (18MB, contains .zip + macOS cruft); not source
+Neural World Models & Active Learning (Notion page)/
 
 # game_synth: keep code (*.py, *.sbatch) but ignore generated run artifacts
 game_synth/*/

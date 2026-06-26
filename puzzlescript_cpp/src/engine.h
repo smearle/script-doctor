@@ -104,7 +104,9 @@ public:
     // Seed the RNG (matches JS PuzzleScript's RC4-based seeding)
     void seedRNG(const std::string& seed);
 
-    // Process a single input. dir: 0=up, 1=left, 2=down, 3=right, 4=action, -1=tick
+    // Process a single input. dir: 0=up, 1=left, 2=down, 3=right, 4=action.
+    // Any other value (-1, or the world model's no-op action id 5) is a
+    // no-force tick: the rule pipeline runs with no player input.
     // Returns true if anything changed.
     bool processInput(int dir);
 
