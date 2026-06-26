@@ -30,7 +30,7 @@ from nca_wm.models import build_input_with_history
 from nca_wm.rule_attn_model import RuleSlotEncoder
 
 
-N_ACTIONS = 5
+N_ACTIONS = 6  # 0-3 move, 4 action, 5 no-op real-time tick (realtime games only)
 
 
 def _embed_input(state, action_onehot, n_hid, name="embed",

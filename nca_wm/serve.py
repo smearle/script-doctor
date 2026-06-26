@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import base64
 import io
+import json
 
 import jax
 import jax.numpy as jnp
@@ -17,27 +18,31 @@ from puzzlescript_cpp import CppPuzzleScriptBackend, CppPuzzleScriptEnv
 
 
 def serve_world_model(
-    model,
-    params,
     game_infos: list[dict],
     ps_parser,
+    bundles: list[dict],
     initial_game_id: int = 0,
     level_i: int = 0,
     port: int = 8000,
     host: str = "0.0.0.0",
-    conditional: bool = True,
-    max_pad: tuple[int, int, int] = (1, 1, 1),
-    max_tok_len: int = 1,
 ):
-    """Serve the trained world model as an interactive web app.
+    """Serve trained world model(s) as an interactive web app.
 
-    Multi-game aware: takes the full ``game_infos`` list and lets the user
-    pick a game (and level within it) at runtime. The model's apply path
-    pads each game's native (n_objs, H, W) state up to the global ``max_pad``
-    used during training, then crops back for rendering.
+    Multi-game *and* multi-model aware: ``game_infos`` lists every game the
+    user can pick, and ``bundles`` is a parallel list (one per game) holding
+    that game's model. Each bundle is a dict with keys:
 
-    Conditional models (``rule_attn`` / ``film``) require per-game tokens —
-    enable via ``conditional=True`` and pass the matching ``max_tok_len``.
+      ``apply_fn``    — jitted ``model.apply`` for this game's checkpoint,
+      ``params``      — that checkpoint's (unwrapped) params,
+      ``conditional`` — whether apply takes game tokens/mask,
+      ``max_pad``     — (C, H, W) the model was trained to pad inputs to,
+      ``max_tok_len`` — token length for conditional models.
+
+    A single checkpoint covering many games supplies the same bundle object
+    for each of its games; serving several independent single-game runs in
+    one viewer supplies a distinct bundle per game. On game switch the active
+    bundle's apply/params/padding take over, so heterogeneous models (e.g. a
+    20-channel mario model and a 9-channel coins model) coexist in one viewer.
     """
     from flask import Flask, jsonify
     import PIL.Image
@@ -49,13 +54,15 @@ def serve_world_model(
         _unpad_pred,
     )
 
+    assert len(bundles) == len(game_infos), (
+        f"bundles ({len(bundles)}) must be parallel to game_infos "
+        f"({len(game_infos)})")
+
     app = Flask(__name__)
-    apply_fn = jax.jit(model.apply)
-    max_C, max_H, max_W = max_pad
 
     state: dict = {}
 
-    def _pad_tokens(tids):
+    def _pad_tokens(tids, max_tok_len):
         pad = np.zeros(max_tok_len, dtype=np.int32)
         mask = np.zeros(max_tok_len, dtype=np.bool_)
         L = min(len(tids), max_tok_len)
@@ -87,8 +94,25 @@ def serve_world_model(
                 again += 1
         return real_obs
 
+    def _realtime_interval(info: dict) -> float | None:
+        """Seconds-per-tick for a real-time game (``realtime_interval`` prelude),
+        or None for turn-based games. The browser uses this to auto-fire the
+        no-op tick action (id 5) between key presses."""
+        try:
+            meta = json.loads(info["json_str"]).get("metadata", {})
+        except Exception:
+            return None
+        if "realtime_interval" not in meta:
+            return None
+        try:
+            return float(meta["realtime_interval"])
+        except (TypeError, ValueError):
+            return None
+
     def _switch(game_id: int, level_i: int):
         info = game_infos[game_id]
+        b = bundles[game_id]
+        max_C, max_H, max_W = b["max_pad"]
         env, backend, real_obs = _build_env(game_id, level_i)
         n_objs, grid_h, grid_w = env.observation_shape
         pred_state = _pad_state_for_model(real_obs, max_C, max_H, max_W)
@@ -108,10 +132,11 @@ def serve_world_model(
             last_action=None,
             env_actions=[],   # actions actually fed to the real env, in order
             history=[],       # snapshots taken pre-step; pop on undo
+            realtime_interval=_realtime_interval(info),
         )
-        if conditional:
+        if b["conditional"]:
             tids = info.get("token_ids", [])
-            pad, mask = _pad_tokens(tids)
+            pad, mask = _pad_tokens(tids, b["max_tok_len"])
             state["tokens"] = jnp.array(pad[None])
             state["mask"] = jnp.array(mask[None])
 
@@ -172,19 +197,22 @@ def serve_world_model(
         model paints in the padding (left unconstrained because the training
         loss always masks padding cells) persists across steps — the player can "leave" through a wall
         into the padding and be carried back later. Mirrors the train/eval AR path."""
+        b = bundles[state["game_id"]]
+        max_C, max_H, max_W = b["max_pad"]
         pred_bin = (jax.nn.sigmoid(logits) > 0.5).astype(jnp.uint8)
         pred_native = _unpad_pred(pred_bin, state["n_objs"],
                                   state["grid_h"], state["grid_w"])
         return _pad_state_for_model(pred_native, max_C, max_H, max_W)
 
     def _apply_step(action):
+        b = bundles[state["game_id"]]
         a_oh = jnp.array(np.eye(N_ACTIONS, dtype=np.float32)[action][None])
-        if conditional:
-            logits, win_logit, _ = apply_fn(
-                params, state["pred_state"], a_oh, state["tokens"], state["mask"]
+        if b["conditional"]:
+            logits, win_logit, _ = b["apply_fn"](
+                b["params"], state["pred_state"], a_oh, state["tokens"], state["mask"]
             )
         else:
-            logits, win_logit, _ = apply_fn(params, state["pred_state"], a_oh)
+            logits, win_logit, _ = b["apply_fn"](b["params"], state["pred_state"], a_oh)
         return logits, win_logit
 
     def _state_payload():
@@ -198,6 +226,7 @@ def serve_world_model(
             step=state["step"], l1=l1, diverged=state["diverged"],
             game=info["name"], game_id=state["game_id"], level_i=state["level_i"],
             n_levels=info.get("n_levels", 1),
+            realtime_interval=state.get("realtime_interval"),
         )
 
     _switch(initial_game_id, level_i)
@@ -365,6 +394,12 @@ HTML_PAGE = r"""<!DOCTYPE html>
     <div>Step: <span class="val" id="stepVal">0</span></div>
     <div>L1 divergence: <span class="val" id="l1Val">0</span></div>
   </div>
+  <div class="info" id="speedRow" style="display:none; align-items:center;">
+    <label for="speedSlider">Speed: <span class="val" id="speedVal">1.0</span>x</label>
+    <input type="range" id="speedSlider" min="0" max="3" step="0.25" value="1"
+           style="width:220px; vertical-align:middle;">
+    <span id="pausedTag" class="warn" style="display:none;">PAUSED</span>
+  </div>
   <div class="controls">
     Arrows / WASD = move &nbsp;|&nbsp; X = action &nbsp;|&nbsp;
     Z = undo &nbsp;|&nbsp; R = restart &nbsp;|&nbsp; V = dream mode
@@ -380,6 +415,75 @@ let busy = false;
 let games = [];          // [{name, n_levels}, ...]
 let currentGame = 0;
 let currentLevel = 0;
+let realtimeTimer = null;   // driver interval handle (real-time games only)
+let baseInterval = null;    // active game's native realtime_interval (s), or null
+let speed = 1.0;            // speed multiplier from the slider (0 = paused)
+const ACTION_QUEUE_MAX = 4; // cap so a held key can't build an unbounded backlog
+let pendingActions = [];    // queued player key actions (never dropped on collision)
+
+// Single point that advances the world by one action. The server keeps one
+// shared state object and isn't concurrency-safe, so `busy` serializes every
+// request (steps, reset, undo) — but unlike before we never *drop* a keypress
+// on a collision; it waits in the queue / retries on the next driver tick.
+async function sendStep(action) {
+  busy = true;
+  try {
+    const endpoint = dreaming ? '/api/step_dream/' : '/api/step/';
+    update(await (await fetch(endpoint + action)).json());
+  } finally {
+    busy = false;
+  }
+}
+
+// Run an arbitrary one-shot command (reset/undo) once the engine is idle, so a
+// real-time tick in flight never makes us silently ignore the key.
+async function whenIdle(fn) {
+  while (busy) await new Promise(r => setTimeout(r, 5));
+  busy = true;                       // atomic: no await between check and set
+  try { return await fn(); } finally { busy = false; }
+}
+
+// Drain one step: a queued player action takes priority; in real-time games an
+// empty queue advances the world with the no-op tick (5). If a step is already
+// in flight we just return and let the next drive() call pick it up.
+async function drive() {
+  if (busy) return;
+  let action = pendingActions.shift();
+  if (action === undefined) {
+    if (!(baseInterval && speed > 0)) return;   // turn-based & idle: nothing to do
+    action = 5;                                  // real-time: passive tick
+  }
+  await sendStep(action);
+}
+
+// Player key -> queue (never dropped). Turn-based games have no driver loop, so
+// kick processing immediately; real-time games are driven by the interval.
+function enqueue(action) {
+  pendingActions.push(action);
+  if (pendingActions.length > ACTION_QUEUE_MAX) pendingActions.shift();  // drop oldest
+  if (!realtimeTimer) drive();
+}
+
+// (Re)build the real-time driver loop at the current speed. The effective tick
+// period is base/speed (higher speed = faster). speed 0 pauses the world.
+function restartDriver() {
+  if (realtimeTimer) { clearInterval(realtimeTimer); realtimeTimer = null; }
+  if (baseInterval && baseInterval > 0 && speed > 0) {
+    const periodMs = Math.max(20, (baseInterval / speed) * 1000);
+    realtimeTimer = setInterval(drive, periodMs);
+  }
+}
+
+// Called from update() with the active game's realtime_interval (or null for
+// turn-based games). Shows/hides the speed slider and (re)starts the driver.
+function setRealtime(interval) {
+  const next = (interval && interval > 0) ? interval : null;
+  if (next === baseInterval) return;
+  baseInterval = next;
+  const row = document.getElementById('speedRow');
+  if (row) row.style.display = baseInterval ? 'flex' : 'none';
+  restartDriver();
+}
 
 async function fetchState() {
   const r = await fetch('/api/state');
@@ -397,6 +501,7 @@ function update(d) {
   }
   if (d.game_id !== undefined) currentGame = d.game_id;
   if (d.level_i !== undefined) currentLevel = d.level_i;
+  if ('realtime_interval' in d) setRealtime(d.realtime_interval);
 }
 
 function populateLevelSelect(gameId) {
@@ -436,6 +541,14 @@ async function init() {
   populateLevelSelect(currentGame);
   document.getElementById('levelSelect').value = currentLevel;
 
+  const speedSlider = document.getElementById('speedSlider');
+  speedSlider.addEventListener('input', () => {
+    speed = parseFloat(speedSlider.value);
+    document.getElementById('speedVal').textContent = speed.toFixed(2);
+    document.getElementById('pausedTag').style.display = speed > 0 ? 'none' : 'inline';
+    restartDriver();   // apply the new tick rate (or pause) immediately
+  });
+
   sel.addEventListener('change', async () => {
     currentGame = parseInt(sel.value);
     populateLevelSelect(currentGame);
@@ -449,23 +562,19 @@ async function init() {
 }
 
 document.addEventListener('keydown', async (e) => {
-  if (busy) return;
   const key = e.key;
   // Don't intercept while a select is focused.
   if (document.activeElement && document.activeElement.tagName === 'SELECT') return;
 
   if (key === 'r' || key === 'R') {
-    busy = true;
+    pendingActions = [];
     dreaming = false;
     document.getElementById('dreamBadge').classList.add('hidden');
-    update(await (await fetch('/api/reset')).json());
-    busy = false;
+    whenIdle(async () => update(await (await fetch('/api/reset')).json()));
     return;
   }
   if (key === 'z' || key === 'Z') {
-    busy = true;
-    update(await (await fetch('/api/undo')).json());
-    busy = false;
+    whenIdle(async () => update(await (await fetch('/api/undo')).json()));
     return;
   }
   if (key === 'v' || key === 'V') {
@@ -477,10 +586,7 @@ document.addEventListener('keydown', async (e) => {
   const action = KEY_MAP[key];
   if (action === undefined) return;
   e.preventDefault();
-  busy = true;
-  const endpoint = dreaming ? '/api/step_dream/' : '/api/step/';
-  update(await (await fetch(endpoint + action)).json());
-  busy = false;
+  enqueue(action);   // queued, never dropped — processed by the driver / drive()
 });
 
 init();

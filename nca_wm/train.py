@@ -49,7 +49,7 @@ from nca_wm.state_ops import (
 )
 from nca_wm.data_collection import (
     _cache_dir, _load_npz_dict, _save_npz_dict,
-    _enabled_action_count, _rollout_history,
+    _enabled_action_count, _enabled_actions, _rollout_history,
     build_predecessor_adjacency, sample_backward_paths,
     _solution_from_sol_dir, _solution_from_transitions_cache,
     collect_unique_transitions, collect_multigame_dataset,
@@ -67,7 +67,9 @@ from nca_wm.eval import (
     _run_eval_rollouts_jax,
 )
 
-N_ACTIONS = 5
+# Ids: 0-3 movement, 4 action button, 5 no-op real-time tick (active only for
+# `realtime_interval` games; otherwise the slot stays zero).
+N_ACTIONS = 6
 
 # Preset game sets for multi-game training
 MULTI_GAME_PRESETS = {
@@ -653,6 +655,9 @@ def train(
     priority_alpha: float = 1.0,
     priority_uniform_mix: float = 0.25,
     priority_mode: str = "loss",
+    game_weighting: str = "none",
+    game_weight_alpha: float = 1.0,
+    game_weight_mix: float = 0.25,
 ):
     """Train (or resume training) the NCA world model.
 
@@ -1237,6 +1242,27 @@ def train(
             den = jnp.maximum(spatial_mask.sum(axis=(1, 2, 3)), 1.0)
             return num / den
 
+    # --- Cross-game bandit state --------------------------------------------
+    # game_weight[g] multiplies game g's base selection probability (renormalized
+    # per bucket in _sample_bucket_batch). Updated from per-game held-out
+    # change_err at each per_game_eval. Starts uniform; no-op when weighting off
+    # or single-game.
+    GW_EPS = 1e-3
+    game_weight = np.ones(n_games, dtype=np.float64)
+    prev_game_cerr: dict[int, float] = {}  # for the "progress" signal
+
+    def _update_game_weights(cur_cerr: dict[int, float]):
+        if game_weighting == "none":
+            return
+        for g, cerr in cur_cerr.items():
+            if game_weighting == "error":
+                sig = max(cerr, GW_EPS)
+            else:  # progress: reward decrease in error since last eval
+                prev = prev_game_cerr.get(g, None)
+                sig = GW_EPS if prev is None else max(prev - cerr, 0.0) + GW_EPS
+                prev_game_cerr[g] = cerr
+            game_weight[g] = sig ** game_weight_alpha
+
     def _sample_bucket_batch():
         """Pick a bucket, sample its per-bucket batch_size rows from games
         in that bucket, and populate the bucket's preallocated buffers.
@@ -1263,7 +1289,17 @@ def train(
         # mode, `game_probs_b` is proportional to each game's within-game
         # transition fraction for this bucket; in uniform mode it is
         # proportional to raw transition count in this bucket.
-        game_choice = np_rng.choice(len(games_b), size=bs_b, p=game_probs_b)
+        if game_weighting != "none":
+            # Bias game selection by the bandit weights, renormalized within this
+            # bucket, then mixed with the base probs to keep every game alive.
+            eff = game_probs_b * game_weight[np.array(games_b, dtype=np.int64)]
+            esum = eff.sum()
+            eff = (eff / esum) if esum > 0 else game_probs_b
+            p_sel = (1.0 - game_weight_mix) * eff + game_weight_mix * game_probs_b
+            p_sel = p_sel / p_sel.sum()
+        else:
+            p_sel = game_probs_b
+        game_choice = np_rng.choice(len(games_b), size=bs_b, p=p_sel)
         local_idx = np.empty(bs_b, dtype=np.int32)
         for k, g in enumerate(games_b):
             rows = np.nonzero(game_choice == k)[0]
@@ -1530,6 +1566,7 @@ def train(
             # Per-game diagnostic pass (multi-game only, with game_names known).
             if per_game_eval is not None and global_step % per_game_eval_interval == 0:
                 worst = ("", 1.0, 0.0)  # (name, change_acc, loss) — lowest change_acc
+                cur_cerr: dict[int, float] = {}  # per-game change_err this eval
                 for g, idx_g in per_game_eval.items():
                     # idx_g = LOCAL indices into per_game_states[g]; pad to global max.
                     N_eval = len(idx_g)
@@ -1571,6 +1608,7 @@ def train(
                             hist_states=hs_g, hist_actions=ha_g,
                         )
                     pg_loss, pg_acc, pg_cacc = float(pg_loss), float(pg_acc), float(pg_cacc)
+                    cur_cerr[g] = 1.0 - pg_cacc
                     per_game_log[g].append({
                         "step": global_step, "loss": pg_loss,
                         "acc": pg_acc, "change_acc": pg_cacc,
@@ -1587,6 +1625,14 @@ def train(
                 if worst[0]:
                     print(f"    worst-fit game: {worst[0]}  "
                           f"change_err={1-worst[1]:.3e}  loss={worst[2]:.3e}")
+                # Feed the cross-game bandit with this eval's per-game errors.
+                _update_game_weights(cur_cerr)
+                if game_weighting != "none":
+                    mn = float(np.mean(list(cur_cerr.values())))
+                    top = sorted(cur_cerr.items(), key=lambda kv: -kv[1])[:3]
+                    print("    [game_weighting=%s] mean per-game change_err=%.3e; "
+                          "hardest: %s" % (game_weighting, mn,
+                          ", ".join("%s=%.2e" % (game_names[g], e) for g, e in top)))
 
             # === Held-out test eval ===
             # Per-game per-bucket pass over (a uniform sample of) the
@@ -2110,6 +2156,9 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--val_eval_interval", type=int, default=0,
                    help="Steps between held-out test-set evals; 0 (default) ties "
                         "the cadence to --log_interval.")
+    p.add_argument("--per_game_eval_interval", type=int, default=1000,
+                   help="Steps between per-game held-out evals (also the update "
+                        "cadence for --game_weighting).")
     # Active-learning style sampling: bias within-game batch draws toward
     # transitions the model currently predicts worst (last-seen per-sample BCE),
     # mixed with a uniform fraction to retain coverage. Unconditional only.
@@ -2125,6 +2174,22 @@ def build_parser() -> argparse.ArgumentParser:
                         "coverage = error-blind control: prefer never-seen "
                         "transitions, all seen equal (isolates coverage effect "
                         "from error-targeting). Only used with --priority_sampling.")
+    # Cross-game bandit: bias which GAME each batch slot is drawn from, by
+    # per-game held-out error or its rate of decrease (learning progress).
+    # Tests whether, under capacity pressure, spending budget on the worst /
+    # most-improvable games beats uniform game sampling. Multi-game only.
+    p.add_argument("--game_weighting", choices=["none", "error", "progress"],
+                   default="none",
+                   help="none = base (size/balanced) game probs. error = weight "
+                        "games by per-game val change_err^alpha. progress = weight "
+                        "by decrease in per-game change_err since last eval "
+                        "(Graves automated-curriculum bandit). Updated each "
+                        "--per_game_eval_interval.")
+    p.add_argument("--game_weight_alpha", type=float, default=1.0,
+                   help="Exponent on the per-game weighting signal.")
+    p.add_argument("--game_weight_mix", type=float, default=0.25,
+                   help="Fraction of game selection left on the base probs "
+                        "(guards against starving any game).")
     p.add_argument("--priority_uniform_mix", type=float, default=0.25,
                    help="Fraction of each batch drawn uniformly (vs by priority) "
                         "to guard against collapse/forgetting on the hard tail.")
@@ -2827,6 +2892,10 @@ def main():
                 priority_alpha=args.priority_alpha,
                 priority_uniform_mix=args.priority_uniform_mix,
                 priority_mode=args.priority_mode,
+                game_weighting=args.game_weighting,
+                game_weight_alpha=args.game_weight_alpha,
+                game_weight_mix=args.game_weight_mix,
+                per_game_eval_interval=args.per_game_eval_interval,
             )
             # (curves saved inside train() with per-game arrays)
             os.makedirs(save_dir, exist_ok=True)
@@ -2980,6 +3049,10 @@ def main():
             priority_alpha=args.priority_alpha,
             priority_uniform_mix=args.priority_uniform_mix,
             priority_mode=args.priority_mode,
+            game_weighting=args.game_weighting,
+            game_weight_alpha=args.game_weight_alpha,
+            game_weight_mix=args.game_weight_mix,
+            per_game_eval_interval=args.per_game_eval_interval,
         )
 
         # Save training curves

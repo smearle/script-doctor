@@ -38,7 +38,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from nca_wm.train import (
     ConditionalNCAWorldModel,
     N_ACTIONS,
-    _enabled_action_count,
+    _enabled_actions,
     _multihot_to_objects,
     _pad_state_for_model,
     _unpad_pred,
@@ -241,9 +241,9 @@ def main():
     # Shared random action sequence — restrict to actions enabled in BOTH games
     # (respect `noaction`) so the sequence is valid for either donor.
     rng = np.random.RandomState(args.action_seed)
-    n_act = min(_enabled_action_count(info_a["json_str"]),
-                _enabled_action_count(info_b["json_str"]))
-    actions = rng.randint(0, n_act, size=args.n_steps)
+    shared_acts = sorted(set(_enabled_actions(info_a["json_str"]))
+                         & set(_enabled_actions(info_b["json_str"])))
+    actions = rng.choice(shared_acts, size=args.n_steps)
     print(f"Action sequence: {actions.tolist()}")
 
     rollout_step = make_rollout_fn(model)

@@ -23,10 +23,10 @@ if str(_REPO_ROOT) not in sys.path:
 from puzzlescript_cpp import CppPuzzleScriptBackend, CppPuzzleScriptEnv
 from nca_wm.models import NCAWorldModel, ConditionalNCAWorldModel
 from nca_wm.state_ops import _multihot_to_objects
-from nca_wm.data_collection import _enabled_action_count
+from nca_wm.data_collection import _enabled_actions
 from nca_wm.inference import make_apply_fn, _pad_state_for_model, _unpad_pred
 
-N_ACTIONS = 5
+N_ACTIONS = 6  # 0-3 move, 4 action, 5 no-op real-time tick (realtime games only)
 
 
 def _labeled_channel_grid(logits_chw, obj_names, pad=2, scale=4):
@@ -212,9 +212,9 @@ def _render_training_gif(
         gt = jnp.array(game_tokens[None])
         gm = jnp.array(game_mask[None])
 
-    n_act = _enabled_action_count(json_str)
+    acts = _enabled_actions(json_str)
     for t in range(n_loop):
-        action = int(actions[t]) if actions is not None else int(rng.randint(n_act))
+        action = int(actions[t]) if actions is not None else int(rng.choice(acts))
         a_oh = jnp.array(np.eye(N_ACTIONS, dtype=np.float32)[action][None])
         if conditional:
             logits, _, _sprite_logits = apply_fn(params, pred_state, a_oh, gt, gm)
@@ -341,10 +341,10 @@ def _render_rollout_frames(
         return np.concatenate(parts, axis=0)
 
     max_steps = len(actions) if actions else n_steps
-    n_act = _enabled_action_count(json_str)
+    acts = _enabled_actions(json_str)
     last_obj_img = None
     for t in range(max_steps):
-        action = actions[t] if actions else np.random.randint(n_act)
+        action = actions[t] if actions else int(np.random.choice(acts))
         a_oh = jnp.array(np.eye(N_ACTIONS, dtype=np.float32)[action][None])
 
         # --- Game renders ---
@@ -763,9 +763,9 @@ def render_rollout_comparison(
         return np.concatenate([np.array(banner), img], axis=0)
 
     pred_won_prob = 0.0
-    n_act = _enabled_action_count(json_str)
+    acts = _enabled_actions(json_str)
     for t in range(max_steps):
-        action = actions[t] if actions else np.random.randint(n_act)
+        action = actions[t] if actions else int(np.random.choice(acts))
         a_oh = jnp.array(np.eye(N_ACTIONS, dtype=np.float32)[action][None])
 
         real_frame = backend.render_frame_from_objects(

@@ -36,7 +36,7 @@ from nca_wm.train import (
     ConditionalNCAWorldModel,
     NCAWorldModel,
     N_ACTIONS,
-    _enabled_action_count,
+    _enabled_actions,
     _pad_offsets,
     _pad_state_for_model,
     _wm_p,
@@ -268,9 +268,9 @@ def _rollout_with_identity(
     model_first_div = -1
 
     prev_real = real_obs.copy()
-    n_act = _enabled_action_count(info["json_str"])
+    acts = _enabled_actions(info["json_str"])
     for t in range(n_steps):
-        action = actions[t] if actions else int(rng.randint(n_act))
+        action = actions[t] if actions else int(rng.choice(acts))
         a_oh = jnp.array(np.eye(N_ACTIONS, dtype=np.float32)[action][None])
 
         if conditional:

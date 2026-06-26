@@ -8,7 +8,7 @@ from the shipped manifest (`dedup_master.json`) + script (`dedup_master.py`).
 
 Reads:
   <master>/dedup_master.json        groups every file into a dedupe cluster
-  <master>/provenance/*.jsonl       content hashes seen via the curated collection
+  <master>/provenance/*.jsonl       content hashes per named source collection (one file each)
   <ps_plus_list>                    PuzzleScript-Plus / non-vanilla files to exclude
 Emits into <stage>:
   data/puzzlescript_games.jsonl     one row per kept vanilla game (+ content + tags)
@@ -16,8 +16,10 @@ Emits into <stage>:
   dedup_master.py, detect_non_vanilla.py  the scripts that produced the tags
   quarantine_ps_plus_manifest.txt   non-vanilla files excluded
 
-Rows are anonymized: provenance is the category "curated_collection" vs
-"gist_scrape" only — no GitHub handles are emitted (the gist id is the row id).
+Each row credits the named collection(s) it was reconciled from
+(`source_collections`, e.g. "PuzzleScript Gallery", "Pedro's PuzzleScript
+Archive", "itch.io"), or "GitHub gist" when it was only seen via a raw gist
+scrape. No GitHub handles are emitted (the gist id is the row id).
 """
 from __future__ import annotations
 
@@ -31,9 +33,31 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_MASTER = Path("/home/jupyter-smearle/puzzlescript-gists")
 
 
-def curated_hashes(master: Path) -> set[str]:
-    out: set[str] = set()
+# Display names for the named source collections, keyed by provenance file stem.
+# The `increpare` corpus is just the GitHub gist set, so it is not a distinct
+# named archive: those rows fall through to the "GitHub gist" default.
+COLLECTION_NAMES = {
+    "gallery": "PuzzleScript Gallery",
+    "itch": "itch.io",
+    "pedro": "Pedro's PuzzleScript Archive",
+}
+
+
+def source_by_hash(master: Path) -> dict[str, set[str]]:
+    """Map each content hash to the named collection(s) it was seen in.
+
+    Each provenance/<collection>.jsonl records the hashes reconciled from one
+    named, human-curated corpus; we keep the collection name so the published
+    rows credit the archive a game came from rather than flattening every
+    source into one anonymous category. Provenance files with no entry in
+    COLLECTION_NAMES (e.g. the gist-equivalent `increpare` set) are skipped so
+    their rows default to "GitHub gist".
+    """
+    out: dict[str, set[str]] = {}
     for jf in (master / "provenance").glob("*.jsonl"):
+        coll = COLLECTION_NAMES.get(jf.stem)
+        if coll is None:
+            continue
         for ln in jf.read_text().splitlines():
             ln = ln.strip()
             if not ln:
@@ -43,7 +67,7 @@ def curated_hashes(master: Path) -> set[str]:
             except Exception:
                 continue
             if ch:
-                out.add(ch)
+                out.setdefault(ch, set()).add(coll)
     return out
 
 
@@ -57,7 +81,7 @@ def main() -> None:
     (stage / "data").mkdir(parents=True, exist_ok=True)
 
     report = json.loads((master / "dedup_master.json").read_text())
-    curated = curated_hashes(master)
+    sources = source_by_hash(master)
     ps_plus = set()
     if args.ps_plus_list.is_file():
         ps_plus = {l.strip() for l in args.ps_plus_list.read_text().splitlines() if l.strip()}
@@ -94,7 +118,7 @@ def main() -> None:
             out.write(json.dumps({
                 "id": fn[:-4],
                 "content": content,
-                "provenance": "curated_collection" if ch in curated else "gist_scrape",
+                "source_collections": sorted(sources.get(ch, {"GitHub gist"})),
                 "parse_status": m["parse_status"],
                 "n_objects": m["n_objs"],
                 "n_levels": m["n_levels"],
@@ -119,7 +143,7 @@ def main() -> None:
 
     sz = (stage / "data" / "puzzlescript_games.jsonl").stat().st_size / 1e6
     print(f"rows: {n} (dedup representatives: {n_rep}) | excluded PS+: {n_excluded}")
-    print(f"curated content hashes: {len(curated)} | jsonl: {sz:.1f} MB | stage: {stage}")
+    print(f"hashes with a named collection: {len(sources)} | jsonl: {sz:.1f} MB | stage: {stage}")
 
 
 _README = """---
@@ -165,7 +189,7 @@ program synthesis, and game design.
 |---|---|
 | `id` | the raw GitHub gist id |
 | `content` | full PuzzleScript source |
-| `provenance` | `curated_collection` or `gist_scrape` (category only; no handles) |
+| `source_collections` | named archive(s) this game was reconciled from (e.g. `PuzzleScript Gallery`, `Pedro's PuzzleScript Archive`, `itch.io`), or `GitHub gist` if seen only via a raw gist scrape |
 | `parse_status` | `ok`, `parse_error`, `preprocess_error`, `timeout` |
 | `n_objects`, `n_levels` | counts (parsed games) |
 | `mechanics_hash`, `levels_hash` | canonical, name/art-invariant fingerprints |
@@ -187,10 +211,15 @@ match an already-kept game, so genuine small variants are retained.
 ## Provenance & license
 
 Collected from public GitHub gists (the canonical PuzzleScript share target) and
-other public PuzzleScript archives. Rows are anonymized to a provenance category;
-the gist `id` is retained as the identifier. These are third-party, human-authored
-works redistributed for research; treat each game as belonging to its original
-author. License: `other`.
+several public PuzzleScript archives, credited per-row in `source_collections`:
+
+- the [PuzzleScript Gallery](https://www.puzzlescript.net/Gallery/index.html),
+- [Pedro's PuzzleScript Archive](https://pedrosworks.com/) (the PuzzleScript Game Database),
+- and itch.io.
+
+No GitHub handles are emitted; the gist `id` is retained as the identifier.
+These are third-party, human-authored works redistributed for research; treat
+each game as belonging to its original author. License: `other`.
 """
 
 

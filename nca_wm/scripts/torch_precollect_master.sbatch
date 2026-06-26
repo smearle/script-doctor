@@ -36,29 +36,13 @@ export PYTHONUNBUFFERED=1
 
 NUM_SHARDS=${NUM_SHARDS:-128}
 ALGO=${ALGO:-bfs}
-# 12 workers. Each game runs in an isolated child; the parent SIGKILLs any child
-# exceeding MEM_CAP_GB (hard RSS ceiling) or PER_LEVEL_TIMEOUT (hang guard), so a
-# pathological game (ragged level, runaway search, segfault) dies alone. Worst
-# case 12 * MEM_CAP_GB = 96G < 110G request. CUDA_VISIBLE_DEVICES="" (set in the
-# worker) keeps JAX off the held GPU (the pinned-host-memory OOM source).
-WORKERS=${WORKERS:-12}
-MAX_CELLS=${MAX_CELLS:-1024}
-N_STEPS=${N_STEPS:-60000}
-MEM_BUDGET=${MEM_BUDGET:-2500}
-MEM_CAP_GB=${MEM_CAP_GB:-8}
-PER_LEVEL_TIMEOUT=${PER_LEVEL_TIMEOUT:-150}
+WORKERS=${WORKERS:-${SLURM_CPUS_PER_TASK:-16}}
 MASTER=${MASTER:-/scratch/se2161/puzzlescript-gists}
 
-echo "host=$(hostname) shard=${SLURM_ARRAY_TASK_ID}/${NUM_SHARDS} algo=${ALGO} workers=${WORKERS} max_cells=${MAX_CELLS} n_steps=${N_STEPS}"
+echo "host=$(hostname) shard=${SLURM_ARRAY_TASK_ID}/${NUM_SHARDS} algo=${ALGO} workers=${WORKERS}"
 srun .venv/bin/python3 -m nca_wm.scripts.precollect_master \
     --master-dir "$MASTER" \
     --search_algo "$ALGO" \
     --workers "$WORKERS" \
-    --max_cells "$MAX_CELLS" \
-    --n_search_steps "$N_STEPS" \
-    --mem_budget_mb "$MEM_BUDGET" \
-    --mem_cap_gb "$MEM_CAP_GB" \
-    --per_level_timeout "$PER_LEVEL_TIMEOUT" \
     --shard "${SLURM_ARRAY_TASK_ID}" \
-    --num-shards "$NUM_SHARDS" \
-    ${EXTRA_ARGS:-}
+    --num-shards "$NUM_SHARDS"

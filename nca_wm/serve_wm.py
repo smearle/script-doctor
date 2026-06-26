@@ -216,9 +216,12 @@ def _pick_run(logs_dir, port, host):
 
 def main():
     p = argparse.ArgumentParser(description="Serve a trained NCA world model.")
-    p.add_argument("--load", default=None, metavar="DIR",
+    p.add_argument("--load", action="append", default=None, metavar="DIR",
                    help="Run directory containing config.json, params.pkl, "
-                        "and game_infos.pkl. If omitted, a picker UI is shown.")
+                        "and game_infos.pkl. Repeatable: pass --load twice to "
+                        "serve several checkpoints in one viewer (the game "
+                        "picker switches both the game and its model). If "
+                        "omitted, a picker UI is shown.")
     p.add_argument("--logs_dir", default=DEFAULT_LOGS_DIR,
                    help="Directory scanned for runs when --load is omitted.")
     p.add_argument("--port", type=int, default=8000)
@@ -226,26 +229,66 @@ def main():
     p.add_argument("--game", default=None,
                    help="Initial game name (default: first game in checkpoint).")
     p.add_argument("--level", type=int, default=0)
+    p.add_argument("--extra_games_dir", action="append", default=None,
+                   help="Dir(s) prepended to the game-search path so games "
+                        "living outside the default dirs (e.g. custom_games/"
+                        "autumn ports) resolve by name. Repeatable.")
     args = p.parse_args()
 
-    if args.load is None:
+    # Register extra game dirs before any compile_game() call (the server
+    # recompiles each game by name to build its renderer backend).
+    if args.extra_games_dir:
+        from puzzlescript_jax.preprocessing import add_extra_games_dir
+        for d in args.extra_games_dir:
+            add_extra_games_dir(d)
+            print(f"[serve_wm] registered games dir: {d}")
+
+    load_dirs = args.load
+    if not load_dirs:
         run_dir = _pick_run(args.logs_dir, args.port, args.host)
         if run_dir is None:
             print("Picker exited without a selection.")
             return
-        args.load = run_dir
-        print(f"\nPicker selected: {args.load}\n"
+        load_dirs = [run_dir]
+        print(f"\nPicker selected: {run_dir}\n"
               f"Loading model — JIT compile can take 30–90s.")
 
-    with open(os.path.join(args.load, "config.json")) as f:
-        cfg = json.load(f)
-    with open(os.path.join(args.load, "params.pkl"), "rb") as f:
-        params = pickle.load(f)
-    with open(os.path.join(args.load, "game_infos.pkl"), "rb") as f:
-        game_infos = pickle.load(f)
+    import jax
 
-    wm_params = _unwrap_wm(params)
-    model, max_tok_len = _build_wm(cfg, game_infos)
+    # Load each run, build its model, and append one bundle per game it owns.
+    # Several single-game runs thus merge into one viewer; the game picker
+    # routes apply/params/padding to the active game's bundle.
+    game_infos: list[dict] = []
+    bundles: list[dict] = []
+    for d in load_dirs:
+        with open(os.path.join(d, "config.json")) as f:
+            cfg = json.load(f)
+        with open(os.path.join(d, "params.pkl"), "rb") as f:
+            params = pickle.load(f)
+        with open(os.path.join(d, "game_infos.pkl"), "rb") as f:
+            run_infos = pickle.load(f)
+
+        wm_params = _unwrap_wm(params)
+        model, max_tok_len = _build_wm(cfg, run_infos)
+        apply_fn = jax.jit(model.apply)
+        conditional = cfg.get("conditional", True)
+        # Models pad inputs to the max (C,H,W) seen across the run's games.
+        run_max_pad = (
+            max(g["n_objs"] for g in run_infos),
+            max(g["H"] for g in run_infos),
+            max(g["W"] for g in run_infos),
+        )
+        bundle = dict(apply_fn=apply_fn, params=wm_params,
+                      conditional=conditional, max_pad=run_max_pad,
+                      max_tok_len=max_tok_len)
+        for info in run_infos:
+            game_infos.append(info)
+            bundles.append(bundle)
+
+        print(f"Loaded {os.path.basename(d.rstrip('/'))}: "
+              f"{len(run_infos)} game(s) {[g['name'] for g in run_infos]}, "
+              f"arch={cfg.get('architecture','rule_attn')}, "
+              f"{'cond' if conditional else 'uncond'}, max_pad={run_max_pad}")
 
     initial_game_id = 0
     if args.game is not None:
@@ -255,25 +298,17 @@ def main():
                 break
         else:
             names = [g["name"] for g in game_infos]
-            raise ValueError(f"Game {args.game!r} not in checkpoint; available: {names}")
+            raise ValueError(f"Game {args.game!r} not loaded; available: {names}")
 
-    max_C = max(g["n_objs"] for g in game_infos)
-    max_H = max(g["H"] for g in game_infos)
-    max_W = max(g["W"] for g in game_infos)
-
-    print(f"Serving {os.path.basename(args.load.rstrip('/'))}: "
-          f"{len(game_infos)} games, arch={cfg.get('architecture','rule_attn')}, "
-          f"vocab={cfg['vocab_size']}, max_pad=({max_C},{max_H},{max_W})")
+    print(f"\nServing {len(game_infos)} game(s) from {len(load_dirs)} run(s): "
+          f"{[g['name'] for g in game_infos]}")
 
     serve_world_model(
-        model, wm_params, game_infos, init_ps_lark_parser(),
+        game_infos, init_ps_lark_parser(), bundles,
         initial_game_id=initial_game_id,
         level_i=args.level,
         port=args.port,
         host=args.host,
-        conditional=cfg.get("conditional", True),
-        max_pad=(max_C, max_H, max_W),
-        max_tok_len=max_tok_len,
     )
 
 

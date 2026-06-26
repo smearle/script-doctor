@@ -23,6 +23,11 @@ def main() -> None:
     ap.add_argument("--extra_games_dir", required=True, action="append",
                     help="Dir(s) to prepend to the game-search path. Repeatable.")
     args, train_args = ap.parse_known_args()
+    # argparse leaves the separating '--' in the remainder; drop one leading
+    # '--' so the flags after it reach train.py as options rather than being
+    # swallowed as positionals (which made train.py report --game missing).
+    if train_args and train_args[0] == "--":
+        train_args = train_args[1:]
 
     from puzzlescript_jax.preprocessing import add_extra_games_dir
     for d in args.extra_games_dir:

@@ -27,8 +27,10 @@ import jax.numpy as jnp
 import flax.linen as nn
 
 # Action-space size mirrors train.py (kept here as a constant so this
-# module doesn't depend on train.py at import time).
-N_ACTIONS = 5
+# module doesn't depend on train.py at import time). Ids: 0-3 movement,
+# 4 action button, 5 no-op real-time tick (active only for `realtime_interval`
+# games; otherwise the slot stays zero).
+N_ACTIONS = 6
 
 
 def build_input_with_history(x, act, hist_states, hist_actions):

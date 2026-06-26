@@ -31,7 +31,7 @@ import optax
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from nca_wm.heldout_eval import _build_model, _load_run
-from nca_wm.train import N_ACTIONS, _enabled_action_count, _pad_state_for_model, _wm_p
+from nca_wm.train import N_ACTIONS, _enabled_actions, _pad_state_for_model, _wm_p
 from puzzlescript_cpp import CppPuzzleScriptEnv
 
 
@@ -65,7 +65,7 @@ def collect_transitions(info, n_transitions, max_C, seed,
     rng = np.random.RandomState(seed)
     H_eval = _next_pow2(info["H"])
     W_eval = _next_pow2(info["W"])
-    n_act = _enabled_action_count(info["json_str"])
+    acts = _enabled_actions(info["json_str"])
     states, actions, next_states = [], [], []
     attempts = 0
     budget = n_transitions * max_attempts_factor
@@ -82,7 +82,7 @@ def collect_transitions(info, n_transitions, max_C, seed,
             if len(states) >= n_transitions or attempts >= budget:
                 break
             attempts += 1
-            a = int(rng.randint(n_act))
+            a = int(rng.choice(acts))
             s_padded = _pad_state_for_model(obs, max_C, H_eval, W_eval)[0]
             nobs, _, done, trunc, _ = env.step(a)
             ns_padded = _pad_state_for_model(nobs, max_C, H_eval, W_eval)[0]

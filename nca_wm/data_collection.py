@@ -30,8 +30,11 @@ from nca_wm.state_ops import (
 )
 
 # Action-space size (mirrors train.py / models.py; data collection one-hots
-# actions without importing the model code).
-N_ACTIONS = 5
+# actions without importing the model code). Action ids:
+#   0=up 1=left 2=down 3=right 4=action button 5=no-op real-time tick.
+# Slot 5 is only ever active for real-time games (`realtime_interval`); for all
+# other games it stays zero, so the one-hot width is a fixed 6 everywhere.
+N_ACTIONS = 6
 
 
 TRANSITIONS_CACHE_VERSION = 5
@@ -237,20 +240,36 @@ def _rollout_history(hist_buf, k, chw):
     return jnp.array(hs), jnp.array(ha)
 
 
-def _enabled_action_count(json_str: str) -> int:
-    """Number of *enabled* actions for a game: 4 if it declares ``noaction``
-    (the X/"action" key is disabled), else N_ACTIONS (5).
+def _enabled_actions(json_str: str) -> list[int]:
+    """Action ids a game actually allows, matching ``actionsForEngine()`` in
+    puzzlescript_cpp/src/solver.cpp (the C++ search/transition collector):
 
-    Mirrors ``actionCount()`` in puzzlescript_cpp/src/solver.cpp, which the C++
-    search/transition collector uses — so random-rollout eval samples the SAME
-    action set the training data was collected over and never feeds a disabled
-    "action" key the model could not have learned. The action one-hot width
-    stays N_ACTIONS; only the sampled range shrinks."""
+      * 0-3 movement (always available),
+      * 4 action button (dropped when the game declares ``noaction``),
+      * 5 no-op real-time tick (added only for ``realtime_interval`` games,
+        whose world advances on its own between key presses).
+
+    Random-action eval samples from exactly this set so it never feeds an
+    action the training data was never collected over (a disabled action key,
+    or a no-op tick on a turn-based game). The set can be non-contiguous
+    (``noaction`` + ``realtime_interval`` gives ``[0,1,2,3,5]``), so callers
+    must sample *from this list*, not ``range(len(...))``."""
     try:
         meta = json.loads(json_str).get("metadata", {})
     except Exception:
-        return N_ACTIONS
-    return N_ACTIONS - 1 if "noaction" in meta else N_ACTIONS
+        meta = {}
+    actions = [0, 1, 2, 3]
+    if "noaction" not in meta:
+        actions.append(4)
+    if "realtime_interval" in meta:
+        actions.append(5)
+    return actions
+
+
+def _enabled_action_count(json_str: str) -> int:
+    """Number of enabled actions; see ``_enabled_actions``. Use the list, not
+    this count, when *sampling* — the id set can be non-contiguous."""
+    return len(_enabled_actions(json_str))
 
 
 # ---------------------------------------------------------------------------

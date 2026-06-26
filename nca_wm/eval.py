@@ -24,12 +24,12 @@ if str(_REPO_ROOT) not in sys.path:
 from puzzlescript_cpp import CppPuzzleScriptBackend, CppPuzzleScriptEnv
 from nca_wm.models import NCAWorldModel, ConditionalNCAWorldModel
 from nca_wm.data_collection import (
-    _cache_dir, _load_npz_dict, _save_npz_dict, _enabled_action_count,
+    _cache_dir, _load_npz_dict, _save_npz_dict, _enabled_actions,
     _rollout_history, _solution_from_sol_dir, _solution_from_transitions_cache,
 )
 from nca_wm.inference import make_apply_fn, _pad_state_for_model
 
-N_ACTIONS = 5
+N_ACTIONS = 6  # 0-3 move, 4 action, 5 no-op real-time tick (realtime games only)
 
 # Module-level cache of JIT'd scan functions, keyed by (id(model), conditional).
 # Hoisting these out of `_run_eval_rollouts_jax` is important: defining them
@@ -59,7 +59,7 @@ def evaluate_world_model(
     env = CppPuzzleScriptEnv(json_str, level_i=level_i, max_episode_steps=max_steps)
     apply_fn = make_apply_fn(model)
 
-    n_act = _enabled_action_count(json_str)
+    acts = _enabled_actions(json_str)
     all_l1_errors = []
     for ep_i in range(n_episodes):
         real_obs, _ = env.reset()
@@ -68,7 +68,7 @@ def evaluate_world_model(
         hist_buf: list[tuple[np.ndarray, int]] = []  # (state (C,H,W), action)
 
         for t in range(max_steps):
-            action = np.random.randint(n_act)
+            action = int(np.random.choice(acts))
             a_oh = jnp.array(np.eye(N_ACTIONS, dtype=np.float32)[action][None])
             hs, ha = _rollout_history(hist_buf, history, pred_state[0].shape)
 
@@ -147,12 +147,12 @@ def _run_eval_rollout(
     pred_state = _pad_state_for_model(real_obs, max_C, max_H, max_W)
 
     n_steps = len(actions) if actions else max_steps
-    n_act = _enabled_action_count(json_str)
+    acts = _enabled_actions(json_str)
     wrong_tiles = []
     wrong_cells = []
     first_div = -1
     for t in range(n_steps):
-        action = actions[t] if actions else np.random.randint(n_act)
+        action = actions[t] if actions else int(np.random.choice(acts))
         a_oh = jnp.array(np.eye(N_ACTIONS, dtype=np.float32)[action][None])
 
         if conditional:
@@ -259,8 +259,8 @@ def _run_eval_rollouts_batched(
         actions_per_step = np.asarray(actions_2d, dtype=np.int32).T
     else:
         rng = np.random.default_rng(rng_seed)
-        actions_per_step = rng.integers(0, _enabled_action_count(json_str),
-                                        size=(max_steps, n_episodes), dtype=np.int32)
+        actions_per_step = rng.choice(_enabled_actions(json_str),
+                                      size=(max_steps, n_episodes)).astype(np.int32)
     eye = np.eye(N_ACTIONS, dtype=np.float32)
 
     wrong_tiles_grid = np.full((n_episodes, max_steps), np.nan, dtype=np.float64)
@@ -462,8 +462,8 @@ def _run_eval_rollouts_jax(
         actions_2d = np.asarray(actions_2d, dtype=np.int32)
     else:
         rng = np.random.default_rng(rng_seed)
-        actions_2d = rng.integers(0, _enabled_action_count(json_str),
-                                  size=(n_episodes, max_steps), dtype=np.int32)
+        actions_2d = rng.choice(_enabled_actions(json_str),
+                                size=(n_episodes, max_steps)).astype(np.int32)
 
     # 2. Pre-roll real envs in C++ (sequential but fast).
     real_obs_traj = None
@@ -614,8 +614,8 @@ def _benchmark_eval_impls(model, params, game_infos,
         cond_kwargs = {}
 
     rng = np.random.default_rng(rng_seed)
-    actions_2d = rng.integers(0, _enabled_action_count(json_str),
-                              size=(n_episodes, max_steps), dtype=np.int32)
+    actions_2d = rng.choice(_enabled_actions(json_str),
+                            size=(n_episodes, max_steps)).astype(np.int32)
 
     print(f"\n=== Benchmark on {name} L0 "
           f"(n_eps={n_episodes}, max_steps={max_steps}, n_objs={n_objs}, "

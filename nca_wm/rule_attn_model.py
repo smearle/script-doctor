@@ -28,7 +28,7 @@ import flax.linen as nn
 from nca_wm.models import build_input_with_history
 
 
-N_ACTIONS = 5
+N_ACTIONS = 6  # 0-3 move, 4 action, 5 no-op real-time tick (realtime games only)
 
 
 class VectorQuantizer(nn.Module):
