@@ -1,0 +1,307 @@
+title Rink (AutumnBench port)
+author ported from AutumnBench rink.sexp
+
+(
+  Port of AutumnBench rink.sexp (GRID_SIZE=28).
+  Autumn render keys: rink (static 22x22 block at (3,3)..(24,24)), skater (red dot).
+
+  Mechanics:
+  - Skater starts at (0,0), moves 1 cell per arrow key press when off the rink.
+  - When the skater enters the rink (was off-rink, now on-rink), a "slide" activates
+    in the direction the skater was moving.
+  - While sliding, the skater moves 2 cells per frame in the slide direction (autonomous).
+  - Pressing a PERPENDICULAR key changes the slide direction (slide still moves by 2).
+  - Pressing the SAME or OPPOSITE direction: slide continues unchanged (opponent override).
+  - Slide stops when the skater leaves the rink.
+
+  Implementation:
+  - Player at (27,27): invisible, stationary, receives arrow-key input.
+  - Skater types encode state:
+      SkaterPR/PL/PU/PD = off-rink, prevSlide=R/L/U/D
+      SkaterR/L/U/D    = on-rink, slide=R/L/U/D
+  - Input rules (global): [ dir Player ] [ Skater* ] -> update Skater type
+  - Slide movement: 2-phase teleport
+      Phase 1: SkaterR moves 1 right, drops SliR2 at old cell
+      Phase 2 (late): SliR2 adjacent to SkaterR -> SkaterR moves 1 more right
+  - Off-rink movement: 1-cell teleport gated by InputR/L/U/D flag
+  - Exit: late [ SkaterR no Rink ] -> [ SkaterPR ] etc.
+  - Entry: late [ SkaterPR Rink ] -> [ SkaterR ] etc.
+)
+
+realtime_interval 0.1
+
+========
+OBJECTS
+========
+
+Background
+black
+
+Rink
+#add8e6
+
+( Invisible Player: receives input, stays at (27,27) )
+Player
+black
+.....
+.....
+.....
+.....
+.....
+
+( Skater off-rink: prevSlide encoded in type )
+SkaterPR
+red
+
+SkaterPL
+red
+
+SkaterPU
+red
+
+SkaterPD
+red
+
+( Skater on-rink: slide direction encoded in type )
+SkaterR
+red
+
+SkaterL
+red
+
+SkaterU
+red
+
+SkaterD
+red
+
+( Input flags: placed on Skater cell to trigger 1-cell off-rink movement )
+InputR
+black
+.....
+.....
+.....
+.....
+.....
+
+InputL
+black
+.....
+.....
+.....
+.....
+.....
+
+InputU
+black
+.....
+.....
+.....
+.....
+.....
+
+InputD
+black
+.....
+.....
+.....
+.....
+.....
+
+( Second-slide-phase markers: left at old position to trigger 2nd hop )
+SliR2
+black
+.....
+.....
+.....
+.....
+.....
+
+SliL2
+black
+.....
+.....
+.....
+.....
+.....
+
+SliU2
+black
+.....
+.....
+.....
+.....
+.....
+
+SliD2
+black
+.....
+.....
+.....
+.....
+.....
+
+=======
+LEGEND
+=======
+
+. = Background
+R = Rink
+P = Player
+S = SkaterPR
+
+SkaterOff = SkaterPR or SkaterPL or SkaterPU or SkaterPD
+SkaterOn  = SkaterR  or SkaterL  or SkaterU  or SkaterD
+Skater    = SkaterPR or SkaterPL or SkaterPU or SkaterPD or SkaterR or SkaterL or SkaterU or SkaterD
+Sli2      = SliR2 or SliL2 or SliU2 or SliD2
+
+=======
+SOUNDS
+=======
+
+================
+COLLISIONLAYERS
+================
+
+Background
+Rink
+SkaterPR, SkaterPL, SkaterPU, SkaterPD, SkaterR, SkaterL, SkaterU, SkaterD
+Player
+InputR, InputL, InputU, InputD
+SliR2
+SliL2
+SliU2
+SliD2
+
+======
+RULES
+======
+
+( === INPUT DETECTION AND STATE TRANSITIONS === )
+( Player stays fixed; rules detect which arrow was pressed )
+
+( --- Right pressed --- )
+( On-rink perpendicular: change slide direction to right )
+[ right Player ] [ SkaterU Rink ] -> [ Player ] [ SkaterR Rink ]
+[ right Player ] [ SkaterD Rink ] -> [ Player ] [ SkaterR Rink ]
+( On-rink same/opposite: slide continues; just update prevSlide doesn't matter for slide )
+( Off-rink: update prevSlide to R, mark for 1-cell rightward move )
+[ right Player ] [ SkaterPL no Rink ] -> [ Player ] [ SkaterPR InputR ]
+[ right Player ] [ SkaterPU no Rink ] -> [ Player ] [ SkaterPR InputR ]
+[ right Player ] [ SkaterPD no Rink ] -> [ Player ] [ SkaterPR InputR ]
+[ right Player ] [ SkaterPR no Rink ] -> [ Player ] [ SkaterPR InputR ]
+
+( --- Left pressed --- )
+( On-rink perpendicular: change slide direction to left )
+[ left Player ] [ SkaterU Rink ] -> [ Player ] [ SkaterL Rink ]
+[ left Player ] [ SkaterD Rink ] -> [ Player ] [ SkaterL Rink ]
+( Off-rink: update prevSlide to L, mark for 1-cell leftward move )
+[ left Player ] [ SkaterPR no Rink ] -> [ Player ] [ SkaterPL InputL ]
+[ left Player ] [ SkaterPU no Rink ] -> [ Player ] [ SkaterPL InputL ]
+[ left Player ] [ SkaterPD no Rink ] -> [ Player ] [ SkaterPL InputL ]
+[ left Player ] [ SkaterPL no Rink ] -> [ Player ] [ SkaterPL InputL ]
+
+( --- Up pressed --- )
+( On-rink perpendicular: change slide direction to up )
+[ up Player ] [ SkaterR Rink ] -> [ Player ] [ SkaterU Rink ]
+[ up Player ] [ SkaterL Rink ] -> [ Player ] [ SkaterU Rink ]
+( Off-rink: update prevSlide to U, mark for 1-cell upward move )
+[ up Player ] [ SkaterPR no Rink ] -> [ Player ] [ SkaterPU InputU ]
+[ up Player ] [ SkaterPL no Rink ] -> [ Player ] [ SkaterPU InputU ]
+[ up Player ] [ SkaterPD no Rink ] -> [ Player ] [ SkaterPU InputU ]
+[ up Player ] [ SkaterPU no Rink ] -> [ Player ] [ SkaterPU InputU ]
+
+( --- Down pressed --- )
+( On-rink perpendicular: change slide direction to down )
+[ down Player ] [ SkaterR Rink ] -> [ Player ] [ SkaterD Rink ]
+[ down Player ] [ SkaterL Rink ] -> [ Player ] [ SkaterD Rink ]
+( Off-rink: update prevSlide to D, mark for 1-cell downward move )
+[ down Player ] [ SkaterPR no Rink ] -> [ Player ] [ SkaterPD InputD ]
+[ down Player ] [ SkaterPL no Rink ] -> [ Player ] [ SkaterPD InputD ]
+[ down Player ] [ SkaterPU no Rink ] -> [ Player ] [ SkaterPD InputD ]
+[ down Player ] [ SkaterPD no Rink ] -> [ Player ] [ SkaterPD InputD ]
+
+( Cancel Player's own movement - it stays fixed )
+[ moving Player ] -> [ Player ]
+
+( === OFF-RINK 1-CELL MOVEMENT (teleport with Input flags) === )
+( Move 1 cell in the input direction, then clean up the flag )
+right [ SkaterPR InputR | no Skater ] -> [ | SkaterPR ]
+left  [ no Skater | SkaterPL InputL ] -> [ SkaterPL | ]
+up    [ SkaterPU InputU | no Skater ] -> [ | SkaterPU ]
+down  [ no Skater | SkaterPD InputD ] -> [ SkaterPD | ]
+
+( === SLIDE MOVEMENT (2-cell: phase 1 + phase 2 via late rules) === )
+( Phase 1: move Skater 1 cell, leave SlideX2 marker at old position )
+right [ SkaterR no SliR2 | no Skater ] -> [ SliR2 | SkaterR ]
+left  [ no Skater | SkaterL no SliL2 ] -> [ SkaterL | SliL2 ]
+up    [ SkaterU no SliU2 | no Skater ] -> [ | SkaterU ] ( ? need different approach for up/down )
+down  [ no Skater | SkaterD no SliD2 ] -> [ SkaterD | SliD2 ]
+
+( === CLEANUP INPUT FLAGS (in case movement couldn't happen, e.g., at grid edge) === )
+late [ InputR ] -> [ ]
+late [ InputL ] -> [ ]
+late [ InputU ] -> [ ]
+late [ InputD ] -> [ ]
+
+( === PHASE 2 SLIDE MOVEMENT (late rules: move 1 more cell in slide direction) === )
+late right [ SliR2 | SkaterR ] -> [ | SkaterR ]
+late left  [ SkaterL | SliL2 ] -> [ SkaterL | ]
+( up/down need vertical pattern - use down [ A | B ] for vertical? )
+late up    [ SliU2 | SkaterU ] -> [ | SkaterU ]
+late down  [ SkaterD | SliD2 ] -> [ SkaterD | ]
+
+( === CLEANUP PHASE 2 MARKERS === )
+late [ SliR2 ] -> [ ]
+late [ SliL2 ] -> [ ]
+late [ SliU2 ] -> [ ]
+late [ SliD2 ] -> [ ]
+
+( === EXIT DETECTION: Skater leaves rink, convert to off-rink type === )
+late [ SkaterR no Rink ] -> [ SkaterPR ]
+late [ SkaterL no Rink ] -> [ SkaterPL ]
+late [ SkaterU no Rink ] -> [ SkaterPU ]
+late [ SkaterD no Rink ] -> [ SkaterPD ]
+
+( === ENTRY DETECTION: Skater enters rink, activate slide === )
+late [ SkaterPR Rink ] -> [ SkaterR ]
+late [ SkaterPL Rink ] -> [ SkaterL ]
+late [ SkaterPU Rink ] -> [ SkaterU ]
+late [ SkaterPD Rink ] -> [ SkaterD ]
+
+==============
+WINCONDITIONS
+==============
+
+=======
+LEVELS
+=======
+
+S...........................
+............................
+............................
+...RRRRRRRRRRRRRRRRRRRRRR...
+...RRRRRRRRRRRRRRRRRRRRRR...
+...RRRRRRRRRRRRRRRRRRRRRR...
+...RRRRRRRRRRRRRRRRRRRRRR...
+...RRRRRRRRRRRRRRRRRRRRRR...
+...RRRRRRRRRRRRRRRRRRRRRR...
+...RRRRRRRRRRRRRRRRRRRRRR...
+...RRRRRRRRRRRRRRRRRRRRRR...
+...RRRRRRRRRRRRRRRRRRRRRR...
+...RRRRRRRRRRRRRRRRRRRRRR...
+...RRRRRRRRRRRRRRRRRRRRRR...
+...RRRRRRRRRRRRRRRRRRRRRR...
+...RRRRRRRRRRRRRRRRRRRRRR...
+...RRRRRRRRRRRRRRRRRRRRRR...
+...RRRRRRRRRRRRRRRRRRRRRR...
+...RRRRRRRRRRRRRRRRRRRRRR...
+...RRRRRRRRRRRRRRRRRRRRRR...
+...RRRRRRRRRRRRRRRRRRRRRR...
+...RRRRRRRRRRRRRRRRRRRRRR...
+...RRRRRRRRRRRRRRRRRRRRRR...
+...RRRRRRRRRRRRRRRRRRRRRR...
+...RRRRRRRRRRRRRRRRRRRRRR...
+............................
+............................
+...........................P

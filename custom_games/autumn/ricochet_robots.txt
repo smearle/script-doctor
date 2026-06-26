@@ -1,0 +1,299 @@
+title Ricochet Robots (AutumnBench port)
+author ported from AutumnBench ricochet_robots.sexp
+homepage www.puzzlescript.net
+
+(
+  Port of the AutumnBench "ricochet_robots" Autumn program.
+  GRID_SIZE = 24.
+
+  Mechanics:
+    - 4 robots on a 24x24 grid with border walls + fixed inner walls.
+    - Arrow keys move Robot1 (always active). The robot slides each tick in
+      its current direction until blocked by a wall, border, or another robot.
+    - Robots 2-4 block Robot1 but never move (click-based selection deferred).
+
+  Movement model:
+    - PS "Player" = robot1 (active robot). Gets movement flags from arrow keys.
+    - Walls are in one collision layer. Player and robots2-4 are in another.
+    - Direction marker (DirX) persists on Player's cell until Player stops.
+    - Each tick: direction marker injects movement into Player via:
+        [ DirX Player ] -> [ DirX dir Player ]
+      PS movement system blocks Player when it would enter a wall cell
+      (explicit rules: [ > Player | Solid ] -> [ Player | Solid ]).
+    - Input capture: [ right Player no DirX... ] -> [ Player DirRight ]
+      This PRESERVES Player's rightward movement so it moves this tick too.
+    - Stop: [ stationary Player DirX ] -> [ Player ] clears direction when blocked.
+
+  Deviations:
+    - Only Player (robot1) moves; robots2-4 are static.
+    - Click-based robot selection is not portable.
+)
+
+realtime_interval 0.1
+throttle_movement
+key_repeat_interval 0.1
+
+========
+OBJECTS
+========
+
+Background
+black
+
+Borders
+gray
+
+innerwall1
+darkgray
+
+innerwall2
+darkgray
+
+innerwall3
+darkgray
+
+innerwall4
+darkgray
+
+innerwall5
+darkgray
+
+innerwall6
+darkgray
+
+innerwall7
+darkgray
+
+innerwall8
+darkgray
+
+centerwall
+gray
+
+quadwall1
+darkgray
+
+quadwall2
+darkgray
+
+quadwall3
+darkgray
+
+quadwall4
+darkgray
+
+(Player = Autumn's robot1, always active. Arrow keys move it.)
+Player
+red
+
+robot2
+blue
+
+robot3
+green
+
+robot4
+yellow
+
+(direction state markers -- invisible, separate layer)
+DirRight
+black
+.....
+.....
+..0..
+.....
+.....
+
+DirLeft
+black
+.....
+.....
+..0..
+.....
+.....
+
+DirUp
+black
+.....
+.....
+..0..
+.....
+.....
+
+DirDown
+black
+.....
+.....
+..0..
+.....
+.....
+
+(TryMove: placed on Player's cell before movement to detect if Player actually moved.
+ If TryMove is in the same cell as Player after movement, Player didn't move.)
+TryMove
+black
+.....
+.....
+..0..
+.....
+.....
+
+=======
+LEGEND
+=======
+
+. = Background
+O = Borders
+A = innerwall1
+C = innerwall2
+D = innerwall3
+E = innerwall4
+F = innerwall5
+G = innerwall6
+H = innerwall7
+I = innerwall8
+J = centerwall
+K = quadwall1
+L = quadwall2
+M = quadwall3
+N = quadwall4
+1 = Player
+2 = robot2
+3 = robot3
+4 = robot4
+
+Solid = Borders or innerwall1 or innerwall2 or innerwall3 or innerwall4 or innerwall5 or innerwall6 or innerwall7 or innerwall8 or centerwall or quadwall1 or quadwall2 or quadwall3 or quadwall4
+Wall = Solid
+
+=======
+SOUNDS
+=======
+
+================
+COLLISIONLAYERS
+================
+
+Background
+Borders, innerwall1, innerwall2, innerwall3, innerwall4, innerwall5, innerwall6, innerwall7, innerwall8, centerwall, quadwall1, quadwall2, quadwall3, quadwall4
+Player, robot2, robot3, robot4
+DirRight, DirLeft, DirUp, DirDown
+TryMove
+
+======
+RULES
+======
+
+(--- Capture arrow input to set direction marker ---
+ When Player has a movement flag from the arrow key AND has no current direction
+ marker, set the direction marker (matching Autumn's "only when !moving" condition).
+ We DO NOT preserve Player's movement in the RHS: the sliding rule below fires
+ in the next iteration of the same frame.)
+
+[ right Player no DirRight no DirLeft no DirUp no DirDown ] -> [ Player DirRight ]
+[ left  Player no DirRight no DirLeft no DirUp no DirDown ] -> [ Player DirLeft  ]
+[ up    Player no DirRight no DirLeft no DirUp no DirDown ] -> [ Player DirUp    ]
+[ down  Player no DirRight no DirLeft no DirUp no DirDown ] -> [ Player DirDown  ]
+
+(--- Cancel ALL input movement when Player is sliding (has any direction marker) ---
+ Without this, the input flag lingers and causes PS native movement even after
+ the late-phase stop rule clears DirX. This prevents direction changes mid-slide,
+ matching Autumn's "only when !moving" condition for direction acceptance.
+ The '>' prefix matches any movement direction (right/left/up/down).)
+
+[ > Player DirRight ] -> [ Player DirRight ]
+[ > Player DirLeft  ] -> [ Player DirLeft  ]
+[ > Player DirUp    ] -> [ Player DirUp    ]
+[ > Player DirDown  ] -> [ Player DirDown  ]
+
+(--- Cancel input movement on robots2-4 (they must not move from input) ---)
+
+[ > robot2 ] -> [ robot2 ]
+[ > robot3 ] -> [ robot3 ]
+[ > robot4 ] -> [ robot4 ]
+
+(--- Sliding movement: inject movement from direction marker each tick ---
+ Mario pattern: inject directional movement into Player.
+ After Player moves, DirX is left behind in the old cell (different layer, doesn't auto-follow).
+ A late "chase" rule re-unites DirX with Player's new cell for the next tick.
+ The direction stops only when Player is adjacent to a blocker in the DirX direction.)
+
+[ DirRight Player ] -> [ DirRight right  Player ]
+[ DirLeft  Player ] -> [ DirLeft  left   Player ]
+[ DirUp    Player ] -> [ DirUp    up     Player ]
+[ DirDown  Player ] -> [ DirDown  down   Player ]
+
+(--- Block Player from entering wall cells ---
+ Explicit because Player and Solid are in different collision layers.)
+
+[ > Player | Solid ] -> [ Player | Solid ]
+
+(--- Block Player from entering other robot cells ---
+ Other robots are immovable obstacles.)
+
+[ > Player | robot2 ] -> [ Player | robot2 ]
+[ > Player | robot3 ] -> [ Player | robot3 ]
+[ > Player | robot4 ] -> [ Player | robot4 ]
+
+(--- Place TryMove marker before movement to detect if Player actually moved ---
+ TryMove is placed in Player's current cell. After movement, if TryMove is
+ in the same cell as Player, it means Player didn't move (was blocked).
+ TryMove is in a separate collision layer so it doesn't move with Player.)
+
+[ DirRight Player no TryMove ] -> [ DirRight Player TryMove ]
+[ DirLeft  Player no TryMove ] -> [ DirLeft  Player TryMove ]
+[ DirUp    Player no TryMove ] -> [ DirUp    Player TryMove ]
+[ DirDown  Player no TryMove ] -> [ DirDown  Player TryMove ]
+
+(--- DirX chases Player: after a successful move, pull DirX to Player's new cell.
+ Pattern: DirX is in old cell (no Player), Player is in new cell (no DirX).
+ This re-unites DirX with Player so the NEXT frame can also apply movement.)
+
+late right [ DirRight no Player | Player no DirRight ] -> [ | Player DirRight ]
+late left  [ DirLeft  no Player | Player no DirLeft  ] -> [ | Player DirLeft  ]
+late up    [ DirUp    no Player | Player no DirUp    ] -> [ | Player DirUp    ]
+late down  [ DirDown  no Player | Player no DirDown  ] -> [ | Player DirDown  ]
+
+(--- Stop: Player didn't move if TryMove and DirX are still in Player's cell ---
+ TryMove is in old cell; Player moved away = no TryMove in new cell = successful move.
+ TryMove still in same cell as Player = Player didn't move = blocked.)
+
+late [ Player TryMove DirRight ] -> [ Player ]
+late [ Player TryMove DirLeft  ] -> [ Player ]
+late [ Player TryMove DirUp    ] -> [ Player ]
+late [ Player TryMove DirDown  ] -> [ Player ]
+
+(--- Always remove TryMove after use ---)
+late [ TryMove ] -> []
+
+==============
+WINCONDITIONS
+==============
+
+=======
+LEVELS
+=======
+
+OOOOOOOOOOOOOOOOOOOOOOOO
+O.1....................O
+O...........L..........O
+O......2....L..........O
+O...AAAA....L..........O
+O....D......L..........O
+O....D............G....O
+O....D............G....O
+O....D..C.........G....O
+O.......C.........G....O
+O.......C.........G....O
+O.......C..JJ..........O
+O.KKKKK.C..JJ.MMMMMMMM.O
+O...I.3................O
+O...I..................O
+O...I..................O
+O...I...........E......O
+O...........N...EHHH...O
+O....FFFFF..N...E.4....O
+O...........N...E......O
+O...........N...E......O
+O...........N...E......O
+O...........N..........O
+OOOOOOOOOOOOOOOOOOOOOOOO

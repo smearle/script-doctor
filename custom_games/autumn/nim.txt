@@ -1,0 +1,224 @@
+title nim (AutumnBench port)
+author ported from AutumnBench nim.sexp
+
+(
+  Port of AutumnBench nim.sexp (GRID_SIZE=17).
+
+  The Nim game: four rows of matches (1, 3, 5, 7 matches). Player clicks to:
+    - Toggle a match selected/unselected (maroon <-> brown).
+    - Click the red RemoveButton for a row to remove all selected matches in that row.
+
+  State is color-encoded: maroon=#800000 (unselected), brown=#a52a2a (selected).
+  Each row uses separate object types so the harness can alias them to the correct
+  Autumn render_all keys (row1_match, row2_match, etc.).
+
+  Remove button logic: clicking RemBtnN sets an invisible RemFlagN marker. A
+  global rule "[RemFlagN] [Match_N_Brown] -> [RemFlagN] [Background]" then removes
+  all selected matches in that row. Finally RemFlagN is cleaned up.
+
+  Player is the invisible cursor used for the click emulation convention.
+  cursor_start is [0,0] (default). compare_color=true.
+)
+
+========
+OBJECTS
+========
+
+Background
+black
+
+Player
+#ffffff #ff0000
+01110
+1...1
+1...1
+1...1
+01110
+
+( === ROW 1 MATCHES (y=4, one match at x=8) === )
+Match1Maroon
+#800000
+
+Match1Brown
+#a52a2a
+
+( === ROW 2 MATCHES (y=7, three matches at x=6,8,10) === )
+Match2Maroon
+#800000
+
+Match2Brown
+#a52a2a
+
+( === ROW 3 MATCHES (y=10, five matches at x=4,6,8,10,12) === )
+Match3Maroon
+#800000
+
+Match3Brown
+#a52a2a
+
+( === ROW 4 MATCHES (y=13, seven matches at x=2,4,6,8,10,12,14) === )
+Match4Maroon
+#800000
+
+Match4Brown
+#a52a2a
+
+( === REMOVE BUTTONS (red, one per row at x=16) === )
+RemBtn1
+#ff0000
+
+RemBtn2
+#ff0000
+
+RemBtn3
+#ff0000
+
+RemBtn4
+#ff0000
+
+( === INVISIBLE REMOVE FLAGS (trigger row-specific removal) === )
+RemFlag1
+orange
+.....
+.....
+.....
+.....
+.....
+
+RemFlag2
+orange
+.....
+.....
+.....
+.....
+.....
+
+RemFlag3
+orange
+.....
+.....
+.....
+.....
+.....
+
+RemFlag4
+orange
+.....
+.....
+.....
+.....
+.....
+
+=======
+LEGEND
+=======
+
+. = Background
+P = Player
+
+( Row 1 matches )
+A = Match1Maroon
+B = Match1Brown
+
+( Row 2 matches )
+C = Match2Maroon
+D = Match2Brown
+
+( Row 3 matches )
+E = Match3Maroon
+F = Match3Brown
+
+( Row 4 matches )
+G = Match4Maroon
+H = Match4Brown
+
+( Remove buttons )
+1 = RemBtn1
+2 = RemBtn2
+3 = RemBtn3
+4 = RemBtn4
+
+=======
+SOUNDS
+=======
+
+================
+COLLISIONLAYERS
+================
+
+Background
+Match1Maroon, Match1Brown
+Match2Maroon, Match2Brown
+Match3Maroon, Match3Brown
+Match4Maroon, Match4Brown
+RemBtn1, RemBtn2, RemBtn3, RemBtn4
+RemFlag1
+RemFlag2
+RemFlag3
+RemFlag4
+Player
+
+======
+RULES
+======
+
+( === CLICK ON MATCH: toggle selected state === )
+[ action Player Match1Maroon ] -> [ Player Match1Brown ]
+[ action Player Match1Brown  ] -> [ Player Match1Maroon ]
+[ action Player Match2Maroon ] -> [ Player Match2Brown ]
+[ action Player Match2Brown  ] -> [ Player Match2Maroon ]
+[ action Player Match3Maroon ] -> [ Player Match3Brown ]
+[ action Player Match3Brown  ] -> [ Player Match3Maroon ]
+[ action Player Match4Maroon ] -> [ Player Match4Brown ]
+[ action Player Match4Brown  ] -> [ Player Match4Maroon ]
+
+( === CLICK ON REMOVE BUTTON: set remove flag for that row === )
+[ action Player RemBtn1 ] -> [ Player RemBtn1 RemFlag1 ]
+[ action Player RemBtn2 ] -> [ Player RemBtn2 RemFlag2 ]
+[ action Player RemBtn3 ] -> [ Player RemBtn3 RemFlag3 ]
+[ action Player RemBtn4 ] -> [ Player RemBtn4 RemFlag4 ]
+
+( === REMOVE SELECTED MATCHES (global: flag anywhere + selected match anywhere) === )
+[ RemFlag1 ] [ Match1Brown ] -> [ RemFlag1 ] [ Background ]
+[ RemFlag2 ] [ Match2Brown ] -> [ RemFlag2 ] [ Background ]
+[ RemFlag3 ] [ Match3Brown ] -> [ RemFlag3 ] [ Background ]
+[ RemFlag4 ] [ Match4Brown ] -> [ RemFlag4 ] [ Background ]
+
+( === CLEANUP REMOVE FLAGS === )
+late [ RemFlag1 ] -> [ ]
+late [ RemFlag2 ] -> [ ]
+late [ RemFlag3 ] -> [ ]
+late [ RemFlag4 ] -> [ ]
+
+==============
+WINCONDITIONS
+==============
+
+=======
+LEVELS
+=======
+
+( 17x17 grid. Autumn: x=col (0-indexed left->right), y=row (0-indexed top->down). )
+( Row 1 match:  (8,4)                                                               )
+( Row 2 matches: (6,7), (8,7), (10,7)                                               )
+( Row 3 matches: (4,10), (6,10), (8,10), (10,10), (12,10)                           )
+( Row 4 matches: (2,13), (4,13), (6,13), (8,13), (10,13), (12,13), (14,13)          )
+( Remove buttons: (16,4), (16,7), (16,10), (16,13)                                  )
+
+P................
+.................
+.................
+.................
+........A.......1
+.................
+.................
+......C.C.C.....2
+.................
+.................
+....E.E.E.E.E...3
+.................
+.................
+..G.G.G.G.G.G.G.4
+.................
+.................
+.................

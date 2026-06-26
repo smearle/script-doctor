@@ -1,0 +1,536 @@
+title gravity_2 (AutumnBench port)
+author ported from AutumnBench gravity_2.sexp
+
+(
+  Port of AutumnBench gravity_2.sexp (GRID_SIZE 30).
+
+  30x30 sandbox. Four colored buttons on edges set global gravity direction.
+  Clicking a free cell spawns a 2x2 blob at:
+    (cursor_x, cursor_y-1), (cursor_x, cursor_y),
+    (cursor_x+1, cursor_y-1), (cursor_x+1, cursor_y).
+  Every tick, all blobs move 1 step in the current gravity direction.
+
+  Gravity direction is encoded in blob type (BlobD/U/L/R).
+  Movement rules fire BEFORE gravity-change rules (top of rule section).
+  When gravity changes: blobs moved in old direction (VM set), then blob types
+  transform. VM prevents double-movement. VM cleared in late rules.
+
+  Gravity singleton (GravDown etc.) is at (0,0), used to determine spawn direction.
+  New blobs spawn in late rules (no movement on spawn tick, matching Autumn prev semantics).
+
+  Border-exit fix: Autumn lets blobs slide off the grid one cell at a time.
+  ExitL/R/U/D invisible markers placed at the four border strips delete any
+  blob cell that reaches the edge (with no VM, so just-arrived cells are safe),
+  then the adjacent cell slides in. Replicates Autumn's off-grid motion.
+
+  Level char encoding (digit chars to avoid PS case-insensitive legend collisions):
+    Z = GravDown+Player+ExitL+ExitU  (top-left corner)
+    1 = Background+ExitL             (col 0 interior)
+    2 = Background+ExitR             (col 29 interior)
+    3 = Background+ExitU             (row 0 interior)
+    4 = Background+ExitD             (row 29 interior)
+    5 = LeftBtn+ExitL                (0,14)
+    6 = RightBtn+ExitR               (29,14)
+    7 = UpBtn+ExitU                  (14,0)
+    8 = DownBtn+ExitD                (14,29)
+    9 = Background+ExitR+ExitU       (top-right corner)
+    0 = Background+ExitL+ExitD       (bottom-left corner)
+    w = Background+ExitR+ExitD       (bottom-right corner)
+)
+
+realtime_interval 0.1
+
+========
+OBJECTS
+========
+
+Background
+black
+
+( === BLOB TYPES: encode current gravity direction === )
+BlobD
+#9370db
+
+BlobU
+#9370db
+
+BlobL
+#9370db
+
+BlobR
+#9370db
+
+( === DIRECTION BUTTONS === )
+LeftBtn
+#ff0000
+
+RightBtn
+#ff8c00
+
+UpBtn
+#ffd700
+
+DownBtn
+#008000
+
+( === PLAYER CURSOR === )
+Player
+#ffffff #ff0000
+01110
+1...1
+1...1
+1...1
+01110
+
+( === GRAVITY STATE SINGLETON (invisible) === )
+GravDown
+black
+.....
+.....
+.....
+.....
+.....
+
+GravLeft
+black
+.....
+.....
+.....
+.....
+.....
+
+GravRight
+black
+.....
+.....
+.....
+.....
+.....
+
+GravUp
+black
+.....
+.....
+.....
+.....
+.....
+
+( === SPAWN MARKERS: 4 per gravity direction === )
+SpawnBaseD
+black
+.....
+.....
+.....
+.....
+.....
+
+SpawnRightD
+black
+.....
+.....
+.....
+.....
+.....
+
+SpawnUpD
+black
+.....
+.....
+.....
+.....
+.....
+
+SpawnUpRightD
+black
+.....
+.....
+.....
+.....
+.....
+
+SpawnBaseU
+black
+.....
+.....
+.....
+.....
+.....
+
+SpawnRightU
+black
+.....
+.....
+.....
+.....
+.....
+
+SpawnUpU
+black
+.....
+.....
+.....
+.....
+.....
+
+SpawnUpRightU
+black
+.....
+.....
+.....
+.....
+.....
+
+SpawnBaseL
+black
+.....
+.....
+.....
+.....
+.....
+
+SpawnRightL
+black
+.....
+.....
+.....
+.....
+.....
+
+SpawnUpL
+black
+.....
+.....
+.....
+.....
+.....
+
+SpawnUpRightL
+black
+.....
+.....
+.....
+.....
+.....
+
+SpawnBaseR
+black
+.....
+.....
+.....
+.....
+.....
+
+SpawnRightR
+black
+.....
+.....
+.....
+.....
+.....
+
+SpawnUpR
+black
+.....
+.....
+.....
+.....
+.....
+
+SpawnUpRightR
+black
+.....
+.....
+.....
+.....
+.....
+
+( === DONE MARKER (prevents double-move per tick) === )
+VM
+black
+.....
+.....
+.....
+.....
+.....
+
+( === BLOCK-SPAWN MARKER: records pre-movement blob positions so that clicking
+    a blob cell that slides away in the same tick does NOT spawn a new blob
+    (matches Autumn isFreePos semantics which checks the pre-frame state) === )
+BlockSpawn
+black
+.....
+.....
+.....
+.....
+.....
+
+( === BORDER EXIT MARKERS (invisible, permanent) === )
+ExitL
+black
+.....
+.....
+.....
+.....
+.....
+
+ExitR
+black
+.....
+.....
+.....
+.....
+.....
+
+ExitU
+black
+.....
+.....
+.....
+.....
+.....
+
+ExitD
+black
+.....
+.....
+.....
+.....
+.....
+
+=======
+LEGEND
+=======
+
+. = Background
+G = GravDown
+P = Player
+
+( Digit chars for border cells - no case-collision risk )
+Z = GravDown and Player and ExitL and ExitU
+1 = Background and ExitL
+2 = Background and ExitR
+3 = Background and ExitU
+4 = Background and ExitD
+5 = LeftBtn and ExitL
+6 = RightBtn and ExitR
+7 = UpBtn and ExitU
+8 = DownBtn and ExitD
+9 = Background and ExitR and ExitU
+0 = Background and ExitL and ExitD
+w = Background and ExitR and ExitD
+
+( Plain button chars (used only in group alias, not in level map) )
+l = LeftBtn
+r = RightBtn
+u = UpBtn
+d = DownBtn
+
+Blob = BlobD or BlobU or BlobL or BlobR
+Grav = GravDown or GravLeft or GravRight or GravUp
+SpawnD = SpawnBaseD or SpawnRightD or SpawnUpD or SpawnUpRightD
+SpawnU = SpawnBaseU or SpawnRightU or SpawnUpU or SpawnUpRightU
+SpawnL = SpawnBaseL or SpawnRightL or SpawnUpL or SpawnUpRightL
+SpawnR = SpawnBaseR or SpawnRightR or SpawnUpR or SpawnUpRightR
+Spawn = SpawnD or SpawnU or SpawnL or SpawnR
+Button = LeftBtn or RightBtn or UpBtn or DownBtn
+
+=======
+SOUNDS
+=======
+
+================
+COLLISIONLAYERS
+================
+
+Background
+BlobD, BlobU, BlobL, BlobR
+LeftBtn, RightBtn, UpBtn, DownBtn
+GravDown, GravLeft, GravRight, GravUp
+SpawnBaseD, SpawnRightD, SpawnUpD, SpawnUpRightD
+SpawnBaseU, SpawnRightU, SpawnUpU, SpawnUpRightU
+SpawnBaseL, SpawnRightL, SpawnUpL, SpawnUpRightL
+SpawnBaseR, SpawnRightR, SpawnUpR, SpawnUpRightR
+VM
+BlockSpawn
+ExitL
+ExitR
+ExitU
+ExitD
+Player
+
+======
+RULES
+======
+
+( ============================================================ )
+( === BLOCK-SPAWN: stamp pre-movement blob positions so that )
+( clicking a blob cell that gravity slides away this tick     )
+( does NOT spawn a new blob (matches Autumn isFreePos which   )
+( tests the state BEFORE any on-handler updates positions).   )
+( Must be the VERY FIRST rule so it sees original positions.  )
+( ============================================================ )
+
+[ Blob no BlockSpawn ] -> [ Blob BlockSpawn ]
+
+( ============================================================ )
+( === BORDER EXIT: blobs at edge disappear (Autumn off-grid) === )
+( no VM: don't delete a blob that just arrived at the exit strip )
+( this tick. Rules fire before movement so vacated cells open up )
+( for the remaining cells to slide in.                           )
+( ============================================================ )
+
+[ BlobL ExitL no VM ] -> [ ExitL ]
+[ BlobR ExitR no VM ] -> [ ExitR ]
+[ BlobU ExitU no VM ] -> [ ExitU ]
+[ BlobD ExitD no VM ] -> [ ExitD ]
+
+( ============================================================ )
+( === BLOB MOVEMENT (fires before gravity change) === )
+( ============================================================ )
+
+down  [ BlobD no VM | no Blob ] -> [ | BlobD VM ]
+up    [ BlobU no VM | no Blob ] -> [ | BlobU VM ]
+left  [ BlobL no VM | no Blob ] -> [ | BlobL VM ]
+right [ BlobR no VM | no Blob ] -> [ | BlobR VM ]
+
+( ============================================================ )
+( === GRAVITY CHANGE: action on button (fires after movement) === )
+( Blob types transform after movement (VM prevents re-move). )
+( ============================================================ )
+
+( Click LeftBtn: set gravity left, transform blob types )
+[ action Player LeftBtn ] [ GravDown ]  -> [ Player LeftBtn ] [ GravLeft ]
+[ action Player LeftBtn ] [ GravUp ]    -> [ Player LeftBtn ] [ GravLeft ]
+[ action Player LeftBtn ] [ GravRight ] -> [ Player LeftBtn ] [ GravLeft ]
+[ action Player LeftBtn ] [ GravLeft ]  -> [ Player LeftBtn ] [ GravLeft ]
+[ action Player LeftBtn ] [ BlobD ] -> [ Player LeftBtn ] [ BlobL ]
+[ action Player LeftBtn ] [ BlobU ] -> [ Player LeftBtn ] [ BlobL ]
+[ action Player LeftBtn ] [ BlobR ] -> [ Player LeftBtn ] [ BlobL ]
+
+( Click RightBtn: set gravity right, transform blob types )
+[ action Player RightBtn ] [ GravDown ]  -> [ Player RightBtn ] [ GravRight ]
+[ action Player RightBtn ] [ GravUp ]    -> [ Player RightBtn ] [ GravRight ]
+[ action Player RightBtn ] [ GravLeft ]  -> [ Player RightBtn ] [ GravRight ]
+[ action Player RightBtn ] [ GravRight ] -> [ Player RightBtn ] [ GravRight ]
+[ action Player RightBtn ] [ BlobD ] -> [ Player RightBtn ] [ BlobR ]
+[ action Player RightBtn ] [ BlobU ] -> [ Player RightBtn ] [ BlobR ]
+[ action Player RightBtn ] [ BlobL ] -> [ Player RightBtn ] [ BlobR ]
+
+( Click UpBtn: set gravity up, transform blob types )
+[ action Player UpBtn ] [ GravDown ]  -> [ Player UpBtn ] [ GravUp ]
+[ action Player UpBtn ] [ GravLeft ]  -> [ Player UpBtn ] [ GravUp ]
+[ action Player UpBtn ] [ GravRight ] -> [ Player UpBtn ] [ GravUp ]
+[ action Player UpBtn ] [ GravUp ]    -> [ Player UpBtn ] [ GravUp ]
+[ action Player UpBtn ] [ BlobD ] -> [ Player UpBtn ] [ BlobU ]
+[ action Player UpBtn ] [ BlobL ] -> [ Player UpBtn ] [ BlobU ]
+[ action Player UpBtn ] [ BlobR ] -> [ Player UpBtn ] [ BlobU ]
+
+( Click DownBtn: set gravity down, transform blob types )
+[ action Player DownBtn ] [ GravUp ]    -> [ Player DownBtn ] [ GravDown ]
+[ action Player DownBtn ] [ GravLeft ]  -> [ Player DownBtn ] [ GravDown ]
+[ action Player DownBtn ] [ GravRight ] -> [ Player DownBtn ] [ GravDown ]
+[ action Player DownBtn ] [ GravDown ]  -> [ Player DownBtn ] [ GravDown ]
+[ action Player DownBtn ] [ BlobU ] -> [ Player DownBtn ] [ BlobD ]
+[ action Player DownBtn ] [ BlobL ] -> [ Player DownBtn ] [ BlobD ]
+[ action Player DownBtn ] [ BlobR ] -> [ Player DownBtn ] [ BlobD ]
+
+( ============================================================ )
+( === SPAWN: action on free cell spawns 2x2 blob === )
+( Detect current gravity from singleton. New blob type matches gravity. )
+( ============================================================ )
+
+[ action Player no Blob no Button no BlockSpawn ] [ GravDown ]  -> [ Player SpawnBaseD ] [ GravDown ]
+[ action Player no Blob no Button no BlockSpawn ] [ GravUp ]    -> [ Player SpawnBaseU ] [ GravUp ]
+[ action Player no Blob no Button no BlockSpawn ] [ GravLeft ]  -> [ Player SpawnBaseL ] [ GravLeft ]
+[ action Player no Blob no Button no BlockSpawn ] [ GravRight ] -> [ Player SpawnBaseR ] [ GravRight ]
+
+( Spread spawn right )
+right [ SpawnBaseD | no SpawnRightD ] -> [ SpawnBaseD | SpawnRightD ]
+right [ SpawnBaseU | no SpawnRightU ] -> [ SpawnBaseU | SpawnRightU ]
+right [ SpawnBaseL | no SpawnRightL ] -> [ SpawnBaseL | SpawnRightL ]
+right [ SpawnBaseR | no SpawnRightR ] -> [ SpawnBaseR | SpawnRightR ]
+
+( Spread spawn up from Base )
+up [ SpawnBaseD | no SpawnUpD ] -> [ SpawnBaseD | SpawnUpD ]
+up [ SpawnBaseU | no SpawnUpU ] -> [ SpawnBaseU | SpawnUpU ]
+up [ SpawnBaseL | no SpawnUpL ] -> [ SpawnBaseL | SpawnUpL ]
+up [ SpawnBaseR | no SpawnUpR ] -> [ SpawnBaseR | SpawnUpR ]
+
+( Spread spawn up from Right )
+up [ SpawnRightD | no SpawnUpRightD ] -> [ SpawnRightD | SpawnUpRightD ]
+up [ SpawnRightU | no SpawnUpRightU ] -> [ SpawnRightU | SpawnUpRightU ]
+up [ SpawnRightL | no SpawnUpRightL ] -> [ SpawnRightL | SpawnUpRightL ]
+up [ SpawnRightR | no SpawnUpRightR ] -> [ SpawnRightR | SpawnUpRightR ]
+
+( Convert spawn markers to blobs (late - no movement on spawn tick) )
+late [ SpawnBaseD ]     -> [ BlobD ]
+late [ SpawnRightD ]    -> [ BlobD ]
+late [ SpawnUpD ]       -> [ BlobD ]
+late [ SpawnUpRightD ]  -> [ BlobD ]
+
+late [ SpawnBaseU ]     -> [ BlobU ]
+late [ SpawnRightU ]    -> [ BlobU ]
+late [ SpawnUpU ]       -> [ BlobU ]
+late [ SpawnUpRightU ]  -> [ BlobU ]
+
+late [ SpawnBaseL ]     -> [ BlobL ]
+late [ SpawnRightL ]    -> [ BlobL ]
+late [ SpawnUpL ]       -> [ BlobL ]
+late [ SpawnUpRightL ]  -> [ BlobL ]
+
+late [ SpawnBaseR ]     -> [ BlobR ]
+late [ SpawnRightR ]    -> [ BlobR ]
+late [ SpawnUpR ]       -> [ BlobR ]
+late [ SpawnUpRightR ]  -> [ BlobR ]
+
+( === CLEANUP === )
+late [ VM ] -> [ ]
+late [ BlockSpawn ] -> [ ]
+
+( Player cursor moves freely via arrow keys - cursor policy )
+
+==============
+WINCONDITIONS
+==============
+
+=======
+LEVELS
+=======
+
+( 30x30 grid.                                                    )
+( Z=(GravDown+Player+ExitL+ExitU) at (0,0)                      )
+( 7=(UpBtn+ExitU) at (14,0)   8=(DownBtn+ExitD) at (14,29)      )
+( 5=(LeftBtn+ExitL) at (0,14) 6=(RightBtn+ExitR) at (29,14)     )
+( 1=ExitL interior, 2=ExitR interior, 3=ExitU interior, 4=ExitD  )
+( 9=top-right corner, 0=bot-left corner, w=bot-right corner      )
+
+Z33333333333337333333333333339
+1............................2
+1............................2
+1............................2
+1............................2
+1............................2
+1............................2
+1............................2
+1............................2
+1............................2
+1............................2
+1............................2
+1............................2
+1............................2
+5............................6
+1............................2
+1............................2
+1............................2
+1............................2
+1............................2
+1............................2
+1............................2
+1............................2
+1............................2
+1............................2
+1............................2
+1............................2
+1............................2
+1............................2
+04444444444444844444444444444w

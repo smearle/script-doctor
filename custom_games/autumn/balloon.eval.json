@@ -1,0 +1,11 @@
+{
+  "alias": {
+    "balloonpurple": "balloon",
+    "balloontan": "balloon",
+    "balloonbrown": "balloon",
+    "rock": "rocks",
+    "newrock": "rocks"
+  },
+  "compare_color": true,
+  "cursor_start": [0, 0]
+}

@@ -1,0 +1,376 @@
+title gravity (AutumnBench port)
+author ported from AutumnBench gravity.sexp
+
+(
+  Port of AutumnBench gravity.sexp (GRID_SIZE=16).
+
+  Autumn render_all keys: leftButton, rightButton, upButton, downButton, blobs.
+
+  Mechanics:
+  - 4 colored buttons at fixed edge positions change gravity direction.
+  - Clicking empty space (not on a button) spawns a 2x2 blob:
+      anchor at click (cx,cy), cells at (cx,cy-1),(cx,cy),(cx+1,cy-1),(cx+1,cy).
+  - All blobs move 1 cell per frame in current gravity direction.
+  - Blobs EXIT the grid (Autumn allows off-grid). Implemented via boundary
+    deletion BEFORE movement: cells at the leading exit edge without VM are
+    removed each frame, then the trailing row/column slides forward with VM.
+
+  Rule ordering (matching Autumn on-handler order):
+    1. Boundary deletion (delete blob cells at exit boundary, no VM only)
+    2. Blob movement (move blobs, add VM to prevent double-move and re-deletion)
+    3. Blob spawn (click at free non-button cell; spawned blobs get VM)
+    4. Spread up/right/upper-right for spawn (spreads also get VM)
+    5. Gravity button click handlers (change GravX marker)
+    6. Blob type conversion (after gravity changed)
+    7. Late cleanup (BlobSeedHere, BlobSeedR, VM)
+
+  VM (Velocity Marker) is added to blobs whenever they move or spawn.
+  It prevents double-movement in the fixpoint loop and prevents boundary
+  deletion from erasing just-moved cells in the same tick.
+  Late rules clear VM so next tick starts fresh.
+
+  Boundary markers (invisible, on entire grid edges):
+    BoundB = bottom row (y=15) -- exit for BlobDown
+    BoundT = top row (y=0)     -- exit for BlobUp
+    BoundL = left column (x=0) -- exit for BlobLeft
+    BoundR = right column (x=15) -- exit for BlobRight
+
+  Gravity direction stored as one of GravDown/GravLeft/GravRight/GravUp at (0,0).
+  PS cursor: Player (visible) moves with arrows, action=click.
+  cursor_start=[0,0].
+)
+
+realtime_interval 0.1
+
+========
+OBJECTS
+========
+
+Background
+black
+
+( === BUTTONS (visible, fixed positions) === )
+LeftButton
+#ff0000
+
+RightButton
+#ff8c00
+
+UpButton
+#ffd700
+
+DownButton
+#008000
+
+( === BLOB TYPES (encode current gravity direction) === )
+BlobDown
+#0000ff
+
+BlobUp
+#0000ff
+
+BlobLeft
+#0000ff
+
+BlobRight
+#0000ff
+
+( === SPAWN HELPERS (invisible) === )
+BlobSeedHere
+black
+.....
+.....
+.....
+.....
+.....
+
+BlobSeedR
+black
+.....
+.....
+.....
+.....
+.....
+
+( === VELOCITY MARKER (invisible; prevents double-move per tick) === )
+VM
+black
+.....
+.....
+.....
+.....
+.....
+
+( === PREVOCCUP: marks cells that had a Blob at end of previous tick. === )
+( Used to replicate Autumn's isFreePos which checks pre-movement positions. )
+PrevOccup
+black
+.....
+.....
+.....
+.....
+.....
+
+( === GRAVITY DIRECTION MARKERS (invisible, at (0,0)) === )
+GravDown
+black
+.....
+.....
+.....
+.....
+.....
+
+GravLeft
+black
+.....
+.....
+.....
+.....
+.....
+
+GravRight
+black
+.....
+.....
+.....
+.....
+.....
+
+GravUp
+black
+.....
+.....
+.....
+.....
+.....
+
+( === BOUNDARY MARKERS (invisible, placed on all edge cells) === )
+BoundB
+black
+.....
+.....
+.....
+.....
+.....
+
+BoundT
+black
+.....
+.....
+.....
+.....
+.....
+
+BoundL
+black
+.....
+.....
+.....
+.....
+.....
+
+BoundR
+black
+.....
+.....
+.....
+.....
+.....
+
+( === PLAYER (visible cursor for click emulation) === )
+Player
+#ffffff #ff0000
+01110
+1...1
+1...1
+1...1
+01110
+
+=======
+LEGEND
+=======
+
+. = Background
+
+( Single boundary markers )
+T = BoundT
+B = BoundB
+K = BoundL
+V = BoundR
+
+( Combination cells )
+F = BoundT and BoundL and Player and GravDown
+G = BoundT and UpButton
+H = BoundT and BoundR
+I = BoundB and BoundL
+J = BoundB and DownButton
+W = BoundB and BoundR
+M = BoundL and LeftButton
+N = BoundR and RightButton
+
+( Group alias for spawn/movement checks )
+Blob = BlobDown or BlobUp or BlobLeft or BlobRight
+
+=======
+SOUNDS
+=======
+
+================
+COLLISIONLAYERS
+================
+
+Background
+LeftButton
+RightButton
+UpButton
+DownButton
+BlobDown, BlobUp, BlobLeft, BlobRight
+BlobSeedHere
+BlobSeedR
+VM
+GravDown, GravLeft, GravRight, GravUp
+BoundB
+BoundT
+BoundL
+BoundR
+PrevOccup
+Player
+
+======
+RULES
+======
+
+( ================================================================ )
+( STEP 1: BOUNDARY DELETION )
+( Delete blobs at the exit edge BEFORE they move. )
+( Only non-VM blobs are deleted; VM blobs just arrived and will )
+( be cleaned up next tick. This prevents re-deletion of just-placed cells. )
+( ================================================================ )
+[ BlobDown  BoundB no VM ] -> [ BoundB ]
+[ BlobUp    BoundT no VM ] -> [ BoundT ]
+[ BlobLeft  BoundL no VM ] -> [ BoundL ]
+[ BlobRight BoundR no VM ] -> [ BoundR ]
+
+( ================================================================ )
+( STEP 2: BLOB MOVEMENT )
+( Move each blob one step in its direction; add VM to prevent )
+( double-movement in the PS fixpoint loop. )
+( ================================================================ )
+down  [ BlobDown  no VM | no BlobDown  ] -> [ | BlobDown  VM ]
+up    [ BlobUp    no VM | no BlobUp    ] -> [ | BlobUp    VM ]
+left  [ BlobLeft  no VM | no BlobLeft  ] -> [ | BlobLeft  VM ]
+right [ BlobRight no VM | no BlobRight ] -> [ | BlobRight VM ]
+
+( ================================================================ )
+( STEP 3: BLOB SPAWNING )
+( Fires on action at a free cell (no Blob, no Button). )
+( Spawned blobs get VM so they are not moved in the same tick. )
+( Spawn check excludes buttons (isFreePos in Autumn is false at button cells). )
+( ================================================================ )
+[ GravDown  ] [ action Player no Blob no PrevOccup no LeftButton no RightButton no UpButton no DownButton ] -> [ GravDown  ] [ Player BlobDown  VM BlobSeedHere ]
+[ GravLeft  ] [ action Player no Blob no PrevOccup no LeftButton no RightButton no UpButton no DownButton ] -> [ GravLeft  ] [ Player BlobLeft  VM BlobSeedHere ]
+[ GravRight ] [ action Player no Blob no PrevOccup no LeftButton no RightButton no UpButton no DownButton ] -> [ GravRight ] [ Player BlobRight VM BlobSeedHere ]
+[ GravUp    ] [ action Player no Blob no PrevOccup no LeftButton no RightButton no UpButton no DownButton ] -> [ GravUp    ] [ Player BlobUp    VM BlobSeedHere ]
+
+( Spread ABOVE anchor (cy-1): )
+up [ BlobDown  BlobSeedHere | no Blob ] -> [ BlobDown  BlobSeedHere | BlobDown  VM ]
+up [ BlobLeft  BlobSeedHere | no Blob ] -> [ BlobLeft  BlobSeedHere | BlobLeft  VM ]
+up [ BlobRight BlobSeedHere | no Blob ] -> [ BlobRight BlobSeedHere | BlobRight VM ]
+up [ BlobUp    BlobSeedHere | no Blob ] -> [ BlobUp    BlobSeedHere | BlobUp    VM ]
+
+( Spread RIGHT of anchor (cx+1, cy) + BlobSeedR: )
+right [ BlobDown  BlobSeedHere | no Blob no BlobSeedR ] -> [ BlobDown  BlobSeedHere | BlobDown  VM BlobSeedR ]
+right [ BlobLeft  BlobSeedHere | no Blob no BlobSeedR ] -> [ BlobLeft  BlobSeedHere | BlobLeft  VM BlobSeedR ]
+right [ BlobRight BlobSeedHere | no Blob no BlobSeedR ] -> [ BlobRight BlobSeedHere | BlobRight VM BlobSeedR ]
+right [ BlobUp    BlobSeedHere | no Blob no BlobSeedR ] -> [ BlobUp    BlobSeedHere | BlobUp    VM BlobSeedR ]
+
+( Spread ABOVE the right cell (cx+1, cy-1): )
+up [ BlobDown  BlobSeedR | no Blob ] -> [ BlobDown  BlobSeedR | BlobDown  VM ]
+up [ BlobLeft  BlobSeedR | no Blob ] -> [ BlobLeft  BlobSeedR | BlobLeft  VM ]
+up [ BlobRight BlobSeedR | no Blob ] -> [ BlobRight BlobSeedR | BlobRight VM ]
+up [ BlobUp    BlobSeedR | no Blob ] -> [ BlobUp    BlobSeedR | BlobUp    VM ]
+
+( ================================================================ )
+( STEP 4: GRAVITY BUTTON CLICKS )
+( Change gravity marker when Player clicks a direction button. )
+( No rule for same-direction (noop). )
+( ================================================================ )
+( Left button -> gravity left )
+[ action Player LeftButton ] [ GravDown  ] -> [ Player LeftButton ] [ GravLeft ]
+[ action Player LeftButton ] [ GravRight ] -> [ Player LeftButton ] [ GravLeft ]
+[ action Player LeftButton ] [ GravUp    ] -> [ Player LeftButton ] [ GravLeft ]
+( Right button -> gravity right )
+[ action Player RightButton ] [ GravDown ] -> [ Player RightButton ] [ GravRight ]
+[ action Player RightButton ] [ GravLeft ] -> [ Player RightButton ] [ GravRight ]
+[ action Player RightButton ] [ GravUp   ] -> [ Player RightButton ] [ GravRight ]
+( Up button -> gravity up )
+[ action Player UpButton ] [ GravDown  ] -> [ Player UpButton ] [ GravUp ]
+[ action Player UpButton ] [ GravLeft  ] -> [ Player UpButton ] [ GravUp ]
+[ action Player UpButton ] [ GravRight ] -> [ Player UpButton ] [ GravUp ]
+( Down button -> gravity down )
+[ action Player DownButton ] [ GravLeft  ] -> [ Player DownButton ] [ GravDown ]
+[ action Player DownButton ] [ GravRight ] -> [ Player DownButton ] [ GravDown ]
+[ action Player DownButton ] [ GravUp    ] -> [ Player DownButton ] [ GravDown ]
+
+( ================================================================ )
+( STEP 5: BLOB TYPE CONVERSION )
+( After gravity changes, convert all existing blobs to the new type. )
+( Note: VM is preserved (separate layer) on already-moved cells. )
+( No identity rules (same type) to avoid fixpoint loops. )
+( ================================================================ )
+( LeftButton clicked: BlobDown/Right/Up -> BlobLeft )
+[ action Player LeftButton ] [ BlobDown  ] -> [ Player LeftButton ] [ BlobLeft ]
+[ action Player LeftButton ] [ BlobRight ] -> [ Player LeftButton ] [ BlobLeft ]
+[ action Player LeftButton ] [ BlobUp    ] -> [ Player LeftButton ] [ BlobLeft ]
+( RightButton clicked: BlobDown/Left/Up -> BlobRight )
+[ action Player RightButton ] [ BlobDown  ] -> [ Player RightButton ] [ BlobRight ]
+[ action Player RightButton ] [ BlobLeft  ] -> [ Player RightButton ] [ BlobRight ]
+[ action Player RightButton ] [ BlobUp    ] -> [ Player RightButton ] [ BlobRight ]
+( UpButton clicked: BlobDown/Left/Right -> BlobUp )
+[ action Player UpButton ] [ BlobDown  ] -> [ Player UpButton ] [ BlobUp ]
+[ action Player UpButton ] [ BlobLeft  ] -> [ Player UpButton ] [ BlobUp ]
+[ action Player UpButton ] [ BlobRight ] -> [ Player UpButton ] [ BlobUp ]
+( DownButton clicked: BlobLeft/Right/Up -> BlobDown )
+[ action Player DownButton ] [ BlobLeft  ] -> [ Player DownButton ] [ BlobDown ]
+[ action Player DownButton ] [ BlobRight ] -> [ Player DownButton ] [ BlobDown ]
+[ action Player DownButton ] [ BlobUp    ] -> [ Player DownButton ] [ BlobDown ]
+
+( ================================================================ )
+( STEP 6: CLEANUP )
+( ================================================================ )
+late [ BlobSeedHere ] -> [ ]
+late [ BlobSeedR    ] -> [ ]
+late [ VM           ] -> [ ]
+( Update PrevOccup: mark current blob positions, remove from vacated positions )
+late [ Blob no PrevOccup ] -> [ Blob PrevOccup ]
+late [ PrevOccup no Blob ] -> [ ]
+
+==============
+WINCONDITIONS
+==============
+
+=======
+LEVELS
+=======
+
+( 16x16 grid. Boundary markers on all edge cells. )
+( F=(0,0)=BoundT+BoundL+Player+GravDown, G=(7,0)=BoundT+UpButton, H=(15,0)=BoundT+BoundR )
+( M=(0,7)=BoundL+LeftButton, N=(15,7)=BoundR+RightButton )
+( I=(0,15)=BoundB+BoundL, J=(7,15)=BoundB+DownButton, W=(15,15)=BoundB+BoundR )
+
+FTTTTTTGTTTTTTTH
+K..............V
+K..............V
+K..............V
+K..............V
+K..............V
+K..............V
+M..............N
+K..............V
+K..............V
+K..............V
+K..............V
+K..............V
+K..............V
+K..............V
+IBBBBBBJBBBBBBBW

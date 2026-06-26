@@ -1,0 +1,11 @@
+{
+  "alias": {
+    "particlered": "particles",
+    "particlegold": "particles",
+    "particlegreen": "particles",
+    "particleblue": "particles",
+    "particlepurple": "particles"
+  },
+  "compare_color": true,
+  "cursor_start": [0, 0]
+}

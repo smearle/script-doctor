@@ -1,0 +1,130 @@
+title mobileMagnet (AutumnBench port)
+author ported from AutumnBench mobileMagnet.sexp
+
+(
+  Port of AutumnBench mobileMagnet.sexp (GRID_SIZE 16).
+  Autumn render keys: fixedMagnet (red, static), mobileMagnet (blue, player-controlled).
+  Each Magnet is a 2-cell vertical body: top cell = posPole, bottom = negPole.
+    fixedMagnet: FixedTop(7,7) + FixedBot(7,8).
+    mobileMagnet: MobileTop(4,7) + MobileBot(4,8) at start.
+  Arrow keys move the mobileMagnet body 1 cell.
+  Repulsion: same-pole adjacency (Manhattan dist 1) blocks the move.
+    Implemented as cancel-move rules: if moving would put same poles
+    at dist 1, cancel both cells' movement before it executes.
+  Attraction: deferred (triggers segfaults in Autumn interpreter on most seeds).
+  Off-grid: Autumn allows, PS clamps at border (minor divergence when at edge).
+)
+
+realtime_interval 0.1
+
+========
+OBJECTS
+========
+
+Background
+white
+
+FixedTop
+red
+00000
+00000
+00000
+00000
+00000
+
+FixedBot
+red
+00000
+00000
+00000
+00000
+00000
+
+MobileTop
+blue
+00000
+00000
+00000
+00000
+00000
+
+MobileBot
+blue
+00000
+00000
+00000
+00000
+00000
+
+=======
+LEGEND
+=======
+
+. = Background
+F = FixedTop
+G = FixedBot
+M = MobileTop
+N = MobileBot
+
+Player = MobileTop or MobileBot
+
+=======
+SOUNDS
+=======
+
+================
+COLLISIONLAYERS
+================
+
+Background
+FixedTop, FixedBot, MobileTop, MobileBot
+
+======
+RULES
+======
+
+( Repulsion: cancel rightward move if same-pole would become adjacent.
+  MobileTop 2 left of FixedTop -> after right, dist=1 -> repulsion.
+  'right' outer qualifier restricts to horizontal left-to-right scan only,
+  preventing false vertical matches (Background is in every cell so '.' is not a gap guard). )
+right [ right MobileTop | . | FixedTop ] -> [ MobileTop | . | FixedTop ]
+right [ right MobileBot | . | FixedBot ] -> [ MobileBot | . | FixedBot ]
+
+( Repulsion: cancel leftward move.
+  FixedTop 2 left of MobileTop -> after left, dist=1 -> repulsion. )
+right [ FixedTop | . | left MobileTop ] -> [ FixedTop | . | MobileTop ]
+right [ FixedBot | . | left MobileBot ] -> [ FixedBot | . | MobileBot ]
+
+( Prevent Fixed magnets from moving: clear any movement intent. )
+[ moving FixedTop ] -> [ FixedTop ]
+[ moving FixedBot ] -> [ FixedBot ]
+
+==============
+WINCONDITIONS
+==============
+
+=======
+LEVELS
+=======
+
+( 16x16 grid, Autumn (x=col, y=row), 0-indexed.
+  FixedTop(F) at col=7 row=7, FixedBot(G) at col=7 row=8.
+  MobileTop(M) at col=4 row=7, MobileBot(N) at col=4 row=8.
+)
+................
+................
+................
+................
+................
+................
+................
+....M..F........
+....N..G........
+................
+................
+................
+................
+................
+................
+................
+

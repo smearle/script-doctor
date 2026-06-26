@@ -1,0 +1,294 @@
+title Magnets (AutumnBench port)
+author ported from AutumnBench magnets.sexp
+
+(
+  Port of AutumnBench magnets.sexp (GRID_SIZE 16).
+  Autumn render keys: fixedMagnet (red, static), mobileMagnet (blue, player-controlled).
+  Each Magnet is a 2-cell vertical body: top cell = posPole, bottom = negPole.
+    fixedMagnet: FixedTop(7,7) + FixedBot(7,8), never moves.
+    mobileMagnet: MobileTop(4,7) + MobileBot(4,8) at start.
+
+  Mechanics:
+  1. Arrow keys move mobileMagnet 1 cell (moveNoCollision).
+  2. Repulsion: same-pole adjacency (dist==1) blocks the move.
+     Blocked destination cells: (6,7), (8,7), (7,6).
+     Approach positions needing cancel rules:
+       Horizontal: (5,7)right, (9,7)left (same row as FT, existing rules)
+       Vertical: (6,6)down, (8,6)down, (6,8)up, (8,8)up
+       Diagonal: (6,6)right, (8,6)left
+     Implemented via BlkD/BlkU/BlkR/BlkL invisible markers.
+  3. Attraction: TWO conditions (same-tick in Autumn; 1-tick lag in PS).
+     Condition 7: delta(posPole(mobile), negPole(fixed=(7,8))) in attractVectors
+     Condition 8: delta(negPole(mobile), posPole(fixed=(7,7))) in attractVectors
+     Trigger positions for MT (posPole):
+       (5,8)=cond7->RIGHT   (5,6)=cond8->RIGHT
+       (9,8)=cond7->LEFT    (9,6)=cond8->LEFT
+       (7,10)=cond7->UP     (7,4)=cond8->DOWN
+  4. Deferred: off-grid motion (Autumn allows negative coords; PS clamps).
+)
+
+realtime_interval 0.1
+
+========
+OBJECTS
+========
+
+Background
+white
+
+FixedTop
+red
+00000
+00000
+00000
+00000
+00000
+
+FixedBot
+red
+00000
+00000
+00000
+00000
+00000
+
+MobileTop
+blue
+00000
+00000
+00000
+00000
+00000
+
+MobileBot
+blue
+00000
+00000
+00000
+00000
+00000
+
+( Attract zone markers: invisible triggers )
+AttrR
+white
+.....
+.....
+.....
+.....
+.....
+
+AttrL
+white
+.....
+.....
+.....
+.....
+.....
+
+AttrD
+white
+.....
+.....
+.....
+.....
+.....
+
+AttrU
+white
+.....
+.....
+.....
+.....
+.....
+
+( Repulsion block markers: invisible, placed at approach positions.
+  BlkD at (6,6) and (8,6): moving DOWN from here -> adj to FT -> cancel.
+  BlkU at (6,8) and (8,8): moving UP from here -> adj to FT -> cancel.
+  BlkR at (6,6): moving RIGHT -> land at (7,6) adj FT -> cancel.
+  BlkL at (8,6): moving LEFT -> land at (7,6) adj FT -> cancel. )
+BlkD
+white
+.....
+.....
+.....
+.....
+.....
+
+BlkU
+white
+.....
+.....
+.....
+.....
+.....
+
+BlkR
+white
+.....
+.....
+.....
+.....
+.....
+
+BlkL
+white
+.....
+.....
+.....
+.....
+.....
+
+=======
+LEGEND
+=======
+
+. = Background
+F = FixedTop
+G = FixedBot
+M = MobileTop
+N = MobileBot
+r = AttrR
+l = AttrL
+d = AttrD
+u = AttrU
+( Repulsion block legend - single markers )
+A = BlkD
+B = BlkU
+( Combined markers for cells with 2 repulsion blocks )
+C = BlkD and BlkR
+E = BlkD and BlkL
+
+Player = MobileTop
+
+=======
+SOUNDS
+=======
+
+================
+COLLISIONLAYERS
+================
+
+Background
+FixedTop, FixedBot, MobileTop, MobileBot
+AttrR, AttrL, AttrD, AttrU
+BlkD
+BlkU
+BlkR
+BlkL
+
+======
+RULES
+======
+
+( === ATTRACTION (pre-movement, 1-tick lag) === )
+
+[ MobileTop AttrR ] -> [ right MobileTop AttrR ]
+[ MobileTop AttrL ] -> [ left  MobileTop AttrL ]
+[ MobileTop AttrD ] -> [ down  MobileTop AttrD ]
+[ MobileTop AttrU ] -> [ up    MobileTop AttrU ]
+
+( === REPULSION === )
+( Horizontal: same-row cancel rules )
+right [ right MobileTop | . | FixedTop ] -> [ MobileTop | . | FixedTop ]
+right [ right MobileBot | . | FixedBot ] -> [ MobileBot | . | FixedBot ]
+right [ FixedTop | . | left MobileTop ] -> [ FixedTop | . | MobileTop ]
+right [ FixedBot | . | left MobileBot ] -> [ FixedBot | . | MobileBot ]
+
+( Vertical/diagonal: cancel via marker objects at approach positions )
+[ down  MobileTop BlkD ] -> [ MobileTop BlkD ]
+[ up    MobileTop BlkU ] -> [ MobileTop BlkU ]
+[ right MobileTop BlkR ] -> [ MobileTop BlkR ]
+[ left  MobileTop BlkL ] -> [ MobileTop BlkL ]
+
+( Direct collision cancel: prevent body split when MT hits FixedTop/Bot directly.
+  Without these, MT is blocked by collision but MB inherits and executes the
+  direction before the collision check, causing MT/MB to split.
+  Must fire BEFORE body sync. )
+right [ right MobileTop | FixedTop ] -> [ MobileTop | FixedTop ]
+right [ right MobileTop | FixedBot ] -> [ MobileTop | FixedBot ]
+right [ FixedTop | left MobileTop ] -> [ FixedTop | MobileTop ]
+right [ FixedBot | left MobileTop ] -> [ FixedBot | MobileTop ]
+
+( === BODY SYNC: MobileBot follows MobileTop === )
+down [ right MobileTop | MobileBot ] -> [ right MobileTop | right MobileBot ]
+down [ left  MobileTop | MobileBot ] -> [ left  MobileTop | left  MobileBot ]
+down [ up    MobileTop | MobileBot ] -> [ up    MobileTop | up    MobileBot ]
+down [ down  MobileTop | MobileBot ] -> [ down  MobileTop | down  MobileBot ]
+
+( === FIXED MAGNETS: never move === )
+[ moving FixedTop ] -> [ FixedTop ]
+[ moving FixedBot ] -> [ FixedBot ]
+
+==============
+WINCONDITIONS
+==============
+
+=======
+LEVELS
+=======
+
+( 16x16 grid. Autumn (x=col, y=row) = PS (col=x, row=y).
+  FixedTop(F) at (col=7, row=7). MobileTop(M) at (col=4, row=7).
+  FixedBot(G) at (col=7, row=8). MobileBot(N) at (col=4, row=8).
+
+  Attract markers:
+    r (AttrR): (5,6) cond8-RIGHT, (5,8) cond7-RIGHT
+    l (AttrL): (9,6) cond8-LEFT,  (9,8) cond7-LEFT
+    d (AttrD): (7,4) cond8-DOWN
+    u (AttrU): (7,10) cond7-UP
+
+  Repulsion block markers:
+    C = BlkD+BlkR at (6,6): cancel down and right moves
+    E = BlkD+BlkL at (8,6): cancel down and left moves
+    B = BlkU at (6,8) and (8,8): cancel up moves
+
+  Row layout (cols 0-15):
+    row4:  .......d........
+    row6:  .....rC.El......   C at col6, E at col8
+    row7:  ....M..F........
+    row8:  ....Nr.G.lB.B...   B at col6 and col10? Wait, recalculate.
+
+  Let me recount:
+    row6 col indices: 0123456789...
+      col5=r, col6=C(BlkD+BlkR), col8=E(BlkD+BlkL), col9=l
+      row6: .....rC.El......
+    row8 col indices:
+      col4=N, col5=r, col6=B(BlkU), col7=G, col8=B(BlkU), col9=l
+      row8: ....NrBGBlb..... wait that's wrong
+
+  Let me be precise:
+    row8: col4=N(MobileBot), col5=r(AttrR), col6=B(BlkU), col7=G(FixedBot), col8=B(BlkU), col9=l(AttrL)
+    Chars: col0-3=.... col4=N col5=r col6=B col7=G col8=B col9=l col10-15=......
+    row8: ....NrBGBl......
+
+  Full grid:
+  row0:  ................
+  row1:  ................
+  row2:  ................
+  row3:  ................
+  row4:  .......d........
+  row5:  ................
+  row6:  .....rC.El......
+  row7:  ....M..F........
+  row8:  ....NrBGBl......
+  row9:  ................
+  row10: .......u........
+  rows11-15: ................
+)
+................
+................
+................
+................
+.......d........
+................
+.....rC.El......
+....M..F........
+....NrBGBl......
+................
+.......u........
+................
+................
+................
+................
+................
+

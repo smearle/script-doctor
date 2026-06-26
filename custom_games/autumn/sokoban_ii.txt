@@ -1,0 +1,198 @@
+title sokoban_ii (AutumnBench port)
+author ported from AutumnBench sokoban_ii.sexp
+
+(
+  Port of AutumnBench sokoban_ii.sexp (GRID_SIZE 8).
+  Autumn render keys: agent, boxes, goal, teleporter1, teleporter2, walls.
+
+  Mechanics:
+    - 8x8 play area at top-left (cols 0..7, rows 0..7).
+    - Arrow input moves the Agent 1 cell if not blocked by a Wall.
+    - ALL boxes slide 1 cell in the same direction with each arrow move.
+      Boxes pass through walls and each other (own collision layer).
+    - A box landing on the Goal is removed.
+    - Off-grid: PS level is 20x20 so boxes escaping right/down go to cols/rows 8-19
+      (outside harness comparison range 0-7).
+      For top (y<0) and left (x<0) off-grid exits: invisible DestroyUp markers placed
+      at row 0, DestroyLeft markers at col 0 — a box at those boundary cells when the
+      move direction is up/left is deleted before being blocked.
+    - Click (add box at click cell): not portable to PS; deferred.
+    - Teleporter: box on T1 teleports to T2 if free; selectFn approximated; deferred.
+    - Behind-agent double-move / blocking: deferred.
+)
+
+realtime_interval 0.1
+
+========
+OBJECTS
+========
+
+Background
+white
+
+Goal
+red
+
+Teleporter1
+green
+
+Teleporter2
+darkgreen
+
+Wall
+black
+
+Box
+orange
+
+Player
+blue
+
+DestroyUp
+white
+.....
+.....
+.....
+.....
+.....
+
+DestroyLeft
+white
+.....
+.....
+.....
+.....
+.....
+
+DirRight
+white
+.....
+.....
+.....
+.....
+.....
+
+DirLeft
+white
+.....
+.....
+.....
+.....
+.....
+
+DirUp
+white
+.....
+.....
+.....
+.....
+.....
+
+DirDown
+white
+.....
+.....
+.....
+.....
+.....
+
+=======
+LEGEND
+=======
+
+. = Background
+G = Goal
+1 = Teleporter1
+2 = Teleporter2
+# = Wall
+* = Box
+P = Player
+U = DestroyUp
+V = DestroyLeft
+g = Goal and DestroyUp
+w = Wall and DestroyUp
+j = DestroyLeft and Teleporter2
+
+=======
+SOUNDS
+=======
+
+================
+COLLISIONLAYERS
+================
+
+Background
+Goal
+Teleporter1
+Teleporter2
+Wall, Player
+Box
+DestroyUp
+DestroyLeft
+DirRight, DirLeft, DirUp, DirDown
+
+======
+RULES
+======
+
+( Latch movement direction from arrow input, AND preserve player movement.
+  We keep the movement direction on Player (right/left/up/down) in the RHS so
+  that PuzzleScript does NOT cancel the player's movement intention. )
+[ right Player no DirRight no DirLeft no DirUp no DirDown ] -> [ right Player DirRight ]
+[ left  Player no DirRight no DirLeft no DirUp no DirDown ] -> [ left  Player DirLeft  ]
+[ up    Player no DirRight no DirLeft no DirUp no DirDown ] -> [ up    Player DirUp    ]
+[ down  Player no DirRight no DirLeft no DirUp no DirDown ] -> [ down  Player DirDown  ]
+
+( Off-grid exit: destroy boxes at top/left boundary -- they would go to y<0 or x<0
+  in Autumn, which is off-grid; destroying them approximates this best we can in PS )
+[ DirUp   ][ Box DestroyUp   ] -> [ DirUp   ][ DestroyUp   ]
+[ DirLeft ][ Box DestroyLeft ] -> [ DirLeft ][ DestroyLeft ]
+
+( Move all boxes in direction — they pass through walls (own layer) )
+[ DirRight ][ Box ] -> [ DirRight ][ right Box ]
+[ DirLeft  ][ Box ] -> [ DirLeft  ][ left  Box ]
+[ DirUp    ][ Box ] -> [ DirUp    ][ up    Box ]
+[ DirDown  ][ Box ] -> [ DirDown  ][ down  Box ]
+
+( Clear direction markers )
+late [ DirRight ] -> []
+late [ DirLeft  ] -> []
+late [ DirUp    ] -> []
+late [ DirDown  ] -> []
+
+( Remove box landing on Goal )
+late [ Box Goal ] -> [ Goal ]
+
+==============
+WINCONDITIONS
+==============
+
+=======
+LEVELS
+=======
+
+( 20 cols x 20 rows; Autumn 8x8 play area at top-left cols 0-7 rows 0-7 )
+( Row 0: DestroyUp on cols 0-7; Goal at (0,0) 'g'; Wall at (5,0) 'w' )
+( Col 0 rows 1-7: DestroyLeft 'V'; Teleporter2 at (0,4) -> 'j' )
+( Col 8: invisible Wall boundary — blocks player from leaving right, not boxes )
+( Row 8: invisible Wall boundary — blocks player from leaving down, not boxes )
+gUUUUwUU#...........
+V###*#..#...........
+V#......#...........
+V#.P....#...........
+j#....*.#...........
+V#......#...........
+V*1*....#...........
+V.......#...........
+#########...........
+....................
+....................
+....................
+....................
+....................
+....................
+....................
+....................
+....................
+....................
+....................

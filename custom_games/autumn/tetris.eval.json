@@ -1,0 +1,13 @@
+{
+  "alias": {
+    "av0": "activeTetris",
+    "av1": "activeTetris",
+    "av2": "activeTetris",
+    "av3": "activeTetris",
+    "ah0": "activeTetris",
+    "ah1": "activeTetris",
+    "ah2": "activeTetris",
+    "ah3": "activeTetris",
+    "block": "blocks"
+  }
+}

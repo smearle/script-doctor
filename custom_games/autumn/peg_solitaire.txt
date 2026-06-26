@@ -1,0 +1,146 @@
+title peg_solitaire (AutumnBench port)
+author ported from AutumnBench peg_solitaire.sexp
+
+(
+  Port of AutumnBench peg_solitaire.sexp (GRID_SIZE=7).
+  Classic English peg solitaire on a cross/plus board.
+  Initial state: 32 pegs filling the cross shape, center hole at (3,3).
+
+  Autumn semantics:
+  1. Click a filled peg to SELECT it (active=true; ALL others set active=false globally).
+  2. Click an empty hole: if the active peg is EXACTLY 2 cells away (cardinal),
+     perform a jump: active cell -> Hole, mid cell -> Hole, target -> Peg.
+     Autumn only checks distance=2 (not whether mid is filled).
+  3. Active state persists across ticks until a new peg is selected.
+  4. After a jump, the active marker stays on the source (now-hole) cell.
+
+  compare_color: true. Peg = #0000ff (CSS blue). Hole = #d3d3d3 (CSS lightgray).
+  Active/NewActive/Player are helpers (ignored in comparison).
+)
+
+realtime_interval 0.1
+
+========
+OBJECTS
+========
+
+Background
+black
+
+( filled peg: CSS blue = #0000ff )
+Peg
+#0000ff
+
+( empty hole: CSS lightgray = #d3d3d3 )
+Hole
+#d3d3d3
+
+( invisible: currently active/selected cell - persists across ticks )
+Active
+black
+.....
+.....
+.....
+.....
+.....
+
+( invisible: transient new selection marker )
+NewActive
+black
+.....
+.....
+.....
+.....
+.....
+
+( invisible: click cursor )
+Player
+#ffffff #ff0000
+01110
+1...1
+1...1
+1...1
+01110
+
+=======
+LEGEND
+=======
+
+. = Background
+C = Background and Player
+P = Peg
+H = Hole
+A = Peg and Active
+Q = Peg and Player
+X = Hole and Player
+
+=======
+SOUNDS
+=======
+
+================
+COLLISIONLAYERS
+================
+
+Background
+Peg, Hole
+Active
+NewActive
+Player
+
+======
+RULES
+======
+
+( === SELECTION: click on a filled Peg -> mark as NewActive === )
+[ action Player Peg ] -> [ Player Peg NewActive ]
+
+( === JUMP: click on a Hole with Active exactly 2 cells away === )
+( Autumn only checks distance=2, NOT whether mid cell is filled. )
+( Handle all 4 directions and both mid=Peg, mid=Hole cases. )
+( CRITICAL: Player must be preserved in the target slot after a jump so )
+( the cursor stays on the board and subsequent clicks work correctly. )
+
+( LEFT direction: Active | mid | PlayerHole )
+( Mid is Peg: )
+[ Active | Peg | action Player Hole ] -> [ Hole | Hole | Player Peg ]
+( Mid is Hole: )
+[ Active | Hole | action Player Hole ] -> [ Hole | Hole | Player Peg ]
+
+( RIGHT direction: PlayerHole | mid | Active )
+[ action Player Hole | Peg | Active ] -> [ Player Peg | Hole | Hole ]
+[ action Player Hole | Hole | Active ] -> [ Player Peg | Hole | Hole ]
+
+( DOWN direction (active above hole): 'down' reads top-to-bottom )
+down [ Active | Peg | action Player Hole ] -> [ Hole | Hole | Player Peg ]
+down [ Active | Hole | action Player Hole ] -> [ Hole | Hole | Player Peg ]
+
+( UP direction (active below hole): 'up' reads bottom-to-top )
+up [ Active | Peg | action Player Hole ] -> [ Hole | Hole | Player Peg ]
+up [ Active | Hole | action Player Hole ] -> [ Hole | Hole | Player Peg ]
+
+( === LATE PHASE: manage Active markers === )
+( When a NEW peg is selected (NewActive exists): clear ALL old Active markers globally )
+late [ NewActive ] [ Active ] -> [ NewActive ] [ ]
+( Then promote NewActive to Active )
+late [ NewActive ] -> [ Active ]
+
+==============
+WINCONDITIONS
+==============
+
+=======
+LEVELS
+=======
+
+( 7x7 cross/plus board. x=col left-to-right, y=row top-to-bottom. )
+( Off-board corners: Background only. On-board: Peg or Hole. )
+( Center (3,3) starts as Hole. Player starts at (0,0). )
+
+C.PPP..
+..PPP..
+PPPPPPP
+PPPHPPP
+PPPPPPP
+..PPP..
+..PPP..

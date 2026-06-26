@@ -1,0 +1,314 @@
+title chomp (AutumnBench port)
+author ported from AutumnBench chomp.sexp
+
+(
+  Port of AutumnBench chomp.sexp (GRID_SIZE=7).
+  The Chomp board game: two players alternately remove blocks.
+
+  State encoding (compare_color=true):
+    blocks:         Block=brown(#a52a2a), BlockSel=blue(#0000ff), BlockDead=black(#000000)
+    poisoned_block: PoisonedBlock=purple(#800080), PoisonedBlockDead=black(#000000)
+    removeButton:   RemoveButton=orange(#ffa500),
+                    RemoveButtonBlue=blue(#0000ff),
+                    RemoveButtonGreen=green(#008000)
+    player1:        Player1Obj=always blue(#0000ff) at (0,6)
+    player2:        Player2Obj=always lightgreen(#90ee90) at (6,6)
+
+  Mechanics:
+  - Click Block/BlockSel at (cx,cy): re-select all blocks at x>=cx AND y>=cy
+    (SelAnchor right+down propagation; DeselAll global deselect first)
+  - Click RemoveButton (with BlockSel present): remove all BlockSel + switch turn
+    (RemoveSig global removal; TurnP1 at RemoveButton cell tracks whose turn)
+  - Click PoisonedBlock: game_over -- all blocks -> BlockDead, button color changes
+
+  Key: `action` condition is consumed after first rule fires. Use intermediate markers
+  (SelAnchor + DeselAll placed by action, then fire independently without action).
+
+  Note: In actual Autumn, selected blocks always show blue regardless of player turn.
+  player1 always renders blue, player2 always lightgreen.
+)
+
+realtime_interval 0.1
+
+========
+OBJECTS
+========
+
+Background
+#000000
+
+( Invisible click cursor )
+Player
+#ffffff #ff0000
+01110
+1...1
+1...1
+1...1
+01110
+
+( === BLOCK STATES (render key: blocks) === )
+Block
+#a52a2a
+
+BlockSel
+#0000ff
+
+BlockDead
+#000000
+.....
+.....
+.....
+.....
+.....
+
+( Dead block that was selected when PoisonedBlock was clicked.
+  Autumn keeps selected=true after game_over, so these are still
+  removed when RemoveButton is subsequently clicked. Renders black. )
+BlockDeadSel
+#000000
+.....
+.....
+.....
+.....
+.....
+
+( === POISONED BLOCK STATES (render key: poisoned_block) === )
+PoisonedBlock
+#800080
+
+PoisonedBlockDead
+#000000
+.....
+.....
+.....
+.....
+.....
+
+( === REMOVE BUTTON STATES (render key: removebutton) === )
+RemoveButton
+#ffa500
+
+RemoveButtonBlue
+#0000ff
+
+RemoveButtonGreen
+#008000
+
+( player1 - always blue, fixed at (0,6) )
+Player1Obj
+#0000ff
+
+( player2 - always lightgreen, fixed at (6,6) )
+Player2Obj
+#90ee90
+
+( === INVISIBLE HELPERS (ignored by harness) === )
+
+( Selection anchor: placed at click point, spreads right+down )
+SelAnchor
+#000000
+.....
+.....
+.....
+.....
+.....
+
+( Deselect-all trigger: placed by action, deselects all BlockSel independently )
+DeselAll
+#000000
+.....
+.....
+.....
+.....
+.....
+
+( Turn tracker: present at RemoveButton cell (3,6) = player1 turn )
+TurnP1
+#000000
+.....
+.....
+.....
+.....
+.....
+
+( Remove-selected trigger: placed when RemoveButton clicked with BlockSel present )
+RemoveSig
+#000000
+.....
+.....
+.....
+.....
+.....
+
+( Kill-all trigger: placed when PoisonedBlock clicked )
+KillSig
+#000000
+.....
+.....
+.....
+.....
+.....
+
+( Re-click dead PoisonedBlock: re-evaluate button color only )
+DeadPoisonSig
+#000000
+.....
+.....
+.....
+.....
+.....
+
+=======
+LEGEND
+=======
+
+. = Background
+P = Player
+B = Block
+S = BlockSel
+D = BlockDead
+E = BlockDeadSel
+Q = PoisonedBlock
+R = RemoveButton
+X = RemoveButton and TurnP1
+1 = Player1Obj
+2 = Player2Obj
+
+( OR-group: blocks that can be removed by RemoveButton )
+SelectableBlock = BlockSel or BlockDeadSel
+
+=======
+SOUNDS
+=======
+
+================
+COLLISIONLAYERS
+================
+
+Background
+Block, BlockSel, BlockDead, BlockDeadSel, PoisonedBlock, PoisonedBlockDead, RemoveButton, RemoveButtonBlue, RemoveButtonGreen, Player1Obj, Player2Obj
+SelAnchor
+DeselAll
+TurnP1
+RemoveSig, KillSig, DeadPoisonSig
+Player
+
+======
+RULES
+======
+
+( ============================================================= )
+( ACTION: Click on Block/BlockSel - place SelAnchor + DeselAll  )
+( action is consumed after first fire; use markers for iteration )
+( ============================================================= )
+
+( Click on unselected Block: place SelAnchor and DeselAll )
+[ action Player Block ] -> [ Player Block SelAnchor DeselAll ]
+
+( Click on selected BlockSel: place SelAnchor and DeselAll )
+[ action Player BlockSel ] -> [ Player BlockSel SelAnchor DeselAll ]
+
+( ============================================================= )
+( DeselAll: globally deselect ALL BlockSel (fires without action) )
+( ============================================================= )
+
+( DeselAll deselects any BlockSel at a DIFFERENT cell )
+[ DeselAll ] [ BlockSel ] -> [ DeselAll ] [ Block ]
+
+( ============================================================= )
+( SelAnchor: spread RIGHT and DOWN through Block/BlockSel cells )
+( ============================================================= )
+
+right [ SelAnchor | Block ] -> [ SelAnchor | SelAnchor Block ]
+right [ SelAnchor | BlockSel ] -> [ SelAnchor | SelAnchor BlockSel ]
+
+down [ SelAnchor | Block ] -> [ SelAnchor | SelAnchor Block ]
+down [ SelAnchor | BlockSel ] -> [ SelAnchor | SelAnchor BlockSel ]
+
+( ============================================================= )
+( ACTION: Click on PoisonedBlock - place KillSig               )
+( ============================================================= )
+
+[ action Player PoisonedBlock ] -> [ Player KillSig PoisonedBlockDead ]
+
+( Re-click on already-dead PoisonedBlock: update button color only )
+[ action Player PoisonedBlockDead ] -> [ Player PoisonedBlockDead DeadPoisonSig ]
+
+( KillSig spreads right+down through Block/BlockSel cells )
+right [ KillSig | Block ] -> [ KillSig | KillSig Block ]
+right [ KillSig | BlockSel ] -> [ KillSig | KillSig BlockSel ]
+
+down [ KillSig | Block ] -> [ KillSig | KillSig Block ]
+down [ KillSig | BlockSel ] -> [ KillSig | KillSig BlockSel ]
+
+( ============================================================= )
+( ACTION: Click on RemoveButton - remove BlockSel + switch turn )
+( ============================================================= )
+
+( Only fire if any SelectableBlock (BlockSel or BlockDeadSel) exists somewhere.
+  BlockDeadSel are blocks that were selected when PoisonedBlock was clicked;
+  Autumn keeps selected=true on dead blocks so they must also be removable. )
+[ action Player RemoveButton ] [ SelectableBlock ] -> [ Player RemoveButton RemoveSig ] [ SelectableBlock ]
+[ action Player RemoveButtonBlue ] [ SelectableBlock ] -> [ Player RemoveButtonBlue RemoveSig ] [ SelectableBlock ]
+[ action Player RemoveButtonGreen ] [ SelectableBlock ] -> [ Player RemoveButtonGreen RemoveSig ] [ SelectableBlock ]
+
+( ============================================================= )
+( LATE RULES                                                     )
+( ============================================================= )
+
+( Apply SelAnchor: SelAnchor+Block -> BlockSel; SelAnchor+BlockSel -> BlockSel )
+late [ SelAnchor Block ] -> [ BlockSel ]
+late [ SelAnchor BlockSel ] -> [ BlockSel ]
+
+( Cleanup DeselAll marker )
+late [ DeselAll ] -> [ ]
+
+( Apply KillSig: convert blocks to dead.
+  Unselected blocks -> BlockDead; selected blocks -> BlockDeadSel.
+  In Autumn, game_over blocks keep their selected=true flag,
+  so BlockDeadSel must remain removable by RemoveButton. )
+late [ KillSig Block ] -> [ KillSig BlockDead ]
+late [ KillSig BlockSel ] -> [ KillSig BlockDeadSel ]
+( RemoveButton color: use two-bracket global rule since KillSig is at block cells, not button cell )
+late [ KillSig ] [ RemoveButton TurnP1 ] -> [ KillSig ] [ RemoveButtonBlue TurnP1 ]
+late [ KillSig ] [ RemoveButton no TurnP1 ] -> [ KillSig ] [ RemoveButtonGreen ]
+( Cleanup KillSig )
+late [ KillSig ] -> [ ]
+
+( Apply RemoveSig: remove all SelectableBlock (BlockSel or BlockDeadSel) globally )
+late [ RemoveSig ] [ SelectableBlock ] -> [ RemoveSig ] [ ]
+( Switch turn at RemoveSig cell )
+late [ RemoveSig TurnP1 ] -> [ ]
+late [ RemoveSig no TurnP1 ] -> [ TurnP1 ]
+
+( Re-click dead PoisonedBlock: re-evaluate button color based on current turn )
+late [ DeadPoisonSig ] [ RemoveButtonBlue no TurnP1 ] -> [ DeadPoisonSig ] [ RemoveButtonGreen ]
+late [ DeadPoisonSig ] [ RemoveButtonGreen TurnP1 ] -> [ DeadPoisonSig ] [ RemoveButtonBlue TurnP1 ]
+late [ DeadPoisonSig ] -> [ ]
+
+==============
+WINCONDITIONS
+==============
+
+=======
+LEVELS
+=======
+
+( 7x7 grid layout:
+  y=0: empty
+  y=1: PoisonedBlock at (1,1), Blocks at x=2..5
+  y=2: Blocks at x=1..5
+  y=3: Blocks at x=1..5
+  y=4: Blocks at x=1..5
+  y=5: empty
+  y=6: Player1Obj at (0,6), RemoveButton+TurnP1 at (3,6), Player2Obj at (6,6)
+  Player cursor starts at (0,0)  <- cursor_start=[0,0]
+)
+
+P......
+.QBBBB.
+.BBBBB.
+.BBBBB.
+.BBBBB.
+.......
+1..X..2

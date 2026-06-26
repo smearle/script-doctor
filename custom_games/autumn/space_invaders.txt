@@ -1,0 +1,318 @@
+title Space Invaders (AutumnBench port)
+author ported from AutumnBench space_invaders.sexp
+
+(
+  Port of AutumnBench space_invaders.sexp (GRID_SIZE=16).
+
+  Autumn mechanics:
+    - 16x16 play area. enemies1 at y=1 x=1,4,7,10,13; enemies2 at y=3 x=2,5,8,11,14.
+    - Hero at (8,15); left/right to move, up to shoot.
+    - Hero bullet: appears at hero when up pressed, moves up 1/tick.
+    - EnemyBullet moves down 1/tick. Spawns every 5 frames (STOCHASTIC: uniformChoice).
+    - enemies1 move right (prev_time%10==0), left (prev_time%10==5); enemies2 opposite.
+    - Collisions: bullet kills enemy; bullet cancels enemyBullet; enemyBullet kills hero.
+
+  Timer design (10-cell HUD row at y=16, cols 0-9):
+    TCursor starts at T0 (col 0). Event triggers fire BEFORE cursor advances.
+    So: trigger at T0 = fires on frames 1,11,21... (matches prev_time%10==0)
+         trigger at T2 = fires on frames 3,13,23... (matches prev_time%5==2 and prev_time%10==2)
+         trigger at T5 = fires on frames 6,16,26... (matches prev_time%10==5)
+         trigger at T7 = fires on frames 8,18,28... (matches prev_time%5==2 and prev_time%10==7)
+    After frame 9 (cursor at T9), late rule wraps cursor back to T0.
+
+  Stochastic deviation: enemyBullet X position uses uniformChoice among enemies.
+  PS RNG differs, so enemy bullet positions will diverge from Autumn at step 3+.
+  The deterministic parts (enemy positions, hero, hero bullets) are matched exactly.
+)
+
+realtime_interval 0.1
+throttle_movement
+key_repeat_interval 0.1
+
+========
+OBJECTS
+========
+
+Background
+black
+
+Enemies1
+#0000ff blue
+00000
+00000
+00000
+00000
+00000
+
+Enemies2
+#0000ff blue
+00000
+00000
+00000
+00000
+00000
+
+( PuzzleScript requires an object named Player )
+Player
+#808080 gray
+00000
+00000
+00000
+00000
+00000
+
+HeroDead
+#000000 black
+00000
+00000
+00000
+00000
+00000
+
+Bullet
+#ff0000 red
+00000
+00000
+00000
+00000
+00000
+
+EnemyBullet
+#ffa500 orange
+00000
+00000
+00000
+00000
+00000
+
+( === HUD TIMER (10 positions T0-T9 in row 16, cols 0-9) === )
+
+T0
+black
+.....
+.....
+.....
+.....
+.....
+
+T1
+black
+.....
+.....
+.....
+.....
+.....
+
+T2
+black
+.....
+.....
+.....
+.....
+.....
+
+T3
+black
+.....
+.....
+.....
+.....
+.....
+
+T4
+black
+.....
+.....
+.....
+.....
+.....
+
+T5
+black
+.....
+.....
+.....
+.....
+.....
+
+T6
+black
+.....
+.....
+.....
+.....
+.....
+
+T7
+black
+.....
+.....
+.....
+.....
+.....
+
+T8
+black
+.....
+.....
+.....
+.....
+.....
+
+T9
+black
+.....
+.....
+.....
+.....
+.....
+
+( T10: wrap sentinel - late rule fires when cursor is here (period = 10 ticks) )
+T10
+black
+.....
+.....
+.....
+.....
+.....
+
+TCursor
+black
+.....
+.....
+.....
+.....
+.....
+
+BottomEdge b
+transparent
+
+TopEdge t
+transparent
+
+=======
+LEGEND
+=======
+
+. = Background
+Q = Enemies1
+Z = Enemies2
+P = Player
+r = Bullet
+e = EnemyBullet
+A = T0
+C = T1
+D = T2
+F = T3
+G = T4
+I = T5
+J = T6
+K = T7
+L = T8
+M = T9
+N = T10
+U = T0 and TCursor
+h = Player and BottomEdge
+
+Enemy = Enemies1 or Enemies2
+
+=======
+SOUNDS
+=======
+
+================
+COLLISIONLAYERS
+================
+
+Background
+T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, BottomEdge, TopEdge
+TCursor
+Enemies1
+Enemies2
+Player, HeroDead
+Bullet
+EnemyBullet
+
+======
+RULES
+======
+
+[BottomEdge EnemyBullet] -> [BottomEdge]
+( player bullets clear off the TOP of the screen instead of stacking at row 0 )
+[TopEdge Bullet] -> [TopEdge]
+
+(Player can only move left/right)
+[down Player ] -> [Player]
+
+( === HERO SHOOT: spawn bullet when up pressed === )
+[ up Player ] -> [ Player Bullet ]
+
+( === ENEMY MOVEMENT PHASE A: e1 right, e2 left (fires frames 1,11,21...) === )
+( Put BEFORE cursor advance so both fire in same pass )
+[ TCursor T0 ] [ Enemies1 ] -> [ TCursor T0 ] [ right Enemies1 ]
+[ TCursor T0 ] [ Enemies2 ] -> [ TCursor T0 ] [ left Enemies2 ]
+
+( === ENEMY MOVEMENT PHASE B: e1 left, e2 right (fires frames 6,16,26...) === )
+[ TCursor T5 ] [ Enemies1 ] -> [ TCursor T5 ] [ left Enemies1 ]
+[ TCursor T5 ] [ Enemies2 ] -> [ TCursor T5 ] [ right Enemies2 ]
+
+( === TIMER ADVANCE (after event triggers) === )
+[ stationary TCursor ] -> [ right TCursor ]
+
+( === HERO BULLET MOVEMENT: moves up 1/tick === )
+[ Bullet ] -> [ up Bullet ]
+
+( === ENEMY BULLET MOVEMENT: moves down 1/tick === )
+[ EnemyBullet ] -> [ down EnemyBullet ]
+
+( === COLLISIONS (late) === )
+
+( Hero bullet kills enemy: BOTH the bullet and the enemy are removed )
+late [ Bullet Enemies1 ] -> []
+late [ Bullet Enemies2 ] -> []
+
+( Hero bullet vs enemy bullet: both removed )
+late [ Bullet EnemyBullet ] -> []
+
+( Enemy bullet hits hero: hero becomes dead )
+late [ EnemyBullet Player ] -> [ HeroDead ]
+
+( === ENEMY BULLET SPAWN (late, no movement this frame) === )
+( Autumn: bullet spawns at prev enemy pos, no moveDown on spawn frame )
+( Fires on frames 3,13,23... (cursor at T3 after regular phase: moved T2->T3) )
+( Fires on frames 8,18,28... (cursor at T8 after regular phase: moved T7->T8) )
+late random [ TCursor T3 ] [ Enemy no EnemyBullet ] -> [ TCursor T3 ] [ Enemy EnemyBullet ]
+late random [ TCursor T8 ] [ Enemy no EnemyBullet ] -> [ TCursor T8 ] [ Enemy EnemyBullet ]
+
+( === TIMER WRAP (late): cursor at T10 -> wrap back to T0 (period = 10 ticks) === )
+late [ TCursor T10 ] [ T0 no TCursor ] -> [ T10 ] [ T0 TCursor ]
+
+==============
+WINCONDITIONS
+==============
+
+=======
+LEVELS
+=======
+
+( 16x16 play area (rows 0-15, cols 0-15). HUD timer at row 16.    )
+( enemies1 y=1 at x=1,4,7,10,13; enemies2 y=3 at x=2,5,8,11,14   )
+( Player (Hero) at (8,15). Timer: T0+TCursor at col 0, T1-T9 at 1-9 )
+
+tttttttttttttttt
+.Q..Q..Q..Q..Q..
+................
+..Z..Z..Z..Z..Z.
+................
+................
+................
+................
+................
+................
+................
+................
+................
+................
+................
+bbbbbbbbhbbbbbbb
+UCDFGIJKLMN.....

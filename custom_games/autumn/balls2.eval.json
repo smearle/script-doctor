@@ -1,0 +1,9 @@
+{"alias": {
+  "balla": "ball_a",
+  "ballamove": "ball_a",
+  "ballb": "ball_b",
+  "ballbmove": "ball_b",
+  "ballc": "ball_c",
+  "ballcmove": "ball_c",
+  "goal": "goal"
+}}

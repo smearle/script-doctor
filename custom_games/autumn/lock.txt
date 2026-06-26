@@ -1,0 +1,197 @@
+title lock (AutumnBench port)
+author ported from AutumnBench lock.sexp
+
+(
+  Port of AutumnBench lock.sexp (GRID_SIZE=16).
+
+  Autumn BFS semantics: after the first loadState, globals.occupiedPositions is
+  stuck at the INITIAL render. So moveNoCollision checks the INITIAL occupancy:
+    - Key initial cells (0,0),(0,1): key can never return once it leaves
+    - Lock cells (always static): key always blocked
+    - Wall initial cells (3,7)-(7,7): key blocked even after wall moves
+    - Wall's CURRENT position does NOT block the key (only initial occ matters)
+    - Key CAN co-occupy a cell with the moving wall
+
+  InitOcc: invisible markers placed at key-initial and wall-initial cells.
+  Rule: Player blocked from entering InitOcc if no Player is currently there.
+  This replicates isFreeExcept excluding current key cells from the check.
+)
+
+realtime_interval 0.1
+throttle_movement
+
+========
+OBJECTS
+========
+
+Background
+white
+
+Lock
+red
+
+Player
+blue
+
+Wall
+gray
+
+( InitOcc: marks initially-occupied cells (key-initial + wall-initial). )
+( Player and InitOcc start co-located; when Player leaves, InitOcc stays. )
+InitOcc
+black
+.....
+.....
+.....
+.....
+.....
+
+( === INVISIBLE HELPERS (ignored by harness) === )
+
+Trigger
+black
+.....
+.....
+.....
+.....
+.....
+
+WallGo
+black
+.....
+.....
+.....
+.....
+.....
+
+WallMoved
+black
+.....
+.....
+.....
+.....
+.....
+
+LeftEdge
+black
+.....
+.....
+.....
+.....
+.....
+
+Blocked
+black
+.....
+.....
+.....
+.....
+.....
+
+=======
+LEGEND
+=======
+
+. = Background
+L = Lock
+P = Player
+W = Wall
+T = Trigger
+E = LeftEdge
+A = LeftEdge and Lock
+Z = LeftEdge and Player and InitOcc
+V = Wall and InitOcc
+
+=======
+SOUNDS
+=======
+
+================
+COLLISIONLAYERS
+================
+
+Background
+Player
+Lock
+Wall
+InitOcc
+Trigger
+WallGo
+WallMoved
+LeftEdge
+Blocked
+
+======
+RULES
+======
+
+( === PLAYER MOVEMENT BLOCKING === )
+
+( Block Player from entering Lock cells (Lock is always at initial position). )
+[ > Player | Lock ] -> [ Player Blocked | Lock ]
+
+( Block Player from entering InitOcc cells when no Player is currently there. )
+( "no Player": if Player IS there (its own current cell, e.g. moving DOWN through )
+( (0,1) which has InitOcc), the rule does NOT fire, allowing correct pass-through. )
+[ > Player | InitOcc no Player ] -> [ Player Blocked | InitOcc ]
+
+( Propagate Blocked between the two vertically-adjacent key cells in any movement. )
+( UP direction: spread from lower cell (A) upward to upper cell (B). )
+up [ Player Blocked | Player ] -> [ Player Blocked | Player Blocked ]
+( DOWN direction: spread from upper cell (A) downward to lower cell (B). )
+( Needed for LEFT/RIGHT where only the top or bottom cell hits an InitOcc. )
+down [ Player Blocked | Player ] -> [ Player Blocked | Player Blocked ]
+
+( Cancel Player movement when Blocked is present. )
+[ moving Player Blocked ] -> [ Player Blocked ]
+
+( === CLEANUP === )
+late [ Blocked ] -> []
+
+( === LATE TRIGGER DETECTION === )
+( Key top at (1,7): Player at Trigger with no Player above = top of 2-cell key. )
+( up context: A=lower(y=7, has Trigger), B=upper(y=6, no Player). )
+late up [ Player Trigger | no Player ] -> [ Player Trigger WallGo | ]
+
+( Flood WallGo to all non-WallMoved cells. )
+late [ WallGo | no WallGo no WallMoved ] -> [ WallGo | WallGo ]
+
+( === WALL MOVEMENT (one cell left per trigger) === )
+( Wall at LeftEdge (x=0): would go off-grid in Autumn, so destroy it. )
+late [ WallGo LeftEdge Wall ] -> [ WallGo LeftEdge WallMoved ]
+
+( Move Wall one cell left if destination is free. )
+late left [ WallGo Wall no WallMoved | no Wall no WallMoved ] -> [ WallGo | Wall WallMoved ]
+
+( === CLEANUP === )
+late [ WallGo ] -> []
+late [ WallMoved ] -> []
+
+==============
+WINCONDITIONS
+==============
+
+=======
+LEVELS
+=======
+
+( 16x16 play area. x=col(left->right), y=row(top->down). )
+( Player at (0,0),(0,1) + InitOcc (Z). Lock L-shape at rows 7-10 (A/L). )
+( Wall initial (3-7,7) + InitOcc (V). Trigger at (1,7) (T). LeftEdge col 0 (E/A). )
+
+Z...............
+Z...............
+E...............
+E...............
+E...............
+E...............
+E...............
+ATLVVVVV........
+A.L.............
+ALL.............
+ALL.............
+E...............
+E...............
+E...............
+E...............
+E...............

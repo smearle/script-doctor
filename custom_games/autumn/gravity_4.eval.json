@@ -1,0 +1,21 @@
+{
+  "alias": {
+    "blobRR": "blobs",
+    "blobDD": "blobs",
+    "blobUU": "blobs",
+    "blobRU": "blobs",
+    "blobRD": "blobs",
+    "blobUL": "blobs",
+    "blobUR": "blobs",
+    "blobDL": "blobs",
+    "btnred": "buttons",
+    "btngold": "buttons",
+    "btndarkorange": "buttons",
+    "btnlightgreen": "buttons",
+    "btngreen": "buttons",
+    "btnlightseagreen": "buttons",
+    "btnlightblue": "buttons",
+    "btnblue": "buttons"
+  },
+  "cursor_start": [0, 0]
+}

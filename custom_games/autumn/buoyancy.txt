@@ -1,0 +1,109 @@
+title buoyancy (AutumnBench port)
+author ported from AutumnBench buoyancy.sexp
+
+(
+  Port of AutumnBench buoyancy.sexp. GRID_SIZE=7.
+
+  Autumn classes: water, crate, rocks (initially empty list).
+
+  Initial layout:
+    Crate: U-shape with origin (3,1).
+      Pillars: (1,0),(1,1) and (5,0),(5,1)
+      Bottom: (1,2),(2,2),(3,2),(4,2),(5,2)
+    Water: rows 3-6, all cols 0-6 (28 cells)
+    Rocks: none initially (click-spawned only)
+
+  Game mechanic: clicking spawns rocks; rocks fall; crate sinks with rocks inside.
+  PuzzleScript has no targeted click, so click actions become no-op ticks.
+  The static initial state is replicated exactly. Rocks and crate movement
+  are deferred (click-game limitation: ~57% max score once rocks diverge).
+
+  realtime_interval needed so no-input ticks fire rules each frame.
+)
+
+realtime_interval 0.1
+
+========
+OBJECTS
+========
+
+Background
+white
+
+( crate = the U-shaped wooden container )
+Crate
+brown
+
+( water = fills lower portion of grid )
+Water
+blue
+
+( rock = falls due to gravity; click-spawned )
+Rock
+gray
+
+( Dummy Player required by PuzzleScript )
+Player
+#ffffff #ff0000
+01110
+1...1
+1...1
+1...1
+01110
+
+=======
+LEGEND
+=======
+
+. = Background
+C = Crate
+W = Water
+R = Rock
+P = Player
+
+=======
+SOUNDS
+=======
+
+================
+COLLISIONLAYERS
+================
+
+Background
+Crate
+Water
+Rock
+Player
+
+======
+RULES
+======
+
+( No rules needed for static state; realtime_interval keeps ticks alive )
+
+==============
+WINCONDITIONS
+==============
+
+=======
+LEVELS
+=======
+
+( 7x7 grid. Play area rows 0-6, cols 0-6.
+  Crate cells: (1,0),(5,0),(1,1),(5,1),(1,2),(2,2),(3,2),(4,2),(5,2)
+  Water cells: rows 3-6, all cols
+  Player (hidden) at (0,0) - required by PuzzleScript
+  Legend:
+    .  = Background
+    C  = Crate
+    W  = Water
+    A  = Crate + Player (col 0 row 0 needs Player)
+)
+
+.C...C.
+.C...C.
+.CCCCC.
+WWWWWWW
+WWWWWWW
+WWWWWWW
+WWWWWWW

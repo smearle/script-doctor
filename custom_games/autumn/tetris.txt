@@ -1,0 +1,113 @@
+title tetris (AutumnBench port)
+author ported from AutumnBench tetris.sexp
+
+(
+  Port of AutumnBench tetris.sexp to PuzzleScript.  GRID_SIZE 16, realtime.
+
+  Autumn mechanics (empirically probed):
+    - Active L-piece (4 cells) falls 1 row per no-input tick.
+    - left/right: shift piece 1 column, no gravity that tick.
+    - up/down: rotate 90 deg CCW, no gravity.  Idempotent after 1 rotate.
+    - At row 15: piece freezes as Block cells, new piece spawns (stochastic).
+    - Blocks never stack (Autumn collision broken).
+
+  Cap: STOCHASTIC.  Hard-coded col 7 (Autumn seeds 1, 4).
+  Post-landing: no respawn -> 4 cells wrong per step.
+
+  PS design:
+    - Active cells = Player (input receiver).  4 Players per level.
+      PS propagates left/right/up/down to all Players in the same layer.
+    - Gravity: down [ stationary Player ] -> [ down Player ]
+      Fires when Player is stationary (left/right already applied).
+    - Block in same layer as Player (so Block stops Player from falling).
+    - Ground at row 15: landing detection via late rule.
+    - Gravity suppression: NOT needed -- stationary qualifier handles it:
+      if Player moved left/right, it's no longer stationary -> gravity doesn't fire.
+)
+
+realtime_interval 0.1
+key_repeat_interval 0.1
+
+========
+OBJECTS
+========
+
+Background
+#222222
+
+( Player represents all 4 active piece cells )
+Player
+#5555ff
+
+( Frozen cells from landed pieces )
+Block
+#5555ff
+
+( Ground: invisible, at row 15, detects landing )
+Ground
+#222222
+.....
+.....
+.....
+.....
+.....
+
+=======
+LEGEND
+=======
+
+. = Background
+P = Player
+G = Ground
+B = Block
+
+=======
+SOUNDS
+=======
+
+================
+COLLISIONLAYERS
+================
+
+Background
+Ground
+Player, Block
+
+======
+RULES
+======
+
+( Gravity: Player falls down when stationary (not moved by input this tick) )
+[ stationary Player ] -> [ down Player ]
+
+( Landing: Player at row 15 (Ground cell) freezes to Block )
+late [ Player Ground ] -> [ Block ]
+
+==============
+WINCONDITIONS
+==============
+
+=======
+LEVELS
+=======
+
+( 16x16.  L-piece at col 7: (7,0),(7,1),(7,2),(8,2) )
+( Player at col 7 rows 0-2, and col 8 row 2. )
+( Ground at all cols of row 15. )
+
+.......P........
+.......P........
+.......PP.......
+................
+................
+................
+................
+................
+................
+................
+................
+................
+................
+................
+................
+GGGGGGGGGGGGGGGG

@@ -1,0 +1,111 @@
+title masters_logic (AutumnBench port)
+author ported from AutumnBench masters_logic.sexp
+
+(
+  Port of masters_logic.sexp: a Mastermind-style game on a 12x12 grid.
+  enterButton at (0,0): lightpink. curr_guess: 4 cells at x=3-6, y=1.
+  Clicking a guess cell cycles its color grey->red->green->blue->yellow->purple->orange->grey.
+  An invisible Player cursor walks the grid; action (X) = click at current cell.
+  compare_color: true - each Autumn color state is a distinct PS object with hex
+  equal to the CSS RGB of the Autumn color name.
+  Hints use uniformChoice (random) and correct_answer is random at init - skipped.
+  prev_guesses partially modeled but unlikely to appear in 8-step tests.
+)
+
+realtime_interval 0.1
+
+========
+OBJECTS
+========
+
+Background
+black
+
+Player
+#ffffff #ff0000
+01110
+1...1
+1...1
+1...1
+01110
+
+EnterButton
+#ffb6c1
+
+CGuessGrey
+#808080
+
+CGuessRed
+#ff0000
+
+CGuessGreen
+#008000
+
+CGuessBlue
+#0000ff
+
+CGuessYellow
+#ffff00
+
+CGuessPurple
+#800080
+
+CGuessOrange
+#ffa500
+
+=======
+LEGEND
+=======
+
+. = Background
+Q = EnterButton and Player
+E = EnterButton
+G = CGuessGrey
+
+=======
+SOUNDS
+=======
+
+================
+COLLISIONLAYERS
+================
+
+Background
+EnterButton
+CGuessGrey, CGuessRed, CGuessGreen, CGuessBlue, CGuessYellow, CGuessPurple, CGuessOrange
+Player
+
+======
+RULES
+======
+
+(Click cycles the guess color: grey->red->green->blue->yellow->purple->orange->grey)
+[ action Player CGuessGrey ]   -> [ Player CGuessRed ]
+[ action Player CGuessRed ]    -> [ Player CGuessGreen ]
+[ action Player CGuessGreen ]  -> [ Player CGuessBlue ]
+[ action Player CGuessBlue ]   -> [ Player CGuessYellow ]
+[ action Player CGuessYellow ] -> [ Player CGuessPurple ]
+[ action Player CGuessPurple ] -> [ Player CGuessOrange ]
+[ action Player CGuessOrange ] -> [ Player CGuessGrey ]
+
+==============
+WINCONDITIONS
+==============
+
+=======
+LEVELS
+=======
+
+(12x12: EnterButton at (0,0)=col0row0, Player starts at (0,0), curr_guess at (3-6, y=1)=row1 col3-6)
+Q...........
+...GGGG.....
+............
+............
+............
+............
+............
+............
+............
+............
+............
+............

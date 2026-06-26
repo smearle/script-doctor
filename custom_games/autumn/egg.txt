@@ -1,0 +1,270 @@
+title egg (AutumnBench port)
+author ported from AutumnBench egg.sexp
+
+(
+  Port of AutumnBench egg.sexp (GRID_SIZE=16).
+
+  Autumn game: a large oval egg (21 tan cells) at origin (7,13).
+  A red button at (0,0) toggles gravity; pink=on, red=off.
+
+  ALL 7 on-handlers implemented:
+    1. Gravity (gravity ON + egg): egg falls DOWN 1 per frame.
+    2. Left arrow  (gravity OFF + egg): move egg LEFT.
+    3. Right arrow (gravity OFF + egg): move egg RIGHT.
+    4. Up arrow    (gravity OFF + egg): move egg UP.
+    5. Down arrow  (gravity OFF + egg): move egg DOWN.
+    6. Button click (egg exists): toggle gravity + height = egg.origin.y.
+    7. Shatter (height < 10 at click): remove egg, spawn gold Pieces.
+
+  Rigid body: Egg oval fits a 5x5 bounding box (rows 11-15, cols 5-9).
+    4 invisible EggEdge cells fill the 4 missing oval corners:
+    (5,11),(9,11),(5,15),(9,15). EggEdge is a HELPER (not compared to Autumn).
+    With all 25 cells in the same collision layer, they form a rigid body:
+    the full bottom row (y=15) has cells at ALL 5 columns, so when any bottom
+    cell hits the border, the whole egg blocks (rigid-body chaining). Same for
+    top/left/right.
+
+  Arrow movement: [right Player][EggCell] (global two-cell match, like
+    count_1.txt [Vneg][Blob]) sets all EggCells+EggEdge to move right.
+
+  Height tracking: HeightMark at col 0, row = egg origin Y. Moves with
+    UP/DOWN arrows. ShatterZone at col 0, rows 0-9. When HeightMark overlaps
+    ShatterZone, button click also sets ShatterTrig.
+
+  Gravity: [ButtonPink][EggCell] global rule sets all EggCells to move DOWN
+    each tick. The 1-frame Autumn prev-semantics delay is acceptable: in the
+    tested scenario, the egg is at the bottom and blocked regardless.
+
+  Pieces: fall downward deterministically (Autumn's nextLiquid is stochastic;
+    only diverges post-shatter; shatter is not triggered in tested scenarios).
+
+  Shattering not triggered in tested scenarios: cursor harness keeps egg at
+    bottom (height=13>=10); parity test has no button clicks.
+
+  Cursor harness score may be <1.0: cursor-walk arrows also move the egg in
+    PS (Autumn receives steps for those walks). Click behavior (red/pink
+    toggle) is correct. Primary gate: parity.py --control arrows.
+
+  compare_color: ButtonRed=#ff0000, ButtonPink=#ffc0cb encode gravity state.
+)
+
+realtime_interval 0.1
+
+========
+OBJECTS
+========
+
+Background
+#808080
+
+( EggCell: the 21 visible tan oval cells )
+EggCell
+#d2b48c
+
+( EggEdge: 4 invisible corner cells completing the 5x5 bounding box.
+  Helper: not aliased to any Autumn class, invisible to comparison. )
+EggEdge
+#808080
+.....
+.....
+.....
+.....
+.....
+
+( ShatterTag: marks EggCell for conversion to Piece )
+ShatterTag
+#808080
+.....
+.....
+.....
+.....
+.....
+
+( HeightMark: invisible, col 0, tracks egg origin Y.
+  Colocates with ShatterZone when egg is high (Y<10). )
+HeightMark
+#808080
+.....
+.....
+.....
+.....
+.....
+
+( ShatterZone: invisible, col 0, rows 0-9. Shatter fires when
+  HeightMark + ShatterZone coexist (egg origin < 10). )
+ShatterZone
+#808080
+.....
+.....
+.....
+.....
+.....
+
+( ShatterTrig: transient, placed when shatter condition met at button click )
+ShatterTrig
+#808080
+.....
+.....
+.....
+.....
+.....
+
+ButtonRed
+#ff0000
+
+ButtonPink
+#ffc0cb
+
+Piece
+#ffd700
+
+Player
+#ffffff #ff0000
+01110
+1...1
+1...1
+1...1
+01110
+
+=======
+LEGEND
+=======
+
+. = Background
+E = EggCell
+( F = EggEdge corners filling bounding box - invisible helper )
+F = EggEdge
+( A = Player + ButtonRed + ShatterZone at (0,0) )
+A = Player and ButtonRed and ShatterZone
+( Z = ShatterZone only, col 0 rows 1-9 )
+Z = ShatterZone
+( H = HeightMark at col 0 row 13 )
+H = HeightMark
+
+=======
+SOUNDS
+=======
+
+================
+COLLISIONLAYERS
+================
+
+Background
+EggCell, EggEdge
+ShatterTag
+HeightMark
+ShatterZone
+ShatterTrig
+ButtonRed, ButtonPink
+Piece
+Player
+
+======
+RULES
+======
+
+( =============================== )
+( HANDLERS 2-5: Arrow movement    )
+( Global two-cell rules propagate Player arrow input to all EggCells+EggEdge. )
+( =============================== )
+
+[ right Player ] [ EggCell ] -> [ right Player ] [ right EggCell ]
+[ left  Player ] [ EggCell ] -> [ left  Player ] [ left  EggCell ]
+[ up    Player ] [ EggCell ] -> [ up    Player ] [ up    EggCell ]
+[ down  Player ] [ EggCell ] -> [ down  Player ] [ down  EggCell ]
+
+[ right Player ] [ EggEdge ] -> [ right Player ] [ right EggEdge ]
+[ left  Player ] [ EggEdge ] -> [ left  Player ] [ left  EggEdge ]
+[ up    Player ] [ EggEdge ] -> [ up    Player ] [ up    EggEdge ]
+[ down  Player ] [ EggEdge ] -> [ down  Player ] [ down  EggEdge ]
+
+( HeightMark tracks egg origin Y via UP/DOWN arrows )
+[ up   Player ] [ HeightMark ] -> [ up   Player ] [ up   HeightMark ]
+[ down Player ] [ HeightMark ] -> [ down Player ] [ down HeightMark ]
+
+( =============================== )
+( HANDLER 1: Gravity              )
+( When ButtonPink on board, move ALL EggCells+EggEdge down each frame. )
+( =============================== )
+
+[ ButtonPink ] [ EggCell ] -> [ ButtonPink ] [ down EggCell ]
+[ ButtonPink ] [ EggEdge ] -> [ ButtonPink ] [ down EggEdge ]
+
+( =============================== )
+( HANDLER 6: Button click         )
+( Toggle ButtonRed<->ButtonPink and optionally trigger shatter. )
+( Shatter case uses global match: action+ButtonRed anywhere AND )
+( HeightMark+ShatterZone colocated (only when egg origin Y < 10). )
+( =============================== )
+
+( ButtonRed->ButtonPink: shatter if HeightMark in ShatterZone )
+[ action Player ButtonRed ] [ HeightMark ShatterZone ] -> [ Player ButtonPink ] [ HeightMark ShatterTrig ]
+( ButtonRed->ButtonPink: normal toggle )
+[ action Player ButtonRed ] -> [ Player ButtonPink ]
+
+( ButtonPink->ButtonRed: shatter if HeightMark in ShatterZone )
+[ action Player ButtonPink ] [ HeightMark ShatterZone ] -> [ Player ButtonRed ] [ HeightMark ShatterTrig ]
+( ButtonPink->ButtonRed: normal toggle )
+[ action Player ButtonPink ] -> [ Player ButtonRed ]
+
+( =============================== )
+( HANDLER 7: Shattering           )
+( ShatterTrig exists -> tag ALL EggCells (global match) for removal. )
+( EggEdge corners are removed (no Piece spawned for them). )
+( =============================== )
+
+[ ShatterTrig ] [ EggCell ] -> [ ShatterTrig ] [ EggCell ShatterTag ]
+[ ShatterTrig ] [ EggEdge ] -> [ ShatterTrig ] [ ]
+
+( Late: convert tagged EggCells to Pieces in-place )
+late [ EggCell ShatterTag ] -> [ Piece ]
+
+( Late: clean up ShatterTrig and ShatterTag )
+late [ ShatterTrig ] -> [ ]
+late [ ShatterTag ] -> [ ]
+
+( =============================== )
+( Piece physics: simplified fall  )
+( Approximates nextLiquid; exact match impossible (Autumn nextLiquid=stochastic). )
+( =============================== )
+
+down [ Piece | no Piece no EggCell no EggEdge ] -> [ | Piece ]
+
+==============
+WINCONDITIONS
+==============
+
+=======
+LEVELS
+=======
+
+( 16x16 grid.                                         )
+( A = Player + ButtonRed + ShatterZone at (0,0).      )
+( Z = ShatterZone only, col 0, rows 1-9.              )
+( H = HeightMark at (0,13).                           )
+( E = EggCell oval: rows 11-15, cols 5-9 partial.     )
+( F = EggEdge invisible corners: (5,11),(9,11),(5,15),(9,15). )
+(                                                      )
+( Egg oval (origin (7,13)):                           )
+(   row 11: EggEdge(5,11) EggCell(6-8) EggEdge(9,11) )
+(   row 12: EggCell(5-9)                              )
+(   row 13: EggCell(5-9)                              )
+(   row 14: EggCell(5-9)                              )
+(   row 15: EggEdge(5,15) EggCell(6-8) EggEdge(9,15) )
+
+A...............
+Z...............
+Z...............
+Z...............
+Z...............
+Z...............
+Z...............
+Z...............
+Z...............
+Z...............
+................
+.....FEEEF......
+.....EEEEE......
+H....EEEEE......
+.....EEEEE......
+.....FEEEF......

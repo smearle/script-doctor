@@ -1,0 +1,184 @@
+title coins (AutumnBench port)
+author ported from AutumnBench coins.sexp
+
+(
+  Port of AutumnBench coins.sexp (GRID_SIZE=16).
+
+  Agent (red) moves with arrow keys, starts at (7,9).
+  Coins (gold) at even-x, even-y positions in rect x=[4..12], y=[2,4]:
+    (4,2)(6,2)(8,2)(10,2)(12,2)(4,4)(6,4)(8,4)(10,4)(12,4).
+
+  COIN COLLECTION - one-frame prev-semantics delay:
+    Autumn uses `prev agent` to detect coin intersection, so the coin is
+    collected the frame AFTER the agent first stands on it.
+    Implementation: a `late` rule converts Coin->CoinPending when the Player
+    stands on it at the END of the tick. The NEXT tick's regular rules remove
+    CoinPending and increment the bullet count. Both Coin and CoinPending alias
+    to "coins" so the harness sees the coin present on the arrival tick and
+    absent on the following tick -- matching Autumn exactly.
+
+  BULLET COUNT (numBullets):
+    Tracked with a HUD strip of 10 BulletSlot/BulletSlotEmpty objects in row 17
+    (outside the 16x16 comparison area). Each BulletSlot = 1 bullet available.
+    Collecting a coin: CoinPending removed, one BulletSlotEmpty -> BulletSlot.
+    Firing a bullet: BulletSlot -> BulletSlotEmpty, NewBullet spawned.
+
+  BULLET MOVEMENT:
+    Bullets move UP every frame (autonomous). In Autumn, bullets can go to y<0
+    (off-grid). In PS, bullets clamp at y=0 -- known inherent cap, diverges only
+    when a bullet would exit the top of the grid.
+
+  BULLET SPAWN TIMING:
+    In Autumn, `on true` (bullet movement) runs before the click handler, so a
+    bullet spawned by clicking does NOT move up on the spawn frame. Modeled with
+    NewBullet: spawned by `action`, converted to Bullet via a late rule so it
+    does not participate in the regular-phase `up` movement that tick.
+
+  OFF-GRID AGENT MOTION (inherent cap):
+    In Autumn, the agent has no grid-boundary clamping and can move to x<0 or
+    x>=16, disappearing from the 16x16 comparison area. PS clamps at the border.
+    Diverges only when the agent actually reaches a grid edge.
+
+  Input modality: arrows (agent movement) + action/X (fire bullet when numBullets>0).
+)
+
+realtime_interval 0.1
+
+========
+OBJECTS
+========
+
+Background
+black
+
+( Agent: the player-controlled character, starts at (7,9) )
+Player
+#ff0000
+
+( Coin: collectible )
+Coin
+#ffd700
+
+( CoinPending: coin just stepped on; removed next tick (aliased to "coins") )
+CoinPending
+#ffd700
+
+( Bullet: rises one cell per tick )
+Bullet
+#9370db
+
+( NewBullet: just spawned this tick; converted to Bullet via late rule so it
+  does not move up on the spawn frame, matching Autumn prev-semantics )
+NewBullet
+#9370db
+
+( BulletSlot: one invisible slot per available bullet (numBullets counter) )
+BulletSlot
+#111111
+.....
+.....
+.....
+.....
+.....
+
+( BulletSlotEmpty: empty slot; starts with 10 in the HUD strip )
+BulletSlotEmpty
+#222222
+.....
+.....
+.....
+.....
+.....
+
+TopEdge
+transparent
+
+=======
+LEGEND
+=======
+
+. = Background
+A = Player
+C = Coin
+B = Bullet
+s = BulletSlotEmpty
+t = TopEdge
+
+=======
+SOUNDS
+=======
+
+================
+COLLISIONLAYERS
+================
+
+Background
+TopEdge
+Player
+Coin, CoinPending
+Bullet, NewBullet
+BulletSlot
+BulletSlotEmpty
+
+======
+RULES
+======
+
+[Bullet TopEdge ] -> [TopEdge]
+
+( === BULLET MOVEMENT: all existing Bullets queue an upward move each tick === )
+[ Bullet ] -> [ up Bullet ]
+
+( === BULLET FIRING: action fires if a BulletSlot is available ===
+  Consumes one BulletSlot, spawns NewBullet (does not move up this tick). )
+[ action Player ] [ BulletSlot ] -> [ Player NewBullet ] [ BulletSlotEmpty ]
+
+( === COIN COLLECTION: remove CoinPending, increment bullet count ===
+  CoinPending was created by the late rule on the PREVIOUS tick (agent stood on
+  coin last tick). This regular rule fires at the START of the next tick.
+  Simultaneously converts one BulletSlotEmpty to BulletSlot (numBullets+1). )
+[ CoinPending ] [ BulletSlotEmpty ] -> [ ] [ BulletSlot ]
+
+( === LATE: mark coin as pending when Player is standing on it ===
+  Fires at END of tick (after movement), creating CoinPending for next tick.
+  Autumn fires the collection handler using prev agent -- same 1-frame delay. )
+late [ Player Coin ] -> [ Player CoinPending ]
+
+( === LATE: activate NewBullet ===
+  NewBullet converts to Bullet at end of tick, so it won't move up on spawn frame. )
+late [ NewBullet ] -> [ Bullet ]
+
+==============
+WINCONDITIONS
+==============
+
+=======
+LEVELS
+=======
+
+( Row 0-15: 16x16 play area (Autumn GRID_SIZE=16).
+  Row 16:   empty separator row.
+  Row 17:   10 BulletSlotEmpty in columns 0-9 (HUD, outside comparison area).
+  The harness only compares rows 0-15 x columns 0-15.
+
+  Coin positions: (4,2)(6,2)(8,2)(10,2)(12,2)(4,4)(6,4)(8,4)(10,4)(12,4)
+  Agent start:    (7,9) )
+
+tttttttttttttttt
+................
+....C.C.C.C.C...
+................
+....C.C.C.C.C...
+................
+................
+................
+................
+.......A........
+................
+................
+................
+................
+................
+................
+................
+ssssssssss......

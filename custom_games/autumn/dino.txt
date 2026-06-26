@@ -1,0 +1,283 @@
+title Dino (AutumnBench port)
+author ported from AutumnBench dino.sexp
+
+(
+  Port of AutumnBench dino.sexp (GRID_SIZE 20).
+  Play area: cols 0-19, rows 0-19 (compared by harness).
+  Buffer: cols 20-59 not compared by harness; holds cactus/bird set B and C.
+
+  Autumn mechanics:
+    dino: 6-cell rigid body at fixed x=1,2,3, only moves vertically.
+      Origin (2,16); cells at (2,16),(3,16),(2,17),(1,18),(2,18),(2,19).
+      Ground: (2,19) blocked by grid boundary; (1,18) by Floor at (1,19);
+              (3,16) by Floor at (3,17). Floor in same layer as Player.
+      Jump (up key): net -6 y. Modeled as 7-step cascade up, then gravity
+              pulls down 1 in same tick. Net: up 6.
+      Gravity: each tick, Player cells move down 1 unless blocked.
+    cactus: 3-cell column, moves left 1/tick.
+      Autumn wraps when cactus.x == 0 (prev-frame condition): stays at x=0
+      for 1 tick, then resets to x=19 next tick.
+      Modeled via 3 independent sets (A at col 19, B at 39, C at 59).
+      LeftBound trigger at col 0 detects cactus there; late rule adds
+      WasAtEdge; next tick the removal rule fires before movement.
+    bird: 1-cell, moves left 1/tick.
+      A: col 27 row 15 (enters play area step 8).
+      B: col 47 row 14 (enters play area step 28 = same tick A wraps away).
+  Deferred:
+    - Bird respawn y = uniformChoice(13,14,15): hardcoded y=14. Seeds
+      diverge from step 28 onward if seed != 0.
+    - Off-grid jump (Autumn y<0 allowed): PS clamps at row 0.
+)
+
+realtime_interval 0.1
+
+========
+OBJECTS
+========
+
+Background
+black
+
+Player
+red
+00000
+00000
+00000
+00000
+00000
+
+Floor
+black
+.....
+.....
+.....
+.....
+.....
+
+Cactus
+green
+00000
+00000
+00000
+00000
+00000
+
+Bird
+yellow
+.....
+.0.0.
+..0..
+.....
+.....
+
+LeftBound
+black
+.....
+.....
+.....
+.....
+.....
+
+WasAtEdge
+black
+.....
+.....
+.....
+.....
+.....
+
+R7
+black
+.....
+.....
+.....
+.....
+.....
+
+R6
+black
+.....
+.....
+.....
+.....
+.....
+
+R5
+black
+.....
+.....
+.....
+.....
+.....
+
+R4
+black
+.....
+.....
+.....
+.....
+.....
+
+R3
+black
+.....
+.....
+.....
+.....
+.....
+
+R2
+black
+.....
+.....
+.....
+.....
+.....
+
+R1
+black
+.....
+.....
+.....
+.....
+.....
+
+JumpClip
+black
+.....
+.....
+.....
+.....
+.....
+
+=======
+LEGEND
+=======
+
+. = Background
+P = Player
+f = Floor
+C = Cactus
+b = Bird
+L = LeftBound
+
+Rise = R7 or R6 or R5 or R4 or R3 or R2 or R1
+
+=======
+SOUNDS
+=======
+
+================
+COLLISIONLAYERS
+================
+
+Background
+Player, Floor
+Cactus
+Bird
+LeftBound
+WasAtEdge
+JumpClip
+R7, R6, R5, R4, R3, R2, R1
+
+======
+RULES
+======
+
+(--- JUMP: UP key gives all Player cells up motion; intercept and start cascade ---)
+[ up Player no Rise ] -> [ Player R7 ]
+
+(--- CANCEL horizontal input; dino x is fixed ---)
+[ left Player ] -> [ Player ]
+[ right Player ] -> [ Player ]
+
+(--- CANCEL down key input; gravity rule below adds down motion unconditionally ---)
+[ down Player ] -> [ Player ]
+
+(--- RISE CASCADE: 7 passes sweeping upward.
+ Each pass: Player cells with Rn move up 1 and gain R(n-1).
+ The "no Player" guard in each target bracket prevents the cascade rule from
+ firing when the cell above already contains another Player object (a peer-block).
+ Without it, PuzzleScript silently destroys the source cell even when the target
+ is occupied (same-layer objects in the target bracket are NOT automatically
+ checked against the pattern's empty slot). ---)
+up [ Player R7 | no Player ] -> [ | Player R6 ]
+up [ Player R6 | no Player ] -> [ | Player R5 ]
+up [ Player R5 | no Player ] -> [ | Player R4 ]
+up [ Player R4 | no Player ] -> [ | Player R3 ]
+up [ Player R3 | no Player ] -> [ | Player R2 ]
+up [ Player R2 | no Player ] -> [ | Player R1 ]
+up [ Player R1 | no Player ] -> [ | Player ]
+
+(Fallback: cascade blocked at top border, strip Rise marker; set JumpClip to
+ prevent gravity from firing on this cell in the same tick.)
+[ Player R7 ] -> [ Player JumpClip ]
+[ Player R6 ] -> [ Player JumpClip ]
+[ Player R5 ] -> [ Player JumpClip ]
+[ Player R4 ] -> [ Player JumpClip ]
+[ Player R3 ] -> [ Player JumpClip ]
+[ Player R2 ] -> [ Player JumpClip ]
+[ Player R1 ] -> [ Player JumpClip ]
+
+(--- GRAVITY: each tick Player cells fall 1 unless blocked by Floor/boundary
+ or JumpClip (set when cascade clipped at top border). ---)
+[ stationary Player no Rise no JumpClip ] -> [ down Player ]
+
+(--- WRAP REMOVAL: objects marked WasAtEdge last tick are removed now.
+ Fires before the left-movement rule so the next cactus/bird set
+ enters from col 39/47 cleanly. ---)
+[ WasAtEdge Cactus ] -> [ WasAtEdge ]
+[ WasAtEdge Bird ]   -> [ WasAtEdge ]
+
+(--- CACTUS moves left 1/tick; 3 independent sets in 60-wide level ---)
+[ Cactus ] -> [ left Cactus ]
+
+(--- BIRD moves left 1/tick; 2 independent sets in 60-wide level ---)
+[ Bird ] -> [ left Bird ]
+
+(--- LATE: when cactus/bird has just arrived at col 0 (co-occupies LeftBound),
+ mark with WasAtEdge.  Next tick the removal rule above fires first. ---)
+late [ Cactus LeftBound no WasAtEdge ] -> [ Cactus LeftBound WasAtEdge ]
+late [ Bird   LeftBound no WasAtEdge ] -> [ Bird   LeftBound WasAtEdge ]
+
+(--- LATE: remove WasAtEdge from cells no longer holding cactus/bird ---)
+late [ WasAtEdge no Cactus no Bird ] -> [ ]
+
+(--- LATE: clear JumpClip each tick so gravity fires next tick ---)
+late [ JumpClip ] -> [ ]
+
+==============
+WINCONDITIONS
+==============
+
+=======
+LEVELS
+=======
+
+(60 cols x 20 rows. Rows and cols are 0-indexed.
+ LeftBound (L) at col 0, every row -- detects cactus/bird arriving at x=0.
+ Player (P): (2,16),(3,16),(2,17),(1,18),(2,18),(2,19).
+ Floor  (f): (3,17),(1,19) -- same layer as Player, blocks fall.
+ CactusA at col 19 rows 17-19; CactusB col 39; CactusC col 59.
+ BirdA at col 27 row 15; BirdB col 47 row 14.)
+
+L...........................................................
+L...........................................................
+L...........................................................
+L...........................................................
+L...........................................................
+L...........................................................
+L...........................................................
+L...........................................................
+L...........................................................
+L...........................................................
+L...........................................................
+L...........................................................
+L...........................................................
+L...........................................................
+L..............................................b............
+L..........................b................................
+L.PP........................................................
+L.Pf...............C...................C...................C
+LPP................C...................C...................C
+LfP................C...................C...................C

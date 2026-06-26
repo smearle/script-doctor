@@ -736,3 +736,271 @@ update (32-step serial BPTT unroll, ~20% GPU util — launch-bound), so 12k upda
 2.5-3h; running in background. Next: confirm per-game tf_ch→~1.0 and ar_ch rises
 (autoregressive fidelity); then add the Markovian games (need `collect --sequences`)
 for one unified model over all in-distribution games.
+
+## 2026-06-24 — coins occlusion fixed (memory model) + human-data integration
+
+**coins: agent disappears behind the coin (user-reported viewer bug).** Diagnosed:
+the engine renders Coin (gold) ON TOP of Agent (red); stepping onto a coin genuinely
+hides the agent (red count→0, cell stays gold), then `(on (intersects (prev agent)
+(prev coins)) ... removeObj)` consumes the coin one step later and the agent reappears.
+A single-frame model sees only a gold cell with NO memory the agent is underneath, so
+it can never predict the reappearance — in AR it loses the agent permanently (confirmed:
+engine red 0→1 at the consume step, WM stays red=0 forever). Genuine occlusion/memory
+case, not underfitting. Coins also has a hidden numBullets counter (pickup→can shoot).
+Fix: added `coins_heuristic` (steer agent onto coins + fire) to collect.py, collected
+200 ordered episodes, trained `coins_recurrent` (meanmax pool, BPTT). Result vs
+singleframe on held-out human-style episodes:
+  TF changed-cell 79.9%→**99.96%**, AR cell-err 0.0246→**0.00017** (144×),
+  **agent-reappearance recall 0.0%→98.7%** (n=551), fire_recall 1.0 (numBullets learned).
+Promoted coins→coins_recurrent in best.json (+ gen_best OVERRIDE + runs/best.json),
+restarted the viewer (serves it, ★ best).
+
+**Human gameplay data integrated.** Fetched BasisResearch/MARA data/
+autumnbench_human_participants.json (202MB, 517 users) via SSH `git-lfs-authenticate`
+(gh OAuth token was 401'd by the LFS endpoint; the working SSH key got a temp token).
+The file stores ACTION SEQUENCES + reset seeds (no states): up/down/left/right/click/
+noop — the purposeful, targeted, mode-switching poking the divergence audit found models
+fail on. New modules: `human_replay.py` (re-executes each user's sequence through the
+engine to recover ground-truth transitions, encoded in each model's palette; out-of-
+palette colors counted) and `human_eval.py` (teacher-forced one-step error = faithful
+"given what the human saw+did, is the WM right?" blindspot probe + AR first-divergence).
+30 games overlap (human ∩ trained ∩ engine). Full eval saved to data/
+human_eval_30games.txt. Reducible (non-aleatoric) human-distribution blindspots, worst
+first: masters_logic (0% TF-changed), paint (37%), lights_new (42%), waterplug (45%),
+bbq (48%), nim (58%), logic_gates (66%). (mario errored — object/multihot path in
+human_eval needs the vocab branch; TODO.) These are the next perfection-loop targets,
+now driven by the REAL human distribution rather than synthetic adversarial profiles.
+
+### coins regression (cold-start delete) + fix
+First coins_recurrent deleted the agent on the FIRST tick under noop and never recovered.
+Root cause: the initial coins_heuristic steered toward a coin every step, so episodes never
+showed a stationary/wandering agent — the model learned "red always leaves its start cell on
+tick 1" and the AR eval (replaying those same always-moving actions) missed it. Fix: mixed
+noop(0.22)+wander(0.20) into coins_heuristic, recollected (3253 noop-persistence steps + 2986
+hide events), added a cold-start persistence test to the eval, retrained. Verified: persistence
+0→100%, occlusion-reappearance 100% (vs singleframe 100%/0%). Redeployed (viewer restart).
+Lesson: an AR eval that replays the COLLECTION policy's actions can't catch a coverage gap in
+that policy — eval under independent/adversarial action distributions (noop, wander) too.
+
+## 2026-06-24 (cont) — search-based novelty collector + masters_logic/paint
+
+**search_collect.py** — frontier/BFS novelty collector (the principled replacement for
+hand-written heuristics). The interpreter has no usable python snapshot/restore (cache stack
+unbound, no fromJson), but is deterministic given (seed, action path), so a frontier node is
+expanded by replaying its path then trying each action. Novelty is keyed on the OBSERVABLE
+grid (env-JSON novelty over-explores: RNG/frame state changes every step -> budget burned at
+depth 1, never goes deep). Emits ordered sequences (root->node paths, carry hidden-state
+context) + deduped transitions. Validated on coins: discovered 4572 bullet-spawn transitions
++ 88 firing events in sequences -- the numBullets firing mechanic the heuristic entirely
+missed (firing needs a collected coin first; BFS reaches it via grid-novelty).
+
+**masters_logic** promoted -> masters_logic_recurrent. The mechanic is a click-to-cycle peg
+(col->(col+1)%7); the singleframe model couldn't even represent it (palette missing 4 of 7
+colors; 1150 out-of-palette cells). New recurrent: human-TF-changed 0% -> 100%, mech-eval
+0% -> 94.7% (residual = aleatoric hint placement on Enter, irreducible).
+
+**paint** — paint_recurrent2 (trained on a UP-every-4-steps heuristic) scored 100% on its own
+policy but REGRESSED the human distribution (36.8% -> 22.8%). NOT promoted; kept paint_recurrent.
+Lesson reaffirmed: own-policy metric overstates; the human distribution is the target. paint
+needs training on the human playtraces directly (next).
+
+**coins firing** — the first coins_recurrent never fired bullets (didn't track hidden numBullets).
+Merged heuristic data (persistence+occlusion) with search data (firing) -> coins_combined_seq
+(400 eps, 829 fire events, 7553 noop-persist). Retraining coins_recurrent_v2.
+
+**human playtraces**: still EVAL-only; folding into training is the next step (and the right
+fix for paint). human_replay.py already reconstructs the transitions; need a per-user train/val
+split to avoid leakage.
+
+### coins_v2 deployed (firing fixed) + model-selection fix
+coins never fired bullets: the WM didn't track hidden numBullets. grid-novelty search
+discovered the firing transitions the heuristic missed; merged with heuristic data (occlusion+
+persistence) -> coins_combined_seq. First v2 fired (0->100%) but REGRESSED occlusion (100->33%)
+-- a model-SELECTION bug: train_recurrent picked best-by-fire_recall once a game has firing
+events, ignoring the dense occlusion mechanic in changed-cell acc. Fixed selection to combined
+score (ch_acc + frec when ft>0). Retrained -> coins_recurrent_v2 passes ALL THREE: persistence
+100%, occlusion 100%, firing 100%. Promoted + deployed (viewer restart). Standing pipeline
+(build_dataset.py) now defaults human_val_frac=0 (train on all human data; human-in-viewer is
+the judge); human replay confirmed seed-correct (reproduces each player's actual trajectory incl.
+random events).
+
+## 2026-06-24 (cont) — seeded-frontier data pipeline (user directive)
+
+Policy: human + heuristic rollouts -> their visited states seed an exhaustive search ->
+generate transitions up to a large max -> train on all. Implemented:
+- collect_sequences + human_replay now emit per-episode SEEDS (states become replayable).
+- search_collect.seeded_search: replays to each frontier state ONCE (interpreter has no python
+  snapshot, so replay-per-action BFS is too slow on deep states -- first attempt got 6 seqs in
+  182s), then branches CONTINUATION ROLLOUTS (1st step sweeps the action set = exhaustive local
+  coverage, random tail for depth), emitting full root->continuation sequences (h=0 valid).
+- build_dataset rewired: heuristic+human -> seed_states -> seeded_search -> merge -> train.
+Validated on coins: 1200 frontier states x3 conts -> 19063 transitions + 2001 sequences in 90s
+(2.6x the old 7179 unique). Human replay confirmed seed-correct.
+
+coins free-play imperfection diagnosed: a SECOND occlusion layer -- a fired bullet renders OVER
+the agent; when it travels up the agent must reappear (red) but the WM kept it purple. Fixed
+coverage via fire-then-noop heuristic (1160 bullet->agent events, was ~0). Training coins_v3 on
+the big data (10k updates + scheduled sampling for AR accumulation).
+
+### coins_v5 deployed — free-play divergence fixed via seeded pipeline + balanced sampling
+User: coins still diverges in free play (never fires bullets). Broad AR sweep confirmed: v2
+diverged under collect_fire (15 err, 8/8) and random_mix (24, 6/8). Root cause of firing: a
+SECOND occlusion (bullet renders over agent; agent must reappear when it travels up). Fixed via
+the seeded-frontier pipeline (5071 bullet->agent events vs 1160 heuristic-only). First merge
+(v4) fixed fire (15->2) but regressed movement (random_mix 24->61) -- click-heavy continuation
+sampling. Fixed seeded_search rand_action to balance action TYPES (45% arrow/40% click/15% noop).
+v5 (500 heur + 3468 balanced seeded, 30k transitions, 8k updates, no sched_samp): free-play
+collect_fire 15->0, random_mix 24->1. Deployed. Remaining: minor wall-corner 'edges' case
+(1 cell ~step40, agent pinned at boundary) -> add wall coverage next.
+
+## 2026-06-24 (cont) — data audit, scaling pipeline (torch), mario fix
+
+**Data audit**: very uneven. Under-covered (singleframe, <2k steps): balloon, balls2, bottle,
+gravity_4, lights, lights_new, logic_gates, nim, particle_1. Well-covered: coins(1.3M), gravity,
+waterplug, disease, mario, space_invaders, pacman, etc (60k-300k).
+
+**Scaling pipeline**: training is ENGINE-FREE (train_recurrent/model/train import no engine),
+autumn code already on torch, 36 local cores. So: generate data LOCALLY (MARA) -> rsync npz ->
+train sweep on torch/210. Built build_all.py (parallel build_dataset runner) + torch_autumn_
+train.sbatch + torch_autumn_submit.sh. Wave-1 (9 under-covered games) data generated locally,
+rsynced to 210, training there (4 concurrent on free GPU).
+
+**coins_v6 deployed**: added wall-pinning to coins_heuristic. Free-play sweep vs v5: random_mix
+23->0, collect_fire 2->0, wander 4->2. Only residual: deep wall-corner 'edges' (1 cell ~step40,
+model loses agent after 40 forced moves -- AR hidden-state drift).
+
+**mario fixed (busted -> usable)**: root cause = selection by bullet_recall ALONE (optimized
+firing, let mario/coins/enemy channels drift) + only 400 rollouts. Fixed objects.py selection to
+combined (changed_acc + bullet_recall), retrained with 1500 rollouts. AR changed-acc 48->77%,
+bullet_recall 25->100%. Loss curve: nca_wm/autumn/figures/mario_loss_curve.png (converged, loss
+->0.0006, TF changed-acc 0.996). Trained on 12,236 UNIQUE transitions (of 60k collected, 5x
+redundant). Residual is AR EXPOSURE BIAS (TF 99.6% vs AR 77%), not undertraining -> added
+--sched_samp to objects.py (training a sched_samp variant now); next: extend seeded pipeline +
+human replay to the OBJECTS representation for wider mario data.
+
+### sched_samp failed for mario; sweep validation
+mario scheduled-sampling (--sched_samp 0.25) REGRESSED AR (81->57%); late-training destabilized
+(changed_acc 0.998->0.750 spike). Restored the good combined-selection model (AR ~81%). So the
+mario AR exposure-bias gap needs WIDER data (extend seeded pipeline + human replay to the OBJECTS
+representation), not sched_samp. Pipeline validation (210-trained, vs old singleframe TF changed-
+cell acc): bottle 92->100 (promoted bottle_recurrent), balloon/balls2/lights tied ~100 (simple
+games already fine). torch sweep (34 jobs, 17 games x{mean,meanmax}) draining slowly behind other
+users.
+
+### sweep results: human-data pipeline wins on HUMAN distribution
+The random-action TF metric saturated for click-puzzle games (lights_new/nim/logic_gates all
+~100%, masking the blindspot). On the HUMAN distribution the pipeline+human-data models were
+dramatically better: lights_new 42->100%, nim 58->84%, logic_gates 66->76% -- promoted all three
+on the human metric. Lesson saved (feedback_eval_human_dist_for_human_games). Random-action eval
+ok for movement/CA games; human-dist eval is the gate for human-data click/puzzle games.
+Session promotions so far: coins_v6, masters_logic, mario(fixed), bottle, bbq, buoyancy, chomp,
+lights_new, nim, logic_gates.
+
+### FINAL: 11 models improved + deployed this session (scaling sweep complete)
+Pipeline: local heuristic+human->seeded-search data gen -> training sweep across torch(H200)+210+
+local GPU -> human-distribution eval (for human-data games) -> promote -> deploy.
+Promotions (verified):
+  coins -> coins_recurrent_v6 (occlusion+persistence+firing, free-play near-perfect)
+  mario -> fixed (AR 48->77%, bullet_recall 25->100%; combined-selection + 1500 rollouts)
+  masters_logic -> recurrent (human 0->100%)
+  lights_new -> sweep_meanmax (human 42->100%)
+  nim -> recurrent (human 58->84%)
+  logic_gates -> recurrent (human 66->76%)
+  paint -> sweep_mean (human 36.8->66.7%; human data fixed cold-start currColor; synthetic-only
+           had REGRESSED it to 22%)
+  bbq -> sweep_mean (92.7->97.6%), buoyancy -> sweep_mean (91->98%), chomp -> sweep_mean (99->100%),
+  bottle -> sweep_mean (92->100%)
+magnets/wind already near-perfect on human dist (no change). torch sweep stalled behind other users
+on the harder games -> trained those locally instead. Key lesson: human-dist eval for human-data
+games (random-action saturates). New infra: build_all.py, search_collect.seeded_search,
+torch_autumn_{train.sbatch,submit.sh}, objects.py --sched_samp (sched_samp HURT mario, reverted).
+
+## 2026-06-25 — Autumn engine snapshot/restore + objects search findings
+
+**MARA engine snapshot/restore** (branch nca-wm/snapshot-restore-binding, LOCAL only, NOT pushed):
+added itp.save_state()/load_state() (opaque EnvState), Environment::deepCopy (snapshot-only;
+hot-path copy() unchanged), and fixed AutumnInstance::copy to deep-copy object fields (was
+sharing Mario's bullet counter, corrupting snapshots). Reusable + correct (matches fresh-replay
+5x; hidden numBullets survives); 47x faster than reseed (293us vs 13.7ms); BEHAVIOR-PRESERVING
+(verified new==backup engine on 8 games -> no models invalidated). See reference_autumn_snapshot_
+restore. Backup .so at .bak, snapshot build at .newsnap.
+
+**objects.collect_object_search_snap**: snapshot-based BFS object search (true exhaustive
+expansion via O(1) restore). 3x more fires + ~10x more collects than the replay version in the
+same budget -- denser coverage of the diverging mario mechanics.
+
+**FINDING (honest)**: training mario on the search/BFS data ALONE regressed it (AR 81.8 -> 29.5%).
+Pure exhaustive coverage optimizes for uniform state-space; the natural heuristic eval distribution
+suffers (the BFS visits many unnatural states -- clicks that do nothing, arrows into walls). The
+color-grid pipeline WORKED because build_dataset MERGES heuristic+human (natural) WITH search
+(coverage). Mario needs the same merge (objects: heuristic+human seqs + search seqs), not search-
+only. Restored the 81.8% baseline; TODO: merge natural+search for objects, retrain.
+
+## 2026-06-25 — mario resolved: 99.4% on the HUMAN distribution
+Evaluated the fixed mario (mario_objects_recurrent) on the HUMAN action distribution (replay 40
+human traces through engine, render objects, teacher-forced): **99.4% changed-cell accuracy** --
+essentially perfect per-step on real human play. The earlier "77-81% AR" was the pessimistic
+HEURISTIC-distribution AUTOREGRESSIVE measure (errors compounding over 40 steps on an arbitrary
+policy). On the meaningful metric (human play, the lesson from feedback_eval_human_dist_for_human_
+games) mario is in good shape. Remaining residual = minor AR drift over long rollouts (inherent
+exposure bias; DAgger fix blocked since the WM's predicted state can't be injected into the engine
+-- snapshot/restore captures only real engine states). The search-data/sched_samp/4k-heuristic
+retrains were chasing the wrong (heuristic-AR) metric; baseline kept. Mario fix (48->99.4% human)
+is solid and deployed.
+
+## 2026-06-25 (cont) — mario phantom-bullet bug: root cause + data regen
+User (viewer): "mario emits a bullet after consuming a coin even on noop." Reproduced via engine
+snapshot AR-vs-engine scan: after a coin enters the recurrent context and a click occurs, the model
+spawns a NEW bullet every step incl noop (1,2,3,4,5,6...) while engine stays 0-1. Root: model fires
+on click regardless of the HIDDEN mario.bullets ammo counter (fires at ammo=0), and the phantom never
+despawns -- "fire mode" learned as a latched recurrent state, not a per-click ammo-gated event.
+mario.sexp: coin pickup -> bullets+=1 (hidden, no visible bullet); on (clicked & bullets>0) -> spawn
+Bullet, bullets-=1. Only the (4,12) coin is floor-reachable (jump=4 from y=15); (7,4),(11,6) need
+platforming. Also: interpreter CRASHES on enemy death ([Prev] Not found: enemy) -- guarded in search.
+
+TWO bugs fixed in objects.py:
+1. _obj_mario_act index inversion: `idx={k:i for i,k in vocab.items()}` turned {name:ch} into
+   {ch:name}, so mario/coins were never found -> the "climber" did RANDOM nav and rarely reached a
+   coin. The mario object search data barely covered the coin->ammo->fire chain. Now `idx=dict(vocab)`.
+2. coin targeting picked the closest coin (the unreachable (7,4) straight overhead) -> mario bounced
+   forever. Now filters to reachable coins (cy >= gs-5).
+Plus crash guards (try/except RuntimeError) around _apply_action in the seed + BFS loops.
+
+Regenerated mario_obj_snap.npz (snapshot-BFS, n_seed=500, 420s): 5897 seqs, unique(s,a)=14564.
+Fire-mechanic coverage vs old mario_obj_hsearch: clicks 2237->35810, fire(ammo>0) 562->4810,
+no-fire(ammo=0) 1675->31000, nonclick-spawn 0->0. 16x denser on the exact failure mode.
+Training mario_objects_recurrent_v2 on it (8000 upd, h96, cuda:1) -- NOT clobbering the promoted
+99.4%-human model until verified on the repro + human dist. Added --save_dir override to objects.py.
+
+## 2026-06-25 (cont) — mario v2 verdict + RNG fix PR; pacman/carrace deployed
+RNG uint32-overflow fix (ants anti-diagonal) -> own branch off main, PR BasisResearch/MARA#499;
+cherry-picked onto snapshot branch so it stays buildable. Terse code comment, full writeup in PR.
+
+pacman sweep (89->95% TFchg, 4->56 AR-surv) + carrace promoted; gravity_3 sweep COLLAPSED (4.6%,
+h96 undercapacity for grid-40) -> kept baseline. One viewer restart deployed pacman+carrace.
+
+**mario v2 (snapshot-BFS data, fixed climber, 16x denser fire coverage) NOT promoted.** Converged
+chg_acc 0.93 / bullet_recall 0.998 (TF), but AR-mode phantom eval (30 heuristic rollouts) is not a
+win: runaway 30/30->29/30, phantom-step 77.8%->65.7%, med-AR-div 7->4 (WORSE), fire-recall 28->25.
+Root cause is NOT data coverage -- it's the LOSS/SELECTION biasing toward over-firing:
+  - bullet pos_weight=100 (inverse-freq capped) penalizes a MISSED bullet 100x a background cell.
+  - selection = chg_acc + bullet_RECALL (no precision) -> picks the most-firing checkpoint.
+v2 over-predicts bullets even teacher-forced (TF false-bullets 543 vs baseline 123). Next lever to
+DISCUSS before launching: lower bullet pos_weight (~10-20), select on chg_acc + F1 (precision-aware),
+maybe + scheduled sampling for AR recovery. Baseline mario_objects_recurrent kept (99.4% human-dist).
+
+## 2026-06-26 — mario bullet: ROOT CAUSE is a comet-trail, not phantom-fire
+Loop-to-100 on the bullet mechanic. Built mario_bullet_eval.py (AR + deterministic scripted probe,
+bullet cell traces) and collect_ammo.py (clean ammo-discipline curriculum: collect->hold(no click)->
+fire->travel->click@ammo0->noops; 1500 eps, 1 fire + ~1.5 click@0 each). Merged snap+ammo -> 7397 eps.
+
+Cell-level inspection of the baseline scripted trace reveals the TRUE bug: the model models bullet
+TRAVEL (moves up 1/step) but NEVER CLEARS THE OLD CELL -> one engine bullet becomes a growing vertical
+streak (4,12),(4,11),(4,10)... = the "6 phantom bullets". So it's a bullet-MOTION modeling failure
+(move = add-new AND remove-old; model only learns add-new), NOT primarily phantom-firing or ammo.
+bullet_pw=100 makes it worse: keeping a stale cell (target=0) costs 1x while lighting the new cell
+(target=1) pays 100x -> the model has no incentive to clear the trail.
+
+Added --bullet_pw (bullet-specific pos_weight) + --select f1 (precision-aware) + bullet_prec/f1 in eval.
+Round 1 (uniform pw_cap=15) failed (precision ~5%, also wrongly lowered coins/enemy). Round 2 in flight:
+merged data, bullet_pw=3 (v4a) vs 1 (v4b), f1 selection. Watching whether low bullet_pw clears the trail.

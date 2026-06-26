@@ -1,0 +1,239 @@
+title bottle (AutumnBench port)
+author ported from AutumnBench bottle.sexp
+realtime_interval 0.1
+
+(
+  Port of AutumnBench bottle.sexp (GRID_SIZE=16).
+
+  Autumn render_all keys: suzie, billy, bottlespot, bottle, rocks (dynamic).
+
+  Static layout:
+    suzie      (0,0)   blue
+    billy      (0,15)  red
+    bottlespot (15,7)  white
+    bottle: 5 cells at col 15, rows 5-9
+    rocks: dynamic, spawned at (0,0) or (0,15), move toward (15,7)
+
+  Autumn unitVector semantics: if dx!=0 and dy!=0, move in x only;
+  if dx=0, move in y. Rocks go RIGHT until x=15, then DOWN or UP to y=7.
+
+  RockA from Suzie (0,0): right to x=15, then DOWN to y=7, stops.
+  RockB from Billy (0,15): right to x=15, then UP to y=7, stops.
+
+  RockA and RockB are in SEPARATE collision layers so both can occupy (15,7)
+  simultaneously (Autumn allows multiple rocks in a list at same position).
+
+  KEY AUTUMN SEMANTIC - click tick vs move tick:
+  Autumn uses (initnext (updateObj prev_rocks ...)) for regular ticks, but an
+  (on (clicked ...)) handler OVERRIDES the initnext, so on a click frame:
+    rocks = addObj(prev_rocks, new_rock)   <- no movement of existing rocks!
+  On non-click frames: rocks = updateObj(prev_rocks, ...) <- rocks move.
+
+  PS IMPLEMENTATION:
+  - ClickBarrier is an invisible object placed at (0,0) when action fires at
+    Suzie or Billy, then spread (via iterative propagation rules) to every grid
+    cell. Movement rules require no ClickBarrier. Late rules clear it.
+  - This freezes ALL rocks on the click tick, matching Autumn's on-handler.
+  - Newly spawned rocks also get a RockANew/RockBNew marker (same purpose:
+    Autumn's new rock isn't in prev(rocks) so it can't be moved by updateObj).
+    The late rule clears these too.
+
+  breaksBottle = uniformChoice(true,false) -> non-deterministic -> RNG-only.
+  compare_color=false (broken vs whole bottle state not compared).
+
+  Col15   = invisible marker at every cell of column x=15.
+  Row7c15 = invisible marker only at (15,7) = bottleSpot row.
+)
+
+========
+OBJECTS
+========
+
+Background
+black
+
+Suzie
+#0000ff
+
+Billy
+#ff0000
+
+BottleSpot
+#ffffff
+
+BottleTop
+#ffffff
+
+BottleUpper
+#ffff00
+
+BottleMid
+#ffff00
+
+BottleLower
+#ffff00
+
+BottleBot
+#ffffff
+
+RockA
+#808080
+
+RockB
+#808080
+
+RockANew
+#000000
+.....
+.....
+.....
+.....
+.....
+
+RockBNew
+#000000
+.....
+.....
+.....
+.....
+.....
+
+RockSink
+#808080
+.....
+.....
+.....
+.....
+.....
+
+ClickBarrier
+#000000
+.....
+.....
+.....
+.....
+.....
+
+Player
+#ffffff #ff0000
+01110
+1...1
+1...1
+1...1
+01110
+
+Col15
+#000000
+.....
+.....
+.....
+.....
+.....
+
+Row7c15
+#000000
+.....
+.....
+.....
+.....
+.......
+
+=======
+LEGEND
+=======
+
+. = Background
+Q = Player and Suzie
+B = Billy
+T = BottleTop and Col15
+U = BottleUpper and Col15
+G = BottleMid and BottleSpot and Col15 and Row7c15
+L = BottleLower and Col15
+N = BottleBot and Col15
+C = Col15
+
+=======
+SOUNDS
+=======
+
+================
+COLLISIONLAYERS
+================
+
+Background
+Suzie, Billy
+BottleSpot
+BottleTop, BottleUpper, BottleMid, BottleLower, BottleBot
+RockA
+RockB
+RockSink
+RockANew
+RockBNew
+ClickBarrier
+Col15
+Row7c15
+Player
+
+======
+RULES
+======
+
+(=== CLICK DETECTION: spawn rock + seed ClickBarrier at spawn cell ===)
+(ClickBarrier will propagate to all cells, freezing rock movement this tick)
+[ action Player Suzie ] -> [ Player Suzie RockA RockANew ClickBarrier ]
+[ action Player Billy ] -> [ Player Billy RockB RockBNew ClickBarrier ]
+
+(=== CLICK BARRIER PROPAGATION: iterative spread to adjacent cells ===)
+(PS rule loop repeats until stable -> ClickBarrier floods the entire grid)
+[ ClickBarrier | no ClickBarrier ] -> [ ClickBarrier | ClickBarrier ]
+
+(=== ROCK MOVEMENT: fires every tick, gated on absence of ClickBarrier ===)
+(RockA from Suzie: right while not at col15, down while at col15 above row7c15)
+(Col15 is present-in-LHS so must be echoed in RHS or PS destroys it)
+[ RockA no RockANew no ClickBarrier no Col15 ] -> [ right RockA ]
+[ RockA no RockANew no ClickBarrier Col15 no Row7c15 ] -> [ down RockA Col15 ]
+
+(RockB from Billy: right while not at col15, up while at col15 above row7c15)
+[ RockB no RockBNew no ClickBarrier no Col15 ] -> [ right RockB ]
+[ RockB no RockBNew no ClickBarrier Col15 no Row7c15 ] -> [ up RockB Col15 ]
+
+(=== SINK: when a rock reaches bottleSpot (Row7c15), absorb it into RockSink ===)
+(RockSink is a permanent sentinel in its own layer; it doesn't block future rocks)
+(This handles Autumn's list semantics: multiple rocks can co-occupy (15,7))
+late [ RockA Row7c15 ] -> [ RockSink Row7c15 ]
+late [ RockB Row7c15 ] -> [ RockSink Row7c15 ]
+
+(=== LATE CLEANUP: clear all markers after movement phase ===)
+late [ ClickBarrier ] -> [ ]
+late [ RockANew ] -> [ ]
+late [ RockBNew ] -> [ ]
+
+==============
+WINCONDITIONS
+==============
+
+=======
+LEVELS
+=======
+
+( 16x16 grid. x=col 0..15, y=row 0..15.                              )
+( Q = Player+Suzie at (0,0). B = Billy at (0,15).                     )
+( Bottle: T(row5), U(row6), G(row7=bottlespot), L(row8), N(row9).    )
+( C = Col15 (other col-15 rows). . = Background.                      )
+
+Q..............C
+...............C
+...............C
+...............C
+...............C
+...............T
+...............U
+...............G
+...............L
+...............N
+...............C
+...............C
+...............C
+...............C
+...............C
+B..............C

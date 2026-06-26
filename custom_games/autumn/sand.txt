@@ -1,0 +1,210 @@
+title sand (AutumnBench port)
+author ported from AutumnBench sand.sexp
+
+(
+  Falling-sand simulation. GRID_SIZE=10.
+  Buttons: SandButton (red) at (2,0), WaterButton (green) at (7,0).
+  Default mode is sand. Clicking WaterButton sets water mode.
+  Clicking SandButton clears water mode.
+  Clicking empty cell adds Sand or Water depending on mode.
+
+  Sand falls straight down (nextSolid). When adjacent to Water (checked after
+  sand moves this tick, matching Autumn's POST-movement adjacency against
+  prev-frame water), solid Sand becomes LiquidSand which flows like water
+  (nextLiquid: fall if below empty, else flow one step toward nearest hole).
+
+  Water uses nextLiquid identically. Right-first lateral flow matches Autumn
+  right-preference tie-break (foldl picks rightmost equal-distance hole).
+
+  Co-occupation (Sand+Water in same cell) is physically impossible in PS
+  (single layer); that is the ONLY inherent divergence from Autumn.
+
+  Rule ordering (Autumn-equivalent):
+    1. Activate WaterJustPlaced/WaterFlowed/SandFlowed from previous late phase.
+    2. Solid sand falls (nextSolid).
+    3. LiquidSand: mark BlockedBelow FIRST, then fall (those not blocked).
+    4. Liquid conversion: Sand adjacent to Water -> LiquidSand (post-movement,
+       using current Water = Autumn's prev water).
+    5. Water: mark BlockedBelow FIRST, then fall (those not blocked).
+    6. Mode switching / click placement.
+    LATE: CanFlow, lateral flow (right then left for water, then liquid sand),
+          cleanup, NewSand->Sand, NewWater->WaterJustPlaced.
+)
+
+realtime_interval 0.1
+
+========
+OBJECTS
+========
+
+Background
+black
+
+Player
+#ffffff #ff0000
+01110
+1...1
+1...1
+1...1
+01110
+
+Sand
+#d2b48c
+
+LiquidSand
+#f4a460
+
+NewSand
+#d2b48c
+
+SandFlowed
+#f4a460
+
+Water
+#87ceeb
+
+NewWater
+#87ceeb
+
+WaterJustPlaced
+#87ceeb
+
+WaterFlowed
+#87ceeb
+
+SandButton
+#ff0000
+
+WaterButton
+#008000
+
+ModeWater
+black
+.....
+.....
+.....
+.....
+.....
+
+BlockedBelow
+black
+.....
+.....
+..0..
+.....
+.....
+
+CanFlow
+black
+.....
+..0..
+.0.0.
+..0..
+.....
+
+=======
+LEGEND
+=======
+
+. = Background
+P = Player and Background
+s = Sand
+b = SandButton
+w = WaterButton
+
+Particle = Sand or LiquidSand or SandFlowed or Water or NewSand or NewWater or WaterJustPlaced or WaterFlowed
+
+=======
+SOUNDS
+=======
+
+================
+COLLISIONLAYERS
+================
+
+Background
+SandButton, WaterButton
+Sand, LiquidSand, NewSand, SandFlowed, Water, NewWater, WaterJustPlaced, WaterFlowed
+ModeWater
+BlockedBelow
+CanFlow
+Player
+
+======
+RULES
+======
+
+(=== 1. Activate carry-over objects from previous late phase ===)
+[ WaterJustPlaced ] -> [ Water ]
+[ WaterFlowed ] -> [ Water ]
+[ SandFlowed ] -> [ LiquidSand ]
+
+(=== 2. Solid sand falls straight down (nextSolid) ===)
+[ stationary Sand ] -> [ down Sand ]
+
+(=== 3. LiquidSand: mark blocked FIRST, then give DOWN to unblocked ===)
+down [ stationary LiquidSand no BlockedBelow | Particle ] -> [ LiquidSand BlockedBelow | Particle ]
+[ stationary LiquidSand no BlockedBelow ] -> [ down LiquidSand ]
+
+(=== 4. Liquid conversion: Sand adjacent to Water -> LiquidSand
+     Fires POST sand-movement using current Water = Autumn's (prev water) ===)
+[ Sand | Water ] -> [ LiquidSand | Water ]
+
+(=== 5. Water: mark blocked FIRST, then give DOWN to unblocked ===)
+down [ stationary Water no BlockedBelow | Particle ] -> [ Water BlockedBelow | Particle ]
+[ stationary Water no BlockedBelow ] -> [ down Water ]
+
+(=== 6. Mode switching: click WaterButton activates water mode ===)
+[ action Player WaterButton ] [ ModeWater ] -> [ Player WaterButton ] [ ModeWater ]
+[ action Player WaterButton ] -> [ Player WaterButton ModeWater ]
+
+(=== 7. Mode switching: click SandButton deactivates water mode ===)
+[ action Player SandButton ] [ ModeWater ] -> [ Player SandButton ] [ ]
+
+(=== 8. Add water in water mode: click on empty cell ===)
+[ action Player no Particle no SandButton no WaterButton ] [ ModeWater ] -> [ Player NewWater ] [ ModeWater ]
+
+(=== 9. Add sand in sand mode: click on empty cell (fallback) ===)
+[ action Player no Particle no SandButton no WaterButton ] -> [ Player NewSand ]
+
+(=== LATE RULES ===)
+
+(Mark flow targets: empty cell with empty cell directly below = hole entry point)
+late down [ no Particle no CanFlow | no Particle ] -> [ CanFlow | ]
+
+(Water lateral flow: right first (matches Autumn right-preference on equal-distance tie))
+late right [ Water BlockedBelow | CanFlow ] -> [ | WaterFlowed ]
+late left  [ Water BlockedBelow | CanFlow ] -> [ | WaterFlowed ]
+
+(Liquid sand lateral flow: right first, then left)
+late right [ LiquidSand BlockedBelow | CanFlow ] -> [ | SandFlowed ]
+late left  [ LiquidSand BlockedBelow | CanFlow ] -> [ | SandFlowed ]
+
+(Cleanup markers)
+late [ BlockedBelow ] -> []
+late [ CanFlow ] -> []
+
+(Newly clicked particles appear at position this tick but don't move until next tick)
+late [ NewSand ] -> [ Sand ]
+late [ NewWater ] -> [ WaterJustPlaced ]
+
+==============
+WINCONDITIONS
+==============
+
+=======
+LEVELS
+=======
+
+(10 cols x 10 rows. Row 0: SandButton at col 2, WaterButton at col 7. Cursor at (0,0).)
+(Initial sand: y=5,6 at x=2,4,5,7; y=7,8,9 at x=2,3,4,5,6,7)
+P.b....w..
+..........
+..........
+..........
+..........
+..s.ss.s..
+..s.ss.s..
+..ssssss..
+..ssssss..
+..ssssss..

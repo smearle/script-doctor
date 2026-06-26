@@ -1,0 +1,319 @@
+title Mario (AutumnBench port)
+author ported from AutumnBench mario.sexp
+homepage www.puzzlescript.net
+
+(
+  Port of the AutumnBench "mario" Autumn program to PuzzleScript.
+  Source: MARA/domains/autumnbench/Autumn.wasm/tests/mario.sexp
+
+  Faithful mechanics:
+    - 16x16 play area (rows 0..15 map 1:1 to Autumn x=col, y=row).
+    - Gravity pulls Player down 1 cell/tick (realtime). Player lands on Steps/Floor.
+    - up = jump: only when grounded; instant rise up to 4 cells (Autumn moveNoCollision 0 -4).
+    - Coins give +1 bullet (ammo) when collected.
+    - Enemy patrols the top row, bouncing between the edges (Autumn origin x in [1,14]).
+    - action (X key) = shoot, replacing Autumn's click. Costs 1 ammo, spawns a Bullet.
+    - Bullets rise each tick, vanish on platforms/ceiling, and kill the enemy on contact.
+
+  Deviations (noted):
+    - Enemy is Autumn's 3x2 blue block, moved/bounced/killed as a rigid unit (every cell
+      carries the patrol direction; a blocked edge spreads a Turn flip across the block, and
+      one bullet spreads a Dead marker that removes all 6 cells). It bounces with its edge at
+      cols 1/14 rather than 0/15, since invisible bound markers occupy cols 0 and 15.
+    - Jump is the only remap of an arrow key (Autumn has no down action).
+    - Ammo is tracked with an "ad hoc global counter": a HUD magazine strip in the
+      bottom row. A Cursor marker sits on the leftmost empty slot, so the Cursor's
+      column == the bullet count. Coins push it right, shots pull it left.
+    - No win condition (AutumnBench tasks are world-model prediction, not win/lose).
+)
+
+realtime_interval 0.12
+throttle_movement
+key_repeat_interval 0.12
+
+========
+OBJECTS
+========
+
+Background
+white
+
+Floor
+gray darkgray
+11111
+00000
+00000
+00000
+00000
+
+Step
+orange #ff8c00
+00000
+01110
+01110
+00000
+00000
+
+Coin
+yellow #ffd700
+.111.
+10001
+10001
+10001
+.111.
+
+Player
+red darkred
+.000.
+00000
+00000
+.000.
+.0.0.
+
+Bullet
+#9370db purple
+..0..
+.000.
+.000.
+.000.
+..0..
+
+(Enemy is a 3x2 block of solid-blue cells, like Autumn's 6 blue Cells.
+ EnemyL/EnemyR are the same sprite; the L/R variant only encodes patrol direction.)
+EnemyL
+blue
+00000
+00000
+00000
+00000
+00000
+
+EnemyR
+blue
+00000
+00000
+00000
+00000
+00000
+
+Ceiling
+white
+.....
+.....
+.....
+.....
+.....
+
+EnemyBound
+white
+.....
+.....
+.....
+.....
+.....
+
+Cursor
+black
+.....
+.....
+.....
+.....
+.....
+
+AmmoSlot
+#333333
+00000
+0...0
+0...0
+0...0
+00000
+
+Ammo
+#9370db purple
+.....
+.000.
+.000.
+.000.
+.....
+
+R1
+white
+.....
+.....
+.....
+.....
+.....
+
+R2
+white
+.....
+.....
+.....
+.....
+.....
+
+R3
+white
+.....
+.....
+.....
+.....
+.....
+
+R4
+white
+.....
+.....
+.....
+.....
+.....
+
+JumpCool
+white
+.....
+.....
+.....
+.....
+.....
+
+(invisible markers that spread across the enemy block: Turn = whole-block direction flip, Dead = whole-block removal)
+Turn
+white
+.....
+.....
+.....
+.....
+.....
+
+Dead
+white
+.....
+.....
+.....
+.....
+.....
+
+=======
+LEGEND
+=======
+
+. = Background
+# = Step
+_ = Floor
+o = Coin
+P = Player
+~ = Ceiling
+B = Ceiling and EnemyBound
+X = EnemyBound
+E = Ceiling and EnemyL
+m = EnemyL
+s = AmmoSlot
+c = AmmoSlot and Cursor
+
+Solid = Floor or Step
+Enemy = EnemyL or EnemyR
+Rise = R1 or R2 or R3 or R4
+
+=======
+SOUNDS
+=======
+
+================
+COLLISIONLAYERS
+================
+
+Background
+AmmoSlot
+Ammo
+Cursor
+Coin
+Floor, Step, Player
+Ceiling
+EnemyBound, EnemyL, EnemyR
+Bullet
+Turn, Dead
+R1, R2, R3, R4, JumpCool
+
+======
+RULES
+======
+
+(--- JUMP: only when grounded; cancel the default up-move and arm a 4-cell rise ---)
+down [ up Player no Rise no JumpCool | Solid ] -> [ Player R4 | Solid ]
+
+(any remaining up-input mid-air is cancelled: no float, no double jump)
+[ up Player ] -> [ Player ]
+
+(--- instant rise cascade: each level moves Player up 1 if the cell above is free ---)
+up [ R4 Player | no Solid ] -> [ | R3 Player ]
+up [ R4 Player | Solid ]    -> [ Player JumpCool | Solid ]
+up [ R3 Player | no Solid ] -> [ | R2 Player ]
+up [ R3 Player | Solid ]    -> [ Player JumpCool | Solid ]
+up [ R2 Player | no Solid ] -> [ | R1 Player ]
+up [ R2 Player | Solid ]    -> [ Player JumpCool | Solid ]
+up [ R1 Player | no Solid ] -> [ | JumpCool Player ]
+up [ R1 Player | Solid ]    -> [ Player JumpCool | Solid ]
+(top-border fallback: no cell above, just end the jump)
+[ Rise Player ] -> [ Player JumpCool ]
+
+(--- GRAVITY: fall 1 cell/tick unless rising or just-jumped; Step/Floor block ---)
+down [ stationary Player no Rise no JumpCool ] -> [ down Player ]
+
+(--- SHOOT (action / X): only if ammo>0; spawn bullet, pull cursor left (-1 bullet) ---)
+right [ action Player ] [ Ammo | Cursor ] -> [ Player Bullet ] [ Cursor | ]
+
+(--- BULLETS rise each tick ---)
+[ Bullet ] -> [ up Bullet ]
+
+(--- ENEMY patrol ---)
+[ EnemyR ] -> [ right EnemyR ]
+[ EnemyL ] -> [ left EnemyL ]
+
+(--- post-movement resolution ---)
+(coin pickup fires after movement, so a just-landed/just-walked Player collects it)
+late right [ Player Coin ] [ Cursor | AmmoSlot no Ammo ] -> [ Player ] [ Ammo | AmmoSlot Cursor ]
+
+(ENEMY BOUNCE: the blocked leading edge seeds a Turn marker, which spreads across the
+ whole connected block; then every marked cell flips direction so the block reverses as a unit)
+late right [ EnemyR | EnemyBound ] -> [ EnemyR Turn | EnemyBound ]
+late left  [ EnemyL | EnemyBound ] -> [ EnemyL Turn | EnemyBound ]
+late [ Turn | Enemy no Turn ] -> [ Turn | Enemy Turn ]
+late [ Turn EnemyR ] -> [ EnemyL ]
+late [ Turn EnemyL ] -> [ EnemyR ]
+
+(ENEMY KILL: a bullet marks one cell Dead; death spreads across the whole block so a single
+ hit removes all 6 cells. Ordered before ceiling/step cleanup so a row-0 hit still counts.)
+late [ Bullet Enemy ] -> [ Enemy Dead ]
+late [ Dead | Enemy no Dead ] -> [ Dead | Enemy Dead ]
+late [ Dead Enemy ] -> []
+
+late [ Bullet Step ] -> [ Step ]
+late [ Bullet Ceiling ] -> [ Ceiling ]
+late [ JumpCool ] -> []
+
+==============
+WINCONDITIONS
+==============
+
+=======
+LEVELS
+=======
+
+B~~~~~EEE~~~~~~B
+X.....mmm......X
+................
+................
+.......o........
+................
+...........o....
+..........###...
+................
+................
+.......###......
+................
+....o...........
+...###..........
+................
+.......P........
+________________
+csssss..........

@@ -341,13 +341,94 @@ def collect_sequences(game, episodes, length, seed, profile="agent"):
             return ("noop", -1, -1)
         return ("click", int(rng.integers(gs)), int(rng.integers(1, gs)))  # avoid row-0 buttons
 
-    heuristics = {"mario_heuristic": mario_heuristic, "snake_heuristic": snake_heuristic,
-                  "waterplug_heuristic": waterplug_heuristic}
+    # --- coins heuristic: the agent (red) moving ONTO a coin (gold) is a rare event
+    # (~0.6% of random-walk transitions) that the WM underfits -> it predicts the gold
+    # cell stays gold ("agent disappears behind the coin"). Steer the agent straight onto
+    # the nearest coin every step so onto-coin (gold->red) transitions are dense, and fire
+    # occasionally so the hidden numBullets counter (coin pickup -> can shoot) is exercised.
+    coins_fire_noops = [0]   # after a fire, hold (noop) so the bullet travels up off the agent
+    coins_wall_drive = [0, 0]  # [steps_left, dir_idx] -- pin the agent against a wall
 
-    all_states, all_actions = [], []
+    def coins_heuristic(grid):
+        red = palette.get("red"); gold = palette.get("gold")
+        # CRITICAL: mix in noop (agent must PERSIST when stationary -- a pure steer-to-coin
+        # policy never shows the agent sitting still, so the WM learns "red always leaves its
+        # cell on tick 1" and deletes a stationary agent) and random wandering (agent away
+        # from coins) alongside the steer-onto-coin moves that cover the occlusion.
+        if coins_fire_noops[0] > 0:                            # let the just-fired bullet travel
+            coins_fire_noops[0] -= 1                           # up while the agent stays put -- a
+            return ("noop", -1, -1)                            # bullet renders OVER the agent, so
+            #                                                    when it moves off, the agent (red)
+            #                                                    must reappear (2nd occlusion layer)
+        if coins_wall_drive[0] > 0:                            # drive INTO and hold against a wall:
+            coins_wall_drive[0] -= 1                           # covers boundary-clamp states (the
+            return arrow_acts[coins_wall_drive[1]]             # agent pinned at an edge) that long
+            #                                                    forced-direction free-play hits
+        r = rng.random()
+        if r < 0.10:                                           # start a wall-pin burst
+            coins_wall_drive[0] = int(rng.integers(8, 16)); coins_wall_drive[1] = int(rng.integers(4))
+            return arrow_acts[coins_wall_drive[1]]
+        if r < 0.22:
+            return ("noop", -1, -1)                            # persistence: agent stays put
+        if r < 0.42:
+            return arrow_acts[rng.integers(4)]                 # wander (not coin-directed)
+        if red is None:
+            return arrow_acts[rng.integers(4)]
+        ys, xs = np.where(grid == red)
+        if not len(xs):
+            return arrow_acts[rng.integers(4)]
+        mx, my = int(xs[0]), int(ys[0])
+        if gold is not None and rng.random() < 0.20:          # spend a pickup: fire, then hold
+            coins_fire_noops[0] = int(rng.integers(3, 7))     # so the bullet travels off-agent
+            return ("click", mx, my)
+        if gold is not None:
+            cys, cxs = np.where(grid == gold)
+            if len(cxs):                                       # head straight for nearest coin
+                i = int(np.argmin(np.abs(cxs - mx) + np.abs(cys - my)))
+                tx, ty = int(cxs[i]), int(cys[i])
+                if mx < tx: return ("right", -1, -1)
+                if mx > tx: return ("left", -1, -1)
+                if my < ty: return ("down", -1, -1)
+                if my > ty: return ("up", -1, -1)
+        return arrow_acts[rng.integers(4)]                     # no coins left: wander
+
+    # --- masters_logic heuristic: the core mechanic is a click-to-CYCLE peg
+    # (col -> (col+1)%7: grey->red->green->blue->yellow->purple->orange) at the 4 guess
+    # cells (3..6, row 1). Random/agent data almost never clicks the same peg twice, so the
+    # cycle past red is never seen (palette is even missing blue/yellow/purple/orange) and
+    # the WM predicts pegs never change. Click the 4 pegs hard to exercise the full cycle;
+    # press enter (0,0) occasionally to submit (row-shift). Hints are aleatoric -> not the
+    # target; keep enter rare so deterministic cycle transitions dominate.
+    ml_pegs = [(3, 1), (4, 1), (5, 1), (6, 1)]
+
+    def masters_logic_heuristic(grid):
+        if rng.random() < 0.12:
+            return ("click", 0, 0)                                # enter/submit
+        px, py = ml_pegs[rng.integers(len(ml_pegs))]
+        return ("click", px, py)
+
+    # --- paint heuristic: hidden currColor (init "red", UP cycles red->gold->green->blue->
+    # purple). The recurrent WM mispredicts WHICH color a click paints, especially the first
+    # clicks of an episode (wrong cold-start prior at h=0). Interleave UP-cycles with bursts
+    # of canvas paints so the model must track currColor across UP presses AND from h=0.
+    pt_left = [0]
+
+    def paint_heuristic(grid):
+        if pt_left[0] <= 0:                                       # cycle color, then paint a burst
+            pt_left[0] = int(rng.integers(2, 7))
+            return ("up", -1, -1)
+        pt_left[0] -= 1
+        return ("click", int(rng.integers(gs)), int(rng.integers(gs)))
+
+    heuristics = {"mario_heuristic": mario_heuristic, "snake_heuristic": snake_heuristic,
+                  "waterplug_heuristic": waterplug_heuristic, "coins_heuristic": coins_heuristic,
+                  "masters_logic_heuristic": masters_logic_heuristic, "paint_heuristic": paint_heuristic}
+
+    all_states, all_actions, all_seeds = [], [], []
     t0 = time.time()
     for e in range(episodes):
-        env.reseed(int(rng.integers(1 << 30)))
+        ep_seed = int(rng.integers(1 << 30))
+        env.reseed(ep_seed)
         if profile == "ca":
             env.reset_board(); _seed_clusters(env, rng, gs)
         states = [grid_idx()]
@@ -359,14 +440,18 @@ def collect_sequences(game, episodes, length, seed, profile="agent"):
             actions.append(list(action_to_fields(act)))
         all_states.append(np.stack(states))
         all_actions.append(np.array(actions, dtype=np.int16))
+        all_seeds.append(ep_seed)
     states = np.stack(all_states).astype(np.uint8)        # (E, L+1, H, W)
     actions = np.stack(all_actions)                       # (E, L, 3)
     inv = [None] * len(palette)
     for name, i in palette.items():
         inv[i] = name
     print(f"[{game}] {episodes} episodes x {length} steps in {time.time()-t0:.1f}s | palette {inv}")
+    # seeds enable replaying any episode state as a search-frontier seed (profile 'ca' reseeds
+    # the board after reset, so those states are not pure-seed-replayable -> seed=-1 there)
+    seeds = np.array([-1 if profile == "ca" else s for s in all_seeds], dtype=np.int64)
     return dict(states=states, actions=actions, palette=np.array(inv),
-                grid_size=np.int32(gs), game=np.str_(game))
+                grid_size=np.int32(gs), game=np.str_(game), seeds=seeds)
 
 
 def main():
@@ -377,7 +462,8 @@ def main():
     ap.add_argument("--seed", type=int, default=0)
     ap.add_argument("--profile", default="ca",
                     choices=["ca", "generic", "agent", "spamclick", "mario_heuristic", "snake_heuristic",
-                             "waterplug_heuristic"])
+                             "waterplug_heuristic", "coins_heuristic", "masters_logic_heuristic",
+                             "paint_heuristic"])
     ap.add_argument("--no_arrows", action="store_true")
     ap.add_argument("--reseed_every", type=int, default=12)
     ap.add_argument("--keep_prev", action="store_true",

@@ -1,0 +1,271 @@
+title grow (AutumnBench port)
+author ported from AutumnBench grow.sexp
+
+(
+  Port of AutumnBench grow.sexp (GRID_SIZE=16).
+
+  Grid layout: 32 wide x 16 tall. Cols 0-15 are the play area (compared by harness).
+  Cols 16-31 are overflow space for cloud right-movement past the play area border.
+  Cloud starts at cols 12-15. When cloud moves right past col 15, cloud cells appear
+  in cols 16-31 (outside comparison area, ignored by harness). This correctly mirrors
+  Autumn's behavior where cloud cells past col 15 are off-grid/invisible.
+
+  Key mechanics:
+  1. ON DOWN: water = prev_water + newDrop (existing water does NOT advance).
+     DownPress floods entire grid; water with DownPress skips the fall late rule.
+  2. WATER FALLS exactly 1 row per non-down tick.
+     Late-rule teleport (1 row). WaterMoved prevents cascade.
+  3. LEAF GROWTH: when water is above a leaf and can't fall.
+  4. CLOUD MOVEMENT: left/right arrows via player-as-proxy pattern.
+
+  Deferred: Sun click-movement. Cloud leftward off-grid (rare, needs many lefts from start).
+)
+
+realtime_interval 0.1
+throttle_movement
+key_repeat_interval 0.1
+
+========
+OBJECTS
+========
+
+Background
+white
+
+Player
+white
+.....
+.....
+.....
+.....
+.....
+
+Sun
+#FFD700
+00000
+00000
+00000
+00000
+00000
+
+Cloud
+gray
+00000
+00000
+00000
+00000
+00000
+
+Water
+blue
+.....
+.000.
+.000.
+.000.
+.....
+
+LeafGreen
+green
+.....
+.000.
+.000.
+.000.
+.....
+
+LeafPurple
+#9370DB
+.....
+.000.
+.000.
+.000.
+.....
+
+( === INVISIBLE HELPERS === )
+
+CloudOrigin
+black
+.....
+.....
+.....
+.....
+.....
+
+DownPress
+black
+.....
+.....
+.....
+.....
+.....
+
+NewWater
+black
+.....
+.....
+.....
+.....
+.....
+
+WaterMoved
+black
+.....
+.....
+.....
+.....
+.....
+
+( LeafHit: floods grid when any water is about to hit a leaf this tick )
+( When LeafHit is present, water freezes instead of falling. )
+( Mirrors Autumn: on-cond (filter not-landing-on-leaf prev_water) uses prev_water as base; )
+( i.e., ALL water stays at prev positions when ANY water would land on a leaf. )
+LeafHit
+black
+.....
+.....
+.....
+.....
+.....
+
+Row12
+black
+.....
+.....
+.....
+.....
+.....
+
+BottomRow
+black
+.....
+.....
+.....
+.....
+.....
+
+=======
+LEGEND
+=======
+
+. = Background
+P = Player
+S = Sun
+Q = Cloud and CloudOrigin
+c = Cloud
+G = LeafGreen
+R = Row12
+B = BottomRow
+H = BottomRow and LeafGreen
+
+Leaf = LeafGreen or LeafPurple
+
+=======
+SOUNDS
+=======
+
+================
+COLLISIONLAYERS
+================
+
+Background
+Player
+Sun
+Cloud
+CloudOrigin
+Water
+LeafGreen, LeafPurple
+NewWater
+DownPress
+WaterMoved
+LeafHit
+Row12
+BottomRow
+
+======
+RULES
+======
+
+( === CLOUD MOVEMENT (player-as-proxy; fires globally for all Cloud cells) === )
+left  [ > Player ] [ Cloud       ] -> [ > Player ] [ left  Cloud       ]
+left  [ > Player ] [ CloudOrigin ] -> [ > Player ] [ left  CloudOrigin ]
+right [ > Player ] [ Cloud       ] -> [ > Player ] [ right Cloud       ]
+right [ > Player ] [ CloudOrigin ] -> [ > Player ] [ right CloudOrigin ]
+
+( Cancel unwanted player movements )
+[ up Player ] -> [ Player ]
+
+( === DOWNPRESS FLOOD === )
+down [ > Player ] -> [ Player DownPress ]
+
+( Flood DownPress in all directions )
+[ DownPress | no DownPress ] -> [ DownPress | DownPress ]
+up    [ DownPress | no DownPress ] -> [ DownPress | DownPress ]
+down  [ DownPress | no DownPress ] -> [ DownPress | DownPress ]
+left  [ DownPress | no DownPress ] -> [ DownPress | DownPress ]
+right [ DownPress | no DownPress ] -> [ DownPress | DownPress ]
+
+( === WATER SPAWN on DOWN press === )
+down [ DownPress ] [ CloudOrigin | no Water no LeafGreen no LeafPurple ] -> [ DownPress ] [ CloudOrigin | Water NewWater ]
+
+( === CLEANUP WaterMoved + LeafHit from previous tick === )
+[ WaterMoved ] -> []
+[ LeafHit ] -> []
+
+( === LEAFHIT DETECTION: any water directly above a leaf triggers LeafHit on that water === )
+( No DownPress exclusion: in Autumn, leaf-hit fires independently of on-down. )
+down [ Water | LeafGreen ] -> [ Water LeafHit | LeafGreen ]
+down [ Water | LeafPurple ] -> [ Water LeafHit | LeafPurple ]
+
+( === LEAFHIT FLOOD: spread LeafHit to ALL cells === )
+[ LeafHit | no LeafHit ] -> [ LeafHit | LeafHit ]
+up    [ LeafHit | no LeafHit ] -> [ LeafHit | LeafHit ]
+down  [ LeafHit | no LeafHit ] -> [ LeafHit | LeafHit ]
+left  [ LeafHit | no LeafHit ] -> [ LeafHit | LeafHit ]
+right [ LeafHit | no LeafHit ] -> [ LeafHit | LeafHit ]
+
+( === LATE: WATER REMOVED at BottomRow (must run BEFORE fall so that fall can use the freed space) === )
+late [ Water BottomRow no WaterMoved no NewWater no DownPress no LeafHit ] -> [ BottomRow ]
+
+( === LATE: WATER FALLS 1 row (teleport; WaterMoved/LeafHit prevent cascade/freeze) === )
+late down [ Water no WaterMoved no NewWater no DownPress no LeafHit | no Water no LeafGreen no LeafPurple ] -> [ | Water WaterMoved ]
+
+( === LATE: LEAF GROWTH when water is above a leaf === )
+( Fires regardless of DownPress: in Autumn, on-down and leaf-hit on-conditions are independent. )
+( Water directly above a leaf: water removed, leaf grows (or water removed for purple). )
+late down [ Water no WaterMoved no NewWater LeafHit no Row12 | LeafGreen ] -> [ LeafGreen | LeafGreen ]
+late down [ Water no WaterMoved no NewWater LeafHit Row12 | LeafGreen ] -> [ LeafPurple Row12 | LeafGreen ]
+late down [ Water no WaterMoved no NewWater LeafHit | LeafPurple ] -> [ | LeafPurple ]
+
+( === LATE: CLEANUP === )
+late [ DownPress ] -> []
+late [ NewWater ] -> []
+late [ LeafHit ] -> []
+
+==============
+WINCONDITIONS
+==============
+
+=======
+LEVELS
+=======
+
+( 32 wide x 16 tall. Cols 0-15 = play area. Cols 16-31 = cloud overflow. )
+( Sun: cols 0-2, rows 0-2. )
+( Cloud: cols 12-15 init, CloudOrigin at (13,0). Player at (15,3). )
+( Row12 at y=12, cols 0-15 only. BottomRow+Leaves at y=15, cols 0-15. )
+
+SSS.........cQcc................
+SSS.........cccc................
+SSS.........cccc................
+...............P................
+................................
+................................
+................................
+................................
+................................
+................................
+................................
+................................
+RRRRRRRRRRRRRRRR................
+................................
+................................
+BHBHBHBHBHBHBHBH................

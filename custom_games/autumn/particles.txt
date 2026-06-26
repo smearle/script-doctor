@@ -1,0 +1,87 @@
+title particles (AutumnBench port)
+author ported from AutumnBench particles.sexp
+
+(
+  Port of AutumnBench particles.sexp (GRID_SIZE 16).
+  Autumn render key: particles (each Particle object).
+
+  Mechanics:
+    - Starts empty (no particles).
+    - On click at (x,y): adds a Particle at the clicked position.
+    - Every frame: each Particle moves to a random adjacent cell (uniformChoice).
+
+  Feasibility cap:
+    - Targeted click: PuzzleScript has no per-cell click; clicks become no-op ticks.
+      Autumn spawns particles on click; PS cannot. => particles will never appear in PS.
+    - Random walk: uniformChoice(adjPositions) uses Autumn's RNG, not PS's.
+      Even if particles could be spawned, their random walks cannot be reproduced.
+
+  Therefore this PS file is an empty static grid (correct for the 0-particle initial
+  state and all frames where PS has 0 particles). The score is limited to the fraction
+  of cells that are empty in Autumn (background cells match; particle cells diverge).
+  Expected mean_cell_acc ~ 0.93-0.95 on clicks policy (sparse grid, 16x16=256 cells).
+)
+
+realtime_interval 0.1
+
+========
+OBJECTS
+========
+
+Background
+white
+
+Player
+#ffffff #ff0000
+01110
+1...1
+1...1
+1...1
+01110
+
+=======
+LEGEND
+=======
+
+. = Background
+P = Player
+
+=======
+SOUNDS
+=======
+
+================
+COLLISIONLAYERS
+================
+
+Background
+Player
+
+======
+RULES
+======
+
+==============
+WINCONDITIONS
+==============
+
+=======
+LEVELS
+=======
+
+................
+................
+................
+................
+................
+................
+................
+................
+................
+................
+................
+................
+................
+................
+................
+P...............

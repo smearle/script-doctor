@@ -1,0 +1,87 @@
+title sokoban (AutumnBench port)
+author ported from AutumnBench sokoban.sexp
+
+(
+  Port of AutumnBench sokoban.sexp (GRID_SIZE 16).
+  Autumn render keys: agent, boxes, goal  -> see sokoban.eval.json for aliases.
+
+  Mechanics:
+    - Arrows move the agent. The single box directly in front is pushed one cell
+      (moveNoCollision): it moves only if the cell behind it is free, else the agent
+      is blocked too. No chain pushing (matches Autumn's displacement==(-x,-y) filter).
+    - A box pushed onto the goal is removed.
+  Deferred: the click rule (add a box at a free clicked cell) -- needs a targeted
+  click, handled in the click-input pass.
+)
+
+========
+OBJECTS
+========
+
+Background
+white
+
+Goal
+red
+
+Box
+gray
+
+Player
+blue
+
+=======
+LEGEND
+=======
+
+. = Background
+G = Goal
+P = Player
+* = Box
+
+=======
+SOUNDS
+=======
+
+================
+COLLISIONLAYERS
+================
+
+Background
+Goal
+Box, Player
+
+======
+RULES
+======
+
+(push the single box directly ahead; if it can't move, the agent is blocked too)
+[ > Player | Box ] -> [ > Player | > Box ]
+
+(a box pushed onto the goal is removed)
+late [ Box Goal ] -> [ Goal ]
+
+==============
+WINCONDITIONS
+==============
+
+=======
+LEVELS
+=======
+
+G...............
+................
+.*............*.
+................
+*...*..P........
+................
+................
+................
+................
+.........**.....
+................
+*...............
+................
+................
+.........*......
+................

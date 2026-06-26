@@ -1,0 +1,10 @@
+{
+  "alias": {
+    "player": "hero",
+    "herodead": "hero",
+    "bullet": "bullet",
+    "enemybullet": "enemybullet",
+    "enemies1": "enemies1",
+    "enemies2": "enemies2"
+  }
+}

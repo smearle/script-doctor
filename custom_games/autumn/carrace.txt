@@ -1,0 +1,415 @@
+title carrace (AutumnBench port)
+author ported from AutumnBench carrace.sexp
+
+(
+  Port of AutumnBench carrace.sexp (GRID_SIZE=13).
+
+  render_all keys compared: playerCar, tracks, obstacles, finish
+  eval.json aliases: car->playercar, obstacle->obstacles, track->tracks, finishline->finish
+
+  Autumn's isWithinBounds() is broken for negative coords (returns true), so the car
+  can leave the grid.  We model off-grid states explicitly:
+    OGL1..OGL5  = car is 1..5 cells off-grid to the LEFT  (placed at x=0, y=car_y)
+    OGR1..OGR3  = car is 1..3 cells off-grid to the RIGHT (placed at x=12, y=car_y)
+  These are helpers (not aliased), so the parity checker ignores them.
+
+  A fixed invisible Player anchor at (6,13) receives all key input; rules relay
+  input to Car / OGLk / OGRk via two-bracket rules (arc_slack pattern).
+
+  Clock: 11-tick cycle matches Autumn's UPDATE_RATE=10 (+1 for the init frame).
+    ClockHand at Col0 (x=0,y=13): autonomous movement fires this tick.
+
+  LeftBound at x=0, y=2..12: marks left-edge cells for OGL conversion.
+  PlayRightBound at x=12, y=0..12: marks right-edge cells for OGR conversion.
+  (Track already at (0,0) and (0,1); car blocked from those by Track being in same
+   collision layer as Car.)
+)
+
+realtime_interval 0.1
+throttle_movement
+key_repeat_interval 0.1
+
+========
+OBJECTS
+========
+
+Background
+black
+
+( === PLAY AREA OBJECTS === )
+
+Car
+blue
+.000.
+00000
+00000
+.000.
+.0.0.
+
+Obstacle
+red
+00000
+00000
+00000
+00000
+00000
+
+Track
+white
+00000
+00000
+00000
+00000
+00000
+
+FinishLine
+yellow
+.000.
+0...0
+.000.
+0...0
+.000.
+
+( === OFF-GRID GHOST OBJECTS (helpers, not compared) === )
+( OGLk = car is k cells off the left edge; placed at x=0 at car's y )
+( OGRk = car is k cells off the right edge; placed at x=12 at car's y )
+
+OGL1
+black
+.....
+.....
+.....
+.....
+.....
+
+OGL2
+black
+.....
+.....
+.....
+.....
+.....
+
+OGL3
+black
+.....
+.....
+.....
+.....
+.....
+
+OGL4
+black
+.....
+.....
+.....
+.....
+.....
+
+OGL5
+black
+.....
+.....
+.....
+.....
+.....
+
+OGR1
+black
+.....
+.....
+.....
+.....
+.....
+
+OGR2
+black
+.....
+.....
+.....
+.....
+.....
+
+OGR3
+black
+.....
+.....
+.....
+.....
+.....
+
+( === EDGE MARKERS (helpers, not compared) === )
+
+LeftBound
+black
+.....
+.....
+.....
+.....
+.....
+
+PlayRightBound
+black
+.....
+.....
+.....
+.....
+.....
+
+( === SPAWN MARKERS (helpers, placed at reset target positions) === )
+
+SpawnC
+black
+.....
+.....
+.....
+.....
+.....
+
+SpawnO1
+black
+.....
+.....
+.....
+.....
+.....
+
+SpawnO2
+black
+.....
+.....
+.....
+.....
+.....
+
+SpawnO3
+black
+.....
+.....
+.....
+.....
+.....
+
+( === PLAYER ANCHOR & CLOCK (row 13, outside comparison zone) === )
+( Player is a fixed invisible anchor that receives all key input )
+
+Player
+black
+.....
+.....
+.....
+.....
+.....
+
+Col0
+black
+.....
+.....
+.....
+.....
+.....
+
+ClockHand
+black
+.....
+.....
+.....
+.....
+.....
+
+RightEdge
+black
+.....
+.....
+.....
+.....
+.....
+
+Wrap
+black
+.....
+.....
+.....
+.....
+.....
+
+( === STATE FLAGS (helpers) === )
+
+InputActive
+black
+.....
+.....
+.....
+.....
+.....
+
+ResetNow
+black
+.....
+.....
+.....
+.....
+.....
+
+=======
+LEGEND
+=======
+
+. = Background
+J = Car and SpawnC
+O = Obstacle
+T = Track
+F = FinishLine
+1 = Obstacle and SpawnO1
+2 = Obstacle and SpawnO2
+3 = Obstacle and SpawnO3
+L = LeftBound
+E = PlayRightBound
+h = ClockHand and Col0
+R = RightEdge
+Q = Player
+
+=======
+SOUNDS
+=======
+
+================
+COLLISIONLAYERS
+================
+
+Background
+Track, Car
+SpawnC
+Obstacle
+SpawnO1, SpawnO2, SpawnO3
+FinishLine
+OGL1, OGL2, OGL3, OGL4, OGL5
+OGR1, OGR2, OGR3
+LeftBound
+PlayRightBound
+Col0, RightEdge
+ClockHand
+Wrap
+InputActive
+ResetNow
+Player
+
+======
+RULES
+======
+
+( === OFF-GRID LEFT: car goes off-grid when left pressed at x=0 === )
+( Must come BEFORE the regular left-relay and before moving-Player cancel )
+( InputActive suppresses auto-up on this key-press frame )
+[ left Player ] [ Car LeftBound no ResetNow ] -> [ Player ] [ OGL1 LeftBound InputActive ]
+
+( === OFF-GRID RIGHT: car goes off-grid when right pressed at x=12 === )
+[ right Player ] [ Car PlayRightBound no ResetNow ] -> [ Player ] [ OGR1 PlayRightBound InputActive ]
+
+( === OGL TRANSITIONS: left/right = deeper/shallower; up/down = suppress auto-up only === )
+[ left Player ]  [ OGL1 ] -> [ Player ] [ OGL2 InputActive ]
+[ left Player ]  [ OGL2 ] -> [ Player ] [ OGL3 InputActive ]
+[ left Player ]  [ OGL3 ] -> [ Player ] [ OGL4 InputActive ]
+[ left Player ]  [ OGL4 ] -> [ Player ] [ OGL5 InputActive ]
+[ left Player ]  [ OGL5 ] -> [ Player ] [ OGL5 InputActive ]
+[ right Player ] [ OGL5 ] -> [ Player ] [ OGL4 InputActive ]
+[ right Player ] [ OGL4 ] -> [ Player ] [ OGL3 InputActive ]
+[ right Player ] [ OGL3 ] -> [ Player ] [ OGL2 InputActive ]
+[ right Player ] [ OGL2 ] -> [ Player ] [ OGL1 InputActive ]
+[ right Player ] [ OGL1 ] -> [ Player ] [ Car InputActive ]
+[ up Player ]    [ OGL1 ] -> [ Player ] [ OGL1 InputActive ]
+[ up Player ]    [ OGL2 ] -> [ Player ] [ OGL2 InputActive ]
+[ up Player ]    [ OGL3 ] -> [ Player ] [ OGL3 InputActive ]
+[ up Player ]    [ OGL4 ] -> [ Player ] [ OGL4 InputActive ]
+[ up Player ]    [ OGL5 ] -> [ Player ] [ OGL5 InputActive ]
+[ down Player ]  [ OGL1 ] -> [ Player ] [ OGL1 InputActive ]
+[ down Player ]  [ OGL2 ] -> [ Player ] [ OGL2 InputActive ]
+[ down Player ]  [ OGL3 ] -> [ Player ] [ OGL3 InputActive ]
+[ down Player ]  [ OGL4 ] -> [ Player ] [ OGL4 InputActive ]
+[ down Player ]  [ OGL5 ] -> [ Player ] [ OGL5 InputActive ]
+
+( === OGR TRANSITIONS: right = go deeper, left = come back === )
+[ right Player ] [ OGR1 ] -> [ Player ] [ OGR2 InputActive ]
+[ right Player ] [ OGR2 ] -> [ Player ] [ OGR3 InputActive ]
+[ right Player ] [ OGR3 ] -> [ Player ] [ OGR3 InputActive ]
+[ left Player ]  [ OGR3 ] -> [ Player ] [ OGR2 InputActive ]
+[ left Player ]  [ OGR2 ] -> [ Player ] [ OGR1 InputActive ]
+[ left Player ]  [ OGR1 ] -> [ Player ] [ Car InputActive ]
+[ up Player ]    [ OGR1 ] -> [ Player ] [ OGR1 InputActive ]
+[ up Player ]    [ OGR2 ] -> [ Player ] [ OGR2 InputActive ]
+[ up Player ]    [ OGR3 ] -> [ Player ] [ OGR3 InputActive ]
+[ down Player ]  [ OGR1 ] -> [ Player ] [ OGR1 InputActive ]
+[ down Player ]  [ OGR2 ] -> [ Player ] [ OGR2 InputActive ]
+[ down Player ]  [ OGR3 ] -> [ Player ] [ OGR3 InputActive ]
+
+( === RELAY INPUT TO CAR (when on-grid) === )
+( left/right move car AND mark InputActive to suppress auto-up )
+[ left Player ]  [ Car ] -> [ Player ] [ left Car InputActive ]
+[ right Player ] [ Car ] -> [ Player ] [ right Car InputActive ]
+( up/down only mark InputActive (speed change in Autumn, not modeled in PS) )
+[ up Player ]    [ Car ] -> [ Player ] [ Car InputActive ]
+[ down Player ]  [ Car ] -> [ Player ] [ Car InputActive ]
+
+( === CANCEL PLAYER ANCHOR MOVEMENT (after all relay rules, catches no-car/no-ogl case) === )
+[ moving Player ] -> [ Player ]
+
+( === RESET DETECTION (must fire before auto-movement) === )
+[ ClockHand Col0 ] [ Car Obstacle ] -> [ ClockHand Col0 ResetNow ] [ Car Obstacle ]
+[ ClockHand Col0 ] [ Car FinishLine ] -> [ ClockHand Col0 ResetNow ] [ Car FinishLine ]
+
+( === AUTO-MOVEMENT (update frame, no reset, no input on car) === )
+[ ClockHand Col0 no ResetNow ] [ no InputActive Car ] -> [ ClockHand Col0 ] [ up Car ]
+[ ClockHand Col0 no ResetNow ] [ stationary Obstacle ] -> [ ClockHand Col0 ] [ down Obstacle ]
+
+( === CLOCK ADVANCE === )
+[ stationary ClockHand ] -> [ right ClockHand ]
+
+( === LATE: clock wrap === )
+late [ ClockHand RightEdge ] -> [ RightEdge Wrap ]
+late [ Wrap ] [ Col0 ] -> [ ] [ ClockHand Col0 ]
+
+( === LATE: reset execution === )
+late [ ResetNow ] [ Car ] -> [ ResetNow ] [ ]
+late [ ResetNow ] [ SpawnC no Car ] -> [ ResetNow ] [ SpawnC Car ]
+
+late [ ResetNow ] [ Obstacle ] -> [ ResetNow ] [ ]
+late [ ResetNow ] [ SpawnO1 no Obstacle ] -> [ ResetNow ] [ SpawnO1 Obstacle ]
+late [ ResetNow ] [ SpawnO2 no Obstacle ] -> [ ResetNow ] [ SpawnO2 Obstacle ]
+late [ ResetNow ] [ SpawnO3 no Obstacle ] -> [ ResetNow ] [ SpawnO3 Obstacle ]
+
+( === LATE: cleanup === )
+late [ ResetNow ] -> [ ]
+late [ InputActive ] -> [ ]
+
+==============
+WINCONDITIONS
+==============
+
+=======
+LEVELS
+=======
+
+( 13 cols x 13 rows play area (rows 0-12) + 1 clock row (row 13)         )
+( x=0: Track at y=0,1; LeftBound at y=2..12                               )
+( x=12: PlayRightBound at y=0..12                                          )
+( Row 0: Track at x=0, FinishLine at x=5, Track at x=11                   )
+( Row 1: Track at x=0, Track at x=11                                       )
+( Row 2: SpawnO1+Obstacle at x=5                                           )
+( Row 5: SpawnO3+Obstacle at x=7                                           )
+( Row 7: SpawnO2+Obstacle at x=3                                           )
+( Row 10: Car+SpawnC at x=5                                                )
+( Clock row 13: ClockHand+Col0 at x=0, Player at x=6, RightEdge at x=11   )
+T....F.....TE
+T..........TE
+L....1......E
+L...........E
+L...........E
+L......3....E
+L...........E
+L..2........E
+L...........E
+L...........E
+L....J......E
+L...........E
+L...........E
+h.....Q....R.

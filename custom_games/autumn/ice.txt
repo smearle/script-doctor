@@ -1,0 +1,232 @@
+title ice (AutumnBench port)
+author ported from AutumnBench ice.sexp
+
+realtime_interval 0.1
+throttle_movement
+key_repeat_interval 0.1
+
+========
+OBJECTS
+========
+
+Background
+black
+
+CelestialBody
+gold
+
+CloudL
+lightgray
+
+CloudC
+lightgray
+
+CloudR
+lightgray
+
+Water
+blue
+
+WaterFrozen
+blue
+
+Player
+black
+.....
+.....
+.....
+.....
+.....
+
+Controller
+black
+.....
+.....
+.....
+.....
+.....
+
+LeftGuard
+black
+.....
+.....
+.....
+.....
+.....
+
+RightGuard
+black
+.....
+.....
+.....
+.....
+.....
+
+Blocked
+black
+.....
+.....
+.....
+.....
+.....
+
+SpawnMark
+black
+.....
+.....
+.....
+.....
+.....
+
+LeftPressed
+black
+.....
+.....
+.....
+.....
+.....
+
+RightPressed
+black
+.....
+.....
+.....
+.....
+.....
+
+DownPressed
+black
+.....
+.....
+.....
+.....
+.....
+
+=======
+LEGEND
+=======
+
+. = Background
+G = LeftGuard and CelestialBody
+S = CelestialBody
+L = CloudL
+C = CloudC
+R = CloudR
+W = Water
+P = Player and Controller
+E = LeftGuard
+F = RightGuard
+
+Cloud = CloudL or CloudC or CloudR
+
+=======
+SOUNDS
+=======
+
+================
+COLLISIONLAYERS
+================
+
+Background
+CelestialBody
+Water, WaterFrozen
+CloudL, CloudC, CloudR
+LeftGuard
+RightGuard
+Player
+Controller
+Blocked
+SpawnMark
+LeftPressed
+RightPressed
+DownPressed
+
+======
+RULES
+======
+
+( Detect key presses: latch to Controller markers )
+[ left Player ] [ Controller ] -> [ Player ] [ Controller LeftPressed ]
+[ right Player ] [ Controller ] -> [ Player ] [ Controller RightPressed ]
+[ down Player ] [ Controller ] -> [ Player ] [ Controller DownPressed ]
+( Cancel any remaining Player movement )
+[ > Player ] -> [ Player ]
+
+( Left: give all cloud cells left movement )
+[ LeftPressed ] [ CloudL ] -> [ LeftPressed ] [ left CloudL ]
+[ LeftPressed ] [ CloudC ] -> [ LeftPressed ] [ left CloudC ]
+[ LeftPressed ] [ CloudR ] -> [ LeftPressed ] [ left CloudR ]
+
+( Detect left boundary: block when LeftPressed AND CloudL is at col 0 )
+[ LeftPressed ] [ CloudL LeftGuard ] -> [ LeftPressed ] [ CloudL LeftGuard Blocked ]
+
+( Right: give all cloud cells right movement )
+[ RightPressed ] [ CloudL ] -> [ RightPressed ] [ right CloudL ]
+[ RightPressed ] [ CloudC ] -> [ RightPressed ] [ right CloudC ]
+[ RightPressed ] [ CloudR ] -> [ RightPressed ] [ right CloudR ]
+
+( Detect right boundary: block when RightPressed AND CloudR is at col 15 )
+[ RightPressed ] [ CloudR RightGuard ] -> [ RightPressed ] [ CloudR RightGuard Blocked ]
+
+( Propagate Blocked rightward from CloudL to CloudR )
+right [ CloudL Blocked | CloudC ] -> [ CloudL Blocked | CloudC Blocked ]
+right [ CloudC Blocked | CloudR ] -> [ CloudC Blocked | CloudR Blocked ]
+
+( Propagate Blocked leftward from CloudR to CloudL )
+left [ CloudR Blocked | CloudC ] -> [ CloudR Blocked | CloudC Blocked ]
+left [ CloudC Blocked | CloudL ] -> [ CloudC Blocked | CloudL Blocked ]
+
+( Cancel cloud movement when Blocked )
+[ moving Cloud Blocked ] -> [ Cloud Blocked ]
+
+( Down: freeze existing water, mark CloudC for spawn )
+[ DownPressed ] [ Water ] -> [ DownPressed ] [ WaterFrozen ]
+[ DownPressed ] [ CloudC ] -> [ DownPressed ] [ CloudC SpawnMark ]
+
+( Spawn water below CloudC after freeze )
+down [ CloudC SpawnMark | no Water no WaterFrozen ] -> [ CloudC SpawnMark | WaterFrozen ]
+
+( Water gravity: stationary Water drops fall 1 cell per tick )
+[ stationary Water ] -> [ down Water ]
+
+( Liquid spreading: when Water is blocked directly below by another Water, spread sideways )
+( Autumn nextLiquid: finds closest hole in row below and moves toward it )
+( Approximation: try right first, then left. Fires after gravity has set directions. )
+down [ > Water | > Water ] -> [ right Water | down Water ]
+
+( Late cleanup )
+late [ Blocked ] -> []
+late [ SpawnMark ] -> []
+late [ LeftPressed ] -> []
+late [ RightPressed ] -> []
+late [ DownPressed ] -> []
+late [ WaterFrozen ] -> [ Water ]
+
+==============
+WINCONDITIONS
+==============
+
+=======
+LEVELS
+=======
+
+( 16x16 grid. CelestialBody rows 0-1 cols 0-1. Cloud row 0 cols 3-5. )
+( LeftGuard col 0 all rows (combined with CelestialBody at rows 0-1). )
+( RightGuard col 15 all rows. Player+Controller at col 15 row 15. )
+
+GS.LCR.........F
+GS.............F
+E..............F
+E..............F
+E..............F
+E..............F
+E..............F
+E..............F
+E..............F
+E..............F
+E..............F
+E..............F
+E..............F
+E..............F
+E..............F
+E.............PF

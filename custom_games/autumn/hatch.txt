@@ -1,0 +1,200 @@
+title hatch (AutumnBench port)
+author ported from AutumnBench hatch.sexp
+
+(
+  Hatch: chick hidden inside an egg. 16x16 grid, click policy.
+
+  Autumn nextLiquid semantics:
+   - Move down if below is free of eggshells (feathers do NOT block).
+   - Else find closest hole in row below (sqDist; foldl: rightmost wins on tie).
+     At y=GRID_SIZE-1 there is no row below -> holes=empty -> shell stays.
+   - After moving, filter(!intersects feathers) removes the shell if it landed
+     on a feather cell. The move AND remove happen in the SAME Autumn frame.
+
+  PS physics (5-phase movement, fires each non-click tick):
+   Phase 1: stationary BrokenEggshell -> DOWN intent.
+   Phase 2: shell with DOWN intent falling INTO feather-only cell -> REMOVE
+            at source (no DOWN movement happens; net effect = shell vanishes
+            from current cell, matching Autumn's same-frame move+filter).
+   Phase 3: shell with DOWN intent blocked by AnyEgg below
+            -> mark with BlockedDown (DOWN intent preserved).
+            KEY: at y=15 there is no cell below so rule cannot fire;
+            shells at y=15 receive no BlockedDown and thus never slide,
+            matching Autumn nextLiquid at y=GRID_SIZE-1 (holes empty, stays).
+   Phase 4: BlockedDown shell trying to slide -> if target is feather-only,
+            REMOVE at source (same-frame move+filter equivalent).
+   Phase 5: BlockedDown shell slides RIGHT (prefer-right = foldl bias) or LEFT
+            into a free (non-AnyEgg, non-feather) cell.
+   Late:    clean up BlockedDown; convert intermediate states.
+
+  Click (Autumn on-handler uses prev eggshells = no movement on click frame):
+   All existing BrokenEggshells freeze to FrozenEggshell on click frame.
+   Newly clicked shell -> FreshBreak (or FreshBreakFeather).
+   Late: FreshBreak->JustBroken, FreshBreakFeather->JustBrokenFeather,
+         FrozenEggshell->BrokenEggshell.
+   Next frame: JustBroken->BrokenEggshell, JustBrokenFeather->[].
+)
+
+realtime_interval 0.1
+
+========
+OBJECTS
+========
+
+Background
+black
+
+Player
+#ffffff #ff0000
+01110
+1...1
+1...1
+1...1
+01110
+
+Eggshell
+#d2b48c
+
+FreshBreak
+#d2b48c
+
+JustBroken
+#d2b48c
+
+BrokenEggshell
+#d2b48c
+
+FrozenEggshell
+#d2b48c
+
+FreshBreakFeather
+#d2b48c
+
+JustBrokenFeather
+#d2b48c
+
+BlockedDown
+#000000
+00000
+00000
+00000
+00000
+00000
+
+FeatherY
+#ffff00
+
+FeatherO
+#ffa500
+
+=======
+LEGEND
+=======
+
+. = Background
+P = Player
+e = Eggshell
+y = FeatherY and Eggshell
+o = FeatherO and Eggshell
+
+(# AnyEgg: any eggshell-type object — used for blocking checks)
+AnyEgg = Eggshell or BrokenEggshell or FrozenEggshell or FreshBreak or JustBroken or FreshBreakFeather or JustBrokenFeather
+
+=======
+SOUNDS
+=======
+
+================
+COLLISIONLAYERS
+================
+
+Background
+Eggshell, BrokenEggshell, FrozenEggshell, FreshBreak, JustBroken, FreshBreakFeather, JustBrokenFeather
+BlockedDown
+FeatherY, FeatherO
+Player
+
+======
+RULES
+======
+
+(=== CLICK: eggshell-only + freeze existing BrokenEggshells ===)
+[ action Player Eggshell no FeatherY no FeatherO ] [ BrokenEggshell ] -> [ Player FreshBreak ] [ FrozenEggshell ]
+
+(=== CLICK: feather+eggshell + freeze existing BrokenEggshells ===)
+[ action Player FeatherY Eggshell ] [ BrokenEggshell ] -> [ Player FeatherY FreshBreakFeather ] [ FrozenEggshell ]
+[ action Player FeatherO Eggshell ] [ BrokenEggshell ] -> [ Player FeatherO FreshBreakFeather ] [ FrozenEggshell ]
+
+(=== CLICK FALLBACK: no existing BrokenEggshell ===)
+[ action Player Eggshell no FeatherY no FeatherO ] -> [ Player FreshBreak ]
+[ action Player FeatherY Eggshell ] -> [ Player FeatherY FreshBreakFeather ]
+[ action Player FeatherO Eggshell ] -> [ Player FeatherO FreshBreakFeather ]
+
+(=== FREEZE remaining BrokenEggshells on click frame ===)
+[ FreshBreak ] [ BrokenEggshell ] -> [ FreshBreak ] [ FrozenEggshell ]
+[ FreshBreakFeather ] [ BrokenEggshell ] -> [ FreshBreakFeather ] [ FrozenEggshell ]
+
+(=== STATE TRANSITIONS ===)
+[ JustBroken ] -> [ BrokenEggshell ]
+[ JustBrokenFeather ] -> [ ]
+
+(=== SAFETY: BrokenEggshell already co-located with feather (fallback removal) ===)
+[ BrokenEggshell FeatherY ] -> [ FeatherY ]
+[ BrokenEggshell FeatherO ] -> [ FeatherO ]
+
+(=== MOVEMENT PHASE 1: all stationary broken shells try to fall ===)
+[ stationary BrokenEggshell ] -> [ down BrokenEggshell ]
+
+(=== MOVEMENT PHASE 2: falling INTO feather-only cell -> remove at source ===)
+(=== Matches Autumn: nextLiquid moves to feather cell, filter removes same frame ===)
+(=== Using "down BrokenEggshell" to match only DOWN-intent shells ===)
+down [ down BrokenEggshell | FeatherY no AnyEgg ] -> [ | FeatherY ]
+down [ down BrokenEggshell | FeatherO no AnyEgg ] -> [ | FeatherO ]
+
+(=== MOVEMENT PHASE 3: blocked by AnyEgg below -> mark with BlockedDown ===)
+(=== "no BlockedDown" guard prevents re-marking after already marked ===)
+(=== Cannot fire at y=15 (no cell below) -> shells at y=15 never slide ===)
+down [ down BrokenEggshell no BlockedDown | AnyEgg ] -> [ BrokenEggshell BlockedDown | AnyEgg ]
+
+(=== MOVEMENT PHASE 4: sliding INTO feather-only cell -> remove at source ===)
+(=== Same-frame move+filter semantics as Autumn ===)
+right [ BrokenEggshell BlockedDown | FeatherY no AnyEgg ] -> [ | FeatherY ]
+right [ BrokenEggshell BlockedDown | FeatherO no AnyEgg ] -> [ | FeatherO ]
+left [ BrokenEggshell BlockedDown | FeatherY no AnyEgg ] -> [ | FeatherY ]
+left [ BrokenEggshell BlockedDown | FeatherO no AnyEgg ] -> [ | FeatherO ]
+
+(=== MOVEMENT PHASE 5: slide into free cell ===)
+(=== RIGHT first = foldl right-wins-on-tie preference (Autumn default) ===)
+right [ BrokenEggshell BlockedDown | no AnyEgg no FeatherY no FeatherO ] -> [ right BrokenEggshell | ]
+left [ BrokenEggshell BlockedDown | no AnyEgg no FeatherY no FeatherO ] -> [ left BrokenEggshell | ]
+
+(=== LATE: convert intermediates; clean up transient BlockedDown ===)
+late [ FreshBreak ] -> [ JustBroken ]
+late [ FreshBreakFeather ] -> [ JustBrokenFeather ]
+late [ FrozenEggshell ] -> [ BrokenEggshell ]
+late [ BlockedDown ] -> [ ]
+
+==============
+WINCONDITIONS
+==============
+
+=======
+LEVELS
+=======
+
+P...............
+................
+................
+................
+................
+................
+................
+................
+................
+.......eee......
+......eeeye.....
+.....eeeeyyo....
+.....eyyyyee....
+.....eyyyyee....
+......yyyye.....
+.......ooe......

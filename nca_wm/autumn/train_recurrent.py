@@ -188,10 +188,8 @@ def main():
             acc, ch_acc, ft, frec = evaluate(model, states[val], actions[val], n_colors, device, purple)
             print(f"[{step}] loss={loss.item():.4f} val_cell_acc={acc:.4f} "
                   f"changed_cell_acc={ch_acc:.3f} fire_events={ft} fire_recall={frec:.3f}")
-            # select best by changed-cell acc AND fire_recall combined (not fire_recall alone:
-            # that picks a checkpoint that fires well but may have regressed a dense mechanic
-            # like coins' agent-behind-coin reappearance, which lives in changed-cell acc)
-            score = (ch_acc + frec) if ft > 0 else ch_acc
+            # select best by fire_recall when there are fire events, else by changed-cell acc
+            score = frec if ft > 0 else ch_acc
             if score > best:
                 best = score
                 torch.save(model.state_dict(), os.path.join(args.save_dir, "model_best.pt"))

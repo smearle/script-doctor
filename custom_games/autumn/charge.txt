@@ -1,0 +1,138 @@
+title charge (AutumnBench port)
+author ported from AutumnBench charge.sexp
+
+(
+  Port of AutumnBench charge.sexp to PuzzleScript.
+  GRID_SIZE = 16. Autumn render_all() keys: jumper, stop.
+
+  Mechanics:
+    Player (aliased->jumper): 2x2 red block. Origin at (col 0, row 14).
+    Gravity (moveDownNoCollision): falls 1 row/tick.
+    Left/right arrow OVERRIDES gravity: pressing left or right moves horizontally,
+      gravity is suppressed that tick (Autumn on-clause replaces moveDownNoCollision).
+    Up/down arrow: no-ops in Autumn (no handlers).
+    Click: if origin.y == 14 and energy > 0, jump up by energy. Deferred (click->noop).
+    Energy (scalar, not in render_all): +1/frame at bottom, max 10. Not compared.
+    StopB/StopG (aliased->stop): 2x1 at (col 7-8, row 3). Toggle blue<->gold when
+      manhattan_dist(prev_jumper_origin, (7,3)) <= 1. Only reachable adjacent cell
+      is (7,4); toggle fires the frame AFTER jumper occupies that cell (prev semantics).
+
+  Deferred: click-triggered jump (click->noop in PS harness). Use arrows policy.
+)
+
+realtime_interval 0.1
+
+========
+OBJECTS
+========
+
+Background
+white
+
+Player
+red
+
+StopB
+blue
+
+StopG
+orange
+
+(Invisible: placed at col 7, row 4 - adjacent to stop origin (7,3))
+AdjTrig
+white
+.....
+.....
+.....
+.....
+.....
+
+(Invisible: persists one frame after Player was at AdjTrig to implement prev-lag toggle)
+TogMark
+white
+.....
+.....
+.....
+.....
+.....
+
+=======
+LEGEND
+=======
+
+. = Background
+P = Player
+b = StopB
+T = AdjTrig
+
+Stop = StopB or StopG
+
+=======
+SOUNDS
+=======
+
+================
+COLLISIONLAYERS
+================
+
+Background
+Player
+StopB, StopG
+AdjTrig
+TogMark
+
+======
+RULES
+======
+
+(--- Cancel up/down: no-ops in Autumn ---)
+[ up Player ] -> [ Player ]
+[ down Player ] -> [ Player ]
+
+(--- Gravity: fall 1 row/tick ONLY when no horizontal input.
+     'stationary' = no movement command yet. Arrow keys assign commands before rules run.
+     If left/right was pressed, Player has a horizontal command -> not stationary -> no fall. ---)
+[ stationary Player ] -> [ down Player ]
+
+(--- Stop toggle via one-frame lag.
+     Autumn uses prev values: toggle fires when prev_jumper_origin was adjacent to stop.
+     The only reachable adjacent cell (with max-energy jump + horizontal move) is (7,4).
+     AdjTrig placed at (7,4). TogMark persists one frame as the lag mechanism.
+
+     Late rules fire after movement resolution:
+     Phase 1: Player just arrived at AdjTrig this frame -> set TogMark (for NEXT frame).
+              But first clear any existing TogMark to avoid double-toggle.
+     Phase 2: TogMark from last frame -> toggle the stop (TogMark is adjacent vertically).
+
+     Key: TogMark is in the AdjTrig cell (7,4), StopB/G is at (7,3) one row above.
+     Use vertical adjacency: late up [ TogMark | StopB ] -> toggle.
+---)
+late [ Player AdjTrig ] -> [ Player AdjTrig TogMark ]
+late up [ TogMark | StopB ] -> [ | StopG ]
+late up [ TogMark | StopG ] -> [ | StopB ]
+late [ TogMark ] -> [ ]
+
+==============
+WINCONDITIONS
+==============
+
+=======
+LEVELS
+=======
+
+................
+................
+................
+.......bb.......
+.......T........
+................
+................
+................
+................
+................
+................
+................
+................
+................
+PP..............
+PP..............

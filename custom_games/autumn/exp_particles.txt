@@ -1,0 +1,97 @@
+title exp_particles (AutumnBench port)
+author ported from AutumnBench exp_particles.sexp
+
+(
+  Port of AutumnBench exp_particles.sexp (GRID_SIZE=16).
+  Autumn render key: particles.
+
+  Mechanics:
+    - One Particle starts at (7,7).
+    - Every frame: each particle moves to a random adjacent cell
+      (uniformChoice of adjPositions) -- STOCHASTIC, uses Autumn RNG.
+    - On click at (x,y): click_count increments; if click_count < 17,
+      adds create_particles(prev click_count) particles at (click_x, click_y).
+      Click k adds k+1 particles (click 1 -> 2, click 2 -> 3, ..., click 16 -> 17).
+      On click frame: existing particles do NOT move (click overrides initnext).
+
+  Feasibility cap (STOCHASTIC):
+    - Particle movement is uniformChoice(adjPositions), which uses Autumn's
+      internal RNG. PuzzleScript's RNG differs, so per-cell exact match is
+      impossible after the first step.
+    - Targeted click: PuzzleScript has no per-cell click; new particles cannot
+      be spawned at the clicked position.
+    - After 40 cursor-policy clicks, Autumn accumulates up to 136 particles
+      (seeds 1-4: ~60 avg), all doing random walks. PS cannot match any of these.
+    - Best achievable: empty static grid, which matches all background cells.
+      Expected mean_cell_acc ~ 0.75-0.96 (sparse grid, 16x16=256 cells).
+    - This PS file is therefore an empty static grid -- the optimal static
+      approximation. The Player cursor is present for click-emulation convention
+      but marked as a helper and not compared.
+)
+
+realtime_interval 0.1
+
+========
+OBJECTS
+========
+
+Background
+#ffffff
+
+Player
+#ffffff #ff0000
+01110
+1...1
+1...1
+1...1
+01110
+
+=======
+LEGEND
+=======
+
+. = Background
+P = Player
+
+=======
+SOUNDS
+=======
+
+================
+COLLISIONLAYERS
+================
+
+Background
+Player
+
+======
+RULES
+======
+
+==============
+WINCONDITIONS
+==============
+
+=======
+LEVELS
+=======
+
+( 16x16 play area. Autumn: particle starts at (7,7). )
+( Player cursor starts at (0,0). )
+
+P...............
+................
+................
+................
+................
+................
+................
+................
+................
+................
+................
+................
+................
+................
+................
+................

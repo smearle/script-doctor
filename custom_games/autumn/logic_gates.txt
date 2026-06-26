@@ -1,0 +1,346 @@
+title logic_gates (AutumnBench port)
+author ported from AutumnBench logic_gates.sexp
+
+(
+  Port of AutumnBench logic_gates.sexp (GRID_SIZE=24).
+  Two clickable switches: switch1 at (4-5, 12-13), switch2 at (19-20, 12-13).
+  Four logic gates: AND (row 4-5), OR (row 8-9), NOT (row 16-17), XOR (row 20-21).
+  State encoded as color -> compare_color=true.
+    switch: darkgrey=#a9a9a9 (off), red=#ff0000 (on)
+    wire:   grey=#808080 (off), yellow=#ffff00 (powered)
+    output: darkblue=#00008b (off), orange=#ffa500 (on)
+  Wire update: wires track current switch state (lag omitted; ~14% cell error
+    on the frame a switch is clicked).
+  notOutput starts BLUE at step 0; turns ORANGE on tick 1 (NOT false = true).
+  Click handling: Player cursor walks via arrows; action = click at cell.
+  Overlapping wires: andWire1+orWire1 share (5,8)-(5,11) in separate layers.
+    andWire2+orWire2 share (19,8)-(19,11) in separate layers.
+)
+
+realtime_interval 0.1
+
+========
+OBJECTS
+========
+
+Background
+#000000
+
+Player
+#ffffff #ff0000
+01110
+1...1
+1...1
+1...1
+01110
+
+Switch1Off
+#a9a9a9
+
+Switch1On
+#ff0000
+
+Switch2Off
+#a9a9a9
+
+Switch2On
+#ff0000
+
+AndWire1Grey
+#808080
+
+AndWire1Yellow
+#ffff00
+
+AndWire2Grey
+#808080
+
+AndWire2Yellow
+#ffff00
+
+OrWire1Grey
+#808080
+
+OrWire1Yellow
+#ffff00
+
+OrWire2Grey
+#808080
+
+OrWire2Yellow
+#ffff00
+
+NotWireGrey
+#808080
+
+NotWireYellow
+#ffff00
+
+XorWire1Grey
+#808080
+
+XorWire1Yellow
+#ffff00
+
+XorWire2Grey
+#808080
+
+XorWire2Yellow
+#ffff00
+
+AndOutputBlue
+#00008b
+
+AndOutputOrange
+#ffa500
+
+OrOutputBlue
+#00008b
+
+OrOutputOrange
+#ffa500
+
+NotOutputBlue
+#00008b
+
+NotOutputOrange
+#ffa500
+
+XorOutputBlue
+#00008b
+
+XorOutputOrange
+#ffa500
+
+S1FlipToOn
+#000000
+.....
+.....
+.....
+.....
+.....
+
+S1FlipToOff
+#000000
+.....
+.....
+.....
+.....
+.....
+
+S2FlipToOn
+#000000
+.....
+.....
+.....
+.....
+.....
+
+S2FlipToOff
+#000000
+.....
+.....
+.....
+.....
+.....
+
+PrevS1Off
+#000000
+.....
+.....
+.....
+.....
+.....
+
+PrevS1On
+#000000
+.....
+.....
+.....
+.....
+.....
+
+PrevS2Off
+#000000
+.....
+.....
+.....
+.....
+.....
+
+PrevS2On
+#000000
+.....
+.....
+.....
+.....
+.....
+
+=======
+LEGEND
+=======
+
+. = Background
+P = Player
+Q = Switch1Off
+R = Switch2Off
+S = AndOutputBlue
+T = AndWire1Grey
+U = AndWire2Grey
+V = OrOutputBlue
+W = OrWire1Grey
+X = OrWire2Grey
+Y = NotOutputBlue
+Z = NotWireGrey
+B = XorOutputBlue
+C = XorWire1Grey
+D = XorWire2Grey
+E = AndWire1Grey and OrWire1Grey
+F = AndWire2Grey and OrWire2Grey
+G = PrevS1Off
+H = PrevS2Off
+
+=======
+SOUNDS
+=======
+
+================
+COLLISIONLAYERS
+================
+
+Background
+Switch1Off, Switch1On
+Switch2Off, Switch2On
+AndWire1Grey, AndWire1Yellow
+AndWire2Grey, AndWire2Yellow
+OrWire1Grey, OrWire1Yellow
+OrWire2Grey, OrWire2Yellow
+NotWireGrey, NotWireYellow
+XorWire1Grey, XorWire1Yellow
+XorWire2Grey, XorWire2Yellow
+AndOutputBlue, AndOutputOrange
+OrOutputBlue, OrOutputOrange
+NotOutputBlue, NotOutputOrange
+XorOutputBlue, XorOutputOrange
+S1FlipToOn, S1FlipToOff
+S2FlipToOn, S2FlipToOff
+PrevS1Off, PrevS1On
+PrevS2Off, PrevS2On
+Player
+
+======
+RULES
+======
+
+( --- CLICK: toggle switches via cursor --- )
+[ action Player Switch1Off ] -> [ Player Switch1On S1FlipToOn ]
+[ action Player Switch1On  ] -> [ Player Switch1Off S1FlipToOff ]
+[ action Player Switch2Off ] -> [ Player Switch2On S2FlipToOn ]
+[ action Player Switch2On  ] -> [ Player Switch2Off S2FlipToOff ]
+
+( --- PROPAGATE FLIP to all other cells of the same switch --- )
+[ S1FlipToOn ][ Switch1Off ] -> [ S1FlipToOn ][ Switch1On ]
+[ S1FlipToOff ][ Switch1On ] -> [ S1FlipToOff ][ Switch1Off ]
+[ S2FlipToOn ][ Switch2Off ] -> [ S2FlipToOn ][ Switch2On ]
+[ S2FlipToOff ][ Switch2On ] -> [ S2FlipToOff ][ Switch2Off ]
+
+( --- AND OUTPUT: orange iff both switches on --- )
+[ Switch1On ][ Switch2On ][ AndOutputBlue ] -> [ Switch1On ][ Switch2On ][ AndOutputOrange ]
+[ Switch1Off ][ AndOutputOrange ] -> [ Switch1Off ][ AndOutputBlue ]
+[ Switch2Off ][ AndOutputOrange ] -> [ Switch2Off ][ AndOutputBlue ]
+
+( --- OR OUTPUT: orange iff at least one switch on --- )
+[ Switch1On ][ OrOutputBlue ] -> [ Switch1On ][ OrOutputOrange ]
+[ Switch2On ][ OrOutputBlue ] -> [ Switch2On ][ OrOutputOrange ]
+[ Switch1Off ][ Switch2Off ][ OrOutputOrange ] -> [ Switch1Off ][ Switch2Off ][ OrOutputBlue ]
+
+( --- NOT OUTPUT: orange iff switch1 off --- )
+[ Switch1Off ][ NotOutputBlue ] -> [ Switch1Off ][ NotOutputOrange ]
+[ Switch1On ][ NotOutputOrange ] -> [ Switch1On ][ NotOutputBlue ]
+
+( --- XOR OUTPUT: orange iff exactly one on --- )
+[ Switch1On ][ Switch2Off ][ XorOutputBlue ] -> [ Switch1On ][ Switch2Off ][ XorOutputOrange ]
+[ Switch1Off ][ Switch2On ][ XorOutputBlue ] -> [ Switch1Off ][ Switch2On ][ XorOutputOrange ]
+[ Switch1On ][ Switch2On ][ XorOutputOrange ] -> [ Switch1On ][ Switch2On ][ XorOutputBlue ]
+[ Switch1Off ][ Switch2Off ][ XorOutputOrange ] -> [ Switch1Off ][ Switch2Off ][ XorOutputBlue ]
+
+( --- WIRES: follow PREVIOUS switch state (PrevS1/PrevS2 = prev-tick switch state) --- )
+( Wire lag matches Autumn's 'prev switch' semantics: wires use PrevS,           )
+( which is updated in late rules AFTER regular rules stabilize each tick.        )
+
+( ANDWIRE1 follows PrevS1 )
+[ PrevS1On ][ AndWire1Grey ]   -> [ PrevS1On ][ AndWire1Yellow ]
+[ PrevS1Off ][ AndWire1Yellow ] -> [ PrevS1Off ][ AndWire1Grey ]
+
+( ANDWIRE2 follows PrevS2 )
+[ PrevS2On ][ AndWire2Grey ]   -> [ PrevS2On ][ AndWire2Yellow ]
+[ PrevS2Off ][ AndWire2Yellow ] -> [ PrevS2Off ][ AndWire2Grey ]
+
+( ORWIRE1 follows PrevS1 )
+[ PrevS1On ][ OrWire1Grey ]   -> [ PrevS1On ][ OrWire1Yellow ]
+[ PrevS1Off ][ OrWire1Yellow ] -> [ PrevS1Off ][ OrWire1Grey ]
+
+( ORWIRE2 follows PrevS2 )
+[ PrevS2On ][ OrWire2Grey ]   -> [ PrevS2On ][ OrWire2Yellow ]
+[ PrevS2Off ][ OrWire2Yellow ] -> [ PrevS2Off ][ OrWire2Grey ]
+
+( NOTWIRE follows PrevS1 )
+[ PrevS1On ][ NotWireGrey ]   -> [ PrevS1On ][ NotWireYellow ]
+[ PrevS1Off ][ NotWireYellow ] -> [ PrevS1Off ][ NotWireGrey ]
+
+( XORWIRE1 follows PrevS1 )
+[ PrevS1On ][ XorWire1Grey ]   -> [ PrevS1On ][ XorWire1Yellow ]
+[ PrevS1Off ][ XorWire1Yellow ] -> [ PrevS1Off ][ XorWire1Grey ]
+
+( XORWIRE2 follows PrevS2 )
+[ PrevS2On ][ XorWire2Grey ]   -> [ PrevS2On ][ XorWire2Yellow ]
+[ PrevS2Off ][ XorWire2Yellow ] -> [ PrevS2Off ][ XorWire2Grey ]
+
+( --- LATE RULES: run after regular rules stabilize each tick --- )
+( Clean up flip markers )
+late [ S1FlipToOn ] -> []
+late [ S1FlipToOff ] -> []
+late [ S2FlipToOn ] -> []
+late [ S2FlipToOff ] -> []
+
+( Update PrevS to match current Switch state -- committed AFTER wires are set )
+late [ Switch1On ][ PrevS1Off ] -> [ Switch1On ][ PrevS1On ]
+late [ Switch1Off ][ PrevS1On ] -> [ Switch1Off ][ PrevS1Off ]
+late [ Switch2On ][ PrevS2Off ] -> [ Switch2On ][ PrevS2On ]
+late [ Switch2Off ][ PrevS2On ] -> [ Switch2Off ][ PrevS2Off ]
+
+( Player cursor moves freely via arrows; no movement blocking needed since
+  Player is in its own collision layer and the grid border handles bounds. )
+
+==============
+WINCONDITIONS
+==============
+
+=======
+LEVELS
+=======
+
+P.......................
+........................
+........................
+........................
+.....TTTTTTTSSUUUUUU....
+.....T......SS.....U....
+.....T.............U....
+.....T.............U....
+.....EWWWWWWVVXXXXXF....
+.....E......VV.....F....
+.....E.............F....
+.....E.............F....
+....QQZZZZZZZ......RR...
+....QQ......Z......RR...
+.....C......Z......D....
+.....C......Z......D....
+.....C......YY.....D....
+.....C......YY.....D....
+.....C.............D....
+.....C.............D....
+.....C......BB.....D....
+.....CCCCCCCBBDDDDDD....
+.GH.....................
+........................

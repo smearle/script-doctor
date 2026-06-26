@@ -1,0 +1,337 @@
+title gravity (AutumnBench port)
+author ported from AutumnBench gravity.sexp
+
+(
+  Port of AutumnBench gravity.sexp (GRID_SIZE=16).
+
+  Autumn render_all keys: leftButton, rightButton, upButton, downButton, blobs.
+
+  Mechanics:
+  - 4 colored buttons at fixed edge positions change gravity direction.
+  - Clicking empty space spawns a 2x2 blob: top-left at (cx,cy-1) where (cx,cy)=click.
+  - All blobs move 1 cell per frame in current gravity direction.
+  - Blobs fall off the grid (Autumn: no wall collision; PS: blocked at border).
+
+  Blob types encode gravity direction:
+    BlobDown  = falling down  (initial)
+    BlobUp    = falling up
+    BlobLeft  = falling left
+    BlobRight = falling right
+
+  Gravity direction stored as one of GravDown/GravLeft/GravRight/GravUp at (0,0).
+  Spawn produces the matching blob type via global two-cell rules.
+  Gravity button clicks:
+    - Change GravX to new GravY (global two-cell rule)
+    - Transform all existing BlobX cells to new BlobY type (global two-cell rules)
+
+  Spawn sequence (fires AFTER gravity movement, per Autumn rule order):
+    Anchor: [GravX] [action Player no BlobX no BlobSeedHere] -> place BlobX VM BlobSeedHere
+    Up spread: place BlobX VM above BlobSeedHere
+    Right spread: place BlobX VM BlobSeedR to right of BlobSeedHere
+    Upper-right: place BlobX VM above BlobSeedR
+    VM on spawn: prevents gravity from moving newly-spawned blobs same tick.
+
+  PS cursor conventions: Player is invisible, moves with arrows, action = click.
+  cursor_start=[0,0]. Buttons NOT blocked (different collision layer from Player).
+
+  Deferred: off-grid motion (PS border blocks, Autumn allows off-grid).
+)
+
+realtime_interval 0.1
+
+========
+OBJECTS
+========
+
+Background
+black
+
+( === BUTTONS (visible, fixed positions) === )
+LeftButton
+#ff0000
+
+RightButton
+#ff8c00
+
+UpButton
+#ffd700
+
+DownButton
+#008000
+
+( === BLOB TYPES (encode current gravity direction) === )
+BlobDown
+#0000ff
+
+BlobUp
+#0000ff
+
+BlobLeft
+#0000ff
+
+BlobRight
+#0000ff
+
+( === SPAWN HELPERS === )
+BlobSeedHere
+black
+.....
+.....
+.....
+.....
+.....
+
+BlobSeedR
+black
+.....
+.....
+.....
+.....
+.....
+
+( === VM: prevent double-movement in same tick === )
+VM
+black
+.....
+.....
+.....
+.....
+.....
+
+( === GRAVITY DIRECTION MARKERS (at 0,0, only one active at a time) === )
+GravDown
+black
+.....
+.....
+.....
+.....
+.....
+
+GravLeft
+black
+.....
+.....
+.....
+.....
+.....
+
+GravRight
+black
+.....
+.....
+.....
+.....
+.....
+
+GravUp
+black
+.....
+.....
+.....
+.....
+.....
+
+( === BOUNDARY MARKERS (for off-grid simulation) === )
+( BlobDown exits at y=15, BlobUp at y=0, BlobLeft at x=0, BlobRight at x=15 )
+BoundB
+black
+.....
+.....
+.....
+.....
+.....
+
+BoundT
+black
+.....
+.....
+.....
+.....
+.....
+
+BoundL
+black
+.....
+.....
+.....
+.....
+.....
+
+BoundR
+black
+.....
+.....
+.....
+.....
+.....
+
+( === PLAYER (invisible cursor for click emulation) === )
+Player
+black
+.....
+.....
+.....
+.....
+.....
+
+=======
+LEGEND
+=======
+
+. = Background
+P = Player and GravDown
+L = LeftButton
+R = RightButton
+U = UpButton
+D = DownButton
+
+Blob = BlobDown or BlobUp or BlobLeft or BlobRight
+
+=======
+SOUNDS
+=======
+
+================
+COLLISIONLAYERS
+================
+
+Background
+LeftButton
+RightButton
+UpButton
+DownButton
+BlobDown, BlobUp, BlobLeft, BlobRight
+Player
+BlobSeedHere
+BlobSeedR
+VM
+GravDown, GravLeft, GravRight, GravUp
+BoundB
+BoundT
+BoundL
+BoundR
+
+======
+RULES
+======
+
+( === GRAVITY BUTTON CLICKS (all 4 buttons, all 4 src types) === )
+
+( Left button: change gravity to left )
+[ action Player LeftButton ] [ GravDown ] -> [ Player LeftButton ] [ GravLeft ]
+[ action Player LeftButton ] [ GravRight ] -> [ Player LeftButton ] [ GravLeft ]
+[ action Player LeftButton ] [ GravUp ] -> [ Player LeftButton ] [ GravLeft ]
+( noop when already GravLeft: but we still need to transform blob types )
+
+( Right button: change gravity to right )
+[ action Player RightButton ] [ GravDown ] -> [ Player RightButton ] [ GravRight ]
+[ action Player RightButton ] [ GravLeft ] -> [ Player RightButton ] [ GravRight ]
+[ action Player RightButton ] [ GravUp ] -> [ Player RightButton ] [ GravRight ]
+
+( Up button: change gravity to up )
+[ action Player UpButton ] [ GravDown ] -> [ Player UpButton ] [ GravUp ]
+[ action Player UpButton ] [ GravLeft ] -> [ Player UpButton ] [ GravUp ]
+[ action Player UpButton ] [ GravRight ] -> [ Player UpButton ] [ GravUp ]
+
+( Down button: change gravity to down )
+[ action Player DownButton ] [ GravLeft ] -> [ Player DownButton ] [ GravDown ]
+[ action Player DownButton ] [ GravRight ] -> [ Player DownButton ] [ GravDown ]
+[ action Player DownButton ] [ GravUp ] -> [ Player DownButton ] [ GravDown ]
+
+( === BLOB TYPE CONVERSION when button clicked === )
+( After gravity change, ALL blobs get new type. )
+( The rules above already changed GravX; now update blobs. )
+( LeftButton click: all blobs -> BlobLeft )
+[ action Player LeftButton ] [ BlobDown ] -> [ Player LeftButton ] [ BlobLeft ]
+[ action Player LeftButton ] [ BlobUp ] -> [ Player LeftButton ] [ BlobLeft ]
+[ action Player LeftButton ] [ BlobRight ] -> [ Player LeftButton ] [ BlobLeft ]
+[ action Player LeftButton ] [ BlobLeft ] -> [ Player LeftButton ] [ BlobLeft ]
+
+( RightButton click: all blobs -> BlobRight )
+[ action Player RightButton ] [ BlobDown ] -> [ Player RightButton ] [ BlobRight ]
+[ action Player RightButton ] [ BlobLeft ] -> [ Player RightButton ] [ BlobRight ]
+[ action Player RightButton ] [ BlobUp ] -> [ Player RightButton ] [ BlobRight ]
+[ action Player RightButton ] [ BlobRight ] -> [ Player RightButton ] [ BlobRight ]
+
+( UpButton click: all blobs -> BlobUp )
+[ action Player UpButton ] [ BlobDown ] -> [ Player UpButton ] [ BlobUp ]
+[ action Player UpButton ] [ BlobLeft ] -> [ Player UpButton ] [ BlobUp ]
+[ action Player UpButton ] [ BlobRight ] -> [ Player UpButton ] [ BlobUp ]
+[ action Player UpButton ] [ BlobUp ] -> [ Player UpButton ] [ BlobUp ]
+
+( DownButton click: all blobs -> BlobDown )
+[ action Player DownButton ] [ BlobLeft ] -> [ Player DownButton ] [ BlobDown ]
+[ action Player DownButton ] [ BlobRight ] -> [ Player DownButton ] [ BlobDown ]
+[ action Player DownButton ] [ BlobUp ] -> [ Player DownButton ] [ BlobDown ]
+[ action Player DownButton ] [ BlobDown ] -> [ Player DownButton ] [ BlobDown ]
+
+( === BLOB MOVEMENT: fires each tick (Autumn: before click in same frame) === )
+( Each blob type moves in its direction. VM prevents double-movement per tick. )
+down  [ BlobDown  no VM | no BlobDown  ] -> [ | BlobDown  VM ]
+up    [ BlobUp    no VM | no BlobUp    ] -> [ | BlobUp    VM ]
+left  [ BlobLeft  no VM | no BlobLeft  ] -> [ | BlobLeft  VM ]
+right [ BlobRight no VM | no BlobRight ] -> [ | BlobRight VM ]
+
+( === BLOB SPAWNING: click at empty position -> 2x2 blob === )
+( isFreePos check: Player pos has no Blob of any type. )
+( VM on newly spawned blobs: gravity already ran this tick, new blobs must not move. )
+( GravDown: spawn BlobDown )
+[ GravDown  ] [ action Player no Blob no BlobSeedHere ] -> [ GravDown  ] [ Player BlobDown  VM BlobSeedHere ]
+( GravLeft: spawn BlobLeft )
+[ GravLeft  ] [ action Player no Blob no BlobSeedHere ] -> [ GravLeft  ] [ Player BlobLeft  VM BlobSeedHere ]
+( GravRight: spawn BlobRight )
+[ GravRight ] [ action Player no Blob no BlobSeedHere ] -> [ GravRight ] [ Player BlobRight VM BlobSeedHere ]
+( GravUp: spawn BlobUp )
+[ GravUp    ] [ action Player no Blob no BlobSeedHere ] -> [ GravUp    ] [ Player BlobUp    VM BlobSeedHere ]
+
+( Spread UP: cell above anchor - blob type matches anchor type )
+up [ BlobDown  BlobSeedHere | no Blob ] -> [ BlobDown  BlobSeedHere | BlobDown  VM ]
+up [ BlobLeft  BlobSeedHere | no Blob ] -> [ BlobLeft  BlobSeedHere | BlobLeft  VM ]
+up [ BlobRight BlobSeedHere | no Blob ] -> [ BlobRight BlobSeedHere | BlobRight VM ]
+up [ BlobUp    BlobSeedHere | no Blob ] -> [ BlobUp    BlobSeedHere | BlobUp    VM ]
+
+( Spread RIGHT: place blob in right cell AND set BlobSeedR there )
+right [ BlobDown  BlobSeedHere | no Blob no BlobSeedR ] -> [ BlobDown  BlobSeedHere | BlobDown  VM BlobSeedR ]
+right [ BlobLeft  BlobSeedHere | no Blob no BlobSeedR ] -> [ BlobLeft  BlobSeedHere | BlobLeft  VM BlobSeedR ]
+right [ BlobRight BlobSeedHere | no Blob no BlobSeedR ] -> [ BlobRight BlobSeedHere | BlobRight VM BlobSeedR ]
+right [ BlobUp    BlobSeedHere | no Blob no BlobSeedR ] -> [ BlobUp    BlobSeedHere | BlobUp    VM BlobSeedR ]
+
+( Spread UPPER-RIGHT: cell above BlobSeedR - type determined by BlobSeedR's neighbor )
+( BlobSeedR is co-located with one of the Blob types in the right cell )
+up [ BlobDown  BlobSeedR | no Blob ] -> [ BlobDown  BlobSeedR | BlobDown  VM ]
+up [ BlobLeft  BlobSeedR | no Blob ] -> [ BlobLeft  BlobSeedR | BlobLeft  VM ]
+up [ BlobRight BlobSeedR | no Blob ] -> [ BlobRight BlobSeedR | BlobRight VM ]
+up [ BlobUp    BlobSeedR | no Blob ] -> [ BlobUp    BlobSeedR | BlobUp    VM ]
+
+( === CLEANUP === )
+late [ BlobSeedHere ] -> [ ]
+late [ BlobSeedR ] -> [ ]
+late [ VM ] -> [ ]
+
+==============
+WINCONDITIONS
+==============
+
+=======
+LEVELS
+=======
+
+( 16x16 grid. LeftButton(0,7), RightButton(15,7), UpButton(7,0), DownButton(7,15) )
+( Player + GravDown at (0,0). )
+
+P......U........
+................
+................
+................
+................
+................
+................
+L..............R
+................
+................
+................
+................
+................
+................
+................
+.......D........

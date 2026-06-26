@@ -1,0 +1,320 @@
+title waterplug (AutumnBench port)
+author ported from AutumnBench waterplug.sexp
+
+(
+  GRID_SIZE=16 click game. Player is an invisible cursor on a 16x16 grid.
+  Three modes tracked by invisible mode markers at (0,16) in helper row 16:
+    ModeVessel (default), ModePlug, ModeWater.
+  Buttons at row 0: VesselButton(2,0), PlugButton(5,0), WaterButton(8,0),
+    RemoveButton(11,0), ClearButton(14,0).
+  Click on free cell: adds Vessel/Plug/Water depending on mode.
+  RemoveButton: removes all plugs.
+  ClearButton: removes all vessels, plugs, and water.
+
+  Water simulation approximating Autumn nextLiquid:
+    Move DOWN if cell below is free (not BoundWall or any object).
+    Else if blocked by game object or water (NOT BoundWall): flow one step
+      horizontally. RIGHT rule fires before LEFT (right-wins-on-tie matches
+      Autumn foldl from the left: on equal-distance, the rightmost hole wins
+      since foldl uses strict-less-than, taking the later element on tie).
+    Else if blocked by BoundWall (water at y=15): stay put.
+
+  BoundWall fills row 16 to enforce GRID_SIZE=16 bottom boundary.
+  Row 16 is outside the harness 16x16 comparison window.
+
+  Timing: click places FreshWater (stays, late->Water). Lateral flow places
+  WaterFlowed (late); WaterFlowed->Water at start of next tick so the new
+  drop falls the following tick. Matches Autumn prev-waterList semantics.
+
+  Alias: vessel->vessels, plug->plugs, water/waterflowed->waterlist.
+)
+
+realtime_interval 0.1
+
+========
+OBJECTS
+========
+
+Background
+black
+
+Player
+#ffffff #ff0000
+01110
+1...1
+1...1
+1...1
+01110
+
+( === GAME OBJECTS: vessels, plugs, water === )
+Vessel
+#800080
+
+Plug
+#ffa500
+
+Water
+#0000ff
+
+( FreshWater = water placed this tick; does not move; late->Water next tick )
+FreshWater
+#0000ff
+.....
+.....
+.....
+.....
+.....
+
+( WaterFlowed = water placed by lateral flow (late); reg->Water next tick )
+WaterFlowed
+#0000ff
+.....
+.....
+.....
+.....
+.....
+
+( === BUTTONS (fixed, row 0) === )
+VesselButton
+#800080
+
+PlugButton
+#ffa500
+
+WaterButton
+#0000ff
+
+RemoveButton
+#808080
+
+ClearButton
+#ff0000
+
+( === BoundWall: invisible wall at row 16 to enforce GRID_SIZE=16 boundary === )
+BoundWall
+#0d0d0d
+.....
+.....
+.....
+.....
+.....
+
+( === MODE MARKERS (invisible, row 16, helper strip) === )
+ModeVessel
+#1a1a1a
+.....
+.....
+.....
+.....
+.....
+
+ModePlug
+#1a1a1a
+.....
+.....
+.....
+.....
+.....
+
+ModeWater
+#1a1a1a
+.....
+.....
+.....
+.....
+.....
+
+( === HELPER MARKERS for clear/remove operations === )
+DoRemove
+#0a0a0a
+.....
+.....
+.....
+.....
+.....
+
+DoClear
+#0a0a0a
+.....
+.....
+.....
+.....
+.....
+
+( === WATER PHYSICS MARKERS (invisible) === )
+( BlockedByWall: water blocked below by BoundWall (y=15); NO lateral flow. )
+BlockedByWall
+#050505
+.....
+.....
+.....
+.....
+.....
+
+( BlockedByObj: water blocked below by vessel/plug/water; CAN flow laterally. )
+BlockedByObj
+#060606
+.....
+.....
+.....
+.....
+.....
+
+=======
+LEGEND
+=======
+
+. = Background
+P = Player
+Q = Vessel
+R = Plug
+W = Water
+F = FreshWater
+V = WaterFlowed
+A = VesselButton
+B = PlugButton
+C = WaterButton
+D = RemoveButton
+E = ClearButton
+X = BoundWall
+M = BoundWall and ModeVessel
+N = ModePlug
+O = ModeWater
+
+( Alias for free-cell check: any occupant that blocks placement )
+Occupant = Vessel or Plug or Water or FreshWater or WaterFlowed or VesselButton or PlugButton or WaterButton or RemoveButton or ClearButton or BoundWall
+
+( BlockedMarker: either kind of blocked marker )
+BlockedMarker = BlockedByWall or BlockedByObj
+
+=======
+SOUNDS
+=======
+
+================
+COLLISIONLAYERS
+================
+
+Background
+ModeVessel, ModePlug, ModeWater
+Vessel, Plug, Water, FreshWater, WaterFlowed, VesselButton, PlugButton, WaterButton, RemoveButton, ClearButton, BoundWall
+BlockedByWall
+BlockedByObj
+DoRemove, DoClear
+Player
+
+======
+RULES
+======
+
+( === Convert laterally-flowed water to active water (start of each tick) === )
+[ WaterFlowed ] -> [ Water ]
+
+( === MODE SWITCH: clicking mode buttons === )
+( Non-directional two-cell rules: [A][B] finds A and B anywhere on the board. )
+
+( Switch to vessel mode from plug or water mode )
+[ action Player VesselButton ] [ ModeWater ] -> [ Player VesselButton ] [ ModeVessel ]
+[ action Player VesselButton ] [ ModePlug  ] -> [ Player VesselButton ] [ ModeVessel ]
+
+( Switch to plug mode from vessel or water mode )
+[ action Player PlugButton ] [ ModeVessel ] -> [ Player PlugButton ] [ ModePlug ]
+[ action Player PlugButton ] [ ModeWater  ] -> [ Player PlugButton ] [ ModePlug ]
+
+( Switch to water mode from vessel or plug mode )
+[ action Player WaterButton ] [ ModeVessel ] -> [ Player WaterButton ] [ ModeWater ]
+[ action Player WaterButton ] [ ModePlug   ] -> [ Player WaterButton ] [ ModeWater ]
+
+( === REMOVE BUTTON: set DoRemove flag === )
+[ action Player RemoveButton ] -> [ Player RemoveButton DoRemove ]
+
+( === CLEAR BUTTON: set DoClear flag === )
+[ action Player ClearButton ] -> [ Player ClearButton DoClear ]
+
+( === EXECUTE REMOVE: remove all plugs === )
+[ DoRemove ] [ Plug ] -> [ DoRemove ] [ Background ]
+
+( === EXECUTE CLEAR: remove all vessels, plugs, water === )
+[ DoClear ] [ Vessel      ] -> [ DoClear ] [ Background ]
+[ DoClear ] [ Plug        ] -> [ DoClear ] [ Background ]
+[ DoClear ] [ Water       ] -> [ DoClear ] [ Background ]
+[ DoClear ] [ FreshWater  ] -> [ DoClear ] [ Background ]
+[ DoClear ] [ WaterFlowed ] -> [ DoClear ] [ Background ]
+
+( === ADD OBJECTS on free-cell click === )
+( Free cell = no Occupant in the game layer )
+( In vessel mode: add Vessel at free cell )
+[ action Player no Occupant ] [ ModeVessel ] -> [ Player Vessel ] [ ModeVessel ]
+
+( In plug mode: add Plug at free cell )
+[ action Player no Occupant ] [ ModePlug ] -> [ Player Plug ] [ ModePlug ]
+
+( In water mode: add FreshWater at free cell )
+[ action Player no Occupant ] [ ModeWater ] -> [ Player FreshWater ] [ ModeWater ]
+
+( === WATER PHYSICS: nextLiquid approximation === )
+( Phase 1: mark water blocked below by BoundWall (no lateral flow). )
+down [ stationary Water no BlockedMarker | BoundWall ] -> [ Water BlockedByWall | BoundWall ]
+
+( Phase 2: mark water blocked below by game object or other water. )
+down [ stationary Water no BlockedMarker | Vessel      ] -> [ Water BlockedByObj | Vessel ]
+down [ stationary Water no BlockedMarker | Plug        ] -> [ Water BlockedByObj | Plug ]
+down [ stationary Water no BlockedMarker | Water       ] -> [ Water BlockedByObj | Water ]
+down [ stationary Water no BlockedMarker | FreshWater  ] -> [ Water BlockedByObj | FreshWater ]
+down [ stationary Water no BlockedMarker | WaterFlowed ] -> [ Water BlockedByObj | WaterFlowed ]
+
+( Phase 3: give DOWN direction to unblocked water. )
+[ stationary Water no BlockedMarker ] -> [ down Water ]
+
+( === LATE RULES === )
+
+( Cleanup operation flags )
+late [ DoRemove ] -> [ ]
+late [ DoClear  ] -> [ ]
+
+( Convert FreshWater to Water (physics runs next tick) )
+late [ FreshWater ] -> [ Water ]
+
+( Lateral flow for BlockedByObj water: RIGHT first then LEFT.
+  RIGHT wins on equal-distance ties, matching Autumn foldl right-bias.
+  BlockedByWall water does NOT flow (stays at y=15 boundary). )
+late right [ Water BlockedByObj | ] -> [ | WaterFlowed ]
+late left  [ Water BlockedByObj | ] -> [ | WaterFlowed ]
+
+( Cleanup physics markers )
+late [ BlockedByWall ] -> [ ]
+late [ BlockedByObj  ] -> [ ]
+
+==============
+WINCONDITIONS
+==============
+
+=======
+LEVELS
+=======
+
+( 16x16 grid + row 16 helper: BoundWall fills row 16 to enforce bottom boundary. )
+( Autumn: x=col(0-15), y=row(0-15), y increases downward. )
+( Vessels left arm:  (3,10),(4,11),(5,12),(6,13),(6,14),(6,15) )
+( Vessels right arm: (12,10),(11,11),(10,12),(9,13),(9,14),(9,15) )
+( Plugs: (7,13),(8,13),(7,14),(8,14),(7,15),(8,15) )
+( Buttons: A=(2,0) B=(5,0) C=(8,0) D=(11,0) E=(14,0) )
+( Mode start: ModeVessel at (0,16) combined with BoundWall as M )
+
+P.A..B..C..D..E.
+................
+................
+................
+................
+................
+................
+................
+................
+................
+...Q........Q...
+....Q......Q....
+.....Q....Q.....
+......QRRQ......
+......QRRQ......
+......QRRQ......
+MXXXXXXXXXXXXXXX

@@ -1,0 +1,240 @@
+title Disease (AutumnBench port)
+author ported from AutumnBench disease.sexp
+
+(
+  disease.sexp (GRID_SIZE=16).  Five particles total.
+  * activeParticle  (health=false, darkgreen): starts at (2,2), moves with arrows.
+  * inactiveParticles (health=true, gray): 4 static particles at (7,5),(4,3),(6,6),(3,5).
+
+  Autumn (on ...) handlers implemented:
+    on left/right/up/down : move activeParticle by +/-1 (off-grid clamped at border in PS)
+    on (clicked inactiveParticles): swap – clicked inactive becomes new active; old active
+        added back to inactive list.  Implemented via modal cursor + flood-fill swap.
+    inactiveParticles autonomous update (infection spreading, color only – irrelevant to
+        class-based harness comparison, not modelled in PS).
+
+  Modal design (same as arc_slack):
+    ARROW mode (no CMode):  arrows redirect to ActiveParticle; X enters cursor mode,
+        spawning Cursor at CursorHome (0,0).
+    CURSOR mode (CMode): arrows move Cursor; X clicks:
+        on InactiveParticles  -> swap (flood-fill to find old active anywhere on board)
+        on BackButton (row 16) -> return to arrow mode.
+
+  SWAP MECHANIC (flood fill):
+    Click places SwapSig (in InactiveP layer) on clicked cell.
+    FindSig (helper layer) floods from SwapSig outward each rule-loop iteration.
+    When FindSig co-occupies ActiveParticle: converts it to FoundActive.
+    Late rules resolve: SwapSig -> ActiveParticle, FoundActive -> InactiveParticles,
+    FindSig cleared.
+
+  CAPS:
+    Off-grid motion: Autumn lets activeParticle leave the 16x16 grid; PS clamps at border.
+    Infection spreading (color changes on inactiveParticles) not modelled – class-based only.
+
+  Eval sidecar: activeparticle / inactiveparticles matched by name (no alias needed).
+  cursor_start=[0,0] (CursorHome position).
+)
+
+realtime_interval 0.1
+
+========
+OBJECTS
+========
+
+Background
+white
+
+( Active particle -- aliased to 'activeparticle' by name match )
+ActiveParticle
+#006400
+
+( Inactive particles -- aliased to 'inactiveparticles' by name match )
+InactiveParticles
+#808080
+
+( Off-board wall: blocks ActiveParticle from leaving 16x16 play area )
+BoundWall
+white
+.....
+.....
+.....
+.....
+.....
+
+( Intermediate state: replaced ActiveParticle cell during swap )
+FoundActive
+white
+.....
+.....
+.....
+.....
+.....
+
+( Flood-fill helper: co-occupies all layers, spreads outward from SwapSig )
+FindSig
+white
+.....
+.....
+.....
+.....
+.....
+
+( Swap target marker: placed on clicked InactiveParticle cell )
+SwapSig
+white
+.....
+.....
+.....
+.....
+.....
+
+( Off-board back-button: click to exit cursor mode )
+BackButton
+#3333ff
+00000
+0...0
+0...0
+0...0
+00000
+
+( Cursor spawn anchor at (0,0) )
+CursorHome
+white
+.....
+.....
+.....
+.....
+.....
+
+( Cursor mode flag on Player cell )
+CMode
+white
+.....
+.....
+.....
+.....
+.....
+
+( Visible cursor in cursor mode )
+Cursor
+#ffffff #ff0000
+01110
+1...1
+1...1
+1...1
+01110
+
+( Fixed invisible input anchor at (0,16); NEVER moves )
+Player
+white
+.....
+.....
+.....
+.....
+.....
+
+=======
+LEGEND
+=======
+
+. = Background
+A = ActiveParticle
+I = InactiveParticles
+w = BoundWall
+k = BoundWall and BackButton
+h = CursorHome
+p = Player
+
+=======
+SOUNDS
+=======
+
+================
+COLLISIONLAYERS
+================
+
+Background
+ActiveParticle, BoundWall, FoundActive
+InactiveParticles, SwapSig
+FindSig
+BackButton
+CursorHome
+CMode
+Cursor
+Player
+
+======
+RULES
+======
+
+( ===== ARROW MODE: arrows move ActiveParticle ===== )
+[ left  Player no CMode ] [ ActiveParticle ] -> [ Player ] [ left  ActiveParticle ]
+[ right Player no CMode ] [ ActiveParticle ] -> [ Player ] [ right ActiveParticle ]
+[ up    Player no CMode ] [ ActiveParticle ] -> [ Player ] [ up    ActiveParticle ]
+[ down  Player no CMode ] [ ActiveParticle ] -> [ Player ] [ down  ActiveParticle ]
+
+( Enter cursor mode: X in arrow mode -> spawn Cursor at CursorHome )
+[ action Player no CMode ] [ CursorHome no Cursor ] -> [ Player CMode ] [ CursorHome Cursor ]
+
+( ===== CURSOR MODE: arrows move Cursor ===== )
+[ left  Player CMode ] [ Cursor ] -> [ Player CMode ] [ left  Cursor ]
+[ right Player CMode ] [ Cursor ] -> [ Player CMode ] [ right Cursor ]
+[ up    Player CMode ] [ Cursor ] -> [ Player CMode ] [ up    Cursor ]
+[ down  Player CMode ] [ Cursor ] -> [ Player CMode ] [ down  Cursor ]
+
+( ===== X in cursor mode: click at cursor cell ===== )
+
+( BackButton: exit cursor mode )
+[ action Player CMode ] [ Cursor BackButton ] -> [ Player ] [ BackButton ]
+
+( Click on InactiveParticle: initiate swap )
+[ action Player CMode ] [ Cursor InactiveParticles ] -> [ Player CMode ] [ Cursor SwapSig ]
+
+( ===== SWAP RESOLUTION (flood-fill) ===== )
+( Start flood from the SwapSig cell )
+[ SwapSig no FindSig ] -> [ SwapSig FindSig ]
+
+( Propagate FindSig outward -- fires until entire board is covered )
+[ FindSig ] [ no FindSig ] -> [ FindSig ] [ FindSig ]
+
+( When FindSig co-occupies ActiveParticle: capture it )
+[ FindSig ActiveParticle ] -> [ FindSig FoundActive ]
+
+( LATE: resolve swap + cleanup )
+late [ SwapSig ] -> [ ActiveParticle ]
+late [ FoundActive ] -> [ InactiveParticles ]
+late [ FindSig ] -> [ ]
+
+( Player anchor never moves )
+[ moving Player ] -> [ Player ]
+
+==============
+WINCONDITIONS
+==============
+
+=======
+LEVELS
+=======
+
+( 16x16 play area (rows 0-15) + 1 off-board strip (row 16).             )
+( ActiveParticle (A) at col=2, row=2 (x=2, y=2 in Autumn).              )
+( InactiveParticles (I):  (4,3) (3,5) (7,5) (6,6) in (col,row).        )
+( CursorHome (h) at (0,0); Player (p) and BackButton (k) at row 16.     )
+
+h...............
+................
+..A.............
+....I...........
+................
+...I...I........
+......I.........
+................
+................
+................
+................
+................
+................
+................
+................
+................
+pkwwwwwwwwwwwwww

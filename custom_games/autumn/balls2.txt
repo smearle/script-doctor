@@ -1,0 +1,158 @@
+title balls2 (AutumnBench port)
+author ported from AutumnBench balls2.sexp
+
+(
+  Port of AutumnBench balls2.sexp.  GRID_SIZE=16.
+
+  Three balls in a horizontal line at row 10:
+    ball_a at (6,10)  -- initially stopped (direction 361)
+    ball_b at (10,10) -- initially stopped (direction 361)
+    ball_c at (14,10) -- initially moving left (direction 270)
+  goal at (0,10) -- fixed; when ball_a reaches goal, ball_a stops.
+
+  Collision chain (Newton's cradle, horizontal only):
+    BallCMove moves left 1 cell/tick.
+    When BallCMove occupies BallB cell: BallCMove->BallC, BallB->BallBMove.
+    When BallBMove occupies BallA cell: BallBMove->BallB, BallA->BallAMove.
+    When BallAMove reaches goal (col 0): BallAMove->BallA (stops).
+
+  Both BallA+BallAMove alias to "ball_a"; BallB+BallBMove to "ball_b"; BallC+BallCMove to "ball_c".
+
+  Deferred: wallintersect bounce (doesn't fire because goal absorbs ball_a first).
+  Deferred: clicked-goal reset (click action not portable to PS).
+  No randomness.
+)
+
+realtime_interval 0.1
+
+========
+OBJECTS
+========
+
+Background
+white
+
+Goal
+green
+00000
+00000
+00000
+00000
+00000
+
+BallA
+blue
+.000.
+00000
+00000
+00000
+.000.
+
+BallAMove
+blue
+.000.
+00000
+00000
+00000
+.000.
+
+BallB
+red
+.000.
+00000
+00000
+00000
+.000.
+
+BallBMove
+red
+.000.
+00000
+00000
+00000
+.000.
+
+BallC
+purple
+.000.
+00000
+00000
+00000
+.000.
+
+BallCMove
+purple
+.000.
+00000
+00000
+00000
+.000.
+
+=======
+LEGEND
+=======
+
+. = Background
+g = Goal
+a = BallA
+b = BallB
+c = BallCMove
+
+=======
+SOUNDS
+=======
+
+================
+COLLISIONLAYERS
+================
+
+Background
+Goal
+BallA, BallAMove
+BallB, BallBMove
+BallC, BallCMove
+
+======
+RULES
+======
+
+( --- Movement: moving balls move left each tick --- )
+[ BallCMove ] -> [ left BallCMove ]
+[ BallBMove ] -> [ left BallBMove ]
+[ BallAMove ] -> [ left BallAMove ]
+
+( --- Collision transfer (late, after movement):
+  when BallCMove lands on BallB, transfer motion to BallB --- )
+late [ BallCMove BallB ] -> [ BallC BallBMove ]
+
+( --- when BallBMove lands on BallA, transfer motion to BallA --- )
+late [ BallBMove BallA ] -> [ BallB BallAMove ]
+
+( --- Goal absorption: when BallAMove reaches goal cell, stop ball_a --- )
+late [ BallAMove Goal ] -> [ BallA Goal ]
+
+==============
+WINCONDITIONS
+==============
+
+=======
+LEVELS
+=======
+
+( 16 columns x 16 rows; goal at col 0 row 10, BallA at col 6, BallB at col 10, BallCMove at col 14 )
+................
+................
+................
+................
+................
+................
+................
+................
+................
+................
+g.....a...b...c.
+................
+................
+................
+................
+................

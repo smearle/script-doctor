@@ -1,0 +1,464 @@
+title colour_lines (AutumnBench port)
+author ported from AutumnBench colour_lines.sexp
+
+(
+  Port of colour_lines.sexp (GRID_SIZE=10).
+  3 coloured balls: red at (0,0) moving=true, blue at (4,5), green at (7,8).
+  Click on a ball -> select it (Active). Click on empty -> set Dest and move.
+  Active ball moves 1 step/frame toward Dest: x-first then y, 1 step/frame.
+  Autumn also spawns a random ball at a random position on each empty-click
+  (uniformChoice COLORS + randomPositions); cannot reproduce in PuzzleScript.
+  Accuracy is capped by this randomness.
+  No compare_color: class-only comparison, all balls alias to "balls".
+  cursor_start [0,0].
+
+  Dest placement: a DestKill flood removes old Dest (the two-pattern cleanup
+  rule [ A ] [ B ] fails when A and B are in different rows and columns).
+  DestKill floods the whole 10x10 grid in the regular phase, removing old Dest.
+  DestNew (placed at click position) is converted to Dest in the late phase.
+  ColDest/RowDest are cleared at start of regular phase and rebuilt fresh
+  from Dest in late phase to avoid stale-column bugs.
+)
+
+realtime_interval 0.1
+
+========
+OBJECTS
+========
+
+Background
+black
+
+BallRed
+#ff0000
+
+BallBlue
+#0000ff
+
+BallGreen
+#008000
+
+Player
+#ffffff #ff0000
+01110
+1...1
+1...1
+1...1
+01110
+
+Dest
+#000000
+.....
+.....
+.....
+.....
+.....
+
+DestNew
+#000000
+.....
+.....
+.....
+.....
+.....
+
+DestKill
+#000000
+.....
+.....
+.....
+.....
+.....
+
+Active
+#000000
+.....
+.....
+.....
+.....
+.....
+
+NewActive
+#000000
+.....
+.....
+.....
+.....
+.....
+
+ColDest
+#000000
+.....
+.....
+.....
+.....
+.....
+
+RowDest
+#000000
+.....
+.....
+.....
+.....
+.....
+
+ScanR
+#000000
+.....
+.....
+.....
+.....
+.....
+
+ScanL
+#000000
+.....
+.....
+.....
+.....
+.....
+
+ScanD
+#000000
+.....
+.....
+.....
+.....
+.....
+
+ScanU
+#000000
+.....
+.....
+.....
+.....
+.....
+
+BackR
+#000000
+.....
+.....
+.....
+.....
+.....
+
+BackL
+#000000
+.....
+.....
+.....
+.....
+.....
+
+BackD
+#000000
+.....
+.....
+.....
+.....
+.....
+
+BackU
+#000000
+.....
+.....
+.....
+.....
+.....
+
+GoRight
+#000000
+.....
+.....
+.....
+.....
+.....
+
+GoLeft
+#000000
+.....
+.....
+.....
+.....
+.....
+
+GoDown
+#000000
+.....
+.....
+.....
+.....
+.....
+
+GoUp
+#000000
+.....
+.....
+.....
+.....
+.....
+
+AtDest
+#000000
+.....
+.....
+.....
+.....
+.....
+
+=======
+LEGEND
+=======
+
+. = Background
+R = BallRed and Player and Active
+B = BallBlue
+G = BallGreen
+
+=======
+SOUNDS
+=======
+
+================
+COLLISIONLAYERS
+================
+
+Background
+BallRed, BallBlue, BallGreen
+Dest
+DestNew
+DestKill
+Active
+NewActive
+ColDest
+RowDest
+ScanR
+ScanL
+ScanD
+ScanU
+BackR
+BackL
+BackD
+BackU
+GoRight
+GoLeft
+GoDown
+GoUp
+AtDest
+Player
+
+======
+RULES
+======
+
+( === REGULAR RULES: cleanup stale markers from previous late phase === )
+( ColDest and RowDest are rebuilt fresh each late phase from Dest. )
+( Clear them at start of regular phase so they don't persist as stale columns. )
+[ ColDest ] -> [ ]
+[ RowDest ] -> [ ]
+
+( === CLICK ACTION === )
+( Click on a ball: mark it as NewActive; deselection handled in late phase )
+[ action Player BallRed ] -> [ Player BallRed NewActive ]
+[ action Player BallBlue ] -> [ Player BallBlue NewActive ]
+[ action Player BallGreen ] -> [ Player BallGreen NewActive ]
+
+( Click on empty: place DestNew at cursor and flood DestKill to kill old Dest )
+[ action Player no BallRed no BallBlue no BallGreen ] -> [ Player DestNew DestKill ]
+
+( DestKill floods entire grid to reach old Dest )
+right [ DestKill | no DestKill ] -> [ DestKill | DestKill ]
+left [ DestKill | no DestKill ] -> [ DestKill | DestKill ]
+down [ DestKill | no DestKill ] -> [ DestKill | DestKill ]
+up [ DestKill | no DestKill ] -> [ DestKill | DestKill ]
+
+( DestKill reaches old Dest: remove it )
+[ DestKill Dest ] -> [ DestKill ]
+
+( Clear stale AtDest when a new Dest is being set )
+[ DestKill AtDest ] -> [ DestKill ]
+
+( Place AtDest when the active ball is sitting at Dest at the START of this frame.    )
+( Ball was at Dest at end of last frame → this is Autumn's "destFlag → false" frame.  )
+( In the subsequent late phase, Step B-v1 uses AtDest to remove Dest.                  )
+[ Active BallRed   Dest no AtDest ] -> [ Active BallRed   Dest AtDest ]
+[ Active BallBlue  Dest no AtDest ] -> [ Active BallBlue  Dest AtDest ]
+[ Active BallGreen Dest no AtDest ] -> [ Active BallGreen Dest AtDest ]
+
+( === LATE RULES === )
+
+( ---- Step 0: Activate new Dest from DestNew and cleanup DestKill ---- )
+late [ DestNew ] -> [ Dest ]
+late [ DestKill ] -> [ ]
+
+( ---- Step 0b: Selection -- NewActive deselects old Active, becomes Active ---- )
+late [ NewActive ] [ Active ] -> [ NewActive ] [ ]
+late [ NewActive ] -> [ Active ]
+
+( ---- Step 0c: Clear AtDest from deselected balls ---- )
+( When a ball loses Active (via Step 0b), remove any AtDest it still carries. )
+late [ AtDest no Active ] -> [ ]
+
+( ---- Step A: Rebuild ColDest and RowDest from Dest ---- )
+( ColDest fills entire column containing Dest )
+late [ Dest no ColDest ] -> [ Dest ColDest ]
+late down [ ColDest | no ColDest ] -> [ ColDest | ColDest ]
+late up [ ColDest | no ColDest ] -> [ ColDest | ColDest ]
+
+( RowDest fills entire row containing Dest )
+late [ Dest no RowDest ] -> [ Dest RowDest ]
+late right [ RowDest | no RowDest ] -> [ RowDest | RowDest ]
+late left [ RowDest | no RowDest ] -> [ RowDest | RowDest ]
+
+( ---- Step B: Arrival detection ---- )
+( B-v1: Ball at Dest WITH AtDest = second consecutive frame there = Autumn's destFlag→false frame. )
+(       Remove Dest now so subsequent frames have no navigation target.                             )
+late [ Active BallRed   AtDest Dest ColDest RowDest ] -> [ Active BallRed   ]
+late [ Active BallBlue  AtDest Dest ColDest RowDest ] -> [ Active BallBlue  ]
+late [ Active BallGreen AtDest Dest ColDest RowDest ] -> [ Active BallGreen ]
+( B-v2: Ball at Dest WITHOUT AtDest = first (arrival) frame.  Autumn's destFlag still true. )
+(       Remove ColDest/RowDest to stop navigation but KEEP Dest so frame N behaviours match. )
+late [ Active BallRed   ColDest RowDest ] -> [ Active BallRed   ]
+late [ Active BallBlue  ColDest RowDest ] -> [ Active BallBlue  ]
+late [ Active BallGreen ColDest RowDest ] -> [ Active BallGreen ]
+
+( ---- Step C: Horizontal movement (ball not x-aligned: no ColDest on ball) ---- )
+late [ Active no ColDest no ScanR no ScanL no GoRight no GoLeft no GoDown no GoUp ] -> [ Active ScanR ScanL ]
+
+( Propagate ScanR rightward )
+late right [ ScanR | no ColDest ] -> [ ScanR | ScanR ]
+
+( ScanR hits ColDest: start BackR going left to Active ball )
+( [ScanR | ColDest] in right direction: ScanR is left of ColDest )
+( -> [ | ColDest BackR ]: remove ScanR from left cell, place BackR AT LEFT cell? )
+( No: -> [ | ColDest BackR ] means: left cell gets nothing (ScanR removed), )
+( right cell gets ColDest+BackR. So BackR is at ColDest's position (left=dest-col). )
+late right [ ScanR | ColDest ] -> [ | ColDest BackR ]
+
+( Wait: BackR is at ColDest's cell and needs to propagate LEFT back to Active. )
+( But when propagating left, the BackR at ColDest's column moves left. )
+( late left [ BackR | no Active ] -> [ BackR | BackR ] )
+( left direction: A is right of B. [BackR | no Active]: BackR is right, no-Active is left. )
+( -> [BackR | BackR]: right keeps BackR, left ALSO gets BackR. )
+( So BackR propagates from ColDest leftward, covering cells: ColDest-1, ColDest-2, ... )
+late left [ BackR | no Active ] -> [ BackR | BackR ]
+
+( BackR reaches Active: place GoRight on Active's cell (the RIGHT cell in left-scan) )
+( late left [ BackR | Active ]: BackR is to the RIGHT of Active. )
+( -> [ | Active GoRight ]: right cell (BackR pos) cleared, left cell (Active pos) gets GoRight. )
+late left [ BackR | Active ] -> [ | Active GoRight ]
+
+( Propagate ScanL leftward )
+late left [ ScanL | no ColDest ] -> [ ScanL | ScanL ]
+
+( ScanL hits ColDest: start BackL going right to Active ball )
+( left direction: [ScanL | ColDest]: ScanL is right, ColDest is left. )
+( -> [ | ColDest BackL ]: ScanL removed, BackL at left cell (ColDest pos). )
+late left [ ScanL | ColDest ] -> [ | ColDest BackL ]
+
+( Propagate BackL rightward toward Active ball )
+( right direction: [BackL | no Active]: BackL is left, no-Active is right. )
+( -> [BackL | BackL]: right cell gets BackL. So BackL propagates right. )
+late right [ BackL | no Active ] -> [ BackL | BackL ]
+
+( BackL reaches Active: place GoLeft on Active's cell. )
+( right direction: [BackL | Active]: BackL is left, Active is right. )
+( -> [ | Active GoLeft ]: BackL cell cleared, Active cell gets GoLeft. )
+late right [ BackL | Active ] -> [ | Active GoLeft ]
+
+( ---- Step D: Vertical movement (ball IS x-aligned: has ColDest) ---- )
+late [ Active ColDest no RowDest no ScanD no ScanU no GoDown no GoUp ] -> [ Active ScanD ScanU ]
+
+( Propagate ScanD downward )
+late down [ ScanD | no RowDest ] -> [ ScanD | ScanD ]
+
+( ScanD hits RowDest: start BackD going up )
+( down direction: [ScanD | RowDest]: ScanD is top, RowDest is below. )
+( -> [ | RowDest BackD ]: BackD at RowDest's cell. )
+late down [ ScanD | RowDest ] -> [ | RowDest BackD ]
+
+( Propagate BackD upward toward Active ball )
+( up direction: [BackD | no Active]: BackD is bottom, no-Active is top. )
+( -> [BackD | BackD]: top cell gets BackD. )
+late up [ BackD | no Active ] -> [ BackD | BackD ]
+
+( BackD arrives at cell above Active: place GoDown on Active's cell. )
+( up direction: [BackD | Active]: BackD is bottom, Active is top. )
+( -> [ | Active GoDown ]: BackD removed, Active gets GoDown. )
+late up [ BackD | Active ] -> [ | Active GoDown ]
+
+( Propagate ScanU upward )
+late up [ ScanU | no RowDest ] -> [ ScanU | ScanU ]
+
+( ScanU hits RowDest: start BackU going down )
+( up direction: [ScanU | RowDest]: ScanU is bottom, RowDest is above. )
+( -> [ | RowDest BackU ]: BackU at RowDest's cell. )
+late up [ ScanU | RowDest ] -> [ | RowDest BackU ]
+
+( Propagate BackU downward toward Active ball )
+( down direction: [BackU | no Active]: BackU is top, no-Active is below. )
+( -> [BackU | BackU]: below gets BackU. )
+late down [ BackU | no Active ] -> [ BackU | BackU ]
+
+( BackU arrives at cell below Active: place GoUp on Active's cell. )
+( down direction: [BackU | Active]: BackU is top, Active is below. )
+( -> [ | Active GoUp ]: BackU removed, Active gets GoUp. )
+late down [ BackU | Active ] -> [ | Active GoUp ]
+
+( ---- Step E: Apply movement via teleportation ---- )
+( Move only into EMPTY ball-layer cells to replicate moveNoCollision blocking. )
+( Move right: remove Active+Ball from current cell, place in right cell )
+late right [ Active BallRed GoRight | no BallRed no BallBlue no BallGreen ] -> [ | Active BallRed ]
+late right [ Active BallBlue GoRight | no BallRed no BallBlue no BallGreen ] -> [ | Active BallBlue ]
+late right [ Active BallGreen GoRight | no BallRed no BallBlue no BallGreen ] -> [ | Active BallGreen ]
+
+( Move left )
+late left [ Active BallRed GoLeft | no BallRed no BallBlue no BallGreen ] -> [ | Active BallRed ]
+late left [ Active BallBlue GoLeft | no BallRed no BallBlue no BallGreen ] -> [ | Active BallBlue ]
+late left [ Active BallGreen GoLeft | no BallRed no BallBlue no BallGreen ] -> [ | Active BallGreen ]
+
+( Move down )
+late down [ Active BallRed GoDown | no BallRed no BallBlue no BallGreen ] -> [ | Active BallRed ]
+late down [ Active BallBlue GoDown | no BallRed no BallBlue no BallGreen ] -> [ | Active BallBlue ]
+late down [ Active BallGreen GoDown | no BallRed no BallBlue no BallGreen ] -> [ | Active BallGreen ]
+
+( Move up )
+late up [ Active BallRed GoUp | no BallRed no BallBlue no BallGreen ] -> [ | Active BallRed ]
+late up [ Active BallBlue GoUp | no BallRed no BallBlue no BallGreen ] -> [ | Active BallBlue ]
+late up [ Active BallGreen GoUp | no BallRed no BallBlue no BallGreen ] -> [ | Active BallGreen ]
+
+( ---- Step F: Cleanup scan/back/command markers ---- )
+late [ ScanR ] -> [ ]
+late [ ScanL ] -> [ ]
+late [ ScanD ] -> [ ]
+late [ ScanU ] -> [ ]
+late [ BackR ] -> [ ]
+late [ BackL ] -> [ ]
+late [ BackD ] -> [ ]
+late [ BackU ] -> [ ]
+late [ GoRight ] -> [ ]
+late [ GoLeft ] -> [ ]
+late [ GoDown ] -> [ ]
+late [ GoUp ] -> [ ]
+
+==============
+WINCONDITIONS
+==============
+
+=======
+LEVELS
+=======
+
+( 10x10 play area. Player+Active start at (0,0) with red ball. )
+( Blue ball at (4,5), Green ball at (7,8). )
+
+R.........
+..........
+..........
+..........
+..........
+....B.....
+..........
+..........
+.......G..
+..........

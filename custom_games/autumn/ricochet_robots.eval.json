@@ -1,0 +1,6 @@
+{
+  "alias": {
+    "player": "robot1"
+  },
+  "ignore": ["dirright", "dirleft", "dirup", "dirdown", "trymove", "background", "wall", "solid"]
+}

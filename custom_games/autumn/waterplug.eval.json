@@ -1,0 +1,14 @@
+{
+  "alias": {
+    "vessel": "vessels",
+    "plug": "plugs",
+    "water": "waterlist",
+    "waterflowed": "waterlist",
+    "vesselbutton": "vesselbutton",
+    "plugbutton": "plugbutton",
+    "waterbutton": "waterbutton",
+    "removebutton": "removebutton",
+    "clearbutton": "clearbutton"
+  },
+  "cursor_start": [0, 0]
+}

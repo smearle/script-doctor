@@ -1,0 +1,13 @@
+{
+  "alias": {
+    "robot1r": "robot1",
+    "robot1l": "robot1",
+    "robot1u": "robot1",
+    "robot1d": "robot1",
+    "robot1rwaiting": "robot1",
+    "robot1lwaiting": "robot1",
+    "robot1uwaiting": "robot1",
+    "robot1dwaiting": "robot1"
+  },
+  "ignore": ["background", "wall", "blocker", "justcreated", "noinput"]
+}

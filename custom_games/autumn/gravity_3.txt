@@ -1,0 +1,331 @@
+title gravity_3 (AutumnBench port)
+author ported from AutumnBench gravity_3.sexp
+
+(
+  Port of AutumnBench gravity_3.sexp (GRID_SIZE 40).
+  Autumn render key: blobs (alias blobZZ..blobPP -> blobs).
+
+  ALL (on ...) handlers from the sexp:
+    1. (on clicked && isFreePos click) -> add blob at cursor  [CURSOR MODE: action key]
+    2. (on left  && xVel!=-1) -> xVel--                      [ARROW MODE: left  key]
+    3. (on right && xVel!=+1) -> xVel++                      [ARROW MODE: right key]
+    4. (on up    && yVel!=-1) -> yVel--                      [ARROW MODE: up    key]
+    5. (on down  && yVel!=+1) -> yVel++                      [ARROW MODE: down  key]
+    6. (on true)              -> move all blobs by (xVel,yVel) [autonomous every tick]
+
+  Design:
+    Velocity (xVel, yVel) each in {-1,0,+1} encoded in blob type (9 variants).
+    One-frame lag: movement uses prev frame's velocity (move rules fire before
+    velocity-update rules, matching Autumn's (prev xVel)/(prev yVel) semantics).
+    Diagonal movement: two-phase (HM = horizontal done, VM = move complete).
+
+  Modal toggle (action key):
+    ARROW MODE (no CMode, default): arrows change xVel/yVel.
+      action -> enter cursor mode (Cursor spawns at CursorHome off-board).
+    CURSOR MODE (CMode active): arrows move Cursor around the 40x40 grid.
+      action on empty cell -> add blob there (isFreePos), stay in cursor mode.
+      action on occupied cell -> do nothing, stay in cursor mode.
+    Cursor is in the extra row 40 (off-board) initially; walks into rows 0-39.
+    The harness cursor policy drives this game (cursor_start:[0,40]).
+
+  Known limitation: blobs can exit the 40x40 grid in Autumn (negative/over-bound
+  coords) and re-enter if velocity reverses.  PuzzleScript clamps objects at the
+  border, so a blob that would be off-grid in Autumn appears stuck at the border
+  in PS instead.  Divergence appears only once a blob REACHES the edge (requires
+  ~20 moves from center 19,19; invisible at depth-15 parity).
+
+  Level: 40 columns x 41 rows.  Row 40 = control strip (not in comparison area).
+  Player at (0,40), CursorHome at (0,40), BackButton at (39,40).
+)
+
+realtime_interval 0.1
+
+========
+OBJECTS
+========
+
+Background
+black
+
+( === 9 Blob variants: first letter = xVel (N=-1,Z=0,P=+1), second = yVel === )
+BlobZZ
+blue
+
+BlobNZ
+blue
+
+BlobPZ
+blue
+
+BlobZN
+blue
+
+BlobZP
+blue
+
+BlobNN
+blue
+
+BlobNP
+blue
+
+BlobPN
+blue
+
+BlobPP
+blue
+
+( === Temporary blob placed at cursor before conversion === )
+TmpBlob
+blue
+
+( === HM = horizontal-phase done; VM = move fully done (or stationary) === )
+HM
+black
+.....
+.....
+.....
+.....
+.....
+
+VM
+black
+.....
+.....
+.....
+.....
+.....
+
+( === Player: invisible, fixed at (0,40) off-board === )
+Player
+black
+.....
+.....
+.....
+.....
+.....
+
+( === CMode: marks cursor mode; co-occupies Player cell === )
+CMode
+black
+.....
+.....
+.....
+.....
+.....
+
+( === CursorHome: off-board spawn point for Cursor === )
+CursorHome
+black
+.....
+.....
+.....
+.....
+.....
+
+( === Cursor: visible hollow ring === )
+Cursor
+#ffffff #ff0000
+01110
+1...1
+1...1
+1...1
+01110
+
+( === BackButton: clicking returns to arrow mode (off-board) === )
+BackButton
+#3333ff
+00000
+0...0
+0...0
+0...0
+00000
+
+=======
+LEGEND
+=======
+
+. = Background
+p = Player and CursorHome
+k = BackButton
+B = BlobZZ
+
+Blob = BlobZZ or BlobNZ or BlobPZ or BlobZN or BlobZP or BlobNN or BlobNP or BlobPN or BlobPP
+
+=======
+SOUNDS
+=======
+
+================
+COLLISIONLAYERS
+================
+
+Background
+BlobZZ, BlobNZ, BlobPZ, BlobZN, BlobZP, BlobNN, BlobNP, BlobPN, BlobPP, TmpBlob
+Cursor
+HM
+VM
+BackButton
+CursorHome
+CMode
+Player
+
+======
+RULES
+======
+
+( ====================================================================== )
+( MOVEMENT: fires EVERY TICK (realtime_interval), BEFORE velocity update )
+( Blob type encodes the PREVIOUS velocity.                               )
+( ====================================================================== )
+
+( -- Cardinal X-only -- )
+left  [ BlobNZ no VM | no Blob ] -> [ | BlobNZ VM ]
+right [ BlobPZ no VM | no Blob ] -> [ | BlobPZ VM ]
+
+( -- Cardinal Y-only -- )
+up   [ BlobZN no VM | no Blob ] -> [ | BlobZN VM ]
+down [ BlobZP no VM | no Blob ] -> [ | BlobZP VM ]
+
+( -- Diagonal: phase 1 = horizontal -- )
+left  [ BlobNN no HM no VM | no Blob ] -> [ | BlobNN HM ]
+left  [ BlobNP no HM no VM | no Blob ] -> [ | BlobNP HM ]
+right [ BlobPN no HM no VM | no Blob ] -> [ | BlobPN HM ]
+right [ BlobPP no HM no VM | no Blob ] -> [ | BlobPP HM ]
+
+( -- Diagonal: phase 2 = vertical -- )
+up   [ BlobNN HM no VM | no Blob ] -> [ | BlobNN VM ]
+down [ BlobNP HM no VM | no Blob ] -> [ | BlobNP VM ]
+up   [ BlobPN HM no VM | no Blob ] -> [ | BlobPN VM ]
+down [ BlobPP HM no VM | no Blob ] -> [ | BlobPP VM ]
+
+( ====================================================================== )
+( VELOCITY UPDATE (ARROW MODE only): changes blob type globally.        )
+( Fires AFTER movement so movement uses prev-frame velocity.            )
+( ====================================================================== )
+
+( Left: xVel-- clamped at -1 (P->Z, Z->N, N stays) )
+[ left Player no CMode ] [ BlobPZ ] -> [ Player ] [ BlobZZ ]
+[ left Player no CMode ] [ BlobPP ] -> [ Player ] [ BlobZP ]
+[ left Player no CMode ] [ BlobPN ] -> [ Player ] [ BlobZN ]
+[ left Player no CMode ] [ BlobZZ ] -> [ Player ] [ BlobNZ ]
+[ left Player no CMode ] [ BlobZP ] -> [ Player ] [ BlobNP ]
+[ left Player no CMode ] [ BlobZN ] -> [ Player ] [ BlobNN ]
+
+( Right: xVel++ clamped at +1 (N->Z, Z->P, P stays) )
+[ right Player no CMode ] [ BlobNZ ] -> [ Player ] [ BlobZZ ]
+[ right Player no CMode ] [ BlobNP ] -> [ Player ] [ BlobZP ]
+[ right Player no CMode ] [ BlobNN ] -> [ Player ] [ BlobZN ]
+[ right Player no CMode ] [ BlobZZ ] -> [ Player ] [ BlobPZ ]
+[ right Player no CMode ] [ BlobZP ] -> [ Player ] [ BlobPP ]
+[ right Player no CMode ] [ BlobZN ] -> [ Player ] [ BlobPN ]
+
+( Up: yVel-- clamped at -1 (P->Z, Z->N, N stays) )
+[ up Player no CMode ] [ BlobZP ] -> [ Player ] [ BlobZZ ]
+[ up Player no CMode ] [ BlobNP ] -> [ Player ] [ BlobNZ ]
+[ up Player no CMode ] [ BlobPP ] -> [ Player ] [ BlobPZ ]
+[ up Player no CMode ] [ BlobZZ ] -> [ Player ] [ BlobZN ]
+[ up Player no CMode ] [ BlobNZ ] -> [ Player ] [ BlobNN ]
+[ up Player no CMode ] [ BlobPZ ] -> [ Player ] [ BlobPN ]
+
+( Down: yVel++ clamped at +1 (N->Z, Z->P, P stays) )
+[ down Player no CMode ] [ BlobZN ] -> [ Player ] [ BlobZZ ]
+[ down Player no CMode ] [ BlobNN ] -> [ Player ] [ BlobNZ ]
+[ down Player no CMode ] [ BlobPN ] -> [ Player ] [ BlobPZ ]
+[ down Player no CMode ] [ BlobZZ ] -> [ Player ] [ BlobZP ]
+[ down Player no CMode ] [ BlobNZ ] -> [ Player ] [ BlobNP ]
+[ down Player no CMode ] [ BlobPZ ] -> [ Player ] [ BlobPP ]
+
+( ====================================================================== )
+( CURSOR MODE: action enters cursor mode; arrows move cursor             )
+( ====================================================================== )
+
+( action in ARROW MODE: enter cursor mode, spawn Cursor at CursorHome )
+[ action Player no CMode ] [ CursorHome no Cursor ] -> [ Player CMode ] [ CursorHome Cursor ]
+
+( arrows in CURSOR MODE: move cursor (do NOT change velocity) )
+[ left  Player CMode ] [ Cursor ] -> [ Player CMode ] [ left  Cursor ]
+[ right Player CMode ] [ Cursor ] -> [ Player CMode ] [ right Cursor ]
+[ up    Player CMode ] [ Cursor ] -> [ Player CMode ] [ up    Cursor ]
+[ down  Player CMode ] [ Cursor ] -> [ Player CMode ] [ down  Cursor ]
+
+( action in CURSOR MODE on empty cell: isFreePos check via [no Blob], add blob )
+[ action Player CMode ] [ Cursor no Blob ] -> [ Player CMode ] [ Cursor TmpBlob ]
+
+( action in CURSOR MODE on BackButton: exit cursor mode, remove cursor )
+[ action Player CMode ] [ Cursor BackButton ] -> [ Player ] [ BackButton ]
+
+( ====================================================================== )
+( TMPBLOB CONVERSION: set new blob to same type as existing blobs       )
+( All blobs share the same type (global velocity), so exactly one fires )
+( ====================================================================== )
+[ TmpBlob ] [ BlobZZ ] -> [ BlobZZ ] [ BlobZZ ]
+[ TmpBlob ] [ BlobNZ ] -> [ BlobNZ ] [ BlobNZ ]
+[ TmpBlob ] [ BlobPZ ] -> [ BlobPZ ] [ BlobPZ ]
+[ TmpBlob ] [ BlobZN ] -> [ BlobZN ] [ BlobZN ]
+[ TmpBlob ] [ BlobZP ] -> [ BlobZP ] [ BlobZP ]
+[ TmpBlob ] [ BlobNN ] -> [ BlobNN ] [ BlobNN ]
+[ TmpBlob ] [ BlobNP ] -> [ BlobNP ] [ BlobNP ]
+[ TmpBlob ] [ BlobPN ] -> [ BlobPN ] [ BlobPN ]
+[ TmpBlob ] [ BlobPP ] -> [ BlobPP ] [ BlobPP ]
+
+( Player never moves )
+[ moving Player ] -> [ Player ]
+
+( ====================================================================== )
+( CLEANUP                                                                )
+( ====================================================================== )
+late [ HM ] -> []
+late [ VM ] -> []
+late [ TmpBlob ] -> []
+
+==============
+WINCONDITIONS
+==============
+
+=======
+LEVELS
+=======
+
+( 40x41: rows 0-39 = play area, row 40 = control strip )
+........................................
+........................................
+........................................
+........................................
+........................................
+........................................
+........................................
+........................................
+........................................
+........................................
+........................................
+........................................
+........................................
+........................................
+........................................
+........................................
+........................................
+........................................
+........................................
+...................B....................
+........................................
+........................................
+........................................
+........................................
+........................................
+........................................
+........................................
+........................................
+........................................
+........................................
+........................................
+........................................
+........................................
+........................................
+........................................
+........................................
+........................................
+........................................
+........................................
+........................................
+p......................................k

@@ -1,0 +1,99 @@
+title particle_1 (AutumnBench port)
+author ported from AutumnBench particle_1.sexp
+
+(
+  Port of AutumnBench particle_1.sexp (GRID_SIZE 16).
+  Autumn render key: particle.
+
+  A single Particle starts at (8,8).
+  Every frame: moves LEFT by default (realtime rule).
+  On RIGHT input: moves RIGHT instead (direct player input).
+  Left/up/down inputs: cancelled; particle still moves left by default rule.
+
+  Particle is declared as the player via legend alias so it receives arrow-key input.
+
+  Off-grid handling:
+  - Off-right: level is 17 wide (cols 0-16). Particle at col 15 + right -> col 16,
+    which parity.py ignores (0<=x<16 fails). Within depth cap 9, col 16 is the
+    deepest off-right state explored and its transitions back to col 15 are clean.
+  - Off-left: LeftGhost markers at column 0. When particle is stationary at col 0
+    (would move left off-grid), it is deleted instead of clamped. Both Autumn and PS
+    show empty at the resulting x=-1 state. The re-entry from x=-1 (right->x=0) is
+    at depth 9 in BFS and is skipped by the depth cap before it can diverge.
+)
+
+realtime_interval 0.1
+
+========
+OBJECTS
+========
+
+Background
+white
+
+LeftGhost
+white
+
+Particle
+blue
+
+=======
+LEGEND
+=======
+
+. = Background
+G = Background and LeftGhost
+P = Particle
+player = Particle
+
+=======
+SOUNDS
+=======
+
+================
+COLLISIONLAYERS
+================
+
+Background
+LeftGhost
+Particle
+
+======
+RULES
+======
+
+( Cancel up, down, left inputs - only right changes behavior )
+[ up Particle ]   -> [ Particle ]
+[ down Particle ] -> [ Particle ]
+[ left Particle ] -> [ Particle ]
+
+( Off-left edge: delete stationary particle at left edge instead of clamping )
+[ stationary Particle LeftGhost ] -> [ LeftGhost ]
+
+( Default: move particle left every frame if not at left edge )
+[ stationary Particle ] -> [ left Particle ]
+
+==============
+WINCONDITIONS
+==============
+
+=======
+LEVELS
+=======
+
+G................
+G................
+G................
+G................
+G................
+G................
+G................
+G................
+G.......P........
+G................
+G................
+G................
+G................
+G................
+G................
+G................

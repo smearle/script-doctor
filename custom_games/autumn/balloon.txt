@@ -1,0 +1,312 @@
+title Balloon (AutumnBench port)
+author ported from AutumnBench balloon.sexp
+
+(
+  Faithful port of the AutumnBench "balloon" Autumn program.
+  Source: MARA/domains/autumnbench/Autumn.wasm/tests/balloon.sexp
+
+  GRID_SIZE = 16 (compared region). The PuzzleScript grid is 16 wide x 17 tall;
+  row 16 is an off-board helper strip (outside the compared 16x16) holding singleton
+  flags / the weight counter.
+
+  ONE Balloon object = 35 cells, rigid. Origin starts at (7,7). Cells relative to
+  origin (m=mediumpurple body, t=tan rope, b=brown basket):
+    y= 5: ......mmm.......   purple body (rows 5..9)
+    y= 6: .....mmmmm......
+    y= 7: .....mmmmm......
+    y= 8: .....mmmmm......
+    y= 9: ......mmm.......
+    y=10: ......t.t.......   tan rope (rows 10..12)
+    y=11: .......t........
+    y=12: ......t.t.......
+    y=13: .....b...b......   brown U-shaped basket (rows 13..15)
+    y=14: .....b...b......
+    y=15: .....bbbbb......
+  The 6 free cells inside the U (rows 13,14 cols 6,7,8 at origin) are the basket
+  interior: clicking a free interior cell adds a Rock; clicking a Rock removes it.
+
+  Autonomous dynamics (one Autumn frame == one PS tick; realtime_interval set):
+    - weight = (>=3 rocks inside the rect [origin+(-2,0) .. origin+(2,7)]).
+    - !weight: the balloon RISES one cell/tick, stops when its top reaches y=0.
+    - weight:  the balloon SINKS one cell/tick (down if within bounds, stopping at the
+      floor y=15); rocks inside the basket rect [origin+(-2,6) .. origin+(2,8)] sink
+      with it.
+    - Rocks not held by the basket are FROZEN at their absolute cell (Autumn's
+      updateObj only touches in-basket rocks; others are unchanged).
+
+  Rigid-body motion: every balloon cell is given the same up/down each tick (the shape
+  shifts together). Because the shape has internal gaps and disconnected cells, a naive
+  border-block would tear it; a singleton GoUp/GoDown flag gates the move globally.
+  GoUp clears the moment any cell reaches row 0 (TopSensor); GoDown clears when a cell
+  is at row 15 (BottomSensor) -- freezing the body as a unit at the ceiling/floor,
+  matching Autumn's isWithinBounds stop.
+
+  Weight test (>=3 counting): an invisible Region overlay (the 5x8 weight rect, moving
+  with the body) marks rocks inside it with Tok; a singleton counter is advanced once
+  per token by three sequential rules (Cnt0->Cnt1->Cnt2->Cnt3, no `again`, so the
+  per-tick reset cannot re-fire). Reaching Cnt3 raises the Weight flag, flipping motion
+  from up to down.
+
+  Rocks live in their own collision layer (Autumn lets a rock and a balloon cell
+  co-occupy a cell), so the body moves through frozen rocks without colliding.
+)
+
+realtime_interval 0.1
+
+========
+OBJECTS
+========
+
+Background
+#87ceeb
+
+( === visible balloon cells, all aliased to "balloon" === )
+BalloonPurple
+#9370db
+
+BalloonTan
+#d2b48c
+
+BalloonBrown
+#a52a2a
+
+Rock
+#808080
+
+NewRock
+#808080
+
+Player
+#ffffff #ff0000
+01110
+1...1
+1...1
+1...1
+01110
+
+( === invisible helpers (transparent sprites) === )
+BasketInside
+#000000
+.....
+.....
+.....
+.....
+.....
+
+Region
+#000000
+.....
+.....
+.....
+.....
+.....
+
+TopSensor
+#000000
+.....
+.....
+.....
+.....
+.....
+
+BottomSensor
+#000000
+.....
+.....
+.....
+.....
+.....
+
+GoUp
+#000000
+.....
+.....
+.....
+.....
+.....
+
+GoDown
+#000000
+.....
+.....
+.....
+.....
+.....
+
+Anchor
+#000000
+.....
+.....
+.....
+.....
+.....
+
+Tok
+#000000
+.....
+.....
+.....
+.....
+.....
+
+Weight
+#000000
+.....
+.....
+.....
+.....
+.....
+
+Cnt0
+#000000
+.....
+.....
+.....
+.....
+.....
+
+Cnt1
+#000000
+.....
+.....
+.....
+.....
+.....
+
+Cnt2
+#000000
+.....
+.....
+.....
+.....
+.....
+
+Cnt3
+#000000
+.....
+.....
+.....
+.....
+.....
+
+=======
+LEGEND
+=======
+
+. = Background
+z = Background and TopSensor
+Q = Background and TopSensor and Player
+A = BalloonPurple
+C = BalloonPurple and Region
+D = BalloonTan and Region
+H = Background and Region
+F = BalloonBrown and Region
+G = Background and BasketInside and Region
+E = BalloonBrown and BottomSensor
+s = Background and BottomSensor
+o = Background and Anchor and GoUp and GoDown and Cnt0
+
+Balloon = BalloonPurple or BalloonTan or BalloonBrown
+Body = BalloonPurple or BalloonTan or BalloonBrown or BasketInside or Region
+Cnt = Cnt0 or Cnt1 or Cnt2 or Cnt3
+AnyRock = Rock or NewRock
+
+=======
+SOUNDS
+=======
+
+================
+COLLISIONLAYERS
+================
+
+Background
+BalloonPurple, BalloonTan, BalloonBrown
+BasketInside
+Region
+Rock, NewRock
+Tok
+TopSensor, BottomSensor
+GoUp
+GoDown
+Weight
+Cnt0, Cnt1, Cnt2, Cnt3
+Anchor
+Player
+
+======
+RULES
+======
+
+( === WEIGHT TEST: is the count of rocks inside the weight rect >= 3 ? === )
+( reset flag, counter and tokens at tick start )
+[ Weight ] -> []
+[ Cnt1 ] -> [ Cnt0 ]
+[ Cnt2 ] -> [ Cnt0 ]
+[ Cnt3 ] -> [ Cnt0 ]
+[ Tok ] -> []
+( mark every rock that lies inside the Region overlay )
+[ Region AnyRock ] -> [ Region AnyRock Tok ]
+( advance the singleton counter once per token, in sequence (no `again`) )
+[ Tok ] [ Cnt0 ] -> [ ] [ Cnt1 ]
+[ Tok ] [ Cnt1 ] -> [ ] [ Cnt2 ]
+[ Tok ] [ Cnt2 ] -> [ ] [ Cnt3 ]
+( Cnt3 reached -> heavy: raise the Weight flag on the Anchor cell )
+[ Cnt3 Anchor ] -> [ Cnt3 Anchor Weight ]
+
+( === choose motion: heavy suppresses rising, light suppresses sinking === )
+[ Weight ] [ GoUp ] -> [ Weight ] [ ]
+[ no Weight Anchor ] [ GoDown ] -> [ Anchor ] [ ]
+
+( ceiling: a rising balloon stops once any cell reaches row 0 )
+[ TopSensor Balloon ] [ GoUp ] -> [ TopSensor Balloon ] [ ]
+( floor: a sinking balloon stops once any cell reaches row 15 )
+[ BottomSensor Balloon ] [ GoDown ] -> [ BottomSensor Balloon ] [ ]
+
+( === CLICK: add a rock on a free basket-interior cell; remove a clicked rock ===
+  A newly placed rock is a NewRock this tick (it does not settle on its placement
+  frame); it becomes a regular Rock late, matching Autumn's addObj-then-nextSolid
+  one-frame delay. )
+[ action Player BasketInside no AnyRock ] -> [ Player BasketInside NewRock ]
+[ action Player AnyRock ] -> [ Player ]
+
+( === MOTION: rise (light) or sink (heavy) the whole rigid body one cell === )
+[ stationary Body ] [ GoUp ]   -> [ up Body ] [ GoUp ]
+[ stationary Body ] [ GoDown ] -> [ down Body ] [ GoDown ]
+( heavy: rocks inside the basket rect sink with the body )
+[ GoDown ] [ BasketInside Rock ] -> [ GoDown ] [ down BasketInside down Rock ]
+( ceiling-locked & light: a held rock settles to the basket floor -- Autumn applies
+  nextSolid to in-basket rocks when the balloon cannot rise )
+down [ TopSensor Balloon ] [ Rock BasketInside | BasketInside no Rock ] -> [ TopSensor Balloon ] [ BasketInside | Rock BasketInside ]
+
+( a freshly placed rock becomes a regular rock for next tick )
+late [ NewRock ] -> [ Rock ]
+
+( === regenerate the singleton flags for the next tick === )
+late [ Anchor no GoUp ] -> [ Anchor GoUp ]
+late [ Anchor no GoDown ] -> [ Anchor GoDown ]
+
+==============
+WINCONDITIONS
+==============
+
+=======
+LEVELS
+=======
+
+Qzzzzzzzzzzzzzzz
+................
+................
+................
+................
+......AAA.......
+.....AAAAA......
+.....CCCCC......
+.....CCCCC......
+.....HCCCH......
+.....HDHDH......
+.....HHDHH......
+.....HDHDH......
+.....FGGGF......
+.....FGGGF......
+sssssEEEEEssssss
+o...............

@@ -1,0 +1,13 @@
+{
+  "alias": {
+    "blobdown": "blobs",
+    "blobup": "blobs",
+    "blobleft": "blobs",
+    "blobright": "blobs",
+    "leftbutton": "leftButton",
+    "rightbutton": "rightButton",
+    "upbutton": "upButton",
+    "downbutton": "downButton"
+  },
+  "cursor_start": [0, 0]
+}

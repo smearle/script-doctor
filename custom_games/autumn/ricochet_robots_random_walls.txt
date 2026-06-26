@@ -1,0 +1,299 @@
+title Ricochet Robots (AutumnBench port)
+author ported from AutumnBench ricochet_robots_random_walls.sexp
+homepage www.puzzlescript.net
+
+(
+  Port of "ricochet_robots_random_walls". GRID_SIZE = 24.
+
+  Mechanics:
+    - 4 robots on a 24x24 grid. Arrow keys slide robot1 (= PS player) until
+      blocked by a wall/border/other robot. Robots 2-4 are idle.
+    - Faithful Autumn timing: a robot continues "moving" even on the tick it
+      arrives adjacent to a wall; it only STOPS on the tick it TRIES to move
+      into the wall and fails. New input is ignored while moving.
+
+  Implementation:
+    Robot1 states: robot1 (stopped), robot1r/l/u/d (moving), robot1xWaiting
+    (just arrived next to wall, still "moving" conceptually -- matches Autumn
+    prev-semantics where moving=true until the blocked attempt fires).
+    JustCreated marker: set on the tick a key starts motion; used to detect
+    immediate blocks (direction pressed into wall → stops same tick, like Autumn).
+    NoInput marker: when robot1 transitions from Waiting, prevents new key from
+    starting movement on that same tick (matches Autumn's prev(moving)=true guard).
+)
+
+realtime_interval 0.1
+throttle_movement
+key_repeat_interval 0.1
+
+========
+OBJECTS
+========
+
+Background
+black
+
+Borders
+gray
+
+innerwall1
+darkgray
+
+innerwall2
+darkgray
+
+innerwall3
+darkgray
+
+innerwall4
+darkgray
+
+innerwall5
+darkgray
+
+innerwall6
+darkgray
+
+innerwall7
+darkgray
+
+innerwall8
+darkgray
+
+centerwall
+gray
+
+quadwall1
+darkgray
+
+quadwall2
+darkgray
+
+quadwall3
+darkgray
+
+quadwall4
+darkgray
+
+robot1
+red
+00000
+00000
+00000
+00000
+00000
+
+robot1r
+red
+00000
+00000
+00000
+00000
+00000
+
+robot1l
+red
+00000
+00000
+00000
+00000
+00000
+
+robot1u
+red
+00000
+00000
+00000
+00000
+00000
+
+robot1d
+red
+00000
+00000
+00000
+00000
+00000
+
+(Waiting: just arrived next to wall, still counts as "moving" this tick.
+ Converts to robot1+NoInput on the next tick, blocking new input for that tick.)
+robot1rWaiting
+red
+00000
+00000
+00000
+00000
+00000
+
+robot1lWaiting
+red
+00000
+00000
+00000
+00000
+00000
+
+robot1uWaiting
+red
+00000
+00000
+00000
+00000
+00000
+
+robot1dWaiting
+red
+00000
+00000
+00000
+00000
+00000
+
+robot2
+blue
+
+robot3
+green
+
+robot4
+yellow
+
+(Invisible helpers: no effect on the class comparison.)
+JustCreated
+black
+.....
+.....
+.....
+.....
+.....
+
+NoInput
+black
+.....
+.....
+.....
+.....
+.....
+
+=======
+LEGEND
+=======
+
+. = Background
+O = Borders
+A = innerwall1
+C = innerwall2
+D = innerwall3
+E = innerwall4
+F = innerwall5
+G = innerwall6
+H = innerwall7
+I = innerwall8
+J = centerwall
+K = quadwall1
+L = quadwall2
+M = quadwall3
+N = quadwall4
+1 = robot1
+2 = robot2
+3 = robot3
+4 = robot4
+player = robot1
+
+Wall = Borders or innerwall1 or innerwall2 or innerwall3 or innerwall4 or innerwall5 or innerwall6 or innerwall7 or innerwall8 or centerwall or quadwall1 or quadwall2 or quadwall3 or quadwall4
+
+Blocker = Wall or robot2 or robot3 or robot4
+
+=======
+SOUNDS
+=======
+
+================
+COLLISIONLAYERS
+================
+
+Background
+JustCreated, NoInput
+Borders, innerwall1, innerwall2, innerwall3, innerwall4, innerwall5, innerwall6, innerwall7, innerwall8, centerwall, quadwall1, quadwall2, quadwall3, quadwall4, robot1, robot1r, robot1l, robot1u, robot1d, robot1rWaiting, robot1lWaiting, robot1uWaiting, robot1dWaiting, robot2, robot3, robot4
+
+======
+RULES
+======
+
+(=== CONTINUOUS MOVEMENT: sliding variants move 1 cell/tick ===)
+[ robot1r ] -> [ right robot1r ]
+[ robot1l ] -> [ left  robot1l ]
+[ robot1u ] -> [ up    robot1u ]
+[ robot1d ] -> [ down  robot1d ]
+
+(=== WAITING -> STOPPED (with NoInput to block new key on this tick) ===
+ These fire first so the NoInput is in place before key-handling rules run.)
+[ robot1rWaiting ] -> [ robot1 NoInput ]
+[ robot1lWaiting ] -> [ robot1 NoInput ]
+[ robot1uWaiting ] -> [ robot1 NoInput ]
+[ robot1dWaiting ] -> [ robot1 NoInput ]
+
+(=== KEY HANDLING: start sliding from stopped state ===
+ Only fires for robot1 (stopped) when no NoInput guard is present.
+ JustCreated co-occupies the creation cell so we can detect immediate blocks.)
+[ right robot1 no NoInput ] -> [ right robot1r JustCreated ]
+[ left  robot1 no NoInput ] -> [ left  robot1l JustCreated ]
+[ up    robot1 no NoInput ] -> [ up    robot1u JustCreated ]
+[ down  robot1 no NoInput ] -> [ down  robot1d JustCreated ]
+
+(=== LATE RULES ===)
+
+(Immediately stop when blocked on the CREATION tick -- Autumn stops same-frame
+ when the first move is already against a wall. Detected by JustCreated being in
+ the same cell as the blocked sliding variant.)
+late right [ JustCreated robot1r | Blocker ] -> [ robot1 | Blocker ]
+late left  [ JustCreated robot1l | Blocker ] -> [ robot1 | Blocker ]
+late up    [ JustCreated robot1u | Blocker ] -> [ robot1 | Blocker ]
+late down  [ JustCreated robot1d | Blocker ] -> [ robot1 | Blocker ]
+
+(Transition to Waiting when the robot moved at least once before hitting the wall.
+ JustCreated will be in the PREVIOUS cell (robot moved away), so `no JustCreated`
+ is true in the sliding variant's NEW cell.)
+late right [ robot1r no JustCreated | Blocker ] -> [ robot1rWaiting | Blocker ]
+late left  [ robot1l no JustCreated | Blocker ] -> [ robot1lWaiting | Blocker ]
+late up    [ robot1u no JustCreated | Blocker ] -> [ robot1uWaiting | Blocker ]
+late down  [ robot1d no JustCreated | Blocker ] -> [ robot1dWaiting | Blocker ]
+
+(Clean up orphaned JustCreated markers left behind when robot moved away.)
+late [ JustCreated ] -> [ ]
+
+(Clear NoInput at end of tick so next tick's input is unblocked.)
+late [ NoInput robot1 ] -> [ robot1 ]
+
+==============
+WINCONDITIONS
+==============
+
+=======
+LEVELS
+=======
+
+OOOOOOOOOOOOOOOOOOOOOOOO
+O.1....................O
+O...........L..........O
+O......2....L..........O
+O...AAAA....L..........O
+O....D......L..........O
+O....D............G....O
+O....D............G....O
+O....D..C.........G....O
+O.......C.........G....O
+O.......C.........G....O
+O.......C..JJ..........O
+O.KKKKK.C..JJ.MMMMMMMM.O
+O...I.3................O
+O...I..................O
+O...I..................O
+O...I...........E......O
+O...........N...EHHH...O
+O....FFFFF..N...E.4....O
+O...........N...E......O
+O...........N...E......O
+O...........N...E......O
+O...........N..........O
+OOOOOOOOOOOOOOOOOOOOOOOO

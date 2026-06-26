@@ -1,0 +1,401 @@
+title bbq (AutumnBench port)
+author ported from AutumnBench bbq.sexp
+
+(
+  Port of AutumnBench bbq.sexp (GRID_SIZE 7). compare_color=true.
+  cursor policy: Player = invisible click cursor (starts at col 7 row 0).
+
+  Autumn classes -> PS objects:
+    bbq        -> BbqGray(gray=#808080), BbqFireOn(orange=#ffa500), BbqFireOff(white=#ffffff),
+                  BbqGasHigh(yellow=#ffff00), BbqGasLow(white=#ffffff),
+                  BbqGasSome(yellow=#ffff00), BbqGasEmpty(white=#ffffff)
+    meat       -> MeatRaw(lightblue=#add8e6), MeatMed(pink=#ffc0cb),
+                  MeatCooked(sandybrown=#f4a460), MeatBurnt(brown=#a52a2a)
+    fillbutton -> FillBtn(yellow=#ffff00)
+    person     -> PersonBlue(blue=#0000ff), PersonBlack(black=#000000)
+
+  Play area: rows 0-6, cols 0-6 (7x7 comparison zone).
+  Counter strips in rows 7-8 (hidden, level extends to 70 cols wide).
+
+  GAS COUNTER (row 7):
+    GasThresh0 at col 0, GasThresh20 at col 20, GasPtr starts at col 65.
+    GasPtr moves LEFT each fire-on tick (blocked at col 0 by grid boundary).
+    When GasPtr lands on GasThresh20: BbqGasHigh -> BbqGasLow.
+    When GasPtr lands on GasThresh0: BbqGasSome -> BbqGasEmpty, fire turns off.
+
+  COOKED COUNTER (row 8):
+    CookedHome (permanent) and CookedPtr both start at col 0.
+    CookedPtr moves RIGHT each fire-on tick.
+    CookedThresh10 at col 10: MeatRaw -> MeatMed.
+    CookedThresh30 at col 30: MeatMed -> MeatCooked.
+    CookedThresh60 at col 60: MeatCooked -> MeatBurnt.
+    On eat: NeedCookedRespawn signal moves CookedPtr back to CookedHome.
+
+  HEALTH (HealthPtr in row 0):
+    HealthPtr starts at col 3 (health=3 = rightmost blue cell).
+    Eating cooked meat (+1): HealthPtr moves right, new cell PersonBlack -> PersonBlue.
+    Eating raw/med meat (-1): current cell PersonBlue -> PersonBlack, HealthPtr moves left.
+    Eating burnt meat (-2): two left moves.
+
+  NOTE: [ A ] [ B ] without | matches A and B anywhere in the grid (cross-row allowed).
+)
+
+realtime_interval 0.1
+
+========
+OBJECTS
+========
+
+Background
+#111111
+
+Player
+#ffffff #ff0000
+01110
+1...1
+1...1
+1...1
+01110
+
+PersonBlue
+#0000ff
+
+PersonBlack
+#000000
+
+HealthPtr
+#111111
+.....
+.....
+.....
+.....
+.....
+
+MeatRaw
+#add8e6
+
+MeatMed
+#ffc0cb
+
+MeatCooked
+#f4a460
+
+MeatBurnt
+#a52a2a
+
+BbqGray
+#808080
+
+BbqFireOn
+#ffa500
+
+BbqFireOff
+#ffffff
+
+BbqGasHigh
+#ffff00
+
+BbqGasLow
+#ffffff
+
+BbqGasSome
+#ffff00
+
+BbqGasEmpty
+#ffffff
+
+FillBtn
+#ffff00
+
+GasPtr
+#113311
+.....
+.....
+.....
+.....
+.....
+
+GasThresh20
+#114411
+.....
+.....
+.....
+.....
+.....
+
+GasThresh0
+#115511
+.....
+.....
+.....
+.....
+.....
+
+CookedPtr
+#331111
+.....
+.....
+.....
+.....
+.....
+
+CookedHome
+#332211
+.....
+.....
+.....
+.....
+.....
+
+CookedThresh10
+#334411
+.....
+.....
+.....
+.....
+.....
+
+CookedThresh30
+#335511
+.....
+.....
+.....
+.....
+.....
+
+CookedThresh60
+#336611
+.....
+.....
+.....
+.....
+.....
+
+FireToggle
+#ff1100
+.....
+.....
+.....
+.....
+.....
+
+FillSig
+#ff2200
+.....
+.....
+.....
+.....
+.....
+
+FillCount4
+#ff2201
+.....
+.....
+.....
+.....
+.....
+
+FillCount3
+#ff2202
+.....
+.....
+.....
+.....
+.....
+
+FillCount2
+#ff2203
+.....
+.....
+.....
+.....
+.....
+
+FillCount1
+#ff2204
+.....
+.....
+.....
+.....
+.....
+
+EatSigH
+#ff3300
+.....
+.....
+.....
+.....
+.....
+
+EatSigH2
+#ff3301
+.....
+.....
+.....
+.....
+.....
+
+EatSigC
+#ff3302
+.....
+.....
+.....
+.....
+.....
+
+NeedCookedRespawn
+#ff3303
+.....
+.....
+.....
+.....
+.....
+
+=======
+LEGEND
+=======
+
+. = Background
+W = Player and Background
+1 = PersonBlue
+2 = PersonBlack
+3 = HealthPtr and PersonBlue
+4 = MeatRaw
+5 = BbqGray
+6 = BbqFireOn
+7 = BbqGasHigh
+8 = BbqGasSome
+9 = FillBtn
+N = GasThresh0
+M = GasThresh20
+V = GasPtr
+C = CookedPtr and CookedHome
+J = CookedThresh10
+K = CookedThresh30
+L = CookedThresh60
+
+=======
+SOUNDS
+=======
+
+================
+COLLISIONLAYERS
+================
+
+Background
+PersonBlue, PersonBlack
+HealthPtr
+MeatRaw, MeatMed, MeatCooked, MeatBurnt
+BbqGray
+BbqFireOn, BbqFireOff
+BbqGasHigh, BbqGasLow
+BbqGasSome, BbqGasEmpty
+FillBtn
+GasPtr
+GasThresh20, GasThresh0
+CookedPtr
+CookedThresh10, CookedThresh30, CookedThresh60
+CookedHome
+FireToggle
+FillSig, FillCount4, FillCount3, FillCount2, FillCount1
+EatSigH, EatSigH2
+EatSigC
+NeedCookedRespawn
+Player
+
+======
+RULES
+======
+
+(=== CLICK DETECTION ===)
+
+[ action Player BbqGray    ] -> [ Player BbqGray    FireToggle ]
+[ action Player BbqFireOn  ] -> [ Player BbqFireOn  FireToggle ]
+[ action Player BbqFireOff ] -> [ Player BbqFireOff FireToggle ]
+[ action Player BbqGasHigh ] -> [ Player BbqGasHigh FireToggle ]
+[ action Player BbqGasLow  ] -> [ Player BbqGasLow  FireToggle ]
+[ action Player BbqGasSome ] -> [ Player BbqGasSome FireToggle ]
+[ action Player BbqGasEmpty] -> [ Player BbqGasEmpty FireToggle ]
+
+[ action Player FillBtn ] -> [ Player FillBtn FillSig ]
+
+[ action Player MeatRaw    ] -> [ Player MeatRaw    EatSigH EatSigC ]
+[ action Player MeatMed    ] -> [ Player MeatMed    EatSigH EatSigC ]
+[ action Player MeatCooked ] -> [ Player MeatCooked EatSigH EatSigC ]
+[ action Player MeatBurnt  ] -> [ Player MeatBurnt  EatSigH EatSigC ]
+
+(=== GAS DECREMENT (fire-on, BEFORE toggle so we see prev-frame fire state) ===)
+[ BbqFireOn ] [ GasPtr ] -> [ BbqFireOn ] [ left GasPtr ]
+
+(cancel the gas decrement when a BBQ click fires this tick; in Autumn the
+ clicked handler overrides initnext so gas does not change on any click tick)
+[ FireToggle ] [ moving GasPtr ] -> [ FireToggle ] [ GasPtr ]
+
+(=== COOKED INCREMENT (fire-on, BEFORE toggle) ===)
+[ BbqFireOn ] [ CookedPtr ] -> [ BbqFireOn ] [ right CookedPtr ]
+
+(=== FIRE TOGGLE ===)
+
+[ FireToggle ] [ BbqFireOff ] [ BbqGasSome  ] -> [ ] [ BbqFireOn ] [ BbqGasSome  ]
+[ FireToggle ] [ BbqFireOff ] [ BbqGasHigh  ] -> [ ] [ BbqFireOn ] [ BbqGasHigh  ]
+[ FireToggle ] [ BbqFireOn  ]                  -> [ ] [ BbqFireOff ]
+[ FireToggle ] [ BbqFireOff ] [ BbqGasEmpty ] -> [ ] [ BbqFireOff ] [ BbqGasEmpty ]
+
+(=== GAS THRESHOLD TRANSITIONS (late: after GasPtr moves) ===)
+late [ GasThresh20 GasPtr ] [ BbqGasHigh ] -> [ GasThresh20 GasPtr ] [ BbqGasLow   ]
+late [ GasThresh0  GasPtr ] [ BbqGasSome  ] -> [ GasThresh0  GasPtr ] [ BbqGasEmpty ]
+late [ GasThresh0  GasPtr ] [ BbqFireOn   ] -> [ GasThresh0  GasPtr ] [ BbqFireOff  ]
+
+(=== COOKED THRESHOLD TRANSITIONS (late: after CookedPtr moves) ===)
+late [ CookedThresh10 CookedPtr ] [ MeatRaw    ] -> [ CookedThresh10 CookedPtr ] [ MeatMed    ]
+late [ CookedThresh30 CookedPtr ] [ MeatMed    ] -> [ CookedThresh30 CookedPtr ] [ MeatCooked ]
+late [ CookedThresh60 CookedPtr ] [ MeatCooked ] -> [ CookedThresh60 CookedPtr ] [ MeatBurnt  ]
+
+(=== FILL GAS (+5) ===)
+[ FillSig    ] [ GasPtr ] -> [ FillCount4 ] [ right GasPtr ]
+[ FillCount4 ] [ GasPtr ] -> [ FillCount3 ] [ right GasPtr ]
+[ FillCount3 ] [ GasPtr ] -> [ FillCount2 ] [ right GasPtr ]
+[ FillCount2 ] [ GasPtr ] -> [ FillCount1 ] [ right GasPtr ]
+[ FillCount1 ] -> [ ]
+
+right [ GasThresh20 | GasPtr ] [ BbqGasLow ] -> [ GasThresh20 | GasPtr ] [ BbqGasHigh ]
+[ GasThresh0 no GasPtr ] [ BbqGasEmpty ] -> [ GasThresh0 ] [ BbqGasSome ]
+
+(=== EATING: HEALTH UPDATE ===)
+(Cross-grid: EatSigH at (3,3), PersonBlue+HealthPtr at row 0)
+
+[ EatSigH MeatCooked ] [ PersonBlue HealthPtr ] -> [ MeatRaw ] [ PersonBlue right HealthPtr ]
+[ EatSigH MeatRaw    ] [ PersonBlue HealthPtr ] -> [ MeatRaw ] [ PersonBlack left HealthPtr ]
+[ EatSigH MeatMed    ] [ PersonBlue HealthPtr ] -> [ MeatRaw ] [ PersonBlack left HealthPtr ]
+[ EatSigH MeatBurnt  ] [ PersonBlue HealthPtr ] -> [ EatSigH2 MeatRaw ] [ PersonBlack left HealthPtr ]
+[ EatSigH2 ] [ PersonBlue HealthPtr ] -> [ ] [ PersonBlack left HealthPtr ]
+
+late [ HealthPtr PersonBlack ] -> [ HealthPtr PersonBlue ]
+
+[ EatSigH  ] -> [ ]
+[ EatSigH2 ] -> [ ]
+
+(=== EATING: COOKED RESET ===)
+[ EatSigC ] [ CookedPtr ] -> [ NeedCookedRespawn ] [ ]
+[ EatSigC ] -> [ ]
+
+[ NeedCookedRespawn ] [ CookedHome ] -> [ ] [ CookedHome CookedPtr ]
+[ NeedCookedRespawn ] -> [ ]
+
+==============
+WINCONDITIONS
+==============
+
+=======
+LEVELS
+=======
+
+1113222W..............................................................
+......................................................................
+......................................................................
+...4..................................................................
+..565.................................................................
+..575.................................................................
+9.585.................................................................
+N...................M............................................V....
+C.........J...................K.............................L.........

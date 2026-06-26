@@ -1,0 +1,196 @@
+title Snake (AutumnBench port)
+author ported from AutumnBench snake.sexp
+
+(
+  Port of AutumnBench snake.sexp (GRID_SIZE 16).
+
+  Mechanics (verified against Autumn interpreter):
+  - 16x16 play area.
+  - Snake = 2 cells: head (SnakeHeadL/R/U/D encodes direction) + tail (SnakeTail).
+  - Initial state: head at (7,7), tail at (8,7), moving LEFT.
+  - Food at (10,8). Not eaten in seeds 0-4 with 40-step arrow sequences.
+  - Autumn "prev" semantics: pressing an arrow FREEZES snake this frame
+    and updates direction for the NEXT tick (1-frame lag).
+  - Each no-input tick: head moves in current direction, tail follows old head.
+
+  Input detection mechanism (Player at (0,0)):
+  - Player is in its own collision layer (can move but cancelled by [moving Player]->[Player]).
+  - When key pressed: [left Player][SnakeHead] fires (multi-bracket) -> set InputFired + change dir.
+  - InputFired in same cell as Player but different layer.
+  - Movement rules gated on [Player no InputFired][SnakeHead...].
+  - late [InputFired] -> [] clears InputFired at end of tick.
+
+  Food eating (implemented):
+  - When snake head lands on food, food is deleted (late rule).
+  - Food respawn is via uniformChoice (RNG), so new food position cannot match Autumn.
+  - Divergence is purely uniformChoice after depth 6 (first food-eating transition).
+
+  Remaining divergences (caps):
+  - Depth 6+: uniformChoice for food respawn position after eating.
+  - Depth 8+: wrapping (toroidal grid) not implemented; PS clamps at border.
+    Masked by food-eating uniformChoice divergence at depth 6.
+)
+
+realtime_interval 0.1
+
+========
+OBJECTS
+========
+
+Background
+white
+
+Player
+white
+.....
+.....
+.....
+.....
+.....
+
+InputFired
+white
+.....
+.....
+.....
+.....
+.....
+
+SnakeHeadL
+green
+
+SnakeHeadR
+green
+
+SnakeHeadU
+green
+
+SnakeHeadD
+green
+
+SnakeTail
+darkgreen
+
+Food
+pink
+
+HeadTrace
+white
+.....
+.....
+.....
+.....
+.....
+
+TailMark
+white
+.....
+.....
+.....
+.....
+.....
+
+=======
+LEGEND
+=======
+
+. = Background
+P = Player
+H = SnakeHeadL
+T = SnakeTail
+F = Food
+
+SnakeHead = SnakeHeadL or SnakeHeadR or SnakeHeadU or SnakeHeadD
+
+=======
+SOUNDS
+=======
+
+================
+COLLISIONLAYERS
+================
+
+Background
+Player
+InputFired
+SnakeHeadL, SnakeHeadR, SnakeHeadU, SnakeHeadD
+SnakeTail
+Food
+HeadTrace
+TailMark
+
+======
+RULES
+======
+
+(=== INPUT: detect via Player direction in multi-bracket, set InputFired + change dir ===)
+(Player at (0,0), can try to move but movement is cancelled after these rules fire)
+(When a key is pressed, Player "tries" to move in that direction -> [dir Player] fires)
+
+[ left  Player no InputFired ] [ SnakeHeadR ] -> [ Player InputFired ] [ SnakeHeadL ]
+[ left  Player no InputFired ] [ SnakeHeadU ] -> [ Player InputFired ] [ SnakeHeadL ]
+[ left  Player no InputFired ] [ SnakeHeadD ] -> [ Player InputFired ] [ SnakeHeadL ]
+[ left  Player no InputFired ] [ SnakeHeadL ] -> [ Player InputFired ] [ SnakeHeadL ]
+
+[ right Player no InputFired ] [ SnakeHeadL ] -> [ Player InputFired ] [ SnakeHeadR ]
+[ right Player no InputFired ] [ SnakeHeadU ] -> [ Player InputFired ] [ SnakeHeadR ]
+[ right Player no InputFired ] [ SnakeHeadD ] -> [ Player InputFired ] [ SnakeHeadR ]
+[ right Player no InputFired ] [ SnakeHeadR ] -> [ Player InputFired ] [ SnakeHeadR ]
+
+[ up    Player no InputFired ] [ SnakeHeadL ] -> [ Player InputFired ] [ SnakeHeadU ]
+[ up    Player no InputFired ] [ SnakeHeadR ] -> [ Player InputFired ] [ SnakeHeadU ]
+[ up    Player no InputFired ] [ SnakeHeadD ] -> [ Player InputFired ] [ SnakeHeadU ]
+[ up    Player no InputFired ] [ SnakeHeadU ] -> [ Player InputFired ] [ SnakeHeadU ]
+
+[ down  Player no InputFired ] [ SnakeHeadL ] -> [ Player InputFired ] [ SnakeHeadD ]
+[ down  Player no InputFired ] [ SnakeHeadR ] -> [ Player InputFired ] [ SnakeHeadD ]
+[ down  Player no InputFired ] [ SnakeHeadU ] -> [ Player InputFired ] [ SnakeHeadD ]
+[ down  Player no InputFired ] [ SnakeHeadD ] -> [ Player InputFired ] [ SnakeHeadD ]
+
+(Cancel Player movement - keeps Player at (0,0))
+[ moving Player ] -> [ Player ]
+
+(=== AUTONOMOUS MOVEMENT: only when no InputFired in Player's cell ===)
+(Mark head and tail for tail-following)
+[ Player no InputFired ] [ SnakeHead no HeadTrace ] -> [ Player ] [ SnakeHead HeadTrace ]
+[ Player no InputFired ] [ SnakeTail no TailMark  ] -> [ Player ] [ SnakeTail TailMark  ]
+
+(Move head in current direction)
+[ Player no InputFired ] [ SnakeHeadL ] -> [ Player ] [ left  SnakeHeadL ]
+[ Player no InputFired ] [ SnakeHeadR ] -> [ Player ] [ right SnakeHeadR ]
+[ Player no InputFired ] [ SnakeHeadU ] -> [ Player ] [ up    SnakeHeadU ]
+[ Player no InputFired ] [ SnakeHeadD ] -> [ Player ] [ down  SnakeHeadD ]
+
+(=== LATE: tail follows old head position ===)
+late [ HeadTrace no SnakeHead ] -> [ SnakeTail ]
+late [ TailMark SnakeTail ] -> [ TailMark ]
+late [ TailMark ] -> []
+late [ HeadTrace SnakeHead ] -> [ SnakeHead ]
+late [ InputFired ] -> []
+(=== FOOD EATEN: delete food when snake head lands on it; respawn is uniformChoice (RNG) so not reproduced ===)
+late [ SnakeHead Food ] -> [ SnakeHead ]
+
+==============
+WINCONDITIONS
+==============
+
+=======
+LEVELS
+=======
+
+P...............
+................
+................
+................
+................
+................
+................
+.......HT.......
+..........F.....
+................
+................
+................
+................
+................
+................
+................

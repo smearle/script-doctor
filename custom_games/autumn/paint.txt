@@ -1,0 +1,179 @@
+title paint (AutumnBench port)
+author ported from AutumnBench paint.sexp
+
+(
+  Port of AutumnBench paint.sexp (GRID_SIZE=16).
+
+  All 6 on-handlers implemented:
+    on clicked          -> place Particle at click position with currColor
+    on up + red         -> currColor = gold
+    on up + gold        -> currColor = green
+    on up + green       -> currColor = blue
+    on up + blue        -> currColor = purple
+    on up + purple      -> currColor = red
+
+  State encoding:
+    CurrRed..CurrPurple  invisible markers at row 16 col 0; exactly one present.
+    ParticleRed..Purple  paint dots placed by action (X) at cursor position.
+    UpUsed               one-shot guard in Player's cell; prevents cascading
+                         color cycling across rule-loop passes within one tick;
+                         removed by a late rule after the main loop.
+    Player               movable cursor (helper; ignored by comparison).
+
+  compare_color=true: particle colors are checked (hex must match CSS RGB).
+  cursor_start=[0,0].
+
+  realtime_interval omitted: no autonomous dynamics in paint.
+)
+
+========
+OBJECTS
+========
+
+Background
+black
+
+Player
+#ffffff #ff0000
+01110
+1...1
+1...1
+1...1
+01110
+
+( === Particles (paint dots, one per color) === )
+ParticleRed
+#ff0000
+
+ParticleGold
+#ffd700
+
+ParticleGreen
+#008000
+
+ParticleBlue
+#0000ff
+
+ParticlePurple
+#800080
+
+( === Current-color markers: exactly one present at row 16, col 0 === )
+CurrRed
+orange
+.....
+.....
+.....
+.....
+.....
+
+CurrGold
+orange
+.....
+.....
+.....
+.....
+.....
+
+CurrGreen
+orange
+.....
+.....
+.....
+.....
+.....
+
+CurrBlue
+orange
+.....
+.....
+.....
+.....
+.....
+
+CurrPurple
+orange
+.....
+.....
+.....
+.....
+.....
+
+( === UpUsed: one-shot guard placed on Player cell when UP cycling fires === )
+UpUsed
+orange
+.....
+.....
+.....
+.....
+.....
+
+=======
+LEGEND
+=======
+
+. = Background
+P = Player
+R = CurrRed
+
+=======
+SOUNDS
+=======
+
+================
+COLLISIONLAYERS
+================
+
+Background
+ParticleRed, ParticleGold, ParticleGreen, ParticleBlue, ParticlePurple
+CurrRed, CurrGold, CurrGreen, CurrBlue, CurrPurple
+UpUsed
+Player
+
+======
+RULES
+======
+
+( UP key cycles currColor: red->gold->green->blue->purple->red.
+  UpUsed guard (same cell as Player) prevents cascading on subsequent passes. )
+[up Player no UpUsed] [CurrRed]    -> [up Player UpUsed] [CurrGold]
+[up Player no UpUsed] [CurrGold]   -> [up Player UpUsed] [CurrGreen]
+[up Player no UpUsed] [CurrGreen]  -> [up Player UpUsed] [CurrBlue]
+[up Player no UpUsed] [CurrBlue]   -> [up Player UpUsed] [CurrPurple]
+[up Player no UpUsed] [CurrPurple] -> [up Player UpUsed] [CurrRed]
+
+( action + Player cell + CurrX somewhere -> place ParticleX at Player cell )
+[ action Player ] [ CurrRed    ] -> [ Player ParticleRed    ] [ CurrRed    ]
+[ action Player ] [ CurrGold   ] -> [ Player ParticleGold   ] [ CurrGold   ]
+[ action Player ] [ CurrGreen  ] -> [ Player ParticleGreen  ] [ CurrGreen  ]
+[ action Player ] [ CurrBlue   ] -> [ Player ParticleBlue   ] [ CurrBlue   ]
+[ action Player ] [ CurrPurple ] -> [ Player ParticlePurple ] [ CurrPurple ]
+
+( Remove UpUsed after the main rule loop so the next UP press can cycle again )
+late [UpUsed] -> []
+
+==============
+WINCONDITIONS
+==============
+
+=======
+LEVELS
+=======
+
+( 16x16 play area (rows 0-15), row 16 holds the CurrColor marker )
+P...............
+................
+................
+................
+................
+................
+................
+................
+................
+................
+................
+................
+................
+................
+................
+................
+R...............

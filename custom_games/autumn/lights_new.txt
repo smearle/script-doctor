@@ -1,0 +1,513 @@
+title lights_new (AutumnBench port)
+author ported from AutumnBench lights_new.sexp
+
+(
+  Port of AutumnBench lights_new.sexp (GRID_SIZE=24).
+  3 light bulbs (light1 at x=5; light2 at x=5,y=11; light3 at x=15,y=11).
+  4 clickable switches, 1 power supply 3x3 at (16-18, 18-20).
+  Light bars yellow/black based on switch states and power supply.
+  Wires static gray. compare_color: true.
+  Colors: Wire gray=#808080; switch off-top grey=#808080, off-bot brown=#a52a2a;
+    switch on-top brown=#a52a2a, on-bot grey=#808080;
+    light bar off black=#000000, on yellow=#ffff00;
+    light base orange=#ffa500;
+    powersupply working green=#008000, broken red=#ff0000.
+  Overlapping cells use separate collision layers.
+  Click policy cursor: cursor walks to target, action=click.
+)
+
+realtime_interval 0.1
+
+========
+OBJECTS
+========
+
+Background
+#000000
+
+Player
+#ffffff #ff0000
+01110
+1...1
+1...1
+1...1
+01110
+
+Wire
+#808080
+
+( Light 1: origin (5,4), bars at (5,1)=bar4 (5,2)=bar3 (5,3)=bar2 (5,4)=bar1, base at (5,5) )
+L1Base
+#ffa500
+
+L1Bar1Blk
+#000000
+
+L1Bar1Yel
+#ffff00
+
+L1Bar2Blk
+#000000
+
+L1Bar2Yel
+#ffff00
+
+L1Bar3Blk
+#000000
+
+L1Bar3Yel
+#ffff00
+
+L1Bar4Blk
+#000000
+
+L1Bar4Yel
+#ffff00
+
+( Light 2: origin (5,11), bars at (5,8)=bar4 (5,9)=bar3 (5,10)=bar2 (5,11)=bar1, base at (5,12) )
+L2Base
+#ffa500
+
+L2Bar1Blk
+#000000
+
+L2Bar1Yel
+#ffff00
+
+L2Bar2Blk
+#000000
+
+L2Bar2Yel
+#ffff00
+
+L2Bar3Blk
+#000000
+
+L2Bar3Yel
+#ffff00
+
+L2Bar4Blk
+#000000
+
+L2Bar4Yel
+#ffff00
+
+( Light 3: origin (15,11), bars at (15,8)=bar4 (15,9)=bar3 (15,10)=bar2 (15,11)=bar1, base at (15,12) )
+L3Base
+#ffa500
+
+L3Bar1Blk
+#000000
+
+L3Bar1Yel
+#ffff00
+
+L3Bar2Blk
+#000000
+
+L3Bar2Yel
+#ffff00
+
+L3Bar3Blk
+#000000
+
+L3Bar3Yel
+#ffff00
+
+L3Bar4Blk
+#000000
+
+L3Bar4Yel
+#ffff00
+
+( Switch 1: top=(9,4) grey=off/brown=on; bot=(9,5) brown=off/grey=on )
+SW1TopOff
+#808080
+
+SW1TopOn
+#a52a2a
+
+SW1BotOff
+#a52a2a
+
+SW1BotOn
+#808080
+
+( Switch 2: top=(9,11) grey=off; bot=(9,12) brown=off )
+SW2TopOff
+#808080
+
+SW2TopOn
+#a52a2a
+
+SW2BotOff
+#a52a2a
+
+SW2BotOn
+#808080
+
+( Switch 3: top=(19,11) grey=off; bot=(19,12) brown=off )
+SW3TopOff
+#808080
+
+SW3TopOn
+#a52a2a
+
+SW3BotOff
+#a52a2a
+
+SW3BotOn
+#808080
+
+( Switch 4: top=(10,14) grey=off; bot=(10,15) brown=off )
+SW4TopOff
+#808080
+
+SW4TopOn
+#a52a2a
+
+SW4BotOff
+#a52a2a
+
+SW4BotOn
+#808080
+
+( Power supply 3x3 at (16-18, 18-20) )
+PSGreen
+#008000
+
+PSRed
+#ff0000
+
+( Invisible flip markers for atomic two-cell switch toggling )
+SW1FlipOn
+#000000
+.....
+.....
+.....
+.....
+.....
+
+SW1FlipOff
+#000000
+.....
+.....
+.....
+.....
+.....
+
+SW2FlipOn
+#000000
+.....
+.....
+.....
+.....
+.....
+
+SW2FlipOff
+#000000
+.....
+.....
+.....
+.....
+.....
+
+SW3FlipOn
+#000000
+.....
+.....
+.....
+.....
+.....
+
+SW3FlipOff
+#000000
+.....
+.....
+.....
+.....
+.....
+
+SW4FlipOn
+#000000
+.....
+.....
+.....
+.....
+.....
+
+SW4FlipOff
+#000000
+.....
+.....
+.....
+.....
+.....
+
+=======
+LEGEND
+=======
+
+. = Background
+P = Player
+W = Wire
+1 = Wire and L1Base
+2 = Wire and L2Base
+3 = Wire and L3Base
+4 = Wire and SW1BotOff
+5 = Wire and SW2BotOff
+6 = Wire and SW3BotOff
+7 = Wire and SW4BotOff
+8 = Wire and PSGreen
+9 = Wire and PSGreen
+Z = Wire and PSGreen
+A = L1Bar1Blk
+B = L1Bar2Blk
+C = L1Bar3Blk
+D = L1Bar4Blk
+E = SW1TopOff
+F = L2Bar1Blk
+G = L2Bar2Blk
+H = L2Bar3Blk
+I = L2Bar4Blk
+J = SW2TopOff
+K = L3Bar1Blk
+L = L3Bar2Blk
+M = L3Bar3Blk
+N = L3Bar4Blk
+O = SW3TopOff
+Q = SW4TopOff
+R = PSGreen
+S = PSGreen
+T = PSGreen
+U = PSGreen
+Y = PSGreen
+X = PSGreen
+
+=======
+SOUNDS
+=======
+
+================
+COLLISIONLAYERS
+================
+
+Background
+Wire
+L1Base, L2Base, L3Base
+L1Bar1Blk, L1Bar1Yel
+L1Bar2Blk, L1Bar2Yel
+L1Bar3Blk, L1Bar3Yel
+L1Bar4Blk, L1Bar4Yel
+L2Bar1Blk, L2Bar1Yel
+L2Bar2Blk, L2Bar2Yel
+L2Bar3Blk, L2Bar3Yel
+L2Bar4Blk, L2Bar4Yel
+L3Bar1Blk, L3Bar1Yel
+L3Bar2Blk, L3Bar2Yel
+L3Bar3Blk, L3Bar3Yel
+L3Bar4Blk, L3Bar4Yel
+SW1TopOff, SW1TopOn
+SW1BotOff, SW1BotOn
+SW2TopOff, SW2TopOn
+SW2BotOff, SW2BotOn
+SW3TopOff, SW3TopOn
+SW3BotOff, SW3BotOn
+SW4TopOff, SW4TopOn
+SW4BotOff, SW4BotOn
+PSGreen, PSRed
+SW1FlipOn, SW1FlipOff
+SW2FlipOn, SW2FlipOff
+SW3FlipOn, SW3FlipOff
+SW4FlipOn, SW4FlipOff
+Player
+
+======
+RULES
+======
+
+( === CLICK: toggle switches via cursor action === )
+[ action Player SW1TopOff ] -> [ Player SW1TopOn SW1FlipOn ]
+[ action Player SW1TopOn  ] -> [ Player SW1TopOff SW1FlipOff ]
+[ action Player SW1BotOff ] -> [ Player SW1BotOn SW1FlipOn ]
+[ action Player SW1BotOn  ] -> [ Player SW1BotOff SW1FlipOff ]
+[ action Player SW2TopOff ] -> [ Player SW2TopOn SW2FlipOn ]
+[ action Player SW2TopOn  ] -> [ Player SW2TopOff SW2FlipOff ]
+[ action Player SW2BotOff ] -> [ Player SW2BotOn SW2FlipOn ]
+[ action Player SW2BotOn  ] -> [ Player SW2BotOff SW2FlipOff ]
+[ action Player SW3TopOff ] -> [ Player SW3TopOn SW3FlipOn ]
+[ action Player SW3TopOn  ] -> [ Player SW3TopOff SW3FlipOff ]
+[ action Player SW3BotOff ] -> [ Player SW3BotOn SW3FlipOn ]
+[ action Player SW3BotOn  ] -> [ Player SW3BotOff SW3FlipOff ]
+[ action Player SW4TopOff ] -> [ Player SW4TopOn SW4FlipOn ]
+[ action Player SW4TopOn  ] -> [ Player SW4TopOff SW4FlipOff ]
+[ action Player SW4BotOff ] -> [ Player SW4BotOn SW4FlipOn ]
+[ action Player SW4BotOn  ] -> [ Player SW4BotOff SW4FlipOff ]
+
+( === PROPAGATE FLIP to both cells of each switch === )
+[ SW1FlipOn  ][ SW1TopOff ] -> [ SW1FlipOn  ][ SW1TopOn  ]
+[ SW1FlipOn  ][ SW1BotOff ] -> [ SW1FlipOn  ][ SW1BotOn  ]
+[ SW1FlipOff ][ SW1TopOn  ] -> [ SW1FlipOff ][ SW1TopOff ]
+[ SW1FlipOff ][ SW1BotOn  ] -> [ SW1FlipOff ][ SW1BotOff ]
+[ SW2FlipOn  ][ SW2TopOff ] -> [ SW2FlipOn  ][ SW2TopOn  ]
+[ SW2FlipOn  ][ SW2BotOff ] -> [ SW2FlipOn  ][ SW2BotOn  ]
+[ SW2FlipOff ][ SW2TopOn  ] -> [ SW2FlipOff ][ SW2TopOff ]
+[ SW2FlipOff ][ SW2BotOn  ] -> [ SW2FlipOff ][ SW2BotOff ]
+[ SW3FlipOn  ][ SW3TopOff ] -> [ SW3FlipOn  ][ SW3TopOn  ]
+[ SW3FlipOn  ][ SW3BotOff ] -> [ SW3FlipOn  ][ SW3BotOn  ]
+[ SW3FlipOff ][ SW3TopOn  ] -> [ SW3FlipOff ][ SW3TopOff ]
+[ SW3FlipOff ][ SW3BotOn  ] -> [ SW3FlipOff ][ SW3BotOff ]
+[ SW4FlipOn  ][ SW4TopOff ] -> [ SW4FlipOn  ][ SW4TopOn  ]
+[ SW4FlipOn  ][ SW4BotOff ] -> [ SW4FlipOn  ][ SW4BotOn  ]
+[ SW4FlipOff ][ SW4TopOn  ] -> [ SW4FlipOff ][ SW4TopOff ]
+[ SW4FlipOff ][ SW4BotOn  ] -> [ SW4FlipOff ][ SW4BotOff ]
+
+( === SWITCH4 triggers permanent power supply failure === )
+[ SW4FlipOn ][ PSGreen ] -> [ SW4FlipOn ][ PSRed ]
+
+( === LIGHT BAR UPDATES === )
+
+( Power supply broken: all bars off )
+[ PSRed ][ L1Bar1Yel ] -> [ PSRed ][ L1Bar1Blk ]
+[ PSRed ][ L1Bar2Yel ] -> [ PSRed ][ L1Bar2Blk ]
+[ PSRed ][ L1Bar3Yel ] -> [ PSRed ][ L1Bar3Blk ]
+[ PSRed ][ L1Bar4Yel ] -> [ PSRed ][ L1Bar4Blk ]
+[ PSRed ][ L2Bar1Yel ] -> [ PSRed ][ L2Bar1Blk ]
+[ PSRed ][ L2Bar2Yel ] -> [ PSRed ][ L2Bar2Blk ]
+[ PSRed ][ L2Bar3Yel ] -> [ PSRed ][ L2Bar3Blk ]
+[ PSRed ][ L2Bar4Yel ] -> [ PSRed ][ L2Bar4Blk ]
+[ PSRed ][ L3Bar1Yel ] -> [ PSRed ][ L3Bar1Blk ]
+[ PSRed ][ L3Bar2Yel ] -> [ PSRed ][ L3Bar2Blk ]
+[ PSRed ][ L3Bar3Yel ] -> [ PSRed ][ L3Bar3Blk ]
+[ PSRed ][ L3Bar4Yel ] -> [ PSRed ][ L3Bar4Blk ]
+
+( Switch3 off: all bars off )
+[ SW3TopOff ][ L1Bar1Yel ] -> [ SW3TopOff ][ L1Bar1Blk ]
+[ SW3TopOff ][ L1Bar2Yel ] -> [ SW3TopOff ][ L1Bar2Blk ]
+[ SW3TopOff ][ L1Bar3Yel ] -> [ SW3TopOff ][ L1Bar3Blk ]
+[ SW3TopOff ][ L1Bar4Yel ] -> [ SW3TopOff ][ L1Bar4Blk ]
+[ SW3TopOff ][ L2Bar1Yel ] -> [ SW3TopOff ][ L2Bar1Blk ]
+[ SW3TopOff ][ L2Bar2Yel ] -> [ SW3TopOff ][ L2Bar2Blk ]
+[ SW3TopOff ][ L2Bar3Yel ] -> [ SW3TopOff ][ L2Bar3Blk ]
+[ SW3TopOff ][ L2Bar4Yel ] -> [ SW3TopOff ][ L2Bar4Blk ]
+[ SW3TopOff ][ L3Bar1Yel ] -> [ SW3TopOff ][ L3Bar1Blk ]
+[ SW3TopOff ][ L3Bar2Yel ] -> [ SW3TopOff ][ L3Bar2Blk ]
+[ SW3TopOff ][ L3Bar3Yel ] -> [ SW3TopOff ][ L3Bar3Blk ]
+[ SW3TopOff ][ L3Bar4Yel ] -> [ SW3TopOff ][ L3Bar4Blk ]
+
+( === Light 1 bars ===
+  power = 0 unless (ps_working AND s3_on): then 3 if s1_on, 4 if s1_on AND s2_on
+  bars 1-3 on iff ps_working AND s3_on AND s1_on  [power >= 1 = power in {3,4}]
+  bar 4 on iff ps_working AND s3_on AND s1_on AND s2_on  [power = 4] )
+
+( L1 bars 1-3: turn yellow if PSGreen + SW3on + SW1on )
+[ PSGreen ][ SW3TopOn ][ SW1TopOn ][ L1Bar1Blk ] -> [ PSGreen ][ SW3TopOn ][ SW1TopOn ][ L1Bar1Yel ]
+[ PSGreen ][ SW3TopOn ][ SW1TopOn ][ L1Bar2Blk ] -> [ PSGreen ][ SW3TopOn ][ SW1TopOn ][ L1Bar2Yel ]
+[ PSGreen ][ SW3TopOn ][ SW1TopOn ][ L1Bar3Blk ] -> [ PSGreen ][ SW3TopOn ][ SW1TopOn ][ L1Bar3Yel ]
+
+( L1 bars 1-3: turn black if SW1off while SW3on and PSGreen )
+[ PSGreen ][ SW3TopOn ][ SW1TopOff ][ L1Bar1Yel ] -> [ PSGreen ][ SW3TopOn ][ SW1TopOff ][ L1Bar1Blk ]
+[ PSGreen ][ SW3TopOn ][ SW1TopOff ][ L1Bar2Yel ] -> [ PSGreen ][ SW3TopOn ][ SW1TopOff ][ L1Bar2Blk ]
+[ PSGreen ][ SW3TopOn ][ SW1TopOff ][ L1Bar3Yel ] -> [ PSGreen ][ SW3TopOn ][ SW1TopOff ][ L1Bar3Blk ]
+
+( L1 bar4: yellow if PSGreen + SW3on + SW1on + SW2on )
+[ PSGreen ][ SW3TopOn ][ SW1TopOn ][ SW2TopOn ][ L1Bar4Blk ] -> [ PSGreen ][ SW3TopOn ][ SW1TopOn ][ SW2TopOn ][ L1Bar4Yel ]
+
+( L1 bar4: black if SW2off )
+[ SW2TopOff ][ L1Bar4Yel ] -> [ SW2TopOff ][ L1Bar4Blk ]
+( L1 bar4: black if SW1off while SW3on and PSGreen )
+[ PSGreen ][ SW3TopOn ][ SW1TopOff ][ L1Bar4Yel ] -> [ PSGreen ][ SW3TopOn ][ SW1TopOff ][ L1Bar4Blk ]
+
+( === Light 2 bars ===
+  power = 0 unless (ps_working AND s3_on): then 3 if s2_on, 4 if s1_on AND s2_on
+  bars 1-3 on iff ps_working AND s3_on AND s2_on
+  bar 4 on iff ps_working AND s3_on AND s1_on AND s2_on )
+
+( L2 bars 1-3: yellow if PSGreen + SW3on + SW2on )
+[ PSGreen ][ SW3TopOn ][ SW2TopOn ][ L2Bar1Blk ] -> [ PSGreen ][ SW3TopOn ][ SW2TopOn ][ L2Bar1Yel ]
+[ PSGreen ][ SW3TopOn ][ SW2TopOn ][ L2Bar2Blk ] -> [ PSGreen ][ SW3TopOn ][ SW2TopOn ][ L2Bar2Yel ]
+[ PSGreen ][ SW3TopOn ][ SW2TopOn ][ L2Bar3Blk ] -> [ PSGreen ][ SW3TopOn ][ SW2TopOn ][ L2Bar3Yel ]
+
+( L2 bars 1-3: black if SW2off while SW3on and PSGreen )
+[ PSGreen ][ SW3TopOn ][ SW2TopOff ][ L2Bar1Yel ] -> [ PSGreen ][ SW3TopOn ][ SW2TopOff ][ L2Bar1Blk ]
+[ PSGreen ][ SW3TopOn ][ SW2TopOff ][ L2Bar2Yel ] -> [ PSGreen ][ SW3TopOn ][ SW2TopOff ][ L2Bar2Blk ]
+[ PSGreen ][ SW3TopOn ][ SW2TopOff ][ L2Bar3Yel ] -> [ PSGreen ][ SW3TopOn ][ SW2TopOff ][ L2Bar3Blk ]
+
+( L2 bar4: yellow if PSGreen + SW3on + SW1on + SW2on )
+[ PSGreen ][ SW3TopOn ][ SW1TopOn ][ SW2TopOn ][ L2Bar4Blk ] -> [ PSGreen ][ SW3TopOn ][ SW1TopOn ][ SW2TopOn ][ L2Bar4Yel ]
+
+( L2 bar4: black if SW1off )
+[ SW1TopOff ][ L2Bar4Yel ] -> [ SW1TopOff ][ L2Bar4Blk ]
+( L2 bar4: black if SW2off while SW3on and PSGreen )
+[ PSGreen ][ SW3TopOn ][ SW2TopOff ][ L2Bar4Yel ] -> [ PSGreen ][ SW3TopOn ][ SW2TopOff ][ L2Bar4Blk ]
+
+( === Light 3 bars ===
+  power: if ps AND s3: s1 AND s2 -> 2; s1 XOR s2 -> 3; else 0
+  bar1: on iff ps AND s3 AND (s1 OR s2)
+  bar2: on iff ps AND s3 AND (s1 OR s2)
+  bar3: on iff ps AND s3 AND (s1 XOR s2)  [power=3]
+  bar4: always off  [max power=3 < 4] )
+
+( L3 bars 1 and 2: yellow if either SW1on or SW2on with SW3on and PSGreen )
+[ PSGreen ][ SW3TopOn ][ SW1TopOn ][ L3Bar1Blk ] -> [ PSGreen ][ SW3TopOn ][ SW1TopOn ][ L3Bar1Yel ]
+[ PSGreen ][ SW3TopOn ][ SW2TopOn ][ L3Bar1Blk ] -> [ PSGreen ][ SW3TopOn ][ SW2TopOn ][ L3Bar1Yel ]
+[ PSGreen ][ SW3TopOn ][ SW1TopOn ][ L3Bar2Blk ] -> [ PSGreen ][ SW3TopOn ][ SW1TopOn ][ L3Bar2Yel ]
+[ PSGreen ][ SW3TopOn ][ SW2TopOn ][ L3Bar2Blk ] -> [ PSGreen ][ SW3TopOn ][ SW2TopOn ][ L3Bar2Yel ]
+
+( L3 bars 1 and 2: black if both SW1off and SW2off )
+[ SW1TopOff ][ SW2TopOff ][ L3Bar1Yel ] -> [ SW1TopOff ][ SW2TopOff ][ L3Bar1Blk ]
+[ SW1TopOff ][ SW2TopOff ][ L3Bar2Yel ] -> [ SW1TopOff ][ SW2TopOff ][ L3Bar2Blk ]
+
+( L3 bar3: yellow if XOR = exactly one of SW1, SW2 on )
+[ PSGreen ][ SW3TopOn ][ SW1TopOn ][ SW2TopOff ][ L3Bar3Blk ] -> [ PSGreen ][ SW3TopOn ][ SW1TopOn ][ SW2TopOff ][ L3Bar3Yel ]
+[ PSGreen ][ SW3TopOn ][ SW1TopOff ][ SW2TopOn ][ L3Bar3Blk ] -> [ PSGreen ][ SW3TopOn ][ SW1TopOff ][ SW2TopOn ][ L3Bar3Yel ]
+
+( L3 bar3: black if both on )
+[ SW1TopOn ][ SW2TopOn ][ L3Bar3Yel ] -> [ SW1TopOn ][ SW2TopOn ][ L3Bar3Blk ]
+( L3 bar3: black if both off )
+[ SW1TopOff ][ SW2TopOff ][ L3Bar3Yel ] -> [ SW1TopOff ][ SW2TopOff ][ L3Bar3Blk ]
+
+( L3 bar4 is always black -- no rules needed; starts black and has no turn-on condition )
+
+( === LATE: clean up flip markers === )
+late [ SW1FlipOn ] -> []
+late [ SW1FlipOff ] -> []
+late [ SW2FlipOn ] -> []
+late [ SW2FlipOff ] -> []
+late [ SW3FlipOn ] -> []
+late [ SW3FlipOff ] -> []
+late [ SW4FlipOn ] -> []
+late [ SW4FlipOff ] -> []
+
+==============
+WINCONDITIONS
+==============
+
+=======
+LEVELS
+=======
+
+P.......................
+.....D..................
+.....C..................
+.....B..................
+.....A...E..............
+..WWW1WWW4WWW...........
+..W.........W...........
+..W.........W...........
+..W..I......W..N........
+..W..H......W..M........
+..W..G......W..L........
+..W..F...J..W..K...O....
+..WWW2WWW5WWWWW3WWW6WW..
+..W..................W..
+..W.......Q..........W..
+..WWWWWWWW7WWWWWWWWWWW..
+..W..................W..
+..W..................W..
+..W.............RST..W..
+..WWWWWWWWWWWWWW89ZWWW..
+................UYX.....
+........................
+........................
+........................

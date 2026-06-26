@@ -1,0 +1,106 @@
+title lights (AutumnBench port)
+author ported from AutumnBench lights.sexp
+
+(
+  16 lights on the diagonal (x==y). A click ANYWHERE toggles every light
+  (Autumn `clicked` is the global click flag, position-independent). We model
+  the toggle on the global `action` (X) button. State is carried as color, so
+  the eval uses compare_color: LightOff=white(#ffffff), LightOn=yellow(#ffff00).
+  An invisible Player satisfies PuzzleScript's player requirement (ignored).
+)
+
+realtime_interval 0.1
+
+========
+OBJECTS
+========
+
+Background
+black
+
+Player
+#ffffff #ff0000
+01110
+1...1
+1...1
+1...1
+01110
+
+LightOff
+#ffffff
+
+LightOn
+#ffff00
+
+NLightOn
+#ffff00
+
+NLightOff
+#ffffff
+
+Flip
+green
+.....
+.....
+.....
+.....
+.....
+
+=======
+LEGEND
+=======
+
+. = Background
+P = Player
+o = LightOff
+Q = LightOff and Player
+
+=======
+SOUNDS
+=======
+
+================
+COLLISIONLAYERS
+================
+
+Background
+LightOff, LightOn, NLightOn, NLightOff
+Flip
+Player
+
+======
+RULES
+======
+
+(action toggles ALL lights once; intermediate N* states prevent re-toggling)
+[ action Player ] -> [ Player Flip ]
+[ Flip ] [ LightOff ] -> [ Flip ] [ NLightOn ]
+[ Flip ] [ LightOn ]  -> [ Flip ] [ NLightOff ]
+[ NLightOn ]  -> [ LightOn ]
+[ NLightOff ] -> [ LightOff ]
+[ Flip ] -> [ ]
+
+==============
+WINCONDITIONS
+==============
+
+=======
+LEVELS
+=======
+
+Q...............
+.o..............
+..o.............
+...o............
+....o...........
+.....o..........
+......o.........
+.......o........
+........o.......
+.........o......
+..........o.....
+...........o....
+............o...
+.............o..
+..............o.
+...............o

@@ -1,0 +1,235 @@
+title arc_slack (AutumnBench port)
+author ported from AutumnBench arc_slack.sexp
+
+(
+  arc_slack (GRID_SIZE 16). Render key: particles. compare_color (green=#008000, gold=#ffd700).
+  7 particles; ONE is "active" (moves with arrows). Two buttons: colorButton gray (15,0),
+  removeButton orangered (15,2).
+    - arrows: move the ACTIVE particle (moveNoCollision -> blocked by other particles + bounds).
+    - click a particle: make it active (others inactive).
+    - click colorButton: toggle the active particle green<->gold.
+    - click removeButton: delete the active particle.
+
+  PuzzleScript has only arrows + X, but the game needs arrows AND targeted clicks, so a MODE TOGGLE
+  (an invisible fixed Player catches input; CMode flag = which mode):
+    ARROW MODE (no CMode): arrows move the active particle; X enters cursor mode (spawns a visible
+      Cursor at CursorHome (0,0)).
+    CURSOR MODE (CMode): arrows move the Cursor; X "clicks" at the Cursor cell:
+        on a particle -> select it; on colorButton -> toggle color; on removeButton -> remove;
+        on the BackButton (extra bottom row 16) -> return to arrow mode.
+  Active/inactive is NOT shown by color (Autumn renders only green/gold), so the harness checks
+  position + green/gold; which particle is active is verified indirectly (only it moves on arrows).
+  The grid is 16x17: row 16 is an off-board strip (BoundWall keeps particles in rows 0..15; the
+  BackButton lives there). The harness compares only the 16x16 play area.
+)
+
+========
+OBJECTS
+========
+
+Background
+white
+
+PActGreen
+#008000
+PActGold
+#ffd700
+PInGreen
+#008000
+PInGold
+#ffd700
+
+ColorButton
+#808080
+
+RemoveButton
+#ff4500
+
+BackButton
+#3333ff
+00000
+0...0
+0...0
+0...0
+00000
+
+BoundWall
+white
+.....
+.....
+.....
+.....
+.....
+
+CursorHome
+white
+.....
+.....
+.....
+.....
+.....
+
+Player
+white
+.....
+.....
+.....
+.....
+.....
+
+CMode
+white
+.....
+.....
+.....
+.....
+.....
+
+Cursor
+#ffffff #ff0000
+01110
+1...1
+1...1
+1...1
+01110
+
+TmpGold
+#ffd700
+TmpGreen
+#008000
+
+NewActive
+white
+.....
+.....
+.....
+.....
+.....
+
+ToggleC
+white
+.....
+.....
+.....
+.....
+.....
+
+RemoveSig
+white
+.....
+.....
+.....
+.....
+.....
+
+=======
+LEGEND
+=======
+
+. = Background
+a = PActGreen
+e = PInGreen
+o = PInGold
+c = ColorButton
+r = RemoveButton
+w = BoundWall
+k = BoundWall and BackButton
+p = Player and CursorHome
+
+ActiveP = PActGreen or PActGold
+Particle = PActGreen or PActGold or PInGreen or PInGold
+
+=======
+SOUNDS
+=======
+
+================
+COLLISIONLAYERS
+================
+
+Background
+PActGreen, PActGold, PInGreen, PInGold, ColorButton, RemoveButton, BoundWall, TmpGold, TmpGreen
+BackButton
+CursorHome
+NewActive
+ToggleC
+RemoveSig
+CMode
+Cursor
+Player
+
+======
+RULES
+======
+
+( ===== ARROW MODE: arrows move the ACTIVE particle (moveNoCollision via shared layer) ===== )
+[ left  Player no CMode ] [ ActiveP ] -> [ Player ] [ left  ActiveP ]
+[ right Player no CMode ] [ ActiveP ] -> [ Player ] [ right ActiveP ]
+[ up    Player no CMode ] [ ActiveP ] -> [ Player ] [ up    ActiveP ]
+[ down  Player no CMode ] [ ActiveP ] -> [ Player ] [ down  ActiveP ]
+
+( ===== X in arrow mode: enter cursor mode, spawn Cursor at CursorHome ===== )
+[ action Player no CMode ] [ CursorHome no Cursor ] -> [ Player CMode ] [ CursorHome Cursor ]
+
+( ===== CURSOR MODE: arrows move the Cursor ===== )
+[ left  Player CMode ] [ Cursor ] -> [ Player CMode ] [ left  Cursor ]
+[ right Player CMode ] [ Cursor ] -> [ Player CMode ] [ right Cursor ]
+[ up    Player CMode ] [ Cursor ] -> [ Player CMode ] [ up    Cursor ]
+[ down  Player CMode ] [ Cursor ] -> [ Player CMode ] [ down  Cursor ]
+
+( ===== X in cursor mode: click at the Cursor cell ===== )
+( back-button -> return to arrow mode: remove CMode and Cursor )
+[ action Player CMode ] [ Cursor BackButton ] -> [ Player ] [ BackButton ]
+( colorButton -> toggle active particle color )
+[ action Player CMode ] [ Cursor ColorButton ] -> [ Player CMode ] [ Cursor ColorButton ToggleC ]
+( removeButton -> remove active particle )
+[ action Player CMode ] [ Cursor RemoveButton ] -> [ Player CMode ] [ Cursor RemoveButton RemoveSig ]
+( on a particle -> select it active )
+[ action Player CMode ] [ Cursor Particle ] -> [ Player CMode ] [ Cursor Particle NewActive ]
+
+( --- resolve SELECT (only when a NewActive exists): clicked particle becomes active, others inactive --- )
+[ NewActive ] [ PActGreen no NewActive ] -> [ NewActive ] [ PInGreen ]
+[ NewActive ] [ PActGold  no NewActive ] -> [ NewActive ] [ PInGold ]
+[ NewActive PInGreen ] -> [ PActGreen ]
+[ NewActive PInGold  ] -> [ PActGold ]
+[ NewActive ] -> [ ]
+
+( --- resolve COLOR toggle (active particle only); Tmp* avoids the double-toggle --- )
+[ ToggleC ] [ PActGreen ] -> [ ToggleC ] [ TmpGold ]
+[ ToggleC ] [ PActGold  ] -> [ ToggleC ] [ TmpGreen ]
+[ TmpGold  ] -> [ PActGold ]
+[ TmpGreen ] -> [ PActGreen ]
+[ ToggleC ] -> [ ]
+
+( --- resolve REMOVE (active particle) --- )
+[ RemoveSig ] [ ActiveP ] -> [ RemoveSig ] [ ]
+[ RemoveSig ] -> [ ]
+
+( phantom Player never moves )
+[ moving Player ] -> [ Player ]
+
+==============
+WINCONDITIONS
+==============
+
+=======
+LEVELS
+=======
+
+p..............c
+.a..............
+...............r
+................
+................
+.....e........o.
+................
+................
+....e...........
+.........o......
+................
+................
+................
+.e..............
+...........o....
+................
+kwwwwwwwwwwwwwww
