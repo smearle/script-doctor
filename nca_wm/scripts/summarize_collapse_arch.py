@@ -6,7 +6,7 @@ Reads each `nca_wm/logs_collapse_arch/collapse_L0_*` save dir and reports:
 - whether training appeared stable or diverged
 
 Used to populate the depth/skip-connection table in
-nca_wm/ARCHITECTURE_REPORT.md.
+nca_wm/docs/architecture/ARCHITECTURE_REPORT.md.
 """
 from __future__ import annotations
 import json

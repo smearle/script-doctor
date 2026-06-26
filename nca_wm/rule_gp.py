@@ -1,6 +1,6 @@
 """Rule-grammar GP — AST-style rule representation, mutators, and enumeration.
 
-See ``RULE_GP_DESIGN.md``. This module knows nothing about PuzzleScript file
+See ``docs/synth/RULE_GP_DESIGN.md``. This module knows nothing about PuzzleScript file
 assembly or the engine; it only models a *rule* as a small dataclass tree
 and supports deterministic unparsing back to PuzzleScript text.
 
@@ -456,7 +456,7 @@ def sample_layers(rng, objs=("ObjA", "ObjB", "ObjC")):
 
 
 def enumerate_smoketest_rulesets() -> list[tuple[dict, list[Rule]]]:
-    """Cross-product of three axes from RULE_GP_DESIGN.md step (3).
+    """Cross-product of three axes from docs/synth/RULE_GP_DESIGN.md step (3).
 
     Returns list of ``(axes_dict, rules)`` pairs. Each ruleset is a list of
     Rule (currently always a single rule).

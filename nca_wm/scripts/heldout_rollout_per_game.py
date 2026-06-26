@@ -1,7 +1,7 @@
 """Run `heldout_eval.py` one game at a time, each in a fresh subprocess, so
 JAX's JIT compile cache resets between games. This dodges the OOM that
 hits when 30 shape-diverse heldouts are evaluated in a single process
-(tracked by JIT cache accumulation, see SCALING_REPORT).
+(tracked by JIT cache accumulation, see docs/scaling/SCALING_REPORT.md).
 
 Aggregates per-game JSON outputs into a single `results.json` keyed by
 heldout name.
