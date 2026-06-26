@@ -68,6 +68,7 @@ class AttnBeliefModel(nn.Module):
         self.emb_z1 = nn.Embedding(cfg.K, cfg.d_cond)
         self.prior0 = nn.Sequential(nn.Linear(cfg.d_cond, cfg.d_cond), nn.ReLU(), nn.Linear(cfg.d_cond, cfg.K))
         self.prior1 = nn.Sequential(nn.Linear(cfg.d_cond + d, cfg.d_cond), nn.ReLU(), nn.Linear(cfg.d_cond, cfg.K))
+        self.q1_ctx = nn.Conv2d(2 * d, d, 3, padding=1)   # fuse pre-state enc(o_t) with observed enc(o)
         self.dec0 = _FiLMDec(cfg)
         self.dec1 = _FiLMDec(cfg)
 
@@ -109,6 +110,8 @@ class AttnBeliefModel(nn.Module):
 
     def belief_now(self, pooled_seq, prev_acts):
         """pooled_seq:(1,L,d) prev_acts:(1,L) [action into each frame] -> belief (1,d_cond)."""
+        if pooled_seq.shape[1] > self.cfg.max_T:           # sliding window (id happens early)
+            pooled_seq, prev_acts = pooled_seq[:, -self.cfg.max_T:], prev_acts[:, -self.cfg.max_T:]
         L = pooled_seq.shape[1]
         tok = self.tok_in(torch.cat([pooled_seq, self.emb_a(prev_acts)], -1)) + self.pos[:L][None]
         mask = torch.triu(torch.full((L, L), float("-inf"), device=tok.device), 1)
@@ -127,9 +130,10 @@ class AttnBeliefModel(nn.Module):
             k = torch.multinomial(probs0, 1).item()
             o = torch.bernoulli(torch.sigmoid(l0[:, k])) * vmask
             logq0 = -self.mixture_nll(l0, p0, o, vmask)
-            eo = masked_pool(self.enc(o), cell_mask)
-            l1 = self._dec_all_k(self.dec1, self.emb_z1, spatial_cur, cb)
-            p1 = F.log_softmax(self.prior1(torch.cat([cb, eo], -1)), -1)
+            e_o = self.enc(o)
+            ctx1 = self.q1_ctx(torch.cat([spatial_cur, e_o], 1))   # q1 SEES the observed o spatially
+            l1 = self._dec_all_k(self.dec1, self.emb_z1, ctx1, cb)
+            p1 = F.log_softmax(self.prior1(torch.cat([cb, masked_pool(e_o, cell_mask)], -1)), -1)
             logq1 = -self.mixture_nll(l1, p1, o, vmask)
             total += (logq1 - logq0).item()
         return total / n_samples
@@ -154,10 +158,10 @@ class AttnBeliefModel(nn.Module):
             l0 = self._dec_all_k(self.dec0, self.emb_z0, ctx, cb0)
             p0 = F.log_softmax(self.prior0(cb0), -1)
             q0nll[:, t] = self.mixture_nll(l0, p0, O[:, t + 1], vmask)
-            # q1: condition on first obs o = O[t+1] (its pooled enc); target resamp R[t]
-            eo = masked_pool(spatial[:, t + 1], CM)                # (N,d)
+            # q1: SEES first obs o = O[t+1] spatially (fused with pre-state); target resamp R[t]
             cb1 = beliefs[:, t] + a_emb[:, t]
-            l1 = self._dec_all_k(self.dec1, self.emb_z1, ctx, cb1)
-            p1 = F.log_softmax(self.prior1(torch.cat([cb1, eo], -1)), -1)
+            ctx1 = self.q1_ctx(torch.cat([ctx, spatial[:, t + 1]], 1))
+            l1 = self._dec_all_k(self.dec1, self.emb_z1, ctx1, cb1)
+            p1 = F.log_softmax(self.prior1(torch.cat([cb1, masked_pool(spatial[:, t + 1], CM)], -1)), -1)
             q1nll[:, t] = self.mixture_nll(l1, p1, R[:, t], vmask)
         return q0nll, q1nll

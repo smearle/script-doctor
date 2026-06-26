@@ -114,3 +114,14 @@ game_synth/*.log
 game_synth/autumn/runs/
 game_synth/autumn/__pycache__/
 game_synth/autumn/*.log
+
+# active_learning: track source + docs + referenced figures, ignore generated
+# checkpoints, run logs, world/game caches, and scratch game corpora.
+nca_wm/active_learning/ckpts/
+nca_wm/active_learning/runs/
+nca_wm/active_learning/_check_games/
+nca_wm/active_learning/_gist_probe/
+nca_wm/active_learning/_multigame/
+nca_wm/active_learning/_sok_games/
+nca_wm/active_learning/_world_cache/
+nca_wm/active_learning/_world_games/
