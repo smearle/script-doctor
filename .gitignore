@@ -108,3 +108,9 @@ texput.logpuffer_assets/
 game_synth/*/
 game_synth/*.pt
 game_synth/*.log
+
+# autumn ELM package: track source, ignore its generated runs/artifacts
+!game_synth/autumn/
+game_synth/autumn/runs/
+game_synth/autumn/__pycache__/
+game_synth/autumn/*.log
