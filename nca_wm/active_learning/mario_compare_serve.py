@@ -41,7 +41,8 @@ import torch.nn.functional as F
 from nca_wm.state_ops import _multihot_to_objects
 from nca_wm.active_learning import mario_belief as MB
 from nca_wm.active_learning.attn_belief_model import AttnBeliefModel, AttnConfig, masked_pool
-from nca_wm.active_learning.mario_explore import break_cols, NA, ACTIONS
+from nca_wm.active_learning.nca_belief_model import NCABeliefModel, BeliefConfig
+from nca_wm.active_learning.mario_explore import break_cols, NA, ACTIONS, TICK
 from nca_wm.active_learning.multigame_data import _engine, _masks, _perm, _read_padded
 
 # The two mario worlds both compile to exactly n_obj=20 with an IDENTITY
@@ -69,31 +70,20 @@ def load_transformer(ckpt_path, device):
     return wm
 
 
-def load_nca(run_dir):
-    """Return (apply_fn, L) where apply_fn(states (1,L,C,H,W), acts_oh (1,L,A))
-    -> next-state logits (1,L,C,H,W). JIT-compiled at fixed L."""
-    import jax
-    import jax.numpy as jnp
-    from nca_wm.models import RecurrentNCAWorldModel, N_ACTIONS
-    run_dir = Path(run_dir)
-    cfg = json.loads((run_dir / "config.json").read_text())
-    with open(run_dir / "params_best.pkl", "rb") as f:
-        params = pickle.load(f)
-    model = RecurrentNCAWorldModel(
-        n_hid=cfg["n_hid"], n_steps=cfg["n_steps"], n_out=cfg["n_out"],
-        axis_pool=cfg["axis_pool"], axis_cummax=cfg["axis_cummax"],
-        global_pool=cfg["global_pool"], input_skip=cfg["input_skip"])
-    L = int(cfg["L"])
-    nparam = sum(int(np.prod(p.shape)) for p in jax.tree_util.tree_leaves(params))
-
-    @jax.jit
-    def _apply(states, acts_oh):
-        logits, _win, _spr = model.apply(params, states, acts_oh)
-        return logits
-
-    print(f"[NCA] loaded {run_dir} (n_hid={cfg['n_hid']}, n_steps={cfg['n_steps']}, "
-          f"L={L}, params={nparam:,})", flush=True)
-    return _apply, L, N_ACTIONS
+def load_belief_nca(ckpt_path, device):
+    """Belief Recurrent-NCA (NCABeliefModel) — carries a PERSISTENT belief grid B
+    across the whole episode (real hidden-state recurrence), unlike the windowed
+    base NCA. Its q0 mixture-marginal is the panel's prediction."""
+    ck = torch.load(ckpt_path, map_location=device)
+    wm = NCABeliefModel(BeliefConfig(**ck["cfg"])).to(device)
+    wm.load_state_dict(ck["model_state"])
+    wm.eval()
+    for p in wm.parameters():
+        p.requires_grad_(False)
+    nparam = sum(p.numel() for p in wm.parameters())
+    print(f"[BeliefNCA] loaded {ckpt_path} (n_obj={ck['cfg']['n_obj']}, "
+          f"step={ck.get('step')}, params={nparam:,})", flush=True)
+    return wm
 
 
 def build_render_backends():
@@ -120,9 +110,9 @@ def build_render_backends():
 # Comparison context: one engine + two autoregressive WM rollouts
 # ---------------------------------------------------------------------------
 class CompareCtx:
-    def __init__(self, tf_wm, nca_apply, nca_L, nca_A, game, backend, device, rng):
+    def __init__(self, tf_wm, bnca, game, backend, device, rng):
         self.tf = tf_wm
-        self.nca_apply, self.nca_L, self.nca_A = nca_apply, nca_L, nca_A
+        self.bnca = bnca
         self.dev, self.game, self.backend = device, game, backend
         self.perm = _perm(game.n_obj, CMAX, rng)
         cell, chan = _masks(game.n_obj, game.H, game.W, self.perm, CMAX, HMAX, WMAX)
@@ -137,7 +127,7 @@ class CompareCtx:
         self.n_break = 0
         self.last_steps = self._stepcount()
         self.mode = "dream"            # "dream" = autoregressive; "predict" = obs-fed
-        self.resync()
+        self._init_state()
 
     # --- engine helpers ---
     def _engine_obs_np(self):
@@ -159,19 +149,38 @@ class CompareCtx:
             self.n_break += 1
         self.last_steps = sc
 
-    # --- (re)initialise both WM rollouts to the engine's current frame ---
-    def resync(self):
+    def _obs_t(self):
+        return torch.from_numpy(self._engine_obs_np())[None].to(self.dev)   # (1,C,H,W)
+
+    # --- state management ---
+    def _init_state(self):
+        """Fresh start: both WMs observe the engine frame with NO prior belief."""
         obs = self._engine_obs_np()
-        # Transformer state (mirrors mario_serve.CompareCtx)
         self.tf_board = torch.from_numpy(obs)[None].to(self.dev)
         self.tf_sp = self.tf.encode_frame(self.tf_board)
         self.tf_ps = [masked_pool(self.tf_sp, self.cellT)]
         self.tf_pa = [NA]
-        # NCA rolling-window state: frames[t] is an input frame, acts[t] the
-        # action applied to it (acts has one fewer entry than frames).
-        self.nca_frames = [obs.copy()]
-        self.nca_acts = []
-        self.nca_board = obs.copy()
+        self.B = self.bnca.init_belief(self.tf_board) * self.cellT[:, None]  # (1,d_b,H,W)
+        self.bnca_board = obs.copy()
+
+    def resync(self):
+        """Snap the OBSERVABLE board to the engine but KEEP the hidden belief.
+        Hidden activations aren't observable, so re-sync only corrects what the WM
+        sees (it ingests the engine frame), letting any accumulated world-belief
+        persist. Use reset_belief() to wipe the hidden state instead."""
+        obs = self._engine_obs_np()
+        self.tf_board = torch.from_numpy(obs)[None].to(self.dev)
+        self.tf_sp = self.tf.encode_frame(self.tf_board)
+        self.tf_ps.append(masked_pool(self.tf_sp, self.cellT))
+        self.tf_pa.append(TICK)
+        self.B = self.bnca.update_belief(self.B, self.tf_board,
+                                         torch.tensor([TICK], device=self.dev),
+                                         cell_mask=self.cellT)
+        self.bnca_board = obs.copy()
+
+    def reset_belief(self):
+        """Wipe BOTH WMs' hidden/belief state (forget), re-observing the engine."""
+        self._init_state()
 
     # --- per-model one-step prediction ---
     @torch.no_grad()
@@ -182,56 +191,36 @@ class CompareCtx:
         l0 = self.tf._dec_all_k(self.tf.dec0, self.tf.emb_z0, self.tf_sp, cb)
         p0 = F.softmax(self.tf.prior0(cb), -1)
         prob = (p0[..., None, None, None] * torch.sigmoid(l0)).sum(1)       # (1,C,H,W)
-        pred = (prob * self.vmaskT > 0.5).float()
-        return pred                                                         # (1,C,H,W)
+        return (prob * self.vmaskT > 0.5).float()                          # (1,C,H,W)
 
-    def _nca_predict(self, a):
-        import jax.numpy as jnp
-        L = self.nca_L
-        frames = self.nca_frames
-        acts_full = self.nca_acts + [a]            # action aligned to each frame
-        # Take the last L; front-pad (repeat oldest frame + TICK) to fixed L so
-        # the JIT shape is constant. Padding re-observes a static frame, which
-        # warms the hidden grid harmlessly when the episode is < L ticks old.
-        fr = frames[-L:]
-        ac = acts_full[-L:]
-        while len(fr) < L:
-            fr = [frames[0]] + fr
-            ac = [5] + ac                          # 5 = TICK (no-op advance)
-        states = np.stack(fr)[None].astype(np.float32)                      # (1,L,C,H,W)
-        acts_oh = np.zeros((1, L, self.nca_A), np.float32)
-        for t, ai in enumerate(ac):
-            acts_oh[0, t, ai] = 1.0
-        logits = self.nca_apply(jnp.asarray(states), jnp.asarray(acts_oh))
-        last = np.asarray(logits[0, -1])                                    # (C,H,W)
-        pred = ((1.0 / (1.0 + np.exp(-last))) * self.vmask_np > 0.5).astype(np.float32)
-        return pred                                                        # (C,H,W)
+    @torch.no_grad()
+    def _bnca_predict(self, a):
+        """q0 mixture-marginal next-frame prediction from the carried belief B."""
+        l0, p0 = self.bnca.q0_logits(self.B, torch.tensor([a], device=self.dev))
+        w = F.softmax(p0, -1)
+        prob = (w[..., None, None, None] * torch.sigmoid(l0)).sum(1)        # (1,C,H,W)
+        return (prob * self.vmaskT > 0.5).float()                          # (1,C,H,W)
 
     @torch.no_grad()
     def step(self, a):
-        # 1) both WM predictions of the next frame from current inputs
-        tf_pred = self._tf_predict(a)                  # (1,C,H,W) torch
-        nca_pred = self._nca_predict(a)                # (C,H,W) numpy
+        # 1) both WM predictions of the next frame from their current belief
+        tf_pred = self._tf_predict(a)                  # (1,C,H,W)
+        bnca_pred = self._bnca_predict(a)              # (1,C,H,W)
         self.tf_board = tf_pred
-        self.nca_board = nca_pred
+        self.bnca_board = bnca_pred[0].cpu().numpy()
         # 2) advance the engine (ground truth)
         self._engine_step(a)
         self.step_i += 1
-        engine_obs = self._engine_obs_np()             # (C,H,W) numpy
+        engine_obs_t = self._obs_t()
         # 3) feed back: own prediction (dream) or true observation (predict)
-        tf_next = tf_pred if self.mode == "dream" else \
-            torch.from_numpy(engine_obs)[None].to(self.dev)
+        tf_next = tf_pred if self.mode == "dream" else engine_obs_t
         self.tf_sp = self.tf.encode_frame(tf_next)
         self.tf_ps.append(masked_pool(self.tf_sp, self.cellT))
         self.tf_pa.append(a)
-        nca_next = nca_pred if self.mode == "dream" else engine_obs
-        self.nca_frames.append(nca_next.copy())
-        self.nca_acts.append(a)
-        # bound buffers (only the last L window is ever used)
-        cap = self.nca_L + 1
-        if len(self.nca_frames) > cap:
-            self.nca_frames = self.nca_frames[-cap:]
-            self.nca_acts = self.nca_acts[-(cap - 1):]
+        bnca_next = bnca_pred if self.mode == "dream" else engine_obs_t
+        self.B = self.bnca.update_belief(self.B, bnca_next,
+                                         torch.tensor([a], device=self.dev),
+                                         cell_mask=self.cellT)
 
     # --- rendering ---
     def _png(self, obs):
@@ -249,7 +238,7 @@ class CompareCtx:
 
     def payload(self):
         eng_obs = self._engine_obs_np()
-        nca_obs = self.nca_board
+        nca_obs = self.bnca_board
         tf_obs = self.tf_board[0].cpu().numpy()
         nca_l1, nca_diff = self._diff(nca_obs)
         tf_l1, tf_diff = self._diff(tf_obs)
@@ -265,7 +254,7 @@ class CompareCtx:
 
 def new_ctx(world):
     import random
-    return CompareCtx(S["tf"], S["nca_apply"], S["nca_L"], S["nca_A"],
+    return CompareCtx(S["tf"], S["bnca"],
                       S["games"][world], S["backends"][world], S["dev"],
                       random.Random(0))
 
@@ -281,6 +270,8 @@ def dispatch(path, q):
         S["ctx"].step(int(q.get("a", ["0"])[0]))
     elif path == "/resync":
         S["ctx"].resync()
+    elif path == "/reset_belief":
+        S["ctx"].reset_belief()
     elif path == "/mode":
         S["ctx"].mode = q.get("m", ["dream"])[0]
     else:
@@ -322,21 +313,23 @@ button:hover{background:#1b5a8a}#info{margin:10px 0;font-size:14px}
 .stat{font-size:13px;margin-top:4px}
 </style></head><body>
 <h2>Mario world models — engine vs. parameter-matched NCA &amp; Transformer</h2>
-<div class=sub>Both WMs (~5.4M params each, same training data) roll forward on their OWN predictions (dream). Mario is realtime: ▶ play fires a no-op tick every 0.12s on the wall clock (gravity pulls Mario down, enemy patrols) — interleaved with your keypresses, just like the PuzzleScript web player.
-<b>Controls:</b> ← / → = move, ↑ = jump, <b>x = shoot (ACTION)</b>, <b>space = no-op tick</b>, <b>r = reset episode</b> (current world). "re-sync" snaps both WMs back to the engine; "predict" mode teacher-forces the engine frame each tick.</div>
+<div class=sub>Engine vs two BELIEF world models (q0 prediction). Both carry hidden belief across the episode. Mario is realtime: ▶ play fires a no-op tick every 0.12s on the wall clock — interleaved with your keypresses, like the PuzzleScript web player.
+<b>Controls:</b> ← / → = move, ↑ = jump, <b>x = shoot (ACTION)</b>, <b>space = no-op tick</b>, <b>r = reset episode</b>.
+<b>"re-sync"</b> snaps the WMs' OBSERVABLE board to the engine but <b>KEEPS their hidden belief</b> (hidden activations aren't observable); <b>"reset belief"</b> wipes the hidden state (forget). To test disambiguation memory: use <b>predict</b> mode, jump into a Step (the WM observes whether it broke), then jump again — does the belief update? (Re-sync keeps that memory; reset-belief erases it.)</div>
 <div>
  <button onclick="reset('mario')">reset BASE</button>
  <button onclick="reset('mario_breakable')">reset BREAKABLE</button>
  <button id=playbtn onclick="togglePlay()">▶ play realtime</button>
  <button onclick="step(5)">no-op tick (space)</button>
- <button onclick="resync()">re-sync WMs → engine</button>
+ <button onclick="resync()">re-sync board → engine (keep belief)</button>
+ <button onclick="resetBelief()">reset belief (forget)</button>
  <button id=modebtn onclick="toggleMode()">mode: dream (autoregressive)</button>
 </div>
 <div id=info></div>
 <div class=row>
  <div class=panel><h3 class=real>engine (ground truth)</h3><img id=real></div>
- <div class=panel><h3 class=nca>Recurrent NCA</h3><img id=nca><div class=stat id=ncastat></div></div>
- <div class=panel><h3 class=tf>Transformer belief</h3><img id=tf><div class=stat id=tfstat></div></div>
+ <div class=panel><h3 class=nca>Belief NCA (q0)</h3><img id=nca><div class=stat id=ncastat></div></div>
+ <div class=panel><h3 class=tf>Belief Transformer (q0)</h3><img id=tf><div class=stat id=tfstat></div></div>
 </div>
 <script>
 function agreeTxt(l1,diff){return l1==0?'<span class=val>matches engine exactly</span>':
@@ -371,6 +364,7 @@ function afterReset(d){render(d);setPlayBtn();if(playing&&!busy)pump();}
 function toggleMode(){let m=curMode=='dream'?'predict':'dream';fetch('/mode?m='+m).then(r=>r.json()).then(render);}
 function reset(w){lastWorld=w;fetch('/reset?world='+w).then(r=>r.json()).then(afterReset);}
 function resync(){fetch('/resync').then(r=>r.json()).then(render);}
+function resetBelief(){fetch('/reset_belief').then(r=>r.json()).then(render);}
 // ←/→ move, ↑ jump, x = shoot (ACTION), space = no-op tick, r = reset episode.
 document.addEventListener('keydown',e=>{let m={ArrowUp:0,ArrowLeft:1,ArrowDown:2,ArrowRight:3,x:4,' ':5,t:5};
  if(e.key=='r'){e.preventDefault();reset(lastWorld);return;}
@@ -384,16 +378,16 @@ def main():
     p = argparse.ArgumentParser()
     p.add_argument("--tf_ckpt",
                    default="nca_wm/active_learning/ckpts/mario2_transformer/params_best.pkl")
-    p.add_argument("--nca_run", default="nca_wm/logs/mario2_recurrent")
+    p.add_argument("--bnca_ckpt",
+                   default="nca_wm/active_learning/ckpts/mario2_nca_belief_600k/params_best.pkl")
     p.add_argument("--port", type=int, default=8771)
     p.add_argument("--device", default="cpu")
     args = p.parse_args()
     dev = torch.device(args.device)
     tf_wm = load_transformer(args.tf_ckpt, dev)
-    nca_apply, nca_L, nca_A = load_nca(args.nca_run)
+    bnca = load_belief_nca(args.bnca_ckpt, dev)
     games, backends = build_render_backends()
-    S.update(tf=tf_wm, nca_apply=nca_apply, nca_L=nca_L, nca_A=nca_A,
-             dev=dev, games=games, backends=backends)
+    S.update(tf=tf_wm, bnca=bnca, dev=dev, games=games, backends=backends)
     S["ctx"] = new_ctx("mario")
     print(f"serving on :{args.port}  worlds={list(games)}", flush=True)
     ThreadingHTTPServer(("0.0.0.0", args.port), Handler).serve_forever()
