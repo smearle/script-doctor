@@ -199,7 +199,7 @@ button:hover{background:#1b5a8a}#info{margin:10px 0;font-size:14px}
 .bar{height:14px;background:#4a90e2;display:inline-block;vertical-align:middle}.hot{background:#e2a04a}
 </style></head><body>
 <h2>Mario two-world belief WM — engine vs. autoregressive WM</h2>
-<div class=sub>Mario is realtime: ▶ play advances frames (gravity pulls Mario down, enemy patrols). arrows = ←/→ move, ↑ jump, space = shoot, t = single tick. The WM rolls forward on its OWN predictions (dream); "re-sync" snaps it back to the engine.</div>
+<div class=sub>Mario is realtime: ▶ play advances frames (gravity pulls Mario down, enemy patrols). arrows = ←/→ move, ↑ jump, x/space = shoot (needs ammo — collect a coin first), t = single tick, r = reset. The WM rolls forward on its OWN predictions (dream); "re-sync" snaps it back to the engine.</div>
 <div>
  <button onclick="reset('mario')">reset BASE</button>
  <button onclick="reset('mario_breakable')">reset BREAKABLE</button>
@@ -232,9 +232,9 @@ function render(d){
    '<span class=warn>WM differs: '+d.diff_cells+' cells ('+d.l1+' channel-bits)</span>';
  document.getElementById('info').innerHTML='world <b>'+d.world+'</b> | step '+d.step+
   ' | breaks '+d.n_break+' | under breakable platform: <b>'+d.under_platform+'</b> | '+agree;
- curMode=d.mode;
+ curMode=d.mode; curWorld=d.world;
  document.getElementById('modebtn').innerText='mode: '+(d.mode=='dream'?'dream (autoregressive)':'predict (one-step, obs-fed)');}
-var curMode='dream';
+var curMode='dream', curWorld='mario';
 // --- input/realtime loop: queue user keypresses (never dropped), fill gaps with ticks ---
 var busy=false, playing=true, queue=[];
 function send(a,fast){busy=true;
@@ -250,8 +250,9 @@ function toggleMode(){let m=curMode=='dream'?'predict':'dream';fetch('/mode?m='+
 function reset(w){igMax=0.01;fetch('/reset?world='+w).then(r=>r.json()).then(afterReset);}
 function resync(){fetch('/resync').then(r=>r.json()).then(render);}
 function reloadCkpt(){fetch('/reload').then(r=>r.json()).then(render);}
-document.addEventListener('keydown',e=>{let m={ArrowUp:0,ArrowLeft:1,ArrowDown:2,ArrowRight:3,' ':4,t:5};
- if(e.key in m){e.preventDefault();step(m[e.key]);}});
+document.addEventListener('keydown',e=>{let m={ArrowUp:0,ArrowLeft:1,ArrowDown:2,ArrowRight:3,' ':4,x:4,t:5};
+ if(e.key in m){e.preventDefault();step(m[e.key]);}
+ else if(e.key=='r'){e.preventDefault();reset(curWorld);}});
 reset('mario');
 </script></body></html>
 """
