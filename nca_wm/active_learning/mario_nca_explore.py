@@ -66,16 +66,20 @@ def rollout(wm, policy, game, device, T, rsamp, rng, mode="train"):
         ai_t = logits[0].argmax(-1) if mode == "greedy" else dist.sample()  # scalar
         ai = int(ai_t)
         if mode == "train":
-            r = ctx.ig(ai)                            # intrinsic reward = WM info-gain
+            # clip IG reward >=0: reward SEEKING positive info-gain, don't let the
+            # large negatives (UP-in-open-air ~ -4) dominate into pure avoidance.
+            r = max(0.0, ctx.ig(ai))                  # intrinsic reward = WM info-gain
             logps.append(dist.log_prob(ai_t)); vals.append(value[0])   # scalars
             rews.append(r); ents.append(dist.entropy())
         ctx.step(ai)
     return logps, vals, rews, ents, ctx
 
 
-def train_explorer(wm, policy, games, device, args):
+def train_explorer(wm, policy, games, device, args, best_path=None):
+    import copy
     opt = torch.optim.Adam(policy.parameters(), lr=args.lr)
     rng = random.Random(0)
+    best_r, best_state, recent = -1.0, None, []
     for upd in range(args.updates):
         L, Vv, Rr, Ee = [], [], [], []
         rsum = 0.0; n_ep = 0
@@ -97,8 +101,20 @@ def train_explorer(wm, policy, games, device, args):
         loss = -(logps * adv).mean() + 0.5 * F.mse_loss(vals, returns) - args.ent_w * ents.mean()
         opt.zero_grad(); loss.backward()
         nn.utils.clip_grad_norm_(policy.parameters(), 1.0); opt.step()
+        # checkpoint the BEST policy by smoothed reward (the final one can collapse)
+        mr = rsum / max(n_ep, 1)
+        recent.append(mr); recent = recent[-20:]
+        sm = float(np.mean(recent))
+        if sm > best_r:
+            best_r = sm; best_state = copy.deepcopy(policy.state_dict())
         if upd % 25 == 0:
-            print(f"upd {upd:4d}  mean-IG-reward {rsum/max(n_ep,1):+.3f}  loss {loss.item():.3f}", flush=True)
+            print(f"upd {upd:4d}  mean-IG-reward {mr:+.3f}  smoothed {sm:+.3f}  "
+                  f"best {best_r:+.3f}  loss {loss.item():.3f}", flush=True)
+    if best_state is not None:
+        policy.load_state_dict(best_state)            # restore best before returning
+        if best_path:
+            torch.save(best_state, best_path)
+        print(f"[train] restored best policy (smoothed reward {best_r:+.3f})", flush=True)
 
 
 @torch.no_grad()
@@ -155,7 +171,11 @@ def make_gif(wm, policy, game, backend, device, T, path, mode="greedy", seed=7):
         if mode == "random":
             ai = rr.randrange(NA)
         else:
-            logits, _ = policy(_feat(ctx)); ai = int(logits.argmax(-1))
+            logits, _ = policy(_feat(ctx))
+            if mode == "sample":
+                ai = int(torch.distributions.Categorical(logits=logits[0]).sample())
+            else:
+                ai = int(logits[0].argmax(-1))
         ctx.step(ai); render()
     path.parent.mkdir(parents=True, exist_ok=True)
     frames[0].save(path, save_all=True, append_images=frames[1:], duration=200, loop=0)
@@ -169,13 +189,13 @@ def main():
     p.add_argument("--train", action="store_true")
     p.add_argument("--eval", action="store_true")
     p.add_argument("--gif", action="store_true")
-    p.add_argument("--updates", type=int, default=600)
+    p.add_argument("--updates", type=int, default=1500)
     p.add_argument("--episodes", type=int, default=8)
-    p.add_argument("--T", type=int, default=16)
-    p.add_argument("--rsamp", type=int, default=2)
+    p.add_argument("--T", type=int, default=24)
+    p.add_argument("--rsamp", type=int, default=3)
     p.add_argument("--gamma", type=float, default=0.95)
-    p.add_argument("--lr", type=float, default=1e-3)
-    p.add_argument("--ent-w", type=float, default=0.01)
+    p.add_argument("--lr", type=float, default=5e-4)
+    p.add_argument("--ent-w", type=float, default=0.03)
     p.add_argument("--seed", type=int, default=0)
     p.add_argument("--device", default=("cuda" if torch.cuda.is_available() else "cpu"))
     args = p.parse_args()
@@ -194,8 +214,8 @@ def main():
     pol_path = Path(args.policy)
     if args.train:
         print("[before]"); eval_explorer(wm, policy, games, device, args.T)
-        train_explorer(wm, policy, games, device, args)
         pol_path.parent.mkdir(parents=True, exist_ok=True)
+        train_explorer(wm, policy, games, device, args, best_path=pol_path)
         torch.save(policy.state_dict(), pol_path); print(f"saved {pol_path}", flush=True)
     elif pol_path.exists():
         policy.load_state_dict(torch.load(pol_path, map_location=device))
