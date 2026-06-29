@@ -43,6 +43,60 @@ from nca_wm.active_learning.nca_belief_model import NCABeliefModel, BeliefConfig
 GAMES_LIST = Path(__file__).resolve().parent / "_mario_recurrent_games.txt"
 
 
+def load_dataset_for_algo(game_names, algos, cap, val_frac, max_grid_dim, seed):
+    """Like train_recurrent.load_dataset_from_caches but for arbitrary search algo
+    cache(s) ('astar' / 'bfs' / both). BFS from the shared start yields IDENTICAL
+    pre-break context windows across the two Mario worlds (they're identical until
+    a break), so the belief can't disambiguate shared states from the path -> it's
+    forced to the marginal -> calibrated IG. A* explores the worlds differently
+    (it exploits breaking), giving a spurious path cue that collapses the belief."""
+    import glob as _glob
+    import numpy as _np
+    from nca_wm.state_ops import _pack_states, _unpack_states
+    from nca_wm.data_collection import ancestor_closed_subsample
+    rng = _np.random.default_rng(seed)
+    per_states, per_next, per_actions, per_val, game_infos = [], [], [], [], []
+    for name in game_names:
+        files = []
+        for algo in algos:
+            files += sorted(_glob.glob(f"rollout_data/{name}/level_*/{algo}_transitions_*.npz"))
+        metas = []
+        for f in files:
+            with _np.load(f, allow_pickle=True) as d:
+                sh = d["states"].shape
+                W = int(d["W"])
+            if sh[0] > 0:
+                metas.append((f, sh[1], sh[2], W, sh[0]))
+        if not metas:
+            continue
+        gC = max(m[1] for m in metas); gH = max(m[2] for m in metas); gW = max(m[3] for m in metas)
+        if max(gH, gW) > max_grid_dim:
+            continue
+        uniform = all((m[1], m[2], m[3]) == (gC, gH, gW) for m in metas)
+        Sp, Np, A = [], [], []
+        for f, C, H, W, N in metas:
+            with _np.load(f, allow_pickle=True) as d:
+                s = d["states"]; ns = d["next_states"]; a = _np.asarray(d["actions"], dtype=_np.int64)
+            if not uniform:
+                pad = ((0, 0), (0, gC - C), (0, gH - H), (0, gW - W))
+                s = _pack_states(_np.pad(_unpack_states(s, W), pad).astype(_np.uint8))
+                ns = _pack_states(_np.pad(_unpack_states(ns, W), pad).astype(_np.uint8))
+            Sp.append(s); Np.append(ns); A.append(a)
+        Sp = _np.concatenate(Sp); Np = _np.concatenate(Np); A = _np.concatenate(A)
+        if cap and len(Sp) > cap:
+            keep = _np.sort(ancestor_closed_subsample(Sp, Np, cap, seed))
+            Sp, Np, A = Sp[keep], Np[keep], A[keep]
+        n = len(Sp); n_val = int(round(val_frac * n))
+        val_idx = _np.sort(rng.permutation(n)[:n_val]).astype(_np.int64)
+        per_states.append(Sp); per_next.append(Np); per_actions.append(A); per_val.append(val_idx)
+        game_infos.append({"name": name, "n_objs": gC, "H": gH, "W": gW})
+        print(f"[load_algo {'+'.join(algos)}] {name}: {n} transitions "
+              f"(C/H/W={gC}/{gH}/{gW})", flush=True)
+    dataset = {"per_game_states": per_states, "per_game_next_states": per_next,
+               "per_game_actions": per_actions, "per_game_val_idx": per_val}
+    return dataset, game_infos
+
+
 def _vmask(CM, CH):
     return CH[:, :, None, None] * CM[:, None, :, :]            # (N,C,H,W)
 
@@ -216,9 +270,15 @@ def train(args):
     game_names = [ln.strip() for ln in GAMES_LIST.read_text().splitlines() if ln.strip()]
     print(f"[nca_belief] games={game_names}", flush=True)
     t0 = time.time()
-    dataset, game_infos = load_dataset_from_caches(
-        game_names, (args.max_transitions_per_game or None), args.val_frac,
-        ancestor_closed=True, max_grid_dim=args.max_grid_dim, seed=args.seed)
+    if args.algo == "astar":
+        dataset, game_infos = load_dataset_from_caches(
+            game_names, (args.max_transitions_per_game or None), args.val_frac,
+            ancestor_closed=True, max_grid_dim=args.max_grid_dim, seed=args.seed)
+    else:
+        algos = ["astar", "bfs"] if args.algo == "both" else [args.algo]
+        dataset, game_infos = load_dataset_for_algo(
+            game_names, algos, (args.max_transitions_per_game or None),
+            args.val_frac, args.max_grid_dim, args.seed)
     games = [GameData(g, dataset, info) for g, info in enumerate(game_infos)]
     games = [gd for gd in games if gd.n > 0]
     max_C = max(gd.n_objs for gd in games)
@@ -296,6 +356,9 @@ def main():
     ap.add_argument("--lr", type=float, default=3e-4)
     ap.add_argument("--eval-every", type=int, default=2500)
     ap.add_argument("--val-frac", type=float, default=0.1)
+    ap.add_argument("--algo", choices=["astar", "bfs", "both"], default="astar",
+                    help="search-cache source. bfs gives matched cross-world "
+                         "contexts (calibration); astar's differ (collapse).")
     ap.add_argument("--max-transitions-per-game", type=int, default=60_000)
     ap.add_argument("--max-grid-dim", type=int, default=30)
     ap.add_argument("--max-eval-rows", type=int, default=2048)
