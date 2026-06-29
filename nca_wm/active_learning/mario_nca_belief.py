@@ -43,7 +43,8 @@ from nca_wm.active_learning.nca_belief_model import NCABeliefModel, BeliefConfig
 GAMES_LIST = Path(__file__).resolve().parent / "_mario_recurrent_games.txt"
 
 
-def load_dataset_for_algo(game_names, algos, cap, val_frac, max_grid_dim, seed):
+def load_dataset_for_algo(game_names, algos, cap, val_frac, max_grid_dim, seed,
+                          cap_tag="all"):
     """Like train_recurrent.load_dataset_from_caches but for arbitrary search algo
     cache(s) ('astar' / 'bfs' / both). BFS from the shared start yields IDENTICAL
     pre-break context windows across the two Mario worlds (they're identical until
@@ -59,7 +60,13 @@ def load_dataset_for_algo(game_names, algos, cap, val_frac, max_grid_dim, seed):
     for name in game_names:
         files = []
         for algo in algos:
-            files += sorted(_glob.glob(f"rollout_data/{name}/level_*/{algo}_transitions_*.npz"))
+            # Pin the cap tag (default "all") so we load the matched cross-world
+            # cache and never silently concat a stale differently-capped one
+            # (e.g. mario_breakable's old cap1000000). Both worlds MUST be the
+            # same algo + cap so the belief can't infer the world from a
+            # collection-distribution cue instead of an observed break.
+            files += sorted(_glob.glob(
+                f"rollout_data/{name}/level_*/{algo}_transitions_*_cap{cap_tag}.npz"))
         metas = []
         for f in files:
             with _np.load(f, allow_pickle=True) as d:
@@ -278,7 +285,7 @@ def train(args):
         algos = ["astar", "bfs"] if args.algo == "both" else [args.algo]
         dataset, game_infos = load_dataset_for_algo(
             game_names, algos, (args.max_transitions_per_game or None),
-            args.val_frac, args.max_grid_dim, args.seed)
+            args.val_frac, args.max_grid_dim, args.seed, cap_tag=args.cap_tag)
     games = [GameData(g, dataset, info) for g, info in enumerate(game_infos)]
     games = [gd for gd in games if gd.n > 0]
     max_C = max(gd.n_objs for gd in games)
@@ -295,6 +302,13 @@ def train(args):
     nparam = sum(p.numel() for p in model.parameters())
     print(f"[nca_belief] params: {nparam:,} | d={cfg.d} d_b={cfg.d_b} "
           f"nca_steps={cfg.nca_steps} K={cfg.K}", flush=True)
+
+    use_wandb = getattr(args, "wandb", False)
+    if use_wandb:
+        import wandb
+        wandb.init(project=args.wandb_project,
+                   name=(args.wandb_name or Path(args.save_dir).name),
+                   config={**vars(args), **cfg.__dict__, "nparam": nparam})
 
     opt = torch.optim.AdamW(model.parameters(), lr=args.lr, betas=(0.9, 0.95), weight_decay=0.01)
     rng = np.random.default_rng(args.seed)
@@ -314,6 +328,14 @@ def train(args):
         if step % 200 == 0:
             print(f"step {step:6d}/{args.updates}  loss {loss.item():.4f}  "
                   f"upd/s {(step+1)/max(time.time()-t0,1e-9):.1f}", flush=True)
+            if use_wandb:
+                import wandb
+                wandb.log({"train/loss": float(loss.item()),
+                           "train/q0_nll": float(_q0.item()),
+                           "train/q1_nll": float(loss.item() - _q0.item()),
+                           "train/lr": opt.param_groups[0]["lr"],
+                           "perf/upd_per_s": (step + 1) / max(time.time() - t0, 1e-9)},
+                          step=step)
         if step > 0 and step % args.eval_every == 0:
             ev = per_world_eval(model, games, device, args.k, args.max_eval_rows,
                                 max_C, max_H, max_W, seed=args.seed)
@@ -321,6 +343,26 @@ def train(args):
             for name, (ce, nll, nch) in ev.items():
                 print(f"  [{step}] {name:16s} change_err {ce:.4f}  q0NLL {nll:.3f}  "
                       f"(n_changed={nch})", flush=True)
+            if use_wandb:
+                import wandb
+                from nca_wm.active_learning.mario_belief_viz import ig_metrics, wm_vs_engine_gifs
+                logd = {"val/mean_change_err": mean_ce}
+                for name, (ce, nll, nch) in ev.items():
+                    logd[f"val/{name}/change_err"] = ce
+                    logd[f"val/{name}/q0_nll"] = nll
+                # disambiguation-IG calibration curve (the whole point of the WM)
+                logd.update(ig_metrics(model, device, max_C, n_samples=args.n_samples, seed=args.seed))
+                # side-by-side ENGINE vs WM-dream GIFs every --gif-every evals
+                eval_idx = step // args.eval_every
+                if args.gif_every and eval_idx % args.gif_every == 0:
+                    try:
+                        gifs = wm_vs_engine_gifs(model, device, max_C, save_dir / "gifs",
+                                                 seed=args.seed)
+                        for g, p in gifs.items():
+                            logd[f"gif/{g}"] = wandb.Video(p, fps=4, format="gif")
+                    except Exception as e:
+                        print(f"[wandb] gif render failed: {e}", flush=True)
+                wandb.log(logd, step=step)
             ckpt = {"model_state": model.state_dict(), "cfg": cfg.__dict__,
                     "step": step, "games": game_names}
             torch.save(ckpt, save_dir / "params.pkl")
@@ -338,6 +380,9 @@ def train(args):
     torch.save({"model_state": model.state_dict(), "cfg": cfg.__dict__,
                 "step": args.updates, "games": game_names}, save_dir / "params.pkl")
     ig_probe(model, device, max_C, args.n_samples, args.seed)
+    if use_wandb:
+        import wandb
+        wandb.finish()
 
 
 def main():
@@ -359,6 +404,10 @@ def main():
     ap.add_argument("--algo", choices=["astar", "bfs", "both"], default="astar",
                     help="search-cache source. bfs gives matched cross-world "
                          "contexts (calibration); astar's differ (collapse).")
+    ap.add_argument("--cap-tag", default="all",
+                    help="transition-cache cap tag to load for --algo bfs/both "
+                         "(e.g. 'all'). Pins a single matched cache per world so "
+                         "both games use identical collection (same algo+cap).")
     ap.add_argument("--max-transitions-per-game", type=int, default=60_000)
     ap.add_argument("--max-grid-dim", type=int, default=30)
     ap.add_argument("--max-eval-rows", type=int, default=2048)
@@ -366,6 +415,11 @@ def main():
     ap.add_argument("--seed", type=int, default=0)
     ap.add_argument("--device", default="cuda")
     ap.add_argument("--save-dir", default="nca_wm/active_learning/ckpts/mario2_nca_belief")
+    ap.add_argument("--wandb", action="store_true", help="log curves/val/IG + WM-vs-engine GIFs to W&B")
+    ap.add_argument("--wandb-project", default="mario-belief-wm")
+    ap.add_argument("--wandb-name", default=None, help="run name (default: save-dir basename)")
+    ap.add_argument("--gif-every", type=int, default=1,
+                    help="render side-by-side WM-vs-engine GIFs every N evals (0=off)")
     args = ap.parse_args()
     if args.train:
         train(args)
