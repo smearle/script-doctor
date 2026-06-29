@@ -61,14 +61,15 @@ def rollout(wm, policy, game, device, T, rsamp, rng, mode="train"):
     logps, vals, rews, ents = [], [], [], []
     for _ in range(T):
         feat = _feat(ctx)
-        logits, value = policy(feat)
-        dist = torch.distributions.Categorical(logits=logits)
-        ai = logits.argmax(-1) if mode == "greedy" else dist.sample()
+        logits, value = policy(feat)                  # (1,NA), (1,)
+        dist = torch.distributions.Categorical(logits=logits[0])   # batch-free
+        ai_t = logits[0].argmax(-1) if mode == "greedy" else dist.sample()  # scalar
+        ai = int(ai_t)
         if mode == "train":
-            r = ctx.ig(int(ai))                       # intrinsic reward = WM info-gain
-            logps.append(dist.log_prob(ai)); vals.append(value)
+            r = ctx.ig(ai)                            # intrinsic reward = WM info-gain
+            logps.append(dist.log_prob(ai_t)); vals.append(value[0])   # scalars
             rews.append(r); ents.append(dist.entropy())
-        ctx.step(int(ai))
+        ctx.step(ai)
     return logps, vals, rews, ents, ctx
 
 
