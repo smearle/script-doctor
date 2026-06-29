@@ -322,12 +322,13 @@ button:hover{background:#1b5a8a}#info{margin:10px 0;font-size:14px}
 .stat{font-size:13px;margin-top:4px}
 </style></head><body>
 <h2>Mario world models — engine vs. parameter-matched NCA &amp; Transformer</h2>
-<div class=sub>Both WMs (~5.4M params each, same training data) roll forward on their OWN predictions (dream). Mario is realtime: ▶ play advances frames (gravity pulls Mario down, enemy patrols). arrows = ←/→ move, ↑ jump, space = shoot, t = single tick. "re-sync" snaps both WMs back to the engine; "predict" mode teacher-forces the engine frame each tick.</div>
+<div class=sub>Both WMs (~5.4M params each, same training data) roll forward on their OWN predictions (dream). Mario is realtime: ▶ play fires a no-op tick every 0.12s on the wall clock (gravity pulls Mario down, enemy patrols) — interleaved with your keypresses, just like the PuzzleScript web player.
+<b>Controls:</b> ← / → = move, ↑ = jump, <b>x = shoot (ACTION)</b>, <b>space = no-op tick</b>, <b>r = reset episode</b> (current world). "re-sync" snaps both WMs back to the engine; "predict" mode teacher-forces the engine frame each tick.</div>
 <div>
  <button onclick="reset('mario')">reset BASE</button>
  <button onclick="reset('mario_breakable')">reset BREAKABLE</button>
  <button id=playbtn onclick="togglePlay()">▶ play realtime</button>
- <button onclick="step(5)">tick (1 frame)</button>
+ <button onclick="step(5)">no-op tick (space)</button>
  <button onclick="resync()">re-sync WMs → engine</button>
  <button id=modebtn onclick="toggleMode()">mode: dream (autoregressive)</button>
 </div>
@@ -350,21 +351,29 @@ function render(d){
   ' | breaks '+d.n_break+' | under breakable platform: <b>'+d.under_platform+'</b>';
  curMode=d.mode;
  document.getElementById('modebtn').innerText='mode: '+(d.mode=='dream'?'dream (autoregressive)':'predict (one-step, obs-fed)');}
-var curMode='dream';
-var busy=false, playing=false, queue=[];
+var curMode='dream', lastWorld='mario';
+// Realtime model (faithful to PuzzleScript realtime_interval): a steady wall-clock
+// timer makes a no-op tick DUE every RT_MS; the tick takes priority over user
+// keypresses so gravity keeps firing even while you walk (a stationary-Player
+// turn lands every interval). User keys fill the gaps between ticks.
+var busy=false, playing=false, queue=[], tickDue=false;
+const RT_MS=120;                                  // realtime_interval 0.12s
+setInterval(()=>{if(playing){tickDue=true;pump();}},RT_MS);
 function send(a){busy=true;
  fetch('/step?a='+a).then(r=>r.json()).then(d=>{render(d);busy=false;pump();});}
 function pump(){if(busy)return;
- if(queue.length){send(queue.shift());return;}
- if(playing)setTimeout(()=>{if(!busy&&!queue.length&&playing)send(5);},60);}
-function step(a){if(busy){if(queue.length<8)queue.push(a);}else send(a);}
+ if(tickDue){tickDue=false;send(5);return;}       // realtime no-op tick has priority
+ if(queue.length){send(queue.shift());return;}}
+function step(a){if(busy||tickDue){if(queue.length<8)queue.push(a);pump();}else send(a);}
 function setPlayBtn(){document.getElementById('playbtn').innerText=playing?'⏸ pause realtime':'▶ play realtime';}
 function togglePlay(){playing=!playing;setPlayBtn();if(playing)pump();}
 function afterReset(d){render(d);setPlayBtn();if(playing&&!busy)pump();}
 function toggleMode(){let m=curMode=='dream'?'predict':'dream';fetch('/mode?m='+m).then(r=>r.json()).then(render);}
-function reset(w){fetch('/reset?world='+w).then(r=>r.json()).then(afterReset);}
+function reset(w){lastWorld=w;fetch('/reset?world='+w).then(r=>r.json()).then(afterReset);}
 function resync(){fetch('/resync').then(r=>r.json()).then(render);}
-document.addEventListener('keydown',e=>{let m={ArrowUp:0,ArrowLeft:1,ArrowDown:2,ArrowRight:3,' ':4,t:5};
+// ←/→ move, ↑ jump, x = shoot (ACTION), space = no-op tick, r = reset episode.
+document.addEventListener('keydown',e=>{let m={ArrowUp:0,ArrowLeft:1,ArrowDown:2,ArrowRight:3,x:4,' ':5,t:5};
+ if(e.key=='r'){e.preventDefault();reset(lastWorld);return;}
  if(e.key in m){e.preventDefault();step(m[e.key]);}});
 reset('mario');
 </script></body></html>
