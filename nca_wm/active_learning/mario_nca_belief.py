@@ -264,6 +264,9 @@ def train(args):
             ckpt = {"model_state": model.state_dict(), "cfg": cfg.__dict__,
                     "step": step, "games": game_names}
             torch.save(ckpt, save_dir / "params.pkl")
+            # Save EVERY eval checkpoint so the calibration-vs-training curve can be
+            # OBSERVED post-hoc (NOT for IG-based selection — that's unscalable).
+            torch.save(ckpt, save_dir / f"params_step{step}.pkl")
             if mean_ce < best:
                 best = mean_ce
                 torch.save(ckpt, save_dir / "params_best.pkl")
