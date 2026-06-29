@@ -34,7 +34,7 @@ from pathlib import Path
 import numpy as np
 import torch
 
-from nca_wm.train_recurrent import (
+from nca_wm.recurrent_data import (
     GameData, N_ACTIONS, build_trajectory_batch, load_dataset_from_caches,
 )
 from nca_wm.active_learning.mario_transformer_baseline import _to_attn_batch

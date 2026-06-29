@@ -34,7 +34,7 @@ import numpy as np
 import torch
 
 from nca_wm.active_learning.attn_belief_model import AttnBeliefModel, AttnConfig
-from nca_wm.train_recurrent import (
+from nca_wm.recurrent_data import (
     GameData,
     N_ACTIONS,
     build_trajectory_batch,
