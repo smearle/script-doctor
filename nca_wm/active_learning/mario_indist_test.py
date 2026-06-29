@@ -18,7 +18,7 @@ import numpy as np
 import torch
 import torch.nn.functional as F
 
-from nca_wm.train_recurrent import GameData, build_trajectory_batch
+from nca_wm.recurrent_data import GameData, build_trajectory_batch
 from nca_wm.active_learning import mario_belief as MB
 from nca_wm.active_learning.multigame_data import _engine
 from nca_wm.active_learning.mario_transformer_baseline import _to_attn_batch

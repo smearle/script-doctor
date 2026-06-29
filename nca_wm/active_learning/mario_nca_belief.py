@@ -54,7 +54,7 @@ def load_dataset_for_algo(game_names, algos, cap, val_frac, max_grid_dim, seed,
     import glob as _glob
     import numpy as _np
     from nca_wm.state_ops import _pack_states, _unpack_states
-    from nca_wm.data_collection import ancestor_closed_subsample
+    from nca_wm.transition_graph import ancestor_closed_subsample
     rng = _np.random.default_rng(seed)
     per_states, per_next, per_actions, per_val, game_infos = [], [], [], [], []
     for name in game_names:
