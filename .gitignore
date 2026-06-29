@@ -133,3 +133,6 @@ nca_wm/active_learning/_multigame/
 nca_wm/active_learning/_sok_games/
 nca_wm/active_learning/_world_cache/
 nca_wm/active_learning/_world_games/
+nca_wm/active_learning/_mario_worlds/
+nca_wm/active_learning/_mario_worlds*/
+nca_wm/active_learning/_*.log
