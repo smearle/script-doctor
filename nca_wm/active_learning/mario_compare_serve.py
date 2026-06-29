@@ -236,7 +236,15 @@ class CompareCtx:
         w = wm_obs[:self.game.n_obj, :self.game.H, :self.game.W] > 0.5
         return int((e != w).sum()), int((e != w).any(0).sum())
 
-    def payload(self):
+    @torch.no_grad()
+    def ig_all(self, n=4):
+        """Per-action information gain of the belief-NCA from the current belief B."""
+        return [round(float(self.bnca.information_gain(
+                    self.B, torch.tensor([a], device=self.dev),
+                    n_samples=n, vmask=self.vmaskT)), 3)
+                for a in range(len(ACTIONS))]
+
+    def payload(self, with_ig=True):
         eng_obs = self._engine_obs_np()
         nca_obs = self.bnca_board
         tf_obs = self.tf_board[0].cpu().numpy()
@@ -249,6 +257,7 @@ class CompareCtx:
                     tf=self._png(tf_obs), step=self.step_i,
                     nca_l1=nca_l1, nca_diff=nca_diff, tf_l1=tf_l1, tf_diff=tf_diff,
                     n_break=self.n_break, under_platform=bool(under),
+                    ig=(self.ig_all() if with_ig else None),
                     mode=self.mode, actions=ACTIONS, world=self.game.gist)
 
 
@@ -264,10 +273,12 @@ def dispatch(path, q):
     (this venv's pinned Flask 1.1.2 is incompatible with its Jinja2/Werkzeug)."""
     if path == "/":
         return "text/html", HTML.encode()
+    with_ig = True
     if path == "/reset":
         S["ctx"] = new_ctx(q.get("world", ["mario"])[0])
     elif path == "/step":
         S["ctx"].step(int(q.get("a", ["0"])[0]))
+        with_ig = q.get("fast", ["0"])[0] != "1"   # realtime ticks skip the (slow) IG
     elif path == "/resync":
         S["ctx"].resync()
     elif path == "/reset_belief":
@@ -276,7 +287,7 @@ def dispatch(path, q):
         S["ctx"].mode = q.get("m", ["dream"])[0]
     else:
         return "text/plain", b"not found"
-    return "application/json", json.dumps(S["ctx"].payload()).encode()
+    return "application/json", json.dumps(S["ctx"].payload(with_ig)).encode()
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -311,6 +322,8 @@ button{margin:2px;padding:6px 10px;background:#0f3460;color:#eee;border:1px soli
 button:hover{background:#1b5a8a}#info{margin:10px 0;font-size:14px}
 .val{color:#4ecca3;font-weight:bold}.warn{color:#e94560;font-weight:bold}
 .stat{font-size:13px;margin-top:4px}
+.bars{margin-top:6px}.barrow{margin:3px 0;font-size:13px}.k{display:inline-block;width:56px}
+.bar{height:14px;background:#4a90e2;display:inline-block;vertical-align:middle}.hot{background:#e2a04a}
 </style></head><body>
 <h2>Mario world models — engine vs. parameter-matched NCA &amp; Transformer</h2>
 <div class=sub>Engine vs two BELIEF world models (q0 prediction). Both carry hidden belief across the episode. Mario is realtime: ▶ play fires a no-op tick every 0.12s on the wall clock — interleaved with your keypresses, like the PuzzleScript web player.
@@ -330,16 +343,26 @@ button:hover{background:#1b5a8a}#info{margin:10px 0;font-size:14px}
  <div class=panel><h3 class=real>engine (ground truth)</h3><img id=real></div>
  <div class=panel><h3 class=nca>Belief NCA (q0)</h3><img id=nca><div class=stat id=ncastat></div></div>
  <div class=panel><h3 class=tf>Belief Transformer (q0)</h3><img id=tf><div class=stat id=tfstat></div></div>
+ <div class=panel><h3 class=nca>Belief-NCA info-gain / action</h3><div id=bars class=bars></div></div>
 </div>
 <script>
 function agreeTxt(l1,diff){return l1==0?'<span class=val>matches engine exactly</span>':
    '<span class=warn>differs: '+diff+' cells ('+l1+' bits)</span>';}
+var igMax=0.01;
+function drawBars(ig,acts){if(!ig)return;
+ igMax=Math.max(igMax,...ig.map(v=>Math.abs(v)));
+ let b=document.getElementById('bars');b.innerHTML='';let best=ig.indexOf(Math.max(...ig));
+ for(let i=0;i<ig.length;i++){let r=document.createElement('div');r.className='barrow';
+  let w=Math.max(0,ig[i])/igMax*150;
+  r.innerHTML='<span class=k>'+acts[i]+'</span><span class="bar'+(i==best?' hot':'')+'" style="width:'+w+'px"></span> '+ig[i].toFixed(3);
+  b.appendChild(r);}}
 function render(d){
  document.getElementById('real').src='data:image/png;base64,'+d.real;
  document.getElementById('nca').src='data:image/png;base64,'+d.nca;
  document.getElementById('tf').src='data:image/png;base64,'+d.tf;
  document.getElementById('ncastat').innerHTML=agreeTxt(d.nca_l1,d.nca_diff);
  document.getElementById('tfstat').innerHTML=agreeTxt(d.tf_l1,d.tf_diff);
+ if(d.ig) drawBars(d.ig,d.actions);     // ticks omit IG; keep last bars
  document.getElementById('info').innerHTML='world <b>'+d.world+'</b> | step '+d.step+
   ' | breaks '+d.n_break+' | under breakable platform: <b>'+d.under_platform+'</b>';
  curMode=d.mode;
@@ -352,11 +375,11 @@ var curMode='dream', lastWorld='mario';
 var busy=false, playing=false, queue=[], tickDue=false;
 const RT_MS=120;                                  // realtime_interval 0.12s
 setInterval(()=>{if(playing){tickDue=true;pump();}},RT_MS);
-function send(a){busy=true;
- fetch('/step?a='+a).then(r=>r.json()).then(d=>{render(d);busy=false;pump();});}
+function send(a,fast){busy=true;
+ fetch('/step?a='+a+(fast?'&fast=1':'')).then(r=>r.json()).then(d=>{render(d);busy=false;pump();});}
 function pump(){if(busy)return;
- if(tickDue){tickDue=false;send(5);return;}       // realtime no-op tick has priority
- if(queue.length){send(queue.shift());return;}}
+ if(tickDue){tickDue=false;send(5,true);return;}  // realtime tick: skip slow IG
+ if(queue.length){send(queue.shift(),false);return;}}  // user actions: compute IG
 function step(a){if(busy||tickDue){if(queue.length<8)queue.push(a);pump();}else send(a);}
 function setPlayBtn(){document.getElementById('playbtn').innerText=playing?'⏸ pause realtime':'▶ play realtime';}
 function togglePlay(){playing=!playing;setPlayBtn();if(playing)pump();}
