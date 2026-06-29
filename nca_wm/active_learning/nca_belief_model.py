@@ -28,7 +28,15 @@ class BeliefConfig:
     d_b: int = 128          # belief channels
     d_cond: int = 64        # action+latent conditioning width
     K: int = 16             # discrete latent modes
-    nca_steps: int = 3
+    nca_steps: int = 6      # belief-NCA micro-steps per tick
+    # Global-context features in the belief recurrence — these let a LOCAL event
+    # (e.g. a single broken Step cell) propagate across the whole grid in one
+    # tick so the belief actually sharpens. The prior NCA-belief lacked these
+    # ("did not sharpen over a rollout"); they mirror the strong base
+    # RecurrentNCAWorldModel (axis_pool / global_pool / input_skip / carry-norm).
+    axis_pool: bool = True
+    global_pool: bool = True
+    input_skip: bool = True
 
 
 def _logbern(logits, x):
@@ -62,10 +70,16 @@ class NCABeliefModel(nn.Module):
         self.enc = nn.Sequential(nn.Conv2d(C, d, 3, padding=1), nn.ReLU(),
                                  nn.Conv2d(d, d, 3, padding=1), nn.ReLU())
         self.b_init = nn.Conv2d(d, d_b, 3, padding=1)
-        # belief update: prev belief + encoded obs + action planes -> belief; then NCA
-        self.b_in = nn.Conv2d(d_b + d + cfg.n_act, d_b, 3, padding=1)
-        self.nca_p = nn.Conv2d(d_b, d_b, 3, padding=1)
+        # belief update: encode (obs, action) -> injection h_inp, add to carried
+        # belief, then run an NCA body with global/axis pooling (mirrors the base
+        # RecurrentNCAWorldModel so the belief can sharpen across the grid).
+        self.b_in = nn.Conv2d(d + cfg.n_act, d_b, 3, padding=1)
+        n_pool = (2 if cfg.axis_pool else 0) + (1 if cfg.global_pool else 0)
+        conv_in = d_b + (d_b if cfg.input_skip else 0)
+        self.nca_p = nn.Conv2d(conv_in, d_b, 3, padding=1)
+        self.nca_pool = (nn.Conv2d(d_b * (1 + n_pool), d_b, 1) if n_pool else None)
         self.nca_u = nn.Conv2d(d_b, d_b, 1)
+        self.carry_norm = nn.GroupNorm(1, d_b)
         # conditioning embeddings
         self.emb_a = nn.Embedding(cfg.n_act, cfg.d_cond)
         self.emb_z0 = nn.Embedding(cfg.K, cfg.d_cond)
@@ -92,15 +106,35 @@ class NCABeliefModel(nn.Module):
         oh = F.one_hot(a, self.cfg.n_act).float()
         return oh[..., None, None].expand(-1, -1, H, W)
 
+    def _nca_body(self, B, h_inp, m):
+        cfg = self.cfg
+        for _ in range(cfg.nca_steps):
+            conv_in = torch.cat([B, h_inp], 1) if cfg.input_skip else B
+            h = self.nca_p(conv_in)
+            if self.nca_pool is not None:
+                feats = [h]
+                if cfg.axis_pool:
+                    feats.append(B.amax(3, keepdim=True).expand_as(B))   # row max
+                    feats.append(B.amax(2, keepdim=True).expand_as(B))   # col max
+                if cfg.global_pool:
+                    feats.append(B.amax((2, 3), keepdim=True).expand_as(B))
+                h = self.nca_pool(torch.cat(feats, 1))
+            B = B + self.nca_u(F.gelu(h))
+            if m is not None:
+                B = B * m
+        return B
+
     def update_belief(self, B, o, a, cell_mask=None):
-        e = self.encode(o)
         H, W = B.shape[-2:]
-        x = torch.cat([B, e, self._act_planes(a, H, W)], dim=1)
-        B = self.b_in(x)
-        for _ in range(self.cfg.nca_steps):
-            B = B + self.nca_u(F.relu(self.nca_p(B)))
-        if cell_mask is not None:                  # zero belief outside the real grid
-            B = B * cell_mask[:, None]
+        m = cell_mask[:, None] if cell_mask is not None else None
+        h_inp = self.b_in(torch.cat([self.encode(o), self._act_planes(a, H, W)], dim=1))
+        B = B + h_inp
+        if m is not None:
+            B = B * m
+        B = self._nca_body(B, h_inp, m)
+        B = self.carry_norm(B)
+        if m is not None:                          # zero belief outside the real grid
+            B = B * m
         return B
 
     # --- heads (all-K, exact mixture) ---
