@@ -108,13 +108,17 @@ def _vmask(CM, CH):
     return CH[:, :, None, None] * CM[:, None, :, :]            # (N,C,H,W)
 
 
-def roll_loss(model, O, A, R, CM, CH, valid):
-    """Per-tick q0/q1 mixture NLL over a trajectory, weighted by `valid` (B,T).
+def roll_loss(model, O, A, R, CM, CH, valid, q0_only=False):
+    """Per-tick q0[+q1] mixture NLL over a trajectory, weighted by `valid` (B,T).
 
     Belief B starts from frame 0; at tick t the head predicts O[t+1] from the
     belief over frames 0..t-1 + action A[t] (BEFORE ingesting O[t+1]), then the
     belief ingests (O[t+1], A[t]). Mirrors AttnBeliefModel.forward_traj but with
-    the recurrent spatial-NCA belief."""
+    the recurrent spatial-NCA belief.
+
+    With ``q0_only`` the belief machinery is ablated: the additional q1 head
+    ``p(o'|h,a,o)`` (and hence the information-gain signal it supports) is
+    dropped, leaving only the base neural world model ``p(o|h,a)`` objective."""
     cm = CM
     vmask = _vmask(CM, CH)
     B = model.init_belief(O[:, 0]) * cm[:, None]
@@ -124,9 +128,10 @@ def roll_loss(model, O, A, R, CM, CH, valid):
     for t in range(T):
         a, onext, oresamp, w = A[:, t], O[:, t + 1], R[:, t], valid[:, t]
         l0, p0 = model.q0_logits(B, a)
-        l1, p1 = model.q1_logits(B, a, onext)
         q0_tot = q0_tot + (model.mixture_nll(l0, p0, onext, vmask) * w).sum()
-        q1_tot = q1_tot + (model.mixture_nll(l1, p1, oresamp, vmask) * w).sum()
+        if not q0_only:
+            l1, p1 = model.q1_logits(B, a, onext)
+            q1_tot = q1_tot + (model.mixture_nll(l1, p1, oresamp, vmask) * w).sum()
         B = model.update_belief(B, onext, a, cell_mask=cm)
     return (q0_tot + q1_tot) / vn, q0_tot / vn
 
@@ -322,7 +327,7 @@ def train(args):
         O, A, R, CM, CH, valid = [x.to(device) for x in _to_attn_batch(*sb, gd.n_objs)]
         for g in opt.param_groups:
             g["lr"] = args.lr * 0.5 * (1 + math.cos(math.pi * min(step / args.updates, 1)))
-        loss, _q0 = roll_loss(model, O, A, R, CM, CH, valid)
+        loss, _q0 = roll_loss(model, O, A, R, CM, CH, valid, q0_only=args.no_belief)
         opt.zero_grad(set_to_none=True); loss.backward()
         torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0); opt.step()
         if step % 200 == 0:
@@ -350,8 +355,10 @@ def train(args):
                 for name, (ce, nll, nch) in ev.items():
                     logd[f"val/{name}/change_err"] = ce
                     logd[f"val/{name}/q0_nll"] = nll
-                # disambiguation-IG calibration curve (the whole point of the WM)
-                logd.update(ig_metrics(model, device, max_C, n_samples=args.n_samples, seed=args.seed))
+                # disambiguation-IG calibration curve (the whole point of the WM);
+                # meaningless once the q1 head is ablated, so skip under --no-belief.
+                if not args.no_belief:
+                    logd.update(ig_metrics(model, device, max_C, n_samples=args.n_samples, seed=args.seed))
                 # side-by-side ENGINE vs WM-dream GIFs every --gif-every evals
                 eval_idx = step // args.eval_every
                 if args.gif_every and eval_idx % args.gif_every == 0:
@@ -389,6 +396,10 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--train", action="store_true")
     ap.add_argument("--probe", action="store_true")
+    ap.add_argument("--no-belief", action="store_true",
+                    help="Ablate the belief machinery: drop the additional q1 head "
+                         "p(o'|h,a,o) and the information-gain signal it supports, "
+                         "training only the base neural world model p(o|h,a).")
     ap.add_argument("--ckpt", default="nca_wm/active_learning/ckpts/mario2_nca_belief/params_best.pkl")
     ap.add_argument("--updates", type=int, default=50_000)
     ap.add_argument("--batch-size", type=int, default=32)
