@@ -21,10 +21,18 @@ from nca_wm.state_ops import _unpack_states
 
 
 def main():
+    import argparse
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--player-ch", type=int, default=None)
+    ap.add_argument("--step-ch", type=int, default=None)
+    a = ap.parse_args()
     game_names = [ln.strip() for ln in GAMES_LIST.read_text().splitlines() if ln.strip()]
-    worlds = {w.gist: w for w in MB.build_worlds()}
-    eng = _engine(worlds["mario"].json_str, 0)
-    pb, sb = MB._bit(eng, "Player"), MB._bit(eng, "Step")
+    if a.player_ch is not None and a.step_ch is not None:
+        pb, sb = a.player_ch, a.step_ch   # skip the slow build_worlds/node bridge
+    else:
+        worlds = {w.gist: w for w in MB.build_worlds()}
+        eng = _engine(worlds["mario"].json_str, 0)
+        pb, sb = MB._bit(eng, "Player"), MB._bit(eng, "Step")
     print(f"UP action idx = {UP}   Player channel = {pb}   Step channel = {sb}")
 
     dataset, infos = load_dataset_for_algo(
@@ -44,6 +52,16 @@ def main():
               f"{(s0[:, sb] > 0.5).mean() * s0.shape[2] * s0.shape[3]:.2f}")
         up = np.where(actions == UP)[0]
         stay = brk = 0
+        # global: does the Step channel EVER go present->absent (a break) anywhere,
+        # under ANY action? (sanity that ch=sb is a breakable object, not Floor)
+        n_all = len(states_packed)
+        global_breaks = global_step_cells = 0
+        for i in range(0, n_all, CH):
+            sl = slice(i, i + CH)
+            S = unpack(states_packed[sl]); Ns = unpack(next_packed[sl])
+            sp = S[:, sb] > 0.5; nsp = Ns[:, sb] > 0.5
+            global_breaks += int((sp & ~nsp).sum())       # cell was Step, now gone
+            global_step_cells += int(sp.sum())
         for i in range(0, len(up), CH):
             ch = up[i:i + CH]
             S = unpack(states_packed[ch])
@@ -55,6 +73,9 @@ def main():
             ns_above = nstep[:, :-1, :]
             stay += int(ns_above[hit].sum())
             brk += int((~ns_above[hit]).sum())
+        print(f"  {info['name']:16s} GLOBAL: Step-cell present->absent events="
+              f"{global_breaks} of {global_step_cells} step-cell-instances "
+              f"(any action, anywhere)")
         tot = stay + brk
         print(f"  {info['name']:16s} UP-transitions={len(up):>7}  "
               f"jump-into-Step events={tot:>6}  "
