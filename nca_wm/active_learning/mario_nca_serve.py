@@ -127,7 +127,8 @@ class NCACtx:
         # so the obs reproduces the training distribution (only C is padded to CMAX).
         self.perm = _perm(self.n_obj, CMAX, rng)
         self.eng = _engine(game.json_str, 0)
-        self.eng.set_track_rules_fired(True)
+        if hasattr(self.eng, "set_track_rules_fired"):   # newer engine builds only
+            self.eng.set_track_rules_fired(True)
         self.pb = MB._bit(self.eng, "Player")
         self.sb = MB._bit(self.eng, "Step")
         self.fb = MB._bit(self.eng, "Floor")
@@ -152,7 +153,8 @@ class NCACtx:
         return int(((self._grid() >> self.sb) & 1).sum())
 
     def _engine_step(self, a):
-        self.eng.clear_rules_fired()
+        if hasattr(self.eng, "clear_rules_fired"):
+            self.eng.clear_rules_fired()
         self.eng.process_input(a)              # action idx == engine input id (5 = tick)
         k = 0
         while self.eng.is_againing() and k < 50:

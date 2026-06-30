@@ -14,7 +14,8 @@ from dataclasses import dataclass
 from pathlib import Path
 
 import numpy as np
-import torch
+# torch is only needed by batch() (training data loader), imported lazily there
+# so import-only consumers (e.g. the viewer / engine helpers) don't require it.
 
 from nca_wm.active_learning import vocab as V
 from nca_wm.active_learning import worlds as W   # for step_engine / read helpers
@@ -103,6 +104,7 @@ def sample_trajectory(mgset: MultiGameSet, n_steps, rng, policy=None):
 
 
 def batch(mgset, n, n_steps, rng):
+    import torch
     O, A, R, CM, CH = [], [], [], [], []
     for _ in range(n):
         o, a, r, cell, chan = sample_trajectory(mgset, n_steps, rng)
