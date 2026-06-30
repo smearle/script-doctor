@@ -121,7 +121,10 @@ def roll_loss(model, O, A, R, CM, CH, valid, q0_only=False):
     dropped, leaving only the base neural world model ``p(o|h,a)`` objective."""
     cm = CM
     vmask = _vmask(CM, CH)
-    B = model.init_belief(O[:, 0]) * cm[:, None]
+    if getattr(model.cfg, "markov", False):
+        B = model.markov_belief(O[:, 0], cm)          # fresh per-frame NCA, no carry
+    else:
+        B = model.init_belief(O[:, 0]) * cm[:, None]
     T = A.shape[1]
     vn = valid.sum().clamp_min(1.0)
     q0_tot = q1_tot = 0.0
@@ -302,7 +305,8 @@ def train(args):
         print(f"  {gd.name}: n={gd.n} train={len(gd.train_rows)} val={len(gd.val_rows)}", flush=True)
 
     cfg = BeliefConfig(n_obj=max_C, n_act=N_ACTIONS, d=args.d, d_b=args.d_b,
-                       d_cond=args.d_cond, K=args.K, nca_steps=args.nca_steps)
+                       d_cond=args.d_cond, K=args.K, nca_steps=args.nca_steps,
+                       markov=args.markov)
     model = NCABeliefModel(cfg).to(device)
     nparam = sum(p.numel() for p in model.parameters())
     print(f"[nca_belief] params: {nparam:,} | d={cfg.d} d_b={cfg.d_b} "

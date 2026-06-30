@@ -37,6 +37,10 @@ class BeliefConfig:
     axis_pool: bool = True
     global_pool: bool = True
     input_skip: bool = True
+    # No-recurrence baseline: rebuild the belief FRESH from the current frame
+    # each tick (NCA still applied per-frame, but no temporal carry). Gives a
+    # pure next-frame NCA world model  o_{t+1} = f(o_t, a_t).
+    markov: bool = False
 
 
 def _logbern(logits, x):
@@ -124,7 +128,25 @@ class NCABeliefModel(nn.Module):
                 B = B * m
         return B
 
+    def markov_belief(self, o, cell_mask=None):
+        """No-recurrence per-frame belief: NCA-process the CURRENT frame alone
+        (no temporal carry, no action injection -- q0/q1 condition on the action
+        at readout, so this stays action-independent and any action can be tried).
+        Yields a pure next-frame NCA world model when used in place of the carried
+        belief. See ``markov`` in BeliefConfig."""
+        m = cell_mask[:, None] if cell_mask is not None else None
+        B = self.init_belief(o)
+        if m is not None:
+            B = B * m
+        B = self._nca_body(B, B, m)          # h_inp = encoded frame (action-free)
+        B = self.carry_norm(B)
+        if m is not None:
+            B = B * m
+        return B
+
     def update_belief(self, B, o, a, cell_mask=None):
+        if self.cfg.markov:                  # no carry: rebuild fresh from o
+            return self.markov_belief(o, cell_mask)
         H, W = B.shape[-2:]
         m = cell_mask[:, None] if cell_mask is not None else None
         h_inp = self.b_in(torch.cat([self.encode(o), self._act_planes(a, H, W)], dim=1))

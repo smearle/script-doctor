@@ -44,7 +44,7 @@ TRANSITIONS_CACHE_VERSION = 5
 # are then water-filled across levels at dataset-assembly time (see
 # collect_multigame_dataset). Keeps disk bounded while letting complex levels
 # receive far more than an equal split when the per-game budget allows.
-TRANSITIONS_CACHE_CAP = 200_000
+TRANSITIONS_CACHE_CAP = 2_000_000
 
 
 def _water_fill(counts, budget: int):
