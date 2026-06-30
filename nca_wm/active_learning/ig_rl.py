@@ -240,7 +240,7 @@ def make_gif(game, backend, policy, q0, q1, device, T, path):
         env.step(logits.argmax(-1).cpu().numpy())
         render()
     Path(path).parent.mkdir(parents=True, exist_ok=True)
-    imageio.mimsave(path, frames, duration=0.25)
+    imageio.mimsave(path, frames, duration=0.25, loop=0)   # loop=0 => infinite
     print(f"  wrote {path}  ({len(frames)} frames, {env.n_break[0]} breaks)", flush=True)
 
 
