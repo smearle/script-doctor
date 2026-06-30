@@ -17,7 +17,7 @@ from nca_wm.active_learning import mario_belief as MB
 from nca_wm.active_learning.multigame_data import _engine
 from nca_wm.active_learning.mario_explore import UP
 from nca_wm.active_learning.mario_nca_belief import load_dataset_for_algo, GAMES_LIST
-from nca_wm.recurrent_data import GameData
+from nca_wm.state_ops import _unpack_states
 
 
 def main():
@@ -31,19 +31,23 @@ def main():
         game_names, ["bfs"], None, 0.0, 30, 0, cap_tag="all")
     CH = 50000
     for g, info in enumerate(infos):
-        gd = GameData(g, dataset, info)
+        states_packed = dataset["per_game_states"][g]
+        next_packed = dataset["per_game_next_states"][g]
+        actions = np.asarray(dataset["per_game_actions"][g], dtype=np.int64)
+        W = int(info["W"])
+        unpack = lambda p: _unpack_states(p, W).astype(np.float32)
         # sanity: mean active cells/frame for the Player & Step channels
-        s0 = gd.unpack(gd.states_packed[:200])
+        s0 = unpack(states_packed[:200])
         print(f"\n  [{info['name']}] sanity: mean Player cells/frame="
               f"{(s0[:, pb] > 0.5).mean() * s0.shape[2] * s0.shape[3]:.2f}  "
               f"mean Step cells/frame="
               f"{(s0[:, sb] > 0.5).mean() * s0.shape[2] * s0.shape[3]:.2f}")
-        up = np.where(gd.actions == UP)[0]
+        up = np.where(actions == UP)[0]
         stay = brk = 0
         for i in range(0, len(up), CH):
             ch = up[i:i + CH]
-            S = gd.unpack(gd.states_packed[ch])
-            Ns = gd.unpack(gd.next_packed[ch])
+            S = unpack(states_packed[ch])
+            Ns = unpack(next_packed[ch])
             player = S[:, pb] > 0.5
             step = S[:, sb] > 0.5
             nstep = Ns[:, sb] > 0.5
