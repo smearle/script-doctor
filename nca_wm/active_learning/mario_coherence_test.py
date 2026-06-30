@@ -88,7 +88,7 @@ def coherence(ckpt_path, device, n_samples=400, seed=0):
     stay_t = torch.tensor(occ_stay, device=device)
     break_t = torch.tensor(occ_break, device=device)
     Dt = torch.tensor(D, device=device)
-    l0D = l0[0][sl]                                              # (K,nC,nH,nW)
+    l0D = l0[0][:, :nC, :nH, :nW]                                # (K,nC,nH,nW)
 
     n_stay = n_break = n_coherent = 0
     frac_break = []                                             # per-sample frac of D matching BREAK
