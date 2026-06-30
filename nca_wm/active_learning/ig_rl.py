@@ -1,16 +1,19 @@
-"""Train an RL player whose ONLY reward is information gain from the FROZEN jax
-NCA world model + adapter (q0/q1), and test whether it learns to seek + break
-the Step -- the jax analogue of mario_nca_explore.py.
+"""RL player trained ONLY on information gain from the FROZEN jax world model
+(NCAWorldModel q0) + adapter (q1). The reward at each step is the per-step IG of
+the action taken; the player should learn to seek the genuinely informative
+transitions (here: the jump into a platform from below, the sole world-
+disambiguating action) with no environment-specific shaping.
 
-The world model (NCAWorldModel) and the IG adapter (AdapterHead) are frozen; an
-A2C policy is rewarded by the per-step IG (the same q0/q1 estimate the viewer
-shows). If IG is calibrated (high on the disambiguating jump-into-Step, ~0
-elsewhere), a reward-maximizing policy should navigate under a Step and jump far
-more than a random policy. The policy body is a small NCA-like conv net (mirrors
-the WM's spatial structure) with a global-pooled readout to a discrete action +
-value head. Feedforward for now (no recurrence).
-
-Reward, env, IG, and sprite rendering all reuse nca_wm.active_learning.mario_nca_serve.
+Design choices (kept general, no Mario-specific tricks):
+  * Policy body = a small conv net over the (C,H,W) board (NCA-like local
+    processing). The spatial feature map is FLATTENED into the readout (not
+    collapsed by global pooling), so the action can depend on *where* structure
+    is -- without assuming a unique "player" cell.
+  * Vectorized: B parallel engines stepped in lockstep; the policy forward and
+    the IG estimate are BATCHED over all B envs (one q0 + rsamp q1 jax calls per
+    timestep, instead of B*T*rsamp individual calls). Engine stepping is ~free.
+  * Every episode starts from level 0; stochastic action sampling is the only
+    source of trajectory diversity (no exploring starts / no planted positions).
 
   python -m nca_wm.active_learning.ig_rl --train --eval --gif
 """
@@ -21,159 +24,200 @@ import random
 from pathlib import Path
 
 import numpy as np
+import jax.numpy as jnp
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from torch.distributions import Categorical
 
 from nca_wm.active_learning.mario_nca_serve import (
-    load_base, load_adapter, build_render_backends, NCACtx, N_ACTIONS, CMAX,
+    load_base, load_adapter, build_render_backends, N_ACTIONS, CMAX,
 )
 from nca_wm.active_learning import mario_belief as MB
+from nca_wm.active_learning.multigame_data import _engine, _read_padded, _perm
 from nca_wm.active_learning.mario_explore import break_cols, UP
 from nca_wm.state_ops import _multihot_to_objects
 
 NA = N_ACTIONS
+EPS = 1e-6
 
 
-# ----------------------------- NCA-like policy -----------------------------
-class NCAPolicy(nn.Module):
-    """Small NCA-ish conv encoder over the (C,H,W) board -> global mean+max pool
-    -> discrete action logits + scalar value. Feedforward."""
-    def __init__(self, c_in=CMAX, hid=96, n_layers=3):
+# ----------------------------- policy -----------------------------
+class ConvPolicy(nn.Module):
+    """Conv trunk -> 1x1 channel neck -> FLATTEN (spatial preserved) -> MLP ->
+    action logits + value. No global-pool-only collapse, no player gather."""
+    def __init__(self, c_in, H, W, hid=64, n_conv=4, neck=24, mlp=256):
         super().__init__()
-        layers = [nn.Conv2d(c_in, hid, 3, padding=1), nn.GELU()]
-        for _ in range(n_layers - 1):
-            layers += [nn.Conv2d(hid, hid, 3, padding=1), nn.GELU()]
-        self.enc = nn.Sequential(*layers)
-        self.pi = nn.Linear(2 * hid, NA)
-        self.v = nn.Linear(2 * hid, 1)
+        convs = [nn.Conv2d(c_in, hid, 3, padding=1), nn.GELU()]
+        for _ in range(n_conv - 1):
+            convs += [nn.Conv2d(hid, hid, 3, padding=1), nn.GELU()]
+        convs += [nn.Conv2d(hid, neck, 1), nn.GELU()]
+        self.enc = nn.Sequential(*convs)
+        self.head = nn.Sequential(nn.Linear(neck * H * W, mlp), nn.GELU())
+        self.pi = nn.Linear(mlp, NA)
+        self.v = nn.Linear(mlp, 1)
 
-    def forward(self, obs):                       # obs (B,C,H,W)
-        h = self.enc(obs)
-        feat = torch.cat([h.mean(dim=(2, 3)), h.amax(dim=(2, 3))], dim=-1)
-        return self.pi(feat), self.v(feat).squeeze(-1)
-
-
-def _obs_t(ctx, device):
-    return torch.from_numpy(ctx._engine_obs()[None]).float().to(device)
+    def forward(self, obs):                  # obs (B,C,H,W)
+        z = self.head(self.enc(obs).flatten(1))
+        return self.pi(z), self.v(z).squeeze(-1)
 
 
-def _under_platform(ctx):
-    cols, info = break_cols(ctx._grid(), ctx.pb, ctx.sb, ctx.fb)
-    return info is not None and info[2] and info[1] in cols
+# ----------------------------- batched env -----------------------------
+class BatchEnv:
+    """B independent C++ engines for one world, stepped in lockstep."""
+    def __init__(self, game, B):
+        self.game, self.B = game, B
+        self.engs = [_engine(game.json_str, 0) for _ in range(B)]
+        self.perm = _perm(game.n_obj, CMAX, None)
+        self.pb = MB._bit(self.engs[0], "Player")
+        self.sb = MB._bit(self.engs[0], "Step")
+        self.fb = MB._bit(self.engs[0], "Floor")
+        self.reset()
+
+    def _sc(self, e):
+        return int(((MB._grid(e) >> self.sb) & 1).sum())
+
+    def reset(self):
+        for e in self.engs:
+            e.load_level(0)
+        self.last = [self._sc(e) for e in self.engs]
+        self.n_break = [0] * self.B
+
+    def obs(self):
+        return np.stack([_read_padded(e, self.game.n_obj, self.perm, CMAX,
+                                      self.game.H, self.game.W) for e in self.engs])
+
+    def step(self, actions):
+        for i, e in enumerate(self.engs):
+            e.process_input(int(actions[i]))
+            k = 0
+            while e.is_againing() and k < 50:
+                e.process_input(-1); k += 1
+            sc = self._sc(e)
+            if sc < self.last[i]:
+                self.n_break[i] += 1
+            self.last[i] = sc
+
+    def under_platform(self):                # diagnostic only (not used in reward)
+        out = np.zeros(self.B, bool)
+        for i, e in enumerate(self.engs):
+            cols, info = break_cols(MB._grid(e), self.pb, self.sb, self.fb)
+            out[i] = info is not None and info[2] and info[1] in cols
+        return out
+
+
+# ----------------------------- batched IG reward -----------------------------
+def batched_ig(q0, q1, states, actions, rng, n_samples):
+    """IG(s,a) = E_{o~q0}[ sum_realcells log q1(o|s,a,o) - log q0(o|s,a) ], per env."""
+    Sj, Aj = jnp.asarray(states), jnp.asarray(actions)
+    P0 = np.asarray(q0(Sj, Aj)).clip(EPS, 1 - EPS)            # (B,C,H,W)
+    m = (states.sum(1, keepdims=True) > 0)                    # real (non-pad) cells
+    ig = np.zeros(len(states))
+    for _ in range(n_samples):
+        o = (rng.random(P0.shape) < P0).astype(np.float32)
+        P1 = np.asarray(q1(Sj, Aj, jnp.asarray(o))).clip(EPS, 1 - EPS)
+        lq0 = o * np.log(P0) + (1 - o) * np.log(1 - P0)
+        lq1 = o * np.log(P1) + (1 - o) * np.log(1 - P1)
+        ig += ((lq1 - lq0) * m).sum(axis=(1, 2, 3))
+    return ig / n_samples
 
 
 # ----------------------------- rollout + A2C -----------------------------
-def rollout(q0, q1, policy, game, backend, device, T, rsamp, seed, mode="train"):
-    ctx = NCACtx(q0, q1, game, backend, random.Random(seed))
+def rollout(env, policy, q0, q1, device, T, rsamp, rng_np):
+    env.reset()
     logps, vals, rews, ents = [], [], [], []
-    n_under_up = 0
     for _ in range(T):
-        obs = _obs_t(ctx, device)
-        logits, value = policy(obs)
-        dist = torch.distributions.Categorical(logits=logits[0])
-        ai_t = logits[0].argmax(-1) if mode == "greedy" else dist.sample()
-        ai = int(ai_t)
-        if ai == UP and _under_platform(ctx):
-            n_under_up += 1
-        if mode == "train":
-            r = max(0.0, ctx._ig(ai, rsamp))      # intrinsic reward = WM info-gain
-            logps.append(dist.log_prob(ai_t)); vals.append(value[0])
-            rews.append(r); ents.append(dist.entropy())
-        ctx.step(ai)
-    ctx.n_under_up = n_under_up
-    return logps, vals, rews, ents, ctx
+        obs = env.obs()
+        logits, value = policy(torch.from_numpy(obs).float().to(device))
+        dist = Categorical(logits=logits)
+        a = dist.sample()
+        a_np = a.detach().cpu().numpy()
+        ig = np.maximum(0.0, batched_ig(q0, q1, obs, a_np, rng_np, rsamp))
+        logps.append(dist.log_prob(a)); vals.append(value)
+        rews.append(torch.from_numpy(ig).float().to(device)); ents.append(dist.entropy())
+        env.step(a_np)
+    return torch.stack(logps), torch.stack(vals), torch.stack(rews), torch.stack(ents)
 
 
-def train_explorer(q0, q1, policy, games, backends, device, args, best_path=None):
+def train(env, policy, q0, q1, device, args, best_path):
     import copy
     opt = torch.optim.Adam(policy.parameters(), lr=args.lr)
-    rng = random.Random(0)
-    best_r, best_state, recent = -1.0, None, []
+    rng_np = np.random.default_rng(0)
+    best, best_state, recent = -1.0, None, []
     for upd in range(args.updates):
-        L, Vv, Rr, Ee = [], [], [], []
-        rsum = 0.0; n_ep = 0
-        for _ in range(args.episodes):
-            gi = rng.randrange(len(games)); g = games[gi]
-            logps, vals, rews, ents, _ = rollout(
-                q0, q1, policy, g, backends[g.gist], device, args.T, args.rsamp,
-                rng.randrange(1 << 30))
-            if not rews:
-                continue
-            R = 0.0; returns = []
-            for r in reversed(rews):
-                R = r + args.gamma * R; returns.insert(0, R)
-            Rr += returns; L += logps; Vv += vals; Ee += ents
-            rsum += float(np.mean(rews)); n_ep += 1
-        if not Rr:
-            continue
-        returns = torch.tensor(Rr, device=device)
-        vals = torch.stack(Vv); logps = torch.stack(L); ents = torch.stack(Ee)
-        adv = (returns - vals).detach(); adv = (adv - adv.mean()) / (adv.std() + 1e-6)
+        logps, vals, rews, ents = rollout(env, policy, q0, q1, device, args.T, args.rsamp, rng_np)
+        # discounted returns over time (T,B)
+        returns = torch.zeros_like(rews)
+        R = torch.zeros(env.B, device=device)
+        for t in range(args.T - 1, -1, -1):
+            R = rews[t] + args.gamma * R
+            returns[t] = R
+        adv = (returns - vals).detach()
+        adv = (adv - adv.mean()) / (adv.std() + 1e-6)
         loss = -(logps * adv).mean() + 0.5 * F.mse_loss(vals, returns) - args.ent_w * ents.mean()
         opt.zero_grad(); loss.backward()
         nn.utils.clip_grad_norm_(policy.parameters(), 1.0); opt.step()
-        mr = rsum / max(n_ep, 1)
-        recent.append(mr); recent = recent[-20:]
-        sm = float(np.mean(recent))
-        if sm > best_r:
-            best_r = sm; best_state = copy.deepcopy(policy.state_dict())
+        mr = float(rews.mean())
+        recent.append(mr); recent = recent[-25:]; sm = float(np.mean(recent))
+        if sm > best:
+            best = sm; best_state = copy.deepcopy(policy.state_dict())
         if upd % 10 == 0:
-            print(f"upd {upd:4d}  mean-IG-reward {mr:+.3f}  smoothed {sm:+.3f}  "
-                  f"best {best_r:+.3f}  loss {loss.item():.3f}", flush=True)
+            print(f"upd {upd:4d}  mean-IG {mr:+.3f}  smoothed {sm:+.3f}  best {best:+.3f}  "
+                  f"max-step-IG {float(rews.max()):.3f}  loss {loss.item():.3f}", flush=True)
     if best_state is not None:
         policy.load_state_dict(best_state)
-        if best_path:
-            Path(best_path).parent.mkdir(parents=True, exist_ok=True)
-            torch.save(best_state, best_path)
-        print(f"[train] restored best policy (smoothed reward {best_r:+.3f})", flush=True)
+        Path(best_path).parent.mkdir(parents=True, exist_ok=True)
+        torch.save(best_state, best_path)
+        print(f"[train] restored + saved best policy (smoothed IG {best:+.3f}) -> {best_path}", flush=True)
 
 
 @torch.no_grad()
-def eval_explorer(q0, q1, policy, games, backends, device, T, n_ep=30, seed=1):
-    print("\n=== eval: IG-policy vs random (under-platform jumps & breaks per episode) ===")
-    for game in games:
-        pj = pb = rj = rb = 0.0
-        for i in range(n_ep):
-            _, _, _, _, ctx = rollout(q0, q1, policy, game, backends[game.gist],
-                                      device, T, 0, seed + i, "greedy")
-            pj += ctx.n_under_up; pb += ctx.n_break
-            rc = NCACtx(q0, q1, game, backends[game.gist], random.Random(1000 + seed + i))
-            for _ in range(T):
-                a = random.Random(2000 + seed + i + _).randrange(NA)
-                if a == UP and _under_platform(rc):
-                    rj += 1
-                rc.step(a)
-            rb += rc.n_break
-        n = n_ep
-        print(f"  {game.gist:16s} POLICY under-platform-UP/ep {pj/n:.2f} breaks/ep {pb/n:.2f} | "
-              f"RANDOM under-platform-UP/ep {rj/n:.2f} breaks/ep {rb/n:.2f}", flush=True)
+def evaluate(env, policy, q0, q1, device, T, rsamp=32, seed=123):
+    print("\n=== eval: greedy IG-policy vs random ===")
+
+    def run(greedy):
+        rng = np.random.default_rng(seed)
+        env.reset(); ig_steps = []; under_up = 0
+        for _ in range(T):
+            obs = env.obs()
+            if greedy:
+                logits, _ = policy(torch.from_numpy(obs).float().to(device))
+                a = logits.argmax(-1).cpu().numpy()
+            else:
+                a = rng.integers(NA, size=env.B)
+            ig_steps.append(batched_ig(q0, q1, obs, a, rng, rsamp))
+            under_up += int(((a == UP) & env.under_platform()).sum())
+            env.step(a)
+        return np.mean(ig_steps), under_up / env.B, sum(env.n_break) / env.B
+
+    pol = run(True); rnd = run(False)
+    print(f"  {env.game.gist:16s}  mean IG/step   POLICY {pol[0]:.3f}  RANDOM {rnd[0]:.3f}")
+    print(f"  {'':16s}  under-plat-UP/ep POLICY {pol[1]:.2f}  RANDOM {rnd[1]:.2f}")
+    print(f"  {'':16s}  breaks/ep        POLICY {pol[2]:.2f}  RANDOM {rnd[2]:.2f}", flush=True)
+    return pol, rnd
 
 
 @torch.no_grad()
-def make_gif(q0, q1, policy, game, backend, device, T, path, seed=7):
-    import imageio
-    ctx = NCACtx(q0, q1, game, backend, random.Random(seed))
+def make_gif(game, backend, policy, q0, q1, device, T, path):
+    import imageio, PIL.Image
+    env = BatchEnv(game, 1)
     frames = []
 
     def render():
-        o = ctx._engine_obs()
-        crop = (o[:ctx.n_obj, :ctx.H, :ctx.W] > 0.5).astype(np.uint8)
-        fr = backend.render_frame_from_objects(_multihot_to_objects(crop), ctx.W, ctx.H)
-        import PIL.Image
+        o = env.obs()[0]
+        crop = (o[:game.n_obj, :game.H, :game.W] > 0.5).astype(np.uint8)
+        fr = backend.render_frame_from_objects(_multihot_to_objects(crop), game.W, game.H)
         frames.append(np.array(PIL.Image.fromarray(fr).resize(
-            (ctx.W * 16, ctx.H * 16), PIL.Image.NEAREST)))
+            (game.W * 16, game.H * 16), PIL.Image.NEAREST)))
 
     render()
     for _ in range(T):
-        obs = _obs_t(ctx, device)
-        logits, _ = policy(obs)
-        ai = int(logits[0].argmax(-1))
-        ctx.step(ai)
+        logits, _ = policy(torch.from_numpy(env.obs()).float().to(device))
+        env.step(logits.argmax(-1).cpu().numpy())
         render()
     Path(path).parent.mkdir(parents=True, exist_ok=True)
     imageio.mimsave(path, frames, duration=0.25)
-    print(f"  wrote {path}  ({len(frames)} frames, {ctx.n_break} breaks)", flush=True)
+    print(f"  wrote {path}  ({len(frames)} frames, {env.n_break[0]} breaks)", flush=True)
 
 
 def main():
@@ -181,38 +225,44 @@ def main():
     ap.add_argument("--train", action="store_true")
     ap.add_argument("--eval", action="store_true")
     ap.add_argument("--gif", action="store_true")
-    ap.add_argument("--updates", type=int, default=150)
-    ap.add_argument("--episodes", type=int, default=8)
-    ap.add_argument("--T", type=int, default=24)
+    ap.add_argument("--world", default="mario")          # which world to train on
+    ap.add_argument("--n_envs", type=int, default=48)
+    ap.add_argument("--updates", type=int, default=800)
+    ap.add_argument("--T", type=int, default=32)
     ap.add_argument("--rsamp", type=int, default=16)
-    ap.add_argument("--gamma", type=float, default=0.95)
+    ap.add_argument("--gamma", type=float, default=0.97)
     ap.add_argument("--lr", type=float, default=3e-4)
     ap.add_argument("--ent_w", type=float, default=0.02)
-    ap.add_argument("--device", default="cpu")     # policy on CPU; jax IG on GPU
+    ap.add_argument("--hid", type=int, default=64)
+    ap.add_argument("--n_conv", type=int, default=4)
+    ap.add_argument("--neck", type=int, default=24)
+    ap.add_argument("--mlp", type=int, default=256)
+    ap.add_argument("--device", default="cpu")
     ap.add_argument("--ckpt", default="nca_wm/active_learning/ckpts/ig_rl_policy.pt")
     ap.add_argument("--gif_dir", default="/tmp/ig_rl_gifs")
     args = ap.parse_args()
 
     device = torch.device(args.device)
-    q0 = load_base()
-    q1 = load_adapter()
-    _games_by_gist, backends = build_render_backends()   # backends keyed by gist(==name)
-    games = MB.build_worlds()
-    policy = NCAPolicy().to(device)
+    q0, q1 = load_base(), load_adapter()
+    games_by_gist, backends = build_render_backends()
+    game = games_by_gist[args.world]
+    env = BatchEnv(game, args.n_envs)
+    policy = ConvPolicy(CMAX, game.H, game.W, args.hid, args.n_conv, args.neck, args.mlp).to(device)
     nparam = sum(p.numel() for p in policy.parameters())
-    print(f"[ig_rl] policy params: {nparam:,}  games={[g.gist for g in games]}", flush=True)
+    print(f"[ig_rl] world={args.world} B={args.n_envs} policy params={nparam:,}", flush=True)
 
     if args.train:
-        train_explorer(q0, q1, policy, games, backends, device, args, best_path=args.ckpt)
+        train(env, policy, q0, q1, device, args, args.ckpt)
     elif Path(args.ckpt).is_file():
         policy.load_state_dict(torch.load(args.ckpt, map_location=device))
-        print(f"[ig_rl] loaded policy {args.ckpt}", flush=True)
+        print(f"[ig_rl] loaded {args.ckpt}", flush=True)
     if args.eval:
-        eval_explorer(q0, q1, policy, games, backends, device, args.T)
+        for gist, g in games_by_gist.items():
+            evaluate(BatchEnv(g, args.n_envs), policy, q0, q1, device, args.T)
     if args.gif:
-        for g in games:
-            make_gif(q0, q1, policy, g, backends[g.gist], device, args.T,
-                     f"{args.gif_dir}/{g.gist}_ig_policy.gif")
+        for gist, g in games_by_gist.items():
+            make_gif(g, backends[gist], policy, q0, q1, device, args.T,
+                     f"{args.gif_dir}/{gist}_ig_policy.gif")
 
 
 if __name__ == "__main__":
