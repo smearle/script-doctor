@@ -106,6 +106,30 @@ class BatchEnv:
         return out
 
 
+class MultiBatchEnv:
+    """Several BatchEnvs (one per world) presented as a single batch. The frozen
+    WM/adapter are world-agnostic, so the policy forward and the IG reward batch
+    over all worlds at once; only the engines (breakable vs not) differ."""
+    def __init__(self, games, B_each):
+        self.envs = [BatchEnv(g, B_each) for g in games]
+        self.B = sum(e.B for e in self.envs)
+        self._splits = np.cumsum([e.B for e in self.envs])[:-1]
+
+    def reset(self):
+        for e in self.envs:
+            e.reset()
+
+    def obs(self):
+        return np.concatenate([e.obs() for e in self.envs], axis=0)
+
+    def step(self, actions):
+        for e, part in zip(self.envs, np.split(np.asarray(actions), self._splits)):
+            e.step(part)
+
+    def under_platform(self):
+        return np.concatenate([e.under_platform() for e in self.envs])
+
+
 # ----------------------------- batched IG reward -----------------------------
 def batched_ig(q0, q1, states, actions, rng, n_samples):
     """IG(s,a) = E_{o~q0}[ sum_realcells log q1(o|s,a,o) - log q0(o|s,a) ], per env."""
@@ -245,11 +269,18 @@ def main():
     device = torch.device(args.device)
     q0, q1 = load_base(), load_adapter()
     games_by_gist, backends = build_render_backends()
-    game = games_by_gist[args.world]
-    env = BatchEnv(game, args.n_envs)
-    policy = ConvPolicy(CMAX, game.H, game.W, args.hid, args.n_conv, args.neck, args.mlp).to(device)
+
+    worlds = (["mario", "mario_breakable"] if args.world in ("both", "all")
+              else args.world.split(","))
+    train_games = [games_by_gist[w] for w in worlds]
+    g0 = train_games[0]
+    if len(train_games) == 1:
+        env = BatchEnv(g0, args.n_envs)
+    else:
+        env = MultiBatchEnv(train_games, max(1, args.n_envs // len(train_games)))
+    policy = ConvPolicy(CMAX, g0.H, g0.W, args.hid, args.n_conv, args.neck, args.mlp).to(device)
     nparam = sum(p.numel() for p in policy.parameters())
-    print(f"[ig_rl] world={args.world} B={args.n_envs} policy params={nparam:,}", flush=True)
+    print(f"[ig_rl] train_worlds={worlds} total_B={env.B} policy params={nparam:,}", flush=True)
 
     if args.train:
         train(env, policy, q0, q1, device, args, args.ckpt)
