@@ -68,7 +68,10 @@ class AdapterHead(nn.Module):
             h_conv = nn.Conv(self.n_hid, (3, 3), padding="SAME", name=f"conv_{i}")(conv_in)
             h = h + nn.Dense(self.n_hid, name=f"out_{i}")(jax.nn.gelu(h_conv))
             h = h * mask
-        logits = nn.Dense(self.n_out, name="readout")(h)    # (B,H,W,C)
+        # Output = a strong copy-of-o skip (so confident copying is the DEFAULT)
+        # plus a learned NCA correction. In deterministic envs the correction ~0.
+        skip = self.param("copy_scale", nn.initializers.constant(5.0), ())
+        logits = nn.Dense(self.n_out, name="readout")(h) + skip * (2.0 * oo - 1.0)
         return logits.transpose(0, 3, 1, 2)                 # (B,C,H,W) o' logits
 
 
