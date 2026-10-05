@@ -1,0 +1,239 @@
+{
+  "jax_version": "0.9.1",
+  "devices": [
+    "NVIDIA GeForce RTX 4090"
+  ],
+  "trials": 9,
+  "seed": 42,
+  "timing": "alternating full/transitions after compilation and warmup",
+  "results": [
+    {
+      "game": "sokoban_basic",
+      "batch": 256,
+      "steps": 100,
+      "full": {
+        "compile_s": 6.091669332236052,
+        "temporary_bytes": 1830104,
+        "argument_bytes": 167944,
+        "output_bytes": 12353760,
+        "median_s": 0.09647816605865955,
+        "min_s": 0.09633943997323513,
+        "max_s": 0.09668388776481152,
+        "env_steps_per_s": 265345.0106466056
+      },
+      "transitions": {
+        "compile_s": 4.198848411440849,
+        "temporary_bytes": 2214272,
+        "argument_bytes": 167944,
+        "output_bytes": 5672064,
+        "median_s": 0.0951818898320198,
+        "min_s": 0.09508733823895454,
+        "max_s": 0.0955665186047554,
+        "env_steps_per_s": 268958.7278123994
+      }
+    },
+    {
+      "game": "sokoban_basic",
+      "batch": 1024,
+      "steps": 100,
+      "full": {
+        "compile_s": 6.060066025704145,
+        "temporary_bytes": 6393560,
+        "argument_bytes": 671752,
+        "output_bytes": 49414368,
+        "median_s": 0.10747980140149593,
+        "min_s": 0.10739379934966564,
+        "max_s": 0.10779472440481186,
+        "env_steps_per_s": 952737.1530719517
+      },
+      "transitions": {
+        "compile_s": 4.078213691711426,
+        "temporary_bytes": 7909504,
+        "argument_bytes": 671752,
+        "output_bytes": 22687872,
+        "median_s": 0.10820315033197403,
+        "min_s": 0.10790323466062546,
+        "max_s": 0.10834069177508354,
+        "env_steps_per_s": 946368.0094879899
+      }
+    },
+    {
+      "game": "sokoban_basic",
+      "batch": 4096,
+      "steps": 100,
+      "full": {
+        "compile_s": 5.936096245422959,
+        "temporary_bytes": 21887704,
+        "argument_bytes": 2686984,
+        "output_bytes": 197656800,
+        "median_s": 0.15225199051201344,
+        "min_s": 0.15188775025308132,
+        "max_s": 0.15283834747970104,
+        "env_steps_per_s": 2690276.8142639194
+      },
+      "transitions": {
+        "compile_s": 4.0662975292652845,
+        "temporary_bytes": 25434240,
+        "argument_bytes": 2686984,
+        "output_bytes": 90751104,
+        "median_s": 0.15246563404798508,
+        "min_s": 0.15220143646001816,
+        "max_s": 0.15269405953586102,
+        "env_steps_per_s": 2686507.045063596
+      },
+      "trace_directory": "profiles-scaling/sokoban_basic-4096"
+    },
+    {
+      "game": "blocks",
+      "batch": 256,
+      "steps": 100,
+      "full": {
+        "compile_s": 2.149119507521391,
+        "temporary_bytes": 2948824,
+        "argument_bytes": 260616,
+        "output_bytes": 30980832,
+        "median_s": 0.11843946389853954,
+        "min_s": 0.11836340092122555,
+        "max_s": 0.11918090842664242,
+        "env_steps_per_s": 216144.17321181129
+      },
+      "transitions": {
+        "compile_s": 1.6649249028414488,
+        "temporary_bytes": 4268160,
+        "argument_bytes": 260616,
+        "output_bytes": 15031936,
+        "median_s": 0.11826726794242859,
+        "min_s": 0.11817088536918163,
+        "max_s": 0.11861837282776833,
+        "env_steps_per_s": 216458.8769604608
+      }
+    },
+    {
+      "game": "blocks",
+      "batch": 1024,
+      "steps": 100,
+      "full": {
+        "compile_s": 2.2883362378925085,
+        "temporary_bytes": 11768024,
+        "argument_bytes": 1042440,
+        "output_bytes": 123922656,
+        "median_s": 0.15993869490921497,
+        "min_s": 0.1596162784844637,
+        "max_s": 0.1606482844799757,
+        "env_steps_per_s": 640245.3143570084
+      },
+      "transitions": {
+        "compile_s": 1.8028319627046585,
+        "temporary_bytes": 17041024,
+        "argument_bytes": 1042440,
+        "output_bytes": 60127360,
+        "median_s": 0.16034462116658688,
+        "min_s": 0.16008685529232025,
+        "max_s": 0.1614454071968794,
+        "env_steps_per_s": 638624.4780460303
+      }
+    },
+    {
+      "game": "blocks",
+      "batch": 4096,
+      "steps": 100,
+      "full": {
+        "compile_s": 2.365425979718566,
+        "temporary_bytes": 47071704,
+        "argument_bytes": 4169736,
+        "output_bytes": 495689952,
+        "median_s": 0.3030367251485586,
+        "min_s": 0.3026236928999424,
+        "max_s": 0.3060364034026861,
+        "env_steps_per_s": 1351651.3544660322
+      },
+      "transitions": {
+        "compile_s": 1.8165998551994562,
+        "temporary_bytes": 68153216,
+        "argument_bytes": 4169736,
+        "output_bytes": 240509056,
+        "median_s": 0.2999672833830118,
+        "min_s": 0.2997356876730919,
+        "max_s": 0.3002623524516821,
+        "env_steps_per_s": 1365482.2465322132
+      },
+      "trace_directory": "profiles-scaling/blocks-4096"
+    },
+    {
+      "game": "Zen_Puzzle_Garden",
+      "batch": 256,
+      "steps": 100,
+      "full": {
+        "compile_s": 5.446611613035202,
+        "temporary_bytes": 3571160,
+        "argument_bytes": 335368,
+        "output_bytes": 46005984,
+        "median_s": 0.08126615546643734,
+        "min_s": 0.08113612234592438,
+        "max_s": 0.08157764747738838,
+        "env_steps_per_s": 315014.28673554905
+      },
+      "transitions": {
+        "compile_s": 3.6101417765021324,
+        "temporary_bytes": 5404800,
+        "argument_bytes": 335368,
+        "output_bytes": 22581888,
+        "median_s": 0.07713212445378304,
+        "min_s": 0.07698723673820496,
+        "max_s": 0.07760299742221832,
+        "env_steps_per_s": 331898.0279784634
+      }
+    },
+    {
+      "game": "Zen_Puzzle_Garden",
+      "batch": 1024,
+      "steps": 100,
+      "full": {
+        "compile_s": 5.287855992093682,
+        "temporary_bytes": 14236120,
+        "argument_bytes": 1341448,
+        "output_bytes": 184023264,
+        "median_s": 0.10487267933785915,
+        "min_s": 0.10467316024005413,
+        "max_s": 0.10500980913639069,
+        "env_steps_per_s": 976422.0829154833
+      },
+      "transitions": {
+        "compile_s": 3.56543648801744,
+        "temporary_bytes": 18366336,
+        "argument_bytes": 1341448,
+        "output_bytes": 90327168,
+        "median_s": 0.10097269713878632,
+        "min_s": 0.10083924420177937,
+        "max_s": 0.10138703137636185,
+        "env_steps_per_s": 1014135.5326901079
+      }
+    },
+    {
+      "game": "Zen_Puzzle_Garden",
+      "batch": 4096,
+      "steps": 100,
+      "full": {
+        "compile_s": 5.194685550406575,
+        "temporary_bytes": 56907480,
+        "argument_bytes": 5365768,
+        "output_bytes": 736092384,
+        "median_s": 0.19226227328181267,
+        "min_s": 0.19186459854245186,
+        "max_s": 0.19431830383837223,
+        "env_steps_per_s": 2130423.1610723743
+      },
+      "transitions": {
+        "compile_s": 3.4964311849325895,
+        "temporary_bytes": 73417856,
+        "argument_bytes": 5365768,
+        "output_bytes": 361308288,
+        "median_s": 0.19062303565442562,
+        "min_s": 0.1899603996425867,
+        "max_s": 0.19198612496256828,
+        "env_steps_per_s": 2148743.453768886
+      },
+      "trace_directory": "profiles-scaling/Zen_Puzzle_Garden-4096"
+    }
+  ]
+}

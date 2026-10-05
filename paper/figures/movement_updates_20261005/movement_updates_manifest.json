@@ -1,0 +1,119 @@
+{
+  "inputs": {
+    "scripts/benchmarks/results/2026-10-04-movement-updates/final/updates-wide-h200/game-0.json": {
+      "sha256": "89df58f094cace92a895737047c7a5123874792d64ba22d0db9ee12e230b9dc5",
+      "engine_sha256": "ab92c0a647c6efe9809c98cfecc7110a89b23b6dfdea2e7205603429041654fe",
+      "jax_version": "0.9.0.1",
+      "trials": 7,
+      "devices": [
+        "NVIDIA H200"
+      ]
+    },
+    "scripts/benchmarks/results/2026-10-04-movement-updates/final/updates-wide-h200/game-1.json": {
+      "sha256": "3995ed7d4d9bc7085108f82a22588113260559da6a66c979bf22a73ade6fdb5e",
+      "engine_sha256": "ab92c0a647c6efe9809c98cfecc7110a89b23b6dfdea2e7205603429041654fe",
+      "jax_version": "0.9.0.1",
+      "trials": 7,
+      "devices": [
+        "NVIDIA H200"
+      ]
+    },
+    "scripts/benchmarks/results/2026-10-04-movement-updates/final/updates-wide-h200/game-10.json": {
+      "sha256": "a94864b38d101fd53570ad6c6598512f545f94c089f78dda1c5c28bf585a7285",
+      "engine_sha256": "ab92c0a647c6efe9809c98cfecc7110a89b23b6dfdea2e7205603429041654fe",
+      "jax_version": "0.9.0.1",
+      "trials": 7,
+      "devices": [
+        "NVIDIA H200"
+      ]
+    },
+    "scripts/benchmarks/results/2026-10-04-movement-updates/final/updates-wide-h200/game-11.json": {
+      "sha256": "75898fbf07e68f90ad734ccb8a2f3efadc53cc1213264de95e62c97330f44353",
+      "engine_sha256": "ab92c0a647c6efe9809c98cfecc7110a89b23b6dfdea2e7205603429041654fe",
+      "jax_version": "0.9.0.1",
+      "trials": 7,
+      "devices": [
+        "NVIDIA H200"
+      ]
+    },
+    "scripts/benchmarks/results/2026-10-04-movement-updates/final/updates-wide-h200/game-2.json": {
+      "sha256": "c5ec79bcd0741c0fbf2c1c5428182d3dbf8cd6fac62302bab85182165b66a440",
+      "engine_sha256": "ab92c0a647c6efe9809c98cfecc7110a89b23b6dfdea2e7205603429041654fe",
+      "jax_version": "0.9.0.1",
+      "trials": 7,
+      "devices": [
+        "NVIDIA H200"
+      ]
+    },
+    "scripts/benchmarks/results/2026-10-04-movement-updates/final/updates-wide-h200/game-3.json": {
+      "sha256": "76f4d4718b65d78cad6e61886b83fbf847b8be6e229d67e56e5a5b54a725fefb",
+      "engine_sha256": "ab92c0a647c6efe9809c98cfecc7110a89b23b6dfdea2e7205603429041654fe",
+      "jax_version": "0.9.0.1",
+      "trials": 7,
+      "devices": [
+        "NVIDIA H200"
+      ]
+    },
+    "scripts/benchmarks/results/2026-10-04-movement-updates/final/updates-wide-h200/game-4.json": {
+      "sha256": "598ce1dd97d3f929e3b71bea18371c5c3bd1d5f2916db2a5d95e5f9ed1420d70",
+      "engine_sha256": "ab92c0a647c6efe9809c98cfecc7110a89b23b6dfdea2e7205603429041654fe",
+      "jax_version": "0.9.0.1",
+      "trials": 7,
+      "devices": [
+        "NVIDIA H200"
+      ]
+    },
+    "scripts/benchmarks/results/2026-10-04-movement-updates/final/updates-wide-h200/game-5.json": {
+      "sha256": "35d8296d93a57a83d05e8b00d75a636f903d5ac9d11acf14e305cc407f425566",
+      "engine_sha256": "ab92c0a647c6efe9809c98cfecc7110a89b23b6dfdea2e7205603429041654fe",
+      "jax_version": "0.9.0.1",
+      "trials": 7,
+      "devices": [
+        "NVIDIA H200"
+      ]
+    },
+    "scripts/benchmarks/results/2026-10-04-movement-updates/final/updates-wide-h200/game-6.json": {
+      "sha256": "8e44eb95c3fcffae15f1e526836478fa299d5bdbe79e15679cc17251ef9387f6",
+      "engine_sha256": "ab92c0a647c6efe9809c98cfecc7110a89b23b6dfdea2e7205603429041654fe",
+      "jax_version": "0.9.0.1",
+      "trials": 7,
+      "devices": [
+        "NVIDIA H200"
+      ]
+    },
+    "scripts/benchmarks/results/2026-10-04-movement-updates/final/updates-wide-h200/game-7.json": {
+      "sha256": "2b74f8f3aa3bddcf1fa6589718882ab9d58543e03c8fe08b0fe0b3cacd82169e",
+      "engine_sha256": "ab92c0a647c6efe9809c98cfecc7110a89b23b6dfdea2e7205603429041654fe",
+      "jax_version": "0.9.0.1",
+      "trials": 7,
+      "devices": [
+        "NVIDIA H200"
+      ]
+    },
+    "scripts/benchmarks/results/2026-10-04-movement-updates/final/updates-wide-h200/game-8.json": {
+      "sha256": "325ec801b5d529f21e569096090ee8b5d3d8a835df29931c67aa1677713bb2b3",
+      "engine_sha256": "ab92c0a647c6efe9809c98cfecc7110a89b23b6dfdea2e7205603429041654fe",
+      "jax_version": "0.9.0.1",
+      "trials": 7,
+      "devices": [
+        "NVIDIA H200"
+      ]
+    },
+    "scripts/benchmarks/results/2026-10-04-movement-updates/final/updates-wide-h200/game-9.json": {
+      "sha256": "d90d00b30da84706d29f6243fe1056b3e22383cc0f01b8ff8e8bbb042be5fc90",
+      "engine_sha256": "ab92c0a647c6efe9809c98cfecc7110a89b23b6dfdea2e7205603429041654fe",
+      "jax_version": "0.9.0.1",
+      "trials": 7,
+      "devices": [
+        "NVIDIA H200"
+      ]
+    },
+    "scripts/benchmarks/results/2026-10-04-movement-updates/final/large-batch-h200.json": {
+      "sha256": "6677494241d17597d80f6ee9b03cc06e272bd0aad41034c239ab232719fe86ea"
+    }
+  },
+  "plotter_sha256": "573d5d80de9b1bf3a96ad062cb3321874dff1a27d1f5d9ca3b79d0b8af836e77",
+  "matplotlib_version": "3.10.6",
+  "scope": "Level zero; full-output 100-step rollouts; autoreset at 100; paired seeds 42/1042.",
+  "aggregation": "Geometric mean of seed median throughput ratios; whiskers span the two seeds, not a confidence interval."
+}

@@ -1,0 +1,637 @@
+{
+  "engine_sha256": "ab92c0a647c6efe9809c98cfecc7110a89b23b6dfdea2e7205603429041654fe",
+  "inputs": {
+    "scripts/benchmarks/results/2026-10-04-movement-updates/final/updates-wide-h200/game-0.json": {
+      "sha256": "89df58f094cace92a895737047c7a5123874792d64ba22d0db9ee12e230b9dc5",
+      "device": "NVIDIA H200"
+    },
+    "scripts/benchmarks/results/2026-10-04-movement-updates/final/updates-wide-h200/game-1.json": {
+      "sha256": "3995ed7d4d9bc7085108f82a22588113260559da6a66c979bf22a73ade6fdb5e",
+      "device": "NVIDIA H200"
+    },
+    "scripts/benchmarks/results/2026-10-04-movement-updates/final/updates-wide-h200/game-10.json": {
+      "sha256": "a94864b38d101fd53570ad6c6598512f545f94c089f78dda1c5c28bf585a7285",
+      "device": "NVIDIA H200"
+    },
+    "scripts/benchmarks/results/2026-10-04-movement-updates/final/updates-wide-h200/game-11.json": {
+      "sha256": "75898fbf07e68f90ad734ccb8a2f3efadc53cc1213264de95e62c97330f44353",
+      "device": "NVIDIA H200"
+    },
+    "scripts/benchmarks/results/2026-10-04-movement-updates/final/updates-wide-h200/game-2.json": {
+      "sha256": "c5ec79bcd0741c0fbf2c1c5428182d3dbf8cd6fac62302bab85182165b66a440",
+      "device": "NVIDIA H200"
+    },
+    "scripts/benchmarks/results/2026-10-04-movement-updates/final/updates-wide-h200/game-3.json": {
+      "sha256": "76f4d4718b65d78cad6e61886b83fbf847b8be6e229d67e56e5a5b54a725fefb",
+      "device": "NVIDIA H200"
+    },
+    "scripts/benchmarks/results/2026-10-04-movement-updates/final/updates-wide-h200/game-4.json": {
+      "sha256": "598ce1dd97d3f929e3b71bea18371c5c3bd1d5f2916db2a5d95e5f9ed1420d70",
+      "device": "NVIDIA H200"
+    },
+    "scripts/benchmarks/results/2026-10-04-movement-updates/final/updates-wide-h200/game-5.json": {
+      "sha256": "35d8296d93a57a83d05e8b00d75a636f903d5ac9d11acf14e305cc407f425566",
+      "device": "NVIDIA H200"
+    },
+    "scripts/benchmarks/results/2026-10-04-movement-updates/final/updates-wide-h200/game-6.json": {
+      "sha256": "8e44eb95c3fcffae15f1e526836478fa299d5bdbe79e15679cc17251ef9387f6",
+      "device": "NVIDIA H200"
+    },
+    "scripts/benchmarks/results/2026-10-04-movement-updates/final/updates-wide-h200/game-7.json": {
+      "sha256": "2b74f8f3aa3bddcf1fa6589718882ab9d58543e03c8fe08b0fe0b3cacd82169e",
+      "device": "NVIDIA H200"
+    },
+    "scripts/benchmarks/results/2026-10-04-movement-updates/final/updates-wide-h200/game-8.json": {
+      "sha256": "325ec801b5d529f21e569096090ee8b5d3d8a835df29931c67aa1677713bb2b3",
+      "device": "NVIDIA H200"
+    },
+    "scripts/benchmarks/results/2026-10-04-movement-updates/final/updates-wide-h200/game-9.json": {
+      "sha256": "d90d00b30da84706d29f6243fe1056b3e22383cc0f01b8ff8e8bbb042be5fc90",
+      "device": "NVIDIA H200"
+    },
+    "scripts/benchmarks/results/2026-10-04-movement-updates/final/large-batch-h200.json": {
+      "sha256": "6677494241d17597d80f6ee9b03cc06e272bd0aad41034c239ab232719fe86ea",
+      "device": "NVIDIA H200"
+    },
+    "scripts/benchmarks/results/2026-10-04-movement-updates/final/additional-levels-h200.json": {
+      "sha256": "45a12fc6004c640bfff89624f3b358403e3cd114af241c2f1ce68bbae37bd9e7",
+      "device": "NVIDIA H200"
+    },
+    "scripts/benchmarks/results/2026-10-04-movement-updates/final/comparison-h100.json": {
+      "sha256": "0aacf8bf4057ee22e9cb08f202185f08b2872ce394cf92a36fe556e2d576dadd",
+      "device": "NVIDIA H100 80GB HBM3"
+    }
+  },
+  "compared_transitions": 26831200,
+  "seeded_comparisons": 94,
+  "trials_per_variant": 7,
+  "timed_calls": 1316,
+  "scope": "All reset and full rollout leaves checked exactly, including dtype and shape; equal NaNs allowed. Counts are paired transitions, excluding warmup and timing repeats.",
+  "cpu_validation": "131 passed, 9 existing expected failures; plus 17 focused tests on JAX 0.7.1.",
+  "groups": [
+    {
+      "device": "NVIDIA H100 80GB HBM3",
+      "game": "Slidings",
+      "level": 0,
+      "batch": 4096,
+      "geomean_speedup": 0.9766557035118771,
+      "seed_speedup_range": [
+        0.9765791630896533,
+        0.9767322499330374
+      ],
+      "geomean_candidate_steps_per_s": 669903.6822813293
+    },
+    {
+      "device": "NVIDIA H100 80GB HBM3",
+      "game": "Zen_Puzzle_Garden",
+      "level": 0,
+      "batch": 4096,
+      "geomean_speedup": 1.025343622556418,
+      "seed_speedup_range": [
+        1.0236878905064566,
+        1.0270020326185418
+      ],
+      "geomean_candidate_steps_per_s": 3051236.3193504703
+    },
+    {
+      "device": "NVIDIA H100 80GB HBM3",
+      "game": "blocks",
+      "level": 0,
+      "batch": 4096,
+      "geomean_speedup": 1.2151447604852184,
+      "seed_speedup_range": [
+        1.2149703264570604,
+        1.2153192195569757
+      ],
+      "geomean_candidate_steps_per_s": 2300912.328829241
+    },
+    {
+      "device": "NVIDIA H100 80GB HBM3",
+      "game": "nekopuzzle",
+      "level": 0,
+      "batch": 4096,
+      "geomean_speedup": 0.9729981312682141,
+      "seed_speedup_range": [
+        0.9720686916919857,
+        0.9739284595243612
+      ],
+      "geomean_candidate_steps_per_s": 1504125.0765423016
+    },
+    {
+      "device": "NVIDIA H100 80GB HBM3",
+      "game": "sokoban_basic",
+      "level": 0,
+      "batch": 4096,
+      "geomean_speedup": 1.016292095812483,
+      "seed_speedup_range": [
+        1.014468768703012,
+        1.0181187000280127
+      ],
+      "geomean_candidate_steps_per_s": 2879152.322167359
+    },
+    {
+      "device": "NVIDIA H200",
+      "game": "Slidings",
+      "level": 0,
+      "batch": 1,
+      "geomean_speedup": 0.9932545743334091,
+      "seed_speedup_range": [
+        0.9930882608556899,
+        0.9934209156638119
+      ],
+      "geomean_candidate_steps_per_s": 607.4753756454779
+    },
+    {
+      "device": "NVIDIA H200",
+      "game": "Slidings",
+      "level": 0,
+      "batch": 256,
+      "geomean_speedup": 0.9824140858195152,
+      "seed_speedup_range": [
+        0.9823562804637239,
+        0.9824718945767802
+      ],
+      "geomean_candidate_steps_per_s": 64183.82244615023
+    },
+    {
+      "device": "NVIDIA H200",
+      "game": "Slidings",
+      "level": 0,
+      "batch": 4096,
+      "geomean_speedup": 0.9797186531745653,
+      "seed_speedup_range": [
+        0.9797141950968513,
+        0.9797231112725653
+      ],
+      "geomean_candidate_steps_per_s": 715077.0160062697
+    },
+    {
+      "device": "NVIDIA H200",
+      "game": "Slidings",
+      "level": 0,
+      "batch": 16384,
+      "geomean_speedup": 0.9880891023179968,
+      "seed_speedup_range": [
+        0.987350899806998,
+        0.9888278567532887
+      ],
+      "geomean_candidate_steps_per_s": 1484498.559788499
+    },
+    {
+      "device": "NVIDIA H200",
+      "game": "Take_Heart_Lass",
+      "level": 0,
+      "batch": 1,
+      "geomean_speedup": 0.9984619423100752,
+      "seed_speedup_range": [
+        0.9981680058947014,
+        0.9987559652826375
+      ],
+      "geomean_candidate_steps_per_s": 334.90122247808665
+    },
+    {
+      "device": "NVIDIA H200",
+      "game": "Take_Heart_Lass",
+      "level": 0,
+      "batch": 256,
+      "geomean_speedup": 0.9936523116545493,
+      "seed_speedup_range": [
+        0.9929859702523526,
+        0.9943191002039137
+      ],
+      "geomean_candidate_steps_per_s": 63183.970994189505
+    },
+    {
+      "device": "NVIDIA H200",
+      "game": "Take_Heart_Lass",
+      "level": 0,
+      "batch": 4096,
+      "geomean_speedup": 1.0008977679281543,
+      "seed_speedup_range": [
+        1.0007207453268239,
+        1.0010748218439165
+      ],
+      "geomean_candidate_steps_per_s": 642768.2058740228
+    },
+    {
+      "device": "NVIDIA H200",
+      "game": "Travelling_salesman",
+      "level": 0,
+      "batch": 1,
+      "geomean_speedup": 0.9980206737281502,
+      "seed_speedup_range": [
+        0.9977826830049236,
+        0.9982587212168282
+      ],
+      "geomean_candidate_steps_per_s": 1601.6729751484668
+    },
+    {
+      "device": "NVIDIA H200",
+      "game": "Travelling_salesman",
+      "level": 0,
+      "batch": 256,
+      "geomean_speedup": 0.9895139057002751,
+      "seed_speedup_range": [
+        0.9885440535955147,
+        0.9904847093186293
+      ],
+      "geomean_candidate_steps_per_s": 217891.56876684452
+    },
+    {
+      "device": "NVIDIA H200",
+      "game": "Travelling_salesman",
+      "level": 0,
+      "batch": 4096,
+      "geomean_speedup": 1.0001169556514715,
+      "seed_speedup_range": [
+        0.999818329191112,
+        1.000415671305798
+      ],
+      "geomean_candidate_steps_per_s": 2572770.161918382
+    },
+    {
+      "device": "NVIDIA H200",
+      "game": "Zen_Puzzle_Garden",
+      "level": 0,
+      "batch": 1,
+      "geomean_speedup": 1.004491870021173,
+      "seed_speedup_range": [
+        1.0041197272282731,
+        1.00486415073613
+      ],
+      "geomean_candidate_steps_per_s": 2814.977444562868
+    },
+    {
+      "device": "NVIDIA H200",
+      "game": "Zen_Puzzle_Garden",
+      "level": 0,
+      "batch": 256,
+      "geomean_speedup": 1.018001769102948,
+      "seed_speedup_range": [
+        1.017861526204604,
+        1.018142031324225
+      ],
+      "geomean_candidate_steps_per_s": 529937.316479089
+    },
+    {
+      "device": "NVIDIA H200",
+      "game": "Zen_Puzzle_Garden",
+      "level": 0,
+      "batch": 4096,
+      "geomean_speedup": 1.03128280907128,
+      "seed_speedup_range": [
+        1.0305559205467603,
+        1.0320102102966795
+      ],
+      "geomean_candidate_steps_per_s": 3152889.984183723
+    },
+    {
+      "device": "NVIDIA H200",
+      "game": "Zen_Puzzle_Garden",
+      "level": 1,
+      "batch": 4096,
+      "geomean_speedup": 1.0290606332782977,
+      "seed_speedup_range": [
+        1.028825333075989,
+        1.0292959872955578
+      ],
+      "geomean_candidate_steps_per_s": 3144270.9711612286
+    },
+    {
+      "device": "NVIDIA H200",
+      "game": "atlas shrank",
+      "level": 0,
+      "batch": 1,
+      "geomean_speedup": 1.00045693849075,
+      "seed_speedup_range": [
+        1.0003998757622052,
+        1.0005140044741483
+      ],
+      "geomean_candidate_steps_per_s": 83.40317388608706
+    },
+    {
+      "device": "NVIDIA H200",
+      "game": "atlas shrank",
+      "level": 0,
+      "batch": 256,
+      "geomean_speedup": 1.0016608617084117,
+      "seed_speedup_range": [
+        1.001394367453186,
+        1.0019274268839367
+      ],
+      "geomean_candidate_steps_per_s": 7997.770623642277
+    },
+    {
+      "device": "NVIDIA H200",
+      "game": "atlas shrank",
+      "level": 0,
+      "batch": 4096,
+      "geomean_speedup": 1.0091447381543113,
+      "seed_speedup_range": [
+        1.0088849480419724,
+        1.0094045951631805
+      ],
+      "geomean_candidate_steps_per_s": 52553.73223582455
+    },
+    {
+      "device": "NVIDIA H200",
+      "game": "blocks",
+      "level": 0,
+      "batch": 1,
+      "geomean_speedup": 1.0034432706886103,
+      "seed_speedup_range": [
+        1.0026304757111615,
+        1.0042567245685075
+      ],
+      "geomean_candidate_steps_per_s": 3125.0652842912323
+    },
+    {
+      "device": "NVIDIA H200",
+      "game": "blocks",
+      "level": 0,
+      "batch": 256,
+      "geomean_speedup": 1.138170555422258,
+      "seed_speedup_range": [
+        1.1300747576949488,
+        1.1463243510301457
+      ],
+      "geomean_candidate_steps_per_s": 317214.36850903375
+    },
+    {
+      "device": "NVIDIA H200",
+      "game": "blocks",
+      "level": 0,
+      "batch": 4096,
+      "geomean_speedup": 1.2069377552418794,
+      "seed_speedup_range": [
+        1.2065280167426535,
+        1.207347632888838
+      ],
+      "geomean_candidate_steps_per_s": 2320559.776481006
+    },
+    {
+      "device": "NVIDIA H200",
+      "game": "blocks",
+      "level": 0,
+      "batch": 16384,
+      "geomean_speedup": 1.3743176072104333,
+      "seed_speedup_range": [
+        1.3736973978487002,
+        1.3749380965899147
+      ],
+      "geomean_candidate_steps_per_s": 3377908.967730574
+    },
+    {
+      "device": "NVIDIA H200",
+      "game": "kettle",
+      "level": 0,
+      "batch": 1,
+      "geomean_speedup": 0.9967540922410696,
+      "seed_speedup_range": [
+        0.9963389066909202,
+        0.9971694508036749
+      ],
+      "geomean_candidate_steps_per_s": 539.1630152560646
+    },
+    {
+      "device": "NVIDIA H200",
+      "game": "kettle",
+      "level": 0,
+      "batch": 256,
+      "geomean_speedup": 1.006933566239323,
+      "seed_speedup_range": [
+        1.0068907145956874,
+        1.0069764197066553
+      ],
+      "geomean_candidate_steps_per_s": 58442.78830567841
+    },
+    {
+      "device": "NVIDIA H200",
+      "game": "kettle",
+      "level": 0,
+      "batch": 4096,
+      "geomean_speedup": 1.0332488688605848,
+      "seed_speedup_range": [
+        1.032526439292256,
+        1.0339718038924652
+      ],
+      "geomean_candidate_steps_per_s": 338160.32235632784
+    },
+    {
+      "device": "NVIDIA H200",
+      "game": "limerick",
+      "level": 0,
+      "batch": 1,
+      "geomean_speedup": 1.0000204371187906,
+      "seed_speedup_range": [
+        0.9995853654062116,
+        1.0004556981972823
+      ],
+      "geomean_candidate_steps_per_s": 713.1907661438988
+    },
+    {
+      "device": "NVIDIA H200",
+      "game": "limerick",
+      "level": 0,
+      "batch": 256,
+      "geomean_speedup": 0.9954555525932153,
+      "seed_speedup_range": [
+        0.994897760353291,
+        0.9960136575609346
+      ],
+      "geomean_candidate_steps_per_s": 106428.20625004073
+    },
+    {
+      "device": "NVIDIA H200",
+      "game": "limerick",
+      "level": 0,
+      "batch": 4096,
+      "geomean_speedup": 0.9978100357163218,
+      "seed_speedup_range": [
+        0.9971421406171169,
+        0.9984783781778889
+      ],
+      "geomean_candidate_steps_per_s": 314945.4462743149
+    },
+    {
+      "device": "NVIDIA H200",
+      "game": "nekopuzzle",
+      "level": 0,
+      "batch": 1,
+      "geomean_speedup": 0.9993416086454537,
+      "seed_speedup_range": [
+        0.9988589330607635,
+        0.9998245174720087
+      ],
+      "geomean_candidate_steps_per_s": 2192.0705865992145
+    },
+    {
+      "device": "NVIDIA H200",
+      "game": "nekopuzzle",
+      "level": 0,
+      "batch": 256,
+      "geomean_speedup": 0.9939213207008267,
+      "seed_speedup_range": [
+        0.9933120987780361,
+        0.9945309162739048
+      ],
+      "geomean_candidate_steps_per_s": 173477.1616958782
+    },
+    {
+      "device": "NVIDIA H200",
+      "game": "nekopuzzle",
+      "level": 0,
+      "batch": 4096,
+      "geomean_speedup": 0.980324256923835,
+      "seed_speedup_range": [
+        0.9800376308413044,
+        0.9806109668342805
+      ],
+      "geomean_candidate_steps_per_s": 1562371.3786676992
+    },
+    {
+      "device": "NVIDIA H200",
+      "game": "nekopuzzle",
+      "level": 0,
+      "batch": 16384,
+      "geomean_speedup": 0.9904772860682636,
+      "seed_speedup_range": [
+        0.9903914884841141,
+        0.9905630910850551
+      ],
+      "geomean_candidate_steps_per_s": 2666703.878417421
+    },
+    {
+      "device": "NVIDIA H200",
+      "game": "notsnake",
+      "level": 0,
+      "batch": 1,
+      "geomean_speedup": 1.0003234708707227,
+      "seed_speedup_range": [
+        0.9997805081740015,
+        1.0008667284406563
+      ],
+      "geomean_candidate_steps_per_s": 1803.5134522699536
+    },
+    {
+      "device": "NVIDIA H200",
+      "game": "notsnake",
+      "level": 0,
+      "batch": 256,
+      "geomean_speedup": 0.9678092955363944,
+      "seed_speedup_range": [
+        0.9675171002199446,
+        0.9681015790973858
+      ],
+      "geomean_candidate_steps_per_s": 255011.56567363505
+    },
+    {
+      "device": "NVIDIA H200",
+      "game": "notsnake",
+      "level": 0,
+      "batch": 4096,
+      "geomean_speedup": 1.003522447311143,
+      "seed_speedup_range": [
+        1.003362569281747,
+        1.0036823508158608
+      ],
+      "geomean_candidate_steps_per_s": 3114298.321197627
+    },
+    {
+      "device": "NVIDIA H200",
+      "game": "sokoban_basic",
+      "level": 0,
+      "batch": 1,
+      "geomean_speedup": 0.9843598314254196,
+      "seed_speedup_range": [
+        0.9827591235129406,
+        0.9859631465544176
+      ],
+      "geomean_candidate_steps_per_s": 2638.0023968325377
+    },
+    {
+      "device": "NVIDIA H200",
+      "game": "sokoban_basic",
+      "level": 0,
+      "batch": 256,
+      "geomean_speedup": 1.0000044708019236,
+      "seed_speedup_range": [
+        0.9997180238159766,
+        1.0002909998628897
+      ],
+      "geomean_candidate_steps_per_s": 264889.2317416778
+    },
+    {
+      "device": "NVIDIA H200",
+      "game": "sokoban_basic",
+      "level": 0,
+      "batch": 4096,
+      "geomean_speedup": 1.02368641628465,
+      "seed_speedup_range": [
+        1.0234627289482847,
+        1.0239101525099714
+      ],
+      "geomean_candidate_steps_per_s": 2994061.4021786638
+    },
+    {
+      "device": "NVIDIA H200",
+      "game": "sokoban_basic",
+      "level": 1,
+      "batch": 4096,
+      "geomean_speedup": 1.0160461607538147,
+      "seed_speedup_range": [
+        1.0148975296634373,
+        1.0171960918309821
+      ],
+      "geomean_candidate_steps_per_s": 2999080.7600334403
+    },
+    {
+      "device": "NVIDIA H200",
+      "game": "sokoban_match3",
+      "level": 0,
+      "batch": 1,
+      "geomean_speedup": 0.9951781796576176,
+      "seed_speedup_range": [
+        0.9944814696829607,
+        0.9958753777306488
+      ],
+      "geomean_candidate_steps_per_s": 1697.563359510732
+    },
+    {
+      "device": "NVIDIA H200",
+      "game": "sokoban_match3",
+      "level": 0,
+      "batch": 256,
+      "geomean_speedup": 0.9968169535029491,
+      "seed_speedup_range": [
+        0.9958707764333203,
+        0.9977640295356444
+      ],
+      "geomean_candidate_steps_per_s": 211453.36745326748
+    },
+    {
+      "device": "NVIDIA H200",
+      "game": "sokoban_match3",
+      "level": 0,
+      "batch": 4096,
+      "geomean_speedup": 1.0059705299546675,
+      "seed_speedup_range": [
+        1.005253360521639,
+        1.0066882110318407
+      ],
+      "geomean_candidate_steps_per_s": 1957671.7027620303
+    },
+    {
+      "device": "NVIDIA H200",
+      "game": "sokoban_match3",
+      "level": 1,
+      "batch": 4096,
+      "geomean_speedup": 1.0253661170085766,
+      "seed_speedup_range": [
+        1.024904024917875,
+        1.0258284174398598
+      ],
+      "geomean_candidate_steps_per_s": 1964046.1988799996
+    }
+  ]
+}

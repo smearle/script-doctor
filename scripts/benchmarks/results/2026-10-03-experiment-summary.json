@@ -1,0 +1,184 @@
+{
+  "engine_sha256": "38ab0cee2e8eb6d22ce4e2bb9780d3b9862f1eddaf0d2fb4aadb0900c3cea03c",
+  "production_changes_this_round": false,
+  "wide_h200": {
+    "configurations": 18,
+    "compared_transitions": 3916800,
+    "minimum_speedup": 0.9913148719102549,
+    "maximum_speedup": 1.1887580803538025
+  },
+  "identity_h200": {
+    "configurations": 20,
+    "compared_transitions": 5888000,
+    "minimum_speedup": 0.9789292793849043,
+    "maximum_speedup": 1.0092151660336448,
+    "decision": "Retain as experimental; no useful measured runtime gain."
+  },
+  "completed_jobs": {
+    "19115700_0": {
+      "JobID": "19115700_0",
+      "JobName": "puzzlejax-wide",
+      "Account": "torch_pr_84_general",
+      "Partition": "h200_public",
+      "State": "COMPLETED",
+      "ExitCode": "0:0",
+      "Elapsed": "00:01:34",
+      "Timelimit": "00:40:00",
+      "NodeList": "gh109"
+    },
+    "19116379": {
+      "JobID": "19116379",
+      "JobName": "puzzlejax-identities",
+      "Account": "torch_pr_84_tandon_advanced",
+      "Partition": "h200_tandon",
+      "State": "COMPLETED",
+      "ExitCode": "0:0",
+      "Elapsed": "00:02:57",
+      "Timelimit": "00:20:00",
+      "NodeList": "gh111"
+    },
+    "19116392_5": {
+      "JobID": "19116392_5",
+      "JobName": "puzzlejax-wide",
+      "Account": "torch_pr_84_tandon_advanced",
+      "Partition": "h200_tandon",
+      "State": "COMPLETED",
+      "ExitCode": "0:0",
+      "Elapsed": "00:25:57",
+      "Timelimit": "00:40:00",
+      "NodeList": "gh114"
+    },
+    "19116462_1": {
+      "JobID": "19116462_1",
+      "JobName": "puzzlejax-wide",
+      "Account": "torch_pr_84_tandon_advanced",
+      "Partition": "h200_tandon",
+      "State": "COMPLETED",
+      "ExitCode": "0:0",
+      "Elapsed": "00:04:14",
+      "Timelimit": "00:20:00",
+      "NodeList": "gh124"
+    },
+    "19116462_2": {
+      "JobID": "19116462_2",
+      "JobName": "puzzlejax-wide",
+      "Account": "torch_pr_84_tandon_advanced",
+      "Partition": "h200_tandon",
+      "State": "COMPLETED",
+      "ExitCode": "0:0",
+      "Elapsed": "00:04:26",
+      "Timelimit": "00:20:00",
+      "NodeList": "gh111"
+    },
+    "19116462_3": {
+      "JobID": "19116462_3",
+      "JobName": "puzzlejax-wide",
+      "Account": "torch_pr_84_tandon_advanced",
+      "Partition": "h200_tandon",
+      "State": "COMPLETED",
+      "ExitCode": "0:0",
+      "Elapsed": "00:03:35",
+      "Timelimit": "00:20:00",
+      "NodeList": "gh111"
+    },
+    "19116462_4": {
+      "JobID": "19116462_4",
+      "JobName": "puzzlejax-wide",
+      "Account": "torch_pr_84_tandon_advanced",
+      "Partition": "h200_tandon",
+      "State": "COMPLETED",
+      "ExitCode": "0:0",
+      "Elapsed": "00:08:50",
+      "Timelimit": "00:20:00",
+      "NodeList": "gh114"
+    },
+    "19117244_6": {
+      "JobID": "19117244_6",
+      "JobName": "puzzlejax-wide",
+      "Account": "torch_pr_84_tandon_advanced",
+      "Partition": "h200_tandon",
+      "State": "COMPLETED",
+      "ExitCode": "0:0",
+      "Elapsed": "00:01:42",
+      "Timelimit": "00:10:00",
+      "NodeList": "gh124"
+    },
+    "19117244_7": {
+      "JobID": "19117244_7",
+      "JobName": "puzzlejax-wide",
+      "Account": "torch_pr_84_tandon_advanced",
+      "Partition": "h200_tandon",
+      "State": "COMPLETED",
+      "ExitCode": "0:0",
+      "Elapsed": "00:01:44",
+      "Timelimit": "00:10:00",
+      "NodeList": "gh112"
+    },
+    "19117244_8": {
+      "JobID": "19117244_8",
+      "JobName": "puzzlejax-wide",
+      "Account": "torch_pr_84_tandon_advanced",
+      "Partition": "h200_tandon",
+      "State": "COMPLETED",
+      "ExitCode": "0:0",
+      "Elapsed": "00:02:11",
+      "Timelimit": "00:10:00",
+      "NodeList": "gh112"
+    },
+    "19117245_0": {
+      "JobID": "19117245_0",
+      "JobName": "puzzlejax-identities",
+      "Account": "torch_pr_84_tandon_advanced",
+      "Partition": "h200_tandon",
+      "State": "COMPLETED",
+      "ExitCode": "0:0",
+      "Elapsed": "00:02:53",
+      "Timelimit": "00:10:00",
+      "NodeList": "gh132"
+    },
+    "19117245_1": {
+      "JobID": "19117245_1",
+      "JobName": "puzzlejax-identities",
+      "Account": "torch_pr_84_tandon_advanced",
+      "Partition": "h200_tandon",
+      "State": "COMPLETED",
+      "ExitCode": "0:0",
+      "Elapsed": "00:02:30",
+      "Timelimit": "00:10:00",
+      "NodeList": "gh114"
+    },
+    "19117245_2": {
+      "JobID": "19117245_2",
+      "JobName": "puzzlejax-identities",
+      "Account": "torch_pr_84_tandon_advanced",
+      "Partition": "h200_tandon",
+      "State": "COMPLETED",
+      "ExitCode": "0:0",
+      "Elapsed": "00:05:47",
+      "Timelimit": "00:10:00",
+      "NodeList": "gh132"
+    },
+    "19117245_3": {
+      "JobID": "19117245_3",
+      "JobName": "puzzlejax-identities",
+      "Account": "torch_pr_84_tandon_advanced",
+      "Partition": "h200_tandon",
+      "State": "COMPLETED",
+      "ExitCode": "0:0",
+      "Elapsed": "00:05:16",
+      "Timelimit": "00:10:00",
+      "NodeList": "gh115"
+    },
+    "19117246": {
+      "JobID": "19117246",
+      "JobName": "puzzlejax-profile",
+      "Account": "torch_pr_84_tandon_advanced",
+      "Partition": "h200_tandon",
+      "State": "COMPLETED",
+      "ExitCode": "0:0",
+      "Elapsed": "00:01:31",
+      "Timelimit": "00:07:00",
+      "NodeList": "gh114"
+    }
+  }
+}

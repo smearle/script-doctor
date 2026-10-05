@@ -1,0 +1,149 @@
+{
+  "jax_version": "0.9.0.1",
+  "devices": [
+    "NVIDIA H200"
+  ],
+  "timing": "alternating A/B after both compilations and warmup",
+  "trials": 15,
+  "seed": 42,
+  "results": [
+    {
+      "kind": "metrics",
+      "shape": [
+        8,
+        8
+      ],
+      "batch": 256,
+      "pairwise": {
+        "compile_s": 1.1766720057930797,
+        "temporary_bytes": 4489496,
+        "median_s": 0.0001154760830104351,
+        "min_s": 0.00011130399070680141,
+        "max_s": 0.00014089606702327728
+      },
+      "transform": {
+        "compile_s": 0.22870263387449086,
+        "temporary_bytes": 65552,
+        "median_s": 6.907503120601177e-05,
+        "min_s": 6.76929485052824e-05,
+        "max_s": 7.58639071136713e-05
+      },
+      "speedup": 1.6717485463891464
+    },
+    {
+      "kind": "metrics",
+      "shape": [
+        16,
+        16
+      ],
+      "batch": 256,
+      "pairwise": {
+        "compile_s": 1.0023307879455388,
+        "temporary_bytes": 1966640,
+        "median_s": 0.000525882001966238,
+        "min_s": 0.000522242859005928,
+        "max_s": 0.000533167039975524
+      },
+      "transform": {
+        "compile_s": 0.24086205009371042,
+        "temporary_bytes": 524288,
+        "median_s": 7.392582483589649e-05,
+        "min_s": 7.099611684679985e-05,
+        "max_s": 7.581105455756187e-05
+      },
+      "speedup": 7.113644022689121
+    },
+    {
+      "kind": "metrics",
+      "shape": [
+        32,
+        32
+      ],
+      "batch": 256,
+      "pairwise": {
+        "compile_s": 1.359561193967238,
+        "temporary_bytes": 7078168,
+        "median_s": 0.00039962492883205414,
+        "min_s": 0.00039487285539507866,
+        "max_s": 0.0004032009746879339
+      },
+      "transform": {
+        "compile_s": 0.3488893359899521,
+        "temporary_bytes": 2228496,
+        "median_s": 7.442617788910866e-05,
+        "min_s": 7.136701606214046e-05,
+        "max_s": 8.418294601142406e-05
+      },
+      "speedup": 5.369413560743044
+    },
+    {
+      "kind": "rollout",
+      "game": "sokoban_basic",
+      "batch": 256,
+      "steps": 100,
+      "pairwise": {
+        "compile_s": 13.882675856817514,
+        "temporary_bytes": 1516504,
+        "median_s": 0.1327919098548591,
+        "min_s": 0.1280962738674134,
+        "max_s": 0.13298441306687891,
+        "env_steps_per_s": 192782.82862247157
+      },
+      "transform": {
+        "compile_s": 9.882835512980819,
+        "temporary_bytes": 1386200,
+        "median_s": 0.13114042417146266,
+        "min_s": 0.12658052798360586,
+        "max_s": 0.1342406750191003,
+        "env_steps_per_s": 195210.59323804438
+      },
+      "speedup": 1.0125932617179672
+    },
+    {
+      "kind": "rollout",
+      "game": "blocks",
+      "batch": 256,
+      "steps": 100,
+      "pairwise": {
+        "compile_s": 5.796770576154813,
+        "temporary_bytes": 3388888,
+        "median_s": 0.16506072296760976,
+        "min_s": 0.16276799188926816,
+        "max_s": 0.16629597917199135,
+        "env_steps_per_s": 155094.4376090219
+      },
+      "transform": {
+        "compile_s": 3.808291481109336,
+        "temporary_bytes": 2948056,
+        "median_s": 0.15962699800729752,
+        "min_s": 0.15920440782792866,
+        "max_s": 0.15994157805107534,
+        "env_steps_per_s": 160373.87359016592
+      },
+      "speedup": 1.0340401374964392
+    },
+    {
+      "kind": "rollout",
+      "game": "Zen_Puzzle_Garden",
+      "batch": 256,
+      "steps": 100,
+      "pairwise": {
+        "compile_s": 13.587066321866587,
+        "temporary_bytes": 3570648,
+        "median_s": 0.10249019786715508,
+        "min_s": 0.10057309200055897,
+        "max_s": 0.10264694411307573,
+        "env_steps_per_s": 249779.98416182204
+      },
+      "transform": {
+        "compile_s": 10.927824469050393,
+        "temporary_bytes": 3570648,
+        "median_s": 0.10243793111294508,
+        "min_s": 0.10204709391109645,
+        "max_s": 0.1026114709675312,
+        "env_steps_per_s": 249907.4290340185
+      },
+      "speedup": 1.0005102285222098
+    }
+  ]
+}

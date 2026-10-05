@@ -1,0 +1,204 @@
+{
+  "jax_version": "0.9.0.1",
+  "devices": [
+    "NVIDIA H200"
+  ],
+  "engine_sha256": "5ced199539d21c61b4751c01ae8f53804893e39abc022e89b3cbbaa5ac921987",
+  "trials": 15,
+  "seed": 42,
+  "timing": "alternating A/B after compilation and warmup; exact full outputs",
+  "results": [
+    {
+      "experiment": "combined",
+      "candidate": "cleanup_barriers",
+      "game": "Zen_Puzzle_Garden",
+      "batch": 256,
+      "steps": 100,
+      "baseline": {
+        "compile_s": 8.921563865966164,
+        "temporary_bytes": 3272664,
+        "median_s": 0.05949337198399007,
+        "min_s": 0.05667234701104462,
+        "max_s": 0.059927424998022616,
+        "env_steps_per_s": 430300.0342103499
+      },
+      "cleanup_barriers": {
+        "compile_s": 6.187042925041169,
+        "temporary_bytes": 3899096,
+        "median_s": 0.05146326497197151,
+        "min_s": 0.04867596994154155,
+        "max_s": 0.05192656407598406,
+        "env_steps_per_s": 497442.2049192284
+      },
+      "speedup": 1.1560357085076511
+    },
+    {
+      "experiment": "combined",
+      "candidate": "cleanup_barriers",
+      "game": "Zen_Puzzle_Garden",
+      "batch": 1024,
+      "steps": 100,
+      "baseline": {
+        "compile_s": 9.211324492003769,
+        "temporary_bytes": 13052888,
+        "median_s": 0.08041053300257772,
+        "min_s": 0.07789069192949682,
+        "max_s": 0.0807930090231821,
+        "env_steps_per_s": 1273465.00733576
+      },
+      "cleanup_barriers": {
+        "compile_s": 6.7138460339047015,
+        "temporary_bytes": 20882648,
+        "median_s": 0.07006033801008016,
+        "min_s": 0.06873767706565559,
+        "max_s": 0.07020423701032996,
+        "env_steps_per_s": 1461597.2875447285
+      },
+      "speedup": 1.1477325871737643
+    },
+    {
+      "experiment": "combined",
+      "candidate": "cleanup_barriers",
+      "game": "Zen_Puzzle_Garden",
+      "batch": 4096,
+      "steps": 100,
+      "baseline": {
+        "compile_s": 9.649995743995532,
+        "temporary_bytes": 52128472,
+        "median_s": 0.159119927091524,
+        "min_s": 0.15658448298927397,
+        "max_s": 0.15965032996609807,
+        "env_steps_per_s": 2574159.047750208
+      },
+      "cleanup_barriers": {
+        "compile_s": 7.857533970032819,
+        "temporary_bytes": 81692632,
+        "median_s": 0.1377085290150717,
+        "min_s": 0.13564785500057042,
+        "max_s": 0.13788240402936935,
+        "env_steps_per_s": 2974398.193994003
+      },
+      "speedup": 1.1554834564684728
+    },
+    {
+      "experiment": "combined",
+      "candidate": "cleanup_barriers",
+      "game": "Zen_Puzzle_Garden",
+      "batch": 16384,
+      "steps": 100,
+      "baseline": {
+        "compile_s": 6.739271103986539,
+        "temporary_bytes": 208583384,
+        "median_s": 0.44385760196018964,
+        "min_s": 0.44373332196846604,
+        "max_s": 0.44413049903232604,
+        "env_steps_per_s": 3691273.9418327026
+      },
+      "cleanup_barriers": {
+        "compile_s": 5.517575238016434,
+        "temporary_bytes": 349681368,
+        "median_s": 0.3855113700265065,
+        "min_s": 0.3851780960103497,
+        "max_s": 0.3858604889828712,
+        "env_steps_per_s": 4249939.502140622
+      },
+      "speedup": 1.151347629331066
+    },
+    {
+      "experiment": "combined",
+      "candidate": "all",
+      "game": "Zen_Puzzle_Garden",
+      "batch": 256,
+      "steps": 100,
+      "baseline": {
+        "compile_s": 6.268182422965765,
+        "temporary_bytes": 3272664,
+        "median_s": 0.060160338995046914,
+        "min_s": 0.05668998905457556,
+        "max_s": 0.060302671045064926,
+        "env_steps_per_s": 425529.5170811402
+      },
+      "all": {
+        "compile_s": 6.140375210903585,
+        "temporary_bytes": 3899096,
+        "median_s": 0.052276598988100886,
+        "min_s": 0.048943522037006915,
+        "max_s": 0.05247744999360293,
+        "env_steps_per_s": 489702.8593200378
+      },
+      "speedup": 1.1508082040444236
+    },
+    {
+      "experiment": "combined",
+      "candidate": "all",
+      "game": "Zen_Puzzle_Garden",
+      "batch": 1024,
+      "steps": 100,
+      "baseline": {
+        "compile_s": 6.825109160039574,
+        "temporary_bytes": 13052888,
+        "median_s": 0.08080055296886712,
+        "min_s": 0.07901431701611727,
+        "max_s": 0.08089750993531197,
+        "env_steps_per_s": 1267318.0595614891
+      },
+      "all": {
+        "compile_s": 6.662883364013396,
+        "temporary_bytes": 20882648,
+        "median_s": 0.07026978104840964,
+        "min_s": 0.06862653803545982,
+        "max_s": 0.07043108204379678,
+        "env_steps_per_s": 1457240.9145469728
+      },
+      "speedup": 1.1498620283618461
+    },
+    {
+      "experiment": "combined",
+      "candidate": "all",
+      "game": "Zen_Puzzle_Garden",
+      "batch": 4096,
+      "steps": 100,
+      "baseline": {
+        "compile_s": 7.909687055973336,
+        "temporary_bytes": 52128472,
+        "median_s": 0.15858909499365836,
+        "min_s": 0.15669125400017947,
+        "max_s": 0.15932908689137548,
+        "env_steps_per_s": 2582775.3164010365
+      },
+      "all": {
+        "compile_s": 7.784369357977994,
+        "temporary_bytes": 81692632,
+        "median_s": 0.13749940693378448,
+        "min_s": 0.136407142970711,
+        "max_s": 0.13776114594656974,
+        "env_steps_per_s": 2978921.9396215347
+      },
+      "speedup": 1.1533802110872378
+    },
+    {
+      "experiment": "combined",
+      "candidate": "all",
+      "game": "Zen_Puzzle_Garden",
+      "batch": 16384,
+      "steps": 100,
+      "baseline": {
+        "compile_s": 5.52837686392013,
+        "temporary_bytes": 208583384,
+        "median_s": 0.44397758098784834,
+        "min_s": 0.44363772589713335,
+        "max_s": 0.44410664902534336,
+        "env_steps_per_s": 3690276.4242162104
+      },
+      "all": {
+        "compile_s": 5.415976594085805,
+        "temporary_bytes": 349681368,
+        "median_s": 0.38544057100079954,
+        "min_s": 0.3849571740720421,
+        "max_s": 0.38556757697369903,
+        "env_steps_per_s": 4250720.1453803405
+      },
+      "speedup": 1.15187039038225
+    }
+  ]
+}

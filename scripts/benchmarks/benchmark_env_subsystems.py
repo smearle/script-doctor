@@ -1,3 +1,10 @@
+"""Measure synchronized subsystem calls, including host dispatch overhead.
+
+Repetitions run on the host: a compiled loop with unchanged inputs lets XLA
+hoist the subsystem out of the loop and only repeat the output reduction.
+Batch timings are amortized per environment, not individual call latency.
+"""
+
 import argparse
 import statistics
 import time
@@ -12,29 +19,21 @@ from puzzlescript_jax.utils import init_ps_env
 def compile_runner(fn, *args):
     t0 = time.perf_counter()
     compiled = jax.jit(fn).lower(*args).compile()
+    compile_s = time.perf_counter() - t0
     jax.block_until_ready(compiled(*args))
-    return compiled, time.perf_counter() - t0
+    return compiled, compile_s
 
 
-def summarize_output(tree):
-    leaves = jax.tree.leaves(tree)
-    total = jnp.int32(0)
-    for leaf in leaves:
-        arr = jnp.asarray(leaf)
-        if arr.dtype == jnp.bool_:
-            arr = arr.astype(jnp.int32)
-        total = total + jnp.sum(arr).astype(jnp.int32)
-    return total
-
-
-def benchmark_runner(compiled, args, denom, outer_trials):
+def benchmark_runner(compiled, args, batch_size, inner_reps, outer_trials):
+    if min(batch_size, inner_reps, outer_trials) < 1:
+        raise ValueError("batch_size, inner_reps, and outer_trials must be positive")
     per_item_us = []
     for _ in range(outer_trials):
         t0 = time.perf_counter()
-        out = compiled(*args)
-        jax.block_until_ready(out)
+        for _ in range(inner_reps):
+            jax.block_until_ready(compiled(*args))
         dt = time.perf_counter() - t0
-        per_item_us.append((dt / denom) * 1e6)
+        per_item_us.append((dt / (inner_reps * batch_size)) * 1e6)
     return {
         "median_us": statistics.median(per_item_us),
         "min_us": min(per_item_us),
@@ -42,43 +41,17 @@ def benchmark_runner(compiled, args, denom, outer_trials):
     }
 
 
-def make_single_runner(fn, inner_reps):
-    def runner(*args):
-        init = summarize_output(fn(*args))
-
-        def body(_, acc):
-            return acc + summarize_output(fn(*args))
-
-        return jax.lax.fori_loop(0, inner_reps, body, init)
-
-    return runner
-
-
-def make_batched_runner(fn, inner_reps, in_axes):
-    batched_fn = jax.vmap(fn, in_axes=in_axes)
-
-    def runner(*args):
-        init = summarize_output(batched_fn(*args))
-
-        def body(_, acc):
-            return acc + summarize_output(batched_fn(*args))
-
-        return jax.lax.fori_loop(0, inner_reps, body, init)
-
-    return runner
-
-
 def benchmark_impl(name, fn, single_args, batch_args, inner_reps, outer_trials, batch_size, in_axes):
-    single_runner = make_single_runner(fn, inner_reps)
-    single_compiled, single_compile_s = compile_runner(single_runner, *single_args)
-    single_stats = benchmark_runner(single_compiled, single_args, inner_reps + 1, outer_trials)
+    single_compiled, single_compile_s = compile_runner(fn, *single_args)
 
-    batch_runner = make_batched_runner(fn, inner_reps, in_axes=in_axes)
+    batch_runner = jax.vmap(fn, in_axes=in_axes)
     batch_compiled, batch_compile_s = compile_runner(batch_runner, *batch_args)
+    single_stats = benchmark_runner(single_compiled, single_args, 1, inner_reps, outer_trials)
     batch_stats = benchmark_runner(
         batch_compiled,
         batch_args,
-        (inner_reps + 1) * batch_size,
+        batch_size,
+        inner_reps,
         outer_trials,
     )
 
@@ -96,11 +69,14 @@ def main():
     parser.add_argument("--game", default="sokoban_basic")
     parser.add_argument("--level", type=int, default=0)
     parser.add_argument("--batch-size", type=int, default=256)
-    parser.add_argument("--inner-reps", type=int, default=1000)
+    parser.add_argument("--inner-reps", type=int, default=10,
+                        help="synchronized host calls per trial (default: 10)")
     parser.add_argument("--outer-trials", type=int, default=7)
     parser.add_argument("--max-steps", type=int, default=1000)
     parser.add_argument("--vmap", action="store_true", default=True)
     args = parser.parse_args()
+    if min(args.batch_size, args.inner_reps, args.outer_trials, args.max_steps) < 1:
+        parser.error("batch size, repetitions, trials, and max steps must be positive")
 
     env = init_ps_env(args.game, args.level, args.max_steps, vmap=args.vmap)
     level = env.get_level(args.level if args.level >= 0 else 0)
@@ -140,7 +116,7 @@ def main():
         ),
         (
             "tick_fn",
-            lambda rng, lvl: env.tick_fn(rng, lvl),
+            lambda rng, lvl: env.tick_fn(rng, lvl, False),
             (step_rng, force_lvl),
             (step_rngs, batch_force_lvl),
             (0, 0),
@@ -156,7 +132,8 @@ def main():
 
     print(
         f"game={args.game},level={args.level},batch_size={batch_size},"
-        f"inner_reps={args.inner_reps},outer_trials={args.outer_trials}"
+        f"inner_reps={args.inner_reps},outer_trials={args.outer_trials},"
+        "timing=synchronized_host_calls,batch_units=us_per_environment"
     )
     print(
         "name,"

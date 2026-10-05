@@ -1,0 +1,541 @@
+................x..........x.xxxxxxx.............................FFFFF.. [ 51%]
+..........
+=================================== FAILURES ===================================
+___ test_jitted_batched_reset_and_autoreset_match_standard[sokoban_basic-0] ____
+
+>   result = jax.jit(rollout)(state)
+
+tests/test_env_switch.py:99: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+tests/test_env_switch.py:97: in rollout
+    return jax.lax.scan(step, state, jnp.array([2, 4, 1, 0], jnp.int32))
+tests/test_env_switch.py:94: in step
+    result = jax.vmap(env.step, in_axes=(0, 0, 0, None))(
+puzzlescript_jax/env.py:1554: in step
+    obs_st, state_st, reward, done, info = self.step_env(
+puzzlescript_jax/env.py:1585: in step_env
+    final_lvl, tick_applied, turn_app_i, cancelled, restart, tick_win, rng = self.tick_fn(
+puzzlescript_jax/env.py:3486: in tick_fn
+    carry = apply_turn(carry)
+puzzlescript_jax/env.py:3457: in apply_turn
+    lvl, applied, block_again, cancelled, restart, win, rng, _ = apply_blocks(carry)
+puzzlescript_jax/env_switch.py:557: in apply_blocks
+    return jax.lax.while_loop(
+puzzlescript_jax/env_switch.py:451: in loop_rule_block
+    loop_block_state = jax.lax.cond(
+puzzlescript_jax/env_switch.py:453: in <lambda>
+    lambda s: jax.lax.while_loop(
+puzzlescript_jax/env_switch.py:377: in apply_rule_block
+    rule_block_state = jax.lax.while_loop(
+puzzlescript_jax/env_switch.py:289: in loop_rule_grp
+    loop_group_state = jax.lax.cond(
+puzzlescript_jax/env_switch.py:291: in <lambda>
+    lambda s: _apply_rule_grp(s),
+puzzlescript_jax/env_switch.py:210: in apply_rule_grp
+    rule_group_state = jax.lax.cond(
+puzzlescript_jax/env_switch.py:195: in _apply_normal
+    rgs = jax.lax.while_loop(
+puzzlescript_jax/env_switch.py:57: in loop_rule_fn
+    result = super().loop_rule_fn(rule_group_state, rule_fn)
+puzzlescript_jax/env.py:4080: in loop_rule_fn
+    app_i=0,
+puzzlescript_jax/env.py:4004: in apply_rule_fn
+    ???
+puzzlescript_jax/env_switch.py:54: in rule_fn
+    return jax.lax.switch(idx, all_rule_fns, rng, lvl)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+>   (level, jnp.zeros(axis_size, bool), 0))
+E   jax._src.source_info_util.JaxStackTraceBeforeTransformation: AssertionError: [True]
+E   
+E   The preceding stack trace is the source of the JAX operation that, once transformed by JAX, triggered the following exception.
+E   
+E   --------------------
+
+puzzlescript_jax/env.py:3972: JaxStackTraceBeforeTransformation
+
+The above exception was the direct cause of the following exception:
+
+parser = Lark(open('<string>'), parser='earley', lexer='dynamic', ...)
+game = 'sokoban_basic', level_i = 0
+
+    @pytest.mark.parametrize("game,level_i", [
+        ("sokoban_basic", 0),
+        ("test_padding_mask", -1),
+        ("test_run_rules_on_level_start_score", 0),
+        ("test_cancel_again", 0),
+        ("test_random", 0),
+    ])
+    def test_jitted_batched_reset_and_autoreset_match_standard(parser, game, level_i):
+        tree, _, error = get_tree_from_txt(parser, game, test_env_init=False)
+        assert tree is not None, error
+        outputs = []
+        for cls in (PuzzleJaxEnv, PuzzleJaxEnvSwitch):
+            env = cls(tree, level_i=level_i, print_score=False, max_steps=3)
+            params = PJParams(level=env.get_level(0), level_i=level_i)
+            keys = jax.random.split(jax.random.PRNGKey(0), 2)
+            # Reset is often first called inside jit/vmap; retained dispatch tables
+            # must not capture tracers from that reset's compilation.
+            with jax.checking_leaks():
+                obs, state = jax.jit(jax.vmap(env.reset, in_axes=(0, None)))(keys, params)
+    
+                def rollout(state):
+                    def step(state, action):
+                        result = jax.vmap(env.step, in_axes=(0, 0, 0, None))(
+                            keys, state, jnp.full((2,), action), params)
+                        return result[1], result
+                    return jax.lax.scan(step, state, jnp.array([2, 4, 1, 0], jnp.int32))
+    
+>               result = jax.jit(rollout)(state)
+                         ^^^^^^^^^^^^^^^^^^^^^^^
+
+tests/test_env_switch.py:99: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+tests/test_env_switch.py:97: in rollout
+    return jax.lax.scan(step, state, jnp.array([2, 4, 1, 0], jnp.int32))
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+state = PJState(multihot_level=JitTracer(bool[2,5,7,6]), win=JitTracer(bool[2]), score=JitTracer(int32[2]), heuristic=JitTrace...uristic=JitTracer(int32[2]), step_i=JitTracer(int32[2]), rng=JitTracer(uint32[2,2]), view_bounds=JitTracer(int32[2,4]))
+action = JitTracer(int32[])
+
+    def step(state, action):
+>       result = jax.vmap(env.step, in_axes=(0, 0, 0, None))(
+            keys, state, jnp.full((2,), action), params)
+E       AssertionError: [True]
+E       --------------------
+E       For simplicity, JAX has removed its internal frames from the traceback of the following exception. Set JAX_TRACEBACK_FILTERING=off to include these.
+
+tests/test_env_switch.py:94: AssertionError
+----------------------------- Captured stdout call -----------------------------
+Writing pretty tree to /home/jupyter-smearle/script-doctor/data/pretty_trees/sokoban_basic
+Parsed sokoban_basic successfully
+_ test_jitted_batched_reset_and_autoreset_match_standard[test_padding_mask--1] _
+
+>   obs, state = jax.jit(jax.vmap(env.reset, in_axes=(0, None)))(keys, params)
+
+tests/test_env_switch.py:90: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+puzzlescript_jax/env.py:1449: in reset
+    lvl, _, _, _, _, _, rng = self.tick_fn(rng, lvl, jnp.array(False))
+puzzlescript_jax/env.py:3486: in tick_fn
+    carry = apply_turn(carry)
+puzzlescript_jax/env.py:3457: in apply_turn
+    lvl, applied, block_again, cancelled, restart, win, rng, _ = apply_blocks(carry)
+puzzlescript_jax/env_switch.py:557: in apply_blocks
+    return jax.lax.while_loop(
+puzzlescript_jax/env_switch.py:451: in loop_rule_block
+    loop_block_state = jax.lax.cond(
+puzzlescript_jax/env_switch.py:453: in <lambda>
+    lambda s: jax.lax.while_loop(
+puzzlescript_jax/env_switch.py:377: in apply_rule_block
+    rule_block_state = jax.lax.while_loop(
+puzzlescript_jax/env_switch.py:289: in loop_rule_grp
+    loop_group_state = jax.lax.cond(
+puzzlescript_jax/env_switch.py:291: in <lambda>
+    lambda s: _apply_rule_grp(s),
+puzzlescript_jax/env_switch.py:210: in apply_rule_grp
+    rule_group_state = jax.lax.cond(
+puzzlescript_jax/env_switch.py:184: in _apply_random
+    return self.apply_random_rule_grp(
+puzzlescript_jax/env_switch.py:142: in apply_random_rule_grp
+    return jax.lax.cond(total_matches > 0, do_apply, no_match)
+puzzlescript_jax/env_switch.py:123: in do_apply
+    rule_state = jax.lax.switch(
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+>   (level, jnp.zeros(axis_size, bool), 0))
+E   jax._src.source_info_util.JaxStackTraceBeforeTransformation: AssertionError: [True]
+E   
+E   The preceding stack trace is the source of the JAX operation that, once transformed by JAX, triggered the following exception.
+E   
+E   --------------------
+
+puzzlescript_jax/env.py:3972: JaxStackTraceBeforeTransformation
+
+The above exception was the direct cause of the following exception:
+
+parser = Lark(open('<string>'), parser='earley', lexer='dynamic', ...)
+game = 'test_padding_mask', level_i = -1
+
+    @pytest.mark.parametrize("game,level_i", [
+        ("sokoban_basic", 0),
+        ("test_padding_mask", -1),
+        ("test_run_rules_on_level_start_score", 0),
+        ("test_cancel_again", 0),
+        ("test_random", 0),
+    ])
+    def test_jitted_batched_reset_and_autoreset_match_standard(parser, game, level_i):
+        tree, _, error = get_tree_from_txt(parser, game, test_env_init=False)
+        assert tree is not None, error
+        outputs = []
+        for cls in (PuzzleJaxEnv, PuzzleJaxEnvSwitch):
+            env = cls(tree, level_i=level_i, print_score=False, max_steps=3)
+            params = PJParams(level=env.get_level(0), level_i=level_i)
+            keys = jax.random.split(jax.random.PRNGKey(0), 2)
+            # Reset is often first called inside jit/vmap; retained dispatch tables
+            # must not capture tracers from that reset's compilation.
+            with jax.checking_leaks():
+>               obs, state = jax.jit(jax.vmap(env.reset, in_axes=(0, None)))(keys, params)
+                             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E               AssertionError: [True]
+E               --------------------
+E               For simplicity, JAX has removed its internal frames from the traceback of the following exception. Set JAX_TRACEBACK_FILTERING=off to include these.
+
+tests/test_env_switch.py:90: AssertionError
+----------------------------- Captured stdout call -----------------------------
+Writing pretty tree to /home/jupyter-smearle/script-doctor/data/pretty_trees/test_padding_mask
+Parsed test_padding_mask successfully
+_ test_jitted_batched_reset_and_autoreset_match_standard[test_run_rules_on_level_start_score-0] _
+
+>   obs, state = jax.jit(jax.vmap(env.reset, in_axes=(0, None)))(keys, params)
+
+tests/test_env_switch.py:90: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+puzzlescript_jax/env.py:1449: in reset
+    lvl, _, _, _, _, _, rng = self.tick_fn(rng, lvl, jnp.array(False))
+puzzlescript_jax/env.py:3486: in tick_fn
+    carry = apply_turn(carry)
+puzzlescript_jax/env.py:3457: in apply_turn
+    lvl, applied, block_again, cancelled, restart, win, rng, _ = apply_blocks(carry)
+puzzlescript_jax/env_switch.py:557: in apply_blocks
+    return jax.lax.while_loop(
+puzzlescript_jax/env_switch.py:451: in loop_rule_block
+    loop_block_state = jax.lax.cond(
+puzzlescript_jax/env_switch.py:453: in <lambda>
+    lambda s: jax.lax.while_loop(
+puzzlescript_jax/env_switch.py:377: in apply_rule_block
+    rule_block_state = jax.lax.while_loop(
+puzzlescript_jax/env_switch.py:289: in loop_rule_grp
+    loop_group_state = jax.lax.cond(
+puzzlescript_jax/env_switch.py:291: in <lambda>
+    lambda s: _apply_rule_grp(s),
+puzzlescript_jax/env_switch.py:210: in apply_rule_grp
+    rule_group_state = jax.lax.cond(
+puzzlescript_jax/env_switch.py:195: in _apply_normal
+    rgs = jax.lax.while_loop(
+puzzlescript_jax/env_switch.py:57: in loop_rule_fn
+    result = super().loop_rule_fn(rule_group_state, rule_fn)
+puzzlescript_jax/env.py:4080: in loop_rule_fn
+    app_i=0,
+puzzlescript_jax/env.py:4004: in apply_rule_fn
+    ???
+puzzlescript_jax/env_switch.py:54: in rule_fn
+    return jax.lax.switch(idx, all_rule_fns, rng, lvl)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+>   (level, jnp.zeros(axis_size, bool), 0))
+E   jax._src.source_info_util.JaxStackTraceBeforeTransformation: AssertionError: [True]
+E   
+E   The preceding stack trace is the source of the JAX operation that, once transformed by JAX, triggered the following exception.
+E   
+E   --------------------
+
+puzzlescript_jax/env.py:3972: JaxStackTraceBeforeTransformation
+
+The above exception was the direct cause of the following exception:
+
+parser = Lark(open('<string>'), parser='earley', lexer='dynamic', ...)
+game = 'test_run_rules_on_level_start_score', level_i = 0
+
+    @pytest.mark.parametrize("game,level_i", [
+        ("sokoban_basic", 0),
+        ("test_padding_mask", -1),
+        ("test_run_rules_on_level_start_score", 0),
+        ("test_cancel_again", 0),
+        ("test_random", 0),
+    ])
+    def test_jitted_batched_reset_and_autoreset_match_standard(parser, game, level_i):
+        tree, _, error = get_tree_from_txt(parser, game, test_env_init=False)
+        assert tree is not None, error
+        outputs = []
+        for cls in (PuzzleJaxEnv, PuzzleJaxEnvSwitch):
+            env = cls(tree, level_i=level_i, print_score=False, max_steps=3)
+            params = PJParams(level=env.get_level(0), level_i=level_i)
+            keys = jax.random.split(jax.random.PRNGKey(0), 2)
+            # Reset is often first called inside jit/vmap; retained dispatch tables
+            # must not capture tracers from that reset's compilation.
+            with jax.checking_leaks():
+>               obs, state = jax.jit(jax.vmap(env.reset, in_axes=(0, None)))(keys, params)
+                             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E               AssertionError: [True]
+E               --------------------
+E               For simplicity, JAX has removed its internal frames from the traceback of the following exception. Set JAX_TRACEBACK_FILTERING=off to include these.
+
+tests/test_env_switch.py:90: AssertionError
+----------------------------- Captured stdout call -----------------------------
+Writing pretty tree to /home/jupyter-smearle/script-doctor/data/pretty_trees/test_run_rules_on_level_start_score
+Parsed test_run_rules_on_level_start_score successfully
+_ test_jitted_batched_reset_and_autoreset_match_standard[test_cancel_again-0] __
+
+>   result = jax.jit(rollout)(state)
+
+tests/test_env_switch.py:99: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+tests/test_env_switch.py:97: in rollout
+    return jax.lax.scan(step, state, jnp.array([2, 4, 1, 0], jnp.int32))
+tests/test_env_switch.py:94: in step
+    result = jax.vmap(env.step, in_axes=(0, 0, 0, None))(
+puzzlescript_jax/env.py:1554: in step
+    obs_st, state_st, reward, done, info = self.step_env(
+puzzlescript_jax/env.py:1585: in step_env
+    final_lvl, tick_applied, turn_app_i, cancelled, restart, tick_win, rng = self.tick_fn(
+puzzlescript_jax/env.py:3486: in tick_fn
+    carry = apply_turn(carry)
+puzzlescript_jax/env.py:3457: in apply_turn
+    lvl, applied, block_again, cancelled, restart, win, rng, _ = apply_blocks(carry)
+puzzlescript_jax/env_switch.py:557: in apply_blocks
+    return jax.lax.while_loop(
+puzzlescript_jax/env_switch.py:451: in loop_rule_block
+    loop_block_state = jax.lax.cond(
+puzzlescript_jax/env_switch.py:453: in <lambda>
+    lambda s: jax.lax.while_loop(
+puzzlescript_jax/env_switch.py:377: in apply_rule_block
+    rule_block_state = jax.lax.while_loop(
+puzzlescript_jax/env_switch.py:289: in loop_rule_grp
+    loop_group_state = jax.lax.cond(
+puzzlescript_jax/env_switch.py:291: in <lambda>
+    lambda s: _apply_rule_grp(s),
+puzzlescript_jax/env_switch.py:210: in apply_rule_grp
+    rule_group_state = jax.lax.cond(
+puzzlescript_jax/env_switch.py:195: in _apply_normal
+    rgs = jax.lax.while_loop(
+puzzlescript_jax/env_switch.py:57: in loop_rule_fn
+    result = super().loop_rule_fn(rule_group_state, rule_fn)
+puzzlescript_jax/env.py:4080: in loop_rule_fn
+    app_i=0,
+puzzlescript_jax/env.py:4004: in apply_rule_fn
+    ???
+puzzlescript_jax/env_switch.py:54: in rule_fn
+    return jax.lax.switch(idx, all_rule_fns, rng, lvl)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+>   (level, jnp.zeros(axis_size, bool), 0))
+E   jax._src.source_info_util.JaxStackTraceBeforeTransformation: AssertionError: [True]
+E   
+E   The preceding stack trace is the source of the JAX operation that, once transformed by JAX, triggered the following exception.
+E   
+E   --------------------
+
+puzzlescript_jax/env.py:3972: JaxStackTraceBeforeTransformation
+
+The above exception was the direct cause of the following exception:
+
+parser = Lark(open('<string>'), parser='earley', lexer='dynamic', ...)
+game = 'test_cancel_again', level_i = 0
+
+    @pytest.mark.parametrize("game,level_i", [
+        ("sokoban_basic", 0),
+        ("test_padding_mask", -1),
+        ("test_run_rules_on_level_start_score", 0),
+        ("test_cancel_again", 0),
+        ("test_random", 0),
+    ])
+    def test_jitted_batched_reset_and_autoreset_match_standard(parser, game, level_i):
+        tree, _, error = get_tree_from_txt(parser, game, test_env_init=False)
+        assert tree is not None, error
+        outputs = []
+        for cls in (PuzzleJaxEnv, PuzzleJaxEnvSwitch):
+            env = cls(tree, level_i=level_i, print_score=False, max_steps=3)
+            params = PJParams(level=env.get_level(0), level_i=level_i)
+            keys = jax.random.split(jax.random.PRNGKey(0), 2)
+            # Reset is often first called inside jit/vmap; retained dispatch tables
+            # must not capture tracers from that reset's compilation.
+            with jax.checking_leaks():
+                obs, state = jax.jit(jax.vmap(env.reset, in_axes=(0, None)))(keys, params)
+    
+                def rollout(state):
+                    def step(state, action):
+                        result = jax.vmap(env.step, in_axes=(0, 0, 0, None))(
+                            keys, state, jnp.full((2,), action), params)
+                        return result[1], result
+                    return jax.lax.scan(step, state, jnp.array([2, 4, 1, 0], jnp.int32))
+    
+>               result = jax.jit(rollout)(state)
+                         ^^^^^^^^^^^^^^^^^^^^^^^
+
+tests/test_env_switch.py:99: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+tests/test_env_switch.py:97: in rollout
+    return jax.lax.scan(step, state, jnp.array([2, 4, 1, 0], jnp.int32))
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+state = PJState(multihot_level=JitTracer(bool[2,6,4,8]), win=JitTracer(bool[2]), score=JitTracer(int32[2]), heuristic=JitTrace...uristic=JitTracer(int32[2]), step_i=JitTracer(int32[2]), rng=JitTracer(uint32[2,2]), view_bounds=JitTracer(int32[2,4]))
+action = JitTracer(int32[])
+
+    def step(state, action):
+>       result = jax.vmap(env.step, in_axes=(0, 0, 0, None))(
+            keys, state, jnp.full((2,), action), params)
+E       AssertionError: [True]
+E       --------------------
+E       For simplicity, JAX has removed its internal frames from the traceback of the following exception. Set JAX_TRACEBACK_FILTERING=off to include these.
+
+tests/test_env_switch.py:94: AssertionError
+----------------------------- Captured stdout call -----------------------------
+Writing pretty tree to /home/jupyter-smearle/script-doctor/data/pretty_trees/test_cancel_again
+Parsed test_cancel_again successfully
+____ test_jitted_batched_reset_and_autoreset_match_standard[test_random-0] _____
+
+>   result = jax.jit(rollout)(state)
+
+tests/test_env_switch.py:99: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+tests/test_env_switch.py:97: in rollout
+    return jax.lax.scan(step, state, jnp.array([2, 4, 1, 0], jnp.int32))
+tests/test_env_switch.py:94: in step
+    result = jax.vmap(env.step, in_axes=(0, 0, 0, None))(
+puzzlescript_jax/env.py:1554: in step
+    obs_st, state_st, reward, done, info = self.step_env(
+puzzlescript_jax/env.py:1585: in step_env
+    final_lvl, tick_applied, turn_app_i, cancelled, restart, tick_win, rng = self.tick_fn(
+puzzlescript_jax/env.py:3486: in tick_fn
+    carry = apply_turn(carry)
+puzzlescript_jax/env.py:3457: in apply_turn
+    lvl, applied, block_again, cancelled, restart, win, rng, _ = apply_blocks(carry)
+puzzlescript_jax/env_switch.py:557: in apply_blocks
+    return jax.lax.while_loop(
+puzzlescript_jax/env_switch.py:451: in loop_rule_block
+    loop_block_state = jax.lax.cond(
+puzzlescript_jax/env_switch.py:453: in <lambda>
+    lambda s: jax.lax.while_loop(
+puzzlescript_jax/env_switch.py:377: in apply_rule_block
+    rule_block_state = jax.lax.while_loop(
+puzzlescript_jax/env_switch.py:289: in loop_rule_grp
+    loop_group_state = jax.lax.cond(
+puzzlescript_jax/env_switch.py:291: in <lambda>
+    lambda s: _apply_rule_grp(s),
+puzzlescript_jax/env_switch.py:210: in apply_rule_grp
+    rule_group_state = jax.lax.cond(
+puzzlescript_jax/env_switch.py:184: in _apply_random
+    return self.apply_random_rule_grp(
+puzzlescript_jax/env_switch.py:142: in apply_random_rule_grp
+    return jax.lax.cond(total_matches > 0, do_apply, no_match)
+puzzlescript_jax/env_switch.py:123: in do_apply
+    rule_state = jax.lax.switch(
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+>   (level, jnp.zeros(axis_size, bool), 0))
+E   jax._src.source_info_util.JaxStackTraceBeforeTransformation: AssertionError: [True]
+E   
+E   The preceding stack trace is the source of the JAX operation that, once transformed by JAX, triggered the following exception.
+E   
+E   --------------------
+
+puzzlescript_jax/env.py:3972: JaxStackTraceBeforeTransformation
+
+The above exception was the direct cause of the following exception:
+
+parser = Lark(open('<string>'), parser='earley', lexer='dynamic', ...)
+game = 'test_random', level_i = 0
+
+    @pytest.mark.parametrize("game,level_i", [
+        ("sokoban_basic", 0),
+        ("test_padding_mask", -1),
+        ("test_run_rules_on_level_start_score", 0),
+        ("test_cancel_again", 0),
+        ("test_random", 0),
+    ])
+    def test_jitted_batched_reset_and_autoreset_match_standard(parser, game, level_i):
+        tree, _, error = get_tree_from_txt(parser, game, test_env_init=False)
+        assert tree is not None, error
+        outputs = []
+        for cls in (PuzzleJaxEnv, PuzzleJaxEnvSwitch):
+            env = cls(tree, level_i=level_i, print_score=False, max_steps=3)
+            params = PJParams(level=env.get_level(0), level_i=level_i)
+            keys = jax.random.split(jax.random.PRNGKey(0), 2)
+            # Reset is often first called inside jit/vmap; retained dispatch tables
+            # must not capture tracers from that reset's compilation.
+            with jax.checking_leaks():
+                obs, state = jax.jit(jax.vmap(env.reset, in_axes=(0, None)))(keys, params)
+    
+                def rollout(state):
+                    def step(state, action):
+                        result = jax.vmap(env.step, in_axes=(0, 0, 0, None))(
+                            keys, state, jnp.full((2,), action), params)
+                        return result[1], result
+                    return jax.lax.scan(step, state, jnp.array([2, 4, 1, 0], jnp.int32))
+    
+>               result = jax.jit(rollout)(state)
+                         ^^^^^^^^^^^^^^^^^^^^^^^
+
+tests/test_env_switch.py:99: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+tests/test_env_switch.py:97: in rollout
+    return jax.lax.scan(step, state, jnp.array([2, 4, 1, 0], jnp.int32))
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+state = PJState(multihot_level=JitTracer(bool[2,13,7,7]), win=JitTracer(bool[2]), score=JitTracer(int32[2]), heuristic=JitTrac...uristic=JitTracer(int32[2]), step_i=JitTracer(int32[2]), rng=JitTracer(uint32[2,2]), view_bounds=JitTracer(int32[2,4]))
+action = JitTracer(int32[])
+
+    def step(state, action):
+>       result = jax.vmap(env.step, in_axes=(0, 0, 0, None))(
+            keys, state, jnp.full((2,), action), params)
+E       AssertionError: [True]
+E       --------------------
+E       For simplicity, JAX has removed its internal frames from the traceback of the following exception. Set JAX_TRACEBACK_FILTERING=off to include these.
+
+tests/test_env_switch.py:94: AssertionError
+----------------------------- Captured stdout call -----------------------------
+Writing pretty tree to /home/jupyter-smearle/script-doctor/data/pretty_trees/test_random
+Parsed test_random successfully
+=============================== warnings summary ===============================
+.venv/lib/python3.13/site-packages/matplotlib/_fontconfig_pattern.py:64
+  /home/jupyter-smearle/script-doctor/.venv/lib/python3.13/site-packages/matplotlib/_fontconfig_pattern.py:64: PyparsingDeprecationWarning: 'oneOf' deprecated - use 'one_of'
+    prop = Group((name + Suppress("=") + comma_separated(value)) | oneOf(_CONSTANTS))
+
+.venv/lib/python3.13/site-packages/matplotlib/_fontconfig_pattern.py:85
+.venv/lib/python3.13/site-packages/matplotlib/_fontconfig_pattern.py:85
+.venv/lib/python3.13/site-packages/matplotlib/_fontconfig_pattern.py:85
+.venv/lib/python3.13/site-packages/matplotlib/_fontconfig_pattern.py:85
+.venv/lib/python3.13/site-packages/matplotlib/_fontconfig_pattern.py:85
+.venv/lib/python3.13/site-packages/matplotlib/_fontconfig_pattern.py:85
+  /home/jupyter-smearle/script-doctor/.venv/lib/python3.13/site-packages/matplotlib/_fontconfig_pattern.py:85: PyparsingDeprecationWarning: 'parseString' deprecated - use 'parse_string'
+    parse = parser.parseString(pattern)
+
+.venv/lib/python3.13/site-packages/matplotlib/_fontconfig_pattern.py:89
+.venv/lib/python3.13/site-packages/matplotlib/_fontconfig_pattern.py:89
+.venv/lib/python3.13/site-packages/matplotlib/_fontconfig_pattern.py:89
+.venv/lib/python3.13/site-packages/matplotlib/_fontconfig_pattern.py:89
+.venv/lib/python3.13/site-packages/matplotlib/_fontconfig_pattern.py:89
+.venv/lib/python3.13/site-packages/matplotlib/_fontconfig_pattern.py:89
+  /home/jupyter-smearle/script-doctor/.venv/lib/python3.13/site-packages/matplotlib/_fontconfig_pattern.py:89: PyparsingDeprecationWarning: 'resetCache' deprecated - use 'reset_cache'
+    parser.resetCache()
+
+.venv/lib/python3.13/site-packages/matplotlib/_mathtext.py:45
+  /home/jupyter-smearle/script-doctor/.venv/lib/python3.13/site-packages/matplotlib/_mathtext.py:45: PyparsingDeprecationWarning: 'enablePackrat' deprecated - use 'enable_packrat'
+    ParserElement.enablePackrat()
+
+.venv/lib/python3.13/site-packages/pytz/tzinfo.py:27
+  /home/jupyter-smearle/script-doctor/.venv/lib/python3.13/site-packages/pytz/tzinfo.py:27: DeprecationWarning: datetime.datetime.utcfromtimestamp() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.fromtimestamp(timestamp, datetime.UTC).
+    _epoch = datetime.utcfromtimestamp(0)
+
+.venv/lib/python3.13/site-packages/pydantic/_internal/_generate_schema.py:2249
+  /home/jupyter-smearle/script-doctor/.venv/lib/python3.13/site-packages/pydantic/_internal/_generate_schema.py:2249: UnsupportedFieldAttributeWarning: The 'repr' attribute with value False was provided to the `Field()` function, which has no effect in the context it was used. 'repr' is field-specific metadata, and can only be attached to a model field using `Annotated` metadata or by assignment. This may have happened because an `Annotated` type alias using the `type` statement was used, or if the `Field()` function was attached to a single member of a union type.
+    warnings.warn(
+
+.venv/lib/python3.13/site-packages/pydantic/_internal/_generate_schema.py:2249
+  /home/jupyter-smearle/script-doctor/.venv/lib/python3.13/site-packages/pydantic/_internal/_generate_schema.py:2249: UnsupportedFieldAttributeWarning: The 'frozen' attribute with value True was provided to the `Field()` function, which has no effect in the context it was used. 'frozen' is field-specific metadata, and can only be attached to a model field using `Annotated` metadata or by assignment. This may have happened because an `Annotated` type alias using the `type` statement was used, or if the `Field()` function was attached to a single member of a union type.
+    warnings.warn(
+
+tests/test_custom_action_sequences.py::test_custom_action_sequences_match_js[game_by_cupcakegrb/level_1_actions_0 [xfail: solution error \u2014 JS wins but JAX does not]-standard]
+tests/test_custom_action_sequences.py::test_custom_action_sequences_match_js[game_by_cupcakegrb/level_1_actions_0 [xfail: solution error \u2014 JS wins but JAX does not]-standard]
+tests/test_custom_action_sequences.py::test_custom_action_sequences_match_js[game_by_cupcakegrb/level_1_actions_0 [xfail: solution error \u2014 JS wins but JAX does not]-standard]
+tests/test_custom_action_sequences.py::test_custom_action_sequences_match_js[game_by_cupcakegrb/level_1_actions_0 [xfail: solution error \u2014 JS wins but JAX does not]-standard]
+tests/test_custom_action_sequences.py::test_custom_action_sequences_match_js[game_by_cupcakegrb/level_1_actions_0 [xfail: solution error \u2014 JS wins but JAX does not]-standard]
+tests/test_custom_action_sequences.py::test_custom_action_sequences_match_js[game_by_cupcakegrb/level_1_actions_0 [xfail: solution error \u2014 JS wins but JAX does not]-standard]
+  /home/jupyter-smearle/script-doctor/puzzlescript_jax/preprocessing.py:186: DeprecationWarning: The 'warn' method is deprecated, use 'warning' instead
+    logger.warn("Maps must be rectangular, yo.")
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED tests/test_env_switch.py::test_jitted_batched_reset_and_autoreset_match_standard[sokoban_basic-0]
+FAILED tests/test_env_switch.py::test_jitted_batched_reset_and_autoreset_match_standard[test_padding_mask--1]
+FAILED tests/test_env_switch.py::test_jitted_batched_reset_and_autoreset_match_standard[test_run_rules_on_level_start_score-0]
+FAILED tests/test_env_switch.py::test_jitted_batched_reset_and_autoreset_match_standard[test_cancel_again-0]
+FAILED tests/test_env_switch.py::test_jitted_batched_reset_and_autoreset_match_standard[test_random-0]
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! KeyboardInterrupt !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+/home/jupyter-smearle/script-doctor/.venv/lib/python3.13/site-packages/jax/_src/source_info_util.py:213: KeyboardInterrupt
+(to show a full traceback on KeyboardInterrupt use --full-trace)
+5 failed, 68 passed, 9 xfailed, 23 warnings in 1485.64s (0:24:45)

@@ -1,0 +1,31 @@
+combined/baseline: compiling limerick, batch=256
+Writing pretty tree to /scratch/se2161/puzzlejax-perf-20261002/round3/data/pretty_trees/limerick
+Parsed limerick successfully
+combined/all: compiling limerick, batch=256
+Writing pretty tree to /scratch/se2161/puzzlejax-perf-20261002/round3/data/pretty_trees/limerick
+Parsed limerick successfully
+Exact outputs match; timing limerick, batch=256
+{"experiment": "combined", "candidate": "all", "game": "limerick", "batch": 256, "steps": 100, "baseline": {"compile_s": 41.051312539959326, "temporary_bytes": 20362712, "median_s": 0.24439847702160478, "min_s": 0.24422992300242186, "max_s": 0.24638847121968865, "env_steps_per_s": 104746.97024293226}, "all": {"compile_s": 30.535305727971718, "temporary_bytes": 20364248, "median_s": 0.24569036811590195, "min_s": 0.24553596484474838, "max_s": 0.24598363204859197, "env_steps_per_s": 104196.18887104056}, "speedup": 0.9947417918569452}
+combined/baseline: compiling limerick, batch=4096
+Writing pretty tree to /scratch/se2161/puzzlejax-perf-20261002/round3/data/pretty_trees/limerick
+Parsed limerick successfully
+E1003 14:51:04.093323 4087613 slow_operation_alarm.cc:73] Constant folding an instruction is taking > 1s:
+
+  %transpose.1178 = pred[32,4096,15,19]{0,3,2,1} transpose(%constant.17201), dimensions={0,1,2,3}, metadata={op_name="jit(rollout)/while/body/closed_call/vmap(jit(step))/jit(step_env)/jit(tick_fn)/cond/jit(rollout)/while/body/closed_call/vmap(jit(step))/jit(step_env)/jit(tick_fn)/cond/branch_1_fun/while/body/while/body/vmap(vmap())/scatter" stack_frame_id=292}
+
+This isn't necessarily a bug; constant-folding is inherently a trade-off between compilation time and speed at runtime. XLA has some guards that attempt to keep constant folding from taking too long, but fundamentally you'll always be able to come up with an input program that takes a long time.
+
+If you'd like to file a bug, run with envvar XLA_FLAGS=--xla_dump_to=/tmp/foo and attach the results.
+E1003 14:51:04.197076 4085479 slow_operation_alarm.cc:140] The operation took 1.103845661s
+Constant folding an instruction is taking > 1s:
+
+  %transpose.1178 = pred[32,4096,15,19]{0,3,2,1} transpose(%constant.17201), dimensions={0,1,2,3}, metadata={op_name="jit(rollout)/while/body/closed_call/vmap(jit(step))/jit(step_env)/jit(tick_fn)/cond/jit(rollout)/while/body/closed_call/vmap(jit(step))/jit(step_env)/jit(tick_fn)/cond/branch_1_fun/while/body/while/body/vmap(vmap())/scatter" stack_frame_id=292}
+
+This isn't necessarily a bug; constant-folding is inherently a trade-off between compilation time and speed at runtime. XLA has some guards that attempt to keep constant folding from taking too long, but fundamentally you'll always be able to come up with an input program that takes a long time.
+
+If you'd like to file a bug, run with envvar XLA_FLAGS=--xla_dump_to=/tmp/foo and attach the results.
+combined/all: compiling limerick, batch=4096
+Writing pretty tree to /scratch/se2161/puzzlejax-perf-20261002/round3/data/pretty_trees/limerick
+Parsed limerick successfully
+Exact outputs match; timing limerick, batch=4096
+{"experiment": "combined", "candidate": "all", "game": "limerick", "batch": 4096, "steps": 100, "baseline": {"compile_s": 45.69548085797578, "temporary_bytes": 313171160, "median_s": 1.2869717329740524, "min_s": 1.2865321231074631, "max_s": 1.2876533230300993, "env_steps_per_s": 318266.50850633584}, "all": {"compile_s": 35.44331714394502, "temporary_bytes": 313207000, "median_s": 1.2982471759896725, "min_s": 1.2979384229984134, "max_s": 1.2988281741272658, "env_steps_per_s": 315502.3231132823}, "speedup": 0.9913148719102549}

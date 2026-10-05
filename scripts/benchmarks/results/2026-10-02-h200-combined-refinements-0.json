@@ -1,0 +1,204 @@
+{
+  "jax_version": "0.9.0.1",
+  "devices": [
+    "NVIDIA H200"
+  ],
+  "engine_sha256": "5ced199539d21c61b4751c01ae8f53804893e39abc022e89b3cbbaa5ac921987",
+  "trials": 15,
+  "seed": 42,
+  "timing": "alternating A/B after compilation and warmup; exact full outputs",
+  "results": [
+    {
+      "experiment": "combined",
+      "candidate": "cleanup_barriers",
+      "game": "sokoban_basic",
+      "batch": 256,
+      "steps": 100,
+      "baseline": {
+        "compile_s": 11.883923341985792,
+        "temporary_bytes": 1386456,
+        "median_s": 0.1251889558043331,
+        "min_s": 0.12497668899595737,
+        "max_s": 0.12585479416884482,
+        "env_steps_per_s": 204490.88208717149
+      },
+      "cleanup_barriers": {
+        "compile_s": 8.263783313101158,
+        "temporary_bytes": 1385432,
+        "median_s": 0.10226910002529621,
+        "min_s": 0.10192301985807717,
+        "max_s": 0.10237116506323218,
+        "env_steps_per_s": 250319.98906480893
+      },
+      "speedup": 1.2241132049990433
+    },
+    {
+      "experiment": "combined",
+      "candidate": "cleanup_barriers",
+      "game": "sokoban_basic",
+      "batch": 1024,
+      "steps": 100,
+      "baseline": {
+        "compile_s": 12.267265536822379,
+        "temporary_bytes": 5495768,
+        "median_s": 0.1337377440650016,
+        "min_s": 0.13348597404547036,
+        "max_s": 0.1339303262066096,
+        "env_steps_per_s": 765677.6380961662
+      },
+      "cleanup_barriers": {
+        "compile_s": 8.895430529024452,
+        "temporary_bytes": 5494744,
+        "median_s": 0.10935390996746719,
+        "min_s": 0.10920844692736864,
+        "max_s": 0.1096079449634999,
+        "env_steps_per_s": 936409.1327915392
+      },
+      "speedup": 1.222980907630908
+    },
+    {
+      "experiment": "combined",
+      "candidate": "cleanup_barriers",
+      "game": "sokoban_basic",
+      "batch": 4096,
+      "steps": 100,
+      "baseline": {
+        "compile_s": 12.377912739990279,
+        "temporary_bytes": 21896152,
+        "median_s": 0.17674222122877836,
+        "min_s": 0.17494987277314067,
+        "max_s": 0.17740939208306372,
+        "env_steps_per_s": 2317499.4472305872
+      },
+      "cleanup_barriers": {
+        "compile_s": 9.027497758856043,
+        "temporary_bytes": 24029400,
+        "median_s": 0.14578016102313995,
+        "min_s": 0.14293676801025867,
+        "max_s": 0.1465516199823469,
+        "env_steps_per_s": 2809710.163065216
+      },
+      "speedup": 1.2123887090557113
+    },
+    {
+      "experiment": "combined",
+      "candidate": "cleanup_barriers",
+      "game": "sokoban_basic",
+      "batch": 16384,
+      "steps": 100,
+      "baseline": {
+        "compile_s": 11.135801332071424,
+        "temporary_bytes": 87624664,
+        "median_s": 0.3415263758506626,
+        "min_s": 0.3390594790689647,
+        "max_s": 0.3423995398916304,
+        "env_steps_per_s": 4797286.874019986
+      },
+      "cleanup_barriers": {
+        "compile_s": 8.493758148048073,
+        "temporary_bytes": 96078040,
+        "median_s": 0.2843874949030578,
+        "min_s": 0.2822012370452285,
+        "max_s": 0.2847973539028317,
+        "env_steps_per_s": 5761153.459150863
+      },
+      "speedup": 1.2009191049946915
+    },
+    {
+      "experiment": "combined",
+      "candidate": "all",
+      "game": "sokoban_basic",
+      "batch": 256,
+      "steps": 100,
+      "baseline": {
+        "compile_s": 8.38693252298981,
+        "temporary_bytes": 1386456,
+        "median_s": 0.12523779808543622,
+        "min_s": 0.1192343148868531,
+        "max_s": 0.12532165506854653,
+        "env_steps_per_s": 204411.1313945003
+      },
+      "all": {
+        "compile_s": 8.018934017047286,
+        "temporary_bytes": 1385432,
+        "median_s": 0.10145916603505611,
+        "min_s": 0.09922191617079079,
+        "max_s": 0.10199581203050911,
+        "env_steps_per_s": 252318.25768363502
+      },
+      "speedup": 1.2343665237910997
+    },
+    {
+      "experiment": "combined",
+      "candidate": "all",
+      "game": "sokoban_basic",
+      "batch": 1024,
+      "steps": 100,
+      "baseline": {
+        "compile_s": 8.813274578889832,
+        "temporary_bytes": 5495768,
+        "median_s": 0.13433424104005098,
+        "min_s": 0.13155929394997656,
+        "max_s": 0.1346692789811641,
+        "env_steps_per_s": 762277.7276083321
+      },
+      "all": {
+        "compile_s": 8.553257931955159,
+        "temporary_bytes": 5494744,
+        "median_s": 0.10957798385061324,
+        "min_s": 0.10452341986820102,
+        "max_s": 0.11005349806509912,
+        "env_steps_per_s": 934494.2880095429
+      },
+      "speedup": 1.2259236419533668
+    },
+    {
+      "experiment": "combined",
+      "candidate": "all",
+      "game": "sokoban_basic",
+      "batch": 4096,
+      "steps": 100,
+      "baseline": {
+        "compile_s": 9.044894074089825,
+        "temporary_bytes": 21896152,
+        "median_s": 0.17658502818085253,
+        "min_s": 0.17642899905331433,
+        "max_s": 0.1769520288798958,
+        "env_steps_per_s": 2319562.446599387
+      },
+      "all": {
+        "compile_s": 8.94521681801416,
+        "temporary_bytes": 24029400,
+        "median_s": 0.14630187512375414,
+        "min_s": 0.14611791889183223,
+        "max_s": 0.14654290210455656,
+        "env_steps_per_s": 2799690.705628528
+      },
+      "speedup": 1.2069908743922961
+    },
+    {
+      "experiment": "combined",
+      "candidate": "all",
+      "game": "sokoban_basic",
+      "batch": 16384,
+      "steps": 100,
+      "baseline": {
+        "compile_s": 8.645391084020957,
+        "temporary_bytes": 87624664,
+        "median_s": 0.34099558112211525,
+        "min_s": 0.3378741398919374,
+        "max_s": 0.3458501498680562,
+        "env_steps_per_s": 4804754.344934653
+      },
+      "all": {
+        "compile_s": 8.652085029054433,
+        "temporary_bytes": 96078040,
+        "median_s": 0.28368937293998897,
+        "min_s": 0.28182008187286556,
+        "max_s": 0.2844198429957032,
+        "env_steps_per_s": 5775330.894564682
+      },
+      "speedup": 1.2020033658231135
+    }
+  ]
+}

@@ -1,0 +1,36 @@
+{
+  "jax_version": "0.9.1",
+  "devices": [
+    "NVIDIA GeForce RTX 4090"
+  ],
+  "engine_sha256": "38ab0cee2e8eb6d22ce4e2bb9780d3b9862f1eddaf0d2fb4aadb0900c3cea03c",
+  "trials": 15,
+  "seed": 42,
+  "timing": "alternating A/B after compilation and warmup; exact full outputs",
+  "results": [
+    {
+      "experiment": "cleanup",
+      "candidate": "parallel",
+      "game": "Zen_Puzzle_Garden",
+      "batch": 16384,
+      "steps": 100,
+      "baseline": {
+        "compile_s": 3.6658118199557066,
+        "temporary_bytes": 236599768,
+        "median_s": 0.5342130288481712,
+        "min_s": 0.5337321106344461,
+        "max_s": 0.5344354789704084,
+        "env_steps_per_s": 3066941.297805093
+      },
+      "parallel": {
+        "compile_s": 3.4452119916677475,
+        "temporary_bytes": 349681112,
+        "median_s": 0.6443595997989178,
+        "min_s": 0.6440961640328169,
+        "max_s": 0.6448646206408739,
+        "env_steps_per_s": 2542679.58529878
+      },
+      "speedup": 0.8290604020098102
+    }
+  ]
+}

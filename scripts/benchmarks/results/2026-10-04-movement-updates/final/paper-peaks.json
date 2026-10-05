@@ -1,0 +1,42 @@
+[
+  {
+    "game": "sokoban_basic",
+    "best_tested_batch": 16384,
+    "median_steps_per_s": 6259157.276508794
+  },
+  {
+    "game": "notsnake",
+    "best_tested_batch": 16384,
+    "median_steps_per_s": 7076286.076118787
+  },
+  {
+    "game": "Zen_Puzzle_Garden",
+    "best_tested_batch": 16384,
+    "median_steps_per_s": 4557420.936916861
+  },
+  {
+    "game": "Slidings",
+    "best_tested_batch": 16384,
+    "median_steps_per_s": 1508582.687975689
+  },
+  {
+    "game": "limerick",
+    "best_tested_batch": 16384,
+    "median_steps_per_s": 423555.6881006534
+  },
+  {
+    "game": "kettle",
+    "best_tested_batch": 16384,
+    "median_steps_per_s": 434520.14263057563
+  },
+  {
+    "game": "Take_Heart_Lass",
+    "best_tested_batch": 16384,
+    "median_steps_per_s": 1800500.676608451
+  },
+  {
+    "game": "atlas shrank",
+    "best_tested_batch": 4096,
+    "median_steps_per_s": 50941.52800419783
+  }
+]

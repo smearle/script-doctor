@@ -1,0 +1,227 @@
+{
+  "jax_version": "0.9.0.1",
+  "devices": [
+    "NVIDIA H200"
+  ],
+  "trials": 15,
+  "seed": 42,
+  "timing": "alternating A/B after compilation and warmup",
+  "results": [
+    {
+      "game": "sokoban_basic",
+      "batch": 256,
+      "steps": 100,
+      "sequential": {
+        "compile_s": 12.165349626215175,
+        "temporary_bytes": 1386456,
+        "hlo_while_ops": 18,
+        "median_s": 0.12713761697523296,
+        "min_s": 0.12317887903191149,
+        "max_s": 0.1274562031030655,
+        "env_steps_per_s": 201356.6134796046
+      },
+      "parallel": {
+        "compile_s": 8.576888495124876,
+        "temporary_bytes": 1386456,
+        "hlo_while_ops": 18,
+        "median_s": 0.12689096294343472,
+        "min_s": 0.12324831611476839,
+        "max_s": 0.12746793101541698,
+        "env_steps_per_s": 201748.01582530298
+      },
+      "speedup": 1.0019438266215082
+    },
+    {
+      "game": "sokoban_basic",
+      "batch": 1024,
+      "steps": 100,
+      "sequential": {
+        "compile_s": 12.643326177960262,
+        "temporary_bytes": 5495768,
+        "hlo_while_ops": 18,
+        "median_s": 0.13581579108722508,
+        "min_s": 0.13212909316644073,
+        "max_s": 0.14206233504228294,
+        "env_steps_per_s": 753962.4014282372
+      },
+      "parallel": {
+        "compile_s": 9.16285574180074,
+        "temporary_bytes": 5495768,
+        "hlo_while_ops": 18,
+        "median_s": 0.13590686791576445,
+        "min_s": 0.1320676440373063,
+        "max_s": 0.13618867890909314,
+        "env_steps_per_s": 753457.1399546039
+      },
+      "speedup": 0.9993298585278573
+    },
+    {
+      "game": "sokoban_basic",
+      "batch": 4096,
+      "steps": 100,
+      "sequential": {
+        "compile_s": 12.833749781129882,
+        "temporary_bytes": 21896152,
+        "hlo_while_ops": 18,
+        "median_s": 0.17983485502190888,
+        "min_s": 0.1770203630439937,
+        "max_s": 0.18023747112601995,
+        "env_steps_per_s": 2277645.2315103174
+      },
+      "parallel": {
+        "compile_s": 9.266858477843925,
+        "temporary_bytes": 21896152,
+        "hlo_while_ops": 18,
+        "median_s": 0.17897970415651798,
+        "min_s": 0.17617966304533184,
+        "max_s": 0.17969910986721516,
+        "env_steps_per_s": 2288527.6402167045
+      },
+      "speedup": 1.0047779208789118
+    },
+    {
+      "game": "blocks",
+      "batch": 256,
+      "steps": 100,
+      "sequential": {
+        "compile_s": 4.069467701017857,
+        "temporary_bytes": 2950360,
+        "hlo_while_ops": 8,
+        "median_s": 0.16588160302489996,
+        "min_s": 0.1624775161035359,
+        "max_s": 0.16614219406619668,
+        "env_steps_per_s": 154326.93881163702
+      },
+      "parallel": {
+        "compile_s": 3.290208750171587,
+        "temporary_bytes": 2950360,
+        "hlo_while_ops": 8,
+        "median_s": 0.16386113595217466,
+        "min_s": 0.16042220406234264,
+        "max_s": 0.1663369310554117,
+        "env_steps_per_s": 156229.84578522478
+      },
+      "speedup": 1.012330361686953
+    },
+    {
+      "game": "blocks",
+      "batch": 1024,
+      "steps": 100,
+      "sequential": {
+        "compile_s": 4.398318216903135,
+        "temporary_bytes": 11777240,
+        "hlo_while_ops": 8,
+        "median_s": 0.20075033302418888,
+        "min_s": 0.19863944500684738,
+        "max_s": 0.20121995289810002,
+        "env_steps_per_s": 510086.32691862877
+      },
+      "parallel": {
+        "compile_s": 3.4366392949596047,
+        "temporary_bytes": 11777240,
+        "hlo_while_ops": 8,
+        "median_s": 0.1999831770081073,
+        "min_s": 0.1984911218751222,
+        "max_s": 0.20094070793129504,
+        "env_steps_per_s": 512043.0704821172
+      },
+      "speedup": 1.0038361027540355
+    },
+    {
+      "game": "blocks",
+      "batch": 4096,
+      "steps": 100,
+      "sequential": {
+        "compile_s": 4.413663143990561,
+        "temporary_bytes": 47047640,
+        "hlo_while_ops": 8,
+        "median_s": 0.35293535399250686,
+        "min_s": 0.3518963239621371,
+        "max_s": 0.3542125590611249,
+        "env_steps_per_s": 1160552.4789922184
+      },
+      "parallel": {
+        "compile_s": 3.4451646809466183,
+        "temporary_bytes": 47047640,
+        "hlo_while_ops": 8,
+        "median_s": 0.3535842029377818,
+        "min_s": 0.352803077083081,
+        "max_s": 0.3547415139619261,
+        "env_steps_per_s": 1158422.7932040137
+      },
+      "speedup": 0.9981649379698416
+    },
+    {
+      "game": "Zen_Puzzle_Garden",
+      "batch": 256,
+      "steps": 100,
+      "sequential": {
+        "compile_s": 11.486157245002687,
+        "temporary_bytes": 3571928,
+        "hlo_while_ops": 22,
+        "median_s": 0.09729458694346249,
+        "min_s": 0.09580064611509442,
+        "max_s": 0.09756152098998427,
+        "env_steps_per_s": 263118.44064743357
+      },
+      "parallel": {
+        "compile_s": 8.147223226027563,
+        "temporary_bytes": 3272664,
+        "hlo_while_ops": 14,
+        "median_s": 0.0639608409255743,
+        "min_s": 0.06059754500165582,
+        "max_s": 0.06422954890877008,
+        "env_steps_per_s": 400244.89405616955
+      },
+      "speedup": 1.521158657946286
+    },
+    {
+      "game": "Zen_Puzzle_Garden",
+      "batch": 1024,
+      "steps": 100,
+      "sequential": {
+        "compile_s": 12.081232023891062,
+        "temporary_bytes": 14235608,
+        "hlo_while_ops": 22,
+        "median_s": 0.11874685995280743,
+        "min_s": 0.11848526517860591,
+        "max_s": 0.1190780617762357,
+        "env_steps_per_s": 862338.5918642058
+      },
+      "parallel": {
+        "compile_s": 8.458715857937932,
+        "temporary_bytes": 13052888,
+        "hlo_while_ops": 14,
+        "median_s": 0.08496013889089227,
+        "min_s": 0.08399528195150197,
+        "max_s": 0.08540887502022088,
+        "env_steps_per_s": 1205271.0993269961
+      },
+      "speedup": 1.3976773284858306
+    },
+    {
+      "game": "Zen_Puzzle_Garden",
+      "batch": 4096,
+      "steps": 100,
+      "sequential": {
+        "compile_s": 9.639492792775854,
+        "temporary_bytes": 56868568,
+        "hlo_while_ops": 22,
+        "median_s": 0.21959091001190245,
+        "min_s": 0.21842430904507637,
+        "max_s": 0.2200583319645375,
+        "env_steps_per_s": 1865286.6823030084
+      },
+      "parallel": {
+        "compile_s": 8.991973702097312,
+        "temporary_bytes": 52153048,
+        "hlo_while_ops": 14,
+        "median_s": 0.17185541009530425,
+        "min_s": 0.17052558506838977,
+        "max_s": 0.1722973680589348,
+        "env_steps_per_s": 2383398.9268819173
+      },
+      "speedup": 1.2777654767465625
+    }
+  ]
+}

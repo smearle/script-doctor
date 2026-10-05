@@ -1,0 +1,25 @@
+{
+  "note": "Identical 100-step transition-output workload at batch 4096; traces instrumented, not SM utilization. Initial production revision, before singleton fallback and explicit movement-delta arguments for switch composition.",
+  "before_engine_sha256": "38ab0cee2e8eb6d22ce4e2bb9780d3b9862f1eddaf0d2fb4aadb0900c3cea03c",
+  "after_engine_sha256": "025b74d0fee6bcd9c04bf8f4b6cd80aabebd98bfa4250d1b87dd80984faa2987",
+  "results": [
+    {
+      "game": "sokoban_basic",
+      "before_kernel_count": 37989,
+      "after_kernel_count": 34300,
+      "reduction_percent": 9.710705730606229
+    },
+    {
+      "game": "blocks",
+      "before_kernel_count": 40358,
+      "after_kernel_count": 29510,
+      "reduction_percent": 26.879429109470244
+    },
+    {
+      "game": "Zen_Puzzle_Garden",
+      "before_kernel_count": 17265,
+      "after_kernel_count": 15570,
+      "reduction_percent": 9.817549956559512
+    }
+  ]
+}

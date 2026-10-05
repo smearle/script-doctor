@@ -1,0 +1,90 @@
+{
+  "jax_version": "0.9.0.1",
+  "devices": [
+    "NVIDIA H200"
+  ],
+  "independent_cell_rules": true,
+  "trials": 9,
+  "seed": 42,
+  "timing": "alternating full/transitions after compilation and warmup",
+  "results": [
+    {
+      "game": "sokoban_basic",
+      "batch": 4096,
+      "steps": 100,
+      "full": {
+        "compile_s": 12.88226386392489,
+        "temporary_bytes": 24127192,
+        "argument_bytes": 2686984,
+        "output_bytes": 197656800,
+        "median_s": 0.13524780212901533,
+        "min_s": 0.13505821605212986,
+        "max_s": 0.13555255206301808,
+        "env_steps_per_s": 3028515.0187451853
+      },
+      "transitions": {
+        "compile_s": 6.633535842876881,
+        "temporary_bytes": 28119936,
+        "argument_bytes": 2686984,
+        "output_bytes": 90751104,
+        "median_s": 0.134850372094661,
+        "min_s": 0.13468028395436704,
+        "max_s": 0.13503466406837106,
+        "env_steps_per_s": 3037440.636147988
+      },
+      "trace_directory": "/state/partition1/job-19197686/puzzlejax-movement-19197686-7zmyNu/sokoban_basic-4096"
+    },
+    {
+      "game": "blocks",
+      "batch": 4096,
+      "steps": 100,
+      "full": {
+        "compile_s": 4.48169072996825,
+        "temporary_bytes": 79366360,
+        "argument_bytes": 4169736,
+        "output_bytes": 495689952,
+        "median_s": 0.17656878218986094,
+        "min_s": 0.17627954902127385,
+        "max_s": 0.1770495451055467,
+        "env_steps_per_s": 2319775.868191497
+      },
+      "transitions": {
+        "compile_s": 2.7505182798486203,
+        "temporary_bytes": 93922688,
+        "argument_bytes": 4169736,
+        "output_bytes": 240509056,
+        "median_s": 0.1728745438158512,
+        "min_s": 0.17273126798681915,
+        "max_s": 0.17356403195299208,
+        "env_steps_per_s": 2369348.2623810284
+      },
+      "trace_directory": "/state/partition1/job-19197686/puzzlejax-movement-19197686-7zmyNu/blocks-4096"
+    },
+    {
+      "game": "Zen_Puzzle_Garden",
+      "batch": 4096,
+      "steps": 100,
+      "full": {
+        "compile_s": 9.486033511115238,
+        "temporary_bytes": 81712600,
+        "argument_bytes": 5365768,
+        "output_bytes": 736092384,
+        "median_s": 0.12772233388386667,
+        "min_s": 0.127403502818197,
+        "max_s": 0.1280283690430224,
+        "env_steps_per_s": 3206956.7439351254
+      },
+      "transitions": {
+        "compile_s": 6.16229829704389,
+        "temporary_bytes": 102814336,
+        "argument_bytes": 5365768,
+        "output_bytes": 361308288,
+        "median_s": 0.12624569004401565,
+        "min_s": 0.12589503498747945,
+        "max_s": 0.12659675488248467,
+        "env_steps_per_s": 3244467.1961252117
+      },
+      "trace_directory": "/state/partition1/job-19197686/puzzlejax-movement-19197686-7zmyNu/Zen_Puzzle_Garden-4096"
+    }
+  ]
+}

@@ -1,0 +1,16 @@
+combined/baseline: compiling notsnake, batch=256
+Writing pretty tree to /scratch/se2161/puzzlejax-perf-20261002/round3/data/pretty_trees/notsnake
+Parsed notsnake successfully
+combined/all: compiling notsnake, batch=256
+Writing pretty tree to /scratch/se2161/puzzlejax-perf-20261002/round3/data/pretty_trees/notsnake
+Parsed notsnake successfully
+Exact outputs match; timing notsnake, batch=256
+{"experiment": "combined", "candidate": "all", "game": "notsnake", "batch": 256, "steps": 100, "baseline": {"compile_s": 15.779301838018, "temporary_bytes": 1414360, "median_s": 0.10326508595608175, "min_s": 0.10160256503149867, "max_s": 0.10394976893439889, "env_steps_per_s": 247905.6668861689}, "all": {"compile_s": 11.991407135967165, "temporary_bytes": 1413336, "median_s": 0.0997950891032815, "min_s": 0.09922747313976288, "max_s": 0.10034780413843691, "env_steps_per_s": 256525.64900769462}, "speedup": 1.0347712185437203}
+combined/baseline: compiling notsnake, batch=4096
+Writing pretty tree to /scratch/se2161/puzzlejax-perf-20261002/round3/data/pretty_trees/notsnake
+Parsed notsnake successfully
+combined/all: compiling notsnake, batch=4096
+Writing pretty tree to /scratch/se2161/puzzlejax-perf-20261002/round3/data/pretty_trees/notsnake
+Parsed notsnake successfully
+Exact outputs match; timing notsnake, batch=4096
+{"experiment": "combined", "candidate": "all", "game": "notsnake", "batch": 4096, "steps": 100, "baseline": {"compile_s": 14.681886036181822, "temporary_bytes": 22077912, "median_s": 0.14049138012342155, "min_s": 0.13959745992906392, "max_s": 0.14211815991438925, "env_steps_per_s": 2915481.360067548}, "all": {"compile_s": 12.12218911619857, "temporary_bytes": 24555224, "median_s": 0.1355554680339992, "min_s": 0.1352791718672961, "max_s": 0.13798734499141574, "env_steps_per_s": 3021641.295187492}, "speedup": 1.0364124897431977}

@@ -1,0 +1,86 @@
+{
+  "jax_version": "0.9.0.1",
+  "devices": [
+    "NVIDIA H200"
+  ],
+  "trials": 9,
+  "seed": 42,
+  "timing": "alternating full/transitions after compilation and warmup",
+  "results": [
+    {
+      "game": "sokoban_basic",
+      "batch": 16384,
+      "steps": 100,
+      "full": {
+        "compile_s": 11.711298924870789,
+        "temporary_bytes": 87624664,
+        "argument_bytes": 10747912,
+        "output_bytes": 790626528,
+        "median_s": 0.3533319169655442,
+        "min_s": 0.35282791894860566,
+        "max_s": 0.35469628404825926,
+        "env_steps_per_s": 4636999.719897287
+      },
+      "transitions": {
+        "compile_s": 6.452649960992858,
+        "temporary_bytes": 101714560,
+        "argument_bytes": 10747912,
+        "output_bytes": 363004032,
+        "median_s": 0.3535488108173013,
+        "min_s": 0.35198211995884776,
+        "max_s": 0.3539041979238391,
+        "env_steps_per_s": 4634155.030001371
+      }
+    },
+    {
+      "game": "blocks",
+      "batch": 16384,
+      "steps": 100,
+      "full": {
+        "compile_s": 4.268265387043357,
+        "temporary_bytes": 188228312,
+        "argument_bytes": 16678920,
+        "output_bytes": 1982759136,
+        "median_s": 1.0743028179276735,
+        "min_s": 1.073889530962333,
+        "max_s": 1.0746523840352893,
+        "env_steps_per_s": 1525082.102233026
+      },
+      "transitions": {
+        "compile_s": 2.945227562915534,
+        "temporary_bytes": 272589184,
+        "argument_bytes": 16678920,
+        "output_bytes": 962035840,
+        "median_s": 1.0749585921876132,
+        "min_s": 1.074528570054099,
+        "max_s": 1.0756461371202022,
+        "env_steps_per_s": 1524151.7318967101
+      }
+    },
+    {
+      "game": "Zen_Puzzle_Garden",
+      "batch": 16384,
+      "steps": 100,
+      "full": {
+        "compile_s": 10.32259187893942,
+        "temporary_bytes": 227466968,
+        "argument_bytes": 21463048,
+        "output_bytes": 2944368864,
+        "median_s": 0.6278424558695406,
+        "min_s": 0.6273009080905467,
+        "max_s": 0.6287328070029616,
+        "env_steps_per_s": 2609571.8514780453
+      },
+      "transitions": {
+        "compile_s": 6.40612225420773,
+        "temporary_bytes": 293543296,
+        "argument_bytes": 21463048,
+        "output_bytes": 1445232768,
+        "median_s": 0.627216316992417,
+        "min_s": 0.6263596129138023,
+        "max_s": 0.628791666124016,
+        "env_steps_per_s": 2612176.940575046
+      }
+    }
+  ]
+}

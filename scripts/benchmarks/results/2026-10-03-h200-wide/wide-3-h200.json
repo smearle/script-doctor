@@ -1,0 +1,60 @@
+{
+  "jax_version": "0.9.0.1",
+  "devices": [
+    "NVIDIA H200"
+  ],
+  "engine_sha256": "38ab0cee2e8eb6d22ce4e2bb9780d3b9862f1eddaf0d2fb4aadb0900c3cea03c",
+  "trials": 7,
+  "seed": 42,
+  "timing": "alternating A/B after compilation and warmup; exact full outputs",
+  "results": [
+    {
+      "experiment": "combined",
+      "candidate": "all",
+      "game": "kettle",
+      "batch": 256,
+      "steps": 100,
+      "baseline": {
+        "compile_s": 56.38455352419987,
+        "temporary_bytes": 7266520,
+        "median_s": 0.4962046497967094,
+        "min_s": 0.47121965303085744,
+        "max_s": 0.496385962003842,
+        "env_steps_per_s": 51591.61650437595
+      },
+      "all": {
+        "compile_s": 35.9388305300381,
+        "temporary_bytes": 7264984,
+        "median_s": 0.45976897794753313,
+        "min_s": 0.44593902211636305,
+        "max_s": 0.46277798688970506,
+        "env_steps_per_s": 55680.13769498246
+      },
+      "speedup": 1.0792477822488802
+    },
+    {
+      "experiment": "combined",
+      "candidate": "all",
+      "game": "kettle",
+      "batch": 4096,
+      "steps": 100,
+      "baseline": {
+        "compile_s": 28.532486375886947,
+        "temporary_bytes": 115542528,
+        "median_s": 1.353215395938605,
+        "min_s": 1.3521626580040902,
+        "max_s": 1.3540814009029418,
+        "env_steps_per_s": 302686.4763949105
+      },
+      "all": {
+        "compile_s": 21.90218642912805,
+        "temporary_bytes": 121299968,
+        "median_s": 1.2620317270047963,
+        "min_s": 1.2585309180431068,
+        "max_s": 1.262435341021046,
+        "env_steps_per_s": 324556.0244131987
+      },
+      "speedup": 1.0722514870131012
+    }
+  ]
+}

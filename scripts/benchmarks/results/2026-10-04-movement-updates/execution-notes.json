@@ -1,0 +1,69 @@
+{
+  "reason": "Torch account file-count quota interrupted initial wide and paper jobs. No unrelated account files were changed.",
+  "archived_unused_snapshot_files": 8658,
+  "archive": "scripts/benchmarks/results/2026-10-04-movement-updates/sources/torch-increpare-snapshot.tar.gz",
+  "archive_sha256": "6532d4ce5d79ecbb572e220c6c375ca2caba020b821f3103868c25b32746f506",
+  "per_file_hashes": "scripts/benchmarks/results/2026-10-04-movement-updates/sources/torch-increpare-snapshot-hashes.json",
+  "verification": "All archived game files SHA-256 checked against remote before removing only unused files from /scratch/se2161/puzzlejax-perf-20261002/data/scraped_games_increpare. All 12 selected game source hashes rechecked locally and on Torch afterward.",
+  "removed_verified_remote_profile_copies": [
+    "profiles-archive-20261003.tar.gz",
+    "round4-production/profiles.tar.gz"
+  ],
+  "retained_local_profile_archives": [
+    "scripts/benchmarks/results/archives/2026-10-03-torch-profiles.tar.gz",
+    "scripts/benchmarks/results/2026-10-04-movement-updates/initial-profile/profiles.tar.gz"
+  ],
+  "final_jobs": {
+    "wide": "19199002",
+    "paper": "19199003",
+    "additional_levels": "19199078",
+    "paper_atlas": "19200893_7",
+    "large_batch": "19200894",
+    "h100": "19201182",
+    "profile": "19203938"
+  },
+  "final_remote_snapshot": "/scratch/se2161/puzzlejax-perf-20261002/round4-dispatch",
+  "engine_sha256": "ab92c0a647c6efe9809c98cfecc7110a89b23b6dfdea2e7205603429041654fe",
+  "superseded_jobs": {
+    "19197657": "Scratch file quota interrupted wide sweep; completed samples retained.",
+    "19197993": "Stopped to preserve singleton performance.",
+    "19198070": "Cancelled after snapshot transfer failed its quota check.",
+    "19198656": "Stopped after finding switch-dispatch composition failure.",
+    "19198657": "Stopped after finding switch-dispatch composition failure.",
+    "19199003_7": "Replaced by standalone Atlas array task after throttle update reported an error; same engine and benchmark protocol."
+  },
+  "completed_utc": "2026-10-05T05:31:16.860087+00:00",
+  "final_tasks_verified_complete": [
+    "19199002_0",
+    "19199002_1",
+    "19199002_10",
+    "19199002_11",
+    "19199002_2",
+    "19199002_3",
+    "19199002_4",
+    "19199002_5",
+    "19199002_6",
+    "19199002_7",
+    "19199002_8",
+    "19199002_9",
+    "19199003_0",
+    "19199003_1",
+    "19199003_2",
+    "19199003_3",
+    "19199003_4",
+    "19199003_5",
+    "19199003_6",
+    "19199078",
+    "19200893_7",
+    "19200894",
+    "19201182",
+    "19203938"
+  ],
+  "paper_configurations": 48,
+  "final_comparison_transitions": 26831200,
+  "cpu_final_regression": {
+    "passed": 131,
+    "expected_failures": 9
+  },
+  "jax071_movement_tests_passed": 17
+}

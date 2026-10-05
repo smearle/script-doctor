@@ -1,0 +1,52 @@
+x..........x.xxxxxxx.................................................... [ 67%]
+...................................                                      [100%]
+=============================== warnings summary ===============================
+.venv/lib/python3.13/site-packages/matplotlib/_fontconfig_pattern.py:64
+  /home/jupyter-smearle/script-doctor/.venv/lib/python3.13/site-packages/matplotlib/_fontconfig_pattern.py:64: PyparsingDeprecationWarning: 'oneOf' deprecated - use 'one_of'
+    prop = Group((name + Suppress("=") + comma_separated(value)) | oneOf(_CONSTANTS))
+
+.venv/lib/python3.13/site-packages/matplotlib/_fontconfig_pattern.py:85
+.venv/lib/python3.13/site-packages/matplotlib/_fontconfig_pattern.py:85
+.venv/lib/python3.13/site-packages/matplotlib/_fontconfig_pattern.py:85
+.venv/lib/python3.13/site-packages/matplotlib/_fontconfig_pattern.py:85
+.venv/lib/python3.13/site-packages/matplotlib/_fontconfig_pattern.py:85
+.venv/lib/python3.13/site-packages/matplotlib/_fontconfig_pattern.py:85
+  /home/jupyter-smearle/script-doctor/.venv/lib/python3.13/site-packages/matplotlib/_fontconfig_pattern.py:85: PyparsingDeprecationWarning: 'parseString' deprecated - use 'parse_string'
+    parse = parser.parseString(pattern)
+
+.venv/lib/python3.13/site-packages/matplotlib/_fontconfig_pattern.py:89
+.venv/lib/python3.13/site-packages/matplotlib/_fontconfig_pattern.py:89
+.venv/lib/python3.13/site-packages/matplotlib/_fontconfig_pattern.py:89
+.venv/lib/python3.13/site-packages/matplotlib/_fontconfig_pattern.py:89
+.venv/lib/python3.13/site-packages/matplotlib/_fontconfig_pattern.py:89
+.venv/lib/python3.13/site-packages/matplotlib/_fontconfig_pattern.py:89
+  /home/jupyter-smearle/script-doctor/.venv/lib/python3.13/site-packages/matplotlib/_fontconfig_pattern.py:89: PyparsingDeprecationWarning: 'resetCache' deprecated - use 'reset_cache'
+    parser.resetCache()
+
+.venv/lib/python3.13/site-packages/matplotlib/_mathtext.py:45
+  /home/jupyter-smearle/script-doctor/.venv/lib/python3.13/site-packages/matplotlib/_mathtext.py:45: PyparsingDeprecationWarning: 'enablePackrat' deprecated - use 'enable_packrat'
+    ParserElement.enablePackrat()
+
+.venv/lib/python3.13/site-packages/pytz/tzinfo.py:27
+  /home/jupyter-smearle/script-doctor/.venv/lib/python3.13/site-packages/pytz/tzinfo.py:27: DeprecationWarning: datetime.datetime.utcfromtimestamp() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.fromtimestamp(timestamp, datetime.UTC).
+    _epoch = datetime.utcfromtimestamp(0)
+
+.venv/lib/python3.13/site-packages/pydantic/_internal/_generate_schema.py:2249
+  /home/jupyter-smearle/script-doctor/.venv/lib/python3.13/site-packages/pydantic/_internal/_generate_schema.py:2249: UnsupportedFieldAttributeWarning: The 'repr' attribute with value False was provided to the `Field()` function, which has no effect in the context it was used. 'repr' is field-specific metadata, and can only be attached to a model field using `Annotated` metadata or by assignment. This may have happened because an `Annotated` type alias using the `type` statement was used, or if the `Field()` function was attached to a single member of a union type.
+    warnings.warn(
+
+.venv/lib/python3.13/site-packages/pydantic/_internal/_generate_schema.py:2249
+  /home/jupyter-smearle/script-doctor/.venv/lib/python3.13/site-packages/pydantic/_internal/_generate_schema.py:2249: UnsupportedFieldAttributeWarning: The 'frozen' attribute with value True was provided to the `Field()` function, which has no effect in the context it was used. 'frozen' is field-specific metadata, and can only be attached to a model field using `Annotated` metadata or by assignment. This may have happened because an `Annotated` type alias using the `type` statement was used, or if the `Field()` function was attached to a single member of a union type.
+    warnings.warn(
+
+tests/test_custom_action_sequences.py::test_custom_action_sequences_match_js[game_by_cupcakegrb/level_1_actions_0 [xfail: solution error \u2014 JS wins but JAX does not]-standard]
+tests/test_custom_action_sequences.py::test_custom_action_sequences_match_js[game_by_cupcakegrb/level_1_actions_0 [xfail: solution error \u2014 JS wins but JAX does not]-standard]
+tests/test_custom_action_sequences.py::test_custom_action_sequences_match_js[game_by_cupcakegrb/level_1_actions_0 [xfail: solution error \u2014 JS wins but JAX does not]-standard]
+tests/test_custom_action_sequences.py::test_custom_action_sequences_match_js[game_by_cupcakegrb/level_1_actions_0 [xfail: solution error \u2014 JS wins but JAX does not]-standard]
+tests/test_custom_action_sequences.py::test_custom_action_sequences_match_js[game_by_cupcakegrb/level_1_actions_0 [xfail: solution error \u2014 JS wins but JAX does not]-standard]
+tests/test_custom_action_sequences.py::test_custom_action_sequences_match_js[game_by_cupcakegrb/level_1_actions_0 [xfail: solution error \u2014 JS wins but JAX does not]-standard]
+  /home/jupyter-smearle/script-doctor/puzzlescript_jax/preprocessing.py:186: DeprecationWarning: The 'warn' method is deprecated, use 'warning' instead
+    logger.warn("Maps must be rectangular, yo.")
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+98 passed, 9 xfailed, 23 warnings in 1550.74s (0:25:50)

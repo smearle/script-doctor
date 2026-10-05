@@ -1,0 +1,281 @@
+{
+  "note": "Trace timings include profiler overhead; active fraction is not SM utilization.",
+  "traces": [
+    {
+      "trace": "/tmp/puzzlejax-final-profile-19117246.czVPwO/sokoban_basic-4096/plugins/profile/2026_10_03_15_11_58/perfetto_trace.json.gz",
+      "devices": [
+        {
+          "name": "/device:GPU:0",
+          "activity_count": 41678,
+          "kernel_count": 37989,
+          "span_ms": 216.51205000000002,
+          "active_union_ms": 98.33480500000115,
+          "active_fraction": 0.45417705388684443,
+          "median_kernel_us": 1.568,
+          "kernels_under_5us_fraction": 0.8814393640264288,
+          "top_activities": [
+            {
+              "name": "MemcpyD2H",
+              "count": 3288,
+              "total_ms": 7.497702999999591
+            },
+            {
+              "name": "input_transpose_fusion_2",
+              "count": 792,
+              "total_ms": 6.53142000000006
+            },
+            {
+              "name": "memcpy128",
+              "count": 2196,
+              "total_ms": 4.503719000000001
+            },
+            {
+              "name": "memcpy32_post",
+              "count": 4101,
+              "total_ms": 4.3332640000000575
+            },
+            {
+              "name": "wrapped_transpose",
+              "count": 792,
+              "total_ms": 4.211242999999991
+            },
+            {
+              "name": "loop_add_fusion",
+              "count": 299,
+              "total_ms": 3.226755000000003
+            },
+            {
+              "name": "input_scatter_fusion_30",
+              "count": 299,
+              "total_ms": 3.15218599999999
+            },
+            {
+              "name": "loop_select_fusion_1",
+              "count": 598,
+              "total_ms": 3.10140599999999
+            },
+            {
+              "name": "loop_select_fusion_12",
+              "count": 299,
+              "total_ms": 2.414471000000003
+            },
+            {
+              "name": "input_reduce_fusion",
+              "count": 1592,
+              "total_ms": 2.0773689999999707
+            },
+            {
+              "name": "loop_select_fusion_13",
+              "count": 299,
+              "total_ms": 1.965048999999995
+            },
+            {
+              "name": "loop_reduce_window_fusion_1",
+              "count": 400,
+              "total_ms": 1.7620419999999972
+            },
+            {
+              "name": "loop_reduce_window_fusion_3",
+              "count": 400,
+              "total_ms": 1.7096400000000036
+            },
+            {
+              "name": "loop_select_fusion_15",
+              "count": 299,
+              "total_ms": 1.6491169999999966
+            },
+            {
+              "name": "input_maximum_reduce_fusion_1",
+              "count": 200,
+              "total_ms": 1.4606720000000002
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "trace": "/tmp/puzzlejax-final-profile-19117246.czVPwO/blocks-4096/plugins/profile/2026_10_03_15_12_16/perfetto_trace.json.gz",
+      "devices": [
+        {
+          "name": "/device:GPU:0",
+          "activity_count": 43547,
+          "kernel_count": 40358,
+          "span_ms": 297.09078500000004,
+          "active_union_ms": 174.1411590000014,
+          "active_fraction": 0.5861546967873857,
+          "median_kernel_us": 1.472,
+          "kernels_under_5us_fraction": 0.8255116705485901,
+          "top_activities": [
+            {
+              "name": "loop_select_fusion",
+              "count": 1990,
+              "total_ms": 28.970110999999555
+            },
+            {
+              "name": "memcpy128",
+              "count": 2989,
+              "total_ms": 13.962673000000022
+            },
+            {
+              "name": "input_scatter_fusion_6",
+              "count": 399,
+              "total_ms": 13.714705000000004
+            },
+            {
+              "name": "loop_add_fusion",
+              "count": 399,
+              "total_ms": 13.631335000000009
+            },
+            {
+              "name": "loop_select_fusion_4",
+              "count": 399,
+              "total_ms": 9.673766000000017
+            },
+            {
+              "name": "loop_select_fusion_5",
+              "count": 399,
+              "total_ms": 7.653407999999963
+            },
+            {
+              "name": "MemcpyD2H",
+              "count": 2988,
+              "total_ms": 6.904244999999701
+            },
+            {
+              "name": "loop_select_fusion_6",
+              "count": 399,
+              "total_ms": 5.999689999999981
+            },
+            {
+              "name": "loop_dynamic_update_slice_fusion",
+              "count": 399,
+              "total_ms": 4.441957999999994
+            },
+            {
+              "name": "loop_transpose_fusion",
+              "count": 399,
+              "total_ms": 4.223288999999996
+            },
+            {
+              "name": "loop_select_fusion_7",
+              "count": 399,
+              "total_ms": 3.938414999999998
+            },
+            {
+              "name": "input_scatter_fusion_7",
+              "count": 399,
+              "total_ms": 3.9019450000000013
+            },
+            {
+              "name": "loop_transpose_fusion_1",
+              "count": 399,
+              "total_ms": 3.834763999999991
+            },
+            {
+              "name": "loop_gather_fusion",
+              "count": 1990,
+              "total_ms": 3.607042000000017
+            },
+            {
+              "name": "input_reduce_fusion_5",
+              "count": 1990,
+              "total_ms": 3.441147999999944
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "trace": "/tmp/puzzlejax-final-profile-19117246.czVPwO/Zen_Puzzle_Garden-4096/plugins/profile/2026_10_03_15_12_42/perfetto_trace.json.gz",
+      "devices": [
+        {
+          "name": "/device:GPU:0",
+          "activity_count": 19461,
+          "kernel_count": 17265,
+          "span_ms": 168.33134900000002,
+          "active_union_ms": 109.64967099999956,
+          "active_fraction": 0.6513918628430854,
+          "median_kernel_us": 1.728,
+          "kernels_under_5us_fraction": 0.7354763973356502,
+          "top_activities": [
+            {
+              "name": "input_reduce_select_fusion",
+              "count": 198,
+              "total_ms": 8.729
+            },
+            {
+              "name": "input_reduce_select_fusion_1",
+              "count": 198,
+              "total_ms": 8.469514000000004
+            },
+            {
+              "name": "loop_select_fusion_2",
+              "count": 198,
+              "total_ms": 7.794896000000012
+            },
+            {
+              "name": "loop_select_fusion",
+              "count": 198,
+              "total_ms": 7.681844999999994
+            },
+            {
+              "name": "loop_add_fusion",
+              "count": 200,
+              "total_ms": 6.898703999999984
+            },
+            {
+              "name": "input_scatter_fusion_6",
+              "count": 200,
+              "total_ms": 6.879127999999989
+            },
+            {
+              "name": "memcpy128",
+              "count": 1196,
+              "total_ms": 6.1413950000000055
+            },
+            {
+              "name": "MemcpyD2H",
+              "count": 1595,
+              "total_ms": 3.8575389999999934
+            },
+            {
+              "name": "loop_select_fusion_14",
+              "count": 200,
+              "total_ms": 3.525583000000001
+            },
+            {
+              "name": "loop_select_fusion_16",
+              "count": 200,
+              "total_ms": 3.290572000000002
+            },
+            {
+              "name": "loop_select_fusion_9",
+              "count": 199,
+              "total_ms": 3.20442900000001
+            },
+            {
+              "name": "loop_select_fusion_15",
+              "count": 200,
+              "total_ms": 2.8331029999999977
+            },
+            {
+              "name": "input_concatenate_fusion",
+              "count": 100,
+              "total_ms": 2.353515999999998
+            },
+            {
+              "name": "memcpy32_post",
+              "count": 2110,
+              "total_ms": 2.3349960000000087
+            },
+            {
+              "name": "loop_dynamic_update_slice_fusion",
+              "count": 200,
+              "total_ms": 2.239341000000006
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

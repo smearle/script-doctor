@@ -1,0 +1,60 @@
+{
+  "jax_version": "0.9.0.1",
+  "devices": [
+    "NVIDIA H200"
+  ],
+  "engine_sha256": "38ab0cee2e8eb6d22ce4e2bb9780d3b9862f1eddaf0d2fb4aadb0900c3cea03c",
+  "trials": 7,
+  "seed": 42,
+  "timing": "alternating A/B after compilation and warmup; exact full outputs",
+  "results": [
+    {
+      "experiment": "combined",
+      "candidate": "all",
+      "game": "atlas shrank",
+      "batch": 256,
+      "steps": 100,
+      "baseline": {
+        "compile_s": 150.9021411249414,
+        "temporary_bytes": 86216800,
+        "median_s": 3.4274393279338256,
+        "min_s": 3.418889067019336,
+        "max_s": 3.4314721239497885,
+        "env_steps_per_s": 7469.1329446326135
+      },
+      "all": {
+        "compile_s": 147.77180319302715,
+        "temporary_bytes": 86214752,
+        "median_s": 3.330652092001401,
+        "min_s": 3.3169615189544857,
+        "max_s": 3.342598262941465,
+        "env_steps_per_s": 7686.1825531038485
+      },
+      "speedup": 1.0290595454760527
+    },
+    {
+      "experiment": "combined",
+      "candidate": "all",
+      "game": "atlas shrank",
+      "batch": 4096,
+      "steps": 100,
+      "baseline": {
+        "compile_s": 226.50669109402224,
+        "temporary_bytes": 1368667152,
+        "median_s": 8.145469333976507,
+        "min_s": 8.137604427989572,
+        "max_s": 8.169254524051212,
+        "env_steps_per_s": 50285.62298939242
+      },
+      "all": {
+        "compile_s": 225.52529444696847,
+        "temporary_bytes": 1371474960,
+        "median_s": 7.963875325978734,
+        "min_s": 7.951710217050277,
+        "max_s": 7.9679869540268555,
+        "env_steps_per_s": 51432.24664302006
+      },
+      "speedup": 1.0228022163287014
+    }
+  ]
+}

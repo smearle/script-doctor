@@ -1,0 +1,16 @@
+combined/baseline: compiling Slidings, batch=256
+Writing pretty tree to /scratch/se2161/puzzlejax-perf-20261002/round3/data/pretty_trees/Slidings
+Parsed Slidings successfully
+combined/all: compiling Slidings, batch=256
+Writing pretty tree to /scratch/se2161/puzzlejax-perf-20261002/round3/data/pretty_trees/Slidings
+Parsed Slidings successfully
+Exact outputs match; timing Slidings, batch=256
+{"experiment": "combined", "candidate": "all", "game": "Slidings", "batch": 256, "steps": 100, "baseline": {"compile_s": 57.708011989016086, "temporary_bytes": 1503448, "median_s": 0.41217010910622776, "min_s": 0.41200938494876027, "max_s": 0.41309245699085295, "env_steps_per_s": 62110.2778547247}, "all": {"compile_s": 45.70845220214687, "temporary_bytes": 1501912, "median_s": 0.41069737705402076, "min_s": 0.4104987329337746, "max_s": 0.41143694799393415, "env_steps_per_s": 62333.00096443694}, "speedup": 1.0035859300168193}
+combined/baseline: compiling Slidings, batch=4096
+Writing pretty tree to /scratch/se2161/puzzlejax-perf-20261002/round3/data/pretty_trees/Slidings
+Parsed Slidings successfully
+combined/all: compiling Slidings, batch=4096
+Writing pretty tree to /scratch/se2161/puzzlejax-perf-20261002/round3/data/pretty_trees/Slidings
+Parsed Slidings successfully
+Exact outputs match; timing Slidings, batch=4096
+{"experiment": "combined", "candidate": "all", "game": "Slidings", "batch": 4096, "steps": 100, "baseline": {"compile_s": 54.499947275966406, "temporary_bytes": 23590872, "median_s": 0.575983741087839, "min_s": 0.5722717090975493, "max_s": 0.5761101478710771, "env_steps_per_s": 711131.1844087886}, "all": {"compile_s": 46.83339993096888, "temporary_bytes": 24310744, "median_s": 0.5780222560279071, "min_s": 0.5776010360568762, "max_s": 0.5788541939109564, "env_steps_per_s": 708623.2333244696}, "speedup": 0.9964732933398162}

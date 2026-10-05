@@ -1,0 +1,18 @@
+{
+  "engine_sha256": "38ab0cee2e8eb6d22ce4e2bb9780d3b9862f1eddaf0d2fb4aadb0900c3cea03c",
+  "jax_version": "0.9.0",
+  "device": "CPU",
+  "result": "98 passed, 9 existing expected failures",
+  "elapsed_s": 1550.74,
+  "log_sha256": "ddebc2f15a5dc9544f68f99ab6a5f00e72d5e6e68ce6df4500cf9fc784a03dc8",
+  "tests": [
+    "test_custom_action_sequences.py",
+    "test_padding_mask_jax.py",
+    "test_env_switch.py",
+    "test_independent_cell_rules.py",
+    "test_nonzero_compaction.py",
+    "test_invalid_force_cleanup.py",
+    "test_movement_refinements.py",
+    "test_chunked_rollouts.py"
+  ]
+}

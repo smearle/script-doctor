@@ -1,0 +1,88 @@
+{
+  "inputs": {
+    "scripts/benchmarks/results/2026-10-03-h200-wide/wide-0-h200.json": {
+      "sha256": "970029fe8b60a2494fbc957e1fc346a6a64aad1efdc8cc907709e341b735a6ca",
+      "engine_sha256": "38ab0cee2e8eb6d22ce4e2bb9780d3b9862f1eddaf0d2fb4aadb0900c3cea03c",
+      "jax_version": "0.9.0.1",
+      "trials": 7,
+      "devices": [
+        "NVIDIA H200"
+      ]
+    },
+    "scripts/benchmarks/results/2026-10-03-h200-wide/wide-1-h200.json": {
+      "sha256": "6010c6186fb915c77e5518736deae18176142f92f16c435a81b7790b7ae84d6d",
+      "engine_sha256": "38ab0cee2e8eb6d22ce4e2bb9780d3b9862f1eddaf0d2fb4aadb0900c3cea03c",
+      "jax_version": "0.9.0.1",
+      "trials": 7,
+      "devices": [
+        "NVIDIA H200"
+      ]
+    },
+    "scripts/benchmarks/results/2026-10-03-h200-wide/wide-2-h200.json": {
+      "sha256": "5cb2ee1780a78fce39935a2147f88571a88bd432ca475de258ae2d5baf0c71d0",
+      "engine_sha256": "38ab0cee2e8eb6d22ce4e2bb9780d3b9862f1eddaf0d2fb4aadb0900c3cea03c",
+      "jax_version": "0.9.0.1",
+      "trials": 7,
+      "devices": [
+        "NVIDIA H200"
+      ]
+    },
+    "scripts/benchmarks/results/2026-10-03-h200-wide/wide-3-h200.json": {
+      "sha256": "0954687ae2aaca086ea45bfd2ab8dfc98469dd25723fc03603a19ae85dffc5f0",
+      "engine_sha256": "38ab0cee2e8eb6d22ce4e2bb9780d3b9862f1eddaf0d2fb4aadb0900c3cea03c",
+      "jax_version": "0.9.0.1",
+      "trials": 7,
+      "devices": [
+        "NVIDIA H200"
+      ]
+    },
+    "scripts/benchmarks/results/2026-10-03-h200-wide/wide-4-h200.json": {
+      "sha256": "bb9d25e2e9c2af6afc04d266819d7e9adbca5d3ce14b95427d4c7607ba2ce487",
+      "engine_sha256": "38ab0cee2e8eb6d22ce4e2bb9780d3b9862f1eddaf0d2fb4aadb0900c3cea03c",
+      "jax_version": "0.9.0.1",
+      "trials": 7,
+      "devices": [
+        "NVIDIA H200"
+      ]
+    },
+    "scripts/benchmarks/results/2026-10-03-h200-wide/wide-5-h200.json": {
+      "sha256": "dbdb2c9445883972a5e187fe15835cfb7f86721e26fc451f6dd235b15fffd155",
+      "engine_sha256": "38ab0cee2e8eb6d22ce4e2bb9780d3b9862f1eddaf0d2fb4aadb0900c3cea03c",
+      "jax_version": "0.9.0.1",
+      "trials": 7,
+      "devices": [
+        "NVIDIA H200"
+      ]
+    },
+    "scripts/benchmarks/results/2026-10-03-h200-wide/wide-6-h200.json": {
+      "sha256": "078e7c5c9beb90fbba8bcf37d7ac4d97793d46325145339e92c4dd5f81dab112",
+      "engine_sha256": "38ab0cee2e8eb6d22ce4e2bb9780d3b9862f1eddaf0d2fb4aadb0900c3cea03c",
+      "jax_version": "0.9.0.1",
+      "trials": 7,
+      "devices": [
+        "NVIDIA H200"
+      ]
+    },
+    "scripts/benchmarks/results/2026-10-03-h200-wide/wide-7-h200.json": {
+      "sha256": "ffbc1183bb79ff9e41c02e5ab401ac74500476b51d34e627eb62ebccb88c673b",
+      "engine_sha256": "38ab0cee2e8eb6d22ce4e2bb9780d3b9862f1eddaf0d2fb4aadb0900c3cea03c",
+      "jax_version": "0.9.0.1",
+      "trials": 7,
+      "devices": [
+        "NVIDIA H200"
+      ]
+    },
+    "scripts/benchmarks/results/2026-10-03-h200-wide/wide-8-h200.json": {
+      "sha256": "39c4fdbc67df02e86568a5e06c38437cef6f7dca22849632e3b2e066cb2c6deb",
+      "engine_sha256": "38ab0cee2e8eb6d22ce4e2bb9780d3b9862f1eddaf0d2fb4aadb0900c3cea03c",
+      "jax_version": "0.9.0.1",
+      "trials": 7,
+      "devices": [
+        "NVIDIA H200"
+      ]
+    }
+  },
+  "plotter_sha256": "a42755da8c6637c45383e25881b0a20f0cedf7d9ad6d6bb85c7a09d2b9215855",
+  "matplotlib_version": "3.10.6",
+  "scope": "Level zero, full-output paired A/B, 100 steps, fixed seed 42; not final-carry paper FPS."
+}

@@ -1,0 +1,221 @@
+[
+  {
+    "game": "sokoban_basic",
+    "objects": 5,
+    "layers": 3,
+    "level_zero_shape": [
+      5,
+      7,
+      6
+    ],
+    "levels": 2,
+    "objects_per_layer": [
+      1,
+      1,
+      3
+    ],
+    "source": "gallery_games/sokoban_basic.txt",
+    "source_sha256": "c389821b95fadf1d764e63c7592c1888cff9d214951db08bd9b7f52661c3faa8"
+  },
+  {
+    "game": "blocks",
+    "objects": 4,
+    "layers": 3,
+    "level_zero_shape": [
+      4,
+      11,
+      13
+    ],
+    "levels": 1,
+    "objects_per_layer": [
+      1,
+      1,
+      2
+    ],
+    "source": "data/scraped_games/blocks.txt",
+    "source_sha256": "7de9da769ecafbc798211d87c9a9875082412e3b9e5689c19175c47190d4ac5a"
+  },
+  {
+    "game": "Zen_Puzzle_Garden",
+    "objects": 6,
+    "layers": 3,
+    "level_zero_shape": [
+      6,
+      12,
+      12
+    ],
+    "levels": 5,
+    "objects_per_layer": [
+      1,
+      3,
+      2
+    ],
+    "source": "data/scraped_games/Zen_Puzzle_Garden.txt",
+    "source_sha256": "58f087759ccd96b0547e45667fa0b9c3f781259d038f14918352f9b6f6794483"
+  },
+  {
+    "game": "notsnake",
+    "objects": 3,
+    "layers": 3,
+    "level_zero_shape": [
+      3,
+      5,
+      8
+    ],
+    "levels": 1,
+    "objects_per_layer": [
+      1,
+      1,
+      1
+    ],
+    "source": "gallery_games/notsnake.txt",
+    "source_sha256": "b9e4dfb30e6d92583ca42e2a858b2db0842caec88fee7bd9963d73acd08559d6"
+  },
+  {
+    "game": "Slidings",
+    "objects": 12,
+    "layers": 4,
+    "level_zero_shape": [
+      12,
+      4,
+      6
+    ],
+    "levels": 11,
+    "objects_per_layer": [
+      1,
+      1,
+      9,
+      1
+    ],
+    "source": "gallery_games/Slidings.txt",
+    "source_sha256": "d0f5ea631f1b45d122b1dde700a23e2db1c40ee18b1c9c5ee8b4c0cecb069267"
+  },
+  {
+    "game": "limerick",
+    "objects": 11,
+    "layers": 4,
+    "level_zero_shape": [
+      11,
+      15,
+      19
+    ],
+    "levels": 10,
+    "objects_per_layer": [
+      1,
+      2,
+      2,
+      6
+    ],
+    "source": "gallery_games/limerick.txt",
+    "source_sha256": "7079dc4d37f015b34de542da41f31ea08725166d4487f5dc6bd483d7eabe4c21"
+  },
+  {
+    "game": "kettle",
+    "objects": 8,
+    "layers": 3,
+    "level_zero_shape": [
+      8,
+      13,
+      15
+    ],
+    "levels": 11,
+    "objects_per_layer": [
+      1,
+      1,
+      6
+    ],
+    "source": "gallery_games/kettle.txt",
+    "source_sha256": "82a818e730c7b0b8c831613cb28d85b79c4eda8236e49720fade3efc6cb3f19e"
+  },
+  {
+    "game": "Take_Heart_Lass",
+    "objects": 14,
+    "layers": 3,
+    "level_zero_shape": [
+      14,
+      6,
+      6
+    ],
+    "levels": 12,
+    "objects_per_layer": [
+      1,
+      4,
+      9
+    ],
+    "source": "gallery_games/Take_Heart_Lass.txt",
+    "source_sha256": "acfdc7fde4c15511b8a2e82cc65a8c368c0dffb96423b93b8391ad6a88991032"
+  },
+  {
+    "game": "atlas shrank",
+    "objects": 27,
+    "layers": 5,
+    "level_zero_shape": [
+      27,
+      7,
+      15
+    ],
+    "levels": 12,
+    "objects_per_layer": [
+      1,
+      1,
+      18,
+      4,
+      3
+    ],
+    "source": "gallery_games/atlas shrank.txt",
+    "source_sha256": "94e41af38141ffb4633de617ee2d46073be04cb0b3472292a846993e66381f95"
+  },
+  {
+    "game": "nekopuzzle",
+    "objects": 3,
+    "layers": 2,
+    "level_zero_shape": [
+      3,
+      7,
+      8
+    ],
+    "levels": 10,
+    "objects_per_layer": [
+      1,
+      2
+    ],
+    "source": "gallery_games/nekopuzzle.txt",
+    "source_sha256": "fb60ce89274c0330b4748b9404830370622bc61461800344570a5e258c34f7f2"
+  },
+  {
+    "game": "sokoban_match3",
+    "objects": 5,
+    "layers": 3,
+    "level_zero_shape": [
+      5,
+      7,
+      9
+    ],
+    "levels": 2,
+    "objects_per_layer": [
+      1,
+      1,
+      3
+    ],
+    "source": "gallery_games/sokoban_match3.txt",
+    "source_sha256": "fc268e570b9d92011f3c47c0ec6082cd871619a3b6b9d320397920d29d862ee7"
+  },
+  {
+    "game": "Travelling_salesman",
+    "objects": 9,
+    "layers": 3,
+    "level_zero_shape": [
+      9,
+      5,
+      5
+    ],
+    "levels": 12,
+    "objects_per_layer": [
+      1,
+      2,
+      6
+    ],
+    "source": "data/scraped_games/Travelling_salesman.txt",
+    "source_sha256": "318461b6b12ce7b29bc9e1dd3abdc4d74844bb21104fbc930bbb0550c5e73aa7"
+  }
+]

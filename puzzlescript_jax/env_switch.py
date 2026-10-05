@@ -3,40 +3,31 @@ Switch-based variant of PuzzleJaxEnv.
 
 Instead of unrolling all rule functions via Python for-loops (causing JAX to
 trace each one inline into a single enormous HLO graph), this version uses
-``jax.lax.switch`` to dispatch rule functions at runtime.  JAX then traces each
-rule function exactly *once* (as a branch of the switch), dramatically reducing
-compile time for games with many rules, rotations, or meta-object expansions.
+``jax.lax.switch`` to dispatch rule functions at runtime. Compilation and
+throughput depend on the game and batching; this remains an experimental
+alternative to the standard dispatcher. Rule compilation, reset, and turn
+semantics are shared with the standard backend.
 
 Usage:
-    from puzzlejax.env_switch import PuzzleJaxEnvSwitch
+    from puzzlescript_jax.env_switch import PuzzleJaxEnvSwitch
     env = PuzzleJaxEnvSwitch(tree, jit=True, ...)
 """
 
 from functools import partial
-import logging
 from typing import List
 
-import chex
 import jax
 import jax.numpy as jnp
 import numpy as np
 
 from puzzlescript_jax.env import (
-    DEBUG,
     MAX_LOOPS,
-    InvalidObjectError,
     LoopRuleBlockState,
     LoopRuleGroupState,
-    LoopRuleState,
     PuzzleJaxEnv,
     RuleBlockState,
     RuleGroupState,
-    RuleState,
-    _expand_or_meta_rules,
 )
-from puzzlescript_jax.env_utils import multihot_to_desc
-
-logger = logging.getLogger(__name__)
 
 
 class PuzzleJaxEnvSwitch(PuzzleJaxEnv):
@@ -46,197 +37,27 @@ class PuzzleJaxEnvSwitch(PuzzleJaxEnv):
     Construction arguments are identical to :class:`PuzzleJaxEnv`.
     """
 
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        # Pre-generate tick_fn OUTSIDE JIT to avoid tracer leaks.
-        # The parent's reset() would call gen_tick_fn inside JIT, creating
-        # jnp arrays that leak from the trace scope via closures.
-        lvl = self.get_level(self.level_i)
-        self.tick_fn = self.gen_tick_fn(lvl.shape)
+    def gen_tick_fn(self, lvl_shape):
+        # reset() can be traced by jit/vmap. The dispatch tables must remain
+        # concrete because the generated tick function is retained on self.
+        # Reuse the standard reset and turn logic, including startup rules,
+        # again/cancel handling, and the multi-level validity mask.
+        with jax.ensure_compile_time_eval():
+            return super().gen_tick_fn(lvl_shape)
 
-    def reset(self, rng, params):
-        """Override reset to skip gen_tick_fn (pre-generated in __init__)."""
-        from puzzlescript_jax.env import PJState, PJStateMultiLevel, PSObs, PRINT_SCORE
-        requested_level_i = jnp.asarray(params.level_i, dtype=jnp.int32)
-        if not self._is_multi_level:
-            sampled_level_i = requested_level_i
-            lvl = params.level
-            level_height = None
-            level_width = None
-            valid_mask = None
-        else:
-            rng, level_rng = jax.random.split(rng)
-            sampled_level_i = jax.lax.cond(
-                requested_level_i < 0,
-                lambda key: jax.random.randint(key, shape=(), minval=0, maxval=len(self._compiled_levels), dtype=jnp.int32),
-                lambda _key: requested_level_i,
-                level_rng,
-            )
-            lvl = jax.lax.cond(
-                requested_level_i < 0,
-                lambda idx: jax.lax.switch(
-                    idx,
-                    tuple(lambda _, level=level: level for level in self._compiled_levels),
-                    None,
-                ),
-                lambda _idx: params.level,
-                sampled_level_i,
-            )
-            level_height = self._level_heights[sampled_level_i]
-            level_width = self._level_widths[sampled_level_i]
-            valid_mask = self._make_valid_mask(level_height, level_width)
-            lvl = jnp.where(valid_mask[None], lvl, False)
-        # NOTE: tick_fn already generated in __init__, do NOT regenerate here.
-        win, score, init_heuristic = self.check_win(lvl)
-        if PRINT_SCORE:
-            jax.debug.print(
-                'heuristic: {heuristic}, score: {score}, win: {win}',
-                heuristic=init_heuristic, score=score, win=win,
-            )
-        state = PJState(
-            multihot_level=lvl,
-            level_i=sampled_level_i,
-            win=jnp.array(False),
-            score=jnp.array(0, dtype=jnp.int32),
-            heuristic=init_heuristic,
-            restart=jnp.array(False),
-            step_i=jnp.array(0, dtype=jnp.int32),
-            init_heuristic=init_heuristic,
-            prev_heuristic=init_heuristic,
-            rng=rng,
-            view_bounds=self._get_default_view_bounds(lvl.shape[1:]),
-        )
-        if self._is_multi_level:
-            state = PJStateMultiLevel(
-                **state,
-                level_height=level_height,
-                level_width=level_width,
-                valid_mask=valid_mask,
-            )
-        if self.tree.prelude.run_rules_on_level_start:
-            lvl = self.apply_player_force(-1, state)
-            lvl, _, _, _, _, _, rng = self.tick_fn(rng, lvl)
-            lvl = lvl[:self.n_objs]
-            state = state.replace(multihot_level=lvl, rng=rng)
-        state = state.replace(view_bounds=self._compute_view_bounds(state.multihot_level, state.view_bounds))
-        obs = self.get_obs(state)
-        return obs, state
+    def loop_rule_fn(self, rule_group_state, all_rule_fns, n_prior_rules_arr):
+        """Dispatch once per rule; the enclosing group owns convergence."""
+        idx = n_prior_rules_arr[rule_group_state.block_i, rule_group_state.grp_i] + rule_group_state.rule_i
 
-    # ------------------------------------------------------------------
-    # Atomic rule application – switch-based
-    # ------------------------------------------------------------------
+        def rule_fn(rng, lvl):
+            if self.jit:
+                return jax.lax.switch(idx, all_rule_fns, rng, lvl)
+            return all_rule_fns[int(idx)](rng, lvl)
 
-    def apply_rule_fn(
-        self,
-        loop_rule_state: LoopRuleState,
-        all_rule_fns,
-        n_prior_rules_arr,
-    ):
-        """Apply an atomic rule once, dispatching via ``jax.lax.switch``."""
-
-        prev_loop_rule_state = loop_rule_state
-        rule_i = loop_rule_state.rule_i
-        grp_i = loop_rule_state.grp_i
-        block_i = loop_rule_state.block_i
-        rng, lvl = prev_loop_rule_state.rng, prev_loop_rule_state.lvl
-
-        global_rule_idx = n_prior_rules_arr[block_i, grp_i] + rule_i
-
-        if self.jit:
-            rule_state: RuleState = jax.lax.switch(
-                global_rule_idx, all_rule_fns, rng, lvl,
-            )
-        else:
-            rule_state = all_rule_fns[global_rule_idx](rng, lvl)
-
-        rule_had_effect = jnp.any(rule_state.lvl != lvl)
-        applied = rule_had_effect & jnp.all(rng == rule_state.rng)
-        again = rule_state.again | prev_loop_rule_state.again
-        restart = rule_state.restart | prev_loop_rule_state.restart
-        cancelled = rule_state.cancelled | prev_loop_rule_state.cancelled
-        win = rule_state.win | prev_loop_rule_state.win
-
-        if DEBUG:
-            jax.debug.print(
-                "      apply_rule_fn: rule {rule_i} had effect: {rule_had_effect}. again: {again}",
-                rule_i=rule_i,
-                rule_had_effect=rule_had_effect,
-                again=again,
-            )
-
-        return LoopRuleState(
-            lvl=rule_state.lvl,
-            applied=applied,
-            again=again,
-            cancelled=cancelled,
-            restart=restart,
-            win=win,
-            app_i=loop_rule_state.app_i + 1,
-            rng=rule_state.rng,
-            rule_i=rule_i,
-            grp_i=grp_i,
-            block_i=block_i,
-        )
-
-    # ------------------------------------------------------------------
-    # Loop a single rule until convergence – switch-based
-    # ------------------------------------------------------------------
-
-    def loop_rule_fn(
-        self,
-        rule_group_state: RuleGroupState,
-        all_rule_fns,
-        n_prior_rules_arr,
-    ):
-        _apply = partial(
-            self.apply_rule_fn,
-            all_rule_fns=all_rule_fns,
-            n_prior_rules_arr=n_prior_rules_arr,
-        )
-
-        loop_rule_state = LoopRuleState(
-            lvl=rule_group_state.lvl,
-            applied=True,
-            cancelled=False,
-            restart=False,
-            again=rule_group_state.again,
-            win=rule_group_state.win,
-            rng=rule_group_state.rng,
-            app_i=0,
-            rule_i=rule_group_state.rule_i,
-            grp_i=rule_group_state.grp_i,
-            block_i=rule_group_state.block_i,
-        )
-
-        if self.jit:
-            loop_rule_state = jax.lax.while_loop(
-                cond_fun=lambda s: s.applied & ~s.cancelled & ~s.restart & (s.app_i < MAX_LOOPS),
-                body_fun=_apply,
-                init_val=loop_rule_state,
-            )
-        else:
-            while (
-                loop_rule_state.applied
-                and not loop_rule_state.cancelled
-                and not loop_rule_state.restart
-            ):
-                loop_rule_state = _apply(loop_rule_state)
-
-        rule_applied = loop_rule_state.app_i > 1
-        grp_applied = rule_applied | loop_rule_state.applied
-
-        return RuleGroupState(
-            lvl=loop_rule_state.lvl,
-            applied=grp_applied,
-            cancelled=rule_group_state.cancelled | loop_rule_state.cancelled,
-            restart=rule_group_state.restart | loop_rule_state.restart,
-            again=rule_group_state.again | loop_rule_state.again,
-            win=rule_group_state.win | loop_rule_state.win,
-            rng=loop_rule_state.rng,
-            rule_i=rule_group_state.rule_i + 1,
-            grp_i=rule_group_state.grp_i,
-            block_i=rule_group_state.block_i,
-        )
+        result = super().loop_rule_fn(rule_group_state, rule_fn)
+        # Keep changes from earlier rules even if a later rule is a no-op or
+        # restores the initial board; the entire group must reconverge.
+        return result.replace(applied=rule_group_state.applied | result.applied)
 
     # ------------------------------------------------------------------
     # Random group application – switch-based
@@ -307,7 +128,7 @@ class PuzzleJaxEnvSwitch(PuzzleJaxEnv):
 
             return RuleGroupState(
                 lvl=rule_state.lvl,
-                applied=jnp.any(rule_state.lvl != init_lvl),
+                applied=rule_state.applied,
                 cancelled=rule_group_state.cancelled | rule_state.cancelled,
                 restart=rule_group_state.restart | rule_state.restart,
                 again=rule_group_state.again | rule_state.again,
@@ -336,7 +157,6 @@ class PuzzleJaxEnvSwitch(PuzzleJaxEnv):
     ):
         block_i = loop_group_state.block_i
         grp_i = loop_group_state.grp_i
-        init_lvl = loop_group_state.lvl
         is_random = grps_are_random_arr[block_i, grp_i]
 
         _loop_rule_fn = partial(
@@ -403,7 +223,7 @@ class PuzzleJaxEnvSwitch(PuzzleJaxEnv):
 
         loop_group_state = LoopRuleGroupState(
             lvl=lvl,
-            applied=jnp.any(lvl != init_lvl),
+            applied=rule_group_state.applied,
             cancelled=rule_group_state.cancelled,
             restart=rule_group_state.restart,
             again=loop_group_state.again | rule_group_state.again,
@@ -526,7 +346,6 @@ class PuzzleJaxEnvSwitch(PuzzleJaxEnv):
         cancelled = loop_rule_block_state.cancelled
         restart = loop_rule_block_state.restart
         prev_again = loop_rule_block_state.again
-        win = loop_rule_block_state.win
         rng = loop_rule_block_state.rng
         block_i = loop_rule_block_state.block_i
 
@@ -668,94 +487,8 @@ class PuzzleJaxEnvSwitch(PuzzleJaxEnv):
             block_i + 1,
         )
 
-    # ------------------------------------------------------------------
-    # gen_tick_fn – builds everything with switch-based dispatch
-    # ------------------------------------------------------------------
-
-    def gen_tick_fn(self, lvl_shape):
-        rule_blocks = []
-        late_rule_grps = []
-
-        for rule_block in self.tree.rules:
-            looping = rule_block.looping
-            rule_grps = []
-            last_subrule_fns_were_late = None
-
-            for rule in rule_block.rules:
-                try:
-                    expanded_rules = _expand_or_meta_rules(
-                        self.meta_objs,
-                        rule,
-                        properties_single_layer=self.properties_single_layer,
-                    )
-                    sub_rule_fns = []
-                    for expanded_rule in expanded_rules:
-                        sub_rule_fns.extend(
-                            self.gen_subrules_meta(
-                                expanded_rule,
-                                rule_name=str(expanded_rule),
-                                lvl_shape=lvl_shape,
-                            )
-                        )
-                except InvalidObjectError as e:
-                    print(e)
-                    continue
-
-                is_random_group = "random" in rule.prefixes
-                if "+" in rule.prefixes:
-                    if is_random_group:
-                        logger.warn(
-                            "Ignoring `random` on a `+`-prefixed rule; random is a rule-group modifier and must "
-                            "appear on the first rule in the group."
-                        )
-                        is_random_group = False
-                    if last_subrule_fns_were_late is None:
-                        logger.warn(
-                            "Initial rule has `+` prefix, but no rule precedes it, so ignoring `+` and adding "
-                            "this rule as a new rule group."
-                        )
-                        rule_grps.append((sub_rule_fns, is_random_group))
-                    if "late" in rule.prefixes:
-                        if last_subrule_fns_were_late:
-                            late_rule_grps[-1][0].extend(sub_rule_fns)
-                        else:
-                            logger.warn(
-                                "Attempting to add `late` rule to a non-late rule. Ignoring `+` and creating a "
-                                "new `late` rule group."
-                            )
-                            late_rule_grps.append((sub_rule_fns, is_random_group))
-                            last_subrule_fns_were_late = True
-                    else:
-                        if last_subrule_fns_were_late:
-                            logger.warn(
-                                "Attempting to add `+` non-late rule to a late rule. Ignoring `+` and creating "
-                                "a new non-late rule group."
-                            )
-                            rule_grps.append((sub_rule_fns, is_random_group))
-                            last_subrule_fns_were_late = False
-                        else:
-                            rule_grps[-1][0].extend(sub_rule_fns)
-                elif "late" in rule.prefixes:
-                    late_rule_grps.append((sub_rule_fns, is_random_group))
-                    last_subrule_fns_were_late = True
-                else:
-                    rule_grps.append((sub_rule_fns, is_random_group))
-                    last_subrule_fns_were_late = False
-
-            rule_blocks.append((looping, rule_grps))
-
-        # Movement rule
-        _move_rule_fn = partial(
-            self.apply_movement,
-            coll_mat=self.coll_mat,
-            n_objs=self.n_objs,
-            obj_force_masks=self.obj_force_masks,
-            jit=self.jit,
-        )
-        rule_blocks.append((False, [([_move_rule_fn], False)]))
-        # Late rules
-        rule_blocks.append((False, late_rule_grps))
-
+    def _gen_rule_blocks_fn(self, rule_blocks):
+        """Use shared rule compilation with dynamic switch-based dispatch."""
         # ----- Build flat function lists and index arrays -----
         all_rule_fns: List = []
         for _, rule_grps in rule_blocks:
@@ -777,7 +510,6 @@ class PuzzleJaxEnvSwitch(PuzzleJaxEnv):
                         # Placeholders – will never be called for non-random groups
                         all_count_fns.append(lambda lvl: jnp.int32(0))
                         all_apply_one_fns.append(all_rule_fns[0])  # dummy, same signature
-                        
 
         max_n_grps = max(len(rg) for _, rg in rule_blocks) if rule_blocks else 1
         n_blocks = len(rule_blocks)
@@ -807,7 +539,7 @@ class PuzzleJaxEnvSwitch(PuzzleJaxEnv):
 
         n_total_blocks = jnp.int32(n_blocks)
 
-        # ----- The tick function -----
+        # ----- The block dispatcher -----
         _loop_rule_block = partial(
             self.loop_rule_block,
             all_rule_fns=all_rule_fns,
@@ -820,95 +552,15 @@ class PuzzleJaxEnvSwitch(PuzzleJaxEnv):
             grps_are_random_arr=grps_are_random_arr,
         )
 
-        def tick_fn(rng, lvl):
-            lvl_changed = False
-            cancelled = False
-            restart = False
-            again = False
-            lvl = lvl[None]
-
-            if not self.jit:
-                if DEBUG:
-                    print(
-                        "\n"
-                        + multihot_to_desc(
-                            lvl[0],
-                            self.objs_to_idxs,
-                            self.n_objs,
-                            obj_idxs_to_force_idxs=self.obj_idxs_to_force_idxs,
-                        )
-                    )
-
-            def apply_turn(carry):
-                prev_carry = carry
-                init_lvl, _, turn_app_i, cancelled, restart, turn_again, win, rng = carry
-                lvl = init_lvl
-                turn_app_i += 1
-                applied = False
-
-                # Use jax.lax.while_loop over all blocks
-                block_i = jnp.int32(0)
-                block_carry = (lvl, applied, False, cancelled, restart, win, rng, block_i)
-
-                if self.jit:
-                    block_carry = jax.lax.while_loop(
-                        cond_fun=lambda x: ~x[3] & ~x[4] & (x[7] < n_total_blocks),
-                        body_fun=_loop_rule_block,
-                        init_val=block_carry,
-                    )
-                else:
-                    while (
-                        not block_carry[3]
-                        and not block_carry[4]
-                        and block_carry[7] < n_total_blocks
-                    ):
-                        block_carry = _loop_rule_block(block_carry)
-
-                lvl, applied, block_again, cancelled, restart, win, rng, _ = block_carry
-
-                turn_applied = jnp.any(lvl != init_lvl)
-                win_turn, score, heuristic = self.check_win(lvl[0])
-                win = win | win_turn
-                lvl = lvl.at[:, self.n_objs :].set(0)
-
-                new_carry = (lvl, turn_applied, turn_app_i, cancelled, restart, block_again, win, rng)
-                prev_carry = (
-                    prev_carry[0],
-                    False,
-                    prev_carry[2],
-                    True,
-                    prev_carry[4],
-                    prev_carry[5],
-                    prev_carry[6],
-                    prev_carry[7],
+        def apply_blocks(carry):
+            if self.jit:
+                return jax.lax.while_loop(
+                    lambda x: ~x[3] & ~x[4] & (x[7] < n_total_blocks),
+                    _loop_rule_block,
+                    carry,
                 )
-                return jax.lax.cond(
-                    cancelled,
-                    lambda _: prev_carry,
-                    lambda _: new_carry,
-                    operand=None,
-                )
+            while not carry[3] and not carry[4] and carry[7] < n_total_blocks:
+                carry = _loop_rule_block(carry)
+            return carry
 
-            turn_applied = True
-            turn_app_i = 0
-            turn_again = True
-            win = False
-
-            carry = (lvl, turn_applied, turn_app_i, cancelled, restart, turn_again, win, rng)
-            if not self.jit:
-                while turn_again and turn_applied and not win:
-                    carry = apply_turn(carry)
-                    lvl, turn_applied, turn_app_i, cancelled, restart, turn_again, win, rng = carry
-            else:
-                carry = jax.lax.while_loop(
-                    cond_fun=lambda x: ~x[3] & ~x[4] & (x[5] & x[1]) & (~x[6]),
-                    body_fun=apply_turn,
-                    init_val=carry,
-                )
-            lvl, turn_applied, turn_app_i, cancelled, restart, turn_again, win, rng = carry
-
-            return lvl[0], turn_applied, turn_app_i, cancelled, restart, win, rng
-
-        if self.jit:
-            tick_fn = jax.jit(tick_fn)
-        return tick_fn
+        return apply_blocks

@@ -1,0 +1,14 @@
+{
+  "sokoban_basic-4096/optimized_hlo.txt": "5d3c0278c00d076d92b11541f6afe4e57d098fb9009aad8f9b3a45fd43cbaea6",
+  "blocks-4096/optimized_hlo.txt": "ab0d9b3443101671e8006d66ec2714c5de4553a2f36d91655c7dab26b1ea92e2",
+  "Zen_Puzzle_Garden-4096/optimized_hlo.txt": "57d0016b0a7844983d765d2eca958571d7292f73021e2fccffd5cdd19feaa59e",
+  "Zen_Puzzle_Garden-4096/plugins/profile/2026_10_05_01_24_05/gh108.hpc.nyu.edu.xplane.pb": "4303664ac0681dd87321644a332abf5a0158f851675817cc6b6b2c9c9f3731d0",
+  "Zen_Puzzle_Garden-4096/plugins/profile/2026_10_05_01_24_05/gh108.hpc.nyu.edu.trace.json.gz": "2371d5ac86e5f88b11c7c3b7719f28d39e17bc473eb7ab795b8952ad8cc88ae5",
+  "Zen_Puzzle_Garden-4096/plugins/profile/2026_10_05_01_24_05/perfetto_trace.json.gz": "57f4d0431680c712cdbf842ee5fc6fc71af6d82d58a5e4632671683cfbd0509b",
+  "blocks-4096/plugins/profile/2026_10_05_01_23_40/gh108.hpc.nyu.edu.xplane.pb": "72708bf76d0756f041a3ee47ad4761049af09e97b33a07bafbe0fb633c08dcbd",
+  "blocks-4096/plugins/profile/2026_10_05_01_23_40/gh108.hpc.nyu.edu.trace.json.gz": "5c5058cfc082c95211576f2d3b753c6ba036d0c1adf8cedb95d4c1004a5d569b",
+  "blocks-4096/plugins/profile/2026_10_05_01_23_40/perfetto_trace.json.gz": "17521f281f54b581b5005fe55f95dbd35608e439fe4271c31f5d164fbdb064b7",
+  "sokoban_basic-4096/plugins/profile/2026_10_05_01_23_23/gh108.hpc.nyu.edu.xplane.pb": "9feb6aa22347777db07d73bdaa129a7460edae1def0fc86ded9a0d10b77fc1cc",
+  "sokoban_basic-4096/plugins/profile/2026_10_05_01_23_23/gh108.hpc.nyu.edu.trace.json.gz": "284918dba51239b0530de9ae3d42efe3be4f346ad192749fd109751a71a628c0",
+  "sokoban_basic-4096/plugins/profile/2026_10_05_01_23_23/perfetto_trace.json.gz": "4942e85590c6c1b76b46f5cb44dfa986b33c8733c100e2e8ee9adbb0ea1c675e"
+}

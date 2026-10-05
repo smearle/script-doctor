@@ -1,0 +1,47 @@
+{
+  "engine_sha256": "38ab0cee2e8eb6d22ce4e2bb9780d3b9862f1eddaf0d2fb4aadb0900c3cea03c",
+  "experiment_sha256": "8f857481f4a432ab21701c86973831ce1a866f9dfd13bf1eb47c72124192b7e6",
+  "tests_sha256": "5fa5fb378399ba670954e1b803bc878b3072a1b7a69530af733bdf190ef6af01",
+  "cpu": {
+    "passed": 16,
+    "invocations": [
+      {
+        "selection": "initial 14 tests before debug cases were added",
+        "duration_s": 27.58,
+        "log": "2026-10-03-movement-identities-tests.log"
+      },
+      {
+        "selection": "-k debug_path",
+        "duration_s": 11.21,
+        "log": "2026-10-03-movement-identities-debug-tests.log"
+      }
+    ],
+    "python_version": "3.13.11",
+    "jax_version": "0.9.0",
+    "jaxlib_version": "0.9.0"
+  },
+  "h200_pilot": {
+    "job_id": 19116379,
+    "exact_output_configurations": 12,
+    "compared_transitions": 2611200,
+    "results": "2026-10-03-h200-movement-identities.json"
+  },
+  "rtx4090_pilot": {
+    "exact_output_configurations": 12,
+    "compared_transitions": 2611200,
+    "performance_usable": false,
+    "reason": "Other GPU experiments overlapped the run; observed large timing variation.",
+    "results": "2026-10-03-rtx4090-movement-identities-contended.json"
+  },
+  "h200_extended": {
+    "job_ids": [
+      "19117245_0",
+      "19117245_1",
+      "19117245_2",
+      "19117245_3"
+    ],
+    "exact_output_configurations": 8,
+    "compared_transitions": 3276800,
+    "results_directory": "2026-10-03-h200-identities-wide"
+  }
+}

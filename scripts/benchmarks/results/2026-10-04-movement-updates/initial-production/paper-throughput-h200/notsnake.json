@@ -1,0 +1,27 @@
+{
+  "game": "notsnake",
+  "level": 0,
+  "jax_version": "0.9.0.1",
+  "devices": [
+    "NVIDIA H200"
+  ],
+  "host": "gh119.hpc.nyu.edu",
+  "engine_sha256": "025b74d0fee6bcd9c04bf8f4b6cd80aabebd98bfa4250d1b87dd80984faa2987",
+  "requested_batches": [
+    1,
+    16,
+    256,
+    1024,
+    4096,
+    16384
+  ],
+  "trials": 5,
+  "seed": 42,
+  "base_steps": 5000,
+  "min_steps": 100,
+  "max_episode_steps": 2147483647,
+  "timing": "median/IQR of synchronized warmed calls; carry continues across trials",
+  "output_mode": "final_carry",
+  "action_generation": "inside timed scan",
+  "results": []
+}

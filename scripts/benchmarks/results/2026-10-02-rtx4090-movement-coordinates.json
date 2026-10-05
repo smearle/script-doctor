@@ -1,0 +1,293 @@
+{
+  "jax_version": "0.9.1",
+  "devices": [
+    "NVIDIA GeForce RTX 4090"
+  ],
+  "trials": 9,
+  "seed": 42,
+  "timing": "alternating A/B after compilation and warmup",
+  "results": [
+    {
+      "kind": "coordinates",
+      "shape": [
+        7,
+        7,
+        12
+      ],
+      "batch": 256,
+      "argwhere": {
+        "compile_s": 0.4118158407509327,
+        "temporary_bytes": 316432,
+        "median_s": 0.00021605193614959717,
+        "min_s": 0.000102996826171875,
+        "max_s": 0.0002690088003873825
+      },
+      "compact": {
+        "compile_s": 0.344226598739624,
+        "temporary_bytes": 151552,
+        "median_s": 0.00019519217312335968,
+        "min_s": 0.00011264719069004059,
+        "max_s": 0.0002608448266983032
+      },
+      "speedup": 1.1068678251409922
+    },
+    {
+      "kind": "coordinates",
+      "shape": [
+        7,
+        7,
+        12
+      ],
+      "batch": 4096,
+      "argwhere": {
+        "compile_s": 0.3380902670323849,
+        "temporary_bytes": 5226512,
+        "median_s": 0.00016380101442337036,
+        "min_s": 0.00014618970453739166,
+        "max_s": 0.00023576058447360992
+      },
+      "compact": {
+        "compile_s": 0.21057789772748947,
+        "temporary_bytes": 3031040,
+        "median_s": 0.00019494816660881042,
+        "min_s": 0.00011697597801685333,
+        "max_s": 0.00021559372544288635
+      },
+      "speedup": 0.8402285452217615
+    },
+    {
+      "kind": "coordinates",
+      "shape": [
+        12,
+        12,
+        12
+      ],
+      "batch": 256,
+      "argwhere": {
+        "compile_s": 0.4519072473049164,
+        "temporary_bytes": 931856,
+        "median_s": 6.46635890007019e-05,
+        "min_s": 6.349943578243256e-05,
+        "max_s": 6.72750174999237e-05
+      },
+      "compact": {
+        "compile_s": 0.24142147973179817,
+        "temporary_bytes": 553984,
+        "median_s": 5.554407835006714e-05,
+        "min_s": 5.521997809410095e-05,
+        "max_s": 5.687400698661804e-05
+      },
+      "speedup": 1.164185110663984
+    },
+    {
+      "kind": "coordinates",
+      "shape": [
+        12,
+        12,
+        12
+      ],
+      "batch": 4096,
+      "argwhere": {
+        "compile_s": 0.3923758137971163,
+        "temporary_bytes": 14909456,
+        "median_s": 0.00036548636853694916,
+        "min_s": 0.00031253136694431305,
+        "max_s": 0.00040838494896888733
+      },
+      "compact": {
+        "compile_s": 0.22969080321490765,
+        "temporary_bytes": 8863744,
+        "median_s": 0.0002763010561466217,
+        "min_s": 0.00022029690444469452,
+        "max_s": 0.0003282204270362854
+      },
+      "speedup": 1.3227831034529252
+    },
+    {
+      "kind": "coordinates",
+      "shape": [
+        16,
+        16,
+        12
+      ],
+      "batch": 256,
+      "argwhere": {
+        "compile_s": 0.3805159479379654,
+        "temporary_bytes": 1641488,
+        "median_s": 8.714571595191956e-05,
+        "min_s": 8.457526564598083e-05,
+        "max_s": 9.207800030708313e-05
+      },
+      "compact": {
+        "compile_s": 0.2457282431423664,
+        "temporary_bytes": 984064,
+        "median_s": 6.602704524993896e-05,
+        "min_s": 6.573647260665894e-05,
+        "max_s": 7.295049726963043e-05
+      },
+      "speedup": 1.3198487925976077
+    },
+    {
+      "kind": "coordinates",
+      "shape": [
+        16,
+        16,
+        12
+      ],
+      "batch": 4096,
+      "argwhere": {
+        "compile_s": 0.38815117441117764,
+        "temporary_bytes": 26263568,
+        "median_s": 0.0006887596100568771,
+        "min_s": 0.0006123464554548264,
+        "max_s": 0.0008297394961118698
+      },
+      "compact": {
+        "compile_s": 0.2342481818050146,
+        "temporary_bytes": 15745024,
+        "median_s": 0.0004845317453145981,
+        "min_s": 0.0004296395927667618,
+        "max_s": 0.0005526039749383926
+      },
+      "speedup": 1.4214953235100776
+    },
+    {
+      "kind": "rollout",
+      "game": "sokoban_basic",
+      "batch": 256,
+      "steps": 100,
+      "argwhere": {
+        "compile_s": 5.969044206663966,
+        "temporary_bytes": 1830104,
+        "median_s": 0.09646497294306755,
+        "min_s": 0.09620742499828339,
+        "max_s": 0.09675619192421436,
+        "env_steps_per_s": 265381.3007868546
+      },
+      "compact": {
+        "compile_s": 5.525178683921695,
+        "temporary_bytes": 1830104,
+        "median_s": 0.09645534679293633,
+        "min_s": 0.09630758315324783,
+        "max_s": 0.09710755944252014,
+        "env_steps_per_s": 265407.78558348154
+      },
+      "speedup": 1.0000997990308602
+    },
+    {
+      "kind": "rollout",
+      "game": "sokoban_basic",
+      "batch": 4096,
+      "steps": 100,
+      "argwhere": {
+        "compile_s": 5.746037680655718,
+        "temporary_bytes": 21887704,
+        "median_s": 0.15234624594449997,
+        "min_s": 0.15197164751589298,
+        "max_s": 0.15269636176526546,
+        "env_steps_per_s": 2688612.36101097
+      },
+      "compact": {
+        "compile_s": 5.256698988378048,
+        "temporary_bytes": 21887704,
+        "median_s": 0.14702922478318214,
+        "min_s": 0.14696726016700268,
+        "max_s": 0.14749450981616974,
+        "env_steps_per_s": 2785840.7102670916
+      },
+      "speedup": 1.0361630224818135
+    },
+    {
+      "kind": "rollout",
+      "game": "blocks",
+      "batch": 256,
+      "steps": 100,
+      "argwhere": {
+        "compile_s": 2.124666452407837,
+        "temporary_bytes": 2948824,
+        "median_s": 0.11842316016554832,
+        "min_s": 0.11824246123433113,
+        "max_s": 0.11900811083614826,
+        "env_steps_per_s": 216173.93054038388
+      },
+      "compact": {
+        "compile_s": 1.8676500711590052,
+        "temporary_bytes": 2948824,
+        "median_s": 0.11437812633812428,
+        "min_s": 0.11417107284069061,
+        "max_s": 0.11499921418726444,
+        "env_steps_per_s": 223819.01871972755
+      },
+      "speedup": 1.0353654492946154
+    },
+    {
+      "kind": "rollout",
+      "game": "blocks",
+      "batch": 4096,
+      "steps": 100,
+      "argwhere": {
+        "compile_s": 2.2826966866850853,
+        "temporary_bytes": 47071704,
+        "median_s": 0.3024836294353008,
+        "min_s": 0.30214487202465534,
+        "max_s": 0.3026471398770809,
+        "env_steps_per_s": 1354122.8686149796
+      },
+      "compact": {
+        "compile_s": 1.9457152802497149,
+        "temporary_bytes": 47071704,
+        "median_s": 0.2677694521844387,
+        "min_s": 0.2675236463546753,
+        "max_s": 0.2680622320622206,
+        "env_steps_per_s": 1529674.1157683248
+      },
+      "speedup": 1.1296420370870055
+    },
+    {
+      "kind": "rollout",
+      "game": "Zen_Puzzle_Garden",
+      "batch": 256,
+      "steps": 100,
+      "argwhere": {
+        "compile_s": 4.222347315400839,
+        "temporary_bytes": 3271384,
+        "median_s": 0.05202780291438103,
+        "min_s": 0.05191921070218086,
+        "max_s": 0.05255128815770149,
+        "env_steps_per_s": 492044.6101121809
+      },
+      "compact": {
+        "compile_s": 3.7699750680476427,
+        "temporary_bytes": 3271384,
+        "median_s": 0.04856225475668907,
+        "min_s": 0.048454318195581436,
+        "max_s": 0.04869884066283703,
+        "env_steps_per_s": 527158.3893347498
+      },
+      "speedup": 1.071362999412926
+    },
+    {
+      "kind": "rollout",
+      "game": "Zen_Puzzle_Garden",
+      "batch": 4096,
+      "steps": 100,
+      "argwhere": {
+        "compile_s": 4.698911743238568,
+        "temporary_bytes": 52185816,
+        "median_s": 0.1462236512452364,
+        "min_s": 0.14594345167279243,
+        "max_s": 0.1463911309838295,
+        "env_steps_per_s": 2801188.429586173
+      },
+      "compact": {
+        "compile_s": 4.3526870626956224,
+        "temporary_bytes": 52161240,
+        "median_s": 0.12514676712453365,
+        "min_s": 0.12496411800384521,
+        "max_s": 0.12541284039616585,
+        "env_steps_per_s": 3272957.0999817094
+      },
+      "speedup": 1.168417327950063
+    }
+  ]
+}

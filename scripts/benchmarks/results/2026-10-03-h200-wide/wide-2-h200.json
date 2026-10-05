@@ -1,0 +1,60 @@
+{
+  "jax_version": "0.9.0.1",
+  "devices": [
+    "NVIDIA H200"
+  ],
+  "engine_sha256": "38ab0cee2e8eb6d22ce4e2bb9780d3b9862f1eddaf0d2fb4aadb0900c3cea03c",
+  "trials": 7,
+  "seed": 42,
+  "timing": "alternating A/B after compilation and warmup; exact full outputs",
+  "results": [
+    {
+      "experiment": "combined",
+      "candidate": "all",
+      "game": "limerick",
+      "batch": 256,
+      "steps": 100,
+      "baseline": {
+        "compile_s": 41.051312539959326,
+        "temporary_bytes": 20362712,
+        "median_s": 0.24439847702160478,
+        "min_s": 0.24422992300242186,
+        "max_s": 0.24638847121968865,
+        "env_steps_per_s": 104746.97024293226
+      },
+      "all": {
+        "compile_s": 30.535305727971718,
+        "temporary_bytes": 20364248,
+        "median_s": 0.24569036811590195,
+        "min_s": 0.24553596484474838,
+        "max_s": 0.24598363204859197,
+        "env_steps_per_s": 104196.18887104056
+      },
+      "speedup": 0.9947417918569452
+    },
+    {
+      "experiment": "combined",
+      "candidate": "all",
+      "game": "limerick",
+      "batch": 4096,
+      "steps": 100,
+      "baseline": {
+        "compile_s": 45.69548085797578,
+        "temporary_bytes": 313171160,
+        "median_s": 1.2869717329740524,
+        "min_s": 1.2865321231074631,
+        "max_s": 1.2876533230300993,
+        "env_steps_per_s": 318266.50850633584
+      },
+      "all": {
+        "compile_s": 35.44331714394502,
+        "temporary_bytes": 313207000,
+        "median_s": 1.2982471759896725,
+        "min_s": 1.2979384229984134,
+        "max_s": 1.2988281741272658,
+        "env_steps_per_s": 315502.3231132823
+      },
+      "speedup": 0.9913148719102549
+    }
+  ]
+}

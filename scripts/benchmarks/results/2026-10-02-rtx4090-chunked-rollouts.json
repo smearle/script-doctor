@@ -1,0 +1,93 @@
+{
+  "jax_version": "0.9.1",
+  "devices": [
+    "NVIDIA GeForce RTX 4090"
+  ],
+  "engine_sha256": "38ab0cee2e8eb6d22ce4e2bb9780d3b9862f1eddaf0d2fb4aadb0900c3cea03c",
+  "trials": 9,
+  "seed": 42,
+  "max_episode_steps": 100,
+  "timing": "alternating synchronized calls after compilation and warmup",
+  "rng": "fold_in(master step key, global environment index)",
+  "actions": "identical precomputed runtime inputs in both variants",
+  "results": [
+    {
+      "game": "sokoban_basic",
+      "batch": 16384,
+      "chunk_size": 4096,
+      "steps": 100,
+      "mode": "full",
+      "monolithic": {
+        "compile_s": 5.751494292169809,
+        "temporary_bytes": 96159968,
+        "output_bytes": 790626528,
+        "median_s": 0.285073084756732,
+        "min_s": 0.28475343622267246,
+        "max_s": 0.28538239747285843,
+        "env_steps_per_s": 5747298.10567046
+      },
+      "chunked": {
+        "compile_s": 5.783757355064154,
+        "temporary_bytes": 75259192,
+        "output_bytes": 790626528,
+        "median_s": 0.5019448287785053,
+        "min_s": 0.5011454783380032,
+        "max_s": 0.5022864919155836,
+        "env_steps_per_s": 3264103.7541657425
+      },
+      "speedup": 0.5679370887244005
+    },
+    {
+      "game": "blocks",
+      "batch": 16384,
+      "chunk_size": 4096,
+      "steps": 100,
+      "mode": "full",
+      "monolithic": {
+        "compile_s": 2.235282016918063,
+        "temporary_bytes": 317447904,
+        "output_bytes": 1982759136,
+        "median_s": 1.297473669052124,
+        "min_s": 1.296236889436841,
+        "max_s": 1.2981040868908167,
+        "env_steps_per_s": 1262761.6568103007
+      },
+      "chunked": {
+        "compile_s": 2.550849763676524,
+        "temporary_bytes": 138785592,
+        "output_bytes": 1982759136,
+        "median_s": 0.8048976305872202,
+        "min_s": 0.8037766125053167,
+        "max_s": 0.8053920436650515,
+        "env_steps_per_s": 2035538.3563555663
+      },
+      "speedup": 1.611973522776481
+    },
+    {
+      "game": "Zen_Puzzle_Garden",
+      "batch": 16384,
+      "chunk_size": 4096,
+      "steps": 100,
+      "mode": "full",
+      "monolithic": {
+        "compile_s": 3.613664636388421,
+        "temporary_bytes": 349746648,
+        "output_bytes": 2944368864,
+        "median_s": 0.6451021507382393,
+        "min_s": 0.6445994917303324,
+        "max_s": 0.6453650370240211,
+        "env_steps_per_s": 2539752.8098845347
+      },
+      "chunked": {
+        "compile_s": 4.6029477678239346,
+        "temporary_bytes": 144071984,
+        "output_bytes": 2944368864,
+        "median_s": 0.48442061245441437,
+        "min_s": 0.48291416838765144,
+        "max_s": 0.4879455231130123,
+        "env_steps_per_s": 3382184.7334256014
+      },
+      "speedup": 1.3316983921672936
+    }
+  ]
+}

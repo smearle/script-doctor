@@ -1,0 +1,10 @@
+Compiling Take_Heart_Lass level=0 batch=4096 live
+Writing pretty tree to /scratch/se2161/puzzlejax-perf-20261002/round3/data/pretty_trees/Take_Heart_Lass
+Parsed Take_Heart_Lass successfully
+Object newdespair appears multiple times in collision layers.
+Compiling Take_Heart_Lass level=0 batch=4096 cached
+Writing pretty tree to /scratch/se2161/puzzlejax-perf-20261002/round3/data/pretty_trees/Take_Heart_Lass
+Parsed Take_Heart_Lass successfully
+Object newdespair appears multiple times in collision layers.
+{"game": "Take_Heart_Lass", "level": 0, "batch": 4096, "steps": 100, "seed": 42, "cache_guard": true, "live": {"compile_s": 159.1151270091068, "temporary_bytes": 63013848, "samples_s": [0.640655366005376, 0.6408631489612162, 0.6398704340681434, 0.6408249048981816, 0.640740284929052, 0.6398934780154377, 0.6393969780765474, 0.6407280801795423, 0.6399281150661409], "median_s": 0.640655366005376, "env_steps_per_s": 639345.3044090524}, "cached": {"compile_s": 125.50532430689782, "temporary_bytes": 63014360, "samples_s": [0.6416852229740471, 0.641625263961032, 0.6418286908883601, 0.6413122329395264, 0.6429376339074224, 0.6435719940345734, 0.6423141949344426, 0.6419213621411473, 0.6426562641281635], "median_s": 0.6419213621411473, "env_steps_per_s": 638084.3887696265}, "speedup": 0.9980278018298869}
+{"game": "Take_Heart_Lass", "level": 0, "batch": 4096, "steps": 100, "seed": 1042, "cache_guard": true, "live": {"compile_s": 159.1151270091068, "temporary_bytes": 63013848, "samples_s": [0.6407393729314208, 0.6404457960743457, 0.6402727840468287, 0.6405717690940946, 0.6396725669037551, 0.6406890139915049, 0.6406901930458844, 0.640367231098935, 0.6405558271799237], "median_s": 0.6405558271799237, "env_steps_per_s": 639444.6551259751}, "cached": {"compile_s": 125.50532430689782, "temporary_bytes": 63014360, "samples_s": [0.6423995250370353, 0.641707168892026, 0.6436544808093458, 0.6421182670164853, 0.642273121047765, 0.642326245084405, 0.6428898018784821, 0.641687799943611, 0.6417354200966656], "median_s": 0.642273121047765, "env_steps_per_s": 637734.9239398399}, "speedup": 0.9973262249165279}

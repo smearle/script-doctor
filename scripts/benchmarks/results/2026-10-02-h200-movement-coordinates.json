@@ -1,0 +1,434 @@
+{
+  "jax_version": "0.9.0.1",
+  "devices": [
+    "NVIDIA H200"
+  ],
+  "trials": 15,
+  "seed": 42,
+  "timing": "alternating A/B after compilation and warmup",
+  "results": [
+    {
+      "kind": "coordinates",
+      "shape": [
+        7,
+        7,
+        12
+      ],
+      "batch": 256,
+      "argwhere": {
+        "compile_s": 0.5605375471059233,
+        "temporary_bytes": 316432,
+        "median_s": 0.00010106479749083519,
+        "min_s": 9.901588782668114e-05,
+        "max_s": 0.00010500499047338963
+      },
+      "compact": {
+        "compile_s": 0.23492499883286655,
+        "temporary_bytes": 151552,
+        "median_s": 7.100310176610947e-05,
+        "min_s": 6.7839864641428e-05,
+        "max_s": 7.480080239474773e-05
+      },
+      "speedup": 1.4233856687522135
+    },
+    {
+      "kind": "coordinates",
+      "shape": [
+        7,
+        7,
+        12
+      ],
+      "batch": 1024,
+      "argwhere": {
+        "compile_s": 0.4403556538745761,
+        "temporary_bytes": 1306640,
+        "median_s": 0.00011759903281927109,
+        "min_s": 0.00011616409756243229,
+        "max_s": 0.00012125400826334953
+      },
+      "compact": {
+        "compile_s": 0.3142314269207418,
+        "temporary_bytes": 606208,
+        "median_s": 0.00011340202763676643,
+        "min_s": 0.0001108099240809679,
+        "max_s": 0.0001360708847641945
+      },
+      "speedup": 1.0370099659588796
+    },
+    {
+      "kind": "coordinates",
+      "shape": [
+        7,
+        7,
+        12
+      ],
+      "batch": 4096,
+      "argwhere": {
+        "compile_s": 0.38774735387414694,
+        "temporary_bytes": 5226512,
+        "median_s": 0.00013828696683049202,
+        "min_s": 0.00013600196689367294,
+        "max_s": 0.00014537200331687927
+      },
+      "compact": {
+        "compile_s": 0.2549439901486039,
+        "temporary_bytes": 3031040,
+        "median_s": 0.00012239301577210426,
+        "min_s": 0.0001193841453641653,
+        "max_s": 0.00012697489000856876
+      },
+      "speedup": 1.129859951224523
+    },
+    {
+      "kind": "coordinates",
+      "shape": [
+        12,
+        12,
+        12
+      ],
+      "batch": 256,
+      "argwhere": {
+        "compile_s": 0.5226970640942454,
+        "temporary_bytes": 935952,
+        "median_s": 0.00010966113768517971,
+        "min_s": 0.00010663806460797787,
+        "max_s": 0.00011584698222577572
+      },
+      "compact": {
+        "compile_s": 0.3623868899885565,
+        "temporary_bytes": 443392,
+        "median_s": 0.00010134000331163406,
+        "min_s": 7.563200779259205e-05,
+        "max_s": 0.00010772491805255413
+      },
+      "speedup": 1.0821110529072813
+    },
+    {
+      "kind": "coordinates",
+      "shape": [
+        12,
+        12,
+        12
+      ],
+      "batch": 1024,
+      "argwhere": {
+        "compile_s": 0.5775262359529734,
+        "temporary_bytes": 3727376,
+        "median_s": 0.00013946997933089733,
+        "min_s": 0.00013788696378469467,
+        "max_s": 0.0001406481023877859
+      },
+      "compact": {
+        "compile_s": 0.2870980880688876,
+        "temporary_bytes": 2215936,
+        "median_s": 0.00012260209769010544,
+        "min_s": 0.0001204460859298706,
+        "max_s": 0.00012579304166138172
+      },
+      "speedup": 1.137582324924227
+    },
+    {
+      "kind": "coordinates",
+      "shape": [
+        12,
+        12,
+        12
+      ],
+      "batch": 4096,
+      "argwhere": {
+        "compile_s": 0.47190585010685027,
+        "temporary_bytes": 14909456,
+        "median_s": 0.00030805100686848164,
+        "min_s": 0.0003053620457649231,
+        "max_s": 0.0003129029646515846
+      },
+      "compact": {
+        "compile_s": 0.2871062990743667,
+        "temporary_bytes": 8863744,
+        "median_s": 0.00024358299560844898,
+        "min_s": 0.0002413429319858551,
+        "max_s": 0.00025325221940875053
+      },
+      "speedup": 1.2646654833150286
+    },
+    {
+      "kind": "coordinates",
+      "shape": [
+        16,
+        16,
+        12
+      ],
+      "batch": 256,
+      "argwhere": {
+        "compile_s": 0.5275821629911661,
+        "temporary_bytes": 1656848,
+        "median_s": 0.00012482795864343643,
+        "min_s": 0.00012249499559402466,
+        "max_s": 0.00013200310058891773
+      },
+      "compact": {
+        "compile_s": 0.3786880150437355,
+        "temporary_bytes": 787456,
+        "median_s": 0.00011292495764791965,
+        "min_s": 0.00011093285866081715,
+        "max_s": 0.00012446800246834755
+      },
+      "speedup": 1.1054062914296436
+    },
+    {
+      "kind": "coordinates",
+      "shape": [
+        16,
+        16,
+        12
+      ],
+      "batch": 1024,
+      "argwhere": {
+        "compile_s": 0.44929610192775726,
+        "temporary_bytes": 6565904,
+        "median_s": 0.00018820492550730705,
+        "min_s": 0.00018566218204796314,
+        "max_s": 0.00019046198576688766
+      },
+      "compact": {
+        "compile_s": 0.2908426229842007,
+        "temporary_bytes": 3936256,
+        "median_s": 0.00015707802958786488,
+        "min_s": 0.0001563460100442171,
+        "max_s": 0.00016558310016989708
+      },
+      "speedup": 1.19816199630917
+    },
+    {
+      "kind": "coordinates",
+      "shape": [
+        16,
+        16,
+        12
+      ],
+      "batch": 4096,
+      "argwhere": {
+        "compile_s": 0.46304500405676663,
+        "temporary_bytes": 26263568,
+        "median_s": 0.0004819449968636036,
+        "min_s": 0.0004792800173163414,
+        "max_s": 0.0005021928809583187
+      },
+      "compact": {
+        "compile_s": 0.2902651091571897,
+        "temporary_bytes": 15745024,
+        "median_s": 0.0003808781038969755,
+        "min_s": 0.00037848902866244316,
+        "max_s": 0.00038788095116615295
+      },
+      "speedup": 1.2653523317107402
+    },
+    {
+      "kind": "rollout",
+      "game": "sokoban_basic",
+      "batch": 256,
+      "steps": 100,
+      "argwhere": {
+        "compile_s": 12.032455054111779,
+        "temporary_bytes": 1386456,
+        "median_s": 0.12857633898966014,
+        "min_s": 0.12824085704050958,
+        "max_s": 0.12869425700046122,
+        "env_steps_per_s": 199103.50692174165
+      },
+      "compact": {
+        "compile_s": 8.473655783804134,
+        "temporary_bytes": 1386456,
+        "median_s": 0.12608449114486575,
+        "min_s": 0.12589796888642013,
+        "max_s": 0.12635421007871628,
+        "env_steps_per_s": 203038.45276725336
+      },
+      "speedup": 1.019763317614784
+    },
+    {
+      "kind": "rollout",
+      "game": "sokoban_basic",
+      "batch": 1024,
+      "steps": 100,
+      "argwhere": {
+        "compile_s": 12.532559368060902,
+        "temporary_bytes": 5495768,
+        "median_s": 0.135916005121544,
+        "min_s": 0.13576392899267375,
+        "max_s": 0.13612489495426416,
+        "env_steps_per_s": 753406.4873995373
+      },
+      "compact": {
+        "compile_s": 8.91234454489313,
+        "temporary_bytes": 5495768,
+        "median_s": 0.13345796894282103,
+        "min_s": 0.13330403296276927,
+        "max_s": 0.1336264058481902,
+        "env_steps_per_s": 767282.7693329608
+      },
+      "speedup": 1.0184180547493278
+    },
+    {
+      "kind": "rollout",
+      "game": "sokoban_basic",
+      "batch": 4096,
+      "steps": 100,
+      "argwhere": {
+        "compile_s": 12.852952403016388,
+        "temporary_bytes": 21896152,
+        "median_s": 0.17858356097713113,
+        "min_s": 0.1783777680248022,
+        "max_s": 0.1787583460099995,
+        "env_steps_per_s": 2293604.169156713
+      },
+      "compact": {
+        "compile_s": 8.931803129147738,
+        "temporary_bytes": 21896152,
+        "median_s": 0.17582996585406363,
+        "min_s": 0.1756544280797243,
+        "max_s": 0.18040331709198654,
+        "env_steps_per_s": 2329523.2869462203
+      },
+      "speedup": 1.0156605565478694
+    },
+    {
+      "kind": "rollout",
+      "game": "blocks",
+      "batch": 256,
+      "steps": 100,
+      "argwhere": {
+        "compile_s": 4.000515083083883,
+        "temporary_bytes": 2950360,
+        "median_s": 0.16567309107631445,
+        "min_s": 0.16547991102561355,
+        "max_s": 0.17159451101906598,
+        "env_steps_per_s": 154521.1707808832
+      },
+      "compact": {
+        "compile_s": 3.2416903579141945,
+        "temporary_bytes": 2950360,
+        "median_s": 0.1626727469265461,
+        "min_s": 0.16245986497960985,
+        "max_s": 0.16353726293891668,
+        "env_steps_per_s": 157371.1668590654
+      },
+      "speedup": 1.0184440492120241
+    },
+    {
+      "kind": "rollout",
+      "game": "blocks",
+      "batch": 1024,
+      "steps": 100,
+      "argwhere": {
+        "compile_s": 4.314645000966266,
+        "temporary_bytes": 11777240,
+        "median_s": 0.19821786182001233,
+        "min_s": 0.19761724187992513,
+        "max_s": 0.19867281522601843,
+        "env_steps_per_s": 516603.2922551764
+      },
+      "compact": {
+        "compile_s": 3.2346871718764305,
+        "temporary_bytes": 11777240,
+        "median_s": 0.196034112945199,
+        "min_s": 0.19552588905207813,
+        "max_s": 0.19647953403182328,
+        "env_steps_per_s": 522358.0654486688
+      },
+      "speedup": 1.0111396370866523
+    },
+    {
+      "kind": "rollout",
+      "game": "blocks",
+      "batch": 4096,
+      "steps": 100,
+      "argwhere": {
+        "compile_s": 4.468480674084276,
+        "temporary_bytes": 47047640,
+        "median_s": 0.35465338197536767,
+        "min_s": 0.35432700091041625,
+        "max_s": 0.355104022892192,
+        "env_steps_per_s": 1154930.4780870485
+      },
+      "compact": {
+        "compile_s": 3.223984372103587,
+        "temporary_bytes": 47047640,
+        "median_s": 0.333150845952332,
+        "min_s": 0.3325705099850893,
+        "max_s": 0.3336470772046596,
+        "env_steps_per_s": 1229473.089972602
+      },
+      "speedup": 1.0645429428869355
+    },
+    {
+      "kind": "rollout",
+      "game": "Zen_Puzzle_Garden",
+      "batch": 256,
+      "steps": 100,
+      "argwhere": {
+        "compile_s": 8.834178274963051,
+        "temporary_bytes": 3272664,
+        "median_s": 0.06399748101830482,
+        "min_s": 0.06392923602834344,
+        "max_s": 0.06409311597235501,
+        "env_steps_per_s": 400015.7442552744
+      },
+      "compact": {
+        "compile_s": 6.247397992992774,
+        "temporary_bytes": 3272664,
+        "median_s": 0.06070257304236293,
+        "min_s": 0.06062513799406588,
+        "max_s": 0.06083640013821423,
+        "env_steps_per_s": 421728.4163907574
+      },
+      "speedup": 1.0542795438612207
+    },
+    {
+      "kind": "rollout",
+      "game": "Zen_Puzzle_Garden",
+      "batch": 1024,
+      "steps": 100,
+      "argwhere": {
+        "compile_s": 9.099594823084772,
+        "temporary_bytes": 13052888,
+        "median_s": 0.0862139358650893,
+        "min_s": 0.08604960585944355,
+        "max_s": 0.08649426698684692,
+        "env_steps_per_s": 1187743.0136148666
+      },
+      "compact": {
+        "compile_s": 6.638391768792644,
+        "temporary_bytes": 13052888,
+        "median_s": 0.08133095013909042,
+        "min_s": 0.0811898538377136,
+        "max_s": 0.0814578861463815,
+        "env_steps_per_s": 1259053.2856787946
+      },
+      "speedup": 1.0600384689672027
+    },
+    {
+      "kind": "rollout",
+      "game": "Zen_Puzzle_Garden",
+      "batch": 4096,
+      "steps": 100,
+      "argwhere": {
+        "compile_s": 9.588991051074117,
+        "temporary_bytes": 52153048,
+        "median_s": 0.17200780706480145,
+        "min_s": 0.17164290882647038,
+        "max_s": 0.17215036996640265,
+        "env_steps_per_s": 2381287.2624187875
+      },
+      "compact": {
+        "compile_s": 8.002328348113224,
+        "temporary_bytes": 52128472,
+        "median_s": 0.15832999208942056,
+        "min_s": 0.1580487049650401,
+        "max_s": 0.15871710306964815,
+        "env_steps_per_s": 2587001.960870868
+      },
+      "speedup": 1.086388022855809
+    }
+  ]
+}

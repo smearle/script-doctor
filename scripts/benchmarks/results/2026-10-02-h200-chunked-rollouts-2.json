@@ -1,0 +1,41 @@
+{
+  "jax_version": "0.9.0.1",
+  "devices": [
+    "NVIDIA H200"
+  ],
+  "engine_sha256": "38ab0cee2e8eb6d22ce4e2bb9780d3b9862f1eddaf0d2fb4aadb0900c3cea03c",
+  "trials": 9,
+  "seed": 42,
+  "max_episode_steps": 100,
+  "timing": "alternating synchronized calls after compilation and warmup",
+  "rng": "fold_in(master step key, global environment index)",
+  "actions": "identical precomputed runtime inputs in both variants",
+  "results": [
+    {
+      "game": "Zen_Puzzle_Garden",
+      "batch": 16384,
+      "chunk_size": 4096,
+      "steps": 100,
+      "mode": "full",
+      "monolithic": {
+        "compile_s": 7.050263422075659,
+        "temporary_bytes": 349746904,
+        "output_bytes": 2944368864,
+        "median_s": 0.38275836082175374,
+        "min_s": 0.38259475911036134,
+        "max_s": 0.387317739892751,
+        "env_steps_per_s": 4280507.410687194
+      },
+      "chunked": {
+        "compile_s": 10.273868100019172,
+        "temporary_bytes": 138309168,
+        "output_bytes": 2944368864,
+        "median_s": 0.5412289928644896,
+        "min_s": 0.5404008300974965,
+        "max_s": 0.5419000131078064,
+        "env_steps_per_s": 3027184.4664652236
+      },
+      "speedup": 0.7072022487117334
+    }
+  ]
+}

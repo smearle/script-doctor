@@ -1,0 +1,16 @@
+combined/baseline: compiling sokoban_match3, batch=256
+Writing pretty tree to /scratch/se2161/puzzlejax-perf-20261002/round3/data/pretty_trees/sokoban_match3
+Parsed sokoban_match3 successfully
+combined/all: compiling sokoban_match3, batch=256
+Writing pretty tree to /scratch/se2161/puzzlejax-perf-20261002/round3/data/pretty_trees/sokoban_match3
+Parsed sokoban_match3 successfully
+Exact outputs match; timing sokoban_match3, batch=256
+{"experiment": "combined", "candidate": "all", "game": "sokoban_match3", "batch": 256, "steps": 100, "baseline": {"compile_s": 19.58064901106991, "temporary_bytes": 2181848, "median_s": 0.14941056678071618, "min_s": 0.1492671249434352, "max_s": 0.14961884613148868, "env_steps_per_s": 171339.95641400706}, "all": {"compile_s": 13.755955221131444, "temporary_bytes": 2180824, "median_s": 0.12568626808933914, "min_s": 0.1255206170026213, "max_s": 0.12595726689323783, "env_steps_per_s": 203681.7576746192}, "speedup": 1.1887580803538025}
+combined/baseline: compiling sokoban_match3, batch=4096
+Writing pretty tree to /scratch/se2161/puzzlejax-perf-20261002/round3/data/pretty_trees/sokoban_match3
+Parsed sokoban_match3 successfully
+combined/all: compiling sokoban_match3, batch=4096
+Writing pretty tree to /scratch/se2161/puzzlejax-perf-20261002/round3/data/pretty_trees/sokoban_match3
+Parsed sokoban_match3 successfully
+Exact outputs match; timing sokoban_match3, batch=4096
+{"experiment": "combined", "candidate": "all", "game": "sokoban_match3", "batch": 4096, "steps": 100, "baseline": {"compile_s": 19.175996938021854, "temporary_bytes": 34597848, "median_s": 0.24828167213127017, "min_s": 0.2477968130260706, "max_s": 0.24861027509905398, "env_steps_per_s": 1649739.171175867}, "all": {"compile_s": 14.748882606858388, "temporary_bytes": 35944664, "median_s": 0.2157281069085002, "min_s": 0.21554358885623515, "max_s": 0.21681432100012898, "env_steps_per_s": 1898686.2948448781}, "speedup": 1.1509008987715141}

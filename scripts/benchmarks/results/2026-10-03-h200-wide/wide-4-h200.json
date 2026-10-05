@@ -1,0 +1,60 @@
+{
+  "jax_version": "0.9.0.1",
+  "devices": [
+    "NVIDIA H200"
+  ],
+  "engine_sha256": "38ab0cee2e8eb6d22ce4e2bb9780d3b9862f1eddaf0d2fb4aadb0900c3cea03c",
+  "trials": 7,
+  "seed": 42,
+  "timing": "alternating A/B after compilation and warmup; exact full outputs",
+  "results": [
+    {
+      "experiment": "combined",
+      "candidate": "all",
+      "game": "Take_Heart_Lass",
+      "batch": 256,
+      "steps": 100,
+      "baseline": {
+        "compile_s": 128.33414073300082,
+        "temporary_bytes": 3814616,
+        "median_s": 0.4340774610172957,
+        "min_s": 0.43357875605579466,
+        "max_s": 0.4346437680069357,
+        "env_steps_per_s": 58975.649046611
+      },
+      "all": {
+        "compile_s": 108.55879082391039,
+        "temporary_bytes": 3813080,
+        "median_s": 0.42701138590928167,
+        "min_s": 0.42666105297394097,
+        "max_s": 0.42731870897114277,
+        "env_steps_per_s": 59951.562990497645
+      },
+      "speedup": 1.0165477440208472
+    },
+    {
+      "experiment": "combined",
+      "candidate": "all",
+      "game": "Take_Heart_Lass",
+      "batch": 4096,
+      "steps": 100,
+      "baseline": {
+        "compile_s": 124.58072249102406,
+        "temporary_bytes": 62630360,
+        "median_s": 0.6582415529992431,
+        "min_s": 0.6565535489935428,
+        "max_s": 0.6631995040224865,
+        "env_steps_per_s": 622263.9669794152
+      },
+      "all": {
+        "compile_s": 111.84932282101363,
+        "temporary_bytes": 63030744,
+        "median_s": 0.646549288998358,
+        "min_s": 0.6462239699903876,
+        "max_s": 0.648475901922211,
+        "env_steps_per_s": 633517.0527131154
+      },
+      "speedup": 1.018084103099083
+    }
+  ]
+}

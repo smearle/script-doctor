@@ -1,0 +1,596 @@
+{
+  "jax_version": "0.9.0.1",
+  "devices": [
+    "NVIDIA H200"
+  ],
+  "timing": "alternating A/B after both compilations and warmup",
+  "trials": 15,
+  "seed": 42,
+  "results": [
+    {
+      "kind": "coordinates",
+      "shape": [
+        8,
+        8
+      ],
+      "batch": 1,
+      "kernels": 2,
+      "column_major": [
+        false,
+        true
+      ],
+      "sorted": {
+        "compile_s": 1.33420072006993,
+        "temporary_bytes": 2328,
+        "hlo_sort_ops": 1,
+        "median_s": 9.368010796606541e-05,
+        "min_s": 9.183422662317753e-05,
+        "max_s": 9.74549911916256e-05
+      },
+      "direct": {
+        "compile_s": 0.4461717640515417,
+        "temporary_bytes": 1040,
+        "hlo_sort_ops": 0,
+        "median_s": 5.85620291531086e-05,
+        "min_s": 5.649193190038204e-05,
+        "max_s": 6.101513281464577e-05
+      },
+      "speedup": 1.599673189621584
+    },
+    {
+      "kind": "coordinates",
+      "shape": [
+        8,
+        8
+      ],
+      "batch": 64,
+      "kernels": 2,
+      "column_major": [
+        false,
+        true
+      ],
+      "sorted": {
+        "compile_s": 0.6822266089729965,
+        "temporary_bytes": 131352,
+        "hlo_sort_ops": 1,
+        "median_s": 9.552878327667713e-05,
+        "min_s": 9.175902232527733e-05,
+        "max_s": 0.00010499497875571251
+      },
+      "direct": {
+        "compile_s": 0.5159933418035507,
+        "temporary_bytes": 65816,
+        "hlo_sort_ops": 0,
+        "median_s": 5.8052828535437584e-05,
+        "min_s": 5.660415627062321e-05,
+        "max_s": 7.538311183452606e-05
+      },
+      "speedup": 1.645549160767642
+    },
+    {
+      "kind": "coordinates",
+      "shape": [
+        8,
+        8
+      ],
+      "batch": 256,
+      "kernels": 2,
+      "column_major": [
+        false,
+        true
+      ],
+      "sorted": {
+        "compile_s": 0.6746476490516216,
+        "temporary_bytes": 524568,
+        "hlo_sort_ops": 1,
+        "median_s": 9.634601883590221e-05,
+        "min_s": 9.362399578094482e-05,
+        "max_s": 9.849085472524166e-05
+      },
+      "direct": {
+        "compile_s": 0.5116505951154977,
+        "temporary_bytes": 263192,
+        "hlo_sort_ops": 0,
+        "median_s": 5.84539957344532e-05,
+        "min_s": 5.718204192817211e-05,
+        "max_s": 6.37490302324295e-05
+      },
+      "speedup": 1.6482366624445348
+    },
+    {
+      "kind": "coordinates",
+      "shape": [
+        16,
+        16
+      ],
+      "batch": 1,
+      "kernels": 2,
+      "column_major": [
+        false,
+        true
+      ],
+      "sorted": {
+        "compile_s": 1.0107671739533544,
+        "temporary_bytes": 8472,
+        "hlo_sort_ops": 1,
+        "median_s": 0.0001006049569696188,
+        "min_s": 9.621214121580124e-05,
+        "max_s": 0.00010712491348385811
+      },
+      "direct": {
+        "compile_s": 0.9480111319571733,
+        "temporary_bytes": 4376,
+        "hlo_sort_ops": 0,
+        "median_s": 8.750194683670998e-05,
+        "min_s": 5.957786925137043e-05,
+        "max_s": 8.925097063183784e-05
+      },
+      "speedup": 1.149745355464613
+    },
+    {
+      "kind": "coordinates",
+      "shape": [
+        16,
+        16
+      ],
+      "batch": 64,
+      "kernels": 2,
+      "column_major": [
+        false,
+        true
+      ],
+      "sorted": {
+        "compile_s": 1.3278378939721733,
+        "temporary_bytes": 524568,
+        "hlo_sort_ops": 1,
+        "median_s": 0.00010434095747768879,
+        "min_s": 0.00010013999417424202,
+        "max_s": 0.00010663899593055248
+      },
+      "direct": {
+        "compile_s": 1.0659776190295815,
+        "temporary_bytes": 262424,
+        "hlo_sort_ops": 0,
+        "median_s": 9.12579707801342e-05,
+        "min_s": 8.867704309523106e-05,
+        "max_s": 9.560491889715195e-05
+      },
+      "speedup": 1.143362673810435
+    },
+    {
+      "kind": "coordinates",
+      "shape": [
+        16,
+        16
+      ],
+      "batch": 256,
+      "kernels": 2,
+      "column_major": [
+        false,
+        true
+      ],
+      "sorted": {
+        "compile_s": 2.1224183910526335,
+        "temporary_bytes": 2097696,
+        "hlo_sort_ops": 1,
+        "median_s": 0.00010589300654828548,
+        "min_s": 0.00010376796126365662,
+        "max_s": 0.0001167510636150837
+      },
+      "direct": {
+        "compile_s": 0.7447933279909194,
+        "temporary_bytes": 1051160,
+        "hlo_sort_ops": 0,
+        "median_s": 9.300699457526207e-05,
+        "min_s": 9.108218364417553e-05,
+        "max_s": 9.455415420234203e-05
+      },
+      "speedup": 1.1385488482008301
+    },
+    {
+      "kind": "coordinates",
+      "shape": [
+        32,
+        32
+      ],
+      "batch": 1,
+      "kernels": 2,
+      "column_major": [
+        false,
+        true
+      ],
+      "sorted": {
+        "compile_s": 0.6792741259559989,
+        "temporary_bytes": 33560,
+        "hlo_sort_ops": 1,
+        "median_s": 0.00010774307884275913,
+        "min_s": 0.00010497588664293289,
+        "max_s": 0.00012520304881036282
+      },
+      "direct": {
+        "compile_s": 0.48294257186353207,
+        "temporary_bytes": 9744,
+        "hlo_sort_ops": 0,
+        "median_s": 9.620515629649162e-05,
+        "min_s": 9.307684376835823e-05,
+        "max_s": 9.938003495335579e-05
+      },
+      "speedup": 1.1199303965653271
+    },
+    {
+      "kind": "coordinates",
+      "shape": [
+        32,
+        32
+      ],
+      "batch": 64,
+      "kernels": 2,
+      "column_major": [
+        false,
+        true
+      ],
+      "sorted": {
+        "compile_s": 2.216770918108523,
+        "temporary_bytes": 2097696,
+        "hlo_sort_ops": 1,
+        "median_s": 0.00011566700413823128,
+        "min_s": 0.00011276407167315483,
+        "max_s": 0.0001219168771058321
+      },
+      "direct": {
+        "compile_s": 1.323443132918328,
+        "temporary_bytes": 1065752,
+        "hlo_sort_ops": 0,
+        "median_s": 0.00010150694288313389,
+        "min_s": 9.989109821617603e-05,
+        "max_s": 0.00016358401626348495
+      },
+      "speedup": 1.139498450577908
+    },
+    {
+      "kind": "coordinates",
+      "shape": [
+        32,
+        32
+      ],
+      "batch": 256,
+      "kernels": 2,
+      "column_major": [
+        false,
+        true
+      ],
+      "sorted": {
+        "compile_s": 0.7519828449003398,
+        "temporary_bytes": 8389400,
+        "hlo_sort_ops": 1,
+        "median_s": 0.0001452411524951458,
+        "min_s": 0.00014029699377715588,
+        "max_s": 0.00014939182437956333
+      },
+      "direct": {
+        "compile_s": 0.6013272830750793,
+        "temporary_bytes": 4262168,
+        "hlo_sort_ops": 0,
+        "median_s": 0.00011618784628808498,
+        "min_s": 0.00011186394840478897,
+        "max_s": 0.00012889597564935684
+      },
+      "speedup": 1.2500546067014948
+    },
+    {
+      "kind": "coordinates",
+      "shape": [
+        64,
+        64
+      ],
+      "batch": 1,
+      "kernels": 2,
+      "column_major": [
+        false,
+        true
+      ],
+      "sorted": {
+        "compile_s": 1.007791129173711,
+        "temporary_bytes": 102168,
+        "hlo_sort_ops": 1,
+        "median_s": 0.00013773399405181408,
+        "min_s": 0.00013587204739451408,
+        "max_s": 0.00014037196524441242
+      },
+      "direct": {
+        "compile_s": 0.6601046719588339,
+        "temporary_bytes": 36368,
+        "hlo_sort_ops": 0,
+        "median_s": 0.00010126805864274502,
+        "min_s": 9.943009354174137e-05,
+        "max_s": 0.00010915682651102543
+      },
+      "speedup": 1.3600931616326737
+    },
+    {
+      "kind": "coordinates",
+      "shape": [
+        64,
+        64
+      ],
+      "batch": 64,
+      "kernels": 2,
+      "column_major": [
+        false,
+        true
+      ],
+      "sorted": {
+        "compile_s": 0.8477419121190906,
+        "temporary_bytes": 8389400,
+        "hlo_sort_ops": 1,
+        "median_s": 0.0001622149720788002,
+        "min_s": 0.00015813391655683517,
+        "max_s": 0.00017600180581212044
+      },
+      "direct": {
+        "compile_s": 0.6153309729415923,
+        "temporary_bytes": 4260632,
+        "hlo_sort_ops": 0,
+        "median_s": 0.00012273108586668968,
+        "min_s": 0.0001170190516859293,
+        "max_s": 0.000132458982989192
+      },
+      "speedup": 1.3217105587658358
+    },
+    {
+      "kind": "coordinates",
+      "shape": [
+        64,
+        64
+      ],
+      "batch": 256,
+      "kernels": 2,
+      "column_major": [
+        false,
+        true
+      ],
+      "sorted": {
+        "compile_s": 0.8283208361826837,
+        "temporary_bytes": 33555224,
+        "hlo_sort_ops": 1,
+        "median_s": 0.0003033808898180723,
+        "min_s": 0.0002993249800056219,
+        "max_s": 0.0003100649919360876
+      },
+      "direct": {
+        "compile_s": 0.5940006810706109,
+        "temporary_bytes": 17041688,
+        "hlo_sort_ops": 0,
+        "median_s": 0.00015878421254456043,
+        "min_s": 0.00015437090769410133,
+        "max_s": 0.00016459799371659756
+      },
+      "speedup": 1.9106489553105475
+    },
+    {
+      "kind": "rollout",
+      "game": "sokoban_basic",
+      "batch": 1,
+      "steps": 100,
+      "sorted": {
+        "compile_s": 12.37243660306558,
+        "temporary_bytes": 24792,
+        "hlo_sort_ops": 8,
+        "median_s": 0.044124318985268474,
+        "min_s": 0.041760941967368126,
+        "max_s": 0.04677274590358138,
+        "env_steps_per_s": 2266.3239297446476
+      },
+      "direct": {
+        "compile_s": 9.809304000111297,
+        "temporary_bytes": 23256,
+        "hlo_sort_ops": 0,
+        "median_s": 0.041505590081214905,
+        "min_s": 0.04106318508274853,
+        "max_s": 0.04832578101195395,
+        "env_steps_per_s": 2409.314017806464
+      },
+      "speedup": 1.0630934025737122
+    },
+    {
+      "kind": "rollout",
+      "game": "sokoban_basic",
+      "batch": 64,
+      "steps": 100,
+      "sorted": {
+        "compile_s": 13.131128389155492,
+        "temporary_bytes": 418008,
+        "hlo_sort_ops": 8,
+        "median_s": 0.10541035491041839,
+        "min_s": 0.10521942400373518,
+        "max_s": 0.10590896592475474,
+        "env_steps_per_s": 60715.0977286715
+      },
+      "direct": {
+        "compile_s": 9.391532519832253,
+        "temporary_bytes": 415960,
+        "hlo_sort_ops": 0,
+        "median_s": 0.10221325699239969,
+        "min_s": 0.10210492415353656,
+        "max_s": 0.10249081696383655,
+        "env_steps_per_s": 62614.18712521691
+      },
+      "speedup": 1.0312787011400726
+    },
+    {
+      "kind": "rollout",
+      "game": "sokoban_basic",
+      "batch": 256,
+      "steps": 100,
+      "sorted": {
+        "compile_s": 13.055917335906997,
+        "temporary_bytes": 1386200,
+        "hlo_sort_ops": 8,
+        "median_s": 0.13327641296200454,
+        "min_s": 0.1330591570585966,
+        "max_s": 0.13366762385703623,
+        "env_steps_per_s": 192082.00034088735
+      },
+      "direct": {
+        "compile_s": 8.847096984973177,
+        "temporary_bytes": 1384152,
+        "hlo_sort_ops": 0,
+        "median_s": 0.13029821985401213,
+        "min_s": 0.1301923079881817,
+        "max_s": 0.13057642010971904,
+        "env_steps_per_s": 196472.3695280149
+      },
+      "speedup": 1.022856744407784
+    },
+    {
+      "kind": "rollout",
+      "game": "blocks",
+      "batch": 1,
+      "steps": 100,
+      "sorted": {
+        "compile_s": 4.2552409139461815,
+        "temporary_bytes": 25816,
+        "hlo_sort_ops": 0,
+        "median_s": 0.05377851892262697,
+        "min_s": 0.05365157313644886,
+        "max_s": 0.05439789197407663,
+        "env_steps_per_s": 1859.4785056069225
+      },
+      "direct": {
+        "compile_s": 3.137739219935611,
+        "temporary_bytes": 25816,
+        "hlo_sort_ops": 0,
+        "median_s": 0.053816107800230384,
+        "min_s": 0.05369373015128076,
+        "max_s": 0.05434234207496047,
+        "env_steps_per_s": 1858.1797177010246
+      },
+      "speedup": 0.999301531100262
+    },
+    {
+      "kind": "rollout",
+      "game": "blocks",
+      "batch": 64,
+      "steps": 100,
+      "sorted": {
+        "compile_s": 3.8903178512118757,
+        "temporary_bytes": 745944,
+        "hlo_sort_ops": 0,
+        "median_s": 0.12846908089704812,
+        "min_s": 0.12834138399921358,
+        "max_s": 0.12858494208194315,
+        "env_steps_per_s": 49817.43432202803
+      },
+      "direct": {
+        "compile_s": 3.1196102059911937,
+        "temporary_bytes": 745944,
+        "hlo_sort_ops": 0,
+        "median_s": 0.12870076298713684,
+        "min_s": 0.12852412997744977,
+        "max_s": 0.1289685091469437,
+        "env_steps_per_s": 49727.75492123272
+      },
+      "speedup": 0.998199839031942
+    },
+    {
+      "kind": "rollout",
+      "game": "blocks",
+      "batch": 256,
+      "steps": 100,
+      "sorted": {
+        "compile_s": 4.01401078607887,
+        "temporary_bytes": 2948056,
+        "hlo_sort_ops": 0,
+        "median_s": 0.16120093711651862,
+        "min_s": 0.16110107582062483,
+        "max_s": 0.16147270100191236,
+        "env_steps_per_s": 158808.0097915058
+      },
+      "direct": {
+        "compile_s": 3.262718537123874,
+        "temporary_bytes": 2948056,
+        "hlo_sort_ops": 0,
+        "median_s": 0.16128113819286227,
+        "min_s": 0.1611246671527624,
+        "max_s": 0.16588854417204857,
+        "env_steps_per_s": 158729.0385400626
+      },
+      "speedup": 0.9995027250102381
+    },
+    {
+      "kind": "rollout",
+      "game": "Zen_Puzzle_Garden",
+      "batch": 1,
+      "steps": 100,
+      "sorted": {
+        "compile_s": 12.609377758111805,
+        "temporary_bytes": 36056,
+        "hlo_sort_ops": 8,
+        "median_s": 0.05886657279916108,
+        "min_s": 0.055625177919864655,
+        "max_s": 0.06179095897823572,
+        "env_steps_per_s": 1698.7569556864898
+      },
+      "direct": {
+        "compile_s": 9.147409541066736,
+        "temporary_bytes": 33752,
+        "hlo_sort_ops": 0,
+        "median_s": 0.0565168762113899,
+        "min_s": 0.05380668002180755,
+        "max_s": 0.05687247798778117,
+        "env_steps_per_s": 1769.383000326669
+      },
+      "speedup": 1.0415751319832791
+    },
+    {
+      "kind": "rollout",
+      "game": "Zen_Puzzle_Garden",
+      "batch": 64,
+      "steps": 100,
+      "sorted": {
+        "compile_s": 13.06106982496567,
+        "temporary_bytes": 910552,
+        "hlo_sort_ops": 8,
+        "median_s": 0.09632219118066132,
+        "min_s": 0.09288852894678712,
+        "max_s": 0.09681601799093187,
+        "env_steps_per_s": 66443.67119925874
+      },
+      "direct": {
+        "compile_s": 8.920011578127742,
+        "temporary_bytes": 909528,
+        "hlo_sort_ops": 0,
+        "median_s": 0.08847057283855975,
+        "min_s": 0.0863919029943645,
+        "max_s": 0.08899879292584956,
+        "env_steps_per_s": 72340.43812148315
+      },
+      "speedup": 1.0887483610672346
+    },
+    {
+      "kind": "rollout",
+      "game": "Zen_Puzzle_Garden",
+      "batch": 256,
+      "steps": 100,
+      "sorted": {
+        "compile_s": 13.58572579594329,
+        "temporary_bytes": 3570648,
+        "hlo_sort_ops": 8,
+        "median_s": 0.10388080915436149,
+        "min_s": 0.10200216202065349,
+        "max_s": 0.10433876584284008,
+        "env_steps_per_s": 246436.27835012076
+      },
+      "direct": {
+        "compile_s": 9.034550577169284,
+        "temporary_bytes": 3569624,
+        "hlo_sort_ops": 0,
+        "median_s": 0.09740688581950963,
+        "min_s": 0.09510991303250194,
+        "max_s": 0.09783700504340231,
+        "env_steps_per_s": 262815.09551014286
+      },
+      "speedup": 1.0664626867021263
+    }
+  ]
+}

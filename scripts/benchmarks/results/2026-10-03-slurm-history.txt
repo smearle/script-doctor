@@ -1,0 +1,27 @@
+JobID|JobName|Account|Partition|State|ExitCode|Elapsed|Timelimit|NodeList
+19115700_0|puzzlejax-wide|torch_pr_84_general|h200_public|COMPLETED|0:0|00:01:34|00:40:00|gh109
+19115700_1|puzzlejax-wide|torch_pr_84_general|h200_public|FAILED|1:0|00:04:21|00:40:00|gh124
+19115700_2|puzzlejax-wide|torch_pr_84_general|h200_public|FAILED|1:0|00:00:21|00:40:00|gh109
+19115700_[3-8%2]|puzzlejax-wide|torch_pr_84_general|h200_public|CANCELLED by 3475478|0:0|00:00:00|00:40:00|None assigned
+19115969|puzzlejax-identities|torch_pr_84_general|h200_public|CANCELLED by 3475478|0:0|00:00:00|00:20:00|None assigned
+19116307_[1-8%2]|puzzlejax-wide|torch_pr_84_general|h200_public|CANCELLED by 3475478|0:0|00:00:00|00:40:00|None assigned
+19116310|puzzlejax-identities|torch_pr_84_general|h200_public|CANCELLED by 3475478|0:0|00:00:00|00:20:00|None assigned
+19116379|puzzlejax-identities|torch_pr_84_tandon_advanced|h200_tandon|COMPLETED|0:0|00:02:57|00:20:00|gh111
+19116392_1|puzzlejax-wide|torch_pr_84_tandon_advanced|h200_tandon|CANCELLED by 3475478|0:0|00:00:34|00:40:00|gh102
+19116392_2|puzzlejax-wide|torch_pr_84_tandon_advanced|h200_tandon|CANCELLED by 3475478|0:0|00:00:34|00:40:00|gh114
+19116392_5|puzzlejax-wide|torch_pr_84_tandon_advanced|h200_tandon|COMPLETED|0:0|00:25:57|00:40:00|gh114
+19116462_1|puzzlejax-wide|torch_pr_84_tandon_advanced|h200_tandon|COMPLETED|0:0|00:04:14|00:20:00|gh124
+19116462_2|puzzlejax-wide|torch_pr_84_tandon_advanced|h200_tandon|COMPLETED|0:0|00:04:26|00:20:00|gh111
+19116462_3|puzzlejax-wide|torch_pr_84_tandon_advanced|h200_tandon|COMPLETED|0:0|00:03:35|00:20:00|gh111
+19116462_4|puzzlejax-wide|torch_pr_84_tandon_advanced|h200_tandon|COMPLETED|0:0|00:08:50|00:20:00|gh114
+19116462_[6-8%2]|puzzlejax-wide|torch_pr_84_tandon_advanced|h200_tandon|CANCELLED by 3475478|0:0|00:00:00|00:20:00|None assigned
+19116535|puzzlejax-identities|torch_pr_84_tandon_advanced|h200_tandon|CANCELLED by 3475478|0:0|00:00:00|00:20:00|None assigned
+19116802|puzzlejax-profile|torch_pr_84_tandon_advanced|h200_tandon|CANCELLED by 3475478|0:0|00:00:00|00:15:00|None assigned
+19117244_6|puzzlejax-wide|torch_pr_84_tandon_advanced|h200_tandon|COMPLETED|0:0|00:01:42|00:10:00|gh124
+19117244_7|puzzlejax-wide|torch_pr_84_tandon_advanced|h200_tandon|COMPLETED|0:0|00:01:44|00:10:00|gh112
+19117244_8|puzzlejax-wide|torch_pr_84_tandon_advanced|h200_tandon|COMPLETED|0:0|00:02:11|00:10:00|gh112
+19117245_0|puzzlejax-identities|torch_pr_84_tandon_advanced|h200_tandon|COMPLETED|0:0|00:02:53|00:10:00|gh132
+19117245_1|puzzlejax-identities|torch_pr_84_tandon_advanced|h200_tandon|COMPLETED|0:0|00:02:30|00:10:00|gh114
+19117245_2|puzzlejax-identities|torch_pr_84_tandon_advanced|h200_tandon|COMPLETED|0:0|00:05:47|00:10:00|gh132
+19117245_3|puzzlejax-identities|torch_pr_84_tandon_advanced|h200_tandon|COMPLETED|0:0|00:05:16|00:10:00|gh115
+19117246|puzzlejax-profile|torch_pr_84_tandon_advanced|h200_tandon|COMPLETED|0:0|00:01:31|00:07:00|gh114

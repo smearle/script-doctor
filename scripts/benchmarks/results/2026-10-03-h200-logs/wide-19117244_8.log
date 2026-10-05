@@ -1,0 +1,16 @@
+combined/baseline: compiling Travelling_salesman, batch=256
+Writing pretty tree to /scratch/se2161/puzzlejax-perf-20261002/round3/data/pretty_trees/Travelling_salesman
+Parsed Travelling_salesman successfully
+combined/all: compiling Travelling_salesman, batch=256
+Writing pretty tree to /scratch/se2161/puzzlejax-perf-20261002/round3/data/pretty_trees/Travelling_salesman
+Parsed Travelling_salesman successfully
+Exact outputs match; timing Travelling_salesman, batch=256
+{"experiment": "combined", "candidate": "all", "game": "Travelling_salesman", "batch": 256, "steps": 100, "baseline": {"compile_s": 26.987807906931266, "temporary_bytes": 1327832, "median_s": 0.12610305682756007, "min_s": 0.12596607906743884, "max_s": 0.12627049605362117, "env_steps_per_s": 203008.56017318266}, "all": {"compile_s": 22.22315399395302, "temporary_bytes": 1326808, "median_s": 0.12198968697339296, "min_s": 0.12179186404682696, "max_s": 0.12542839092202485, "env_steps_per_s": 209853.80514652512}, "speedup": 1.033718996713749}
+combined/baseline: compiling Travelling_salesman, batch=4096
+Writing pretty tree to /scratch/se2161/puzzlejax-perf-20261002/round3/data/pretty_trees/Travelling_salesman
+Parsed Travelling_salesman successfully
+combined/all: compiling Travelling_salesman, batch=4096
+Writing pretty tree to /scratch/se2161/puzzlejax-perf-20261002/round3/data/pretty_trees/Travelling_salesman
+Parsed Travelling_salesman successfully
+Exact outputs match; timing Travelling_salesman, batch=4096
+{"experiment": "combined", "candidate": "all", "game": "Travelling_salesman", "batch": 4096, "steps": 100, "baseline": {"compile_s": 25.980524573940784, "temporary_bytes": 20806360, "median_s": 0.166632825974375, "min_s": 0.1634313620161265, "max_s": 0.1677435291931033, "env_steps_per_s": 2458099.1026521316}, "all": {"compile_s": 23.521824051858857, "temporary_bytes": 21395160, "median_s": 0.16269915807060897, "min_s": 0.16226792777888477, "max_s": 0.16378080495633185, "env_steps_per_s": 2517529.9298244664}, "speedup": 1.024177555375295}

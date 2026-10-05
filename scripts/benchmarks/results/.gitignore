@@ -1,0 +1,3 @@
+# Large raw GPU traces and source/data archives remain local; retain hashes,
+# compact measurements, profile summaries and publication figures in Git.
+*.tar.gz

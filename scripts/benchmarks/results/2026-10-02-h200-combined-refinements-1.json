@@ -1,0 +1,204 @@
+{
+  "jax_version": "0.9.0.1",
+  "devices": [
+    "NVIDIA H200"
+  ],
+  "engine_sha256": "5ced199539d21c61b4751c01ae8f53804893e39abc022e89b3cbbaa5ac921987",
+  "trials": 15,
+  "seed": 42,
+  "timing": "alternating A/B after compilation and warmup; exact full outputs",
+  "results": [
+    {
+      "experiment": "combined",
+      "candidate": "cleanup_barriers",
+      "game": "blocks",
+      "batch": 256,
+      "steps": 100,
+      "baseline": {
+        "compile_s": 4.0879558238666505,
+        "temporary_bytes": 2950360,
+        "median_s": 0.1606490700505674,
+        "min_s": 0.16048615495674312,
+        "max_s": 0.16086379904299974,
+        "env_steps_per_s": 159353.55238559368
+      },
+      "cleanup_barriers": {
+        "compile_s": 2.9966155709698796,
+        "temporary_bytes": 3646680,
+        "median_s": 0.09928207704797387,
+        "min_s": 0.09920507692731917,
+        "max_s": 0.10312326089479029,
+        "env_steps_per_s": 257851.17275124977
+      },
+      "speedup": 1.6181074653881435
+    },
+    {
+      "experiment": "combined",
+      "candidate": "cleanup_barriers",
+      "game": "blocks",
+      "batch": 1024,
+      "steps": 100,
+      "baseline": {
+        "compile_s": 4.373666359111667,
+        "temporary_bytes": 11777240,
+        "median_s": 0.19384667999111116,
+        "min_s": 0.19371920288540423,
+        "max_s": 0.19473609398119152,
+        "env_steps_per_s": 528252.5344498835
+      },
+      "cleanup_barriers": {
+        "compile_s": 3.3027166430838406,
+        "temporary_bytes": 19848152,
+        "median_s": 0.12182261212728918,
+        "min_s": 0.12172418786212802,
+        "max_s": 0.12733755283989012,
+        "env_steps_per_s": 840566.445029146
+      },
+      "speedup": 1.5912208464924884
+    },
+    {
+      "experiment": "combined",
+      "candidate": "cleanup_barriers",
+      "game": "blocks",
+      "batch": 4096,
+      "steps": 100,
+      "baseline": {
+        "compile_s": 4.370681948959827,
+        "temporary_bytes": 47047640,
+        "median_s": 0.3319668830372393,
+        "min_s": 0.3316413869615644,
+        "max_s": 0.33281084382906556,
+        "env_steps_per_s": 1233858.01695783
+      },
+      "cleanup_barriers": {
+        "compile_s": 3.255093384999782,
+        "temporary_bytes": 79339224,
+        "median_s": 0.2200525940861553,
+        "min_s": 0.21973534091375768,
+        "max_s": 0.22019845200702548,
+        "env_steps_per_s": 1861373.1944447465
+      },
+      "speedup": 1.5085797302951456
+    },
+    {
+      "experiment": "combined",
+      "candidate": "cleanup_barriers",
+      "game": "blocks",
+      "batch": 16384,
+      "steps": 100,
+      "baseline": {
+        "compile_s": 4.035047129029408,
+        "temporary_bytes": 188228312,
+        "median_s": 0.9905739740934223,
+        "min_s": 0.9902511520776898,
+        "max_s": 0.9911212709266692,
+        "env_steps_per_s": 1653990.5578475054
+      },
+      "cleanup_barriers": {
+        "compile_s": 3.1609925858210772,
+        "temporary_bytes": 317382104,
+        "median_s": 0.6727543249726295,
+        "min_s": 0.6724872039631009,
+        "max_s": 0.6770000378601253,
+        "env_steps_per_s": 2435361.526760392
+      },
+      "speedup": 1.4724156164045812
+    },
+    {
+      "experiment": "combined",
+      "candidate": "all",
+      "game": "blocks",
+      "batch": 256,
+      "steps": 100,
+      "baseline": {
+        "compile_s": 3.1411299749743193,
+        "temporary_bytes": 2950360,
+        "median_s": 0.16001425799913704,
+        "min_s": 0.15974607807584107,
+        "max_s": 0.16271579707972705,
+        "env_steps_per_s": 159985.74327131562
+      },
+      "all": {
+        "compile_s": 2.955762824974954,
+        "temporary_bytes": 3646680,
+        "median_s": 0.09908764204010367,
+        "min_s": 0.09899374702945352,
+        "max_s": 0.1040221699513495,
+        "env_steps_per_s": 258357.14194953724
+      },
+      "speedup": 1.6148760299934737
+    },
+    {
+      "experiment": "combined",
+      "candidate": "all",
+      "game": "blocks",
+      "batch": 1024,
+      "steps": 100,
+      "baseline": {
+        "compile_s": 3.2421633461490273,
+        "temporary_bytes": 11777240,
+        "median_s": 0.1939150569960475,
+        "min_s": 0.19376707216724753,
+        "max_s": 0.1942093539983034,
+        "env_steps_per_s": 528066.2656437616
+      },
+      "all": {
+        "compile_s": 3.2050375919789076,
+        "temporary_bytes": 19848152,
+        "median_s": 0.12189180497080088,
+        "min_s": 0.12158725620247424,
+        "max_s": 0.12297699018381536,
+        "env_steps_per_s": 840089.2908635644
+      },
+      "speedup": 1.590878542183371
+    },
+    {
+      "experiment": "combined",
+      "candidate": "all",
+      "game": "blocks",
+      "batch": 4096,
+      "steps": 100,
+      "baseline": {
+        "compile_s": 3.260509467916563,
+        "temporary_bytes": 47047640,
+        "median_s": 0.331024173181504,
+        "min_s": 0.330421837978065,
+        "max_s": 0.3320010011084378,
+        "env_steps_per_s": 1237371.869441728
+      },
+      "all": {
+        "compile_s": 3.163938757032156,
+        "temporary_bytes": 79339224,
+        "median_s": 0.21988995396532118,
+        "min_s": 0.21954217902384698,
+        "max_s": 0.220013391925022,
+        "env_steps_per_s": 1862749.9465691734
+      },
+      "speedup": 1.5054083518236117
+    },
+    {
+      "experiment": "combined",
+      "candidate": "all",
+      "game": "blocks",
+      "batch": 16384,
+      "steps": 100,
+      "baseline": {
+        "compile_s": 3.1110170329920948,
+        "temporary_bytes": 188228312,
+        "median_s": 0.9899883919861168,
+        "min_s": 0.9896509889513254,
+        "max_s": 0.9943264180328697,
+        "env_steps_per_s": 1654968.899900976
+      },
+      "all": {
+        "compile_s": 3.076771748950705,
+        "temporary_bytes": 317382104,
+        "median_s": 0.672316123964265,
+        "min_s": 0.6721431959886104,
+        "max_s": 0.6730811221059412,
+        "env_steps_per_s": 2436948.8423679164
+      },
+      "speedup": 1.472504312627101
+    }
+  ]
+}

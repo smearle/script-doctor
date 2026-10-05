@@ -1,0 +1,90 @@
+{
+  "jax_version": "0.9.0.1",
+  "devices": [
+    "NVIDIA H200"
+  ],
+  "independent_cell_rules": true,
+  "trials": 5,
+  "seed": 42,
+  "timing": "alternating full/transitions after compilation and warmup",
+  "results": [
+    {
+      "game": "sokoban_basic",
+      "batch": 4096,
+      "steps": 100,
+      "full": {
+        "compile_s": 12.504719476914033,
+        "temporary_bytes": 21896152,
+        "argument_bytes": 2686984,
+        "output_bytes": 197656800,
+        "median_s": 0.17678801086731255,
+        "min_s": 0.17661676090210676,
+        "max_s": 0.17810266092419624,
+        "env_steps_per_s": 2316899.1946372623
+      },
+      "transitions": {
+        "compile_s": 6.678199215093628,
+        "temporary_bytes": 25442944,
+        "argument_bytes": 2686984,
+        "output_bytes": 90751104,
+        "median_s": 0.1743392359931022,
+        "min_s": 0.1739059539977461,
+        "max_s": 0.17473736708052456,
+        "env_steps_per_s": 2349442.4400036144
+      },
+      "trace_directory": "profiles-current-h200/sokoban_basic-4096"
+    },
+    {
+      "game": "blocks",
+      "batch": 4096,
+      "steps": 100,
+      "full": {
+        "compile_s": 4.141753152012825,
+        "temporary_bytes": 47047640,
+        "argument_bytes": 4169736,
+        "output_bytes": 495689952,
+        "median_s": 0.33214967511594296,
+        "min_s": 0.331841176841408,
+        "max_s": 0.33293551905080676,
+        "env_steps_per_s": 1233178.9873255831
+      },
+      "transitions": {
+        "compile_s": 2.855749580077827,
+        "temporary_bytes": 68162176,
+        "argument_bytes": 4169736,
+        "output_bytes": 240509056,
+        "median_s": 0.33262399677187204,
+        "min_s": 0.33255688683129847,
+        "max_s": 0.33279480901546776,
+        "env_steps_per_s": 1231420.474695701
+      },
+      "trace_directory": "profiles-current-h200/blocks-4096"
+    },
+    {
+      "game": "Zen_Puzzle_Garden",
+      "batch": 4096,
+      "steps": 100,
+      "full": {
+        "compile_s": 9.429750220151618,
+        "temporary_bytes": 52128472,
+        "argument_bytes": 5365768,
+        "output_bytes": 736092384,
+        "median_s": 0.15776165598072112,
+        "min_s": 0.15768397506326437,
+        "max_s": 0.15786030516028404,
+        "env_steps_per_s": 2596321.6312210504
+      },
+      "transitions": {
+        "compile_s": 6.254498952999711,
+        "temporary_bytes": 73410944,
+        "argument_bytes": 5365768,
+        "output_bytes": 361308288,
+        "median_s": 0.15621818089857697,
+        "min_s": 0.15602922905236483,
+        "max_s": 0.1564880011137575,
+        "env_steps_per_s": 2621973.9446711936
+      },
+      "trace_directory": "profiles-current-h200/Zen_Puzzle_Garden-4096"
+    }
+  ]
+}

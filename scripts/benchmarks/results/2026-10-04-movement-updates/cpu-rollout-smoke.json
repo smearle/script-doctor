@@ -1,0 +1,70 @@
+{
+  "jax_version": "0.9.0",
+  "devices": [
+    "cpu"
+  ],
+  "engine_sha256": "38ab0cee2e8eb6d22ce4e2bb9780d3b9862f1eddaf0d2fb4aadb0900c3cea03c",
+  "benchmark_sha256": "7869d202d9601f279b2df5af53d9173b444e8223b17fc5158912aaa5026f7aec",
+  "trials": 1,
+  "seeds": [
+    42
+  ],
+  "max_episode_steps": 100,
+  "output_mode": "full",
+  "results": [
+    {
+      "candidate_name": "masked",
+      "game": "sokoban_basic",
+      "level": 0,
+      "batch": 3,
+      "steps": 5,
+      "seed": 42,
+      "baseline": {
+        "compile_s": 6.684884484857321,
+        "temporary_bytes": 41544,
+        "samples_s": [
+          0.0032852236181497574
+        ],
+        "median_s": 0.0032852236181497574,
+        "env_steps_per_s": 4565.899233504239
+      },
+      "candidate": {
+        "compile_s": 6.407591538503766,
+        "temporary_bytes": 41544,
+        "samples_s": [
+          0.0025530755519866943
+        ],
+        "median_s": 0.0025530755519866943,
+        "env_steps_per_s": 5875.26678884518
+      },
+      "speedup": 1.2867710145096711
+    },
+    {
+      "candidate_name": "batched",
+      "game": "sokoban_basic",
+      "level": 0,
+      "batch": 3,
+      "steps": 5,
+      "seed": 42,
+      "baseline": {
+        "compile_s": 6.505225837230682,
+        "temporary_bytes": 41544,
+        "samples_s": [
+          0.005370309576392174
+        ],
+        "median_s": 0.005370309576392174,
+        "env_steps_per_s": 2793.135067285478
+      },
+      "candidate": {
+        "compile_s": 6.507140664383769,
+        "temporary_bytes": 41736,
+        "samples_s": [
+          0.0055447351187467575
+        ],
+        "median_s": 0.0055447351187467575,
+        "env_steps_per_s": 2705.268994597231
+      },
+      "speedup": 0.9685421325601559
+    }
+  ]
+}

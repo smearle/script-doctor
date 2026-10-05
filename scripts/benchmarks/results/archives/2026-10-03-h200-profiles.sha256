@@ -1,0 +1,12 @@
+df1f9ef7ab3056754e36e9e9710dc9a848287f28ff96e91ae38656b65ffadeae  ./sokoban_basic-4096/optimized_hlo.txt
+7f6c92049bd7bc9daa7b829509fec2496f309ac5d8ad8b0cc5a036f9b98d4ac4  ./sokoban_basic-4096/plugins/profile/2026_10_03_15_11_58/gh114.hpc.nyu.edu.xplane.pb
+f6d6a11e7772227fe208efe4af8c9ef2622fa94fc8d5332368c569d871e63dde  ./sokoban_basic-4096/plugins/profile/2026_10_03_15_11_58/gh114.hpc.nyu.edu.trace.json.gz
+d4dcbbe07bdc34ab86a1e0554111303a1fc249d7879fe35d3e2a0b4a2b51b5eb  ./sokoban_basic-4096/plugins/profile/2026_10_03_15_11_58/perfetto_trace.json.gz
+03528c92c071c8ba67166b67523579db8cdba47bdabfdbdd9cd1841ab01de520  ./blocks-4096/optimized_hlo.txt
+9431ba0630fbc14cc1159937c7b219e97e6a437740d0a736f097d9a0b28b25a9  ./blocks-4096/plugins/profile/2026_10_03_15_12_16/gh114.hpc.nyu.edu.xplane.pb
+7ea2a3325b41df4e0a0c350fec208726c078e069b7be0e07f2af1760e85bf10e  ./blocks-4096/plugins/profile/2026_10_03_15_12_16/gh114.hpc.nyu.edu.trace.json.gz
+6c8b1488743e0b02d07438f377b97163cad20287b099dc0d7acb9d0ac75333cb  ./blocks-4096/plugins/profile/2026_10_03_15_12_16/perfetto_trace.json.gz
+d7e76891dc295385cfed7bea71b7d6e9e2e8809592d232d062b800f2943c7952  ./Zen_Puzzle_Garden-4096/optimized_hlo.txt
+19e181f8458bf0f2edc41e8afbc78b729c1930593d75cfb510a43d13ca30e488  ./Zen_Puzzle_Garden-4096/plugins/profile/2026_10_03_15_12_42/gh114.hpc.nyu.edu.xplane.pb
+acd81e2b04dfd31841b5ae68db732c6962d1a6ee309f55b5752479769e0752dd  ./Zen_Puzzle_Garden-4096/plugins/profile/2026_10_03_15_12_42/gh114.hpc.nyu.edu.trace.json.gz
+2c14a904f91365d80ed67948daac9819a42eef44e4ae74cd21f5f15c1e312a08  ./Zen_Puzzle_Garden-4096/plugins/profile/2026_10_03_15_12_42/perfetto_trace.json.gz

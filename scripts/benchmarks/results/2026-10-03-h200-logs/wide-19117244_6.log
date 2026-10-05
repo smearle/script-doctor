@@ -1,0 +1,16 @@
+combined/baseline: compiling nekopuzzle, batch=256
+Writing pretty tree to /scratch/se2161/puzzlejax-perf-20261002/round3/data/pretty_trees/nekopuzzle
+Parsed nekopuzzle successfully
+combined/all: compiling nekopuzzle, batch=256
+Writing pretty tree to /scratch/se2161/puzzlejax-perf-20261002/round3/data/pretty_trees/nekopuzzle
+Parsed nekopuzzle successfully
+Exact outputs match; timing nekopuzzle, batch=256
+{"experiment": "combined", "candidate": "all", "game": "nekopuzzle", "batch": 256, "steps": 100, "baseline": {"compile_s": 17.791718650143594, "temporary_bytes": 2845656, "median_s": 0.15278491494245827, "min_s": 0.1509976559318602, "max_s": 0.15286764898337424, "env_steps_per_s": 167555.80882864943}, "all": {"compile_s": 14.35197473783046, "temporary_bytes": 2844632, "median_s": 0.15106485690921545, "min_s": 0.14715142198838294, "max_s": 0.15123935393057764, "env_steps_per_s": 169463.6365053765}, "speedup": 1.011386222238813}
+combined/baseline: compiling nekopuzzle, batch=4096
+Writing pretty tree to /scratch/se2161/puzzlejax-perf-20261002/round3/data/pretty_trees/nekopuzzle
+Parsed nekopuzzle successfully
+combined/all: compiling nekopuzzle, batch=4096
+Writing pretty tree to /scratch/se2161/puzzlejax-perf-20261002/round3/data/pretty_trees/nekopuzzle
+Parsed nekopuzzle successfully
+Exact outputs match; timing nekopuzzle, batch=4096
+{"experiment": "combined", "candidate": "all", "game": "nekopuzzle", "batch": 4096, "steps": 100, "baseline": {"compile_s": 20.104733181884512, "temporary_bytes": 44565464, "median_s": 0.2611592991743237, "min_s": 0.2574315050151199, "max_s": 0.26154799899086356, "env_steps_per_s": 1568391.404384158}, "all": {"compile_s": 16.51212988398038, "temporary_bytes": 44564440, "median_s": 0.2594768749549985, "min_s": 0.2551416349597275, "max_s": 0.25978628592565656, "env_steps_per_s": 1578560.7101636229}, "speedup": 1.0064839081309922}

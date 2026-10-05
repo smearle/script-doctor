@@ -1,0 +1,44 @@
+{
+  "date": "2026-10-02",
+  "sources": {
+    "puzzlescript_jax/env.py": "38ab0cee2e8eb6d22ce4e2bb9780d3b9862f1eddaf0d2fb4aadb0900c3cea03c",
+    "scripts/benchmarks/benchmark_movement_refinements.py": "dfb339b6b0ffd7b3f02b6759d7a783a6ec26def55007f1d344de2dd41a4e11f3",
+    "scripts/benchmarks/benchmark_chunked_rollouts.py": "3a2d3762db9656f853053b8927b0db76382821e8b45c77ec7d97831073d34c97",
+    "scripts/benchmarks/benchmark_manhattan_distance.py": "812cf37a8cdb5d41db640e54eb6bcfde1598e274781f700537ae68231ceda60e",
+    "scripts/benchmarks/benchmark_rollout_scaling.py": "0e2404e22585bf09898e3743e4ba63214f07945e9f7b825b627997448d68fa9b"
+  },
+  "retained": [
+    "parallel invalid-force cleanup",
+    "layer-local slice for force extraction",
+    "barriers before and after coordinate prefix sum"
+  ],
+  "rejected": [
+    "prefix-sum barrier alone"
+  ],
+  "chunking": "Opt-in benchmark helper; not an automatic engine or training policy.",
+  "torch": {
+    "device": "NVIDIA H200",
+    "driver": "610.43.02",
+    "memory_mib": 143771,
+    "jax": "0.9.0.1",
+    "ablation_snapshot": "/scratch/se2161/puzzlejax-perf-20261002/round2",
+    "promoted_snapshot": "/scratch/se2161/puzzlejax-perf-20261002/round2/chunked",
+    "completed_jobs": {
+      "ablations": "19062051_[0-2]",
+      "combined": "19063941_[0-2]",
+      "chunk_sokoban": "19063943_0",
+      "chunk_blocks_zen": "19065531_[1-2]",
+      "chunk_atlas": "19063047_3"
+    },
+    "all_completed_jobs_exit_code": "0:0"
+  },
+  "rtx4090": {
+    "host": "210",
+    "snapshot": "/tmp/puzzlejax-perf-20261002/round2",
+    "jax": "0.9.1",
+    "note": "Different JAX version; not a controlled hardware comparison."
+  },
+  "validation": "2026-10-02-refinements-validation.json",
+  "known_performance_exception": "RTX 4090 Zen, unchunked batch 16384: combined change is 0.878x the preceding engine; chunking improves this configuration.",
+  "prior_paper_figure": "Earlier eight-game final-carry measurements are preserved under their preceding engine hash; these new full-output paired timings do not replace those curves."
+}

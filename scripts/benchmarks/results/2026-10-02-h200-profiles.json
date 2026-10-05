@@ -1,0 +1,373 @@
+{
+  "note": "JAX 0.9.0.1; warmed transitions rollouts, batch 4096, 100 steps. Trace timings include profiler overhead; activity fraction is not SM utilization.",
+  "traces": [
+    {
+      "trace": "profiles-scaling/Zen_Puzzle_Garden-4096/plugins/profile/2026_10_02_02_44_32/perfetto_trace.json.gz",
+      "devices": [
+        {
+          "name": "/device:GPU:0",
+          "activity_count": 34486,
+          "kernel_count": 30507,
+          "span_ms": 276.76431099999996,
+          "active_union_ms": 170.66740300000137,
+          "active_fraction": 0.6166524953428745,
+          "median_kernel_us": 1.664,
+          "kernels_under_5us_fraction": 0.7988330547087553,
+          "top_activities": [
+            {
+              "name": "input_scatter_fusion_20",
+              "count": 200,
+              "total_ms": 43.36531299999999
+            },
+            {
+              "name": "memcpy128",
+              "count": 2583,
+              "total_ms": 11.403870000000051
+            },
+            {
+              "name": "input_transpose_fusion",
+              "count": 392,
+              "total_ms": 10.974149000000008
+            },
+            {
+              "name": "loop_select_fusion_10",
+              "count": 596,
+              "total_ms": 9.802038999999988
+            },
+            {
+              "name": "MemcpyD2H",
+              "count": 3178,
+              "total_ms": 7.764924999999737
+            },
+            {
+              "name": "input_scatter_fusion_12",
+              "count": 396,
+              "total_ms": 5.787963
+            },
+            {
+              "name": "input_scatter_fusion_10",
+              "count": 396,
+              "total_ms": 5.653403000000014
+            },
+            {
+              "name": "loop_add_fusion",
+              "count": 200,
+              "total_ms": 5.3414590000000075
+            },
+            {
+              "name": "wrapped_transpose",
+              "count": 392,
+              "total_ms": 5.068273999999988
+            },
+            {
+              "name": "input_reduce_fusion_17",
+              "count": 396,
+              "total_ms": 4.892317000000011
+            },
+            {
+              "name": "loop_select_fusion_5",
+              "count": 199,
+              "total_ms": 3.2085570000000043
+            },
+            {
+              "name": "loop_select_fusion_19",
+              "count": 199,
+              "total_ms": 3.206670000000005
+            },
+            {
+              "name": "loop_reduce_window_fusion_1",
+              "count": 792,
+              "total_ms": 3.0128439999999608
+            },
+            {
+              "name": "memcpy32_post",
+              "count": 2705,
+              "total_ms": 2.8057370000000317
+            },
+            {
+              "name": "input_concatenate_fusion_4",
+              "count": 100,
+              "total_ms": 2.3431559999999982
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "trace": "profiles-scaling/blocks-4096/plugins/profile/2026_10_02_02_42_52/perfetto_trace.json.gz",
+      "devices": [
+        {
+          "name": "/device:GPU:0",
+          "activity_count": 63048,
+          "kernel_count": 57071,
+          "span_ms": 476.78504399999997,
+          "active_union_ms": 282.27631100009353,
+          "active_fraction": 0.5920410351632035,
+          "median_kernel_us": 1.409,
+          "kernels_under_5us_fraction": 0.8643444130994726,
+          "top_activities": [
+            {
+              "name": "input_scatter_fusion_8",
+              "count": 399,
+              "total_ms": 90.54356600000006
+            },
+            {
+              "name": "loop_select_fusion",
+              "count": 1990,
+              "total_ms": 28.98209499999953
+            },
+            {
+              "name": "loop_select_fusion_1",
+              "count": 1990,
+              "total_ms": 28.969372999999507
+            },
+            {
+              "name": "memcpy128",
+              "count": 4979,
+              "total_ms": 24.37716799999995
+            },
+            {
+              "name": "MemcpyD2H",
+              "count": 5377,
+              "total_ms": 13.337560000000293
+            },
+            {
+              "name": "loop_add_fusion",
+              "count": 399,
+              "total_ms": 6.787119000000028
+            },
+            {
+              "name": "loop_compare_fusion_2",
+              "count": 4778,
+              "total_ms": 6.409046000000132
+            },
+            {
+              "name": "loop_select_fusion_6",
+              "count": 399,
+              "total_ms": 5.989381999999979
+            },
+            {
+              "name": "loop_slice_fusion_1",
+              "count": 399,
+              "total_ms": 5.185679999999981
+            },
+            {
+              "name": "memcpy32_post",
+              "count": 4990,
+              "total_ms": 4.847924000000236
+            },
+            {
+              "name": "input_reduce_fusion_1",
+              "count": 4778,
+              "total_ms": 4.623805000000249
+            },
+            {
+              "name": "input_reduce_fusion",
+              "count": 1990,
+              "total_ms": 4.270169999999966
+            },
+            {
+              "name": "input_concatenate_fusion",
+              "count": 399,
+              "total_ms": 3.916145999999999
+            },
+            {
+              "name": "input_reduce_fusion_7",
+              "count": 1990,
+              "total_ms": 3.440449999999941
+            },
+            {
+              "name": "input_scatter_fusion",
+              "count": 1990,
+              "total_ms": 3.170949000000026
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "trace": "profiles-scaling/sokoban_basic-4096/plugins/profile/2026_10_02_02_41_47/perfetto_trace.json.gz",
+      "devices": [
+        {
+          "name": "/device:GPU:0",
+          "activity_count": 46761,
+          "kernel_count": 41876,
+          "span_ms": 256.3056,
+          "active_union_ms": 120.9521990000075,
+          "active_fraction": 0.4719061893302663,
+          "median_kernel_us": 1.472,
+          "kernels_under_5us_fraction": 0.899775527748591,
+          "top_activities": [
+            {
+              "name": "input_scatter_fusion_28",
+              "count": 299,
+              "total_ms": 22.22233200000002
+            },
+            {
+              "name": "MemcpyD2H",
+              "count": 4185,
+              "total_ms": 9.99602199999983
+            },
+            {
+              "name": "input_transpose_fusion_2",
+              "count": 792,
+              "total_ms": 6.537961000000068
+            },
+            {
+              "name": "memcpy128",
+              "count": 2794,
+              "total_ms": 5.666582000000121
+            },
+            {
+              "name": "memcpy32_post",
+              "count": 4699,
+              "total_ms": 4.958517000000167
+            },
+            {
+              "name": "wrapped_transpose",
+              "count": 792,
+              "total_ms": 4.188600999999987
+            },
+            {
+              "name": "loop_select_fusion_1",
+              "count": 598,
+              "total_ms": 3.291470000000005
+            },
+            {
+              "name": "loop_select_fusion_9",
+              "count": 598,
+              "total_ms": 3.1057549999999936
+            },
+            {
+              "name": "input_reduce_fusion",
+              "count": 1592,
+              "total_ms": 2.3029010000000407
+            },
+            {
+              "name": "loop_compare_fusion_1",
+              "count": 1794,
+              "total_ms": 2.24492099999998
+            },
+            {
+              "name": "loop_reduce_window_fusion_1",
+              "count": 400,
+              "total_ms": 1.7730080000000004
+            },
+            {
+              "name": "loop_reduce_window_fusion_3",
+              "count": 400,
+              "total_ms": 1.7270260000000028
+            },
+            {
+              "name": "input_reduce_fusion_3",
+              "count": 1794,
+              "total_ms": 1.713756000000035
+            },
+            {
+              "name": "loop_select_fusion_11",
+              "count": 299,
+              "total_ms": 1.652815999999997
+            },
+            {
+              "name": "input_reduce_select_fusion",
+              "count": 200,
+              "total_ms": 1.4605419999999998
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "trace": "profiles-cells/Zen_Puzzle_Garden-4096/plugins/profile/2026_10_02_02_52_27/perfetto_trace.json.gz",
+      "devices": [
+        {
+          "name": "/device:GPU:0",
+          "activity_count": 21450,
+          "kernel_count": 18655,
+          "span_ms": 208.708773,
+          "active_union_ms": 140.79790899999557,
+          "active_fraction": 0.6746142338731278,
+          "median_kernel_us": 1.537,
+          "kernels_under_5us_fraction": 0.777271508978826,
+          "top_activities": [
+            {
+              "name": "input_scatter_fusion_8",
+              "count": 200,
+              "total_ms": 43.50869899999998
+            },
+            {
+              "name": "input_reduce_select_fusion",
+              "count": 198,
+              "total_ms": 8.696293000000004
+            },
+            {
+              "name": "input_reduce_select_fusion_1",
+              "count": 198,
+              "total_ms": 8.469433000000006
+            },
+            {
+              "name": "loop_select_fusion_2",
+              "count": 198,
+              "total_ms": 7.735916000000001
+            },
+            {
+              "name": "loop_select_fusion",
+              "count": 198,
+              "total_ms": 7.6565829999999995
+            },
+            {
+              "name": "memcpy128",
+              "count": 1395,
+              "total_ms": 7.4924689999999625
+            },
+            {
+              "name": "loop_add_fusion",
+              "count": 200,
+              "total_ms": 5.340743000000007
+            },
+            {
+              "name": "MemcpyD2H",
+              "count": 1994,
+              "total_ms": 5.000520999999953
+            },
+            {
+              "name": "loop_select_fusion_18",
+              "count": 200,
+              "total_ms": 3.305277000000007
+            },
+            {
+              "name": "loop_select_fusion_5",
+              "count": 199,
+              "total_ms": 3.2084230000000042
+            },
+            {
+              "name": "loop_select_fusion_11",
+              "count": 199,
+              "total_ms": 3.1960740000000083
+            },
+            {
+              "name": "memcpy32_post",
+              "count": 2309,
+              "total_ms": 2.3797950000000214
+            },
+            {
+              "name": "input_concatenate_fusion_2",
+              "count": 100,
+              "total_ms": 2.3376319999999993
+            },
+            {
+              "name": "input_concatenate_fusion",
+              "count": 200,
+              "total_ms": 1.942617999999999
+            },
+            {
+              "name": "loop_select_fusion_29",
+              "count": 100,
+              "total_ms": 1.6163199999999975
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

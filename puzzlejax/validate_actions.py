@@ -234,7 +234,8 @@ def compare_states_at_step(
     return True, None
 
 
-def run_test_case(game_name, level_i, js_actions, backend, parser, compare_per_step=True):
+def run_test_case(game_name, level_i, js_actions, backend, parser, compare_per_step=True,
+                  *, env_cls=PuzzleJaxEnv):
     """Run a single test case through both backends and compare.
 
     Returns (success: bool, message: str).
@@ -256,7 +257,7 @@ def run_test_case(game_name, level_i, js_actions, backend, parser, compare_per_s
         return False, f"JAX parse failed ({status}): {err_msg}"
 
     try:
-        env = PuzzleJaxEnv(tree, debug=False, print_score=False, level_i=level_i)
+        env = env_cls(tree, debug=False, print_score=False, level_i=level_i)
     except Exception:
         return False, f"JAX env init failed:\n{traceback.format_exc()}"
 
@@ -338,15 +339,24 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--game", type=str, default=None, help="Only run tests for this game")
     ap.add_argument("--dir", type=str, default=ACTION_SEQUENCES_DIR, help="Action sequences directory")
+    ap.add_argument("--backend", choices=("standard", "switch"), default="standard",
+                    help="JAX rule dispatcher (the experimental switch backend can be slow on large games)")
     ap.add_argument(
         "--output-dir",
         type=str,
-        default=VALIDATED_ACTION_SEQUENCES_DIR,
-        help="Directory for persisted validation results",
+        default=None,
+        help="Directory for persisted results (switch defaults to a separate _switch directory)",
     )
     ap.add_argument("--first-error-only", action="store_true", help="Stop at first mismatch per test case")
     ap.add_argument("--fail-fast", action="store_true", help="Stop after first failing test case")
     args = ap.parse_args()
+    if args.backend == "switch":
+        from puzzlescript_jax.env_switch import PuzzleJaxEnvSwitch
+        env_cls = PuzzleJaxEnvSwitch
+    else:
+        env_cls = PuzzleJaxEnv
+    if args.output_dir is None:
+        args.output_dir = VALIDATED_ACTION_SEQUENCES_DIR + ("_switch" if args.backend == "switch" else "")
 
     cases = discover_test_cases(args.dir, game_filter=args.game)
     if not cases:
@@ -378,6 +388,7 @@ def main():
     for game_name, level_i, seq_id, fpath in cases:
         label = f"{game_name}/level_{level_i}_actions_{seq_id}"
         case_result = {
+            "backend": args.backend,
             "game": game_name,
             "level": level_i,
             "seq_id": seq_id,
@@ -405,6 +416,7 @@ def main():
             ok, msg = run_test_case(
                 game_name, level_i, js_actions, backend, parser,
                 compare_per_step=not args.first_error_only,
+                env_cls=env_cls,
             )
         except KeyboardInterrupt:
             raise
@@ -441,6 +453,7 @@ def main():
     print(f"\n{'='*60}")
     print(f"Results: {n_pass} passed, {n_fail} failed, {n_error} errors, {n_xfail} xfailed, {n_xpass} xpassed")
     summary = {
+        "backend": args.backend,
         "output_dir": args.output_dir,
         "source_dir": args.dir,
         "game_filter": args.game,

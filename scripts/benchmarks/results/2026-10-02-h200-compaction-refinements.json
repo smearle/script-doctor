@@ -1,0 +1,156 @@
+{
+  "jax_version": "0.9.0.1",
+  "devices": [
+    "NVIDIA H200"
+  ],
+  "engine_sha256": "5ced199539d21c61b4751c01ae8f53804893e39abc022e89b3cbbaa5ac921987",
+  "trials": 15,
+  "seed": 42,
+  "timing": "alternating A/B after compilation and warmup; exact full outputs",
+  "results": [
+    {
+      "experiment": "compaction",
+      "candidate": "prefix_barrier",
+      "game": "sokoban_basic",
+      "batch": 4096,
+      "steps": 100,
+      "baseline": {
+        "compile_s": 12.478766705957241,
+        "temporary_bytes": 24029400,
+        "median_s": 0.15739331510849297,
+        "min_s": 0.15518528199754655,
+        "max_s": 0.15963771590031683,
+        "env_steps_per_s": 2602397.6921615642
+      },
+      "prefix_barrier": {
+        "compile_s": 8.942051253980026,
+        "temporary_bytes": 24029400,
+        "median_s": 0.16408586804755032,
+        "min_s": 0.1601852950407192,
+        "max_s": 0.16481066099368036,
+        "env_steps_per_s": 2496253.9728363585
+      },
+      "speedup": 0.9592131058043468
+    },
+    {
+      "experiment": "compaction",
+      "candidate": "prefix_barrier",
+      "game": "blocks",
+      "batch": 4096,
+      "steps": 100,
+      "baseline": {
+        "compile_s": 4.1722025180934,
+        "temporary_bytes": 79339224,
+        "median_s": 0.27034703199751675,
+        "min_s": 0.26737882592715323,
+        "max_s": 0.2716748589882627,
+        "env_steps_per_s": 1515089.6866652574
+      },
+      "prefix_barrier": {
+        "compile_s": 3.1592351510189474,
+        "temporary_bytes": 79339224,
+        "median_s": 0.28840781399048865,
+        "min_s": 0.28548887104261667,
+        "max_s": 0.2893119570799172,
+        "env_steps_per_s": 1420211.173659491
+      },
+      "speedup": 0.9373776259974443
+    },
+    {
+      "experiment": "compaction",
+      "candidate": "prefix_barrier",
+      "game": "Zen_Puzzle_Garden",
+      "batch": 4096,
+      "steps": 100,
+      "baseline": {
+        "compile_s": 9.301738646929152,
+        "temporary_bytes": 81692632,
+        "median_s": 0.15692662098444998,
+        "min_s": 0.15672640001866966,
+        "max_s": 0.15853381797205657,
+        "env_steps_per_s": 2610137.1292547467
+      },
+      "prefix_barrier": {
+        "compile_s": 7.672806521062739,
+        "temporary_bytes": 81692632,
+        "median_s": 0.17140277998987585,
+        "min_s": 0.1707986310357228,
+        "max_s": 0.17245703400112689,
+        "env_steps_per_s": 2389692.8627656656
+      },
+      "speedup": 0.9155430325792795
+    },
+    {
+      "experiment": "compaction",
+      "candidate": "mask_prefix_barrier",
+      "game": "sokoban_basic",
+      "batch": 4096,
+      "steps": 100,
+      "baseline": {
+        "compile_s": 8.64046511601191,
+        "temporary_bytes": 24029400,
+        "median_s": 0.1558244110783562,
+        "min_s": 0.1554064949741587,
+        "max_s": 0.15687592804897577,
+        "env_steps_per_s": 2628599.698631512
+      },
+      "mask_prefix_barrier": {
+        "compile_s": 8.69444620294962,
+        "temporary_bytes": 24029400,
+        "median_s": 0.14291137806139886,
+        "min_s": 0.14263217302504927,
+        "max_s": 0.144808069919236,
+        "env_steps_per_s": 2866111.890853253
+      },
+      "speedup": 1.090356927433794
+    },
+    {
+      "experiment": "compaction",
+      "candidate": "mask_prefix_barrier",
+      "game": "blocks",
+      "batch": 4096,
+      "steps": 100,
+      "baseline": {
+        "compile_s": 3.190166274900548,
+        "temporary_bytes": 79339224,
+        "median_s": 0.2683366489363834,
+        "min_s": 0.26799957489129156,
+        "max_s": 0.2698904820717871,
+        "env_steps_per_s": 1526440.7661925708
+      },
+      "mask_prefix_barrier": {
+        "compile_s": 3.037198635051027,
+        "temporary_bytes": 79339224,
+        "median_s": 0.21792320103850216,
+        "min_s": 0.21697458904236555,
+        "max_s": 0.22012279008049518,
+        "env_steps_per_s": 1879561.2309661
+      },
+      "speedup": 1.2313358451860035
+    },
+    {
+      "experiment": "compaction",
+      "candidate": "mask_prefix_barrier",
+      "game": "Zen_Puzzle_Garden",
+      "batch": 4096,
+      "steps": 100,
+      "baseline": {
+        "compile_s": 7.761313081020489,
+        "temporary_bytes": 81692632,
+        "median_s": 0.1588819429744035,
+        "min_s": 0.15718788898084313,
+        "max_s": 0.15944812807720155,
+        "env_steps_per_s": 2578014.797225813
+      },
+      "mask_prefix_barrier": {
+        "compile_s": 7.747044348041527,
+        "temporary_bytes": 81692632,
+        "median_s": 0.13649674702901393,
+        "min_s": 0.13391218101605773,
+        "max_s": 0.1369177979649976,
+        "env_steps_per_s": 3000804.113763494
+      },
+      "speedup": 1.1639980177742355
+    }
+  ]
+}

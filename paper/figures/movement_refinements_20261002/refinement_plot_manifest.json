@@ -1,0 +1,116 @@
+{
+  "inputs": {
+    "scripts/benchmarks/results/2026-10-02-h200-cleanup-refinements.json": {
+      "sha256": "97a97728d333d586a9c051237640ee93cc1a405dc09346783a3709db398e3c6c",
+      "engine_sha256": "5ced199539d21c61b4751c01ae8f53804893e39abc022e89b3cbbaa5ac921987",
+      "jax_version": "0.9.0.1",
+      "trials": 15,
+      "devices": [
+        "NVIDIA H200"
+      ]
+    },
+    "scripts/benchmarks/results/2026-10-02-h200-layout-refinements.json": {
+      "sha256": "11b181e5a3f88602a7312b2bc146afa2c422ab9a3182e649c0912b23bed2575e",
+      "engine_sha256": "5ced199539d21c61b4751c01ae8f53804893e39abc022e89b3cbbaa5ac921987",
+      "jax_version": "0.9.0.1",
+      "trials": 15,
+      "devices": [
+        "NVIDIA H200"
+      ]
+    },
+    "scripts/benchmarks/results/2026-10-02-h200-compaction-refinements.json": {
+      "sha256": "c5cb3fd68e6b06cbac50d23efffe8b12f1d737eb112ca54e57afa4526cc90b21",
+      "engine_sha256": "5ced199539d21c61b4751c01ae8f53804893e39abc022e89b3cbbaa5ac921987",
+      "jax_version": "0.9.0.1",
+      "trials": 15,
+      "devices": [
+        "NVIDIA H200"
+      ]
+    },
+    "scripts/benchmarks/results/2026-10-02-h200-combined-refinements-0.json": {
+      "sha256": "13d885ed09caba01672dd5922881566ff64e020a27b268445bca6e04532e2b42",
+      "engine_sha256": "5ced199539d21c61b4751c01ae8f53804893e39abc022e89b3cbbaa5ac921987",
+      "jax_version": "0.9.0.1",
+      "trials": 15,
+      "devices": [
+        "NVIDIA H200"
+      ]
+    },
+    "scripts/benchmarks/results/2026-10-02-h200-combined-refinements-1.json": {
+      "sha256": "684937d209a3656f3285759a715c1cd8dd86b9a38c2000a3a51664256917f652",
+      "engine_sha256": "5ced199539d21c61b4751c01ae8f53804893e39abc022e89b3cbbaa5ac921987",
+      "jax_version": "0.9.0.1",
+      "trials": 15,
+      "devices": [
+        "NVIDIA H200"
+      ]
+    },
+    "scripts/benchmarks/results/2026-10-02-h200-combined-refinements-2.json": {
+      "sha256": "f21d714ac6e5042be869a61929a8817ac41185954efecabd4306ec694b6d0f2f",
+      "engine_sha256": "5ced199539d21c61b4751c01ae8f53804893e39abc022e89b3cbbaa5ac921987",
+      "jax_version": "0.9.0.1",
+      "trials": 15,
+      "devices": [
+        "NVIDIA H200"
+      ]
+    },
+    "scripts/benchmarks/results/2026-10-02-rtx4090-combined-sweep.json": {
+      "sha256": "fc9a4f9447d036072ddc33463572383d3fd49587b419d56f4c12c47f7701d6b3",
+      "engine_sha256": "38ab0cee2e8eb6d22ce4e2bb9780d3b9862f1eddaf0d2fb4aadb0900c3cea03c",
+      "jax_version": "0.9.1",
+      "trials": 15,
+      "devices": [
+        "NVIDIA GeForce RTX 4090"
+      ]
+    },
+    "scripts/benchmarks/results/2026-10-02-h200-chunked-rollouts-0.json": {
+      "sha256": "d8aae0d10706dd8d565d0c63368835fbe5d94f27bfeb50c3f2c2099f8a23ca3a",
+      "engine_sha256": "38ab0cee2e8eb6d22ce4e2bb9780d3b9862f1eddaf0d2fb4aadb0900c3cea03c",
+      "jax_version": "0.9.0.1",
+      "trials": 9,
+      "devices": [
+        "NVIDIA H200"
+      ]
+    },
+    "scripts/benchmarks/results/2026-10-02-h200-chunked-rollouts-1.json": {
+      "sha256": "95d8775b2c457014384ccc9fd1e0c286ddf95a51670e9fc17bda0f44906ea695",
+      "engine_sha256": "38ab0cee2e8eb6d22ce4e2bb9780d3b9862f1eddaf0d2fb4aadb0900c3cea03c",
+      "jax_version": "0.9.0.1",
+      "trials": 9,
+      "devices": [
+        "NVIDIA H200"
+      ]
+    },
+    "scripts/benchmarks/results/2026-10-02-h200-chunked-rollouts-2.json": {
+      "sha256": "f38b5b8ed3cdfb93afad66e98a48d3db4719d15cec5ad2802b7c3f6cb5b02c36",
+      "engine_sha256": "38ab0cee2e8eb6d22ce4e2bb9780d3b9862f1eddaf0d2fb4aadb0900c3cea03c",
+      "jax_version": "0.9.0.1",
+      "trials": 9,
+      "devices": [
+        "NVIDIA H200"
+      ]
+    },
+    "scripts/benchmarks/results/2026-10-02-h200-chunked-rollouts-3.json": {
+      "sha256": "6a331d671bc6d7749ad7e2cc9556142e468c9d7a48183c9cacec3356e24e43a3",
+      "engine_sha256": "38ab0cee2e8eb6d22ce4e2bb9780d3b9862f1eddaf0d2fb4aadb0900c3cea03c",
+      "jax_version": "0.9.0.1",
+      "trials": 9,
+      "devices": [
+        "NVIDIA H200"
+      ]
+    },
+    "scripts/benchmarks/results/2026-10-02-rtx4090-chunked-rollouts.json": {
+      "sha256": "6ee2f6525e39f7d3ca300d52cde825fb4e778ea5f443599f6599e40e56683c4f",
+      "engine_sha256": "38ab0cee2e8eb6d22ce4e2bb9780d3b9862f1eddaf0d2fb4aadb0900c3cea03c",
+      "jax_version": "0.9.1",
+      "trials": 9,
+      "devices": [
+        "NVIDIA GeForce RTX 4090"
+      ]
+    }
+  },
+  "accepted_candidate": "all",
+  "plotter_sha256": "e2c7e8ff32fd5d783465128183e7b41bb3541b5dd4b2e07ae12a4b274eb71c60",
+  "matplotlib_version": "3.10.6",
+  "note": "Full-output paired experiments; separate from final-carry paper throughput curves."
+}

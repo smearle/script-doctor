@@ -1,0 +1,54 @@
+production/baseline: atlas shrank level=0 batch=1
+Writing pretty tree to /scratch/se2161/puzzlejax-perf-20261002/round4-dispatch/data/pretty_trees/atlas shrank
+Parsed atlas shrank successfully
+Object playerl appears multiple times in collision layers.
+Object playerr appears multiple times in collision layers.
+Object players appears multiple times in collision layers.
+Object playerrh appears multiple times in collision layers.
+Object playerlh appears multiple times in collision layers.
+production/candidate: atlas shrank level=0 batch=1
+Writing pretty tree to /scratch/se2161/puzzlejax-perf-20261002/round4-dispatch/data/pretty_trees/atlas shrank
+Parsed atlas shrank successfully
+Object playerl appears multiple times in collision layers.
+Object playerr appears multiple times in collision layers.
+Object players appears multiple times in collision layers.
+Object playerrh appears multiple times in collision layers.
+Object playerlh appears multiple times in collision layers.
+{"candidate_name": "production", "game": "atlas shrank", "level": 0, "batch": 1, "steps": 100, "seed": 42, "baseline": {"compile_s": 127.88456273707561, "temporary_bytes": 350712, "samples_s": [1.2030899429228157, 1.2015824269037694, 1.1992354281246662, 1.2010506999213248, 1.200044128112495, 1.2006880650296807, 1.203701817896217], "median_s": 1.2010506999213248, "env_steps_per_s": 83.26043189230107}, "candidate": {"compile_s": 129.1023025661707, "temporary_bytes": 350712, "samples_s": [1.204972123960033, 1.2002564510330558, 1.2005621220450848, 1.2005706208292395, 1.2047481248155236, 1.200336349895224, 1.2024423370603472], "median_s": 1.2005706208292395, "env_steps_per_s": 83.29372572096554}, "speedup": 1.0003998757622052}
+{"candidate_name": "production", "game": "atlas shrank", "level": 0, "batch": 1, "steps": 100, "seed": 1042, "baseline": {"compile_s": 127.88456273707561, "temporary_bytes": 350712, "samples_s": [1.1963630348909646, 1.1980372031684965, 1.2002970790490508, 1.2009162849280983, 1.1944568001199514, 1.1969020799733698, 1.1993389579001814], "median_s": 1.1980372031684965, "env_steps_per_s": 83.46986198385662}, "candidate": {"compile_s": 129.1023025661707, "temporary_bytes": 350712, "samples_s": [1.1949642191175371, 1.2003304329700768, 1.198211032897234, 1.1951344250701368, 1.2027173219248652, 1.1953689658548683, 1.1974217230454087], "median_s": 1.1974217230454087, "env_steps_per_s": 83.51276586637287}, "speedup": 1.0005140044741483}
+production/baseline: atlas shrank level=0 batch=256
+Writing pretty tree to /scratch/se2161/puzzlejax-perf-20261002/round4-dispatch/data/pretty_trees/atlas shrank
+Parsed atlas shrank successfully
+Object playerl appears multiple times in collision layers.
+Object playerr appears multiple times in collision layers.
+Object players appears multiple times in collision layers.
+Object playerrh appears multiple times in collision layers.
+Object playerlh appears multiple times in collision layers.
+production/candidate: atlas shrank level=0 batch=256
+Writing pretty tree to /scratch/se2161/puzzlejax-perf-20261002/round4-dispatch/data/pretty_trees/atlas shrank
+Parsed atlas shrank successfully
+Object playerl appears multiple times in collision layers.
+Object playerr appears multiple times in collision layers.
+Object players appears multiple times in collision layers.
+Object playerrh appears multiple times in collision layers.
+Object playerlh appears multiple times in collision layers.
+{"candidate_name": "production", "game": "atlas shrank", "level": 0, "batch": 256, "steps": 100, "seed": 42, "baseline": {"compile_s": 136.99991852906533, "temporary_bytes": 86174816, "samples_s": [3.213114483980462, 3.220268847187981, 3.2145061758346856, 3.2192002858500928, 3.2114147059619427, 3.2137171819340438, 3.2055111969821155], "median_s": 3.2137171819340438, "env_steps_per_s": 7965.85341856177}, "candidate": {"compile_s": 135.37195916799828, "temporary_bytes": 86173792, "samples_s": [3.2069601169787347, 3.2065771580673754, 3.2160964079666883, 3.2070473469793797, 3.2170121469534934, 3.207534892950207, 3.2080135561991483], "median_s": 3.207534892950207, "env_steps_per_s": 7981.207018594204}, "speedup": 1.0019274268839367}
+{"candidate_name": "production", "game": "atlas shrank", "level": 0, "batch": 256, "steps": 100, "seed": 1042, "baseline": {"compile_s": 136.99991852906533, "temporary_bytes": 86174816, "samples_s": [3.1972643909975886, 3.196625388925895, 3.215269354172051, 3.2414117811713368, 3.1985719241201878, 3.2049953148234636, 3.198716839076951], "median_s": 3.198716839076951, "env_steps_per_s": 8003.209189153284}, "candidate": {"compile_s": 135.37195916799828, "temporary_bytes": 86173792, "samples_s": [3.1915466419886798, 3.190492580179125, 3.1942628629039973, 3.200504762819037, 3.1986789610236883, 3.1916794658172876, 3.199358476791531], "median_s": 3.1942628629039973, "env_steps_per_s": 8014.368603567677}, "speedup": 1.001394367453186}
+production/baseline: atlas shrank level=0 batch=4096
+Writing pretty tree to /scratch/se2161/puzzlejax-perf-20261002/round4-dispatch/data/pretty_trees/atlas shrank
+Parsed atlas shrank successfully
+Object playerl appears multiple times in collision layers.
+Object playerr appears multiple times in collision layers.
+Object players appears multiple times in collision layers.
+Object playerrh appears multiple times in collision layers.
+Object playerlh appears multiple times in collision layers.
+production/candidate: atlas shrank level=0 batch=4096
+Writing pretty tree to /scratch/se2161/puzzlejax-perf-20261002/round4-dispatch/data/pretty_trees/atlas shrank
+Parsed atlas shrank successfully
+Object playerl appears multiple times in collision layers.
+Object playerr appears multiple times in collision layers.
+Object players appears multiple times in collision layers.
+Object playerrh appears multiple times in collision layers.
+Object playerlh appears multiple times in collision layers.
+{"candidate_name": "production", "game": "atlas shrank", "level": 0, "batch": 4096, "steps": 100, "seed": 42, "baseline": {"compile_s": 212.44178908411413, "temporary_bytes": 1370920720, "samples_s": [7.869468496181071, 7.872821470024064, 7.861475944053382, 7.879139824071899, 7.860423782840371, 7.866887310985476, 7.865314417984337], "median_s": 7.866887310985476, "env_steps_per_s": 52066.33625322515}, "candidate": {"compile_s": 211.73818522505462, "temporary_bytes": 1370920720, "samples_s": [7.797605986939743, 7.78942540101707, 7.80206133890897, 7.791874040849507, 7.797918264986947, 7.785295927198604, 7.798707539914176], "median_s": 7.797605986939743, "env_steps_per_s": 52528.94294557092}, "speedup": 1.0088849480419724}
+{"candidate_name": "production", "game": "atlas shrank", "level": 0, "batch": 4096, "steps": 100, "seed": 1042, "baseline": {"compile_s": 212.44178908411413, "temporary_bytes": 1370920720, "samples_s": [7.860714097041637, 7.872265322133899, 7.860588826937601, 7.8662872249260545, 7.8635157130192965, 7.86757287196815, 7.862094829091802], "median_s": 7.8635157130192965, "env_steps_per_s": 52088.66046033866}, "candidate": {"compile_s": 211.73818522505462, "temporary_bytes": 1370920720, "samples_s": [7.788863968104124, 7.788073641015217, 7.797353100031614, 7.7848321290221065, 7.796901661902666, 7.7902515509631485, 7.796867598081008], "median_s": 7.7902515509631485, "env_steps_per_s": 52578.53322456052}, "speedup": 1.0094045951631805}

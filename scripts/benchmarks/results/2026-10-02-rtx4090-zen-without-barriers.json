@@ -1,0 +1,60 @@
+{
+  "jax_version": "0.9.1",
+  "devices": [
+    "NVIDIA GeForce RTX 4090"
+  ],
+  "engine_sha256": "38ab0cee2e8eb6d22ce4e2bb9780d3b9862f1eddaf0d2fb4aadb0900c3cea03c",
+  "trials": 15,
+  "seed": 42,
+  "timing": "alternating A/B after compilation and warmup; exact full outputs",
+  "results": [
+    {
+      "experiment": "combined",
+      "candidate": "cleanup_slice",
+      "game": "Zen_Puzzle_Garden",
+      "batch": 4096,
+      "steps": 100,
+      "baseline": {
+        "compile_s": 4.65645538829267,
+        "temporary_bytes": 52161240,
+        "median_s": 0.12499908916652203,
+        "min_s": 0.1248589251190424,
+        "max_s": 0.1252589039504528,
+        "env_steps_per_s": 3276823.8771271096
+      },
+      "cleanup_slice": {
+        "compile_s": 4.472689278423786,
+        "temporary_bytes": 87463640,
+        "median_s": 0.133506802842021,
+        "min_s": 0.1332211960107088,
+        "max_s": 0.13371475040912628,
+        "env_steps_per_s": 3068008.4556041756
+      },
+      "speedup": 0.9362750549455808
+    },
+    {
+      "experiment": "combined",
+      "candidate": "cleanup_slice",
+      "game": "Zen_Puzzle_Garden",
+      "batch": 16384,
+      "steps": 100,
+      "baseline": {
+        "compile_s": 3.6797125302255154,
+        "temporary_bytes": 208599512,
+        "median_s": 0.5663048401474953,
+        "min_s": 0.5655850134789944,
+        "max_s": 0.5666095726191998,
+        "env_steps_per_s": 2893141.4387580995
+      },
+      "cleanup_slice": {
+        "compile_s": 3.524667378515005,
+        "temporary_bytes": 349681112,
+        "median_s": 0.6707523446530104,
+        "min_s": 0.6702381372451782,
+        "max_s": 0.6715939175337553,
+        "env_steps_per_s": 2442630.2987394957
+      },
+      "speedup": 0.8442830571698601
+    }
+  ]
+}
