@@ -79,8 +79,8 @@ public:
     const std::vector<float>& getRewards() const  { return rewards_; }
     const std::vector<float>& getScores() const   { return scores_; }
     const std::vector<float>& getScoreDeltas() const { return score_deltas_; }
-    const std::vector<bool>&  getDones()   const  { return dones_; }
-    const std::vector<bool>&  getWins()    const  { return wins_; }
+    const std::vector<uint8_t>& getDones() const { return dones_; }
+    const std::vector<uint8_t>& getWins()  const { return wins_; }
 
     // ---- Queries -----------------------------------------------------
 
@@ -115,11 +115,13 @@ private:
     std::vector<float>   rewards_;
     std::vector<float>   scores_;
     std::vector<float>   score_deltas_;
-    std::vector<bool>    dones_;
-    std::vector<bool>    wins_;
+    // OpenMP workers write separate elements. vector<bool> would pack them
+    // into shared words and race, potentially losing wins and skipping resets.
+    std::vector<uint8_t> dones_;
+    std::vector<uint8_t> wins_;
 
     // Per-env state for reward computation
-    std::vector<bool> prev_winning_;
+    std::vector<uint8_t> prev_winning_;
     std::vector<float> prev_scores_;
     bool auto_reset_ = true;
     int num_threads_ = 0;

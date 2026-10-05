@@ -197,7 +197,7 @@ PYBIND11_MODULE(_puzzlescript_cpp, m) {
         }, "Get heuristic score deltas as float32 array of shape (batch,)")
         .def("get_dones", [](const BatchedEngine& be) {
             const auto& d = be.getDones();
-            // Convert vector<bool> to numpy bool array
+            // Copy byte-backed flags into a NumPy bool array.
             py::array_t<bool> arr({static_cast<py::ssize_t>(d.size())});
             auto ptr = arr.mutable_unchecked<1>();
             for (size_t i = 0; i < d.size(); ++i) ptr(i) = d[i];

@@ -1317,23 +1317,23 @@ bool Engine::checkWin() {
         bool conditionMet = true;
 
         for (int i = 0; i < level_.n_tiles; ++i) {
-            BitVec cell = level_.getCell(i);
+            const int32_t* cell = level_.objects.data() + i * level_.STRIDE_OBJ;
 
             // Check filter1
             bool f1;
             if (wc.aggr1)
-                f1 = wc.mask1.bitsSetInArray(cell.data.data());
+                f1 = wc.mask1.bitsSetInArray(cell);
             else
-                f1 = wc.mask1.anyBitsInCommon(cell);
+                f1 = !wc.mask1.bitsClearInArray(cell);
 
             // Check filter2
             bool f2;
             if (wc.mask2_is_all) {
                 f2 = true;
             } else if (wc.aggr2) {
-                f2 = wc.mask2.bitsSetInArray(cell.data.data());
+                f2 = wc.mask2.bitsSetInArray(cell);
             } else {
-                f2 = wc.mask2.anyBitsInCommon(cell);
+                f2 = !wc.mask2.bitsClearInArray(cell);
             }
 
             switch (wc.num) {
@@ -1367,12 +1367,11 @@ bool Engine::cellMatchesWinMask(const WinCondition& wc, const BitVec& mask, bool
     if (mask_is_all) {
         return true;
     }
-    BitVec cell(level_.STRIDE_OBJ);
-    level_.getCellInto(tileIndex, cell);
+    const int32_t* cell = level_.objects.data() + tileIndex * level_.STRIDE_OBJ;
     if (aggregate) {
-        return mask.bitsSetInArray(cell.data.data());
+        return mask.bitsSetInArray(cell);
     }
-    return mask.anyBitsInCommon(cell);
+    return !mask.bitsClearInArray(cell);
 }
 
 // ============================================================
