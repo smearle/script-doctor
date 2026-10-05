@@ -1,0 +1,39 @@
+name, driver_version, memory.total [MiB]
+NVIDIA H200, 610.43.02, 143771 MiB
+Writing pretty tree to /scratch/se2161/puzzlejax-perf-20261002/round5/data/pretty_trees/Take_Heart_Lass
+Parsed Take_Heart_Lass successfully
+Object newdespair appears multiple times in collision layers.
+Compiling batch=32768, steps=100
+E1005 02:53:29.956565 3877928 slow_operation_alarm.cc:73] Constant folding an instruction is taking > 1s:
+
+  %transpose.6768 = pred[30,32768,6,6]{0,3,2,1} transpose(%constant.89380), dimensions={0,1,2,3}, metadata={op_name="jit(rollout)/while/body/closed_call/vmap(jit(step))/jit(step_env)/jit(tick_fn)/cond/jit(rollout)/while/body/closed_call/vmap(jit(step))/jit(step_env)/jit(tick_fn)/cond/branch_1_fun/while/body/while/body/vmap(vmap())/scatter" stack_frame_id=260}
+
+This isn't necessarily a bug; constant-folding is inherently a trade-off between compilation time and speed at runtime. XLA has some guards that attempt to keep constant folding from taking too long, but fundamentally you'll always be able to come up with an input program that takes a long time.
+
+If you'd like to file a bug, run with envvar XLA_FLAGS=--xla_dump_to=/tmp/foo and attach the results.
+E1005 02:53:30.081462 3877554 slow_operation_alarm.cc:140] The operation took 1.124983408s
+Constant folding an instruction is taking > 1s:
+
+  %transpose.6768 = pred[30,32768,6,6]{0,3,2,1} transpose(%constant.89380), dimensions={0,1,2,3}, metadata={op_name="jit(rollout)/while/body/closed_call/vmap(jit(step))/jit(step_env)/jit(tick_fn)/cond/jit(rollout)/while/body/closed_call/vmap(jit(step))/jit(step_env)/jit(tick_fn)/cond/branch_1_fun/while/body/while/body/vmap(vmap())/scatter" stack_frame_id=260}
+
+This isn't necessarily a bug; constant-folding is inherently a trade-off between compilation time and speed at runtime. XLA has some guards that attempt to keep constant folding from taking too long, but fundamentally you'll always be able to come up with an input program that takes a long time.
+
+If you'd like to file a bug, run with envvar XLA_FLAGS=--xla_dump_to=/tmp/foo and attach the results.
+Compiled in 176.23s; warming up
+{"batch": 32768, "steps": 100, "compile_s": 176.23296373686753, "host": "gh101.hpc.nyu.edu", "argument_bytes": 18022408, "output_bytes": 18022496, "temporary_bytes": 536004920, "samples_s": [1.785024652024731, 1.477886944077909, 1.4733354789204895, 1.476254261098802, 1.4745296260807663], "fps_samples": [1835716.944459656, 2217219.668345117, 2224069.159320663, 2219671.8318435336, 2222267.9979035673], "median_fps": 2219671.8318435336, "q25_fps": 2217219.668345117, "q75_fps": 2222267.9979035673}
+Compiling batch=65536, steps=100
+Compiled in 190.98s; warming up
+{"batch": 65536, "steps": 100, "compile_s": 190.97561466507614, "host": "gh101.hpc.nyu.edu", "argument_bytes": 36044808, "output_bytes": 36044896, "temporary_bytes": 1071776056, "samples_s": [3.292578405002132, 2.577001349069178, 2.5753885561134666, 2.576763552147895, 2.575297359144315], "fps_samples": [1990415.7756862151, 2543110.8145780303, 2544703.3941511624, 2543345.5058525493, 2544793.5077204215], "median_fps": 2543345.5058525493, "q25_fps": 2543110.8145780303, "q75_fps": 2544703.3941511624}
+Compiling batch=131072, steps=100
+Compiled in 282.62s; warming up
+{"batch": 131072, "steps": 100, "compile_s": 282.6228853550274, "host": "gh101.hpc.nyu.edu", "argument_bytes": 72089608, "output_bytes": 72089696, "temporary_bytes": 2143290680, "samples_s": [6.401745707029477, 4.864406447857618, 4.828280542977154, 4.83175122900866, 4.8235898721031845], "fps_samples": [2047441.5260836678, 2694511.682051707, 2714672.4146062154, 2712722.4434295287, 2717312.2814201843], "median_fps": 2712722.4434295287, "q25_fps": 2694511.682051707, "q75_fps": 2714672.4146062154}
+Compiling batch=262144, steps=100
+Compiled in 167.43s; warming up
+{"batch": 262144, "steps": 100, "compile_s": 167.43119243416004, "host": "gh101.hpc.nyu.edu", "argument_bytes": 144179208, "output_bytes": 144179296, "temporary_bytes": 4286317880, "samples_s": [13.264039140893146, 10.037691830890253, 9.373276622965932, 9.359136318787932, 9.357845328981057], "fps_samples": [1976351.2246568075, 2611596.4149573836, 2796716.778396446, 2800942.213799802, 2801328.6262399033], "median_fps": 2796716.778396446, "q25_fps": 2611596.4149573836, "q75_fps": 2800942.213799802}
+Compiling batch=524288, steps=100
+Compiled in 208.27s; warming up
+{"batch": 524288, "steps": 100, "compile_s": 208.26784525508992, "host": "gh101.hpc.nyu.edu", "argument_bytes": 288358408, "output_bytes": 288358496, "temporary_bytes": 8584970296, "samples_s": [26.343035254161805, 19.59176298114471, 18.305227942066267, 18.28487895615399, 18.304481005994603], "fps_samples": [1990233.8319847572, 2676063.4073849274, 2864143.520415617, 2867330.9856587527, 2864260.3951912047], "median_fps": 2864143.520415617, "q25_fps": 2676063.4073849274, "q75_fps": 2864260.3951912047}
+Compiling batch=1048576, steps=100
+Compiled in 309.82s; warming up
+{"batch": 1048576, "steps": 100, "compile_s": 309.81922870408744, "host": "gh101.hpc.nyu.edu", "argument_bytes": 576716808, "output_bytes": 576716896, "temporary_bytes": 17165472312, "samples_s": [53.189369974890724, 39.20348197990097, 36.40246173692867, 36.39805606403388, 36.400871837046], "fps_samples": [1971401.4294491636, 2674701.1924542543, 2880508.4875242556, 2880857.148401759, 2880634.300997264], "median_fps": 2880508.4875242556, "q25_fps": 2674701.1924542543, "q75_fps": 2880634.300997264}
+Stopped: plateau

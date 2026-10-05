@@ -1,0 +1,10 @@
+name, driver_version, memory.total [MiB]
+NVIDIA H200, 610.43.02, 143771 MiB
+Writing pretty tree to /scratch/se2161/puzzlejax-perf-20261002/round5/data/pretty_trees/atlas shrank
+Parsed atlas shrank successfully
+Object playerl appears multiple times in collision layers.
+Object playerr appears multiple times in collision layers.
+Object players appears multiple times in collision layers.
+Object playerrh appears multiple times in collision layers.
+Object playerlh appears multiple times in collision layers.
+Stopped: regression

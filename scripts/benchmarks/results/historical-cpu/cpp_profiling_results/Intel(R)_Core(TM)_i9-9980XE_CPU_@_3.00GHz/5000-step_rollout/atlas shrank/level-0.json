@@ -1,0 +1,1198 @@
+{
+    "1-cpp_batched-threads-1": {
+        "fps": [
+            5889.832512852801,
+            5928.988436070328,
+            5948.295417116674
+        ],
+        "iterations": [
+            5000,
+            5000,
+            5000
+        ],
+        "total_iterations": 5000,
+        "requested_iterations": 5000,
+        "completed_ratio": 1.0,
+        "successful_workers": 1,
+        "failed_workers": 0,
+        "wall_time": 0.8405769467353821,
+        "mean_worker_fps": 5948.295417116674,
+        "wins": 31,
+        "timeouts": 0,
+        "timed_out": false,
+        "had_worker_failures": false,
+        "sample_worker_error": null,
+        "execution_mode": "cpp_batched",
+        "num_threads": 1
+    },
+    "2-cpp_batched-threads-1": {
+        "fps": [
+            5385.562354155102,
+            5275.089614764476,
+            5419.062671004588
+        ],
+        "iterations": [
+            5000,
+            5000,
+            5000
+        ],
+        "total_iterations": 5000,
+        "requested_iterations": 5000,
+        "completed_ratio": 1.0,
+        "successful_workers": 2,
+        "failed_workers": 0,
+        "wall_time": 0.9226687904447317,
+        "mean_worker_fps": 2709.531335502294,
+        "wins": 36,
+        "timeouts": 0,
+        "timed_out": false,
+        "had_worker_failures": false,
+        "sample_worker_error": null,
+        "execution_mode": "cpp_batched",
+        "num_threads": 1
+    },
+    "2-cpp_batched-threads-2": {
+        "fps": [
+            10430.146175393493,
+            10452.563190102459,
+            9270.897883665537
+        ],
+        "iterations": [
+            5000,
+            5000,
+            5000
+        ],
+        "total_iterations": 5000,
+        "requested_iterations": 5000,
+        "completed_ratio": 1.0,
+        "successful_workers": 2,
+        "failed_workers": 0,
+        "wall_time": 0.5393220875412226,
+        "mean_worker_fps": 4635.4489418327685,
+        "wins": 47,
+        "timeouts": 0,
+        "timed_out": false,
+        "had_worker_failures": false,
+        "sample_worker_error": null,
+        "execution_mode": "cpp_batched",
+        "num_threads": 2
+    },
+    "4-cpp_batched-threads-2": {
+        "fps": [
+            10096.112943882335,
+            12368.30188316205,
+            11776.260907538319
+        ],
+        "iterations": [
+            5000,
+            5000,
+            5000
+        ],
+        "total_iterations": 5000,
+        "requested_iterations": 5000,
+        "completed_ratio": 1.0,
+        "successful_workers": 4,
+        "failed_workers": 0,
+        "wall_time": 0.42458298429846764,
+        "mean_worker_fps": 2944.0652268845797,
+        "wins": 43,
+        "timeouts": 0,
+        "timed_out": false,
+        "had_worker_failures": false,
+        "sample_worker_error": null,
+        "execution_mode": "cpp_batched",
+        "num_threads": 2
+    },
+    "4-cpp_batched-threads-4": {
+        "fps": [
+            17334.906373776612,
+            17372.64584658788,
+            16955.70853176756
+        ],
+        "iterations": [
+            5000,
+            5000,
+            5000
+        ],
+        "total_iterations": 5000,
+        "requested_iterations": 5000,
+        "completed_ratio": 1.0,
+        "successful_workers": 4,
+        "failed_workers": 0,
+        "wall_time": 0.29488593712449074,
+        "mean_worker_fps": 4238.92713294189,
+        "wins": 42,
+        "timeouts": 0,
+        "timed_out": false,
+        "had_worker_failures": false,
+        "sample_worker_error": null,
+        "execution_mode": "cpp_batched",
+        "num_threads": 4
+    },
+    "8-cpp_batched-threads-2": {
+        "fps": [
+            13313.948390990978,
+            13534.597748213013,
+            13631.660568303007
+        ],
+        "iterations": [
+            5000,
+            5000,
+            5000
+        ],
+        "total_iterations": 5000,
+        "requested_iterations": 5000,
+        "completed_ratio": 1.0,
+        "successful_workers": 8,
+        "failed_workers": 0,
+        "wall_time": 0.3667931705713272,
+        "mean_worker_fps": 1703.9575710378758,
+        "wins": 40,
+        "timeouts": 0,
+        "timed_out": false,
+        "had_worker_failures": false,
+        "sample_worker_error": null,
+        "execution_mode": "cpp_batched",
+        "num_threads": 2
+    },
+    "8-cpp_batched-threads-4": {
+        "fps": [
+            20288.7680826971,
+            20721.525959496266,
+            20755.908273477253
+        ],
+        "iterations": [
+            5000,
+            5000,
+            5000
+        ],
+        "total_iterations": 5000,
+        "requested_iterations": 5000,
+        "completed_ratio": 1.0,
+        "successful_workers": 8,
+        "failed_workers": 0,
+        "wall_time": 0.24089526385068893,
+        "mean_worker_fps": 2594.4885341846566,
+        "wins": 35,
+        "timeouts": 0,
+        "timed_out": false,
+        "had_worker_failures": false,
+        "sample_worker_error": null,
+        "execution_mode": "cpp_batched",
+        "num_threads": 4
+    },
+    "8-cpp_batched-threads-8": {
+        "fps": [
+            30406.197495990713,
+            30270.58201839931,
+            30720.465241420778
+        ],
+        "iterations": [
+            5000,
+            5000,
+            5000
+        ],
+        "total_iterations": 5000,
+        "requested_iterations": 5000,
+        "completed_ratio": 1.0,
+        "successful_workers": 8,
+        "failed_workers": 0,
+        "wall_time": 0.16275795176625252,
+        "mean_worker_fps": 3840.058155177597,
+        "wins": 30,
+        "timeouts": 0,
+        "timed_out": false,
+        "had_worker_failures": false,
+        "sample_worker_error": null,
+        "execution_mode": "cpp_batched",
+        "num_threads": 8
+    },
+    "16-cpp_batched-threads-2": {
+        "fps": [
+            14453.106309045086,
+            14501.160525359737,
+            14345.428671481888
+        ],
+        "iterations": [
+            4992,
+            4992,
+            4992
+        ],
+        "total_iterations": 4992,
+        "requested_iterations": 4992,
+        "completed_ratio": 1.0,
+        "successful_workers": 16,
+        "failed_workers": 0,
+        "wall_time": 0.34798541851341724,
+        "mean_worker_fps": 896.589291967618,
+        "wins": 37,
+        "timeouts": 0,
+        "timed_out": false,
+        "had_worker_failures": false,
+        "sample_worker_error": null,
+        "execution_mode": "cpp_batched",
+        "num_threads": 2
+    },
+    "16-cpp_batched-threads-4": {
+        "fps": [
+            22813.064362480363,
+            22898.17042392653,
+            22966.139234761777
+        ],
+        "iterations": [
+            4992,
+            4992,
+            4992
+        ],
+        "total_iterations": 4992,
+        "requested_iterations": 4992,
+        "completed_ratio": 1.0,
+        "successful_workers": 16,
+        "failed_workers": 0,
+        "wall_time": 0.2173634823411703,
+        "mean_worker_fps": 1435.383702172611,
+        "wins": 31,
+        "timeouts": 0,
+        "timed_out": false,
+        "had_worker_failures": false,
+        "sample_worker_error": null,
+        "execution_mode": "cpp_batched",
+        "num_threads": 4
+    },
+    "16-cpp_batched-threads-8": {
+        "fps": [
+            36890.40349432448,
+            36593.76571479887,
+            35441.51003691164
+        ],
+        "iterations": [
+            4992,
+            4992,
+            4992
+        ],
+        "total_iterations": 4992,
+        "requested_iterations": 4992,
+        "completed_ratio": 1.0,
+        "successful_workers": 16,
+        "failed_workers": 0,
+        "wall_time": 0.14085178636014462,
+        "mean_worker_fps": 2215.0943773069775,
+        "wins": 39,
+        "timeouts": 0,
+        "timed_out": false,
+        "had_worker_failures": false,
+        "sample_worker_error": null,
+        "execution_mode": "cpp_batched",
+        "num_threads": 8
+    },
+    "16-cpp_batched-threads-16": {
+        "fps": [
+            51258.27846213283,
+            50048.04398393217,
+            50299.673209614026
+        ],
+        "iterations": [
+            4992,
+            4992,
+            4992
+        ],
+        "total_iterations": 4992,
+        "requested_iterations": 4992,
+        "completed_ratio": 1.0,
+        "successful_workers": 16,
+        "failed_workers": 0,
+        "wall_time": 0.09924517758190632,
+        "mean_worker_fps": 3143.7295756008766,
+        "wins": 37,
+        "timeouts": 0,
+        "timed_out": false,
+        "had_worker_failures": false,
+        "sample_worker_error": null,
+        "execution_mode": "cpp_batched",
+        "num_threads": 16
+    },
+    "32-cpp_batched-threads-2": {
+        "fps": [
+            12082.753173997673,
+            14865.565128955217,
+            14914.286981596686
+        ],
+        "iterations": [
+            4992,
+            4992,
+            4992
+        ],
+        "total_iterations": 4992,
+        "requested_iterations": 4992,
+        "completed_ratio": 1.0,
+        "successful_workers": 32,
+        "failed_workers": 0,
+        "wall_time": 0.33471261523664,
+        "mean_worker_fps": 466.07146817489644,
+        "wins": 30,
+        "timeouts": 0,
+        "timed_out": false,
+        "had_worker_failures": false,
+        "sample_worker_error": null,
+        "execution_mode": "cpp_batched",
+        "num_threads": 2
+    },
+    "32-cpp_batched-threads-4": {
+        "fps": [
+            24099.346887188054,
+            24640.09747905965,
+            24850.278940070155
+        ],
+        "iterations": [
+            4992,
+            4992,
+            4992
+        ],
+        "total_iterations": 4992,
+        "requested_iterations": 4992,
+        "completed_ratio": 1.0,
+        "successful_workers": 32,
+        "failed_workers": 0,
+        "wall_time": 0.20088305696845055,
+        "mean_worker_fps": 776.5712168771923,
+        "wins": 41,
+        "timeouts": 0,
+        "timed_out": false,
+        "had_worker_failures": false,
+        "sample_worker_error": null,
+        "execution_mode": "cpp_batched",
+        "num_threads": 4
+    },
+    "32-cpp_batched-threads-8": {
+        "fps": [
+            41789.52737039352,
+            41620.43563768707,
+            40815.850390207605
+        ],
+        "iterations": [
+            4992,
+            4992,
+            4992
+        ],
+        "total_iterations": 4992,
+        "requested_iterations": 4992,
+        "completed_ratio": 1.0,
+        "successful_workers": 32,
+        "failed_workers": 0,
+        "wall_time": 0.12230542674660683,
+        "mean_worker_fps": 1275.4953246939876,
+        "wins": 39,
+        "timeouts": 0,
+        "timed_out": false,
+        "had_worker_failures": false,
+        "sample_worker_error": null,
+        "execution_mode": "cpp_batched",
+        "num_threads": 8
+    },
+    "32-cpp_batched-threads-16": {
+        "fps": [
+            64056.043984873264,
+            64024.38473824475,
+            60078.64147780667
+        ],
+        "iterations": [
+            4992,
+            4992,
+            4992
+        ],
+        "total_iterations": 4992,
+        "requested_iterations": 4992,
+        "completed_ratio": 1.0,
+        "successful_workers": 32,
+        "failed_workers": 0,
+        "wall_time": 0.08309109322726727,
+        "mean_worker_fps": 1877.4575461814584,
+        "wins": 42,
+        "timeouts": 0,
+        "timed_out": false,
+        "had_worker_failures": false,
+        "sample_worker_error": null,
+        "execution_mode": "cpp_batched",
+        "num_threads": 16
+    },
+    "32-cpp_batched-threads-24": {
+        "fps": [
+            67234.83840952603,
+            67297.4285773331,
+            66336.03162435631
+        ],
+        "iterations": [
+            4992,
+            4992,
+            4992
+        ],
+        "total_iterations": 4992,
+        "requested_iterations": 4992,
+        "completed_ratio": 1.0,
+        "successful_workers": 32,
+        "failed_workers": 0,
+        "wall_time": 0.07525322027504444,
+        "mean_worker_fps": 2073.000988261135,
+        "wins": 38,
+        "timeouts": 0,
+        "timed_out": false,
+        "had_worker_failures": false,
+        "sample_worker_error": null,
+        "execution_mode": "cpp_batched",
+        "num_threads": 24
+    },
+    "32-cpp_batched-threads-32": {
+        "fps": [
+            107200.05532295839,
+            105495.68714107416,
+            100216.33131290982
+        ],
+        "iterations": [
+            4992,
+            4992,
+            4992
+        ],
+        "total_iterations": 4992,
+        "requested_iterations": 4992,
+        "completed_ratio": 1.0,
+        "successful_workers": 32,
+        "failed_workers": 0,
+        "wall_time": 0.04981224052608013,
+        "mean_worker_fps": 3131.760353528432,
+        "wins": 32,
+        "timeouts": 0,
+        "timed_out": false,
+        "had_worker_failures": false,
+        "sample_worker_error": null,
+        "execution_mode": "cpp_batched",
+        "num_threads": 32
+    },
+    "64-cpp_batched-threads-2": {
+        "fps": [
+            12311.71531517133,
+            12397.158408221316,
+            12574.438467815988
+        ],
+        "iterations": [
+            6400,
+            6400,
+            6400
+        ],
+        "total_iterations": 6400,
+        "requested_iterations": 6400,
+        "completed_ratio": 1.0,
+        "successful_workers": 64,
+        "failed_workers": 0,
+        "wall_time": 0.5089690499007702,
+        "mean_worker_fps": 196.4756010596248,
+        "wins": 36,
+        "timeouts": 0,
+        "timed_out": false,
+        "had_worker_failures": false,
+        "sample_worker_error": null,
+        "execution_mode": "cpp_batched",
+        "num_threads": 2
+    },
+    "64-cpp_batched-threads-4": {
+        "fps": [
+            23736.068963283302,
+            24171.57001860001,
+            23254.237665668246
+        ],
+        "iterations": [
+            6400,
+            6400,
+            6400
+        ],
+        "total_iterations": 6400,
+        "requested_iterations": 6400,
+        "completed_ratio": 1.0,
+        "successful_workers": 64,
+        "failed_workers": 0,
+        "wall_time": 0.2752186544239521,
+        "mean_worker_fps": 363.34746352606635,
+        "wins": 49,
+        "timeouts": 0,
+        "timed_out": false,
+        "had_worker_failures": false,
+        "sample_worker_error": null,
+        "execution_mode": "cpp_batched",
+        "num_threads": 4
+    },
+    "64-cpp_batched-threads-8": {
+        "fps": [
+            42375.21076678935,
+            42366.9724493717,
+            42507.0039581052
+        ],
+        "iterations": [
+            6400,
+            6400,
+            6400
+        ],
+        "total_iterations": 6400,
+        "requested_iterations": 6400,
+        "completed_ratio": 1.0,
+        "successful_workers": 64,
+        "failed_workers": 0,
+        "wall_time": 0.15056342259049416,
+        "mean_worker_fps": 664.1719368453937,
+        "wins": 33,
+        "timeouts": 0,
+        "timed_out": false,
+        "had_worker_failures": false,
+        "sample_worker_error": null,
+        "execution_mode": "cpp_batched",
+        "num_threads": 8
+    },
+    "64-cpp_batched-threads-16": {
+        "fps": [
+            68087.98383583712,
+            68930.31526992242,
+            69881.28951241444
+        ],
+        "iterations": [
+            6400,
+            6400,
+            6400
+        ],
+        "total_iterations": 6400,
+        "requested_iterations": 6400,
+        "completed_ratio": 1.0,
+        "successful_workers": 64,
+        "failed_workers": 0,
+        "wall_time": 0.09158388525247574,
+        "mean_worker_fps": 1091.8951486314756,
+        "wins": 42,
+        "timeouts": 0,
+        "timed_out": false,
+        "had_worker_failures": false,
+        "sample_worker_error": null,
+        "execution_mode": "cpp_batched",
+        "num_threads": 16
+    },
+    "64-cpp_batched-threads-24": {
+        "fps": [
+            91211.0293343912,
+            88926.3315512561,
+            89258.23830588028
+        ],
+        "iterations": [
+            6400,
+            6400,
+            6400
+        ],
+        "total_iterations": 6400,
+        "requested_iterations": 6400,
+        "completed_ratio": 1.0,
+        "successful_workers": 64,
+        "failed_workers": 0,
+        "wall_time": 0.07170206494629383,
+        "mean_worker_fps": 1394.6599735293794,
+        "wins": 43,
+        "timeouts": 0,
+        "timed_out": false,
+        "had_worker_failures": false,
+        "sample_worker_error": null,
+        "execution_mode": "cpp_batched",
+        "num_threads": 24
+    },
+    "64-cpp_batched-threads-32": {
+        "fps": [
+            122244.89577600466,
+            121205.84923563714,
+            120242.39584588056
+        ],
+        "iterations": [
+            6400,
+            6400,
+            6400
+        ],
+        "total_iterations": 6400,
+        "requested_iterations": 6400,
+        "completed_ratio": 1.0,
+        "successful_workers": 64,
+        "failed_workers": 0,
+        "wall_time": 0.053225819021463394,
+        "mean_worker_fps": 1878.7874350918837,
+        "wins": 44,
+        "timeouts": 0,
+        "timed_out": false,
+        "had_worker_failures": false,
+        "sample_worker_error": null,
+        "execution_mode": "cpp_batched",
+        "num_threads": 32
+    },
+    "128-cpp_batched-threads-8": {
+        "fps": [
+            44167.76981053643,
+            44900.93279653921,
+            44582.71872043198
+        ],
+        "iterations": [
+            12800,
+            12800,
+            12800
+        ],
+        "total_iterations": 12800,
+        "requested_iterations": 12800,
+        "completed_ratio": 1.0,
+        "successful_workers": 128,
+        "failed_workers": 0,
+        "wall_time": 0.28710676170885563,
+        "mean_worker_fps": 348.3024900033748,
+        "wins": 70,
+        "timeouts": 0,
+        "timed_out": false,
+        "had_worker_failures": false,
+        "sample_worker_error": null,
+        "execution_mode": "cpp_batched",
+        "num_threads": 8
+    },
+    "128-cpp_batched-threads-16": {
+        "fps": [
+            74617.48365886924,
+            78693.44968692778,
+            78877.18792144148
+        ],
+        "iterations": [
+            12800,
+            12800,
+            12800
+        ],
+        "total_iterations": 12800,
+        "requested_iterations": 12800,
+        "completed_ratio": 1.0,
+        "successful_workers": 128,
+        "failed_workers": 0,
+        "wall_time": 0.16227759048342705,
+        "mean_worker_fps": 616.2280306362616,
+        "wins": 75,
+        "timeouts": 0,
+        "timed_out": false,
+        "had_worker_failures": false,
+        "sample_worker_error": null,
+        "execution_mode": "cpp_batched",
+        "num_threads": 16
+    },
+    "128-cpp_batched-threads-24": {
+        "fps": [
+            98952.09443235004,
+            97252.48560183111,
+            101227.9278843333
+        ],
+        "iterations": [
+            12800,
+            12800,
+            12800
+        ],
+        "total_iterations": 12800,
+        "requested_iterations": 12800,
+        "completed_ratio": 1.0,
+        "successful_workers": 128,
+        "failed_workers": 0,
+        "wall_time": 0.12644731812179089,
+        "mean_worker_fps": 790.8431865963539,
+        "wins": 70,
+        "timeouts": 0,
+        "timed_out": false,
+        "had_worker_failures": false,
+        "sample_worker_error": null,
+        "execution_mode": "cpp_batched",
+        "num_threads": 24
+    },
+    "128-cpp_batched-threads-32": {
+        "fps": [
+            147572.3069781617,
+            146869.6222878657,
+            139105.52952536335
+        ],
+        "iterations": [
+            12800,
+            12800,
+            12800
+        ],
+        "total_iterations": 12800,
+        "requested_iterations": 12800,
+        "completed_ratio": 1.0,
+        "successful_workers": 128,
+        "failed_workers": 0,
+        "wall_time": 0.09201647154986858,
+        "mean_worker_fps": 1086.7619494169012,
+        "wins": 67,
+        "timeouts": 0,
+        "timed_out": false,
+        "had_worker_failures": false,
+        "sample_worker_error": null,
+        "execution_mode": "cpp_batched",
+        "num_threads": 32
+    },
+    "256-cpp_batched-threads-8": {
+        "fps": [
+            45723.15373462936,
+            45908.085691635075,
+            45913.030207837015
+        ],
+        "iterations": [
+            25600,
+            25600,
+            25600
+        ],
+        "total_iterations": 25600,
+        "requested_iterations": 25600,
+        "completed_ratio": 1.0,
+        "successful_workers": 256,
+        "failed_workers": 0,
+        "wall_time": 0.5575759187340736,
+        "mean_worker_fps": 179.34777424936334,
+        "wins": 158,
+        "timeouts": 0,
+        "timed_out": false,
+        "had_worker_failures": false,
+        "sample_worker_error": null,
+        "execution_mode": "cpp_batched",
+        "num_threads": 8
+    },
+    "256-cpp_batched-threads-16": {
+        "fps": [
+            82373.2991869914,
+            82150.69912875304,
+            82586.84337821892
+        ],
+        "iterations": [
+            25600,
+            25600,
+            25600
+        ],
+        "total_iterations": 25600,
+        "requested_iterations": 25600,
+        "completed_ratio": 1.0,
+        "successful_workers": 256,
+        "failed_workers": 0,
+        "wall_time": 0.3099767342209816,
+        "mean_worker_fps": 322.6048569461677,
+        "wins": 141,
+        "timeouts": 0,
+        "timed_out": false,
+        "had_worker_failures": false,
+        "sample_worker_error": null,
+        "execution_mode": "cpp_batched",
+        "num_threads": 16
+    },
+    "256-cpp_batched-threads-24": {
+        "fps": [
+            109758.86261608392,
+            110192.75819608977,
+            110705.95331032694
+        ],
+        "iterations": [
+            25600,
+            25600,
+            25600
+        ],
+        "total_iterations": 25600,
+        "requested_iterations": 25600,
+        "completed_ratio": 1.0,
+        "successful_workers": 256,
+        "failed_workers": 0,
+        "wall_time": 0.231243209913373,
+        "mean_worker_fps": 432.4451301184646,
+        "wins": 148,
+        "timeouts": 0,
+        "timed_out": false,
+        "had_worker_failures": false,
+        "sample_worker_error": null,
+        "execution_mode": "cpp_batched",
+        "num_threads": 24
+    },
+    "256-cpp_batched-threads-32": {
+        "fps": [
+            152981.22991723445,
+            150809.23251846642,
+            152050.38414587424
+        ],
+        "iterations": [
+            25600,
+            25600,
+            25600
+        ],
+        "total_iterations": 25600,
+        "requested_iterations": 25600,
+        "completed_ratio": 1.0,
+        "successful_workers": 256,
+        "failed_workers": 0,
+        "wall_time": 0.1683652438223362,
+        "mean_worker_fps": 593.9468130698212,
+        "wins": 166,
+        "timeouts": 0,
+        "timed_out": false,
+        "had_worker_failures": false,
+        "sample_worker_error": null,
+        "execution_mode": "cpp_batched",
+        "num_threads": 32
+    },
+    "512-cpp_batched-threads-8": {
+        "fps": [
+            45149.30045925013,
+            44834.73496022223,
+            44649.72092095708
+        ],
+        "iterations": [
+            51200,
+            51200,
+            51200
+        ],
+        "total_iterations": 51200,
+        "requested_iterations": 51200,
+        "completed_ratio": 1.0,
+        "successful_workers": 512,
+        "failed_workers": 0,
+        "wall_time": 1.1467036958783865,
+        "mean_worker_fps": 87.2064861737443,
+        "wins": 294,
+        "timeouts": 0,
+        "timed_out": false,
+        "had_worker_failures": false,
+        "sample_worker_error": null,
+        "execution_mode": "cpp_batched",
+        "num_threads": 8
+    },
+    "512-cpp_batched-threads-16": {
+        "fps": [
+            80470.48299218302,
+            80991.07517519905,
+            81568.28075978038
+        ],
+        "iterations": [
+            51200,
+            51200,
+            51200
+        ],
+        "total_iterations": 51200,
+        "requested_iterations": 51200,
+        "completed_ratio": 1.0,
+        "successful_workers": 512,
+        "failed_workers": 0,
+        "wall_time": 0.6276949755847454,
+        "mean_worker_fps": 159.31304835894605,
+        "wins": 307,
+        "timeouts": 0,
+        "timed_out": false,
+        "had_worker_failures": false,
+        "sample_worker_error": null,
+        "execution_mode": "cpp_batched",
+        "num_threads": 16
+    },
+    "512-cpp_batched-threads-24": {
+        "fps": [
+            109514.9533289357,
+            109932.26805909508,
+            110008.68235729207
+        ],
+        "iterations": [
+            51200,
+            51200,
+            51200
+        ],
+        "total_iterations": 51200,
+        "requested_iterations": 51200,
+        "completed_ratio": 1.0,
+        "successful_workers": 512,
+        "failed_workers": 0,
+        "wall_time": 0.4654178097844124,
+        "mean_worker_fps": 214.86070772908607,
+        "wins": 319,
+        "timeouts": 0,
+        "timed_out": false,
+        "had_worker_failures": false,
+        "sample_worker_error": null,
+        "execution_mode": "cpp_batched",
+        "num_threads": 24
+    },
+    "512-cpp_batched-threads-32": {
+        "fps": [
+            138105.56486513015,
+            138034.51719991074,
+            137276.20498080397
+        ],
+        "iterations": [
+            51200,
+            51200,
+            51200
+        ],
+        "total_iterations": 51200,
+        "requested_iterations": 51200,
+        "completed_ratio": 1.0,
+        "successful_workers": 512,
+        "failed_workers": 0,
+        "wall_time": 0.3729706835001707,
+        "mean_worker_fps": 268.11758785313276,
+        "wins": 298,
+        "timeouts": 0,
+        "timed_out": false,
+        "had_worker_failures": false,
+        "sample_worker_error": null,
+        "execution_mode": "cpp_batched",
+        "num_threads": 32
+    },
+    "4-cpp_batched-threads-1": {
+        "fps": [
+            5849.112498727812,
+            5842.193030983641,
+            6504.012793535101
+        ],
+        "iterations": [
+            5000,
+            5000,
+            5000
+        ],
+        "total_iterations": 5000,
+        "requested_iterations": 5000,
+        "completed_ratio": 1.0,
+        "successful_workers": 4,
+        "failed_workers": 0,
+        "wall_time": 0.7687561754137278,
+        "mean_worker_fps": 1626.0031983837753,
+        "wins": 34,
+        "timeouts": 0,
+        "timed_out": false,
+        "had_worker_failures": false,
+        "sample_worker_error": null,
+        "execution_mode": "cpp_batched",
+        "num_threads": 1
+    },
+    "8-cpp_batched-threads-1": {
+        "fps": [
+            7775.286748024334,
+            7623.326980263984,
+            7755.840034911695
+        ],
+        "iterations": [
+            5000,
+            5000,
+            5000
+        ],
+        "total_iterations": 5000,
+        "requested_iterations": 5000,
+        "completed_ratio": 1.0,
+        "successful_workers": 8,
+        "failed_workers": 0,
+        "wall_time": 0.6446754932403564,
+        "mean_worker_fps": 969.4800043639618,
+        "wins": 35,
+        "timeouts": 0,
+        "timed_out": false,
+        "had_worker_failures": false,
+        "sample_worker_error": null,
+        "execution_mode": "cpp_batched",
+        "num_threads": 1
+    },
+    "16-cpp_batched-threads-1": {
+        "fps": [
+            7841.443111033443,
+            7844.623982864304,
+            7887.714084256625
+        ],
+        "iterations": [
+            4992,
+            4992,
+            4992
+        ],
+        "total_iterations": 4992,
+        "requested_iterations": 4992,
+        "completed_ratio": 1.0,
+        "successful_workers": 16,
+        "failed_workers": 0,
+        "wall_time": 0.6328829806298018,
+        "mean_worker_fps": 492.98213026603906,
+        "wins": 30,
+        "timeouts": 0,
+        "timed_out": false,
+        "had_worker_failures": false,
+        "sample_worker_error": null,
+        "execution_mode": "cpp_batched",
+        "num_threads": 1
+    },
+    "32-cpp_batched-threads-1": {
+        "fps": [
+            7964.908157880834,
+            8012.094815413392,
+            7944.378424351881
+        ],
+        "iterations": [
+            4992,
+            4992,
+            4992
+        ],
+        "total_iterations": 4992,
+        "requested_iterations": 4992,
+        "completed_ratio": 1.0,
+        "successful_workers": 32,
+        "failed_workers": 0,
+        "wall_time": 0.6283688582479954,
+        "mean_worker_fps": 248.2618257609963,
+        "wins": 36,
+        "timeouts": 0,
+        "timed_out": false,
+        "had_worker_failures": false,
+        "sample_worker_error": null,
+        "execution_mode": "cpp_batched",
+        "num_threads": 1
+    },
+    "64-cpp_batched-threads-1": {
+        "fps": [
+            6292.049339791899,
+            6294.981047226841,
+            6325.876901629505
+        ],
+        "iterations": [
+            6400,
+            6400,
+            6400
+        ],
+        "total_iterations": 6400,
+        "requested_iterations": 6400,
+        "completed_ratio": 1.0,
+        "successful_workers": 64,
+        "failed_workers": 0,
+        "wall_time": 1.0117174424231052,
+        "mean_worker_fps": 98.84182658796101,
+        "wins": 39,
+        "timeouts": 0,
+        "timed_out": false,
+        "had_worker_failures": false,
+        "sample_worker_error": null,
+        "execution_mode": "cpp_batched",
+        "num_threads": 1
+    },
+    "128-cpp_batched-threads-2": {
+        "fps": [
+            12399.735231157816,
+            12431.569695695776,
+            12468.41981423136
+        ],
+        "iterations": [
+            12800,
+            12800,
+            12800
+        ],
+        "total_iterations": 12800,
+        "requested_iterations": 12800,
+        "completed_ratio": 1.0,
+        "successful_workers": 128,
+        "failed_workers": 0,
+        "wall_time": 1.0265936013311148,
+        "mean_worker_fps": 97.4095297986825,
+        "wins": 73,
+        "timeouts": 0,
+        "timed_out": false,
+        "had_worker_failures": false,
+        "sample_worker_error": null,
+        "execution_mode": "cpp_batched",
+        "num_threads": 2
+    },
+    "128-cpp_batched-threads-4": {
+        "fps": [
+            23845.939847874168,
+            24008.888197218952,
+            24190.345398415117
+        ],
+        "iterations": [
+            12800,
+            12800,
+            12800
+        ],
+        "total_iterations": 12800,
+        "requested_iterations": 12800,
+        "completed_ratio": 1.0,
+        "successful_workers": 128,
+        "failed_workers": 0,
+        "wall_time": 0.5291367191821337,
+        "mean_worker_fps": 188.9870734251181,
+        "wins": 76,
+        "timeouts": 0,
+        "timed_out": false,
+        "had_worker_failures": false,
+        "sample_worker_error": null,
+        "execution_mode": "cpp_batched",
+        "num_threads": 4
+    },
+    "256-cpp_batched-threads-2": {
+        "fps": [
+            12378.771606501336,
+            12462.731756934474,
+            12418.934848491306
+        ],
+        "iterations": [
+            25600,
+            25600,
+            25600
+        ],
+        "total_iterations": 25600,
+        "requested_iterations": 25600,
+        "completed_ratio": 1.0,
+        "successful_workers": 256,
+        "failed_workers": 0,
+        "wall_time": 2.0613684114068747,
+        "mean_worker_fps": 48.511464251919165,
+        "wins": 144,
+        "timeouts": 0,
+        "timed_out": false,
+        "had_worker_failures": false,
+        "sample_worker_error": null,
+        "execution_mode": "cpp_batched",
+        "num_threads": 2
+    },
+    "256-cpp_batched-threads-4": {
+        "fps": [
+            24381.88159357828,
+            24378.49001335286,
+            24259.58366484805
+        ],
+        "iterations": [
+            25600,
+            25600,
+            25600
+        ],
+        "total_iterations": 25600,
+        "requested_iterations": 25600,
+        "completed_ratio": 1.0,
+        "successful_workers": 256,
+        "failed_workers": 0,
+        "wall_time": 1.0552530642598867,
+        "mean_worker_fps": 94.7639986908127,
+        "wins": 138,
+        "timeouts": 0,
+        "timed_out": false,
+        "had_worker_failures": false,
+        "sample_worker_error": null,
+        "execution_mode": "cpp_batched",
+        "num_threads": 4
+    },
+    "512-cpp_batched-threads-4": {
+        "fps": [
+            23670.593726028637,
+            23858.196271163106,
+            23783.92111158705
+        ],
+        "iterations": [
+            51200,
+            51200,
+            51200
+        ],
+        "total_iterations": 51200,
+        "requested_iterations": 51200,
+        "completed_ratio": 1.0,
+        "successful_workers": 512,
+        "failed_workers": 0,
+        "wall_time": 2.152714842930436,
+        "mean_worker_fps": 46.452970921068456,
+        "wins": 327,
+        "timeouts": 0,
+        "timed_out": false,
+        "had_worker_failures": false,
+        "sample_worker_error": null,
+        "execution_mode": "cpp_batched",
+        "num_threads": 4
+    }
+}

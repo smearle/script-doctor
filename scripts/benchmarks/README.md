@@ -2,6 +2,201 @@
 
 Run benchmarks from the repository root with the project environment activated.
 
+## Adaptive batches, broader coverage, and CPU audit (2026-10-05)
+
+The updated benchmark doubles the high-batch tail until either a median drops
+more than 10% below the best earlier median, or two successive measurements
+improve on the previous best by at most 3%. Only batches at least 4096 count
+towards stopping. The safety ceiling is 1,048,576; reaching the ceiling is
+reported separately from a plateau. Each point retains five warmed timings,
+compilation time, and compiler-estimated memory requirements. Results are
+checkpointed after every point. Resume rejects changes to the engine hash,
+device, JAX version, seed, or rollout protocol.
+
+The workload and frozen JAX engine are unchanged from the preceding paper
+figure. The first eight games resume its six original points exactly. Eight
+additional games expand the suite to sixteen: Blocks, Nekopuzzle, Sokoban
+Match 3, Travelling Salesman, Multi-word Dictionary Game, Microban, Magnet
+Jack, and HyperMaze. These are level-zero measurements, not a claim about
+all levels or every PuzzleScript game.
+
+All sixteen sweeps completed: **163 configurations and 815 timing samples**,
+including the 48 preserved original points. Fifteen games met the plateau
+criterion; Atlas Shrank regressed. No run stopped merely at the safety cap.
+Sokoban and Notsnake reach 9.56M and 11.54M steps/s, respectively, 52.8% and
+63.0% above their preceding batch-16,384 measurements.
+
+| Game | Best measured batch | Median steps/s | Stop |
+| --- | ---: | ---: | --- |
+| sokoban basic | 1,048,576 | 9,560,741 | plateau |
+| notsnake | 1,048,576 | 11,537,635 | plateau |
+| Zen Puzzle Garden | 262,144 | 5,110,070 | plateau |
+| Slidings | 1,048,576 | 2,359,643 | plateau |
+| limerick | 32,768 | 426,135 | plateau |
+| kettle | 262,144 | 483,818 | plateau |
+| Take Heart Lass | 1,048,576 | 2,880,508 | plateau |
+| atlas shrank | 4,096 | 50,942 | regression |
+| blocks | 65,536 | 3,296,783 | plateau |
+| nekopuzzle | 524,288 | 3,512,366 | plateau |
+| sokoban match3 | 524,288 | 5,029,540 | plateau |
+| Travelling salesman | 1,048,576 | 12,278,443 | plateau |
+| Multi-word Dictionary Game | 524,288 | 3,188,907 | plateau |
+| Microban | 1,048,576 | 9,555,941 | plateau |
+| Magnet Jack | 16,384 | 216,492 | plateau |
+| HyperMaze | 32,768 | 95,271 | plateau |
+
+[Sixteen-game figure](../../paper/figures/adaptive_throughput_20261005/adaptive_throughput_h200.pdf),
+[CSV](../../paper/figures/adaptive_throughput_20261005/adaptive_throughput_h200.csv),
+and [provenance](../../paper/figures/adaptive_throughput_20261005/adaptive_throughput_manifest.json).
+The stopping threshold is an empirical saturation rule, not proof of a global
+optimum. Smaller batches near the plateau may offer a better memory trade-off.
+HyperMaze's first compilation took 318 seconds; its best measured throughput
+was 95,271 steps/s. Compilation costs remain visible in the raw data and CSV.
+
+[Extended paper figure](../../paper/figures/throughput_adaptive_20261005/random_rollout_profile_h200_updated.pdf)
+retains the archived CPU measurements unchanged. The reference JSON files
+and their hashes are now included under [historical-cpu](results/historical-cpu/)
+so a clean checkout can reproduce the figure. The NodeJS native label now
+says **engine-only**, making the workload difference explicit.
+
+```bash
+# Submit from a prepared checkout on Torch; account/partition are site-specific.
+sbatch --account=YOUR_ACCOUNT --partition=h200_tandon \
+  scripts/benchmarks/adaptive_throughput.slurm
+
+MPLCONFIGDIR=/tmp/puzzlejax-mpl python -m scripts.plotting.plot_engine_throughput \
+  --paper-results scripts/benchmarks/results/2026-10-05-adaptive/adaptive-throughput-h200 \
+  --output-dir paper/figures/throughput_adaptive_20261005
+MPLCONFIGDIR=/tmp/puzzlejax-mpl python -m scripts.plotting.plot_adaptive_throughput \
+  --results scripts/benchmarks/results/2026-10-05-adaptive/adaptive-throughput-h200 \
+  --output-dir paper/figures/adaptive_throughput_20261005
+```
+
+### Further JAX experiments
+
+Two H100 experiments did not justify another production change. Replacing the
+movement-delta lookup with arithmetic produced ratios of 0.996–1.009×;
+precomputing a shared loop bound produced 0.989–1.001×. Each covers Sokoban,
+Blocks and Zen at batches 1/4096/16384, two seeds, and nine alternating trials.
+Ratios aggregate the two seed-specific median ratios geometrically. All
+**24,577,200 paired transitions** match exactly, including complete rollout
+outputs. The [arithmetic](results/2026-10-05-adaptive/movement-deltas.json) and
+[loop-bound](results/2026-10-05-adaptive/movement-bounds.json) raw results are
+retained; neither candidate is enabled in the engine.
+
+### Why the NodeJS batched curve is low
+
+The native worker pool runs whole rollouts inside NodeJS. It returns aggregate
+performance statistics, with no per-step Python crossing, observation, reward,
+or info output. Its outer timer includes per-run compilation. In contrast,
+`NodeJSBatchedPuzzleEnv` sends each action through Python → a Node controller →
+one child process per environment, then gathers complete RL outputs and waits
+for every child before the next step. At larger batches it also oversubscribes
+CPU cores. These are different workloads; their throughput gap cannot be
+attributed simply to the JavaScript engine or multiprocessing implementation.
+
+There were two concrete inefficiencies worth a small check:
+
+* An ordinary transition calculated the same heuristic score twice. The worker
+  now reuses the first result unless it reset the board. In nine configurations
+  (three games, batches 1/4/16), the median change ranges from effectively zero
+  to **+21.6%**. All complete outputs match. The two focused tests also exercise
+  wins, truncation, partial reset, and automatic reset enabled/disabled.
+* Default child-process JSON serialization expands observation buffers into
+  arrays of numbers. Node's binary serialization is now opt-in for experiments.
+  It helps several cases but regresses Sokoban at batch 16 by **11.7%**, so JSON
+  remains the default. This was not a consistent throughput improvement.
+
+The final score and serialization audits use 2,000 steps and nine alternating
+trials after warmup, with frozen source hashes. The [raw measurements](results/2026-10-05-adaptive/)
+include all configurations, not just improvements. Earlier short/mutable-source
+pilots are explicitly superseded by `nodejs-score-final.json` and
+`nodejs-serialization-final.json`.
+
+The NodeJS profiler's moved-file path resolution is corrected. Its Hydra
+launcher requests one CPU and defaults to the single-process mode; users who
+select the batched mode must also request sufficient CPUs. Archived metadata
+does not record the allocation, so this is not evidence that the historical
+curves used a one-CPU SLURM allocation. Further optimization work in this round
+focuses on C++.
+
+### C++ correctness and scoring
+
+A threaded comparison uncovered an existing `BatchedEngine` race: `dones_`,
+`wins_`, and `prev_winning_` used `std::vector<bool>`. OpenMP writes to distinct
+environments could modify the same packed word. A lost done flag could also
+skip automatic reset, corrupting the next observation. These buffers now use
+one byte per environment. Python still receives NumPy boolean arrays.
+The new mixed-win regression fails on the unchanged baseline and exercises
+32/65/128 environments against a serial reference after the fix.
+
+Scoring and win checks now read packed cell words directly, avoiding temporary
+`BitVec` heap allocations for each examined cell. Distance scoring also collects
+matching target cells once per condition instead of rediscovering them for every
+source cell. The raw score, normalized score, empty-set defaults, property and
+aggregate semantics, and win conditions are preserved. The 48 reference cases
+cover thin boards, multiword masks, sign bits, empty masks, and mixed conditions.
+
+C++ measurements use isolated extension builds and complete Python RL outputs.
+Both final builds include the flag fix. Compilation, initialization, reset,
+action generation, correctness hashing and IPC are outside the timer. Two
+persistent worker processes alternate measured calls; the idle process is
+paused with `SIGSTOP` so its OpenMP workers cannot consume CPU while the other
+build runs. The source hashes, library hashes, CPU affinity, thread settings,
+all timing samples and full-output hashes are recorded. The shared workspace
+extension was not rebuilt, preserving concurrent work.
+
+The early passive-wait pilot and partial target-list ablation are exploratory.
+The latter stopped on the pre-existing flag race; only final comparisons against
+the corrected baseline are used to report retained speedups.
+
+The final eight-game comparison passes **1,387,200 paired transitions** with
+exact complete-output equality, across 48 configurations and 864 timed calls.
+Both corrected builds pass all **51 focused C++ tests**. The adaptive-benchmark
+and NodeJS regression tests add six passing tests. The earlier JAX engine and
+its 131-pass/9-expected-failure regression result are unchanged.
+
+On the Core i9-9980XE, geometric-mean throughput improves **28.4%** at batch one,
+**45.3%** at batch 32 with one thread, and **44.7%** at batch 256 with eight
+threads. Each cell below is the geometric mean of two seed-specific median
+ratios, with nine alternating trials per seed. No tested configuration regresses.
+
+| Game | Batch 1, 1 thread | Batch 32, 1 thread | Batch 256, 8 threads |
+| --- | ---: | ---: | ---: |
+| sokoban basic | 1.197× | 1.484× | 1.458× |
+| blocks | 1.687× | 2.004× | 1.946× |
+| Zen Puzzle Garden | 1.226× | 1.344× | 1.325× |
+| kettle | 1.506× | 1.680× | 1.632× |
+| notsnake | 1.104× | 1.272× | 1.267× |
+| Slidings | 1.076× | 1.176× | 1.157× |
+| limerick | 1.396× | 1.334× | 1.465× |
+| Microban | 1.195× | 1.480× | 1.459× |
+
+[C++ comparison figure](../../paper/figures/cpp_scoring_20261005/cpp_scoring_speedup.pdf),
+[summary CSV](../../paper/figures/cpp_scoring_20261005/cpp_scoring_summary.csv),
+[raw serial results](results/2026-10-05-adaptive/cpp-final-single.json),
+and [raw threaded results](results/2026-10-05-adaptive/cpp-final-threaded.json).
+The figures keep these controlled results separate from the historical CPU
+references in the paper overlay. Rebuild the C++ extension to activate the
+source changes in a working checkout (`python setup_cpp.py build_ext --inplace`).
+
+```bash
+# Point these arguments at separate builds, both using byte-backed batched flags.
+OMP_WAIT_POLICY=ACTIVE OMP_PROC_BIND=close OMP_PLACES=cores \
+OPENBLAS_NUM_THREADS=1 MPLCONFIGDIR=/tmp/puzzlejax-mpl \
+python -m scripts.benchmarks.benchmark_cpp_scoring \
+  --baseline /path/to/corrected-baseline/_puzzlescript_cpp.cpython-313-x86_64-linux-gnu.so \
+  --candidate /path/to/optimized/_puzzlescript_cpp.cpython-313-x86_64-linux-gnu.so \
+  --games sokoban_basic blocks Zen_Puzzle_Garden kettle notsnake Slidings limerick Microban \
+  --batches 256 --threads 8 --steps 300 --trials 9 --seeds 42 1042 \
+  --output /tmp/cpp-threaded.json
+
+MPLCONFIGDIR=/tmp/puzzlejax-mpl python -m scripts.plotting.plot_cpp_scoring \
+  --results scripts/benchmarks/results/2026-10-05-adaptive/cpp-final-single.json \
+            scripts/benchmarks/results/2026-10-05-adaptive/cpp-final-threaded.json \
+  --output-dir paper/figures/cpp_scoring_20261005
+```
+
 ## Shared movement loop and sparse updates (2026-10-04–05)
 
 Movement now has an explicit `custom_vmap` rule. A scalar loop index visits

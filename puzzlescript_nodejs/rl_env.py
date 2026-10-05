@@ -162,7 +162,11 @@ class _NodeJSBatchedController:
         n_envs: int,
         max_episode_steps: int,
         auto_reset: bool = True,
+        ipc_serialization: str = "json",
+        reuse_score: bool = True,
     ) -> None:
+        if ipc_serialization not in ("json", "advanced"):
+            raise ValueError("ipc_serialization must be json or advanced")
         self.n_envs = int(n_envs)
         self.max_episode_steps = int(max_episode_steps)
         self.auto_reset = bool(auto_reset)
@@ -181,6 +185,8 @@ class _NodeJSBatchedController:
                 "nEnvs": self.n_envs,
                 "maxEpisodeSteps": self.max_episode_steps,
                 "autoReset": self.auto_reset,
+                "ipcSerialization": ipc_serialization,
+                "reuseScore": bool(reuse_score),
             },
             obs_shape=None,
         )
@@ -292,6 +298,7 @@ class NodeJSBatchedPuzzleEnv:
         auto_reset: bool = True,
         *,
         game_text: str | None = None,
+        ipc_serialization: str = "json",
     ) -> None:
         self.game = game
         self.level_i = level_i
@@ -309,6 +316,7 @@ class NodeJSBatchedPuzzleEnv:
             n_envs=self.batch_size,
             max_episode_steps=self.max_steps,
             auto_reset=self.auto_reset,
+            ipc_serialization=ipc_serialization,
         )
         self._obs_shape = self._controller.obs_shape
 

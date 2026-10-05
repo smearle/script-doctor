@@ -28,7 +28,7 @@ STYLES = {
     "cpp_batched": ("C++ batched (archived CPU)", "#1f77b4", "*", "-"),
     "nodejs_batched": ("NodeJS batched (archived CPU)", "#2ca02c", "D", "--"),
     "single_process": ("NodeJS (archived CPU)", "#F0C078", None, (0, (5, 3))),
-    "nodejs_native": ("NodeJS native (archived CPU)", "#E8943A", None, (0, (5, 3))),
+    "nodejs_native": ("NodeJS engine-only (archived CPU)", "#E8943A", None, (0, (5, 3))),
 }
 
 
@@ -72,7 +72,9 @@ def plot_paper(results_dir, data_dir, output_dir, manifest):
         expected_batches = row.get("requested_batches", [1, 16, 256, 1024, 4096, 16384])
         if sorted(r["batch"] for r in row["results"]) != sorted(expected_batches):
             raise ValueError(f"Incomplete batch sweep for {row['game']}")
-    if len({tuple(r["batch"] for r in row["results"]) for row in rows}) != 1:
+        if "adaptive" in row and row.get("stop_reason") not in ("plateau", "regression", "max_batch"):
+            raise ValueError(f"Unfinished adaptive sweep for {row['game']}")
+    if not all("adaptive" in row for row in rows) and len({tuple(r["batch"] for r in row["results"]) for row in rows}) != 1:
         raise ValueError("Paper sweep is incomplete: games have different batch sets")
     for field in ("engine_sha256", "jax_version", "level", "trials", "seed",
                   "base_steps", "min_steps", "max_episode_steps", "output_mode",
@@ -85,6 +87,7 @@ def plot_paper(results_dir, data_dir, output_dir, manifest):
             "base_steps", "min_steps", "max_episode_steps", "timing",
             "output_mode", "action_generation")}
     metadata = json.loads((data_dir / "games_to_n_rules.json").read_text())
+    manifest["inputs"].append(str(data_dir / "games_to_n_rules.json"))
     fig, axes = plt.subplots(2, 4, figsize=(7.1, 3.8))
     handles = {}
     for ax, game, title, row in zip(axes.flat, GAMES, TITLES, rows):
@@ -113,7 +116,7 @@ def plot_paper(results_dir, data_dir, output_dir, manifest):
             handles[label] = line
         ax.set_xscale("log")
         ax.set_yscale("log")
-        ax.set_xticks([1, 10, 100, 1000, 10000])
+        ax.xaxis.set_major_locator(LogLocator(base=10, numticks=4))
         ax.yaxis.set_major_locator(LogLocator(base=10, numticks=4))
         ax.xaxis.set_minor_locator(NullLocator())
         ax.yaxis.set_minor_locator(NullLocator())
@@ -164,7 +167,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--paper-results", type=Path)
     parser.add_argument("--movement-results", type=Path)
-    parser.add_argument("--data-dir", type=Path, default=Path("data"))
+    parser.add_argument("--data-dir", type=Path, default=Path("scripts/benchmarks/results/historical-cpu"))
     parser.add_argument("--output-dir", type=Path, required=True)
     args = parser.parse_args()
     if args.paper_results is None and args.movement_results is None:

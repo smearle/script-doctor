@@ -1,0 +1,39 @@
+F
+=================================== FAILURES ===================================
+___________ test_parallel_mixed_wins_and_auto_reset_match_serial[32] ___________
+
+one_push_game = '{"objectCount":5,"layerCount":3,"STRIDE_OBJ":1,"STRIDE_MOV":1,"idDict":["background","target","player","wall","crate"...:"Test"},"backgroundid":0,"backgroundlayer":0,"collisionLayers":[["background"],["target"],["player","wall","crate"]]}'
+batch = 32
+
+    @pytest.mark.parametrize("batch", [32, 65, 128])
+    def test_parallel_mixed_wins_and_auto_reset_match_serial(one_push_game, batch):
+        serial, parallel = [CppBatchedPuzzleScriptEnv(one_push_game, batch, level_indices=[0] * batch,
+                                                    num_threads=threads, max_episode_steps=10000)
+                            for threads in (1, 8)]
+        rng = np.random.default_rng(7)
+        for _ in range(128):
+            serial.reset()
+            parallel.reset()
+            actions = np.where(rng.integers(0, 2, batch), 3, 4).astype(np.int32)
+            left, right = serial.step(actions), parallel.step(actions)
+            np.testing.assert_array_equal(left[2], actions == 3)
+            for a, b in zip(left[:4], right[:4]):
+>               np.testing.assert_array_equal(a, b)
+E               AssertionError: 
+E               Arrays are not equal
+E               
+E               Mismatched elements: 4 / 2880 (0.139%)
+E               Max absolute difference among violations: 1
+E               Max relative difference among violations: 1.
+E                ACTUAL: array([[[[1, 1, 1, 1, 1, 1],
+E                        [1, 1, 1, 1, 1, 1],
+E                        [1, 1, 1, 1, 1, 1]],...
+E                DESIRED: array([[[[1, 1, 1, 1, 1, 1],
+E                        [1, 1, 1, 1, 1, 1],
+E                        [1, 1, 1, 1, 1, 1]],...
+
+tests/test_cpp_batch_flags.py:38: AssertionError
+=========================== short test summary info ============================
+FAILED tests/test_cpp_batch_flags.py::test_parallel_mixed_wins_and_auto_reset_match_serial[32]
+!!!!!!!!!!!!!!!!!!!!!!!!!! stopping after 1 failures !!!!!!!!!!!!!!!!!!!!!!!!!!!
+1 failed in 0.27s

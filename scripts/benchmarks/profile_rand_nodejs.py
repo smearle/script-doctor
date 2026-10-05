@@ -5,6 +5,7 @@ import os
 import random
 import subprocess
 import traceback
+from pathlib import Path
 from dataclasses import dataclass
 from timeit import default_timer as timer
 from typing import Any, List, Optional
@@ -131,9 +132,9 @@ def _get_nodejs_native_game_path(game: str) -> str:
     return os.path.join(GAMES_DIR, f"{game}.txt")
 
 
-_SINGLE_STEP_CONTROLLER_PATH = os.path.join(
-    os.path.dirname(__file__), "puzzlescript_nodejs", "puzzlescript", "single_step_controller.js",
-)
+_REPO_ROOT = Path(__file__).resolve().parents[2]
+_SINGLE_STEP_CONTROLLER_PATH = str(
+    _REPO_ROOT / "puzzlescript_nodejs" / "puzzlescript" / "single_step_controller.js")
 
 
 class SingleStepController:
@@ -483,12 +484,8 @@ def _run_nodejs_native_pool(
     repeats: int,
     execution_mode: str,
 ) -> list[dict]:
-    pool_script_path = os.path.join(
-        os.path.dirname(__file__),
-        "puzzlescript_nodejs",
-        "puzzlescript",
-        "random_rollout_pool.js",
-    )
+    pool_script_path = str(
+        _REPO_ROOT / "puzzlescript_nodejs" / "puzzlescript" / "random_rollout_pool.js")
     payload = json.dumps({
         "gamePath": game_path,
         "levelI": level_i,

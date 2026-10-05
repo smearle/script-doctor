@@ -1,0 +1,285 @@
+{
+  "summary": [
+    {
+      "game": "sokoban_basic",
+      "batch": 1,
+      "threads": 1,
+      "speedup": 1.1969424605134578,
+      "min_seed_ratio": 1.194428184485599,
+      "max_seed_ratio": 1.1994620291022475,
+      "baseline_fps": 17098.28531976444,
+      "candidate_fps": 20465.663701200025
+    },
+    {
+      "game": "blocks",
+      "batch": 1,
+      "threads": 1,
+      "speedup": 1.687262621781026,
+      "min_seed_ratio": 1.6858035201846386,
+      "max_seed_ratio": 1.6887229862632973,
+      "baseline_fps": 6046.8579101663,
+      "candidate_fps": 10202.637331044536
+    },
+    {
+      "game": "Zen_Puzzle_Garden",
+      "batch": 1,
+      "threads": 1,
+      "speedup": 1.22595361575608,
+      "min_seed_ratio": 1.2214687816823309,
+      "max_seed_ratio": 1.2304549166744763,
+      "baseline_fps": 8465.950145089633,
+      "candidate_fps": 10378.862191183347
+    },
+    {
+      "game": "kettle",
+      "batch": 1,
+      "threads": 1,
+      "speedup": 1.505820532207898,
+      "min_seed_ratio": 1.4835400824964096,
+      "max_seed_ratio": 1.5284355993963277,
+      "baseline_fps": 4135.642154878956,
+      "candidate_fps": 6227.534870681237
+    },
+    {
+      "game": "notsnake",
+      "batch": 1,
+      "threads": 1,
+      "speedup": 1.1039579053445971,
+      "min_seed_ratio": 1.1022568444558056,
+      "max_seed_ratio": 1.105661591400256,
+      "baseline_fps": 17571.2229650728,
+      "candidate_fps": 19397.890498864657
+    },
+    {
+      "game": "Slidings",
+      "batch": 1,
+      "threads": 1,
+      "speedup": 1.0760122046651315,
+      "min_seed_ratio": 1.0735171368249643,
+      "max_seed_ratio": 1.078513071540371,
+      "baseline_fps": 17175.723404599066,
+      "candidate_fps": 18481.288007301133
+    },
+    {
+      "game": "limerick",
+      "batch": 1,
+      "threads": 1,
+      "speedup": 1.3963684599327297,
+      "min_seed_ratio": 1.3855312343368877,
+      "max_seed_ratio": 1.4072904511806947,
+      "baseline_fps": 4604.324323573235,
+      "candidate_fps": 6429.333264738757
+    },
+    {
+      "game": "Microban",
+      "batch": 1,
+      "threads": 1,
+      "speedup": 1.1946849853626305,
+      "min_seed_ratio": 1.1920702115497466,
+      "max_seed_ratio": 1.1973054946112516,
+      "baseline_fps": 16207.155214107572,
+      "candidate_fps": 19362.44498973601
+    },
+    {
+      "game": "sokoban_basic",
+      "batch": 32,
+      "threads": 1,
+      "speedup": 1.4835450267832762,
+      "min_seed_ratio": 1.4802122378449436,
+      "max_seed_ratio": 1.4868853197009866,
+      "baseline_fps": 34119.29219453251,
+      "candidate_fps": 50617.5062525642
+    },
+    {
+      "game": "blocks",
+      "batch": 32,
+      "threads": 1,
+      "speedup": 2.004153863743447,
+      "min_seed_ratio": 2.000931441200727,
+      "max_seed_ratio": 2.0073814758727915,
+      "baseline_fps": 7847.9598301300275,
+      "candidate_fps": 15728.519016058424
+    },
+    {
+      "game": "Zen_Puzzle_Garden",
+      "batch": 32,
+      "threads": 1,
+      "speedup": 1.3436376448527148,
+      "min_seed_ratio": 1.3427472265731708,
+      "max_seed_ratio": 1.344528653596865,
+      "baseline_fps": 12208.148988724006,
+      "candidate_fps": 16403.32855522019
+    },
+    {
+      "game": "kettle",
+      "batch": 32,
+      "threads": 1,
+      "speedup": 1.679933639872116,
+      "min_seed_ratio": 1.6788859318449016,
+      "max_seed_ratio": 1.680982001721064,
+      "baseline_fps": 5259.633877270906,
+      "candidate_fps": 8835.835883838403
+    },
+    {
+      "game": "notsnake",
+      "batch": 32,
+      "threads": 1,
+      "speedup": 1.2719341603853371,
+      "min_seed_ratio": 1.2715941356521443,
+      "max_seed_ratio": 1.272274276041267,
+      "baseline_fps": 40543.6409522274,
+      "candidate_fps": 51568.84191353586
+    },
+    {
+      "game": "Slidings",
+      "batch": 32,
+      "threads": 1,
+      "speedup": 1.1756218914059422,
+      "min_seed_ratio": 1.1737803969014782,
+      "max_seed_ratio": 1.1774662749533815,
+      "baseline_fps": 35874.251245138155,
+      "candidate_fps": 42174.5551015813
+    },
+    {
+      "game": "limerick",
+      "batch": 32,
+      "threads": 1,
+      "speedup": 1.3341984666133289,
+      "min_seed_ratio": 1.3330201036779432,
+      "max_seed_ratio": 1.3353778711978266,
+      "baseline_fps": 5876.244905277815,
+      "candidate_fps": 7840.076942066056
+    },
+    {
+      "game": "Microban",
+      "batch": 32,
+      "threads": 1,
+      "speedup": 1.479843027808116,
+      "min_seed_ratio": 1.4780290554035476,
+      "max_seed_ratio": 1.4816592264854853,
+      "baseline_fps": 34140.27957043134,
+      "candidate_fps": 50522.25468972274
+    },
+    {
+      "game": "sokoban_basic",
+      "batch": 256,
+      "threads": 8,
+      "speedup": 1.4580922563035865,
+      "min_seed_ratio": 1.4577606941131995,
+      "max_seed_ratio": 1.4584238939065475,
+      "baseline_fps": 245462.43548960978,
+      "candidate_fps": 357906.8764008186
+    },
+    {
+      "game": "blocks",
+      "batch": 256,
+      "threads": 8,
+      "speedup": 1.9461071949776225,
+      "min_seed_ratio": 1.9459000279722103,
+      "max_seed_ratio": 1.946314384038725,
+      "baseline_fps": 60702.52091425489,
+      "candidate_fps": 118133.61270451103
+    },
+    {
+      "game": "Zen_Puzzle_Garden",
+      "batch": 256,
+      "threads": 8,
+      "speedup": 1.3253191466054954,
+      "min_seed_ratio": 1.3233334245104587,
+      "max_seed_ratio": 1.327307848367006,
+      "baseline_fps": 92236.1271378949,
+      "candidate_fps": 122242.3053045908
+    },
+    {
+      "game": "kettle",
+      "batch": 256,
+      "threads": 8,
+      "speedup": 1.6320779769689984,
+      "min_seed_ratio": 1.6319408011841248,
+      "max_seed_ratio": 1.6322151642844351,
+      "baseline_fps": 40228.492907968975,
+      "candidate_fps": 65656.03732174971
+    },
+    {
+      "game": "notsnake",
+      "batch": 256,
+      "threads": 8,
+      "speedup": 1.2671182961550946,
+      "min_seed_ratio": 1.2656603704085574,
+      "max_seed_ratio": 1.2685779012996223,
+      "baseline_fps": 287863.10289122816,
+      "candidate_fps": 364756.6044614526
+    },
+    {
+      "game": "Slidings",
+      "batch": 256,
+      "threads": 8,
+      "speedup": 1.1567832979035686,
+      "min_seed_ratio": 1.1564204818824468,
+      "max_seed_ratio": 1.1571462277547955,
+      "baseline_fps": 242785.43149942192,
+      "candidate_fps": 280850.13213284255
+    },
+    {
+      "game": "limerick",
+      "batch": 256,
+      "threads": 8,
+      "speedup": 1.4648863477438292,
+      "min_seed_ratio": 1.4612438007246784,
+      "max_seed_ratio": 1.4685379748006715,
+      "baseline_fps": 40936.72796112738,
+      "candidate_fps": 59967.65391155856
+    },
+    {
+      "game": "Microban",
+      "batch": 256,
+      "threads": 8,
+      "speedup": 1.4588748622207197,
+      "min_seed_ratio": 1.4586259857414843,
+      "max_seed_ratio": 1.459123781164235,
+      "baseline_fps": 244919.18069427728,
+      "candidate_fps": 357306.4359905753
+    }
+  ],
+  "configuration": {
+    "host": "Yalda24",
+    "cpu_affinity": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7
+    ],
+    "source_hashes": {
+      "scripts/benchmarks/benchmark_cpp_scoring.py": "b3d314783de38e52b65c5d601f1353ccefdb8e2fead46e6e8ffcf9fe1e501c39",
+      "puzzlescript_cpp/__init__.py": "80b5ca3886cfb7f8f65dcfdd7d2f3549dcb4a51161d7dacf7d33eb52ad1ad44d",
+      "scripts/benchmarks/profile_rand_nodejs.py": "1e5e43a879f58e326f16d897c970dd479ed21da7466057e23cc727081420102e"
+    },
+    "idle_workers": "SIGSTOP between requests; only the measured build runs",
+    "thread_environment": {
+      "OMP_WAIT_POLICY": "ACTIVE",
+      "OMP_PROC_BIND": "close",
+      "OMP_PLACES": "cores",
+      "OPENBLAS_NUM_THREADS": "1"
+    },
+    "trials": 9,
+    "seeds": [
+      42,
+      1042
+    ],
+    "steps": 300,
+    "library_hashes": {
+      "baseline": "7b9106d6bfec8c248b184e5f19655f3710a23c002d0c0be092260649fca16fa7",
+      "candidate": "355f88636be05074d9286c171f0c9ee69b4ae630f7670f3acb9282341c5fde0f"
+    },
+    "timing": "full Python wrapper outputs; alternating warmed calls; reset/actions/IPC excluded"
+  },
+  "plotter_sha256": "fe886f9283a0f1f6a0b8f1939468b80eee72ec2c3ce0005e22183f003b966414",
+  "inputs": {
+    "scripts/benchmarks/results/2026-10-05-adaptive/cpp-final-single.json": "a6a8bc4891a518ec665e9670c16f03521c2b2b491828dd656483c4f92dbff8e0",
+    "scripts/benchmarks/results/2026-10-05-adaptive/cpp-final-threaded.json": "5666cf3c90839433eac8317d7ebd6f955a3e7ed156bf4b5817da020f6eb5c7a2"
+  }
+}

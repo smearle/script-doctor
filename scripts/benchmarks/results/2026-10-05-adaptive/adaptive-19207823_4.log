@@ -1,0 +1,8 @@
+name, driver_version, memory.total [MiB]
+NVIDIA H200, 610.43.02, 143771 MiB
+Writing pretty tree to /scratch/se2161/puzzlejax-perf-20261002/round5/data/pretty_trees/limerick
+Parsed limerick successfully
+Compiling batch=32768, steps=100
+Compiled in 43.64s; warming up
+{"batch": 32768, "steps": 100, "compile_s": 43.64162052003667, "host": "gh106.hpc.nyu.edu", "argument_bytes": 104235016, "output_bytes": 104235104, "temporary_bytes": 2700640728, "samples_s": [8.838748113019392, 8.538394887000322, 7.689574375981465, 6.978418285958469, 6.579545977991074], "fps_samples": [370731.2345707991, 383772.3651068091, 426135.41917679453, 469561.9932375463, 498028.2850763666], "median_fps": 426135.41917679453, "q25_fps": 383772.3651068091, "q75_fps": 469561.9932375463}
+Stopped: plateau

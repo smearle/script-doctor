@@ -1,0 +1,34 @@
+{
+  "sokoban_basic.txt": [
+    1,
+    false
+  ],
+  "notsnake.txt": [
+    2,
+    false
+  ],
+  "Zen_Puzzle_Garden.txt": [
+    3,
+    false
+  ],
+  "Slidings.txt": [
+    10,
+    false
+  ],
+  "limerick.txt": [
+    11,
+    false
+  ],
+  "kettle.txt": [
+    14,
+    false
+  ],
+  "Take_Heart_Lass.txt": [
+    17,
+    false
+  ],
+  "atlas shrank.txt": [
+    44,
+    false
+  ]
+}

@@ -1,0 +1,32 @@
+{
+  "date": "2026-10-05",
+  "jax_engine_sha256": "ab92c0a647c6efe9809c98cfecc7110a89b23b6dfdea2e7205603429041654fe",
+  "frozen_source": "The same validated JAX engine used for the preceding paper sweep; later unrelated local command fixes were kept separate.",
+  "slurm_jobs": {
+    "adaptive_h200": "19207823",
+    "movement_arithmetic_h100": "19208123",
+    "movement_bounds_h100": "19208274"
+  },
+  "source_guard": "Initial array 19207806 rejected resume because the uploaded engine included intervening local edits. Pending tasks were cancelled, the preserved ab92 engine restored, and 19207823 submitted. No mismatched measurements were accepted.",
+  "game_list_revision": "Before array task 15 started, Sokolor_EX was replaced by HyperMaze because Sokolor_EX has a known JS score mismatch. Timing code and protocol were unchanged. Early tasks record the preceding benchmark script hash.",
+  "node_final_snapshot": "The final Node audits used /tmp/puzzlejax-node-audit-final with frozen source hashes and a guard against edits during measurement.",
+  "node_pilots": "nodejs-ipc.json is a short pilot; nodejs-ipc-long.json spans a worker edit and is superseded, not used for final claims. Final files have suffix -final.json.",
+  "cpu_references": "All 16 archived CPU inputs remain byte-for-byte identical; copied into tracked historical-cpu for reproducible plotting.",
+  "output_protocols": "Paper curves return final carry only and continue state across timed calls. JAX A/B checks and C++/Node audits compare complete per-step outputs. Do not mix their ratios.",
+  "unrelated_work": "Commit on isolated codex/puzzlejax-gpu-throughput worktree; shared research edits and shared C++ extension preserved.",
+  "cpp_pilots": "The passive-wait direct-cell pilot was stopped after 18 configurations to switch to parked-worker timing. The subsequent target-list ablation stopped on a Kettle threaded output mismatch. These are exploratory files, not final speedups.",
+  "cpp_race": "A new one-push mixed-win test failed on the unchanged C++ baseline, including wrong post-reset observations. Replacing packed vector<bool> buffers with uint8_t fixes it. Both final A/B builds include this fix.",
+  "cpp_wrapper_provenance": {
+    "note": "The measured workspace wrapper has unrelated search-seed edits outside the exercised batched class. The exact CppBatchedPuzzleScriptEnv source is identical to the committed wrapper; both A/B workers use the same wrapper.",
+    "batched_class_sha256": "5351a6b5c70e48b8eaeed19a581bd9041014498a6155dcf82eb636efce6c006e"
+  },
+  "completed": {
+    "h200_games": 16,
+    "h200_configurations": 163,
+    "h200_timed_calls_including_preserved_points": 815,
+    "cpp_configurations": 48,
+    "cpp_paired_transitions": 1387200,
+    "cpp_focused_tests": 51,
+    "benchmark_and_node_tests": 6
+  }
+}

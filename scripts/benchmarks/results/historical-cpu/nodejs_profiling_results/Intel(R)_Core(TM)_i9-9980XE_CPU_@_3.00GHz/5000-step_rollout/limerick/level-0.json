@@ -1,0 +1,236 @@
+{
+    "1-single_process": {
+        "fps": [
+            7330.501652027403,
+            7626.793547474557,
+            6882.741750845403
+        ],
+        "iterations": [
+            5000,
+            5000,
+            5000
+        ],
+        "total_iterations": 5000,
+        "requested_iterations": 5000,
+        "completed_ratio": 1.0,
+        "successful_workers": 1,
+        "failed_workers": 0,
+        "wall_time": 0.7264546863734722,
+        "mean_worker_fps": 6882.741750845403,
+        "engine_time": null,
+        "wins": 0,
+        "timeouts": 0,
+        "timed_out": false,
+        "had_worker_failures": false,
+        "sample_worker_error": null,
+        "execution_mode": "single_process"
+    },
+    "1-nodejs_native": {
+        "fps": [
+            11642.44066863794,
+            14222.114129098085,
+            15234.636157369914
+        ],
+        "iterations": [
+            5000,
+            5000,
+            5000
+        ],
+        "total_iterations": 5000,
+        "requested_iterations": 5000,
+        "completed_ratio": 1,
+        "successful_workers": 1,
+        "failed_workers": 0,
+        "wall_time": 0.32819950200000003,
+        "mean_worker_fps": 15673.98119122257,
+        "engine_time": null,
+        "wins": null,
+        "timeouts": 0,
+        "timed_out": false,
+        "had_worker_failures": false,
+        "sample_worker_error": null,
+        "execution_mode": "nodejs_native"
+    },
+    "1-nodejs_batched": {
+        "fps": [
+            427.4117465094896,
+            453.3628592554136,
+            468.02086370926287
+        ],
+        "iterations": [
+            5000,
+            5000,
+            5000
+        ],
+        "total_iterations": 5000,
+        "requested_iterations": 5000,
+        "completed_ratio": 1.0,
+        "successful_workers": 1,
+        "failed_workers": 0,
+        "wall_time": 10.683284416794777,
+        "mean_worker_fps": 468.02086370926287,
+        "engine_time": null,
+        "wins": 0,
+        "timeouts": 0,
+        "timed_out": false,
+        "had_worker_failures": false,
+        "sample_worker_error": null,
+        "execution_mode": "nodejs_batched"
+    },
+    "2-nodejs_batched": {
+        "fps": [
+            563.9377876956636,
+            574.6207112180084,
+            593.0211271497175
+        ],
+        "iterations": [
+            5000,
+            5000,
+            5000
+        ],
+        "total_iterations": 5000,
+        "requested_iterations": 5000,
+        "completed_ratio": 1.0,
+        "successful_workers": 2,
+        "failed_workers": 0,
+        "wall_time": 8.431402813643217,
+        "mean_worker_fps": 296.51056357485874,
+        "engine_time": null,
+        "wins": 0,
+        "timeouts": 0,
+        "timed_out": false,
+        "had_worker_failures": false,
+        "sample_worker_error": null,
+        "execution_mode": "nodejs_batched"
+    },
+    "4-nodejs_batched": {
+        "fps": [
+            974.6051340100569,
+            1027.6793833913655,
+            973.7910215550173
+        ],
+        "iterations": [
+            5000,
+            5000,
+            5000
+        ],
+        "total_iterations": 5000,
+        "requested_iterations": 5000,
+        "completed_ratio": 1.0,
+        "successful_workers": 4,
+        "failed_workers": 0,
+        "wall_time": 5.134571883827448,
+        "mean_worker_fps": 243.44775538875433,
+        "engine_time": null,
+        "wins": 0,
+        "timeouts": 0,
+        "timed_out": false,
+        "had_worker_failures": false,
+        "sample_worker_error": null,
+        "execution_mode": "nodejs_batched"
+    },
+    "8-nodejs_batched": {
+        "fps": [
+            1538.1727323552157,
+            1412.9439585900573,
+            1575.6594349520474
+        ],
+        "iterations": [
+            5000,
+            5000,
+            5000
+        ],
+        "total_iterations": 5000,
+        "requested_iterations": 5000,
+        "completed_ratio": 1.0,
+        "successful_workers": 8,
+        "failed_workers": 0,
+        "wall_time": 3.1732745599001646,
+        "mean_worker_fps": 196.95742936900592,
+        "engine_time": null,
+        "wins": 1,
+        "timeouts": 0,
+        "timed_out": false,
+        "had_worker_failures": false,
+        "sample_worker_error": null,
+        "execution_mode": "nodejs_batched"
+    },
+    "16-nodejs_batched": {
+        "fps": [
+            4772.529360391183,
+            4865.50888327673,
+            5295.115604925747
+        ],
+        "iterations": [
+            4992,
+            4992,
+            4992
+        ],
+        "total_iterations": 4992,
+        "requested_iterations": 4992,
+        "completed_ratio": 1.0,
+        "successful_workers": 16,
+        "failed_workers": 0,
+        "wall_time": 0.9427556209266186,
+        "mean_worker_fps": 330.9447253078592,
+        "engine_time": null,
+        "wins": 0,
+        "timeouts": 0,
+        "timed_out": false,
+        "had_worker_failures": false,
+        "sample_worker_error": null,
+        "execution_mode": "nodejs_batched"
+    },
+    "32-nodejs_batched": {
+        "fps": [
+            5915.001148895007,
+            6625.012266392307,
+            6235.256212890421
+        ],
+        "iterations": [
+            4992,
+            4992,
+            4992
+        ],
+        "total_iterations": 4992,
+        "requested_iterations": 4992,
+        "completed_ratio": 1.0,
+        "successful_workers": 32,
+        "failed_workers": 0,
+        "wall_time": 0.8006086405366659,
+        "mean_worker_fps": 194.85175665282566,
+        "engine_time": null,
+        "wins": 1,
+        "timeouts": 0,
+        "timed_out": false,
+        "had_worker_failures": false,
+        "sample_worker_error": null,
+        "execution_mode": "nodejs_batched"
+    },
+    "64-nodejs_batched": {
+        "fps": [
+            5813.520061410054,
+            6561.94824581039,
+            6238.9942228943055
+        ],
+        "iterations": [
+            6400,
+            6400,
+            6400
+        ],
+        "total_iterations": 6400,
+        "requested_iterations": 6400,
+        "completed_ratio": 1.0,
+        "successful_workers": 64,
+        "failed_workers": 0,
+        "wall_time": 1.0258063673973083,
+        "mean_worker_fps": 97.48428473272352,
+        "engine_time": null,
+        "wins": 1,
+        "timeouts": 0,
+        "timed_out": false,
+        "had_worker_failures": false,
+        "sample_worker_error": null,
+        "execution_mode": "nodejs_batched"
+    }
+}

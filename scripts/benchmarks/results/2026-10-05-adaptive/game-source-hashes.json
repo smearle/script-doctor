@@ -1,0 +1,66 @@
+{
+  "HyperMaze": {
+    "path": "data/scraped_games/HyperMaze.txt",
+    "sha256": "3343b5f393a122bff84b1b4cb33bb530f38d8a5357bddc221e77a5a8c76ec6ce"
+  },
+  "Magnet_Jack": {
+    "path": "data/scraped_games/Magnet_Jack.txt",
+    "sha256": "7958d48abfa7ed5d9efde610ebb049cfe3043aeba9fc48cf6e7ef4d804f5bec2"
+  },
+  "Microban": {
+    "path": "gallery_games/Microban.txt",
+    "sha256": "f3b2815e76d4192a325f069e50dc5bd1d5aa336e72b79b606320cf30a0b0cc13"
+  },
+  "Multi-word_Dictionary_Game": {
+    "path": "gallery_games/Multi-word_Dictionary_Game.txt",
+    "sha256": "ec595bf18ea4c3f7493a571a01e96f310b2d57dea701e4676fc12cc28b55794b"
+  },
+  "Slidings": {
+    "path": "gallery_games/Slidings.txt",
+    "sha256": "d0f5ea631f1b45d122b1dde700a23e2db1c40ee18b1c9c5ee8b4c0cecb069267"
+  },
+  "Take_Heart_Lass": {
+    "path": "gallery_games/Take_Heart_Lass.txt",
+    "sha256": "acfdc7fde4c15511b8a2e82cc65a8c368c0dffb96423b93b8391ad6a88991032"
+  },
+  "Travelling_salesman": {
+    "path": "data/scraped_games/Travelling_salesman.txt",
+    "sha256": "318461b6b12ce7b29bc9e1dd3abdc4d74844bb21104fbc930bbb0550c5e73aa7"
+  },
+  "Zen_Puzzle_Garden": {
+    "path": "data/scraped_games/Zen_Puzzle_Garden.txt",
+    "sha256": "58f087759ccd96b0547e45667fa0b9c3f781259d038f14918352f9b6f6794483"
+  },
+  "atlas shrank": {
+    "path": "gallery_games/atlas shrank.txt",
+    "sha256": "94e41af38141ffb4633de617ee2d46073be04cb0b3472292a846993e66381f95"
+  },
+  "blocks": {
+    "path": "data/scraped_games/blocks.txt",
+    "sha256": "7de9da769ecafbc798211d87c9a9875082412e3b9e5689c19175c47190d4ac5a"
+  },
+  "kettle": {
+    "path": "gallery_games/kettle.txt",
+    "sha256": "82a818e730c7b0b8c831613cb28d85b79c4eda8236e49720fade3efc6cb3f19e"
+  },
+  "limerick": {
+    "path": "gallery_games/limerick.txt",
+    "sha256": "7079dc4d37f015b34de542da41f31ea08725166d4487f5dc6bd483d7eabe4c21"
+  },
+  "nekopuzzle": {
+    "path": "gallery_games/nekopuzzle.txt",
+    "sha256": "fb60ce89274c0330b4748b9404830370622bc61461800344570a5e258c34f7f2"
+  },
+  "notsnake": {
+    "path": "gallery_games/notsnake.txt",
+    "sha256": "b9e4dfb30e6d92583ca42e2a858b2db0842caec88fee7bd9963d73acd08559d6"
+  },
+  "sokoban_basic": {
+    "path": "gallery_games/sokoban_basic.txt",
+    "sha256": "c389821b95fadf1d764e63c7592c1888cff9d214951db08bd9b7f52661c3faa8"
+  },
+  "sokoban_match3": {
+    "path": "gallery_games/sokoban_match3.txt",
+    "sha256": "fc268e570b9d92011f3c47c0ec6082cd871619a3b6b9d320397920d29d862ee7"
+  }
+}

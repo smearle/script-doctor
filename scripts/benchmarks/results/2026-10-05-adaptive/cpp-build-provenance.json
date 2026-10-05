@@ -1,0 +1,39 @@
+{
+  "base_commit": "778bc8ce",
+  "host": "Yalda24",
+  "compiler": "c++ (Ubuntu 11.4.0-1ubuntu1~22.04.3) 11.4.0",
+  "variant_hashes": {
+    "variants/baseline-engine.cpp": "1512139f7eb49e9e635da1dee3e1a0aaa59d4f7209d59a28e7534db08f6b281a",
+    "variants/baseline-heuristic.cpp": "12edf395406abe9d53342ae92a59450cea2ff747639599555b5b5716072611f5",
+    "variants/direct-engine.cpp": "2c4b86e392075f5c91b7d0182ae26c8dd1dcab947fa9e32bcf4b10c13719d20a",
+    "variants/targets-heuristic.cpp": "634ba326772f57c791ef4f319af995208f9e8a2d9ae25e7aba987b5d2a495aea",
+    "setup_cpp.py": "08448baf4cf0fb1163c30d50e9e58a1cdfa1bc0c5de4ff41a5ea038bfbfa946c"
+  },
+  "candidate_A": "Read win/scoring masks directly from packed cells; remove temporary BitVec allocations.",
+  "candidate_B": "Candidate A plus collect target cells once per non-NO win condition.",
+  "build_command": "python setup_cpp.py build_ext --build-lib VARIANT_DIRECTORY --build-temp TEMP_DIRECTORY",
+  "build_isolation": "Separate source/build/library directories; the shared workspace extension was never rebuilt.",
+  "corrected_baseline": "Original scoring, byte-backed batched flags. Final performance baseline uses this correctness fix.",
+  "flag_header_sha256": "cec62357fec42ad87a4667f2d448a742684792ac999b1b825c078e40491d22a6",
+  "cpu_model": "Intel(R) Core(TM) i9-9980XE CPU @ 3.00GHz",
+  "optimized_build_sources": {
+    "puzzlescript_cpp/src/batched_engine.cpp": "6c5ece4d8939e9667ef8291cbf562250a9dd2a526d5d7f52e20ee59e8bf871e2",
+    "puzzlescript_cpp/src/batched_engine.h": "cec62357fec42ad87a4667f2d448a742684792ac999b1b825c078e40491d22a6",
+    "puzzlescript_cpp/src/bindings.cpp": "74a087408e34c4d6c6fcc87c4e898af35625f7887faa6051899d8e03f3ca82c8",
+    "puzzlescript_cpp/src/bitvec.h": "98ad451fe93cc63e87f829cec1ecf4521548a0fca458cbd3dbbb14925f80d4bc",
+    "puzzlescript_cpp/src/engine.cpp": "2c4b86e392075f5c91b7d0182ae26c8dd1dcab947fa9e32bcf4b10c13719d20a",
+    "puzzlescript_cpp/src/engine.h": "2af49ec82443085282d2c5f815368c10c69190028122fa96470c428fa6149085",
+    "puzzlescript_cpp/src/heuristic.cpp": "634ba326772f57c791ef4f319af995208f9e8a2d9ae25e7aba987b5d2a495aea",
+    "puzzlescript_cpp/src/level.h": "2ef3ff96d1db2237db0f278bd713bbe7e4e286a533cbe86e520e4ce45e75f665",
+    "puzzlescript_cpp/src/renderer.cpp": "a9fc6f1f23aaf60fe191076a23990a0a2f0dc071e12f04135b0b6df6ba3be232",
+    "puzzlescript_cpp/src/renderer.h": "e5f0be48639530b7045eed2e93aea87b9238b2e9613046e35eb860999e0d3b03",
+    "puzzlescript_cpp/src/rng.h": "545827aef8c746815fe66ee261c08d386991f379dd6ae2a17f690a3fc7e5babd",
+    "puzzlescript_cpp/src/solver.cpp": "dab373dbabe50f82189daa0f1a70a327ea56d8f25b6d95c0d50824d3431beaf0",
+    "puzzlescript_cpp/src/solver.h": "7f7df4fe0faf4ae18fac0809a931ab4d616fee7088dd2d1eedcf8689c010ffee",
+    "puzzlescript_cpp/src/viewport.h": "b67ae0ede3833bb2629be3eecca20e757bdc615413158588ae50f1989b7c8043"
+  },
+  "final_library_hashes": {
+    "baseline-fixed": "7b9106d6bfec8c248b184e5f19655f3710a23c002d0c0be092260649fca16fa7",
+    "optimized-fixed": "355f88636be05074d9286c171f0c9ee69b4ae630f7670f3acb9282341c5fde0f"
+  }
+}

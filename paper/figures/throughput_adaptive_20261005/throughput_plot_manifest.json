@@ -1,0 +1,125 @@
+{
+  "inputs": [
+    {
+      "path": "scripts/benchmarks/results/2026-10-05-adaptive/adaptive-throughput-h200/Slidings.json",
+      "sha256": "919c8dc57cfa3a584ba4772fa6dd2d418dae177995af480808ee17a2c511f22d"
+    },
+    {
+      "path": "scripts/benchmarks/results/2026-10-05-adaptive/adaptive-throughput-h200/Take_Heart_Lass.json",
+      "sha256": "5d60d3d7d70b6ffa45fc5187c9b2ff2c8d36cdfb2c2a5184bfd6a36f6fe5f51f"
+    },
+    {
+      "path": "scripts/benchmarks/results/2026-10-05-adaptive/adaptive-throughput-h200/Zen_Puzzle_Garden.json",
+      "sha256": "cfacfb7e8d89b33801bd3f16db4778cbe568a9a62e3a2440049e62dd67c4d00a"
+    },
+    {
+      "path": "scripts/benchmarks/results/2026-10-05-adaptive/adaptive-throughput-h200/atlas shrank.json",
+      "sha256": "aa7c7aece824e00c88498577e238661f6942c5170fddf8e8e0c84f9e1a25a929"
+    },
+    {
+      "path": "scripts/benchmarks/results/2026-10-05-adaptive/adaptive-throughput-h200/kettle.json",
+      "sha256": "6d7c2160018eb71b943556dee20d954bdbec65f430f5b773bcd2f61d815665a8"
+    },
+    {
+      "path": "scripts/benchmarks/results/2026-10-05-adaptive/adaptive-throughput-h200/limerick.json",
+      "sha256": "0c3d9dded9f158f54c562be830fa0751714e3904bbeac61dd772a751b1fcd930"
+    },
+    {
+      "path": "scripts/benchmarks/results/2026-10-05-adaptive/adaptive-throughput-h200/notsnake.json",
+      "sha256": "2a62d143e0d2ba4490de45d521cb8a92ed89b45d5a7d112d832ac2c0229b2498"
+    },
+    {
+      "path": "scripts/benchmarks/results/2026-10-05-adaptive/adaptive-throughput-h200/sokoban_basic.json",
+      "sha256": "c1ccd14687c50220bffa64f8dccef08238400a3b98614e3e0788d59cf4374552"
+    },
+    {
+      "path": "scripts/benchmarks/results/historical-cpu/cpp_profiling_results/Intel(R)_Core(TM)_i9-9980XE_CPU_@_3.00GHz/5000-step_rollout/Slidings/level-0.json",
+      "sha256": "d6b7d7896f6a90ab0012a9631aea60173da4c68ec420e6818561dda416d57745"
+    },
+    {
+      "path": "scripts/benchmarks/results/historical-cpu/cpp_profiling_results/Intel(R)_Core(TM)_i9-9980XE_CPU_@_3.00GHz/5000-step_rollout/Take_Heart_Lass/level-0.json",
+      "sha256": "c2e67522c935f9530b8a60305509880657ca3458643c45592759e2209e16ed18"
+    },
+    {
+      "path": "scripts/benchmarks/results/historical-cpu/cpp_profiling_results/Intel(R)_Core(TM)_i9-9980XE_CPU_@_3.00GHz/5000-step_rollout/Zen_Puzzle_Garden/level-0.json",
+      "sha256": "4f0ec5066120ad7915f9ecb09e92cd43aeac2ee48321e3bd555b362529081d7e"
+    },
+    {
+      "path": "scripts/benchmarks/results/historical-cpu/cpp_profiling_results/Intel(R)_Core(TM)_i9-9980XE_CPU_@_3.00GHz/5000-step_rollout/atlas shrank/level-0.json",
+      "sha256": "05dbcfc525462cf19f4a784ad7fd5f0220a05e191213f0c69c17a1b3ed80b395"
+    },
+    {
+      "path": "scripts/benchmarks/results/historical-cpu/cpp_profiling_results/Intel(R)_Core(TM)_i9-9980XE_CPU_@_3.00GHz/5000-step_rollout/kettle/level-0.json",
+      "sha256": "a5eaaf724c1d0dd6d444f0e74d4f0034c9ab87869cd20c70f5f997348539f443"
+    },
+    {
+      "path": "scripts/benchmarks/results/historical-cpu/cpp_profiling_results/Intel(R)_Core(TM)_i9-9980XE_CPU_@_3.00GHz/5000-step_rollout/limerick/level-0.json",
+      "sha256": "8661a036465281836eb36dfdc515b9d96ed68cc88849a6f579cb2f23a05af446"
+    },
+    {
+      "path": "scripts/benchmarks/results/historical-cpu/cpp_profiling_results/Intel(R)_Core(TM)_i9-9980XE_CPU_@_3.00GHz/5000-step_rollout/notsnake/level-0.json",
+      "sha256": "770e508d5626a5a7ee1086308590b8d6b4ec260a83cc9a99d28f374040d1ad4f"
+    },
+    {
+      "path": "scripts/benchmarks/results/historical-cpu/cpp_profiling_results/Intel(R)_Core(TM)_i9-9980XE_CPU_@_3.00GHz/5000-step_rollout/sokoban_basic/level-0.json",
+      "sha256": "b73e0163dc2d4c0b8760cb7ea5f16a47ead7001234b194d82e789128ffa9bd04"
+    },
+    {
+      "path": "scripts/benchmarks/results/historical-cpu/games_to_n_rules.json",
+      "sha256": "487bafdd1abf25f5df5902d037c0f07ccc28b039edf7157d338b657594d33287"
+    },
+    {
+      "path": "scripts/benchmarks/results/historical-cpu/nodejs_profiling_results/Intel(R)_Core(TM)_i9-9980XE_CPU_@_3.00GHz/5000-step_rollout/Slidings/level-0.json",
+      "sha256": "aa3cddbbe08ad480e5675ea464dc911dc4fd813ff4fb5ed05bbd677a01bbe18b"
+    },
+    {
+      "path": "scripts/benchmarks/results/historical-cpu/nodejs_profiling_results/Intel(R)_Core(TM)_i9-9980XE_CPU_@_3.00GHz/5000-step_rollout/Take_Heart_Lass/level-0.json",
+      "sha256": "6f191c6c56cc3b854fee8008f583189dd8e973837d3d0967e00a960a29d958a3"
+    },
+    {
+      "path": "scripts/benchmarks/results/historical-cpu/nodejs_profiling_results/Intel(R)_Core(TM)_i9-9980XE_CPU_@_3.00GHz/5000-step_rollout/Zen_Puzzle_Garden/level-0.json",
+      "sha256": "3d0b29b9ea8ab1fbefdf24ce405b0575a914fab1d089c1a43d10b5227725282f"
+    },
+    {
+      "path": "scripts/benchmarks/results/historical-cpu/nodejs_profiling_results/Intel(R)_Core(TM)_i9-9980XE_CPU_@_3.00GHz/5000-step_rollout/atlas shrank/level-0.json",
+      "sha256": "bd3b2cdac4e44e593fdd6b4c8be3aabdedc195fa06fb6e2514b11cffbe823a86"
+    },
+    {
+      "path": "scripts/benchmarks/results/historical-cpu/nodejs_profiling_results/Intel(R)_Core(TM)_i9-9980XE_CPU_@_3.00GHz/5000-step_rollout/kettle/level-0.json",
+      "sha256": "219872ac424a37c862f1f3235990c829dad7d5c36d19ebaf96a287e78fb55e21"
+    },
+    {
+      "path": "scripts/benchmarks/results/historical-cpu/nodejs_profiling_results/Intel(R)_Core(TM)_i9-9980XE_CPU_@_3.00GHz/5000-step_rollout/limerick/level-0.json",
+      "sha256": "7087600d278650ade1f054139f1aaacea3ecf8d5313065adb78ebb1fd9fc6582"
+    },
+    {
+      "path": "scripts/benchmarks/results/historical-cpu/nodejs_profiling_results/Intel(R)_Core(TM)_i9-9980XE_CPU_@_3.00GHz/5000-step_rollout/notsnake/level-0.json",
+      "sha256": "6920b2bb2125f5cdbc0bb5870dca2aec4e3f4030ae25b17a64314cfbfef8e873"
+    },
+    {
+      "path": "scripts/benchmarks/results/historical-cpu/nodejs_profiling_results/Intel(R)_Core(TM)_i9-9980XE_CPU_@_3.00GHz/5000-step_rollout/sokoban_basic/level-0.json",
+      "sha256": "c69517f73e8f91d04b2189e005f7c9e51e2358d1b7d1e614d6c0e4490b2c1208"
+    }
+  ],
+  "matplotlib_version": "3.10.6",
+  "plotter_sha256": "b9874c78ea41adef6787a000da0bb74057d1e028ea790e31bf8a2ed0e1a3f116",
+  "historical_cpu_note": "CPU curves are archived references, not newly measured comparisons.",
+  "updated_jax_note": "Median/IQR of warmed final-carry rollouts, random actions generated inside the scan.",
+  "movement_note": "Separate paired full-output rollout workload; only movement coordinate collection changes.",
+  "paper_configuration": {
+    "engine_sha256": "ab92c0a647c6efe9809c98cfecc7110a89b23b6dfdea2e7205603429041654fe",
+    "jax_version": "0.9.0.1",
+    "devices": [
+      "NVIDIA H200"
+    ],
+    "level": 0,
+    "trials": 5,
+    "seed": 42,
+    "base_steps": 5000,
+    "min_steps": 100,
+    "max_episode_steps": 2147483647,
+    "timing": "median/IQR of synchronized warmed calls; carry continues across trials",
+    "output_mode": "final_carry",
+    "action_generation": "inside timed scan"
+  }
+}
