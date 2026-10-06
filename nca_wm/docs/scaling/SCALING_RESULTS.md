@@ -1186,6 +1186,21 @@ multi-character-control / chase-style mechanics. `shadow` (a 2-rule
 1×4-grid game) fits worst because its rule structure is so atypical
 that even a closest-fit slot still leaves residual error.
 
+**Engine-load numbers in this and the next two sections were re-scored
+2026-10-06.** The original compile test (`try_compile` in
+`sample_latent_games_rule_attn.py`) counted a game as engine-loadable
+whenever `CppPuzzleScriptBackend.compile_and_serialize` didn't raise.
+PuzzleScript's `compile` never throws on compile errors: it logs them
+and loads whatever state it salvaged, so an engine-rejected game can
+still serialize cleanly (2 of the 58 rejected decodes below did). The
+test now reads the engine's own verdict
+(`puzzlescript_nodejs.utils.check_compile`: "Successful Compilation"
+and no "Errors detected"; playable = compiled with at least one level).
+Only the v4 numbers change (random 4/25 → 3/25, interp 9/9 → 8/9). The
+`serializeCompiledStateJSON` TypeErrors the old test reported came from
+the wrapper's serializer failing on the empty or partial state the
+engine leaves after compile errors; they are a symptom, not the cause.
+
 **Symbolic AE results (autoregressive sampling, 16 random + 9 interpolation):**
 
 - **TF reconstruction**: 100% perfect across all 94 training games.
@@ -1200,14 +1215,19 @@ that even a closest-fit slot still leaves residual error.
   | > Obj4 ]`, ellipsis rules `[ > ... | Obj1 ] -> [ > ... | Obj1 ]`,
   `late` prefixes — confirming the decoder learned the rule grammar.
   Even the t=0.00 endpoint produces a sokoban-style first push rule.
-- **Why engine-load fails**: the JS engine *parses* the decoded text
-  (PuzzleScript syntax is satisfied) but then crashes in
-  `serializeCompiledStateJSON` because (i) AR generation emits ~40
-  redundant `all Obj1 on Obj4`-style win-conditions instead of
-  stopping at one, and (ii) decoded rules reference `Grp1`, `Grp2`,
-  etc. as legend groups but the LEGEND section only emits `Grp0` because
-  the AR sequence didn't include the corresponding `GROUP_OR` /
-  `GROUP_AND` structure tokens in the right place.
+- **Why engine-load fails (corrected 2026-10-06)**: the engine rejects
+  all 25 decodes with compile errors (the `serializeCompiledStateJSON`
+  crash was a symptom; see the note above). By first error
+  (engine warnings excluded): 10 undefined names in rules (consistent
+  with decoded rules referencing `Grp1`, `Grp2`, etc. while the LEGEND
+  section only emits `Grp0`, because the AR sequence didn't include the
+  corresponding `GROUP_OR` / `GROUP_AND` structure tokens in the right
+  place), 4 invalid win-condition object names, 4 LHS/RHS cell-count
+  mismatches, 3 objects repeated in one cell, 2 movements in late rules,
+  1 name already in use, 1 internal compiler exception.
+  AR generation also emits redundant `all Obj1 on Obj4`-style
+  win-conditions instead of stopping at one (median 29, max 62
+  win-condition lines per decoded game).
 - **Diagnosis**: a teacher-forcing-vs-autoregressive gap. The decoder
   has learned the conditional `p(t_n | t_{<n}, slot)` perfectly but
   hasn't learned a stable basin to *generate* well-formed sequences
@@ -1258,15 +1278,20 @@ longest sprite-rich games. All non-perfect games still reconstruct
 **Autoregressive sampling (25 random Gaussian-fit slots + 9-point
 interpolation Ebony_&_Ivory ↔ rigidfail1):**
 - Random samples: **15/25 engine-load (60%)** — *up from 0/25*.
+  Unchanged by the 2026-10-06 re-score: the same 15 games compile with
+  no engine errors, and all 15 are playable.
 - Interp samples: **9/9 engine-load (100%)** — perfect along the entire
-  Ebony_&_Ivory ↔ rigidfail1 line.
+  Ebony_&_Ivory ↔ rigidfail1 line (also unchanged, all playable).
 - Sampled programs include real palette+sprite blocks, coherent
   legend assignments (a/b/c → Obj0/Obj1/Obj2), collision-layer
   groupings, push rules `[ > Obj2 | Obj4 ] -> [ > Obj2 | > Obj4 ]`,
   `late`-prefixed rules, and 3×3 to 5×5 levels with players.
-- The remaining failures (10/25 random) are mostly downstream
-  `serializeCompiledStateJSON` errors due to under-defined legend
-  groups in the decoded text, not parsing errors.
+- The remaining failures (10/25 random) are engine compile errors
+  (corrected 2026-10-06; the `serializeCompiledStateJSON` errors
+  reported earlier were a symptom, not the cause). By first error (engine
+  warnings excluded): 3 LHS/RHS cell-count mismatches, 3 undefined names
+  in rules, 1 AND-aggregate of same-layer objects, 1 undeclared name in a
+  collision layer, 1 name already in use, 1 internal compiler exception.
 
 **Why EoS + sprites is necessary (ablations not run yet, but
 diagnostic-level evidence from earlier sweep):**
@@ -1301,14 +1326,24 @@ no-EoS-no-sprites v4_decoder run.
 - perfect-reconstruction games: **147/199**
 
 **AR sampling (25 random + 9-point interp `herding_cats!` ↔ `blocks`):**
-- random AR engine-load: **4/25 (16%)** — *down from 15/25 at 94g*
-- interp AR engine-load: **9/9 (100%)** — same as 94g
-- Interpolation between two training endpoints stays robust at scale,
-  but random Gaussian-fit slot draws degrade. Reading: the empirical
-  slot prior becomes a poorer match to the manifold as games crowd it
-  (slots are denser, off-manifold draws more frequent). Interp's
-  invariance is consistent with that: a line whose endpoints are
-  on-manifold stays close enough to the manifold along its length.
+- random AR engine-load: **3/25 (12%)** — *down from 15/25 at 94g*
+  (corrected 2026-10-06 from 4/25; `random_02` compiles with engine
+  errors: a same-layer AND-aggregate, movements in late rules, and two
+  objects in no collision layer). All 3 are playable. By first error
+  (engine warnings excluded), the 22 failures are 11 undefined names in
+  rules, 4 LHS/RHS cell-count mismatches, 2 names already in use, 2
+  AND-aggregates of same-layer objects, 1 object repeated in one cell,
+  1 undeclared name in a collision layer, 1 internal compiler exception.
+- interp AR engine-load: **8/9 (89%)** — vs 9/9 at 94g (corrected
+  2026-10-06 from 9/9; `interp_03_0.38` has an RHS property `GRP0`
+  that can't be inferred from the LHS). All 8 are playable.
+- Interpolation between two training endpoints stays largely robust at
+  scale, but random Gaussian-fit slot draws degrade. Reading: the
+  empirical slot prior becomes a poorer match to the manifold as games
+  crowd it (slots are denser, off-manifold draws more frequent).
+  Interp's near-invariance is consistent with that: a line whose
+  endpoints are on-manifold stays close enough to the manifold along
+  its length.
 
 **Postrun multi-game eval crashed mid-Smother (L12 of 13).** No
 traceback in train.log; process just disappeared. Smother L8 had

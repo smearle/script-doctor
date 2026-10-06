@@ -9,9 +9,11 @@ Loads the joint encoder+NCA+SlotTokenDecoder trained with
   3. Interpolates linearly between two named training games' slots and
      decodes at intermediate points.
   4. For each decoded token sequence, runs `detokenize` → PuzzleScript
-     source string and attempts a JS-engine compile. Reports the
-     compile-success rate (the ``engine-load success rate'' metric the
-     paper TODO asks for).
+     source string and compiles it with the reference JS engine
+     (`puzzlescript_nodejs.utils.check_compile`). Reports the compile-
+     success rate (the ``engine-load success rate'' metric the paper TODO
+     asks for: no engine compile errors) and the playable rate (compiled
+     with at least one level).
 
 This addresses two papertodos:
   * `results.tex` line 21 — symbolic autoencoder results
@@ -152,32 +154,6 @@ def decode_slots_greedy(decoder, dec_params, slots, max_len, bos_id=0,
         decoder, dec_params, slots, max_len=max_len,
         bos_id=bos_id, eos_id=eos_id, temperature=0.0,
     )
-
-
-def try_compile(text: str, ps_parser, name: str) -> tuple[bool, str]:
-    """Save `text` to a tempfile + try JS-engine compile. Returns (ok, reason)."""
-    from puzzlescript_cpp import CppPuzzleScriptBackend
-    from puzzlescript_jax.preprocessing import add_extra_games_dir
-    import tempfile
-
-    # We need the parser to find this game's .txt by name. Write to a
-    # tempdir and register it so get_tree_from_txt picks it up.
-    tmp = tempfile.mkdtemp(prefix="latent_decode_")
-    safe_name = name.replace("/", "_")
-    fp = os.path.join(tmp, safe_name + ".txt")
-    with open(fp, "w") as f:
-        f.write(text)
-    add_extra_games_dir(tmp)
-    try:
-        backend = CppPuzzleScriptBackend()
-        backend.compile_and_serialize(ps_parser, safe_name)
-        return True, "ok"
-    except Exception as e:
-        # truncate long error messages
-        msg = str(e)
-        if len(msg) > 200:
-            msg = msg[:200] + "..."
-        return False, msg
 
 
 def main():
@@ -339,12 +315,12 @@ def main():
 
     # ---- Detokenize + (optional) compile ----
     if args.no_compile:
-        ps_parser = None
+        engine = None
     else:
-        from puzzlescript_jax.utils import init_ps_lark_parser
-        print(f"\nInitializing JS parser for compile validation...",
-              file=sys.stderr)
-        ps_parser = init_ps_lark_parser()
+        from javascript import require
+        from puzzlescript_nodejs.utils import check_compile
+        engine = require(os.path.join(
+            REPO, "puzzlescript_nodejs", "puzzlescript", "engine.js"))
 
     from nca_wm.detokenize_game import detokenize
 
@@ -369,14 +345,14 @@ def main():
         out_fp = os.path.join(out_dir, label + ".txt")
         with open(out_fp, "w") as f:
             f.write(text)
-        if ps_parser is None:
+        if engine is None:
             return out_fp, "skipped"
-        try:
-            ok, reason = try_compile(text, ps_parser, label)
-            return out_fp, ("compile_ok" if ok else f"compile_fail: {reason}")
-        except Exception as e:
-            # Don't let a buggy compile-check kill the rest of the loop.
-            return out_fp, f"compile_error: {type(e).__name__}: {str(e)[:120]}"
+        compiled, playable, msgs = check_compile(engine, text)
+        if playable:
+            return out_fp, "playable"
+        if compiled:
+            return out_fp, "compiled_no_levels"
+        return out_fp, "compile_fail: " + " | ".join(msgs)[:200]
 
     print(f"\nDecoding random samples + compile-check...",
           file=sys.stderr)
@@ -396,19 +372,19 @@ def main():
                                              "file": path, "status": status})
         print(f"  {label} (t={ts[i]:.2f}): {status}", file=sys.stderr)
 
-    # Aggregate compile-success rate
-    n_random = len(summary["random"])
-    n_random_ok = sum(
-        1 for r in summary["random"] if r["status"] == "compile_ok"
-    )
-    n_interp = len(summary["interp"]["points"])
-    n_interp_ok = sum(
-        1 for r in summary["interp"]["points"] if r["status"] == "compile_ok"
-    )
-    summary["compile_success_random"] = n_random_ok / max(n_random, 1)
-    summary["compile_success_interp"] = n_interp_ok / max(n_interp, 1)
-    print(f"\nCompile success: random {n_random_ok}/{n_random}, "
-          f"interp {n_interp_ok}/{n_interp}", file=sys.stderr)
+    # Aggregate compile-success and playable rates
+    for kind, entries in (("random", summary["random"]),
+                          ("interp", summary["interp"]["points"])):
+        n = len(entries)
+        n_compiled = sum(
+            1 for r in entries
+            if r["status"] in ("playable", "compiled_no_levels")
+        )
+        n_playable = sum(1 for r in entries if r["status"] == "playable")
+        summary[f"compile_success_{kind}"] = n_compiled / max(n, 1)
+        summary[f"playable_{kind}"] = n_playable / max(n, 1)
+        print(f"\n{kind}: compiled {n_compiled}/{n}, playable {n_playable}/{n}",
+              file=sys.stderr)
 
     summary_fp = os.path.join(out_dir, "summary.json")
     with open(summary_fp, "w") as f:

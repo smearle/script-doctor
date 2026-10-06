@@ -17,6 +17,31 @@ def compile_game(parser, engine, game, level_i):
     return game_text
 
 
+def check_compile(engine: Proxy, game_text: str) -> tuple[bool, bool, list[str]]:
+    """Compile raw ``game_text`` and read the verdict from the engine's messages.
+
+    PuzzleScript's ``compile`` never throws on compile errors: it logs them and,
+    whenever it can salvage a state, loads that state anyway, so a broken game
+    can still serialize cleanly. Compiled = the engine logged "Successful
+    Compilation" and no "Errors detected"; playable = compiled with at least
+    one non-message level. Returns (compiled, playable, messages), where
+    messages are the captured engine messages other than the success line:
+    errors and line-numbered warnings (the capture strips the markup that
+    tells them apart).
+    """
+    engine.unloadGame()
+    engine.clearCapturedErrors()
+    try:
+        engine.compile(['restart'], game_text)
+    except Exception as e:  # the compiler itself crashed on this input
+        return False, False, [f"{type(e).__name__}: {e}"]
+    msgs = [str(m) for m in engine.getCapturedErrors()]
+    compiled = (any('Successful Compilation' in m for m in msgs)
+                and not any('Errors detected' in m for m in msgs))
+    playable = compiled and any(lv.type == 'level' for lv in engine.getLevelInfo())
+    return compiled, playable, [m for m in msgs if 'Successful Compilation' not in m]
+
+
 def replay_actions_js(
     engine: Proxy,
     solver: Proxy,
