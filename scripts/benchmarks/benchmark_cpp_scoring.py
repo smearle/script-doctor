@@ -7,6 +7,7 @@ outside the timed region. Both builds receive the same seeded actions.
 import argparse
 import hashlib
 import importlib.util
+import itertools
 import json
 import os
 from pathlib import Path
@@ -31,18 +32,26 @@ def worker(library):
         request = json.loads(line)
         if request["command"] == "init":
             env = CppBatchedPuzzleScriptEnv(request["compiled"], request["batch"],
-                                          level_indices=[0] * request["batch"],
-                                          num_threads=request["threads"], max_episode_steps=100)
+                                          level_indices=[request.get("level", 0)] * request["batch"],
+                                          num_threads=request["threads"],
+                                          max_episode_steps=request.get("max_episode_steps", 100))
+            steps, batch = request["steps"], request["batch"]
+            random_actions = request.get("random_actions", False)
             actions = np.random.default_rng(request["seed"]).integers(
                 0, 5, (request["steps"], request["batch"]), dtype=np.int32)
-            result = {"ready": True}
+            result = {"ready": True, "observation_shape": env.observation_shape}
         elif request["command"] == "run":
             env.reset()
             digest = hashlib.sha256() if request.get("check") else None
             trace = []
+            rng = np.random.RandomState(request.get("seed", 42)) if random_actions else None
+            wins = 0
             start = time.perf_counter()
-            for action in actions:
+            for step in range(steps):
+                action = rng.randint(0, env.num_actions, size=batch, dtype=np.int32) if random_actions else actions[step]
                 output = env.step(action)
+                if random_actions:
+                    wins += int(np.sum(output[4]["won"]))
                 if digest is not None:
                     step_trace = {}
                     fields = dict(zip(("obs", "reward", "done", "truncated"), output[:4]))
@@ -57,7 +66,7 @@ def worker(library):
                     trace.append(step_trace)
             result = {"seconds": time.perf_counter() - start,
                       "sha256": digest.hexdigest() if digest is not None else None,
-                      "trace": trace}
+                      "trace": trace, "wins": wins}
         else:
             raise ValueError(request)
         print(json.dumps(result), flush=True)
@@ -101,6 +110,8 @@ def main():
     parser.add_argument("--steps", type=int, default=1000)
     parser.add_argument("--trials", type=int, default=9)
     parser.add_argument("--seeds", nargs="+", type=int, default=[42, 1042])
+    parser.add_argument("--levels", nargs="+", type=int, default=[0])
+    parser.add_argument("--compiled-dir", type=Path, help="Optional frozen compiled-game JSON inputs.")
     parser.add_argument("--output", type=Path)
     args = parser.parse_args()
     if args.worker:
@@ -113,7 +124,8 @@ def main():
     processes = []
     root = Path(__file__).resolve().parents[2]
     tracked_sources = [Path(__file__), root / "puzzlescript_cpp/__init__.py",
-                       root / "scripts/benchmarks/profile_rand_nodejs.py"]
+                       root / "scripts/benchmarks/profile_rand_nodejs.py",
+                       root / "puzzlescript_nodejs/puzzlescript/engine.js"]
     source_hashes = {str(p.relative_to(root)): hashlib.sha256(p.read_bytes()).hexdigest()
                      for p in tracked_sources}
     result = {"host": platform.node(), "cpu_affinity": sorted(os.sched_getaffinity(0)),
@@ -122,6 +134,7 @@ def main():
               "thread_environment": {key: os.environ.get(key) for key in
                                      ("OMP_WAIT_POLICY", "OMP_PROC_BIND", "OMP_PLACES", "OPENBLAS_NUM_THREADS")},
               "trials": args.trials, "seeds": args.seeds, "steps": args.steps,
+              "games": args.games, "levels": args.levels, "batches": args.batches, "threads": args.threads,
               "library_hashes": {name: hashlib.sha256(path.read_bytes()).hexdigest()
                                  for name, path in [("baseline", args.baseline), ("candidate", args.candidate)]},
               "timing": "full Python wrapper outputs; alternating warmed calls; reset/actions/IPC excluded",
@@ -132,8 +145,11 @@ def main():
             processes.append(subprocess.Popen(
                 [sys.executable, "-m", "scripts.benchmarks.benchmark_cpp_scoring", "--worker", str(library.resolve())],
                 stdin=subprocess.PIPE, stdout=subprocess.PIPE, text=True))
-        for game in args.games:
-            compiled = compile_game(game)
+        for game, level in itertools.product(args.games, args.levels):
+            compiled = ((args.compiled_dir / f"{game}.json").read_text().strip()
+                        if args.compiled_dir else compile_game(game))
+            if level not in {l["index"] for l in json.loads(compiled)["levels"] if l["type"] == "level"}:
+                raise ValueError(f"No playable level {level} in {game}")
             for batch in args.batches:
                 for threads in args.threads:
                     if threads > batch:
@@ -141,13 +157,14 @@ def main():
                     for seed in args.seeds:
                         for process in processes:
                             request(process, {"command": "init", "compiled": compiled, "batch": batch,
+                                              "level": level,
                                               "threads": threads, "steps": args.steps, "seed": seed})
                         checks = [request(p, {"command": "run", "check": True}) for p in processes]
                         if checks[0]["sha256"] != checks[1]["sha256"]:
                             for step, (left, right) in enumerate(zip(checks[0]["trace"], checks[1]["trace"])):
                                 if left != right:
                                     differing = {k: [left[k], right[k]] for k in left if left[k] != right[k]}
-                                    raise AssertionError(f"Full outputs differ for {game}/{batch}/{threads}/{seed}, "
+                                    raise AssertionError(f"Full outputs differ for {game}/level{level}/{batch}/{threads}/{seed}, "
                                                          f"step {step}: {differing}")
                         for _ in range(2):
                             for process in processes:
@@ -157,7 +174,7 @@ def main():
                             for index in ((0, 1) if trial % 2 == 0 else (1, 0)):
                                 samples[index].append(request(processes[index], {"command": "run"})["seconds"])
                         fps = [float(batch * args.steps / np.median(s)) for s in samples]
-                        row = {"game": game, "batch": batch, "threads": threads, "seed": seed,
+                        row = {"game": game, "level": level, "batch": batch, "threads": threads, "seed": seed,
                                "compiled_sha256": hashlib.sha256(compiled.encode()).hexdigest(),
                                "output_sha256": checks[0]["sha256"], "samples_s": samples,
                                "baseline_fps": fps[0], "candidate_fps": fps[1], "speedup": fps[1]/fps[0]}

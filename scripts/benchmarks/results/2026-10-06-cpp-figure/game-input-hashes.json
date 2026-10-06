@@ -1,0 +1,178 @@
+{
+  "HyperMaze": {
+    "original": {
+      "path": "data/scraped_games/HyperMaze.txt",
+      "sha256": "3343b5f393a122bff84b1b4cb33bb530f38d8a5357bddc221e77a5a8c76ec6ce"
+    },
+    "compiled_sha256": "4942d931e16ead8883df7e666df89520961be8150039b535322af759594d521d",
+    "simplified": {
+      "path": "data/simplified_games/HyperMaze_simplified.txt",
+      "sha256": "2c91497a3337622755a69cd443fc02c1a7fac273ca340a879d614e89bce9dd0d"
+    }
+  },
+  "Magnet_Jack": {
+    "original": {
+      "path": "data/scraped_games/Magnet_Jack.txt",
+      "sha256": "7958d48abfa7ed5d9efde610ebb049cfe3043aeba9fc48cf6e7ef4d804f5bec2"
+    },
+    "compiled_sha256": "515cbc7bc76356b793368b7f4a1a65013572c5375d04c66a602cf0baa87eea18",
+    "simplified": {
+      "path": "data/simplified_games/Magnet_Jack_simplified.txt",
+      "sha256": "2b776392ae6faa708ed835e1ff4e8feb6c8874d849469015a751920b75b51e28"
+    }
+  },
+  "Microban": {
+    "original": {
+      "path": "gallery_games/Microban.txt",
+      "sha256": "f3b2815e76d4192a325f069e50dc5bd1d5aa336e72b79b606320cf30a0b0cc13"
+    },
+    "compiled_sha256": "a7700ddc6e206bf4c9993fc9d767cd76b78016c81586a7f37a81ea7abc79d0df",
+    "simplified": {
+      "path": "data/simplified_games/Microban_simplified.txt",
+      "sha256": "a82b28479c121b6d21eada4a3915107908424daf4c203cd5ae930d291dffe6e3"
+    }
+  },
+  "Multi-word_Dictionary_Game": {
+    "original": {
+      "path": "gallery_games/Multi-word_Dictionary_Game.txt",
+      "sha256": "ec595bf18ea4c3f7493a571a01e96f310b2d57dea701e4676fc12cc28b55794b"
+    },
+    "compiled_sha256": "1ca7752d3e0bad6bbb7413ca1c208b42a302fed2d535e86281b27b2cd3f23127",
+    "simplified": {
+      "path": "data/simplified_games/Multi-word_Dictionary_Game_simplified.txt",
+      "sha256": "97508602f88301f1a97156c0be41cb419e6074e35b06c44f9ce916e1415e890c"
+    }
+  },
+  "Slidings": {
+    "original": {
+      "path": "gallery_games/Slidings.txt",
+      "sha256": "d0f5ea631f1b45d122b1dde700a23e2db1c40ee18b1c9c5ee8b4c0cecb069267"
+    },
+    "compiled_sha256": "0a3f5e38de70922b89d6902879f25d6812fe2266386fabf1e5a2ef5b4228c8f1",
+    "simplified": {
+      "path": "data/simplified_games/Slidings_simplified.txt",
+      "sha256": "538c249ff40bfc5d15d1642ea1da3220d0fa9e1a4c72d9146b5da71d94cdd29b"
+    }
+  },
+  "Take_Heart_Lass": {
+    "original": {
+      "path": "gallery_games/Take_Heart_Lass.txt",
+      "sha256": "acfdc7fde4c15511b8a2e82cc65a8c368c0dffb96423b93b8391ad6a88991032"
+    },
+    "compiled_sha256": "3544524044e5bcde8c34596fe530b20cdcea9f649b2935818b16637a5080fa3f",
+    "simplified": {
+      "path": "data/simplified_games/Take_Heart_Lass_simplified.txt",
+      "sha256": "95cdd04a65681c281d96531357871c061b80623dd89fa58179d1d016788064ff"
+    }
+  },
+  "Travelling_salesman": {
+    "original": {
+      "path": "data/scraped_games/Travelling_salesman.txt",
+      "sha256": "318461b6b12ce7b29bc9e1dd3abdc4d74844bb21104fbc930bbb0550c5e73aa7"
+    },
+    "compiled_sha256": "92bc53076247ebae68fafb2c233b8819356a04c975ee974d00fd4d358dc33c3b",
+    "simplified": {
+      "path": "data/simplified_games/Travelling_salesman_simplified.txt",
+      "sha256": "f1f966cf1cfe7757e5936b263dc41d7d5338f3937b58e588103e9866635cc8b4"
+    }
+  },
+  "Zen_Puzzle_Garden": {
+    "original": {
+      "path": "data/scraped_games/Zen_Puzzle_Garden.txt",
+      "sha256": "58f087759ccd96b0547e45667fa0b9c3f781259d038f14918352f9b6f6794483"
+    },
+    "compiled_sha256": "20202d57cd862cbbbba78feeb8d780eb07c4197ca69e6d0967d0931bea4cd3d8",
+    "simplified": {
+      "path": "data/simplified_games/Zen_Puzzle_Garden_simplified.txt",
+      "sha256": "cf0744dc42e0f3a6295aa7f0cb636e9443b9611fb61c8e1c5d02570673dbd61b"
+    }
+  },
+  "atlas shrank": {
+    "original": {
+      "path": "gallery_games/atlas shrank.txt",
+      "sha256": "94e41af38141ffb4633de617ee2d46073be04cb0b3472292a846993e66381f95"
+    },
+    "compiled_sha256": "d404eb3169c0e30331f1db6ec7ee13d9a092b0cb84a7ec415f4bceab06217f05",
+    "simplified": {
+      "path": "data/simplified_games/atlas shrank_simplified.txt",
+      "sha256": "ef21b04a8d49f00f2607b1487d138cd1847dd22d41feb6e456ffb1e801ddcf93"
+    }
+  },
+  "blocks": {
+    "original": {
+      "path": "data/scraped_games/blocks.txt",
+      "sha256": "7de9da769ecafbc798211d87c9a9875082412e3b9e5689c19175c47190d4ac5a"
+    },
+    "compiled_sha256": "7721ba972e0c260c75756e6f7be33e1615c72c586abc6961408919cfd5034266",
+    "simplified": {
+      "path": "data/simplified_games/blocks_simplified.txt",
+      "sha256": "87780e08ee3c8b46cb84c99770d0805d082d6c3e1335ccd0fc7aadd01910aba4"
+    }
+  },
+  "kettle": {
+    "original": {
+      "path": "gallery_games/kettle.txt",
+      "sha256": "82a818e730c7b0b8c831613cb28d85b79c4eda8236e49720fade3efc6cb3f19e"
+    },
+    "compiled_sha256": "ac39171ba8a3e1a5786a5566d558b3b6bce9172855f9138e507b0f3f080e93bb",
+    "simplified": {
+      "path": "data/simplified_games/kettle_simplified.txt",
+      "sha256": "348004a6e6fef557b139ab09c558995615bd56811e037cb7a78aa156a56939dd"
+    }
+  },
+  "limerick": {
+    "original": {
+      "path": "gallery_games/limerick.txt",
+      "sha256": "7079dc4d37f015b34de542da41f31ea08725166d4487f5dc6bd483d7eabe4c21"
+    },
+    "compiled_sha256": "d5893223c98a1571e3729a03f5084e65a506a4fbd24785b2968205b8154e4aa5",
+    "simplified": {
+      "path": "data/simplified_games/limerick_simplified.txt",
+      "sha256": "2688d1283af8b072283a143f0d1250c68cefc5ee5ceba186406f3c06e7b46118"
+    }
+  },
+  "nekopuzzle": {
+    "original": {
+      "path": "gallery_games/nekopuzzle.txt",
+      "sha256": "fb60ce89274c0330b4748b9404830370622bc61461800344570a5e258c34f7f2"
+    },
+    "compiled_sha256": "c498e4a79583ccfe86976a83ad07ac383e723c37af947f66814b47471078446f",
+    "simplified": {
+      "path": "data/simplified_games/nekopuzzle_simplified.txt",
+      "sha256": "8734244f354ba84cac618481afde5a19e887d1298471d4e11492c1a660ad52ae"
+    }
+  },
+  "notsnake": {
+    "original": {
+      "path": "gallery_games/notsnake.txt",
+      "sha256": "b9e4dfb30e6d92583ca42e2a858b2db0842caec88fee7bd9963d73acd08559d6"
+    },
+    "compiled_sha256": "4b72a87b06f9b6f9b107fce33dafe9648a3559f17e5e16ef3a07438edb79f0f3",
+    "simplified": {
+      "path": "data/simplified_games/notsnake_simplified.txt",
+      "sha256": "48fedc0da65f8cf9d16c3a103b052f4844fe45f1ec8c695a4b9cd0de9926c9e7"
+    }
+  },
+  "sokoban_basic": {
+    "original": {
+      "path": "gallery_games/sokoban_basic.txt",
+      "sha256": "c389821b95fadf1d764e63c7592c1888cff9d214951db08bd9b7f52661c3faa8"
+    },
+    "compiled_sha256": "3012b8f11e46e65eda7d38436677f235a2f2fb9adc2ee92309cc12a993ac08f3",
+    "simplified": {
+      "path": "data/simplified_games/sokoban_basic_simplified.txt",
+      "sha256": "629417944b16e3de6e469a5b34e21f74d693f253da9a276ee8b7aeb850e5e70a"
+    }
+  },
+  "sokoban_match3": {
+    "original": {
+      "path": "gallery_games/sokoban_match3.txt",
+      "sha256": "fc268e570b9d92011f3c47c0ec6082cd871619a3b6b9d320397920d29d862ee7"
+    },
+    "compiled_sha256": "268da2f5cc9fcd02276a523700ed86ad2304564ae88a116ea90cf0c7a6dc01f6",
+    "simplified": {
+      "path": "data/simplified_games/sokoban_match3_simplified.txt",
+      "sha256": "4d9a73ac12abfa2c67a6a45e5313ab85fb1b89c579675eec65b800838d6ef042"
+    }
+  }
+}

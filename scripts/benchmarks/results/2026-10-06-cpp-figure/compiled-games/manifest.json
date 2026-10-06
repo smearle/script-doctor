@@ -1,0 +1,633 @@
+{
+  "sokoban_basic": {
+    "compiled_sha256": "3012b8f11e46e65eda7d38436677f235a2f2fb9adc2ee92309cc12a993ac08f3",
+    "levels": [
+      {
+        "index": 0,
+        "width": 6,
+        "height": 7
+      },
+      {
+        "index": 1,
+        "width": 6,
+        "height": 7
+      }
+    ],
+    "object_count": 5
+  },
+  "notsnake": {
+    "compiled_sha256": "4b72a87b06f9b6f9b107fce33dafe9648a3559f17e5e16ef3a07438edb79f0f3",
+    "levels": [
+      {
+        "index": 0,
+        "width": 8,
+        "height": 5
+      }
+    ],
+    "object_count": 3
+  },
+  "Zen_Puzzle_Garden": {
+    "compiled_sha256": "20202d57cd862cbbbba78feeb8d780eb07c4197ca69e6d0967d0931bea4cd3d8",
+    "levels": [
+      {
+        "index": 0,
+        "width": 12,
+        "height": 12
+      },
+      {
+        "index": 1,
+        "width": 12,
+        "height": 12
+      },
+      {
+        "index": 2,
+        "width": 12,
+        "height": 12
+      },
+      {
+        "index": 3,
+        "width": 12,
+        "height": 11
+      },
+      {
+        "index": 4,
+        "width": 12,
+        "height": 12
+      }
+    ],
+    "object_count": 6
+  },
+  "Slidings": {
+    "compiled_sha256": "0a3f5e38de70922b89d6902879f25d6812fe2266386fabf1e5a2ef5b4228c8f1",
+    "levels": [
+      {
+        "index": 0,
+        "width": 6,
+        "height": 4
+      },
+      {
+        "index": 1,
+        "width": 6,
+        "height": 5
+      },
+      {
+        "index": 2,
+        "width": 7,
+        "height": 4
+      },
+      {
+        "index": 3,
+        "width": 7,
+        "height": 5
+      },
+      {
+        "index": 4,
+        "width": 10,
+        "height": 4
+      },
+      {
+        "index": 5,
+        "width": 9,
+        "height": 9
+      },
+      {
+        "index": 6,
+        "width": 8,
+        "height": 7
+      },
+      {
+        "index": 7,
+        "width": 7,
+        "height": 6
+      },
+      {
+        "index": 8,
+        "width": 8,
+        "height": 7
+      },
+      {
+        "index": 9,
+        "width": 8,
+        "height": 8
+      },
+      {
+        "index": 10,
+        "width": 8,
+        "height": 5
+      }
+    ],
+    "object_count": 12
+  },
+  "limerick": {
+    "compiled_sha256": "d5893223c98a1571e3729a03f5084e65a506a4fbd24785b2968205b8154e4aa5",
+    "levels": [
+      {
+        "index": 0,
+        "width": 19,
+        "height": 15
+      },
+      {
+        "index": 1,
+        "width": 19,
+        "height": 17
+      },
+      {
+        "index": 2,
+        "width": 19,
+        "height": 15
+      },
+      {
+        "index": 3,
+        "width": 19,
+        "height": 15
+      },
+      {
+        "index": 4,
+        "width": 19,
+        "height": 14
+      },
+      {
+        "index": 5,
+        "width": 19,
+        "height": 15
+      },
+      {
+        "index": 6,
+        "width": 19,
+        "height": 15
+      },
+      {
+        "index": 7,
+        "width": 19,
+        "height": 15
+      },
+      {
+        "index": 8,
+        "width": 19,
+        "height": 15
+      },
+      {
+        "index": 9,
+        "width": 19,
+        "height": 15
+      }
+    ],
+    "object_count": 11
+  },
+  "kettle": {
+    "compiled_sha256": "ac39171ba8a3e1a5786a5566d558b3b6bce9172855f9138e507b0f3f080e93bb",
+    "levels": [
+      {
+        "index": 0,
+        "width": 15,
+        "height": 13
+      },
+      {
+        "index": 1,
+        "width": 15,
+        "height": 13
+      },
+      {
+        "index": 2,
+        "width": 15,
+        "height": 13
+      },
+      {
+        "index": 3,
+        "width": 15,
+        "height": 13
+      },
+      {
+        "index": 4,
+        "width": 15,
+        "height": 13
+      },
+      {
+        "index": 5,
+        "width": 15,
+        "height": 13
+      },
+      {
+        "index": 6,
+        "width": 15,
+        "height": 13
+      },
+      {
+        "index": 7,
+        "width": 15,
+        "height": 13
+      },
+      {
+        "index": 8,
+        "width": 15,
+        "height": 14
+      },
+      {
+        "index": 9,
+        "width": 15,
+        "height": 14
+      },
+      {
+        "index": 10,
+        "width": 15,
+        "height": 15
+      }
+    ],
+    "object_count": 8
+  },
+  "Take_Heart_Lass": {
+    "compiled_sha256": "3544524044e5bcde8c34596fe530b20cdcea9f649b2935818b16637a5080fa3f",
+    "levels": [
+      {
+        "index": 0,
+        "width": 6,
+        "height": 6
+      },
+      {
+        "index": 1,
+        "width": 9,
+        "height": 7
+      },
+      {
+        "index": 2,
+        "width": 9,
+        "height": 7
+      },
+      {
+        "index": 3,
+        "width": 8,
+        "height": 6
+      },
+      {
+        "index": 4,
+        "width": 11,
+        "height": 9
+      },
+      {
+        "index": 5,
+        "width": 11,
+        "height": 9
+      },
+      {
+        "index": 6,
+        "width": 11,
+        "height": 9
+      },
+      {
+        "index": 7,
+        "width": 11,
+        "height": 9
+      },
+      {
+        "index": 8,
+        "width": 11,
+        "height": 9
+      },
+      {
+        "index": 9,
+        "width": 11,
+        "height": 9
+      },
+      {
+        "index": 10,
+        "width": 12,
+        "height": 9
+      },
+      {
+        "index": 11,
+        "width": 18,
+        "height": 11
+      }
+    ],
+    "object_count": 15
+  },
+  "atlas shrank": {
+    "compiled_sha256": "d404eb3169c0e30331f1db6ec7ee13d9a092b0cb84a7ec415f4bceab06217f05",
+    "levels": [
+      {
+        "index": 0,
+        "width": 15,
+        "height": 7
+      },
+      {
+        "index": 1,
+        "width": 15,
+        "height": 7
+      },
+      {
+        "index": 2,
+        "width": 18,
+        "height": 11
+      },
+      {
+        "index": 3,
+        "width": 15,
+        "height": 10
+      },
+      {
+        "index": 4,
+        "width": 18,
+        "height": 22
+      },
+      {
+        "index": 5,
+        "width": 18,
+        "height": 11
+      },
+      {
+        "index": 6,
+        "width": 18,
+        "height": 11
+      },
+      {
+        "index": 7,
+        "width": 18,
+        "height": 11
+      },
+      {
+        "index": 8,
+        "width": 18,
+        "height": 19
+      },
+      {
+        "index": 9,
+        "width": 54,
+        "height": 20
+      },
+      {
+        "index": 10,
+        "width": 72,
+        "height": 11
+      },
+      {
+        "index": 11,
+        "width": 36,
+        "height": 12
+      }
+    ],
+    "object_count": 32
+  },
+  "blocks": {
+    "compiled_sha256": "7721ba972e0c260c75756e6f7be33e1615c72c586abc6961408919cfd5034266",
+    "levels": [
+      {
+        "index": 0,
+        "width": 13,
+        "height": 11
+      }
+    ],
+    "object_count": 4
+  },
+  "nekopuzzle": {
+    "compiled_sha256": "c498e4a79583ccfe86976a83ad07ac383e723c37af947f66814b47471078446f",
+    "levels": [
+      {
+        "index": 0,
+        "width": 8,
+        "height": 7
+      },
+      {
+        "index": 1,
+        "width": 8,
+        "height": 7
+      },
+      {
+        "index": 2,
+        "width": 8,
+        "height": 8
+      },
+      {
+        "index": 3,
+        "width": 8,
+        "height": 7
+      },
+      {
+        "index": 4,
+        "width": 8,
+        "height": 7
+      },
+      {
+        "index": 5,
+        "width": 8,
+        "height": 7
+      },
+      {
+        "index": 6,
+        "width": 8,
+        "height": 7
+      },
+      {
+        "index": 7,
+        "width": 8,
+        "height": 7
+      },
+      {
+        "index": 8,
+        "width": 8,
+        "height": 7
+      },
+      {
+        "index": 9,
+        "width": 8,
+        "height": 7
+      }
+    ],
+    "object_count": 3
+  },
+  "sokoban_match3": {
+    "compiled_sha256": "268da2f5cc9fcd02276a523700ed86ad2304564ae88a116ea90cf0c7a6dc01f6",
+    "levels": [
+      {
+        "index": 0,
+        "width": 9,
+        "height": 7
+      },
+      {
+        "index": 1,
+        "width": 9,
+        "height": 8
+      }
+    ],
+    "object_count": 5
+  },
+  "Travelling_salesman": {
+    "compiled_sha256": "92bc53076247ebae68fafb2c233b8819356a04c975ee974d00fd4d358dc33c3b",
+    "levels": [
+      {
+        "index": 0,
+        "width": 5,
+        "height": 5
+      },
+      {
+        "index": 1,
+        "width": 7,
+        "height": 7
+      },
+      {
+        "index": 2,
+        "width": 7,
+        "height": 7
+      },
+      {
+        "index": 3,
+        "width": 7,
+        "height": 7
+      },
+      {
+        "index": 4,
+        "width": 7,
+        "height": 7
+      },
+      {
+        "index": 5,
+        "width": 15,
+        "height": 5
+      },
+      {
+        "index": 6,
+        "width": 9,
+        "height": 9
+      },
+      {
+        "index": 7,
+        "width": 9,
+        "height": 9
+      },
+      {
+        "index": 8,
+        "width": 9,
+        "height": 9
+      },
+      {
+        "index": 9,
+        "width": 9,
+        "height": 9
+      },
+      {
+        "index": 10,
+        "width": 9,
+        "height": 9
+      },
+      {
+        "index": 11,
+        "width": 20,
+        "height": 19
+      }
+    ],
+    "object_count": 9
+  },
+  "Multi-word_Dictionary_Game": {
+    "compiled_sha256": "1ca7752d3e0bad6bbb7413ca1c208b42a302fed2d535e86281b27b2cd3f23127",
+    "levels": [
+      {
+        "index": 0,
+        "width": 9,
+        "height": 7
+      }
+    ],
+    "object_count": 7
+  },
+  "Microban": {
+    "compiled_sha256": "a7700ddc6e206bf4c9993fc9d767cd76b78016c81586a7f37a81ea7abc79d0df",
+    "levels": [
+      {
+        "index": 0,
+        "width": 6,
+        "height": 7
+      },
+      {
+        "index": 1,
+        "width": 6,
+        "height": 7
+      },
+      {
+        "index": 2,
+        "width": 9,
+        "height": 6
+      },
+      {
+        "index": 3,
+        "width": 8,
+        "height": 6
+      },
+      {
+        "index": 4,
+        "width": 8,
+        "height": 7
+      },
+      {
+        "index": 5,
+        "width": 12,
+        "height": 6
+      },
+      {
+        "index": 6,
+        "width": 7,
+        "height": 8
+      },
+      {
+        "index": 7,
+        "width": 8,
+        "height": 12
+      },
+      {
+        "index": 8,
+        "width": 6,
+        "height": 7
+      },
+      {
+        "index": 9,
+        "width": 11,
+        "height": 8
+      }
+    ],
+    "object_count": 5
+  },
+  "Magnet_Jack": {
+    "compiled_sha256": "515cbc7bc76356b793368b7f4a1a65013572c5375d04c66a602cf0baa87eea18",
+    "levels": [
+      {
+        "index": 0,
+        "width": 16,
+        "height": 10
+      },
+      {
+        "index": 1,
+        "width": 17,
+        "height": 13
+      },
+      {
+        "index": 2,
+        "width": 19,
+        "height": 9
+      },
+      {
+        "index": 3,
+        "width": 20,
+        "height": 8
+      },
+      {
+        "index": 4,
+        "width": 22,
+        "height": 8
+      },
+      {
+        "index": 5,
+        "width": 16,
+        "height": 11
+      }
+    ],
+    "object_count": 34
+  },
+  "HyperMaze": {
+    "compiled_sha256": "4942d931e16ead8883df7e666df89520961be8150039b535322af759594d521d",
+    "levels": [
+      {
+        "index": 0,
+        "width": 50,
+        "height": 20
+      }
+    ],
+    "object_count": 42
+  }
+}

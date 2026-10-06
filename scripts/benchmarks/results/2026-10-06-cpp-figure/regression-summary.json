@@ -1,0 +1,338 @@
+{
+  "configurations": 72,
+  "games": 16,
+  "paired_transitions": 777600,
+  "min_ratio": 1.0755062165426192,
+  "max_ratio": 1.9279726031962066,
+  "rows": [
+    {
+      "game": "HyperMaze",
+      "level": 0,
+      "batch": 1,
+      "threads": 1,
+      "geomean_speedup": 1.472699988363397,
+      "min_seed_ratio": 1.4723119829751754,
+      "max_seed_ratio": 1.4730880960045265
+    },
+    {
+      "game": "HyperMaze",
+      "level": 0,
+      "batch": 64,
+      "threads": 8,
+      "geomean_speedup": 1.4727552385976177,
+      "min_seed_ratio": 1.4700698666365661,
+      "max_seed_ratio": 1.4754455159191102
+    },
+    {
+      "game": "Magnet_Jack",
+      "level": 0,
+      "batch": 1,
+      "threads": 1,
+      "geomean_speedup": 1.3035274906152188,
+      "min_seed_ratio": 1.2982188832585484,
+      "max_seed_ratio": 1.308857805645711
+    },
+    {
+      "game": "Magnet_Jack",
+      "level": 0,
+      "batch": 64,
+      "threads": 8,
+      "geomean_speedup": 1.347370756452873,
+      "min_seed_ratio": 1.345124816447123,
+      "max_seed_ratio": 1.3496204464797716
+    },
+    {
+      "game": "Microban",
+      "level": 0,
+      "batch": 1,
+      "threads": 1,
+      "geomean_speedup": 1.1977920506649575,
+      "min_seed_ratio": 1.1975270407021283,
+      "max_seed_ratio": 1.198057119273878
+    },
+    {
+      "game": "Microban",
+      "level": 0,
+      "batch": 64,
+      "threads": 8,
+      "geomean_speedup": 1.4110111054580003,
+      "min_seed_ratio": 1.4106372177253939,
+      "max_seed_ratio": 1.41138509228911
+    },
+    {
+      "game": "Microban",
+      "level": 1,
+      "batch": 64,
+      "threads": 8,
+      "geomean_speedup": 1.5602102944028846,
+      "min_seed_ratio": 1.557790617761936,
+      "max_seed_ratio": 1.5626337294661654
+    },
+    {
+      "game": "Multi-word_Dictionary_Game",
+      "level": 0,
+      "batch": 1,
+      "threads": 1,
+      "geomean_speedup": 1.1195558475726206,
+      "min_seed_ratio": 1.11927408121535,
+      "max_seed_ratio": 1.1198376848618297
+    },
+    {
+      "game": "Multi-word_Dictionary_Game",
+      "level": 0,
+      "batch": 64,
+      "threads": 8,
+      "geomean_speedup": 1.2000446933811375,
+      "min_seed_ratio": 1.1961942680590658,
+      "max_seed_ratio": 1.2039075128230916
+    },
+    {
+      "game": "Slidings",
+      "level": 0,
+      "batch": 1,
+      "threads": 1,
+      "geomean_speedup": 1.0791170511972465,
+      "min_seed_ratio": 1.0760277703699592,
+      "max_seed_ratio": 1.082215201364427
+    },
+    {
+      "game": "Slidings",
+      "level": 0,
+      "batch": 64,
+      "threads": 8,
+      "geomean_speedup": 1.1386900822986523,
+      "min_seed_ratio": 1.1337641994005347,
+      "max_seed_ratio": 1.1436373667565818
+    },
+    {
+      "game": "Take_Heart_Lass",
+      "level": 0,
+      "batch": 1,
+      "threads": 1,
+      "geomean_speedup": 1.0856315292724024,
+      "min_seed_ratio": 1.0755062165426192,
+      "max_seed_ratio": 1.0958521663771625
+    },
+    {
+      "game": "Take_Heart_Lass",
+      "level": 0,
+      "batch": 64,
+      "threads": 8,
+      "geomean_speedup": 1.1530404454569192,
+      "min_seed_ratio": 1.150428891801612,
+      "max_seed_ratio": 1.1556579275207906
+    },
+    {
+      "game": "Travelling_salesman",
+      "level": 0,
+      "batch": 1,
+      "threads": 1,
+      "geomean_speedup": 1.080305054774045,
+      "min_seed_ratio": 1.079440933931444,
+      "max_seed_ratio": 1.0811698673680952
+    },
+    {
+      "game": "Travelling_salesman",
+      "level": 0,
+      "batch": 64,
+      "threads": 8,
+      "geomean_speedup": 1.1807429805803722,
+      "min_seed_ratio": 1.17991207101629,
+      "max_seed_ratio": 1.181574475281873
+    },
+    {
+      "game": "Zen_Puzzle_Garden",
+      "level": 0,
+      "batch": 1,
+      "threads": 1,
+      "geomean_speedup": 1.2308273022117182,
+      "min_seed_ratio": 1.2271325268056539,
+      "max_seed_ratio": 1.2345332022233186
+    },
+    {
+      "game": "Zen_Puzzle_Garden",
+      "level": 0,
+      "batch": 64,
+      "threads": 8,
+      "geomean_speedup": 1.2626587202216604,
+      "min_seed_ratio": 1.1995415589126386,
+      "max_seed_ratio": 1.3290969636741972
+    },
+    {
+      "game": "Zen_Puzzle_Garden",
+      "level": 1,
+      "batch": 64,
+      "threads": 8,
+      "geomean_speedup": 1.3256521556077694,
+      "min_seed_ratio": 1.325514204039531,
+      "max_seed_ratio": 1.3257901215331795
+    },
+    {
+      "game": "atlas shrank",
+      "level": 0,
+      "batch": 1,
+      "threads": 1,
+      "geomean_speedup": 1.1154928975860545,
+      "min_seed_ratio": 1.1146591422765295,
+      "max_seed_ratio": 1.116327276537274
+    },
+    {
+      "game": "atlas shrank",
+      "level": 0,
+      "batch": 64,
+      "threads": 8,
+      "geomean_speedup": 1.1259640094652676,
+      "min_seed_ratio": 1.1253098047221834,
+      "max_seed_ratio": 1.1266185945337022
+    },
+    {
+      "game": "blocks",
+      "level": 0,
+      "batch": 1,
+      "threads": 1,
+      "geomean_speedup": 1.7061083868684603,
+      "min_seed_ratio": 1.7027686517816225,
+      "max_seed_ratio": 1.7094546723639161
+    },
+    {
+      "game": "blocks",
+      "level": 0,
+      "batch": 64,
+      "threads": 8,
+      "geomean_speedup": 1.9255675029305552,
+      "min_seed_ratio": 1.9231654029706544,
+      "max_seed_ratio": 1.9279726031962066
+    },
+    {
+      "game": "kettle",
+      "level": 0,
+      "batch": 1,
+      "threads": 1,
+      "geomean_speedup": 1.5394752273934635,
+      "min_seed_ratio": 1.5393128613491305,
+      "max_seed_ratio": 1.5396376105640959
+    },
+    {
+      "game": "kettle",
+      "level": 0,
+      "batch": 64,
+      "threads": 8,
+      "geomean_speedup": 1.5860182032161882,
+      "min_seed_ratio": 1.5670192105255616,
+      "max_seed_ratio": 1.6052475451717338
+    },
+    {
+      "game": "limerick",
+      "level": 0,
+      "batch": 1,
+      "threads": 1,
+      "geomean_speedup": 1.3929956737900602,
+      "min_seed_ratio": 1.3922788770700538,
+      "max_seed_ratio": 1.39371283954356
+    },
+    {
+      "game": "limerick",
+      "level": 0,
+      "batch": 64,
+      "threads": 8,
+      "geomean_speedup": 1.4545327647017872,
+      "min_seed_ratio": 1.408197505856243,
+      "max_seed_ratio": 1.5023926365390141
+    },
+    {
+      "game": "nekopuzzle",
+      "level": 0,
+      "batch": 1,
+      "threads": 1,
+      "geomean_speedup": 1.1873035587090215,
+      "min_seed_ratio": 1.1857424087185682,
+      "max_seed_ratio": 1.1888667641115735
+    },
+    {
+      "game": "nekopuzzle",
+      "level": 0,
+      "batch": 64,
+      "threads": 8,
+      "geomean_speedup": 1.3359941280939238,
+      "min_seed_ratio": 1.333993081216801,
+      "max_seed_ratio": 1.3379981766272477
+    },
+    {
+      "game": "notsnake",
+      "level": 0,
+      "batch": 1,
+      "threads": 1,
+      "geomean_speedup": 1.1092074644021033,
+      "min_seed_ratio": 1.1080534894683558,
+      "max_seed_ratio": 1.1103626411353669
+    },
+    {
+      "game": "notsnake",
+      "level": 0,
+      "batch": 64,
+      "threads": 8,
+      "geomean_speedup": 1.23235313378488,
+      "min_seed_ratio": 1.2319984360068543,
+      "max_seed_ratio": 1.2327079336819589
+    },
+    {
+      "game": "sokoban_basic",
+      "level": 0,
+      "batch": 1,
+      "threads": 1,
+      "geomean_speedup": 1.1955500070388312,
+      "min_seed_ratio": 1.193117752498921,
+      "max_seed_ratio": 1.197987219900864
+    },
+    {
+      "game": "sokoban_basic",
+      "level": 0,
+      "batch": 64,
+      "threads": 8,
+      "geomean_speedup": 1.4207895058663293,
+      "min_seed_ratio": 1.4134993560803961,
+      "max_seed_ratio": 1.428117254738299
+    },
+    {
+      "game": "sokoban_basic",
+      "level": 1,
+      "batch": 64,
+      "threads": 8,
+      "geomean_speedup": 1.5599367808581661,
+      "min_seed_ratio": 1.559337213930824,
+      "max_seed_ratio": 1.5605365783196719
+    },
+    {
+      "game": "sokoban_match3",
+      "level": 0,
+      "batch": 1,
+      "threads": 1,
+      "geomean_speedup": 1.485576599584438,
+      "min_seed_ratio": 1.4835657321750622,
+      "max_seed_ratio": 1.4875901925809927
+    },
+    {
+      "game": "sokoban_match3",
+      "level": 0,
+      "batch": 64,
+      "threads": 8,
+      "geomean_speedup": 1.83482017714112,
+      "min_seed_ratio": 1.8315555357247053,
+      "max_seed_ratio": 1.8380906375913393
+    },
+    {
+      "game": "sokoban_match3",
+      "level": 1,
+      "batch": 64,
+      "threads": 8,
+      "geomean_speedup": 1.7065255440613043,
+      "min_seed_ratio": 1.7029217925793607,
+      "max_seed_ratio": 1.710136921862202
+    }
+  ],
+  "input_hashes": {
+    "regression-single.json": "51fc5f18d9ee4feab77f1211a9d18bf58eb9df586e9846ef340d75b7d576361f",
+    "regression-threaded.json": "a01f6e3685a494bc3e0bd2f5dea74cec3113b793f3a43a7320c82d2c0053677c",
+    "regression-levels.json": "f69a51fea45599ec99e21066b88ac43a9e728de2e15a7f1c1c0992ef0924801f"
+  }
+}

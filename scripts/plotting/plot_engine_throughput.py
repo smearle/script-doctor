@@ -60,7 +60,29 @@ def save(fig, path):
     plt.close(fig)
 
 
-def plot_paper(results_dir, data_dir, output_dir, manifest):
+def load_cpp_results(results_dir, games):
+    rows = {}
+    for game in games:
+        data = json.loads((results_dir / f"{game}.json").read_text())
+        if data["game"] != game or data.get("level") != 0:
+            raise ValueError(f"Mislabeled C++ result: {game}")
+        if data.get("stop_reason") not in ("plateau", "regression", "max_batch") or "pending_batch" in data:
+            raise ValueError(f"Unfinished C++ sweep: {game}")
+        points = data["results"]
+        if not points or [p["batch"] for p in points] != [2**i for i in range(len(points))]:
+            raise ValueError(f"Missing C++ batch measurements: {game}")
+        for p in points:
+            if p["threads"] != min(p["batch"], data["max_threads"]) or len(p["samples_s"]) != data["trials"]:
+                raise ValueError(f"Incomplete/inconsistent C++ timing: {game}/{p['batch']}")
+        rows[game] = data
+    for field in ("library_sha256", "source_hashes", "cpu_model", "cpu_affinity", "host",
+                  "max_threads", "trials", "seed", "base_steps", "min_steps", "timing", "thread_environment", "adaptive"):
+        if len({json.dumps(r[field], sort_keys=True) for r in rows.values()}) != 1:
+            raise ValueError(f"Mixed C++ configuration: {field}")
+    return rows
+
+
+def plot_paper(results_dir, data_dir, output_dir, manifest, cpp_results=None):
     rows = [json.loads((results_dir / f"{game}.json").read_text()) for game in GAMES]
     for game, row in zip(GAMES, rows):
         if row["game"] != game:
@@ -88,6 +110,10 @@ def plot_paper(results_dir, data_dir, output_dir, manifest):
             "output_mode", "action_generation")}
     metadata = json.loads((data_dir / "games_to_n_rules.json").read_text())
     manifest["inputs"].append(str(data_dir / "games_to_n_rules.json"))
+    cpp = load_cpp_results(cpp_results, GAMES) if cpp_results else None
+    if cpp:
+        manifest["cpp_configuration"] = {k: v for k, v in cpp[GAMES[0]].items()
+                                         if k not in ("game", "compiled_sha256", "results", "stop_reason", "extension_history")}
     fig, axes = plt.subplots(2, 4, figsize=(7.1, 3.8))
     handles = {}
     for ax, game, title, row in zip(axes.flat, GAMES, TITLES, rows):
@@ -99,7 +125,18 @@ def plot_paper(results_dir, data_dir, output_dir, manifest):
         ax.fill_between(x, [p["q25_fps"] for p in points], [p["q75_fps"] for p in points],
                         color="#d62728", alpha=0.18, linewidth=0)
         manifest["inputs"].append(str(results_dir / f"{game}.json"))
+        if cpp:
+            points = cpp[game]["results"]
+            cx = [p["batch"] for p in points]
+            line, = ax.plot(cx, [p["median_fps"] for p in points], color="#1f77b4", marker="*",
+                            markersize=3, linewidth=1.2, label="C++ optimized (CPU)")
+            handles[line.get_label()] = line
+            ax.fill_between(cx, [p["q25_fps"] for p in points], [p["q75_fps"] for p in points],
+                            color="#1f77b4", alpha=0.18, linewidth=0)
+            manifest["inputs"].append(str(cpp_results / f"{game}.json"))
         for mode, (label, color, marker, style) in STYLES.items():
+            if cpp and mode == "cpp_batched":
+                continue
             folder = "cpp_profiling_results" if mode == "cpp_batched" else "nodejs_profiling_results"
             path = data_dir / folder / CPU / "5000-step_rollout" / game / "level-0.json"
             if not path.exists():
@@ -130,9 +167,16 @@ def plot_paper(results_dir, data_dir, output_dir, manifest):
     fig.supylabel("Environment steps/s", fontsize=8, x=0.005, y=0.61)
     fig.legend(handles.values(), handles.keys(), loc="lower center", ncol=3,
                fontsize=6.5, frameon=False, bbox_to_anchor=(0.52, 0.05))
-    fig.text(0.52, 0.015,
-             f"JAX: median / IQR of {rows[0]['trials']} warmed, continuing rollouts. Archived CPU: Core i9-9980XE; original statistics.",
-             ha="center", fontsize=5.8)
+    if cpp:
+        fig.text(0.52, 0.029, "JAX: final carry, continuing rollouts. C++: full RL outputs, reset between trials. Both: median / IQR.",
+                 ha="center", fontsize=5.6)
+        cpu_label = cpp[GAMES[0]]["cpu_model"].replace("Intel(R) Core(TM)", "Core").replace(" CPU @ 3.00GHz", "")
+        fig.text(0.52, 0.006, f"C++: {cpu_label}, up to {cpp[GAMES[0]]['max_threads']} threads. NodeJS: archived CPU references.",
+                 ha="center", fontsize=5.6)
+    else:
+        fig.text(0.52, 0.015,
+                 f"JAX: median / IQR of {rows[0]['trials']} warmed, continuing rollouts. Archived CPU: Core i9-9980XE; original statistics.",
+                 ha="center", fontsize=5.8)
     fig.subplots_adjust(left=0.075, right=0.995, top=0.92, bottom=0.30, wspace=0.46, hspace=0.70)
     save(fig, output_dir / "random_rollout_profile_h200_updated")
 
@@ -167,20 +211,23 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--paper-results", type=Path)
     parser.add_argument("--movement-results", type=Path)
+    parser.add_argument("--cpp-results", type=Path, help="Replace archived C++ with fresh optimized CPU curves.")
     parser.add_argument("--data-dir", type=Path, default=Path("scripts/benchmarks/results/historical-cpu"))
     parser.add_argument("--output-dir", type=Path, required=True)
     args = parser.parse_args()
     if args.paper_results is None and args.movement_results is None:
         parser.error("provide --paper-results and/or --movement-results")
+    if args.cpp_results and not args.paper_results:
+        parser.error("--cpp-results requires --paper-results")
     args.output_dir.mkdir(parents=True, exist_ok=True)
     plt.rcParams.update({"pdf.fonttype": 42, "ps.fonttype": 42, "font.family": "DejaVu Sans"})
     manifest = {"inputs": [], "matplotlib_version": matplotlib.__version__,
                 "plotter_sha256": hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),
-                "historical_cpu_note": "CPU curves are archived references, not newly measured comparisons.",
+                "historical_cpu_note": "NodeJS curves are archived; C++ is newly measured when cpp_configuration is present.",
                 "updated_jax_note": "Median/IQR of warmed final-carry rollouts, random actions generated inside the scan.",
                 "movement_note": "Separate paired full-output rollout workload; only movement coordinate collection changes."}
     if args.paper_results:
-        plot_paper(args.paper_results, args.data_dir, args.output_dir, manifest)
+        plot_paper(args.paper_results, args.data_dir, args.output_dir, manifest, args.cpp_results)
     if args.movement_results:
         plot_movement(args.movement_results, args.output_dir, manifest)
     manifest["inputs"] = [{"path": p, "sha256": hashlib.sha256(Path(p).read_bytes()).hexdigest()}

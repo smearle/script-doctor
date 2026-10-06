@@ -1,0 +1,343 @@
+{
+  "peaks": [
+    {
+      "game": "sokoban_basic",
+      "best_batch": 1048576,
+      "median_fps": 9560740.673560046,
+      "last_batch": 1048576,
+      "stop_reason": "plateau"
+    },
+    {
+      "game": "notsnake",
+      "best_batch": 1048576,
+      "median_fps": 11537635.488169534,
+      "last_batch": 1048576,
+      "stop_reason": "plateau"
+    },
+    {
+      "game": "Zen_Puzzle_Garden",
+      "best_batch": 262144,
+      "median_fps": 5110070.104666897,
+      "last_batch": 262144,
+      "stop_reason": "plateau"
+    },
+    {
+      "game": "Slidings",
+      "best_batch": 1048576,
+      "median_fps": 2359643.15467246,
+      "last_batch": 1048576,
+      "stop_reason": "plateau"
+    },
+    {
+      "game": "limerick",
+      "best_batch": 32768,
+      "median_fps": 426135.41917679453,
+      "last_batch": 32768,
+      "stop_reason": "plateau"
+    },
+    {
+      "game": "kettle",
+      "best_batch": 262144,
+      "median_fps": 483817.62093547004,
+      "last_batch": 262144,
+      "stop_reason": "plateau"
+    },
+    {
+      "game": "Take_Heart_Lass",
+      "best_batch": 1048576,
+      "median_fps": 2880508.4875242556,
+      "last_batch": 1048576,
+      "stop_reason": "plateau"
+    },
+    {
+      "game": "atlas shrank",
+      "best_batch": 4096,
+      "median_fps": 50941.52800419783,
+      "last_batch": 16384,
+      "stop_reason": "regression"
+    },
+    {
+      "game": "blocks",
+      "best_batch": 65536,
+      "median_fps": 3296783.2306667552,
+      "last_batch": 262144,
+      "stop_reason": "plateau"
+    },
+    {
+      "game": "nekopuzzle",
+      "best_batch": 524288,
+      "median_fps": 3512365.6935373107,
+      "last_batch": 524288,
+      "stop_reason": "plateau"
+    },
+    {
+      "game": "sokoban_match3",
+      "best_batch": 524288,
+      "median_fps": 5029539.8808602365,
+      "last_batch": 524288,
+      "stop_reason": "plateau"
+    },
+    {
+      "game": "Travelling_salesman",
+      "best_batch": 1048576,
+      "median_fps": 12278443.114578493,
+      "last_batch": 1048576,
+      "stop_reason": "plateau"
+    },
+    {
+      "game": "Multi-word_Dictionary_Game",
+      "best_batch": 524288,
+      "median_fps": 3188907.109066861,
+      "last_batch": 524288,
+      "stop_reason": "plateau"
+    },
+    {
+      "game": "Microban",
+      "best_batch": 1048576,
+      "median_fps": 9555941.422522316,
+      "last_batch": 1048576,
+      "stop_reason": "plateau"
+    },
+    {
+      "game": "Magnet_Jack",
+      "best_batch": 16384,
+      "median_fps": 216491.84923051088,
+      "last_batch": 65536,
+      "stop_reason": "plateau"
+    },
+    {
+      "game": "HyperMaze",
+      "best_batch": 32768,
+      "median_fps": 95270.78086570656,
+      "last_batch": 32768,
+      "stop_reason": "plateau"
+    }
+  ],
+  "engine_sha256": "ab92c0a647c6efe9809c98cfecc7110a89b23b6dfdea2e7205603429041654fe",
+  "adaptive": {
+    "factor": 2,
+    "max_batch": 1048576,
+    "min_gain": 0.03,
+    "patience": 2,
+    "regression": 0.1
+  },
+  "plotter_sha256": "14cbc9086463bc06ca4924777e4448cdde3697652b507de2b550be9bebd0f5d7",
+  "inputs": {
+    "scripts/benchmarks/results/2026-10-05-adaptive/adaptive-throughput-h200/sokoban_basic.json": "c1ccd14687c50220bffa64f8dccef08238400a3b98614e3e0788d59cf4374552",
+    "scripts/benchmarks/results/2026-10-05-adaptive/adaptive-throughput-h200/notsnake.json": "2a62d143e0d2ba4490de45d521cb8a92ed89b45d5a7d112d832ac2c0229b2498",
+    "scripts/benchmarks/results/2026-10-05-adaptive/adaptive-throughput-h200/Zen_Puzzle_Garden.json": "cfacfb7e8d89b33801bd3f16db4778cbe568a9a62e3a2440049e62dd67c4d00a",
+    "scripts/benchmarks/results/2026-10-05-adaptive/adaptive-throughput-h200/Slidings.json": "919c8dc57cfa3a584ba4772fa6dd2d418dae177995af480808ee17a2c511f22d",
+    "scripts/benchmarks/results/2026-10-05-adaptive/adaptive-throughput-h200/limerick.json": "0c3d9dded9f158f54c562be830fa0751714e3904bbeac61dd772a751b1fcd930",
+    "scripts/benchmarks/results/2026-10-05-adaptive/adaptive-throughput-h200/kettle.json": "6d7c2160018eb71b943556dee20d954bdbec65f430f5b773bcd2f61d815665a8",
+    "scripts/benchmarks/results/2026-10-05-adaptive/adaptive-throughput-h200/Take_Heart_Lass.json": "5d60d3d7d70b6ffa45fc5187c9b2ff2c8d36cdfb2c2a5184bfd6a36f6fe5f51f",
+    "scripts/benchmarks/results/2026-10-05-adaptive/adaptive-throughput-h200/atlas shrank.json": "aa7c7aece824e00c88498577e238661f6942c5170fddf8e8e0c84f9e1a25a929",
+    "scripts/benchmarks/results/2026-10-05-adaptive/adaptive-throughput-h200/blocks.json": "a7bc6e60a827cc8fc361d21b4c850b82a107908ed2304a20a6ad749cf5db4150",
+    "scripts/benchmarks/results/2026-10-05-adaptive/adaptive-throughput-h200/nekopuzzle.json": "096e53fa46901d397c4c980c7ce61b4d21489494243018fdb251b48c8ae32fbd",
+    "scripts/benchmarks/results/2026-10-05-adaptive/adaptive-throughput-h200/sokoban_match3.json": "95ae75cb7e20b081302178a86ef413ceef52d8154688eafda6fab0dd0c9d5092",
+    "scripts/benchmarks/results/2026-10-05-adaptive/adaptive-throughput-h200/Travelling_salesman.json": "abc25af1d581053aa2367f2270054bf7a6b3f5c2453b3532bf41d8b1d5a30eb3",
+    "scripts/benchmarks/results/2026-10-05-adaptive/adaptive-throughput-h200/Multi-word_Dictionary_Game.json": "0315e85b6c1b6488ba026bc501bff465e7aecc6f1c268a981be2f968e22aedfc",
+    "scripts/benchmarks/results/2026-10-05-adaptive/adaptive-throughput-h200/Microban.json": "4864a30e860f99f91cf7bddd608dd6e11d54b37224414fb8078aa9a84547dba2",
+    "scripts/benchmarks/results/2026-10-05-adaptive/adaptive-throughput-h200/Magnet_Jack.json": "6a5ad4e8f4cf185d42a8a894a3a1093cd951a008b208ae2c977dd223b9309b8e",
+    "scripts/benchmarks/results/2026-10-05-adaptive/adaptive-throughput-h200/HyperMaze.json": "36f523c6be703dcb54250f0574eca4d64b7368b71c0e551cc1fc91fdaff83d43",
+    "scripts/benchmarks/results/2026-10-06-cpp-figure/cpp-throughput/sokoban_basic.json": "5e67fd374c4be40369ddce68d1e0566888ca1f141bc0176b42932d4781086573",
+    "scripts/benchmarks/results/2026-10-06-cpp-figure/cpp-throughput/notsnake.json": "0b960dd99191bd180d99b7d8f9b9258f514b553bfadf201279a035cb3f3c2106",
+    "scripts/benchmarks/results/2026-10-06-cpp-figure/cpp-throughput/Zen_Puzzle_Garden.json": "24f8ca73571d067125706bc03e47552ee0339651fc8eac42a964d3977c9ea7f7",
+    "scripts/benchmarks/results/2026-10-06-cpp-figure/cpp-throughput/Slidings.json": "203fe0bd720b49608da078c73e274a408d759a940a6fa66f0e90d3222c43f608",
+    "scripts/benchmarks/results/2026-10-06-cpp-figure/cpp-throughput/limerick.json": "1c377a8e8310654aa5c5b311a8413a92569c02c0cf464733c6432ebf4cb79c8d",
+    "scripts/benchmarks/results/2026-10-06-cpp-figure/cpp-throughput/kettle.json": "38c4af0f762c6b0240f0e4c3986e9fceea14fd6cecd971b8a843ca82a5580c4a",
+    "scripts/benchmarks/results/2026-10-06-cpp-figure/cpp-throughput/Take_Heart_Lass.json": "9c1d6c3d08901ad1e2fd320c160e67429349783ecff77793bd462884738e03d8",
+    "scripts/benchmarks/results/2026-10-06-cpp-figure/cpp-throughput/atlas shrank.json": "862e473c6ba8c7c200a55fc04b53e893fea5bd19789a932f0ae111ac25abc2cb",
+    "scripts/benchmarks/results/2026-10-06-cpp-figure/cpp-throughput/blocks.json": "ae1c48fd005909a85314bcb9e699d63faa50c30c66f1ad04ff56cb67f5b9832d",
+    "scripts/benchmarks/results/2026-10-06-cpp-figure/cpp-throughput/nekopuzzle.json": "bb5ebd0a149766d27d822ed6841f21fb233487772c2d539da9f40060798b7e71",
+    "scripts/benchmarks/results/2026-10-06-cpp-figure/cpp-throughput/sokoban_match3.json": "ca7da9285ea33675b807f4322a5431379c5a7a2ee89fa0418d74905bcb9551c6",
+    "scripts/benchmarks/results/2026-10-06-cpp-figure/cpp-throughput/Travelling_salesman.json": "97740888bbff05ba3ab6628fecc55a2f19dda7f81d1ae337b57b52bb068f136b",
+    "scripts/benchmarks/results/2026-10-06-cpp-figure/cpp-throughput/Multi-word_Dictionary_Game.json": "2f91d5688fe8ddc58decf51bfc04a21a19adb184dfad543e32a614d8c7cf4f16",
+    "scripts/benchmarks/results/2026-10-06-cpp-figure/cpp-throughput/Microban.json": "f79d1266db7248896cc01d0eb7c40be9e75879c22bce52531bc94d74eda76ebb",
+    "scripts/benchmarks/results/2026-10-06-cpp-figure/cpp-throughput/Magnet_Jack.json": "56681dbc37ad960edd3195bdf0a453aa71d7c6c95b748700e8eb61c9cadb0ecd",
+    "scripts/benchmarks/results/2026-10-06-cpp-figure/cpp-throughput/HyperMaze.json": "1a2539458ef56829a518047cbbad2e0c4a00b8364c0f4cb7ade06acda6007503"
+  },
+  "cpp_configuration": {
+    "library_sha256": "355f88636be05074d9286c171f0c9ee69b4ae630f7670f3acb9282341c5fde0f",
+    "source_hashes": {
+      "scripts/benchmarks/benchmark_cpp_throughput.py": "92c74f53dd6fab439e6b7d1bf5c5a33190b187619a933539119891348b9ab66c",
+      "scripts/benchmarks/benchmark_cpp_scoring.py": "99c6ab153d0aec49d37d6114603cb2473baeb88c7f65a57356a61ba4545adfd7",
+      "puzzlescript_cpp/__init__.py": "158fa886867977335394dc41755006d7461ab280607d7448027dd720615da078",
+      "puzzlescript_nodejs/puzzlescript/engine.js": "2827f74d734c204073b006c2e99853522cac3800e519533e47d636d0bcefe2a4"
+    },
+    "host": "Yalda24",
+    "cpu_model": "Intel(R) Core(TM) i9-9980XE CPU @ 3.00GHz",
+    "python_version": "3.13.11",
+    "numpy_version": "2.2.6",
+    "cpu_affinity": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12,
+      13,
+      14,
+      15,
+      16,
+      17,
+      18,
+      19,
+      20,
+      21,
+      22,
+      23,
+      24,
+      25,
+      26,
+      27,
+      28,
+      29,
+      30,
+      31
+    ],
+    "max_threads": 32,
+    "thread_policy": "min(batch, max_threads)",
+    "trials": 5,
+    "seed": 42,
+    "base_steps": 5000,
+    "min_steps": 100,
+    "level": 0,
+    "thread_environment": {
+      "OMP_WAIT_POLICY": "ACTIVE",
+      "OMP_PROC_BIND": "close",
+      "OMP_PLACES": "cores",
+      "OMP_DYNAMIC": "false",
+      "OPENBLAS_NUM_THREADS": "1"
+    },
+    "timing": "median/IQR; random actions, full RL outputs and win counting timed; reset before each trial excluded",
+    "adaptive": {
+      "min_batch": 1024,
+      "factor": 2,
+      "min_gain": 0.03,
+      "patience": 2,
+      "regression": 0.1,
+      "max_batch": 8192
+    }
+  },
+  "cpp_peaks": [
+    {
+      "game": "sokoban_basic",
+      "best_batch": 2048,
+      "median_fps": 1472852.8006103642,
+      "last_batch": 4096,
+      "stop_reason": "regression"
+    },
+    {
+      "game": "notsnake",
+      "best_batch": 2048,
+      "median_fps": 1490046.981417637,
+      "last_batch": 4096,
+      "stop_reason": "regression"
+    },
+    {
+      "game": "Zen_Puzzle_Garden",
+      "best_batch": 1024,
+      "median_fps": 474406.5272815343,
+      "last_batch": 4096,
+      "stop_reason": "plateau"
+    },
+    {
+      "game": "Slidings",
+      "best_batch": 1024,
+      "median_fps": 995993.4472350084,
+      "last_batch": 4096,
+      "stop_reason": "regression"
+    },
+    {
+      "game": "limerick",
+      "best_batch": 128,
+      "median_fps": 226209.60677248804,
+      "last_batch": 4096,
+      "stop_reason": "plateau"
+    },
+    {
+      "game": "kettle",
+      "best_batch": 2048,
+      "median_fps": 241298.85270774303,
+      "last_batch": 4096,
+      "stop_reason": "plateau"
+    },
+    {
+      "game": "Take_Heart_Lass",
+      "best_batch": 512,
+      "median_fps": 552773.6929199705,
+      "last_batch": 4096,
+      "stop_reason": "plateau"
+    },
+    {
+      "game": "atlas shrank",
+      "best_batch": 256,
+      "median_fps": 167664.00320984345,
+      "last_batch": 4096,
+      "stop_reason": "regression"
+    },
+    {
+      "game": "blocks",
+      "best_batch": 4096,
+      "median_fps": 469503.7322562159,
+      "last_batch": 4096,
+      "stop_reason": "plateau"
+    },
+    {
+      "game": "nekopuzzle",
+      "best_batch": 2048,
+      "median_fps": 1082841.8513801834,
+      "last_batch": 4096,
+      "stop_reason": "regression"
+    },
+    {
+      "game": "sokoban_match3",
+      "best_batch": 2048,
+      "median_fps": 961043.1556222357,
+      "last_batch": 8192,
+      "stop_reason": "plateau"
+    },
+    {
+      "game": "Travelling_salesman",
+      "best_batch": 2048,
+      "median_fps": 1558383.247524656,
+      "last_batch": 8192,
+      "stop_reason": "regression"
+    },
+    {
+      "game": "Multi-word_Dictionary_Game",
+      "best_batch": 2048,
+      "median_fps": 918770.5058517249,
+      "last_batch": 4096,
+      "stop_reason": "plateau"
+    },
+    {
+      "game": "Microban",
+      "best_batch": 4096,
+      "median_fps": 1487664.2114978004,
+      "last_batch": 8192,
+      "stop_reason": "plateau"
+    },
+    {
+      "game": "Magnet_Jack",
+      "best_batch": 64,
+      "median_fps": 197129.98341766212,
+      "last_batch": 4096,
+      "stop_reason": "plateau"
+    },
+    {
+      "game": "HyperMaze",
+      "best_batch": 4096,
+      "median_fps": 83444.62997836844,
+      "last_batch": 4096,
+      "stop_reason": "plateau"
+    }
+  ]
+}

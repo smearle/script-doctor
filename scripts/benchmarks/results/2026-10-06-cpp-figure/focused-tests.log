@@ -1,0 +1,35 @@
+........................................................................ [ 87%]
+..........                                                               [100%]
+=============================== warnings summary ===============================
+../../home/jupyter-smearle/script-doctor/.venv/lib/python3.13/site-packages/matplotlib/_fontconfig_pattern.py:64
+  /home/jupyter-smearle/script-doctor/.venv/lib/python3.13/site-packages/matplotlib/_fontconfig_pattern.py:64: PyparsingDeprecationWarning: 'oneOf' deprecated - use 'one_of'
+    prop = Group((name + Suppress("=") + comma_separated(value)) | oneOf(_CONSTANTS))
+
+../../home/jupyter-smearle/script-doctor/.venv/lib/python3.13/site-packages/matplotlib/_fontconfig_pattern.py:85
+../../home/jupyter-smearle/script-doctor/.venv/lib/python3.13/site-packages/matplotlib/_fontconfig_pattern.py:85
+../../home/jupyter-smearle/script-doctor/.venv/lib/python3.13/site-packages/matplotlib/_fontconfig_pattern.py:85
+../../home/jupyter-smearle/script-doctor/.venv/lib/python3.13/site-packages/matplotlib/_fontconfig_pattern.py:85
+../../home/jupyter-smearle/script-doctor/.venv/lib/python3.13/site-packages/matplotlib/_fontconfig_pattern.py:85
+../../home/jupyter-smearle/script-doctor/.venv/lib/python3.13/site-packages/matplotlib/_fontconfig_pattern.py:85
+  /home/jupyter-smearle/script-doctor/.venv/lib/python3.13/site-packages/matplotlib/_fontconfig_pattern.py:85: PyparsingDeprecationWarning: 'parseString' deprecated - use 'parse_string'
+    parse = parser.parseString(pattern)
+
+../../home/jupyter-smearle/script-doctor/.venv/lib/python3.13/site-packages/matplotlib/_fontconfig_pattern.py:89
+../../home/jupyter-smearle/script-doctor/.venv/lib/python3.13/site-packages/matplotlib/_fontconfig_pattern.py:89
+../../home/jupyter-smearle/script-doctor/.venv/lib/python3.13/site-packages/matplotlib/_fontconfig_pattern.py:89
+../../home/jupyter-smearle/script-doctor/.venv/lib/python3.13/site-packages/matplotlib/_fontconfig_pattern.py:89
+../../home/jupyter-smearle/script-doctor/.venv/lib/python3.13/site-packages/matplotlib/_fontconfig_pattern.py:89
+../../home/jupyter-smearle/script-doctor/.venv/lib/python3.13/site-packages/matplotlib/_fontconfig_pattern.py:89
+  /home/jupyter-smearle/script-doctor/.venv/lib/python3.13/site-packages/matplotlib/_fontconfig_pattern.py:89: PyparsingDeprecationWarning: 'resetCache' deprecated - use 'reset_cache'
+    parser.resetCache()
+
+../../home/jupyter-smearle/script-doctor/.venv/lib/python3.13/site-packages/matplotlib/_mathtext.py:45
+  /home/jupyter-smearle/script-doctor/.venv/lib/python3.13/site-packages/matplotlib/_mathtext.py:45: PyparsingDeprecationWarning: 'enablePackrat' deprecated - use 'enable_packrat'
+    ParserElement.enablePackrat()
+
+../../home/jupyter-smearle/script-doctor/.venv/lib/python3.13/site-packages/pytz/tzinfo.py:27
+  /home/jupyter-smearle/script-doctor/.venv/lib/python3.13/site-packages/pytz/tzinfo.py:27: DeprecationWarning: datetime.datetime.utcfromtimestamp() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.fromtimestamp(timestamp, datetime.UTC).
+    _epoch = datetime.utcfromtimestamp(0)
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+82 passed, 15 warnings in 136.41s (0:02:16)

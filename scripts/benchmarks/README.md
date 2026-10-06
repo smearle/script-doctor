@@ -2,6 +2,79 @@
 
 Run benchmarks from the repository root with the project environment activated.
 
+## Refreshed C++ curves and sixteen-game regression check (2026-10-06)
+
+The [updated eight-game paper figure](../../paper/figures/throughput_cpp_20261006/random_rollout_profile_h200_updated.pdf)
+replaces the archived C++ curve with fresh measurements of the packed-cell
+scoring and target-list optimizations. The existing H200 JAX measurements and
+historical NodeJS references are retained. The
+[sixteen-game supplement](../../paper/figures/adaptive_throughput_cpp_20261006/adaptive_throughput_h200_cpp.pdf)
+adds C++ curves for the wider suite, with a
+[combined CSV](../../paper/figures/adaptive_throughput_cpp_20261006/adaptive_throughput_h200_cpp.csv).
+Raw timings, frozen compiled games, regression hashes and test logs are under
+[2026-10-06-cpp-figure](results/2026-10-06-cpp-figure/).
+
+Fresh C++ measurements run on a Core i9-9980XE, pinned to logical CPUs 0–31,
+with `min(batch, 32)` OpenMP threads. Each point reports the median and IQR
+of five trials after two warmups. Random action generation, full Python RL
+outputs, and win counting are timed; reset, compilation and initialization are
+excluded. Trials start from a reset board with seeds 42–46. Rollout length is
+5,000 at batch one and `max(5000 // batch, 100)` otherwise, following the
+original CPU profiler. The episode limit is one larger than the rollout.
+Batch size doubles from one. Stopping considers batches at least 1,024 and
+requires either a drop exceeding 10% or two successive gains at most 3%.
+All sixteen curves completed: **211 batch configurations and 1,055 timed
+calls**, with ten plateaus and six regressions as batch size grows. No curve
+stopped solely at the safety cap. Peak medians and stopping reasons are in the
+[throughput summary](results/2026-10-06-cpp-figure/throughput-summary.json).
+
+The initial stopping floor of 64 ended some curves during a small-batch dip.
+The sweep was extended with a floor of 1,024 while preserving those timings.
+Per-point driver hashes and extension history record the change; the measured
+worker, wrapper, library and rollout protocol did not change. Resume checks
+reject incompatible inputs. A separate 16-thread pilot is excluded from the
+figures. Unlike the archived C++ curve, the new curve does not select the
+fastest timing sample or search over thread counts. Therefore changes relative
+to that archive are not controlled estimates of optimization gains.
+
+The controlled comparison uses the same corrected baseline and optimized
+extension builds as the preceding round: **both include the batched flag race
+fix**. Sixteen games at batches 1/64 and threads 1/8, respectively, plus level
+one of Sokoban Basic, Zen, Sokoban Match 3 and Microban, cover **72 paired
+configurations and 777,600 transitions**. All observations, rewards, done and
+truncation flags, and info fields match exactly. Runs use two seeds, 300 steps,
+and nine alternating timing trials; the inactive worker is paused. No sampled
+configuration regresses: median speedups range from **1.076× to 1.928×**.
+Across the sixteen level-zero games, geometric-mean gains are **25.6%** at batch
+one and **36.3%** at batch 64. The
+[per-game summary](results/2026-10-06-cpp-figure/regression-summary.json)
+retains both seed-specific bounds. These checks sample games and levels; they
+do not establish equivalence for every PuzzleScript program.
+
+All **82 focused C++/JAX regression tests** and **12 benchmark/reporting tests**
+pass. No additional engine change was required. JAX uses final-carry output
+with continuing rollouts, whereas C++ returns full RL outputs and resets between
+trials. Those workload differences remain explicit in the figure and prevent
+interpreting its curves as an isolated language/backend comparison.
+
+```bash
+python -m scripts.benchmarks.benchmark_cpp_throughput \
+  --library puzzlescript_cpp/_puzzlescript_cpp.cpython-313-x86_64-linux-gnu.so \
+  --compiled-dir scripts/benchmarks/results/2026-10-06-cpp-figure/compiled-games \
+  --max-threads 32 --output-dir /tmp/cpp-throughput-new
+# Defaults to the eight paper games. Use --games to include the wider suite.
+# Match the affinity/OpenMP environment in the raw metadata when reproducing timings.
+
+MPLCONFIGDIR=/tmp/puzzlejax-mpl python -m scripts.plotting.plot_engine_throughput \
+  --paper-results scripts/benchmarks/results/2026-10-05-adaptive/adaptive-throughput-h200 \
+  --cpp-results scripts/benchmarks/results/2026-10-06-cpp-figure/cpp-throughput \
+  --output-dir paper/figures/throughput_cpp_20261006
+MPLCONFIGDIR=/tmp/puzzlejax-mpl python -m scripts.plotting.plot_adaptive_throughput \
+  --results scripts/benchmarks/results/2026-10-05-adaptive/adaptive-throughput-h200 \
+  --cpp-results scripts/benchmarks/results/2026-10-06-cpp-figure/cpp-throughput \
+  --output-dir paper/figures/adaptive_throughput_cpp_20261006
+```
+
 ## Adaptive batches, broader coverage, and CPU audit (2026-10-05)
 
 The updated benchmark doubles the high-batch tail until either a median drops

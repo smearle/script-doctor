@@ -1,0 +1,28 @@
+{
+  "date": "2026-10-06",
+  "parent_commit": "acbd3eea",
+  "measured_snapshot": "Frozen committed engine/wrapper/NodeJS compiler from codex/puzzlejax-gpu-throughput; benchmark source hashes recorded in each result.",
+  "build_provenance": "../2026-10-05-adaptive/cpp-build-provenance.json",
+  "builds": "Reused hash-verified baseline-fixed and optimized-fixed extension builds. Both contain the byte-backed batched flag fix; only packed-cell scoring/win checks and cached target lists differ.",
+  "regression": "16 level-zero games at batch 1/thread 1 and batch 64/threads 8, plus level 1 of Sokoban Basic, Zen, Sokoban Match 3 and Microban at batch 64/threads 8. Two seeds, 300 steps, nine alternating trials, exact complete-output hashes. Action generation and reset excluded from A/B timing.",
+  "cpu_curve": "Core i9-9980XE, affinity 0-31, min(batch,32) threads. Random actions, full RL outputs and win counting included in timing. Reset before each trial excluded. Two warmups, five seeded trials. Median/IQR without selecting thread counts or fastest samples.",
+  "cpu_topology": "18 physical cores, 36 logical CPUs. Affinity 0-31 spans all 18 physical cores and 14 additional SMT siblings.",
+  "extension": "Initial stopping floor 64 was increased to 1024 because small-batch dips stopped several curves prematurely. Preserved timings have per-point driver hashes; extension_history retains the initial configuration. Only the driver/stopping limits changed; worker, wrapper, library and rollout protocol stayed identical. Initial driver is archived under provenance/.",
+  "pilot": "A preliminary 16-thread curve was stopped and excluded from the figure. Published measurements use up to 32 threads, matching the archived C++ resource ceiling.",
+  "comparability": "JAX H200 timings are reused without changes: final-carry output, continuing rollouts. C++ returns full RL outputs and resets between trials. NodeJS curves retain historical statistics. Use paired regression data, not historical-curve ratios, to estimate optimization gains.",
+  "validation": {
+    "paired_configurations": 72,
+    "paired_transitions": 777600,
+    "exact_outputs": true,
+    "focused_cpp_jax_tests_passed": 82,
+    "reporting_tests_passed": 12,
+    "cpp_curve_configurations": 211,
+    "cpp_curve_timed_calls": 1055,
+    "curve_stopping_reasons": {
+      "regression": 6,
+      "plateau": 10
+    }
+  },
+  "workspace_isolation": "Shared research edits, shared C++ extension and dirty NodeJS/JAX engine files were not modified. Work committed from an isolated worktree.",
+  "build_source_check": "All optimized C++ source hashes match the recorded build except a single comment in bindings.cpp describing byte-backed flags. Replacing that comment with its pre-commit text reproduces the recorded hash exactly; executable code is identical."
+}
