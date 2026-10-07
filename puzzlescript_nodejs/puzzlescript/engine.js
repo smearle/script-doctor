@@ -544,6 +544,7 @@ globalThis.__PS_NODE_API__ = {
     },
     unloadGame,
     clearBackups: () => { backups = []; },
+    getNumBackups: () => backups.length,
     drainLazyGeneration: () => { tick_lazy_function_generation(false); },
     serializeCompiledState,
     serializeCompiledStateJSON: () => JSON.stringify(serializeCompiledState()),

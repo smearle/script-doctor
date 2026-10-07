@@ -818,6 +818,8 @@ function solveAStar(engine, maxIters=100_000, timeoutMs=-1) {
 			// redraw();
 			// await timeout(1);
 		}
+		// Every changing input pushes an undo state; the search never undoes, so drop them.
+		engine.clearBackups();
 		var temp = queue.poll();
 		var parentState = temp[1];
 		var numSteps = temp[2];
@@ -960,6 +962,8 @@ function solveGBFS(engine, maxIters=100_000, timeoutMs=-1) {
 		if (iters > 500) {
 			iters = 0;
 		}
+		// Every changing input pushes an undo state; the search never undoes, so drop them.
+		engine.clearBackups();
 		var temp = queue.poll();
 		var parentState = temp[1];
 		var numSteps = temp[2];
@@ -1200,6 +1204,8 @@ function solveMCTS(engine, options = {}) {
     // start from th root
     currentNode = rootNode;
     engine.restoreLevel(init_level);
+    // Every changing input pushes an undo state; the search never undoes, so drop them.
+    engine.clearBackups();
     let changed = true;
     // selecting next node
     while(currentNode.is_fully_expanded()){

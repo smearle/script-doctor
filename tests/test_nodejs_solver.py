@@ -1,6 +1,7 @@
 import time
 
 import pytest
+from javascript import eval_js
 
 from backends.nodejs import NodeJSPuzzleScriptBackend
 from puzzlescript_jax.utils import init_ps_lark_parser, level_to_int_arr
@@ -243,5 +244,38 @@ def test_run_search_stops_at_timeout_ms(algo):
         assert result.timeout
         assert 0 < result.iterations < 1_000_000
         assert elapsed < 20
+    finally:
+        backend.unload_game()
+
+
+@pytest.mark.parametrize("solver_call, max_undo_states", [
+    pytest.param("solver.solveBFS(probe, 300, -1)", 5, id="bfs"),
+    pytest.param("solver.solveAStar(probe, 300, -1)", 5, id="astar"),
+    pytest.param("solver.solveGBFS(probe, 300, -1)", 5, id="gbfs"),
+    # One iteration: the selection path plus a simulation of up to 100 moves.
+    pytest.param("solver.solveMCTS(probe, {max_iterations: 200})", 150, id="mcts"),
+])
+def test_search_does_not_accumulate_undo_states(solver_call, max_undo_states):
+    # Every changing input pushes an undo state. MCTS never dropped them (one
+    # 100k-iteration run reached 16.5 GB) and A* / GBFS kept them until the end.
+    backend = NodeJSPuzzleScriptBackend()
+    try:
+        backend.load_level(CRATE_ROOM, 0)
+        engine, solver = backend.engine, backend.solver
+        # Record the undo stack's peak after every input the solver makes.
+        peak = eval_js(f"""
+            const processInput = engine.processInput;
+            let peak = 0;
+            const probe = Object.assign({{}}, engine, {{
+                processInput: (...args) => {{
+                    const changed = processInput(...args);
+                    peak = Math.max(peak, engine.getNumBackups());
+                    return changed;
+                }},
+            }});
+            {solver_call};
+            return peak;
+        """)
+        assert 0 < peak <= max_undo_states
     finally:
         backend.unload_game()
