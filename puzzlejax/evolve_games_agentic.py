@@ -719,7 +719,7 @@ def run_single_mode(args) -> None:
             max_repair_attempts=args.max_repair_attempts,
             fewshot_n=args.fewshot_n,
             temperature=args.temperature,
-            enable_thinking=args.enable_thinking or None,
+            enable_thinking=args.enable_thinking,
         )
         results.append({
             "uid": ind.uid,
@@ -765,7 +765,7 @@ def run_evolution_mode(args) -> None:
             max_repair_attempts=args.max_repair_attempts,
             fewshot_n=args.fewshot_n,
             temperature=args.temperature,
-            enable_thinking=args.enable_thinking or None,
+            enable_thinking=args.enable_thinking,
         )
         ind.generation = 0
         pop.append(ind)
@@ -815,7 +815,7 @@ def run_evolution_mode(args) -> None:
                 max_repair_attempts=args.max_repair_attempts,
                 fewshot_n=args.fewshot_n,
                 temperature=args.temperature,
-                enable_thinking=args.enable_thinking or None,
+                enable_thinking=args.enable_thinking,
             )
             ind.generation = gen
             new_pop.append(ind)
@@ -886,8 +886,8 @@ def main():
     parser.add_argument("--vllm_base_url", type=str, default="",
                         help="vLLM server URL (default: VLLM_BASE_URL env or localhost:8000)")
     parser.add_argument("--temperature", type=float, default=0.7)
-    parser.add_argument("--enable_thinking", action="store_true", default=False,
-                        help="Enable Qwen3 thinking mode")
+    parser.add_argument("--enable_thinking", action=argparse.BooleanOptionalAction, default=None,
+                        help="Qwen thinking mode on/off (default: the chat template's default)")
 
     # Evolution params
     parser.add_argument("--pop_size", type=int, default=3,
