@@ -122,7 +122,6 @@ function createSandbox() {
     sandbox.canvas = null;
     sandbox.lastDownTarget = null;
     sandbox.input = makeElement();
-    sandbox.IDE = false;
 
     sandbox.canvasResize = function() {};
     sandbox.redraw = function() {};
@@ -178,6 +177,10 @@ var require = undefined;
     }
 
     allCode += `
+// The source bundle declares lexical IDE; sandbox.IDE does not set it.
+// This API runs headlessly, without the browser debugger timeline.
+IDE = false;
+
 // ---- Monkey-patch to capture pre-compilation state ----
 var _parsedSnapshot = null;
 var _origLevelsToArray = levelsToArray;
