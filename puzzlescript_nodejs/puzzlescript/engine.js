@@ -181,6 +181,25 @@ var require = undefined;
 // This API runs headlessly, without the browser debugger timeline.
 IDE = false;
 
+// ---- Headless message handling ----
+// In-level messages (a rule's 'message' command) are never displayed here.
+// Upstream processOutputCommands answers one with showTempMessage(), which sets
+// textMode = true, and processCommandQueue skips checkWin while textMode is set.
+// A browser clears textMode and runs checkWin when the player dismisses the
+// message (inputoutput.js, not loaded here); headless callers never dismiss it,
+// so no later win in the level would be detected. Instead every message is
+// dismissed as soon as it is raised: textMode stays false and the turn's own
+// checkWin runs. Its text is queued for takeMessages(), for players that read
+// messages (e.g. LLM agents). The other output commands only play sounds, which
+// cannot play here.
+var _inLevelMessages = [];
+processOutputCommands = function (commands) {
+    if (commands.includes('message')) {
+        _inLevelMessages.push(messagetext);
+    }
+    messagetext = "";
+};
+
 // ---- Monkey-patch to capture pre-compilation state ----
 var _parsedSnapshot = null;
 var _origLevelsToArray = levelsToArray;
@@ -508,6 +527,9 @@ globalThis.__PS_NODE_API__ = {
     setHasUsedCheckpoint: (value) => { hasUsedCheckpoint = value; },
     get_o10: () => _o10,
     getNumLevels: () => state.levels.length,
+    // In-level messages raised since the previous call, oldest first (see
+    // "Headless message handling"); message levels are reported by getLevelInfo.
+    takeMessages: () => _inLevelMessages.splice(0),
     getLevelInfo: () => state.levels.map((lv, i) => {
         if (lv.objects) return { type: 'level', index: i };
         return { type: 'message', index: i, message: lv.message || '' };
