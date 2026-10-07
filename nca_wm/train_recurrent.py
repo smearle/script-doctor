@@ -168,7 +168,7 @@ def load_dataset_from_caches(game_names, max_transitions_per_game, val_frac,
     _ckey = hashlib.sha256(json.dumps({
         "games": sorted(game_names), "cap": cap,
         "val_frac": round(float(val_frac), 6), "ac": bool(ancestor_closed),
-        "mgd": max_grid_dim, "seed": int(seed), "v": 1}, sort_keys=True
+        "mgd": max_grid_dim, "seed": int(seed), "v": 2}, sort_keys=True
     ).encode()).hexdigest()[:16]
     _cpath = _REPO_ROOT / "rollout_data" / "_merged" / f"recurrent_ds_{_ckey}.pkl"
     if _cpath.is_file():
@@ -183,9 +183,24 @@ def load_dataset_from_caches(game_names, max_transitions_per_game, val_frac,
     per_states, per_next, per_actions, per_val = [], [], [], []
     game_infos = []
     n_skip_size = n_empty = 0
+    def _select_one_cache_per_level(name):
+        by_level = {}
+        for f in sorted(_glob.glob(
+                f"rollout_data/{name}/level_*/astar_transitions_*.npz")):
+            level_dir = os.path.basename(os.path.dirname(f))
+            try:
+                with np.load(f, allow_pickle=True) as d:
+                    n = int(d["states"].shape[0])
+            except Exception:
+                continue
+            prev = by_level.get(level_dir)
+            key = (n, os.path.getmtime(f))
+            if prev is None or key > prev[0]:
+                by_level[level_dir] = (key, f)
+        return [v[1] for k, v in sorted(by_level.items())]
+
     for name in game_names:
-        fs = sorted(_glob.glob(
-            f"rollout_data/{name}/level_*/astar_transitions_*.npz"))
+        fs = _select_one_cache_per_level(name)
         # First pass: just shapes/W (cheap headers) to find the game's max dims.
         metas = []  # (path, C, H, W, N)
         for f in fs:
