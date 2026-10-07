@@ -31,6 +31,7 @@ ALGO_NAMES = ['astar', 'gbfs', 'bfs', 'mcts']
 HEATMAP_SEARCH_DEPTHS = [1_000_000]
 ALL_RESULTS_PATH = os.path.join('data', 'all_search_results.json')
 EXIT_TRAINING_DIR = os.path.join('data', 'exit_training')
+CORRECTED_EXIT_PATH = Path('data/exit_results_corrected.json')
 JS_REPLAY_CSV_PATH = os.path.join('llm_agent_results', 'analysis_js_replay',
                                    'replay_results.csv')
 
@@ -128,13 +129,31 @@ def _load_exit_run_config(job_dir: str) -> dict | None:
     return None
 
 
-def _load_exit_rows(dataset: str) -> tuple[pd.DataFrame, list[str], dict[str, int]]:
+def _load_exit_rows(dataset: str, corrected_path=None) -> tuple[pd.DataFrame, list[str], dict[str, int]]:
     """Scan exit_training/ for per-config results.
 
     Returns (DataFrame[method, game, pct_solved], ordered method labels,
              {raw_game_name: n_levels_found}).
     """
     empty = pd.DataFrame(columns=['method', 'game', 'pct_solved']), [], {}
+    published = Path(corrected_path) if corrected_path is not None else CORRECTED_EXIT_PATH
+    if corrected_path is not None or (dataset == 'priority' and published.exists()):
+        from puzzlejax.exit_outcomes import load_published_bundle
+        bundle = load_published_bundle(published)
+        dataset_games = set(get_list_of_games_for_testing(dataset))
+        published_games = {g for group in bundle['results'].values() for g in group}
+        if published_games != dataset_games:
+            raise ValueError('Corrected ExIt publication does not match the requested dataset')
+        rows=[];coverage={}
+        for method,group in bundle['results'].items():
+            for game,stats in group.items():
+                if stats['n_levels'] != stats['n_levels_requested']:
+                    raise ValueError(f'Partial corrected ExIt coverage: {game}')
+                rows.append(dict(method=method,game=_format_game_label(game),
+                                 pct_solved=stats['pct_solved'],n_levels_tested=stats['n_levels']))
+                coverage[game]=stats['n_levels']
+        methods=sorted(bundle['results'],key=lambda m: 0 if '1M' in m else 1)
+        return pd.DataFrame(rows),methods,coverage
     if not os.path.isdir(EXIT_TRAINING_DIR):
         print(f'  WARNING: {EXIT_TRAINING_DIR} not found – skipping ExIt results.')
         return empty
@@ -543,12 +562,16 @@ def main():
                                      formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument('--dataset', default='priority',
                         choices=['priority', 'gallery', 'pedro', 'increpare'])
+    parser.add_argument('--exit-results',type=Path,
+                        help='Validated full-coverage corrected ExIt bundle')
+    parser.add_argument('--output-dir',type=Path,
+                        help='Stage figures here before publishing the full-results update')
     args = parser.parse_args()
 
     dataset_games = get_list_of_games_for_testing(args.dataset)
     metadata = _load_games_metadata()
 
-    exit_df, exit_methods, exit_coverage = _load_exit_rows(args.dataset)
+    exit_df, exit_methods, exit_coverage = _load_exit_rows(args.dataset,args.exit_results)
     search_df, search_coverage = _load_search_rows(args.dataset)
     rl_df, rl_methods, rl_coverage = _load_rl_rows(args.dataset)
     llm_df, llm_coverage = _load_llm_rows(args.dataset)
@@ -685,10 +708,12 @@ def main():
 
     fig.tight_layout()
 
-    out_dir = os.path.join(PLOTS_DIR, 'search', args.dataset, 'heatmaps')
+    out_dir = args.output_dir or os.path.join(PLOTS_DIR, 'search', args.dataset, 'heatmaps')
     os.makedirs(out_dir, exist_ok=True)
     out_path = os.path.join(out_dir, 'aggregate_winrate_heatmap.png')
     fig.savefig(out_path, dpi=300, bbox_inches='tight')
+    fig.savefig(os.path.join(out_dir,'aggregate_winrate_heatmap.pdf'),bbox_inches='tight')
+    heatmap.to_csv(os.path.join(out_dir,'aggregate_winrate_heatmap.csv'))
     plt.close(fig)
     print(f'Saved {out_path}')
 
