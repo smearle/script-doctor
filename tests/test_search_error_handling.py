@@ -1,9 +1,10 @@
 """End-to-end tests for search error classification, logging, and aggregation.
 
 Covers:
-  1. _classify_error correctly buckets OOM / timeout / unknown exceptions
+  1. _classify_error correctly buckets OOM / timeout / solver / engine /
+     unknown exceptions, including JS exceptions raised through the Node bridge
   2. write_level_error_log produces valid, parseable JSON with required fields
-  3. The search loop (search_nodejs.main) catches injected OOM and timeout
+  3. The search loop (search_nodejs.main) catches injected OOM, timeout and JS
      errors from a mock backend and writes proper error logs
   4. The aggregation path (plot_search_results._collect_results_for_algo)
      picks up OOM and timeout flags from those logs
@@ -22,13 +23,66 @@ from typing import Optional, List
 from unittest.mock import patch, MagicMock
 
 import pytest
+from javascript.errors import JavaScriptError
+from submitit.core.utils import UncompletedJobError
 
 from backends.base import SearchResult
+from backends.nodejs import NodeJSPuzzleScriptBackend
 from puzzlejax.search_nodejs import (
     _classify_error,
     write_level_error_log,
     TIMEOUT_ERROR_PATTERNS,
     OOM_ERROR_PATTERNS,
+)
+from tests.test_nodejs_solver import make_game
+
+
+# JS stacks of errors stored in data/js_sols as "timeout" or "oom" (paths shortened).
+SOLVER_REFERENCE_ERROR = (
+    "ReferenceError: _o10 is not defined\n"
+    "    at getScoreNormalized (/repo/puzzlescript_nodejs/puzzlescript/solver.js:378:50)\n"
+    "    at MCTSNode.simulate (/repo/puzzlescript_nodejs/puzzlescript/solver.js:1081:14)\n"
+    "    at Object.solveMCTS (/repo/puzzlescript_nodejs/puzzlescript/solver.js:1236:33)\n"
+    "    at Bridge.call (/repo/.venv/lib/python3.13/site-packages/javascript/js/bridge.js:136:42)"
+)
+ENGINE_TYPE_ERROR = (
+    "TypeError: Cannot read properties of undefined (reading 'length')\n"
+    "    at Object.processInput (standalone_puzzlescript_sources.js:10586:65)\n"
+    "    at processInputSearch (/repo/puzzlescript_nodejs/puzzlescript/solver.js:540:33)\n"
+    "    at Object.solveMCTS (/repo/puzzlescript_nodejs/puzzlescript/solver.js:1217:17)\n"
+    "    at Bridge.call (/repo/.venv/lib/python3.13/site-packages/javascript/js/bridge.js:136:42)"
+)
+ENGINE_ERROR_IN_CALLBACK = (
+    "TypeError: Cannot read properties of undefined (reading '0')\n"
+    "    at standalone_puzzlescript_sources.js:10559:72\n"
+    "    at Array.map (<anonymous>)\n"
+    "    at Object.processInput (standalone_puzzlescript_sources.js:10559:45)\n"
+    "    at processInputSearch (/repo/puzzlescript_nodejs/puzzlescript/solver.js:540:33)"
+)
+ENGINE_TOO_MANY_ERRORS = (
+    "Error: Too many errors/warnings; noping out.\n"
+    "    at TooManyErrors (standalone_puzzlescript_sources.js:11073:11)\n"
+    "    at logErrorCacheable (standalone_puzzlescript_sources.js:11098:17)\n"
+    "    at applyRuleGroup (standalone_puzzlescript_sources.js:10338:9)\n"
+    "    at applyRules (standalone_puzzlescript_sources.js:10352:30)\n"
+    "    at Object.processInput (standalone_puzzlescript_sources.js:10544:3)\n"
+    "    at Object.solveAStar (/repo/puzzlescript_nodejs/puzzlescript/solver.js:822:34)"
+)
+ENGINE_ERROR_ON_LEVEL_LOAD = (
+    "TypeError: Cannot read properties of undefined (reading 'length')\n"
+    "    at processInput (standalone_puzzlescript_sources.js:10586:65)\n"
+    "    at loadLevelFromLevelDat (standalone_puzzlescript_sources.js:8402:4)\n"
+    "    at setGameState (standalone_puzzlescript_sources.js:8688:5)\n"
+    "    at Object.compile (standalone_puzzlescript_sources.js:15984:9)"
+)
+SLURM_WALL_TIME = "Job not requeued because: timed-out and not checkpointable."
+
+# A rule group that never settles: every turn loops until the engine logs an
+# error, and after 100 of those it throws.
+FLIP_FOREVER = make_game(
+    "[ Coin ] -> [ Crate ]\n+ [ Crate ] -> [ Coin ]",
+    "no Coin",
+    "##########\n#P.......#\n#........#\n#........#\n#....C...#\n#........#\n#........#\n##########",
 )
 
 
@@ -59,8 +113,72 @@ class TestClassifyError:
 
     def test_oom_takes_priority_over_timeout_in_message(self):
         # If both patterns appear, OOM is checked first
-        exc = RuntimeError("out of memory after timeout")
+        exc = RuntimeError("out of memory after the search timed out")
         assert _classify_error(exc) == "oom"
+
+    def test_traceback_source_lines_are_ignored(self):
+        # The formatted traceback used to be matched too, and a source line such
+        # as `timeout_ms=timeout_ms` turned every error into a "timeout".
+        def search(timeout_ms):
+            raise ValueError("unexpected")
+
+        try:
+            search(timeout_ms=1_000)
+        except ValueError as exc:
+            assert _classify_error(exc) == "unknown"
+
+    def test_identifier_containing_timeout_is_not_a_timeout(self):
+        assert _classify_error(KeyError("timeout_ms")) == "unknown"
+
+    def test_slurm_wall_time_is_timeout(self):
+        assert _classify_error(UncompletedJobError(SLURM_WALL_TIME)) == "timeout"
+
+    def test_bridge_call_timeout_is_timeout(self):
+        exc = Exception(
+            "Call to 'solveBFS' timed out. Increase the timeout by setting the `timeout` keyword argument."
+        )
+        assert _classify_error(exc) == "timeout"
+
+    @pytest.mark.parametrize("js_stack, expected", [
+        (SOLVER_REFERENCE_ERROR, "solver_error"),
+        (ENGINE_TYPE_ERROR, "engine_error"),
+        (ENGINE_ERROR_IN_CALLBACK, "engine_error"),
+        # Was "oom": "TooManyErrors" contains "oom".
+        (ENGINE_TOO_MANY_ERRORS, "engine_error"),
+        (ENGINE_ERROR_ON_LEVEL_LOAD, "engine_error"),
+    ])
+    def test_js_error_classified_by_where_it_was_thrown(self, js_stack, expected):
+        assert _classify_error(JavaScriptError("solveMCTS", js_stack)) == expected
+
+    def test_js_allocation_failure_is_oom(self):
+        exc = JavaScriptError("solveBFS", (
+            "RangeError: Array buffer allocation failed\n"
+            "    at new ArrayBuffer (<anonymous>)\n"
+            "    at solveBFS (/repo/puzzlescript_nodejs/puzzlescript/solver.js:600:3)"
+        ))
+        assert _classify_error(exc) == "oom"
+
+
+class TestClassifyBridgeErrors:
+    """Classify exceptions raised through the real Node bridge."""
+
+    def test_engine_error_during_search(self):
+        backend = NodeJSPuzzleScriptBackend()
+        try:
+            with pytest.raises(JavaScriptError) as exc_info:
+                backend.run_search(
+                    "astar", game_text=FLIP_FOREVER, level_i=0, n_steps=10_000, timeout_ms=-1,
+                )
+            assert "Too many errors" in str(exc_info.value.js)
+            assert _classify_error(exc_info.value) == "engine_error"
+        finally:
+            backend.unload_game()
+
+    def test_solver_error(self):
+        backend = NodeJSPuzzleScriptBackend()
+        with pytest.raises(JavaScriptError) as exc_info:
+            backend.solver.getScore(None)
+        assert _classify_error(exc_info.value) == "solver_error"
 
 
 # ---------------------------------------------------------------------------
@@ -178,7 +296,7 @@ class _MockBackend:
 
 
 class TestSearchLoopErrorHandling:
-    """Inject OOM and timeout errors into the search loop via a mock backend."""
+    """Inject OOM, timeout and JS errors into the search loop via a mock backend."""
 
     def test_oom_and_timeout_are_logged(self, tmp_path):
         error_schedule = {
@@ -192,10 +310,10 @@ class TestSearchLoopErrorHandling:
         cfg = _make_mock_cfg()
 
         with (
-            patch("search_nodejs.NodeJSPuzzleScriptBackend", return_value=mock_backend),
-            patch("search_nodejs.init_ps_lark_parser", return_value=None),
-            patch("search_nodejs.JS_SOLS_DIR", sols_dir),
-            patch("search_nodejs.STANDALONE_NODEJS_RESULTS_PATH",
+            patch("puzzlejax.search_nodejs.NodeJSPuzzleScriptBackend", return_value=mock_backend),
+            patch("puzzlejax.search_nodejs.init_ps_lark_parser", return_value=None),
+            patch("puzzlejax.search_nodejs.JS_SOLS_DIR", sols_dir),
+            patch("puzzlejax.search_nodejs.STANDALONE_NODEJS_RESULTS_PATH",
                   str(tmp_path / "results.json")),
         ):
             from puzzlejax.search_nodejs import main
@@ -227,6 +345,35 @@ class TestSearchLoopErrorHandling:
         assert success_result["won"] is True
         assert "error" not in success_result
 
+    def test_js_errors_and_slurm_timeout_are_logged_by_cause(self, tmp_path):
+        error_schedule = {
+            0: JavaScriptError("solveMCTS", SOLVER_REFERENCE_ERROR),
+            1: JavaScriptError("solveAStar", ENGINE_TOO_MANY_ERRORS),
+            2: UncompletedJobError(SLURM_WALL_TIME),
+            # level 3: succeeds normally
+        }
+        mock_backend = _MockBackend(error_schedule)
+        sols_dir = str(tmp_path / "js_sols")
+        cfg = _make_mock_cfg()
+
+        with (
+            patch("puzzlejax.search_nodejs.NodeJSPuzzleScriptBackend", return_value=mock_backend),
+            patch("puzzlejax.search_nodejs.init_ps_lark_parser", return_value=None),
+            patch("puzzlejax.search_nodejs.JS_SOLS_DIR", sols_dir),
+            patch("puzzlejax.search_nodejs.STANDALONE_NODEJS_RESULTS_PATH",
+                  str(tmp_path / "results.json")),
+        ):
+            from puzzlejax.search_nodejs import main
+            main(cfg)
+
+        game_dir = os.path.join(sols_dir, "sokoban_basic")
+        expected = {0: "solver_error", 1: "engine_error", 2: "timeout", 3: None}
+        for level_i, error in expected.items():
+            with open(os.path.join(game_dir, f"bfs_1000-steps_level-{level_i}.json")) as f:
+                result = json.load(f)
+            assert result.get("error") == error, level_i
+            assert result["won"] is (error is None)
+
     def test_unknown_error_still_raises(self, tmp_path):
         error_schedule = {0: ValueError("something unexpected")}
         mock_backend = _MockBackend(error_schedule)
@@ -234,10 +381,10 @@ class TestSearchLoopErrorHandling:
         cfg = _make_mock_cfg()
 
         with (
-            patch("search_nodejs.NodeJSPuzzleScriptBackend", return_value=mock_backend),
-            patch("search_nodejs.init_ps_lark_parser", return_value=None),
-            patch("search_nodejs.JS_SOLS_DIR", sols_dir),
-            patch("search_nodejs.STANDALONE_NODEJS_RESULTS_PATH",
+            patch("puzzlejax.search_nodejs.NodeJSPuzzleScriptBackend", return_value=mock_backend),
+            patch("puzzlejax.search_nodejs.init_ps_lark_parser", return_value=None),
+            patch("puzzlejax.search_nodejs.JS_SOLS_DIR", sols_dir),
+            patch("puzzlejax.search_nodejs.STANDALONE_NODEJS_RESULTS_PATH",
                   str(tmp_path / "results.json")),
         ):
             from puzzlejax.search_nodejs import main
@@ -289,7 +436,7 @@ class TestAggregationErrorPickup:
             "score": 0, "timeout": False, "time": 1.0,
         })
 
-        with patch("plot_search_results.JS_SOLS_DIR", sols_dir):
+        with patch("scripts.plotting.plot_search_results.JS_SOLS_DIR", sols_dir):
             from scripts.plotting.plot_search_results import _collect_results_for_algo
             results_by_depth, per_level_by_depth = _collect_results_for_algo([game], algo)
 
@@ -300,6 +447,26 @@ class TestAggregationErrorPickup:
         assert game_result["n_levels"] == 4
         # Only level 0 solved
         assert game_result["pct_solved"] == pytest.approx(0.25)
+
+    def test_engine_error_is_not_oom(self, tmp_path):
+        sols_dir = str(tmp_path / "js_sols")
+        game = "rule_loop_game"
+        game_dir = os.path.join(sols_dir, game)
+        self._write_result(game_dir, "bfs", 1000, 0, {
+            "won": False, "actions": [], "iterations": 0,
+            "score": None, "timeout": False, "time": 0,
+            "error": "engine_error", "error_message": ENGINE_TOO_MANY_ERRORS,
+        })
+
+        with patch("scripts.plotting.plot_search_results.JS_SOLS_DIR", sols_dir):
+            from scripts.plotting.plot_search_results import _collect_results_for_algo
+            results_by_depth, _ = _collect_results_for_algo([game], "bfs")
+
+        game_result = results_by_depth[1000][game]
+        assert game_result["has_oom"] is False
+        assert game_result["has_timeout"] is False
+        assert game_result["n_levels"] == 1
+        assert game_result["pct_solved"] == 0
 
     def test_no_errors_means_no_flags(self, tmp_path):
         sols_dir = str(tmp_path / "js_sols")
@@ -314,7 +481,7 @@ class TestAggregationErrorPickup:
                 "score": 1, "timeout": False, "time": 0.05,
             })
 
-        with patch("plot_search_results.JS_SOLS_DIR", sols_dir):
+        with patch("scripts.plotting.plot_search_results.JS_SOLS_DIR", sols_dir):
             from scripts.plotting.plot_search_results import _collect_results_for_algo
             results_by_depth, _ = _collect_results_for_algo([game], algo)
 

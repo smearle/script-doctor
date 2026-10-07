@@ -11,6 +11,7 @@ import dotenv
 import hydra
 import numpy as np
 import submitit
+from javascript.errors import JavaScriptError
 
 from conf.config import SearchNodeJSConfig
 from backends import NodeJSPuzzleScriptBackend
@@ -23,18 +24,18 @@ dotenv.load_dotenv()
 
 OOM_ERROR_PATTERNS = (
     "out of memory",
-    "oom",
-    "heap out of memory",
     "allocation failed",
     "memory limit",
 )
 
 TIMEOUT_ERROR_PATTERNS = (
-    "timed out",
-    "timeout",
-    "time out",
+    "timed out",  # JSPyBridge: "Call to 'solveBFS' timed out."
+    "timed-out",  # submitit at SLURM wall time: "timed-out and not checkpointable"
     "deadline exceeded",
 )
+
+# Stack frames in our search code; the engine's frames are in the vm bundle.
+SOLVER_JS_FRAME = "puzzlescript/solver.js:"
 
 
 def get_standalone_run_name(cfg: SearchNodeJSConfig, algo_name, cpu_name):
@@ -49,21 +50,30 @@ def get_standalone_run_params_from_name(run_name: str):
 
 
 def _classify_error(exc: BaseException) -> str:
-    """Classify an exception as 'oom', 'timeout', or 'unknown'."""
+    """Classify an exception as 'oom', 'timeout', 'solver_error', 'engine_error', or 'unknown'.
+
+    Only the exception's own message is matched, never the formatted traceback,
+    whose source lines (e.g. ``timeout_ms=timeout_ms``) would match any error.
+    A JavaScript exception thrown in our solver code is a 'solver_error'; one
+    thrown in the PuzzleScript engine is an 'engine_error'.
+    """
     if isinstance(exc, MemoryError):
         return 'oom'
     if isinstance(exc, TimeoutError):
         return 'timeout'
-    error_text = " ".join(
-        part for part in (
-            str(exc),
-            repr(exc),
-            traceback.format_exc(),
-        ) if part
-    ).lower()
-    if any(pattern in error_text for pattern in OOM_ERROR_PATTERNS):
+    if isinstance(exc, JavaScriptError):
+        js_lines = str(exc.js).splitlines()
+        js_message = js_lines[0].lower() if js_lines else ''
+        if any(pattern in js_message for pattern in OOM_ERROR_PATTERNS):
+            return 'oom'
+        # The innermost frame with a source location is where it was thrown.
+        thrown_at = next(
+            (line for line in js_lines if line.lstrip().startswith('at ') and '.js:' in line), '')
+        return 'solver_error' if SOLVER_JS_FRAME in thrown_at else 'engine_error'
+    message = str(exc).lower()
+    if any(pattern in message for pattern in OOM_ERROR_PATTERNS):
         return 'oom'
-    if any(pattern in error_text for pattern in TIMEOUT_ERROR_PATTERNS):
+    if any(pattern in message for pattern in TIMEOUT_ERROR_PATTERNS):
         return 'timeout'
     return 'unknown'
 
