@@ -38,8 +38,8 @@ _JS_TO_JAX = [3, 0, 1, 2, 4]
 JAX_TO_JS = {jax: js for js, jax in enumerate(_JS_TO_JAX)}
 
 GAMES_DIR = "data/scraped_games"
-SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
-CONTROLLER_PATH = os.path.join(SCRIPT_DIR, "puzzlescript_nodejs", "puzzlescript", "single_step_controller.js")
+REPO_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+CONTROLLER_PATH = os.path.join(REPO_ROOT, "puzzlescript_nodejs", "puzzlescript", "single_step_controller.js")
 
 
 # ---------------------------------------------------------------------------
@@ -70,7 +70,7 @@ def probe_js_level_map(game_text: str) -> dict[int, int]:
     try:
         result = subprocess.run(
             ["node", "-e", node_script, game_text],
-            capture_output=True, text=True, timeout=15, cwd=SCRIPT_DIR,
+            capture_output=True, text=True, timeout=15, cwd=REPO_ROOT,
         )
         if result.returncode != 0:
             return {}
@@ -97,7 +97,7 @@ class JSEngine:
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             text=True,
-            cwd=SCRIPT_DIR,
+            cwd=REPO_ROOT,
         )
         self._alive = True
 
