@@ -9,16 +9,16 @@ search (BFS) is run on each level (max 5 levels per game) to evaluate solvabilit
 Usage examples
 --------------
 # Local (assumes vLLM server already running on localhost:8000):
-    python evolve_games_agentic.py
+    python -m puzzlejax.evolve_games_agentic
 
 # Specify model and base URL:
-    python evolve_games_agentic.py --model vllm-qwen3.5-9b --vllm_base_url http://localhost:8000/v1
+    python -m puzzlejax.evolve_games_agentic --model vllm-qwen3.5-9b --vllm_base_url http://localhost:8000/v1
 
 # Full evolution with custom params:
-    python evolve_games_agentic.py --pop_size 4 --n_gens 10 --max_repair_attempts 10
+    python -m puzzlejax.evolve_games_agentic --pop_size 4 --n_gens 10 --max_repair_attempts 10
 
 # Single-shot generation (no evolution, just generate one game):
-    python evolve_games_agentic.py --mode single --n_games 5
+    python -m puzzlejax.evolve_games_agentic --mode single --n_games 5
 """
 from __future__ import annotations
 
@@ -39,11 +39,11 @@ from typing import Optional
 # ---------------------------------------------------------------------------
 # Paths
 # ---------------------------------------------------------------------------
-SCRIPT_DIR = Path(__file__).resolve().parent
-DATA_DIR = SCRIPT_DIR / "data"
+REPO_ROOT = Path(__file__).resolve().parents[1]
+DATA_DIR = REPO_ROOT / "data"
 GAMES_DIR = DATA_DIR / "scraped_games_increpare"
-DOCS_PATH = SCRIPT_DIR / "script_doctor" / "all_documentation.txt"
-LOGS_ROOT = SCRIPT_DIR / "evo_agentic_logs"
+DOCS_PATH = REPO_ROOT / "script_doctor" / "all_documentation.txt"
+LOGS_ROOT = REPO_ROOT / "evo_agentic_logs"
 
 logger = logging.getLogger("evo_agentic")
 logging.basicConfig(
