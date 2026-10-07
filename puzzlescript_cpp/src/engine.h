@@ -234,7 +234,7 @@ private:
     bool ruleTryApply(Rule& rule);
     // Each row returns a list of matches, where each match is {startIdx} or {startIdx, k} or {startIdx, k1, k2}
     std::vector<std::vector<std::vector<int>>> ruleFindMatches(Rule& rule);
-    bool ruleApplyAt(Rule& rule, const std::vector<std::vector<int>>& tuple, bool check, int delta);
+    bool ruleApplyAt(Rule& rule, const std::vector<int>* tuple, bool check, int delta);
     void ruleQueueCommands(Rule& rule);
     bool cellPatternReplace(CellPattern& cp, Rule& rule, int currentIndex);
 

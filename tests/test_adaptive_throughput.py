@@ -30,13 +30,14 @@ def test_low_batch_noise_is_not_a_plateau():
     assert scaling_stop(points) is None
 
 
-def test_resume_preserves_samples_and_extends_until_plateau(tmp_path, monkeypatch):
+def test_resume_preserves_samples_and_extends_until_plateau(tmp_path, monkeypatch, capsys):
     monkeypatch.setattr(benchmark, "init_ps_env", lambda *args, **kwargs: object())
     monkeypatch.setattr(benchmark.jax, "devices", lambda: [SimpleNamespace(device_kind="test-device")])
     monkeypatch.setattr(benchmark.jax, "clear_caches", lambda: None)
     calls = []
 
-    def measure(env, batch, steps, trials, seed):
+    def measure(env, batch, steps, trials, seed, *, params=None):
+        assert params is None
         calls.append(batch)
         return {"batch": batch, "steps": steps, "median_fps": 100.0, "samples_s": [1.0]}
 
@@ -56,4 +57,9 @@ def test_resume_preserves_samples_and_extends_until_plateau(tmp_path, monkeypatc
     monkeypatch.setattr(sys, "argv", command + ["--resume", "--seed", "43"])
     with pytest.raises(SystemExit, match="2"):
         benchmark.main()
+    assert json.loads((tmp_path / "test.json").read_text()) == result
+    monkeypatch.setattr(sys, "argv", command + ["--resume", "--prepare-params"])
+    with pytest.raises(SystemExit, match="2"):
+        benchmark.main()
+    assert 'cannot resume with changed reset preparation' in capsys.readouterr().err
     assert json.loads((tmp_path / "test.json").read_text()) == result

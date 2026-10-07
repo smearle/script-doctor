@@ -127,6 +127,7 @@ function createSandbox() {
     sandbox.canvasResize = function() {};
     sandbox.redraw = function() {};
     sandbox.forceRegenImages = function() {};
+    sandbox.updateFocusBorderColour = function() {};
     sandbox.consolePrintFromRule = function() {};
     sandbox.__capturedErrors = [];
     sandbox.consolePrint = function(msg) {

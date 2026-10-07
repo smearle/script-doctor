@@ -235,7 +235,7 @@ def compare_states_at_step(
 
 
 def run_test_case(game_name, level_i, js_actions, backend, parser, compare_per_step=True,
-                  *, env_cls=PuzzleJaxEnv):
+                  *, env_cls=PuzzleJaxEnv, stop_on_win=False, prepare_params=False):
     """Run a single test case through both backends and compare.
 
     Returns (success: bool, message: str).
@@ -265,12 +265,14 @@ def run_test_case(game_name, level_i, js_actions, backend, parser, compare_per_s
     if level is None:
         return False, f"Level {level_i} not found in game"
     params = PJParams(level=level, level_i=level_i)
+    if prepare_params:
+        params = env.prepare_params(params)
 
     # --- Replay in JS ---
     try:
         js_scores, js_states, js_winning = replay_actions_js(
             engine, solver, js_actions, game_text, level_i,
-            stop_on_win=False, return_winning=True,
+            stop_on_win=stop_on_win, return_winning=True,
         )
     except Exception:
         return False, f"JS replay failed:\n{traceback.format_exc()}"
@@ -284,6 +286,8 @@ def run_test_case(game_name, level_i, js_actions, backend, parser, compare_per_s
     if unsupported:
         return False, f"Unsupported actions for JAX comparison: {unsupported} (undo=5, restart=6 not supported)"
 
+    if stop_on_win:
+        js_actions = js_actions[:len(js_states) - 1]
     key = jax.random.PRNGKey(0)
     jax_actions = [JS_TO_JAX_ACTIONS[a] for a in js_actions]
     jax_actions_arr = jnp.array([int(a) for a in jax_actions], dtype=jnp.int32)
@@ -332,7 +336,8 @@ def run_test_case(game_name, level_i, js_actions, backend, parser, compare_per_s
         detail = "\n  ".join(errors)
         return False, f"{len(errors)} step(s) with mismatches:\n  {detail}"
 
-    return True, "all steps match"
+    return True, (f"all {n_steps} states match through the first win or action limit"
+                  if stop_on_win else "all steps match")
 
 
 def main():

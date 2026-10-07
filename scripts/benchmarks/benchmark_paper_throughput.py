@@ -72,8 +72,9 @@ def make_random_rollout(env, params, batch, steps):
     return rollout
 
 
-def benchmark(env, batch, steps, trials, seed):
-    params = PJParams(level=env.get_level(0), level_i=0)
+def benchmark(env, batch, steps, trials, seed, *, params=None):
+    if params is None:
+        params = PJParams(level=env.get_level(0), level_i=0)
     key, reset_key = jax.random.split(jax.random.PRNGKey(seed))
     _, state = jax.jit(jax.vmap(env.reset, in_axes=(0, None)))(jax.random.split(reset_key, batch), params)
     carry = jax.block_until_ready((state, key))
@@ -112,6 +113,8 @@ def main():
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--output-dir", type=Path, required=True)
     parser.add_argument("--resume", action="store_true")
+    parser.add_argument("--prepare-params", action="store_true",
+                        help="Precompute deterministic reset state outside timed rollouts.")
     parser.add_argument("--adaptive", action="store_true", help="Double batches until plateau or regression.")
     parser.add_argument("--max-batch", type=int, default=1048576)
     parser.add_argument("--min-gain", type=float, default=0.03)
@@ -142,6 +145,8 @@ def main():
         if not args.resume:
             parser.error(f"{output} exists; use --resume or a new output directory")
         previous = json.loads(output.read_text())
+        if previous.get("prepare_params", False) != args.prepare_params:
+            parser.error("cannot resume with changed reset preparation")
         for field in ("game", "engine_sha256", "jax_version", "devices", "level", "trials", "seed",
                       "base_steps", "min_steps", "max_episode_steps", "output_mode", "action_generation"):
             if previous[field] != result[field]:
@@ -150,11 +155,20 @@ def main():
         for row in result["results"]:
             row.setdefault("host", previous["host"])
     result["benchmark_sha256"] = hashlib.sha256(Path(__file__).read_bytes()).hexdigest()
+    result["prepare_params"] = args.prepare_params
     if args.adaptive:
         result["adaptive"] = {"factor": 2, "max_batch": args.max_batch, "min_gain": args.min_gain,
                               "patience": args.patience, "regression": args.regression}
     result.pop("stop_reason", None)
     save_result(output, result)
+    prepared_params = None
+    if args.prepare_params:
+        start = time.perf_counter()
+        prepared_params = env.prepare_params(PJParams(level=env.get_level(0), level_i=0))
+        jax.block_until_ready(prepared_params)
+        result["reset_preparation_s"] = time.perf_counter() - start
+        result["reset_cache_used"] = prepared_params.reset_cache is not None
+        save_result(output, result)
     pending = [b for b in args.batches if b not in {r["batch"] for r in result["results"]}]
     while True:
         if pending:
@@ -173,7 +187,7 @@ def main():
         result["pending_batch"] = batch
         save_result(output, result)
         try:
-            row = benchmark(env, batch, steps, args.trials, args.seed)
+            row = benchmark(env, batch, steps, args.trials, args.seed, params=prepared_params)
         except Exception as error:
             result["stop_reason"] = "error"
             result["error"] = {"batch": batch, "type": type(error).__name__, "message": str(error)}
