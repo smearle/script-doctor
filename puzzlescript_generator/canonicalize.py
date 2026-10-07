@@ -266,7 +266,8 @@ def render(c: Canon, levels=None) -> str:
                         glyph[cell] = GLYPHS[gi]
                         gi += 1
     mech = mechanics_text(c)
-    glines = [f"{ch} = " + " and ".join(sorted(cell, key=lambda o: (o not in SPECIAL, _num(o))))
+    glines = [f"{ch} = " + " and ".join(sorted(cell, key=lambda o: (o not in SPECIAL, SPECIAL.index(o)
+                                                                    if o in SPECIAL else _num(o))))
               for cell, ch in glyph.items()]
     mech = mech.replace("\nSOUNDS\n", "\n" + "\n".join(glines) + "\n\nSOUNDS\n", 1)
     lv_text = "\n\n".join("\n".join("".join(glyph[cell] for cell in row) for row in lv) for lv in levels)

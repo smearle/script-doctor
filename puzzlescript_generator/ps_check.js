@@ -37,9 +37,16 @@ function levelKey() {
   return JSON.stringify(Array.from(engine.backupLevel().dat));
 }
 
+// The solver steps the engine itself: give it an engine that clears the message log before
+// each turn as step() does (ps_engine.js).
+const solverEngine = Object.assign({}, engine, {
+  processInput: (...a) => { engine.clearLog(); return engine.processInput(...a); },
+});
+
 function step(action) {
   engine.setWinning(false);
   engine.setHasUsedCheckpoint(false);
+  engine.clearLog();
   engine.processInput(action);
   while (engine.getAgaining()) engine.processInput(-1);
   return engine.getWinning();
@@ -65,7 +72,7 @@ function probe(text, levelIndex) {
   out.rollout = { steps: ROLLOUT_STEPS, changed, distinct: seen.size, won };
   engine.compile(['loadLevel', levelIndex], text, SEED);
   const t0 = Date.now();
-  const r = solver.solveBFS(engine, BFS_ITERS, BFS_TIMEOUT_MS);
+  const r = solver.solveBFS(solverEngine, BFS_ITERS, BFS_TIMEOUT_MS);
   out.bfs = { solved: !!r[0], sol_len: r[0] ? r[1].length : null, iters: r[2],
               timeout: !!r[6], ms: Date.now() - t0 };
   return out;

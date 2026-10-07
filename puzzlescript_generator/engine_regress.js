@@ -82,6 +82,7 @@ function run(e, text) {
     for (let t = 0; t < STEPS; t++) {
       engine.setWinning(false);
       engine.setHasUsedCheckpoint(false);
+      engine.clearLog();
       engine.processInput(choices[Math.floor(rand() * choices.length)]);
       while (engine.getAgaining()) engine.processInput(-1);
       const won = engine.getWinning();

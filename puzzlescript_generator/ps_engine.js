@@ -11,6 +11,11 @@
 //                    headless engine never checks for a win again (a browser checks when the
 //                    player dismisses the message). Sounds are not needed either.
 // Both are idempotent, so they are harmless where the wrapper already sets IDE = false.
+// engine.clearLog() empties the engine's message log. Loop guards log a warning on some
+// turns ("Got caught looping lots in a rule group"), and once the log holds 100 messages
+// the engine throws "Too many errors/warnings", so a long rollout of a sound game would
+// fail. A turn's messages say nothing about the next, so dynamics loops clear the log
+// before every turn.
 // Distinct ENGINE_DIRs load as separate module instances, each with its own realm.
 'use strict';
 const path = require('path');
@@ -19,6 +24,8 @@ function loadEngine(engineDir) {
   const engine = require(path.join(path.resolve(engineDir), 'puzzlescript_nodejs/puzzlescript/engine.js'));
   engine.inEngine = engine.processInput.constructor;
   engine.inEngine('IDE = false; processOutputCommands = function () {};')();
+  const reset = engine.inEngine('errorStrings = []; errorCount = 0;');
+  engine.clearLog = () => { reset(); engine.clearCapturedErrors(); };
   return engine;
 }
 

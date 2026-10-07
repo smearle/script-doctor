@@ -77,6 +77,7 @@ function cells(map) {
 function step(action) {
   engine.setWinning(false);
   engine.setHasUsedCheckpoint(false);
+  engine.clearLog();
   engine.processInput(action);
   while (engine.getAgaining()) engine.processInput(-1);
   return engine.getWinning();

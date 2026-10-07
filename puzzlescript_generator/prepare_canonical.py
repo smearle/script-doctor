@@ -27,6 +27,7 @@ text), doc_check.jsonl, the token files of prepare_data.py and prep_report.json.
 from __future__ import annotations
 
 import argparse
+import functools
 import hashlib
 import json
 import random
@@ -41,11 +42,24 @@ from check_games import check_texts
 from prepare_data import SPECIALS, UnionFind, norm_title, normalize, split_of
 
 
+@functools.lru_cache(maxsize=None)
+def engine_fingerprint(engine_dir: str) -> str:
+    """sha256 of the engine's JavaScript: the Node wrapper and PuzzleScript/src/js."""
+    root = Path(engine_dir)
+    files = [root / "puzzlescript_nodejs/puzzlescript/engine.js"] + sorted((root / "PuzzleScript/src/js").rglob("*.js"))
+    h = hashlib.sha256()
+    for f in files:
+        h.update(f.relative_to(root).as_posix().encode() + b"\0" + f.read_bytes())
+    return h.hexdigest()
+
+
 def cached_check(path: Path, items, script, args):
     """Run `script` over items, reusing path when it was made from identical inputs (the
-    items and the script's source)."""
-    source = (Path(__file__).resolve().parent / script).read_text()
-    digest = hashlib.sha256(json.dumps([script, source, items]).encode()).hexdigest()
+    items, the script's and the engine loader's source, and the engine's JavaScript)."""
+    here = Path(__file__).resolve().parent
+    sources = [(here / name).read_text() for name in (script, "ps_engine.js")]
+    digest = hashlib.sha256(json.dumps([script, sources, engine_fingerprint(str(args.engine_dir)), items])
+                            .encode()).hexdigest()
     stamp = path.with_suffix(".inputs-sha256")
     if path.exists() and stamp.exists() and stamp.read_text() == digest:
         print(f"reusing {path.name}")
