@@ -142,14 +142,14 @@ RECONCILE_CORPORA = [
 # --------------------------------------------------------------------------- #
 # pedro re-scrape
 # --------------------------------------------------------------------------- #
-def cmd_pedro(staging: Path, update: bool):
+def cmd_pedro(staging: Path, update: bool, refresh_list: bool = False):
     token = get_token()
     out = staging / "pedro"
     out.mkdir(parents=True, exist_ok=True)
     manifest = out / "_manifest.jsonl"
 
     urls_path = staging / "ps_urls.txt"
-    if update or not urls_path.is_file() or urls_path.stat().st_size == 0:
+    if update or refresh_list or not urls_path.is_file() or urls_path.stat().st_size == 0:
         # pedros.works is now domain-parked; the live database moved to pedrosworks.com.
         # The .js asset is served directly (only the HTML pages sit behind a bot challenge).
         js_url = "https://pedrosworks.com/puzzlescript/hyper/PGDGame.js"
@@ -379,6 +379,9 @@ def cmd_forum(master: Path, staging: Path):
     out.mkdir(parents=True, exist_ok=True)
     manifest = out / "_manifest.jsonl"
     have = {p.stem for p in master.glob("*.txt")} | {p.stem for p in out.glob("*.txt")}
+    rejected = out / "_rejected.txt"  # gist ids already checked: deleted or not PS
+    if rejected.is_file():
+        have |= set(rejected.read_text().split())
 
     tids = _forum_topic_ids()
     print(f"{len(tids)} forum topics to scan")
@@ -406,11 +409,17 @@ def cmd_forum(master: Path, staging: Path):
             r = requests.get(f"https://api.github.com/gists/{gid}", headers=headers, timeout=60)
         except requests.RequestException:
             continue
+        if r.status_code == 404:
+            with rejected.open("a") as rf:
+                rf.write(gid + "\n")
+            continue
         if not r.ok:
             continue
         script = next((f["content"] for f in (r.json().get("files") or {}).values()
                        if f.get("content") and is_ps_source(f["content"])), None)
         if not script:
+            with rejected.open("a") as rf:
+                rf.write(gid + "\n")
             continue
         (out / f"{gid}.txt").write_text(script, encoding="utf-8")
         saved += 1
@@ -461,6 +470,9 @@ def cmd_wayback(master: Path, staging: Path):
     manifest = out / "_manifest.jsonl"
 
     have = {p.stem for p in master.glob("*.txt")} | {p.stem for p in out.glob("*.txt")}
+    rejected = out / "_rejected.txt"  # gist ids already checked: deleted or not PS
+    if rejected.is_file():
+        have |= set(rejected.read_text().split())
     ids = cdx_gist_ids()
     new_ids = [g for g in ids if g not in have]
     print(f"CDX yielded {len(ids)} distinct gist ids; {len(new_ids)} not already held")
@@ -482,6 +494,9 @@ def cmd_wayback(master: Path, staging: Path):
             break
         if r is None or r.status_code == 404:
             dead += 1
+            if r is not None:
+                with rejected.open("a") as rf:
+                    rf.write(gid + "\n")
             continue
         if not r.ok:
             continue
@@ -494,6 +509,8 @@ def cmd_wayback(master: Path, staging: Path):
                 break
         if not script:
             notps += 1
+            with rejected.open("a") as rf:
+                rf.write(gid + "\n")
             continue
         (out / f"{gid}.txt").write_text(script, encoding="utf-8")
         have.add(gid)
@@ -766,6 +783,8 @@ if __name__ == "__main__":
 
     pe = sub.add_parser("pedro", help="Re-scrape pedros.works gists into staging")
     pe.add_argument("--update", action="store_true", help="Re-fetch URL list and overwrite existing files")
+    pe.add_argument("--refresh-list", action="store_true",
+                    help="Re-fetch URL list; download only gist ids not yet on disk")
 
     sub.add_parser("consolidate", help="Merge gist-native sources into MASTER")
 
@@ -780,7 +799,7 @@ if __name__ == "__main__":
 
     args = ap.parse_args()
     if args.cmd == "pedro":
-        cmd_pedro(args.staging, args.update)
+        cmd_pedro(args.staging, args.update, args.refresh_list)
     elif args.cmd == "authors":
         cmd_authors(args.master, args.staging, args.limit)
     elif args.cmd == "wayback":
