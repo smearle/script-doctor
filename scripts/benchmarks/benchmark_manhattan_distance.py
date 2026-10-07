@@ -1,264 +1,185 @@
+"""Compare exact nearest-target heuristics and optional full game rollouts.
+
+Run from the repository root, for example::
+
+    python -m scripts.benchmarks.benchmark_manhattan_distance \
+        --sizes 8 16 32 --batches 1 64 --games sokoban_basic Microban \
+        --steps 100 --trials 7 --output /tmp/manhattan-benchmark.json
+
+Each timed call is synchronized. Inputs are runtime arguments; there is no
+loop of identical calls for XLA to hoist. Rollouts carry evolving states and
+compare every returned observation, state, reward, done flag, and info field.
+"""
+
+import argparse
+import json
 import statistics
 import time
 
 import jax
 import jax.numpy as jnp
+import numpy as np
 
-
-INT_INF = jnp.int32(1 << 29)
-
-
-def safe_add_one(x):
-    return jnp.where(x >= INT_INF, INT_INF, x + 1)
+import puzzlescript_jax.env as env_module
+from puzzlescript_jax.env import PJParams
+from puzzlescript_jax.utils import init_ps_env
 
 
 def pairwise_sum_nearest(src_channel, trg_channel):
-    n_cells = src_channel.size
-    src_coords = jnp.argwhere(src_channel, size=n_cells, fill_value=-1)
-    trg_coords = jnp.argwhere(trg_channel, size=n_cells, fill_value=-1)
-    src_coords = src_coords[:, None, :]
-    trg_coords = trg_coords[None, :, :]
-    dists = jnp.abs(src_coords - trg_coords).sum(axis=-1)
-    dists = jnp.where(jnp.all(src_coords == -1, axis=-1), jnp.nan, dists)
-    dists = jnp.where(jnp.all(trg_coords == -1, axis=-1), jnp.nan, dists)
+    """Pre-optimization implementation, including the current empty fallback."""
+    max_dist = sum(src_channel.shape)
+    src_coords = jnp.argwhere(src_channel, size=src_channel.size, fill_value=-1)
+    is_real_src = ~jnp.all(src_coords == -1, axis=-1)
+    dists = env_module.compute_manhattan_dists_from_channels(src_channel, trg_channel)
     dists = jnp.nanmin(dists, axis=1)
-    dists = jnp.where(jnp.isnan(dists), 0, dists)
+    dists = jnp.where(jnp.isnan(dists), jnp.where(is_real_src, max_dist, 0), dists)
     return jnp.sum(dists).astype(jnp.int32)
 
 
 def pairwise_min_nearest(src_channel, trg_channel):
-    n_cells = src_channel.size
-    src_coords = jnp.argwhere(src_channel, size=n_cells, fill_value=-1)
-    trg_coords = jnp.argwhere(trg_channel, size=n_cells, fill_value=-1)
-    src_coords = src_coords[:, None, :]
-    trg_coords = trg_coords[None, :, :]
-    dists = jnp.abs(src_coords - trg_coords).sum(axis=-1)
-    dists = jnp.where(jnp.all(src_coords == -1, axis=-1), jnp.nan, dists)
-    dists = jnp.where(jnp.all(trg_coords == -1, axis=-1), jnp.nan, dists)
-    dists = jnp.where(jnp.isnan(dists), INT_INF, dists)
-    return jnp.min(dists).astype(jnp.int32)
+    max_dist = sum(src_channel.shape)
+    dists = env_module.compute_manhattan_dists_from_channels(src_channel, trg_channel)
+    return jnp.min(jnp.where(jnp.isnan(dists), max_dist, dists)).astype(jnp.int32)
 
 
-def manhattan_distance_transform(trg_channel):
-    h, w = trg_channel.shape
-    dist0 = jnp.where(trg_channel, 0, INT_INF).astype(jnp.int32)
-
-    def forward_row(y, dist):
-        def forward_col(x, dist_inner):
-            val = dist_inner[y, x]
-            val = jnp.minimum(val, jnp.where(y > 0, safe_add_one(dist_inner[y - 1, x]), INT_INF))
-            val = jnp.minimum(val, jnp.where(x > 0, safe_add_one(dist_inner[y, x - 1]), INT_INF))
-            return dist_inner.at[y, x].set(val)
-
-        return jax.lax.fori_loop(0, w, forward_col, dist)
-
-    dist = jax.lax.fori_loop(0, h, forward_row, dist0)
-
-    def backward_row(y_rev, dist_inner):
-        y = h - 1 - y_rev
-
-        def backward_col(x_rev, dist_last):
-            x = w - 1 - x_rev
-            val = dist_last[y, x]
-            val = jnp.minimum(val, jnp.where(y + 1 < h, safe_add_one(dist_last[y + 1, x]), INT_INF))
-            val = jnp.minimum(val, jnp.where(x + 1 < w, safe_add_one(dist_last[y, x + 1]), INT_INF))
-            return dist_last.at[y, x].set(val)
-
-        return jax.lax.fori_loop(0, w, backward_col, dist_inner)
-
-    return jax.lax.fori_loop(0, h, backward_row, dist)
+PAIRWISE = (pairwise_sum_nearest, pairwise_min_nearest)
+TRANSFORM = (
+    env_module.compute_sum_of_manhattan_dists_from_channels,
+    env_module.compute_min_manhattan_dist_from_channels,
+)
 
 
-def transform_sum_nearest(src_channel, trg_channel):
-    dist_map = manhattan_distance_transform(trg_channel)
-    return jnp.where(jnp.any(trg_channel), jnp.sum(jnp.where(src_channel, dist_map, 0)), 0).astype(jnp.int32)
-
-
-def transform_min_nearest(src_channel, trg_channel):
-    dist_map = manhattan_distance_transform(trg_channel)
-    masked = jnp.where(src_channel, dist_map, INT_INF)
-    return jnp.min(masked).astype(jnp.int32)
-
-
-def make_case(shape, src_density, trg_density, seed):
-    key = jax.random.PRNGKey(seed)
-    key_src, key_trg = jax.random.split(key)
-    src = jax.random.bernoulli(key_src, p=src_density, shape=shape)
-    trg = jax.random.bernoulli(key_trg, p=trg_density, shape=shape)
-    return src, trg
-
-
-def make_batch(shape, src_density, trg_density, seed, batch_size):
-    srcs = []
-    trgs = []
-    for i in range(batch_size):
-        src, trg = make_case(shape, src_density, trg_density, seed + i)
-        srcs.append(src)
-        trgs.append(trg)
-    return jnp.stack(srcs), jnp.stack(trgs)
-
-
-def make_single_runner(fn, inner_reps):
-    def runner(src, trg):
-        init = fn(src, trg)
-
-        def body(_, acc):
-            return acc + fn(src, trg)
-
-        return jax.lax.fori_loop(0, inner_reps, body, init)
-
-    return runner
-
-
-def make_batched_runner(fn, inner_reps):
-    batched_fn = jax.vmap(fn, in_axes=(0, 0))
-
-    def runner(src_batch, trg_batch):
-        init = batched_fn(src_batch, trg_batch)
-
-        def body(_, acc):
-            return acc + batched_fn(src_batch, trg_batch)
-
-        return jax.lax.fori_loop(0, inner_reps, body, init)
-
-    return runner
-
-
-def compile_runner(runner, *args):
-    t0 = time.perf_counter()
-    compiled = jax.jit(runner).lower(*args).compile()
-    jax.block_until_ready(compiled(*args))
-    return compiled, time.perf_counter() - t0
-
-
-def benchmark_runner(compiled, args, denom, outer_trials):
-    per_item_us = []
-    for _ in range(outer_trials):
-        t0 = time.perf_counter()
-        out = compiled(*args)
-        jax.block_until_ready(out)
-        dt = time.perf_counter() - t0
-        per_item_us.append((dt / denom) * 1e6)
-    return {
-        "median_us": statistics.median(per_item_us),
-        "min_us": min(per_item_us),
-        "max_us": max(per_item_us),
+def compile_runner(fn, args):
+    start = time.perf_counter()
+    compiled = jax.jit(fn).lower(*args).compile()
+    compile_s = time.perf_counter() - start
+    output = jax.block_until_ready(compiled(*args))
+    memory = compiled.memory_analysis()
+    return compiled, output, {
+        "compile_s": compile_s,
+        "temporary_bytes": memory.temp_size_in_bytes if memory else None,
     }
 
 
-def correctness_suite():
-    print("correctness")
-    cases = [
-        ((4, 4), 0.0, 0.0, 0),
-        ((4, 4), 0.25, 0.25, 1),
-        ((8, 8), 0.10, 0.10, 2),
-        ((8, 8), 0.50, 0.50, 3),
-        ((16, 16), 0.05, 0.20, 4),
-        ((16, 16), 0.30, 0.05, 5),
-    ]
-    for shape, src_d, trg_d, seed in cases:
-        src, trg = make_case(shape, src_d, trg_d, seed)
-        pair_sum = int(pairwise_sum_nearest(src, trg))
-        xform_sum = int(transform_sum_nearest(src, trg))
-        pair_min = int(pairwise_min_nearest(src, trg))
-        xform_min = int(transform_min_nearest(src, trg))
-        print(
-            f"shape={shape} src_d={src_d:.2f} trg_d={trg_d:.2f} "
-            f"sum_match={pair_sum == xform_sum} min_match={pair_min == xform_min}"
+def time_pair(runners, arguments, stats, trials, names=("pairwise", "transform")):
+    """Alternate A/B order after both versions compile to limit timing drift."""
+    for _ in range(2):
+        for fn, args in zip(runners, arguments):
+            jax.block_until_ready(fn(*args))
+    durations = [[], []]
+    for trial in range(trials):
+        for i in ((0, 1) if trial % 2 == 0 else (1, 0)):
+            start = time.perf_counter()
+            jax.block_until_ready(runners[i](*arguments[i]))
+            durations[i].append(time.perf_counter() - start)
+    for name, samples in zip(names, durations):
+        stats[name].update(
+            median_s=statistics.median(samples),
+            min_s=min(samples),
+            max_s=max(samples),
         )
-        if pair_sum != xform_sum or pair_min != xform_min:
-            raise SystemExit(
-                f"mismatch for shape={shape}: "
-                f"pair_sum={pair_sum}, xform_sum={xform_sum}, "
-                f"pair_min={pair_min}, xform_min={xform_min}"
-            )
-    print("all correctness checks passed")
 
 
-def benchmark_metric(name, fn_a, fn_b, shape, src_d, trg_d, seed, inner_reps, outer_trials, batch_size):
-    src, trg = make_case(shape, src_d, trg_d, seed)
-    src_batch, trg_batch = make_batch(shape, src_d, trg_d, seed + 1000, batch_size)
-
-    a_single_runner = make_single_runner(fn_a, inner_reps)
-    a_single_compiled, a_single_compile_s = compile_runner(a_single_runner, src, trg)
-    a_single_stats = benchmark_runner(a_single_compiled, (src, trg), inner_reps + 1, outer_trials)
-
-    b_single_runner = make_single_runner(fn_b, inner_reps)
-    b_single_compiled, b_single_compile_s = compile_runner(b_single_runner, src, trg)
-    b_single_stats = benchmark_runner(b_single_compiled, (src, trg), inner_reps + 1, outer_trials)
-
-    a_batch_runner = make_batched_runner(fn_a, inner_reps)
-    a_batch_compiled, a_batch_compile_s = compile_runner(a_batch_runner, src_batch, trg_batch)
-    a_batch_stats = benchmark_runner(
-        a_batch_compiled,
-        (src_batch, trg_batch),
-        (inner_reps + 1) * batch_size,
-        outer_trials,
-    )
-
-    b_batch_runner = make_batched_runner(fn_b, inner_reps)
-    b_batch_compiled, b_batch_compile_s = compile_runner(b_batch_runner, src_batch, trg_batch)
-    b_batch_stats = benchmark_runner(
-        b_batch_compiled,
-        (src_batch, trg_batch),
-        (inner_reps + 1) * batch_size,
-        outer_trials,
-    )
-
-    print(
-        f"{shape},{src_d:.2f},{trg_d:.2f},{name},"
-        f"{a_single_compile_s * 1e3:.2f},{b_single_compile_s * 1e3:.2f},"
-        f"{a_single_stats['median_us']:.2f},{b_single_stats['median_us']:.2f},{a_single_stats['median_us'] / b_single_stats['median_us']:.2f},"
-        f"{a_batch_compile_s * 1e3:.2f},{b_batch_compile_s * 1e3:.2f},"
-        f"{a_batch_stats['median_us']:.2f},{b_batch_stats['median_us']:.2f},{a_batch_stats['median_us'] / b_batch_stats['median_us']:.2f}"
-    )
+def assert_equal(before, after):
+    assert jax.tree.structure(before) == jax.tree.structure(after)
+    for left, right in zip(jax.tree.leaves(before), jax.tree.leaves(after)):
+        np.testing.assert_array_equal(np.asarray(left), np.asarray(right))
 
 
-def speed_suite():
-    inner_reps = 200
-    outer_trials = 7
-    batch_size = 64
-    print("\nspeed")
-    print(f"inner_reps={inner_reps},outer_trials={outer_trials},batch_size={batch_size}")
-    print(
-        "shape,src_density,trg_density,metric,"
-        "pair_compile_ms,xform_compile_ms,pair_us,xform_us,speedup,"
-        "pair_batch_compile_ms,xform_batch_compile_ms,pair_batch_us,xform_batch_us,batch_speedup"
-    )
-    cases = [
-        ((16, 16), 0.10, 0.10, 20),
-        ((32, 32), 0.05, 0.05, 21),
-        ((32, 32), 0.20, 0.20, 22),
-        ((64, 64), 0.05, 0.05, 23),
-        ((64, 64), 0.20, 0.20, 24),
-    ]
-    for shape, src_d, trg_d, seed in cases:
-        benchmark_metric(
-            "sum",
-            pairwise_sum_nearest,
-            transform_sum_nearest,
-            shape,
-            src_d,
-            trg_d,
-            seed,
-            inner_reps,
-            outer_trials,
-            batch_size,
-        )
-        benchmark_metric(
-            "min",
-            pairwise_min_nearest,
-            transform_min_nearest,
-            shape,
-            src_d,
-            trg_d,
-            seed + 500,
-            inner_reps,
-            outer_trials,
-            batch_size,
-        )
+def benchmark_metrics(size, batch, trials):
+    rng = np.random.default_rng(42)
+    sources = rng.random((batch, size, size)) < 0.1
+    targets = rng.random((batch, size, size)) < 0.1
+    # Include empty channels in larger batches, too.
+    if batch > 1:
+        sources[0] = False
+        targets[1] = False
+    args = (jnp.asarray(sources), jnp.asarray(targets))
+    outputs, runners, stats = [], [], {}
+    for name, (sum_fn, min_fn) in [("pairwise", PAIRWISE), ("transform", TRANSFORM)]:
+        fn = jax.vmap(lambda src, trg: (sum_fn(src, trg), min_fn(src, trg)))
+        runner, output, stats[name] = compile_runner(fn, args)
+        runners.append(runner)
+        outputs.append(output)
+    assert_equal(*outputs)
+    time_pair(runners, [args, args], stats, trials)
+    return {"kind": "metrics", "shape": [size, size], "batch": batch, **stats}
+
+
+def benchmark_rollout(game, batch, steps, trials):
+    outputs, runners, arguments, stats = [], [], [], {}
+    try:
+        for name, funcs in [("pairwise", PAIRWISE), ("transform", TRANSFORM)]:
+            (env_module.compute_sum_of_manhattan_dists_from_channels,
+             env_module.compute_min_manhattan_dist_from_channels) = funcs
+            env = init_ps_env(game, level_i=0, max_episode_steps=100)
+            params = PJParams(level=env.get_level(0), level_i=0)
+            keys = jax.random.split(jax.random.PRNGKey(0), batch)
+            _, state = jax.jit(jax.vmap(env.reset, in_axes=(0, None)))(keys, params)
+            rng = np.random.default_rng(42)
+            actions = jnp.asarray(rng.integers(0, env.action_space.n, (steps, batch), dtype=np.int32))
+
+            def rollout(state, key, actions):
+                def step(carry, action):
+                    state, key = carry
+                    key, step_key = jax.random.split(key)
+                    keys = jax.random.split(step_key, batch)
+                    result = jax.vmap(env.step, in_axes=(0, 0, 0, None))(keys, state, action, params)
+                    return (result[1], key), result
+                return jax.lax.scan(step, (state, key), actions)
+
+            args = (state, jax.random.PRNGKey(1), actions)
+            runner, output, stats[name] = compile_runner(rollout, args)
+            runners.append(runner)
+            arguments.append(args)
+            outputs.append(output)
+        assert_equal(*outputs)
+        time_pair(runners, arguments, stats, trials)
+        for values in stats.values():
+            values["env_steps_per_s"] = batch * steps / values["median_s"]
+    finally:
+        (env_module.compute_sum_of_manhattan_dists_from_channels,
+         env_module.compute_min_manhattan_dist_from_channels) = TRANSFORM
+    return {"kind": "rollout", "game": game, "batch": batch, "steps": steps, **stats}
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--sizes", nargs="*", type=int, default=[8, 16, 32])
+    parser.add_argument("--batches", nargs="+", type=int, default=[1, 64])
+    parser.add_argument("--games", nargs="*", default=[])
+    parser.add_argument("--steps", type=int, default=100)
+    parser.add_argument("--trials", type=int, default=7)
+    parser.add_argument("--output")
+    args = parser.parse_args()
+    if min([*args.sizes, *args.batches, args.steps, args.trials]) < 1:
+        parser.error("sizes, batches, steps, and trials must be positive")
+    results = {
+        "jax_version": jax.__version__,
+        "devices": [d.device_kind for d in jax.devices()],
+        "timing": "alternating A/B after both compilations and warmup",
+        "trials": args.trials,
+        "seed": 42,
+        "results": [],
+    }
+    print(json.dumps({k: v for k, v in results.items() if k != "results"}), flush=True)
+
+    def record(row):
+        row["speedup"] = row["pairwise"]["median_s"] / row["transform"]["median_s"]
+        results["results"].append(row)
+        print(json.dumps(row), flush=True)
+        if args.output:
+            with open(args.output, "w") as f:
+                json.dump(results, f, indent=2)
+        jax.clear_caches()
+
+    for size in args.sizes:
+        for batch in args.batches:
+            record(benchmark_metrics(size, batch, args.trials))
+    for game in args.games:
+        for batch in args.batches:
+            record(benchmark_rollout(game, batch, args.steps, args.trials))
 
 
 if __name__ == "__main__":
-    correctness_suite()
-    speed_suite()
+    main()

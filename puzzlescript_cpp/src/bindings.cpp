@@ -51,7 +51,7 @@ PYBIND11_MODULE(_puzzlescript_cpp, m) {
         .def("seed_rng", &Engine::seedRNG,
              py::arg("seed"),
              "Seed the RNG (RC4-based, matching JS PuzzleScript)")
-        .def("process_input", &Engine::processInput,
+        .def("process_input", [](Engine& engine, int direction) { return engine.processInput(direction); },
              py::arg("direction"),
              "Process input. dir: 0=up, 1=left, 2=down, 3=right, 4=action. Any other value (-1 or no-op id 5) is a no-force tick. Returns True if anything changed.")
         .def("check_win", &Engine::checkWin,
@@ -197,7 +197,7 @@ PYBIND11_MODULE(_puzzlescript_cpp, m) {
         }, "Get heuristic score deltas as float32 array of shape (batch,)")
         .def("get_dones", [](const BatchedEngine& be) {
             const auto& d = be.getDones();
-            // Convert vector<bool> to numpy bool array
+            // Copy byte-backed flags into a NumPy bool array.
             py::array_t<bool> arr({static_cast<py::ssize_t>(d.size())});
             auto ptr = arr.mutable_unchecked<1>();
             for (size_t i = 0; i < d.size(); ++i) ptr(i) = d[i];
@@ -270,14 +270,16 @@ PYBIND11_MODULE(_puzzlescript_cpp, m) {
         py::gil_scoped_release release;
         return solveBFS(engine, maxIters, timeoutMs);
     }, py::arg("engine"), py::arg("max_iters") = 100000, py::arg("timeout_ms") = -1);
-    m.def("solve_astar", [](Engine& engine, int maxIters, int timeoutMs) {
+    m.def("solve_astar", [](Engine& engine, int maxIters, int timeoutMs, std::optional<uint32_t> seed) {
         py::gil_scoped_release release;
-        return solveAStar(engine, maxIters, timeoutMs);
-    }, py::arg("engine"), py::arg("max_iters") = 100000, py::arg("timeout_ms") = -1);
-    m.def("solve_gbfs", [](Engine& engine, int maxIters, int timeoutMs) {
+        return solveAStar(engine, maxIters, timeoutMs, seed);
+    }, py::arg("engine"), py::arg("max_iters") = 100000, py::arg("timeout_ms") = -1,
+       py::arg("seed") = py::none());
+    m.def("solve_gbfs", [](Engine& engine, int maxIters, int timeoutMs, std::optional<uint32_t> seed) {
         py::gil_scoped_release release;
-        return solveGBFS(engine, maxIters, timeoutMs);
-    }, py::arg("engine"), py::arg("max_iters") = 100000, py::arg("timeout_ms") = -1);
+        return solveGBFS(engine, maxIters, timeoutMs, seed);
+    }, py::arg("engine"), py::arg("max_iters") = 100000, py::arg("timeout_ms") = -1,
+       py::arg("seed") = py::none());
     m.def("solve_mcts", [](Engine& engine, const MCTSOptions& options) {
         py::gil_scoped_release release;
         return solveMCTS(engine, options);

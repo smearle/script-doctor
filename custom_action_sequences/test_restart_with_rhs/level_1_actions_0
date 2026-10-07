@@ -1,0 +1,6 @@
+# restart must fire with an identical or state-changing RHS.
+right
+right
+left
+right
+right

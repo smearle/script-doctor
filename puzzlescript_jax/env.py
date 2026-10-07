@@ -12,13 +12,14 @@ from einops import rearrange
 import flax
 import flax.struct
 import jax
+from jax.custom_batching import custom_vmap
 import jax.numpy as jnp
 import numpy as np
 
 from puzzlescript_jax.env_render import render_solid_color, render_sprite
 from puzzlescript_jax.env_utils import N_MOVEMENTS, multihot_to_desc, N_FORCES, ACTION
 from puzzlescript_jax.jax_utils import stack_leaves
-from puzzlescript_jax.detect_randomness import tree_has_randomness
+from puzzlescript_jax.detect_randomness import rule_has_randomness, tree_has_randomness
 from puzzlescript_jax.ps_game import LegendEntry, PSGameTree, PSObject, Rule, WinCondition
 from gymnax.environments.spaces import Discrete, Box
 
@@ -343,6 +344,111 @@ def _first_true_coord_large(mask):
     col = flat_idx % mask.shape[1]
     return jnp.where(has_any, jnp.array([row, col], dtype=jnp.int32), jnp.array([-1, -1], dtype=jnp.int32))
 
+
+def _ordered_match_coords(kernel_activations, kernel_order_is_col):
+    """Collect padded (row, column) matches in each kernel's static scan order.
+
+    argwhere already emits row-major coordinates. For column-major rules,
+    enumerate the transposed mask and swap the coordinate components back.
+    This preserves sequential match order and (-1, -1) padding without a sort.
+    """
+    max_coords = kernel_activations.shape[1] * kernel_activations.shape[2]
+    coords = []
+    for mask, is_col in zip(kernel_activations, kernel_order_is_col):
+        ordered_mask = mask.T if is_col else mask
+        matches = jnp.argwhere(ordered_mask, size=max_coords, fill_value=-1)
+        coords.append(matches[:, ::-1] if is_col else matches)
+    return jnp.stack(coords)
+
+
+def _compact_nonzero_coords(mask, size):
+    """Stable, padded nonzero coordinates without histogram contention.
+
+    Each true element writes its flat index at its exclusive prefix count.
+    False elements and matches beyond the fixed capacity are dropped. Unlike
+    the histogram used by argwhere, long runs of false elements do not contend
+    for the same destination. Truncation and -1 padding match argwhere exactly.
+    """
+    if mask.size == 0 or size == 0:
+        return jnp.full((size, mask.ndim), -1, dtype=jnp.int32)
+    # Keep mask construction and prefix accumulation out of the scatter
+    # fusion. Together these boundaries improve H200 whole-engine throughput;
+    # isolating only the prefix sum instead caused a regression.
+    flat = jax.lax.optimization_barrier(mask.reshape(-1))
+    offsets = jax.lax.optimization_barrier(jnp.cumsum(flat, dtype=jnp.int32) - 1)
+    destinations = jnp.where(flat, offsets, size)
+    indices = jnp.full((size,), -1, dtype=jnp.int32).at[destinations].set(
+        jnp.arange(flat.size, dtype=jnp.int32), mode="drop")
+    strides = np.cumprod(mask.shape[::-1])[::-1] // np.array(mask.shape)
+    coords = (indices[:, None] // jnp.asarray(strides, dtype=jnp.int32)) % jnp.array(mask.shape)
+    return jnp.where(indices[:, None] >= 0, coords, -1)
+
+
+def _movement_coords(force_arr, size):
+    return _compact_nonzero_coords(force_arr, size)
+
+
+def _movement_force_array(force_arr):
+    """Exclude ACTION with a layer-local slice, preserving (y, x, layer, dir)."""
+    _, height, width = force_arr.shape
+    forces = force_arr.reshape(-1, N_FORCES, height, width)[:, :N_MOVEMENTS]
+    return forces.transpose(3, 2, 0, 1).reshape(width, height, -1)
+
+
+def _remove_invalid_forces(lvl, coords, layer_masks):
+    """Clear orphaned forces at the selected cell/layer pairs in parallel.
+
+    Cleanup reads only object channels, which it never changes. Repeated
+    coordinates therefore commute. Use the original, suffix-padded coordinate
+    list so truncation and ACTION-only cells retain their existing semantics.
+    """
+    n_layers, n_objs = layer_masks.shape
+    height, width = lvl.shape[2:]
+    # Layer masks are static NumPy metadata. Reduce only each layer's objects
+    # instead of broadcasting an objects-by-layers-by-board intermediate.
+    occupied = jnp.stack([
+        jnp.any(lvl[0, np.flatnonzero(mask)], axis=0) for mask in layer_masks])
+    y, x, channel = coords.T
+    layer = jnp.where(y >= 0, channel // N_MOVEMENTS, n_layers)
+    visited = jnp.zeros((n_layers, height, width), dtype=bool).at[layer, x, y].set(
+        True, mode="drop")
+    clear = visited & ~occupied
+    force_end = n_objs + n_layers * N_FORCES
+    forces = lvl[0, n_objs:force_end].reshape(n_layers, N_FORCES, height, width)
+    forces = forces & ~clear[:, None]
+    return lvl.at[0, n_objs:force_end].set(forces.reshape(-1, height, width))
+
+
+def _is_independent_cell_rule(rule):
+    """Conservatively identify cell replacements that commute."""
+    return (len(rule.left_kernels) == len(rule.right_kernels) == 1
+            and len(rule.left_kernels[0]) == len(rule.right_kernels[0]) == 1
+            and not rule_has_randomness(rule))
+
+
+def _apply_independent_cells(rng, lvl, detect_at_xy, project_at_xy):
+    """Reuse point semantics on isolated cells; the caller proves no RNG use.
+
+    No cell can read or write another cell, so matching and projecting once per
+    cell is identical to enumerating the original matches in either scan order.
+    Point detection also enforces the multi-level validity mask.
+    """
+    def apply_cell(cell):
+        cell_level = cell[None, :, None, None]
+        xy = jnp.zeros(2, dtype=jnp.int32)
+        active, cell_outs, kernel_out = detect_at_xy(cell_level, xy)
+        pattern_out = PatternFnReturn(
+            detected_meta_objs=kernel_out.detected_meta_objs,
+            detected_moving_idx=kernel_out.detected_moving_idx,
+        )
+        _, projected = project_at_xy(
+            rng, cell_level, xy, cell_outs, kernel_out, pattern_out)
+        return jnp.where(active, projected[0, :, 0, 0], cell), active
+
+    cells, active = jax.vmap(jax.vmap(apply_cell))(lvl[0].transpose(1, 2, 0))
+    return cells.transpose(2, 0, 1)[None], jnp.any(active)
+
+
 def compute_manhattan_dists_from_channels(src_channel, trg_channel):
     n_cells = np.prod(src_channel.shape)
     src_coords = jnp.argwhere(src_channel, size=n_cells, fill_value=-1)
@@ -356,25 +462,37 @@ def compute_manhattan_dists_from_channels(src_channel, trg_channel):
     dists = jnp.where(jnp.all(trg_coords == -1, axis=-1), np.nan, dists)
     return dists
 
+def _manhattan_distance_to_targets(trg_channel):
+    """Exact nearest-target distances using O(H*W) storage.
+
+    Along either axis, min_j(d[j] + abs(i-j)) is the minimum of a
+    prefix minimum of d[j]-j plus i and a suffix minimum of d[j]+j
+    minus i. Applying this along both axes gives Manhattan distances
+    without materializing an (H*W, H*W) array of pairwise distances.
+    The finite H+W sentinel preserves the no-target heuristic fallback.
+    """
+    max_dist = sum(trg_channel.shape)
+    dists = jnp.where(trg_channel, jnp.int32(0), jnp.int32(max_dist))
+    for axis in range(2):
+        coord_shape = [1, 1]
+        coord_shape[axis] = trg_channel.shape[axis]
+        coords = jnp.arange(trg_channel.shape[axis], dtype=jnp.int32).reshape(coord_shape)
+        forward = jax.lax.cummin(dists - coords, axis=axis) + coords
+        backward = jax.lax.cummin(dists + coords, axis=axis, reverse=True) - coords
+        dists = jnp.minimum(forward, backward)
+    return dists
+
+
 def compute_sum_of_manhattan_dists_from_channels(src_channel, trg_channel):
-    max_dist = src_channel.shape[0] + src_channel.shape[1]
-    n_cells = np.prod(src_channel.shape)
-    # Identify real (non-filler) source rows from argwhere
-    src_coords = jnp.argwhere(src_channel, size=n_cells, fill_value=-1)
-    is_real_src = ~jnp.all(src_coords == -1, axis=-1)
-    dists = compute_manhattan_dists_from_channels(src_channel, trg_channel)
-    # Get minimum of each source to any target.
-    # Real sources with no target get max_dist; filler argwhere rows get 0.
-    dists = jnp.nanmin(dists, axis=1)
-    dists = jnp.where(jnp.isnan(dists), jnp.where(is_real_src, max_dist, 0), dists)
-    return jnp.sum(dists, axis=0).astype(np.int32)
+    dists = _manhattan_distance_to_targets(trg_channel)
+    # Each real source contributes H+W when there are no targets.
+    return jnp.sum(jnp.where(src_channel, dists, 0)).astype(np.int32)
 
 def compute_min_manhattan_dist_from_channels(src_channel, trg_channel):
     max_dist = src_channel.shape[0] + src_channel.shape[1]
-    dists = compute_manhattan_dists_from_channels(src_channel, trg_channel)
-    # Cap fallback at max_dist (not INT_MAX) to avoid reward magnitude explosion
-    dists = jnp.where(jnp.isnan(dists), max_dist, dists)
-    return jnp.min(dists).astype(np.int32)
+    dists = _manhattan_distance_to_targets(trg_channel)
+    # No sources or no targets both yield the existing H+W fallback.
+    return jnp.min(jnp.where(src_channel, dists, max_dist)).astype(np.int32)
 
 def check_all(lvl, src, trg, src_all=False, trg_all=False):
     src_channel = get_channel(lvl, src, src_all)
@@ -711,9 +829,17 @@ class PJStateMultiLevel(PJState):
     valid_mask: chex.Array
 
 @flax.struct.dataclass
+class PJResetCache:
+    level: chex.Array
+    state: PJState
+    owner: object = flax.struct.field(pytree_node=False)
+
+
+@flax.struct.dataclass
 class PJParams:
     level: chex.Array
     level_i: int = 0
+    reset_cache: Optional[PJResetCache] = None
 
 @flax.struct.dataclass
 class PSObs:
@@ -839,6 +965,7 @@ class PuzzleJaxEnv:
         self.vmap = vmap
         self.title = tree.prelude.title
         self._has_randomness = tree_has_randomness(tree)
+        self._reset_cache_owner = object()
         self.tree = tree
         self.levels = tree.levels
         self.level_i = level_i
@@ -1271,7 +1398,39 @@ class PuzzleJaxEnv:
 
         return im
 
+    def prepare_params(self, params: PJParams) -> PJParams:
+        """Precompute deterministic fixed-level reset work outside a rollout.
+
+        Call on concrete parameters before JIT-compiling the rollout. Random
+        games and multi-level environments retain the normal reset path. A
+        changed level or a different environment invalidates the cached state.
+        """
+        params = params.replace(reset_cache=None)
+        if not self.jit or self._is_multi_level or self.has_randomness():
+            return params
+        # Own the snapshot even if callers supplied a mutable NumPy array.
+        level = jnp.array(params.level, copy=True)
+        _, state = self.reset(jax.random.PRNGKey(0), params.replace(level=level))
+        return params.replace(reset_cache=PJResetCache(
+            level=level, state=state, owner=self._reset_cache_owner))
+
     def reset(self, rng, params: PJParams) -> Tuple[chex.Array, PJState]:
+        cache = params.reset_cache
+        if (cache is not None and cache.owner is self._reset_cache_owner and self.jit
+                and not self._is_multi_level and not self.has_randomness()
+                and params.level.shape == cache.level.shape):
+            def cached(_):
+                state = cache.state.replace(rng=rng)
+                return self.get_obs(state), state
+
+            return jax.lax.cond(
+                jnp.array_equal(params.level, cache.level), cached,
+                lambda _: self._reset_uncached(rng, params.replace(reset_cache=None)),
+                operand=None,
+            )
+        return self._reset_uncached(rng, params)
+
+    def _reset_uncached(self, rng, params: PJParams) -> Tuple[chex.Array, PJState]:
         requested_level_i = jnp.asarray(params.level_i, dtype=jnp.int32)
         if self._is_multi_level:
             rng, level_rng = jax.random.split(rng)
@@ -1501,7 +1660,10 @@ class PuzzleJaxEnv:
         )
 
         win, score, heuristic = self.check_win(multihot_level)
-        win = win | tick_win
+        # A restart discards the pre-reset board and its queued win. Check
+        # the restored board instead; otherwise touching a goal while a
+        # restart rule fires can produce a false solution.
+        win = win | (tick_win & ~restart)
         if PRINT_SCORE:
             jax.debug.print('heuristic: {heuristic}, score: {score}, win: {win}', heuristic=heuristic, score=score, win=win)
 
@@ -2764,6 +2926,8 @@ class PuzzleJaxEnv:
                 return False  # explicit horizontal kernel
 
             kernel_order_is_col = [is_col_major_kernel(lp, rot) for lp in lps]
+            independent_cells = (self.jit and has_point_fns
+                                 and _is_independent_cell_rule(rule))
 
             def detect_pattern(lvl):
                 kernel_activations: List[chex.Array] = []
@@ -2834,36 +2998,21 @@ class PuzzleJaxEnv:
                 return rng, lvl
 
             def apply_pattern(rng, lvl):
-                kernel_activations, cell_detect_outs, kernel_detect_outs, pattern_detect_out = detect_pattern(lvl)
-                pattern_detected = jnp.all(jnp.sum(kernel_activations, axis=(1,2)) > 0)
                 init_lvl = lvl
+                if independent_cells:
+                    lvl, pattern_detected = _apply_independent_cells(
+                        rng, lvl, kernel_detection_at_fns[0], kernel_projection_at_fns[0])
+                else:
+                    kernel_activations, cell_detect_outs, kernel_detect_outs, pattern_detect_out = detect_pattern(lvl)
+                    pattern_detected = jnp.all(jnp.sum(kernel_activations, axis=(1,2)) > 0)
 
                 # Apply each tuple of matches sequentially, re-checking after each
                 # (matching JS semantics where overlapping matches are re-verified
                 # before projection, for both single- and multi-kernel rules).
                 # Only needed when we actually have replacements to project.
-                if kernel_activations.shape[0] >= 1 and has_right_pattern:
+                if not independent_cells and kernel_activations.shape[0] >= 1 and has_right_pattern:
                     if self.jit:
-                        max_coords = kernel_activations.shape[1] * kernel_activations.shape[2]
-                        coord_lists = jnp.stack(
-                            [
-                                jnp.argwhere(kernel_activations[i], size=max_coords, fill_value=-1)
-                                for i in range(kernel_activations.shape[0])
-                            ],
-                            axis=0,
-                        )  # (K, max_coords, 2)
-
-                        order_is_col = jnp.array(kernel_order_is_col)
-                        h, w = kernel_activations.shape[1], kernel_activations.shape[2]
-                        rows = coord_lists[:, :, 0]
-                        cols = coord_lists[:, :, 1]
-                        valid = rows != -1
-                        row_major_key = rows * w + cols
-                        col_major_key = cols * h + rows
-                        keys = jnp.where(order_is_col[:, None], col_major_key, row_major_key)
-                        keys = jnp.where(valid, keys, jnp.iinfo(jnp.int32).max)
-                        sort_idxs = jnp.argsort(keys, axis=1)
-                        coord_lists = jnp.take_along_axis(coord_lists, sort_idxs[:, :, None], axis=1)
+                        coord_lists = _ordered_match_coords(kernel_activations, kernel_order_is_col)
 
                         coord_counts = jnp.sum(coord_lists[:, :, 0] != -1, axis=1)  # (K,)
                         any_empty = jnp.any(coord_counts == 0)
@@ -3038,8 +3187,7 @@ class PuzzleJaxEnv:
 
                 cancel, restart, again, win = False, False, False, False
                 if has_right_pattern:
-                    # Sequential re-check path always runs for rules with replacements,
-                    # so results are in `lvl` (potentially modified by projections).
+                    # Both replacement paths have already projected into `lvl`.
                     next_lvl = lvl
                     rule_applied = jnp.any(next_lvl != init_lvl)
                 else:
@@ -3049,11 +3197,13 @@ class PuzzleJaxEnv:
                     if r_command is None and not np.all([r is None for r in rps]):
                         print(rps)
 
-                    if r_command == 'cancel':
-                        cancel = pattern_detected
-                    elif r_command == 'restart':
-                        restart = pattern_detected
-                if r_command == 'again':
+                # Commands depend on a matched rule, including rules with an
+                # identical or state-changing right-hand pattern.
+                if r_command == 'cancel':
+                    cancel = pattern_detected
+                elif r_command == 'restart':
+                    restart = pattern_detected
+                elif r_command == 'again':
                     # Again will be applied as long as left pattern is detected, until the entire turn has no effect 
                     # on the level.
                     again = pattern_detected
@@ -3237,7 +3387,8 @@ class PuzzleJaxEnv:
         return rule_fns
             
 
-    def gen_tick_fn(self, lvl_shape):
+    def _gen_rule_blocks(self, lvl_shape):
+        """Compile normal, movement, and late blocks in PuzzleScript order."""
         rule_blocks = []
         late_rule_blocks = []
         for rule_block in self.tree.rules:
@@ -3315,25 +3466,19 @@ class PuzzleJaxEnv:
         rule_blocks.append((False, [([_move_rule_fn], False)]))
         rule_blocks.extend(late_rule_blocks)
 
-        all_rule_fns = [rule_fn for looping, rule_grps in rule_blocks for rule_grp, _ in rule_grps for rule_fn in rule_grp]
-        n_rules_counted = 0
-        # n_prior_rules = {}
-        max_n_grps = max([len(rule_grps) for _, rule_grps in rule_blocks])
-        n_prior_rules_arr = np.zeros((len(rule_blocks), max_n_grps), dtype=jnp.int32)
-        n_rules_per_grp_arr = np.zeros((len(rule_blocks), max_n_grps), dtype=jnp.int32)
-        n_grps_per_block_arr = np.zeros((len(rule_blocks),), dtype=jnp.int32)
-        for rule_block_i, rule_block in enumerate(rule_blocks):
-            _, rule_grps = rule_block
-            n_grps_per_block_arr[rule_block_i] = len(rule_grps)
-            for rule_grp_i, (rule_grp, _) in enumerate(rule_grps):
-                # n_prior_rules[(rule_block_i, rule_grp_i)] = n_rules_counted
-                n_prior_rules_arr[rule_block_i, rule_grp_i] = n_rules_counted
-                n_rules_per_grp_arr[rule_block_i, rule_grp_i] = len(rule_grp)
-                n_rules_counted += len(rule_grp)
-        n_prior_rules_arr = jnp.array(n_prior_rules_arr)
-        n_rules_per_grp_arr = jnp.array(n_rules_per_grp_arr)
-        n_grps_per_block_arr = jnp.array(n_grps_per_block_arr)
-        blocks_are_looping_lst = jnp.array([looping for looping, _ in rule_blocks])
+        return rule_blocks
+
+    def _gen_rule_blocks_fn(self, rule_blocks):
+        """Build the standard statically unrolled block dispatcher."""
+        def apply_blocks(carry):
+            for block_i, (looping, rule_block) in enumerate(rule_blocks):
+                carry = (*carry[:7], block_i)
+                carry = self.loop_rule_block(carry, rule_block=rule_block, looping=looping)
+            return carry
+        return apply_blocks
+
+    def gen_tick_fn(self, lvl_shape):
+        apply_blocks = self._gen_rule_blocks_fn(self._gen_rule_blocks(lvl_shape))
 
         def tick_fn(rng, lvl, do_again):
             lvl_changed = False
@@ -3354,53 +3499,8 @@ class PuzzleJaxEnv:
                 applied = False
                 block_again = False
 
-                # for block_i, (looping, rule_grps) in enumerate(rule_blocks):
-                    # n_prior_rules
-                
-                _loop_rule_block = partial(
-                    self.loop_rule_block,
-                    ### COMPILE VS RUNTIME ###
-                    # n_prior_rules_arr=n_prior_rules_arr, n_rules_per_grp_arr=n_rules_per_grp_arr, all_rule_fns=all_rule_fns,
-                    # n_grps_per_block_arr=n_grps_per_block_arr, blocks_are_looping_lst=blocks_are_looping_lst,
-                    ### COMPILE VS RUNTIME ###
-                )
-
-                ### COMPILE VS RUNTIME ###
-                for block_i, (looping, rule_block) in enumerate(rule_blocks):
-                    carry = (lvl, applied, block_again, cancelled, restart, win, rng, block_i)
-                    lvl, applied, block_again, cancelled, restart, win, rng, block_i = _loop_rule_block(
-                        carry=carry,
-                        rule_block=rule_block,
-                        looping=looping,
-                    )
-                    if DEBUG:
-                        jax.debug.print(
-                            'apply_turn: block {block_i} applied: {applied}. again: {again}',
-                            block_i=block_i, applied=applied, again=block_again)
-
-                # block_i = 0
-                # carry = (lvl, applied, again, cancelled, restart, win, rng, block_i)
-                # if self.jit:
-                #     # Apply (loop) each block in sequence.
-                #     carry = jax.lax.while_loop(
-                #         cond_fun=lambda x: ~x[3] & ~x[4] & (x[7] < len(rule_blocks)),
-                #         body_fun=_loop_rule_block,
-                #         init_val=carry,
-                #     )
-                #     # carry, _ = jax.lax.scan(
-                #     #     loop_rule_block,
-                #     #     init=init_carry,
-                #     #     xs=jnp.arange(len(rule_blocks)),
-                #     # )
-                # else:
-                #     while not cancelled and not restart and block_i < len(rule_blocks):
-                #         carry = _loop_rule_block(carry)
-                #         lvl, applied, again, cancelled, restart, win, rng, block_i = carry
-                #         if DEBUG:
-                #             print(f'      block {block_i} applied: {applied}. again: {again}')
-
-                # lvl, applied, again, cancelled, restart, win, rng, block_i = carry
-                ### COMPILE VS RUNTIME ###
+                carry = (lvl, applied, block_again, cancelled, restart, win, rng, 0)
+                lvl, applied, block_again, cancelled, restart, win, rng, _ = apply_blocks(carry)
 
                 # Only compare object channels (not force channels) to match JS
                 # semantics, where `modified` checks level.objects only.
@@ -3837,145 +3937,97 @@ class PuzzleJaxEnv:
 
 
     def apply_movement(self, rng, lvl, coll_mat, n_objs, obj_force_masks, jit=True):
-        coll_mat = jnp.array(coll_mat, dtype=bool)
-        # Upper bound on the number of forces that might exist in the level at any given time.
-        n_layers = len(self.collision_layers)
-        max_possible_forces = n_layers * lvl.shape[2] * lvl.shape[3]
-        if self._is_multi_level:
-            force_arr = lvl[0, n_objs:-2]  # exclude player_effect channel and valid_mask channel
-        else:
-            force_arr = lvl[0, n_objs:-1]  # exclude player_effect channel
-        # Mask out all forces corresponding to ACTION.
-        force_mask = np.ones((force_arr.shape[0],), dtype=bool)
-        force_mask[ACTION::N_FORCES] = 0
-        force_arr = force_arr[force_mask]
-        # Rearrange the array, since we want to apply force to the "first" objects spatially on the map.
-        # force_arr = rearrange(force_arr, "c h w -> w h c")
-        force_arr = force_arr.transpose(2, 1, 0)
-        # Get the first x,y,c coordinates where force is present.
-        coords = jnp.argwhere(force_arr, size=max_possible_forces+1, fill_value=-1)
-        # force_idxs = coords[:, 2] % (N_FORCES - 1)
+        """Resolve ordered forces, reading objects and collisions after each move.
 
-        def remove_invalid_force(carry):
-            lvl, i = carry
-            y, x, c = coords[i]
-            coll_layer_idx = c // (N_FORCES - 1)
-            layer_obj_mask = jnp.array(self.layer_masks)[coll_layer_idx]
-            obj_idx = _first_true_idx_large(jnp.where(layer_obj_mask, lvl[0, :self.n_objs, x, y], False))
-            obj_exists = obj_idx != -1
-            new_lvl = jax.lax.dynamic_update_slice(
-                lvl,
-                jnp.zeros((1, N_FORCES, 1, 1), dtype=bool),
-                (0, n_objs + (coll_layer_idx * N_FORCES), x, y)
-            )
-            lvl = jax.lax.select(
-                ~obj_exists,
-                new_lvl,
-                lvl
-            )
-            i += 1
-            return lvl, i
+        Under vmap, a shared index visits every environment's coordinate list.
+        Sentinel coordinates make finished environments inert. Sparse writes
+        avoid selecting/copying their entire boards on every loop iteration.
+        Unbatched execution retains its original loop and update operations.
+        """
+        capacity = len(self.collision_layers) * lvl.shape[2] * lvl.shape[3] + 1
+        forces = lvl[0, n_objs:-2 if self._is_multi_level else -1]
+        coords = _movement_coords(_movement_force_array(forces), size=capacity)
+        lvl = _remove_invalid_forces(lvl, coords, self.layer_masks)
+        multi_level = self._is_multi_level
+        object_count = self.n_objs
 
-        def attempt_move(carry):
-            # NOTE: This depends on movement forces preceding any other forces (per object) in the channel dimension.
-            lvl, prev_can_move, _, i = carry
-            y, x, c = coords[i]
-            # Get the obj idx on which the force is applied.
-            # First get the collision layer idx.
-            coll_layer_idx = c // N_MOVEMENTS
-            # Check that the coordinates are not null, and that the force is actually present at the coordinates
-            # (since we may have removed it if not corresponding to an object).
-            is_force_present = (x != -1) & (
-                jnp.any(jax.lax.dynamic_slice(
-                    lvl, (0, n_objs + (coll_layer_idx * N_FORCES), x, y), (1, N_MOVEMENTS, 1, 1)
-                )))
-            # Then find the active object in this collition layer.
-            n_layer_objs = jnp.array(self.n_objs_per_layer)[coll_layer_idx]
-            n_prior_objs = jnp.array(self.n_objs_prior_to_layer)[coll_layer_idx]
-            layer_obj_mask = jnp.array(self.layer_masks)[coll_layer_idx]
-            # obj_idx = n_prior_objs + jnp.argwhere(lvl[0, n_prior_objs: n_prior_objs + n_layer_objs, x, y])
-            obj_idx = _first_true_idx_large(jnp.where(layer_obj_mask, lvl[0, :self.n_objs, x, y], False))
-            obj_exists = obj_idx != -1
-            # Determine where the object would move and whether such a move would be legal.
-            forces_to_deltas = jnp.array([[0, -1], [1, 0], [0, 1], [-1, 0]])
-            delta = forces_to_deltas[c % N_MOVEMENTS]
-            x_1, y_1 = x + delta[0], y + delta[1]
-            would_collide = jnp.any(lvl[0, :n_objs, x_1, y_1] & coll_mat[obj_idx])
-            out_of_bounds = (x_1 < 0) | (x_1 >= lvl.shape[2]) | (y_1 < 0) | (y_1 >= lvl.shape[3])
-            if self._is_multi_level:
-                target_valid = lvl[0, -1, x_1, y_1]
+        def attempt(level, applied, coord, collisions, masks, deltas, *, sparse_updates):
+            y, x, channel = coord
+            layer = channel // N_MOVEMENTS
+            force_present = (x != -1) & jnp.any(jax.lax.dynamic_slice(
+                level, (0, n_objs + layer * N_FORCES, x, y), (1, N_MOVEMENTS, 1, 1)))
+            obj = _first_true_idx_large(jnp.where(masks[layer], level[0, :object_count, x, y], False))
+            delta = deltas[channel % N_MOVEMENTS]
+            x1, y1 = x + delta[0], y + delta[1]
+            collision = jnp.any(level[0, :n_objs, x1, y1] & collisions[obj])
+            outside = (x1 < 0) | (x1 >= level.shape[2]) | (y1 < 0) | (y1 >= level.shape[3])
+            valid = level[0, -1, x1, y1] if multi_level else True
+            can_move = (obj != -1) & force_present & ~collision & ~outside & valid
+            if sparse_updates:
+                # A positive, out-of-bounds channel drops the entire update, even
+                # when sentinel coordinates have negative spatial components.
+                target_obj = jnp.where(can_move, obj, level.shape[1])
+                force_channels = jnp.where(can_move,
+                                          n_objs + layer * N_FORCES + jnp.arange(N_FORCES),
+                                          level.shape[1])
+                level = level.at[0, target_obj, x, y].set(False, mode='drop')
+                level = level.at[0, target_obj, x1, y1].set(True, mode='drop')
+                level = level.at[0, force_channels, x, y].set(False, mode='drop')
             else:
-                target_valid = True
-            can_move = obj_exists & is_force_present & ~would_collide & ~out_of_bounds & target_valid
-            # Now, in the new level, move the object in the direction of the force.
-            new_lvl = lvl.at[0, obj_idx, x, y].set(False)
-            new_lvl = new_lvl.at[0, obj_idx, x_1, y_1].set(True)
+                updated = level.at[0, obj, x, y].set(False).at[0, obj, x1, y1].set(True)
+                updated = jax.lax.dynamic_update_slice(updated, jnp.zeros((1, N_FORCES, 1, 1), bool),
+                                                      (0, n_objs + layer * N_FORCES, x, y))
+                level = jax.lax.select(can_move, updated, level)
+            return level, applied | can_move
 
-            # And remove any forces that were applied to the object before it moved.
-            new_lvl = jax.lax.dynamic_update_slice(
-                new_lvl,
-                jnp.zeros((1, N_FORCES, 1, 1), dtype=bool),
-                (0, n_objs + (coll_layer_idx * N_FORCES), x, y)
-            )
-            # Use the force mask instead
-            # obj_force_mask = obj_force_masks[obj_idx]
-            # new_lvl = new_lvl.at[0, :, x, y].set(
-            #     jnp.where(obj_force_mask, 0, new_lvl[0, :, x, y])
-            # )
+        def single_loop(level, coordinates, collisions, masks, deltas):
+            def body(carry):
+                updated, applied = attempt(carry[0], carry[1], coordinates[carry[2]], collisions, masks, deltas,
+                                           sparse_updates=False)
+                return updated, applied, carry[2] + 1
+            carry = (level, False, 0)
+            if jit:
+                carry = jax.lax.while_loop(
+                    lambda state: coordinates[state[2], 0] != -1, body, carry)
+            else:
+                # Preserve the debugger's stop-after-first-success behavior.
+                while coordinates[carry[2], 0] != -1 and not carry[1]:
+                    carry = body(carry)
+            return carry[0], carry[1]
 
-            lvl = jax.lax.select(can_move, new_lvl, lvl)
-            i += 1
-            # if DEBUG:
-            #     jax.debug.print('      at position {xy}, the object {obj} moved to {new_xy}', xy=(x, y), obj=obj_idx, new_xy=(x_1, y_1))
-            #     jax.debug.print('      would collide: {would_collide}, out of bounds: {out_of_bounds}, can_move: {can_move}',
-            #                     would_collide=would_collide, out_of_bounds=out_of_bounds, can_move=can_move)
-            return lvl, prev_can_move | can_move, rng, i
-
-        init_carry = (lvl, 0)
-
-        # Iterate through forces and remove them if they don't correspond to an object.
         if jit:
-            lvl, i = jax.lax.while_loop(
-                lambda carry: (coords[carry[1], 0] != -1),
-                lambda carry: remove_invalid_force(carry),
-                init_carry,
-            )
-        else:
-            i = init_carry[1]
-            carry = init_carry
-            while (coords[i, 0] != -1):
-                lvl, i = remove_invalid_force(carry)
-                carry = (lvl, i)
+            run = custom_vmap(single_loop)
 
-        init_carry = (lvl, False, rng, 0)
-
-        # Iterate through possible moves until we apply one, or run out of possible moves.
-        if jit:
-            lvl, can_move, rng, i = jax.lax.while_loop(
-                lambda carry: (coords[carry[3], 0] != -1),
-                lambda carry: attempt_move(carry),
-                init_carry,
-            )
+            @run.def_vmap
+            def run_batched(axis_size, in_batched, level, coordinates, collisions, masks, deltas):
+                # All dynamic values are explicit arguments: the rule also works
+                # with mapped collision matrices and non-leading/nested vmaps.
+                level, coordinates, collisions, masks, deltas = [
+                    value if mapped else jnp.broadcast_to(value, (axis_size, *value.shape))
+                    for value, mapped in zip((level, coordinates, collisions, masks, deltas), in_batched)]
+                if axis_size == 1:
+                    # There is no unequal completion to optimize in a singleton
+                    # batch; its original updates also lower more efficiently.
+                    return jax.vmap(single_loop)(level, coordinates, collisions, masks, deltas), (True, True)
+                def body(carry):
+                    updated, applied = jax.vmap(partial(attempt, sparse_updates=True))(
+                        carry[0], carry[1], coordinates[:, carry[2]], collisions, masks, deltas)
+                    return updated, applied, carry[2] + 1
+                updated, applied, _ = jax.lax.while_loop(
+                    lambda carry: jnp.any(coordinates[:, carry[2], 0] != -1), body,
+                    (level, jnp.zeros(axis_size, bool), 0))
+                return (updated, applied), (True, True)
         else:
-            i = init_carry[3]
-            can_move = init_carry[1]
-            carry = init_carry
-            while (coords[i, 0] != -1) and not can_move:
-                lvl, can_move, rng, i = attempt_move(carry)
-                carry = (lvl, can_move, rng, i)
-        
+            run = single_loop
+        # Even a constant lookup table must be an explicit argument: vmap over
+        # lax.switch can batch branch constants, which custom_vmap disallows
+        # for closed-over constants.
+        deltas = jnp.array([[0, -1], [1, 0], [0, 1], [-1, 0]])
+        level, applied = run(lvl, coords, jnp.asarray(coll_mat, bool), jnp.asarray(self.layer_masks), deltas)
         if DEBUG:
-            jax.debug.print('      applied movement: {can_move}', can_move=can_move)
-        rule_state = RuleState(
-            lvl=lvl,
-            applied=can_move,
-            cancelled=False,
-            restart=False,
-            again=False,
-            win=False,
-            rng=rng
-        )
-        return rule_state
+            jax.debug.print('      applied movement: {can_move}', can_move=applied)
+        return RuleState(lvl=level, applied=applied, cancelled=False, restart=False,
+                         again=False, win=False, rng=rng)
 
     def apply_rule_fn(
             self,

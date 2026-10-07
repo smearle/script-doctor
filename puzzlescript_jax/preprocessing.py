@@ -17,7 +17,6 @@ import numpy as np
 
 from conf.config import PreprocessConfig
 from puzzlescript_jax.detect_randomness import tree_has_randomness
-from puzzlescript_jax.env import PuzzleJaxEnv
 from puzzlescript_jax.gen_tree import GenPSTree
 from puzzlescript_jax.globals import (
     GAMES_N_RULES_SORTED_PATH, GAMES_TO_N_RULES_PATH, GAMES_TO_SKIP, LARK_SYNTAX_PATH, TEST_GAMES,
@@ -539,6 +538,7 @@ def get_env_from_ps_file(parser, game, log_dir: str = None, overwrite: bool = Tr
     if success != PJParseErrors.SUCCESS:
         return None, tree, success, err_msg 
     try:
+        from puzzlescript_jax.env import PuzzleJaxEnv
         env = PuzzleJaxEnv(tree)
         return env, tree, PJParseErrors.SUCCESS, ""
     except Exception as e:
@@ -597,6 +597,7 @@ def get_tree_from_txt(parser, game, log_dir: str = None, overwrite: bool = True,
     os.makedirs(SIMPLIFIED_GAMES_DIR, exist_ok=True)
     os.makedirs(PRETTY_TREES_DIR, exist_ok=True)
     os.makedirs(MIN_GAMES_DIR, exist_ok=True)
+    os.makedirs(TREES_DIR, exist_ok=True)
     if overwrite or not os.path.exists(simp_filepath):
         # Now save the simplified version of the file
         try:
@@ -682,6 +683,7 @@ def get_tree_from_txt(parser, game, log_dir: str = None, overwrite: bool = True,
         return None, PJParseErrors.TREE_ERROR, gen_error_str(e)
     if test_env_init:
         try:
+            from puzzlescript_jax.env import PuzzleJaxEnv
             env = PuzzleJaxEnv(tree, level_i=0)
         except Exception as e:
             traceback.print_exc()

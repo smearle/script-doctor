@@ -154,11 +154,18 @@ class CppPuzzleScriptEngine:
     def solve_bfs(self, max_iters: int = 100_000, timeout_ms: int = -1) -> SolverResult:
         return _solve_bfs(self._engine, max_iters, timeout_ms)
 
-    def solve_astar(self, max_iters: int = 100_000, timeout_ms: int = -1) -> SolverResult:
-        return _solve_astar(self._engine, max_iters, timeout_ms)
+    def solve_astar(self, max_iters: int = 100_000, timeout_ms: int = -1,
+                    seed: int | None = None) -> SolverResult:
+        # Preserve compatibility with an existing extension for unseeded calls.
+        if seed is None:
+            return _solve_astar(self._engine, max_iters, timeout_ms)
+        return _solve_astar(self._engine, max_iters, timeout_ms, seed=seed)
 
-    def solve_gbfs(self, max_iters: int = 100_000, timeout_ms: int = -1) -> SolverResult:
-        return _solve_gbfs(self._engine, max_iters, timeout_ms)
+    def solve_gbfs(self, max_iters: int = 100_000, timeout_ms: int = -1,
+                   seed: int | None = None) -> SolverResult:
+        if seed is None:
+            return _solve_gbfs(self._engine, max_iters, timeout_ms)
+        return _solve_gbfs(self._engine, max_iters, timeout_ms, seed=seed)
 
     def solve_mcts(self, options: MCTSOptions | None = None) -> SolverResult:
         if options is None:
@@ -333,7 +340,10 @@ class CppPuzzleScriptBackend:
         n_steps: int,
         timeout_ms: int,
         warmup: bool = False,
+        seed: int | None = None,
     ) -> SearchResult:
+        if seed is not None and algo not in ("astar", "gbfs"):
+            raise ValueError("Explicit search seeds currently apply to astar and gbfs")
         self.load_level(game_text, level_i)
         loops = 3 if warmup else 1
         method_name = self.SEARCH_ALGOS[algo]
@@ -346,6 +356,8 @@ class CppPuzzleScriptBackend:
                 options = MCTSOptions()
                 options.max_iterations = n_steps
                 raw_result = method(options=options)
+            elif seed is not None:
+                raw_result = method(max_iters=n_steps, timeout_ms=timeout_ms, seed=seed)
             else:
                 raw_result = method(max_iters=n_steps, timeout_ms=timeout_ms)
         return self._normalize_result(raw_result)

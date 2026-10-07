@@ -3,6 +3,7 @@
 #include "engine.h"
 
 #include <vector>
+#include <optional>
 
 struct RandomRolloutResult {
     int iterations = 0;
@@ -61,6 +62,8 @@ TransitionData collectTransitionsAStar(Engine& engine, int maxIters = 100000, in
 RandomRolloutResult randomRolloutRaw(Engine& engine, int maxIters = 100000, int timeoutMs = -1);
 SolverResult solveRandom(Engine& engine, int maxLength = 100, int maxIters = 100000, int timeoutMs = 60000);
 SolverResult solveBFS(Engine& engine, int maxIters = 100000, int timeoutMs = -1);
-SolverResult solveAStar(Engine& engine, int maxIters = 100000, int timeoutMs = -1);
-SolverResult solveGBFS(Engine& engine, int maxIters = 100000, int timeoutMs = -1);
+SolverResult solveAStar(Engine& engine, int maxIters = 100000, int timeoutMs = -1,
+                       std::optional<uint32_t> seed = std::nullopt);
+SolverResult solveGBFS(Engine& engine, int maxIters = 100000, int timeoutMs = -1,
+                      std::optional<uint32_t> seed = std::nullopt);
 SolverResult solveMCTS(Engine& engine, const MCTSOptions& options = MCTSOptions());

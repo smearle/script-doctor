@@ -125,10 +125,15 @@ async function main() {
                 state.maxEpisodeSteps = Number(message.maxEpisodeSteps);
                 state.workers = [];
                 state.obsBuffers = [];
+                const serialization = message.ipcSerialization || 'json';
+                if (!['json', 'advanced'].includes(serialization)) {
+                    throw new Error(`Unsupported IPC serialization: ${serialization}`);
+                }
 
                 for (let workerI = 0; workerI < state.nEnvs; workerI += 1) {
                     state.workers.push(fork(workerPath, [], {
                         stdio: ['ignore', 'ignore', 'ignore', 'ipc'],
+                        serialization,
                     }));
                 }
 
@@ -138,6 +143,7 @@ async function main() {
                     levelI: message.levelI,
                     maxEpisodeSteps: state.maxEpisodeSteps,
                     autoReset: message.autoReset !== false,
+                    reuseScore: message.reuseScore !== false,
                 }, INIT_REQUEST_TIMEOUT_MS)));
                 ensureWorkerResultsOkay(ready);
 

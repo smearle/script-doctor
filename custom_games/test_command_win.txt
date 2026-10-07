@@ -1,0 +1,32 @@
+title Win command without a board change
+
+OBJECTS
+
+Background
+black
+
+Player
+blue
+
+LEGEND
+
+P = Player
+
+SOUNDS
+
+COLLISIONLAYERS
+
+Background
+Player
+
+RULES
+
+[ action Player ] -> win
+
+WINCONDITIONS
+
+no Player
+
+LEVELS
+
+P

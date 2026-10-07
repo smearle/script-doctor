@@ -65,7 +65,10 @@ class PuzzleJaxPuxleEnv(Puzzle):
         _, next_state, _, _, _ = self.env.step_env(state.rng, pj_state, action, self.params)
         next_state = self._pj_to_state(next_state)
 
-        changed = jnp.any(next_state.multihot_level != state.multihot_level)
+        # A command can win without moving or replacing an object. Preserve
+        # that terminal edge while continuing to discard ordinary no-ops.
+        changed = (jnp.any(next_state.multihot_level != state.multihot_level)
+                   | (next_state.win & ~state.win))
         cost = jnp.where(changed, jnp.array(1.0, dtype=jnp.float32), jnp.array(jnp.inf))
 
         next_state = jax.lax.cond(
@@ -199,10 +202,11 @@ class PuzzleJaxPuxleEnv(Puzzle):
 
     def _pj_to_state(self, state: PJState) -> Puzzle.State:
         level = state.multihot_level
-        win, _, heuristic = self.env.check_win(level)
+        _, _, heuristic = self.env.check_win(level)
         return self.State(
             multihot_level=level,
-            win=win,
+            # Board conditions do not include explicit rule-level win commands.
+            win=state.win,
             heuristic=heuristic,
             rng=self._init_state_template.rng,
             prev_heuristic=heuristic,

@@ -1,0 +1,50 @@
+title Cancel with replacement patterns
+
+OBJECTS
+
+Background
+black
+
+Player
+blue
+
+TargetNoop
+red
+
+TargetChange
+green
+
+Marker
+yellow
+
+LEGEND
+
+. = Background
+P = Player
+A = TargetNoop
+B = TargetChange
+Target = TargetNoop or TargetChange
+
+SOUNDS
+
+COLLISIONLAYERS
+
+Background
+TargetNoop, TargetChange
+Marker
+Player
+
+RULES
+
+late [ Player TargetNoop ] -> [ Player TargetNoop ] cancel
+late [ Player TargetChange ] -> [ Player TargetChange Marker ] cancel
+
+WINCONDITIONS
+
+some Player on Target
+
+LEVELS
+
+P.A
+
+P.B

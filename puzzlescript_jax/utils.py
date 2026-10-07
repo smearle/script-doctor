@@ -879,12 +879,8 @@ def init_ps_env_from_js(game, level_i, max_episode_steps, vmap: bool = True):
     return env
 
 
-def init_ps_lark_parser():
-    with open(LARK_SYNTAX_PATH, "r", encoding='utf-8') as file:
-        puzzlescript_grammar = file.read()
-    # Initialize the Lark parser with the PuzzleScript grammar
-    parser = Lark(puzzlescript_grammar, start="ps_game", maybe_placeholders=False)
-    return parser
+# Backward-compatible export; classical workers import the lightweight module.
+from puzzlescript_jax.parser import init_ps_lark_parser
 
     
 def level_to_int_arr(level: dict, n_objs: int):

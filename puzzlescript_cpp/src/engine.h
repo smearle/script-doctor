@@ -100,6 +100,9 @@ public:
     // Load a specific level (optionally with a random seed for deterministic behavior)
     void loadLevel(int levelIndex);
     void loadLevel(int levelIndex, const std::string& randomSeed);
+    // Preserve JS startup/restart AGAIN and dry-run scheduling semantics.
+    // The caller settles pending automatic steps before accepting player input.
+    void setPreserveStartupAgain(bool enabled) { preserveStartupAgain_ = enabled; }
 
     // Seed the RNG (matches JS PuzzleScript's RC4-based seeding)
     void seedRNG(const std::string& seed);
@@ -108,7 +111,7 @@ public:
     // Any other value (-1, or the world model's no-op action id 5) is a
     // no-force tick: the rule pipeline runs with no player input.
     // Returns true if anything changed.
-    bool processInput(int dir);
+    bool processInput(int dir, bool dontDoWin = false, bool probeOnly = false);
 
     // Check win conditions. Returns true if won.
     bool checkWin();
@@ -193,6 +196,7 @@ private:
     Level level_;
     bool winning_ = false;
     bool againing_ = false;
+    bool preserveStartupAgain_ = false;
     RNG rng_;
     int curLevel_ = 0;
 
@@ -233,7 +237,7 @@ private:
     bool ruleTryApply(Rule& rule);
     // Each row returns a list of matches, where each match is {startIdx} or {startIdx, k} or {startIdx, k1, k2}
     std::vector<std::vector<std::vector<int>>> ruleFindMatches(Rule& rule);
-    bool ruleApplyAt(Rule& rule, const std::vector<std::vector<int>>& tuple, bool check, int delta);
+    bool ruleApplyAt(Rule& rule, const std::vector<int>* tuple, bool check, int delta);
     void ruleQueueCommands(Rule& rule);
     bool cellPatternReplace(CellPattern& cp, Rule& rule, int currentIndex);
 

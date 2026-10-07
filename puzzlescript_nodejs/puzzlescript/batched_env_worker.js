@@ -4,6 +4,7 @@ const engine = require('./engine.js');
 const solver = require('./solver.js');
 
 let gameText = null;
+let reuseScore = true;
 let levelI = 0;
 let currentLevelI = 0;
 let numLevels = 0;
@@ -124,7 +125,11 @@ function stepEnv(action) {
         loadLevel();
     }
 
-    currentScore = Number(solver.getScore(engine));
+    // When this step did not reset, nothing since scoreBeforeReset changed the board.
+    // Reuse that score instead of repeating the whole-board heuristic scan.
+    // The override retains the preceding behavior for paired benchmarks.
+    currentScore = reuseScore && !(autoReset && (won || truncated))
+        ? scoreBeforeReset : Number(solver.getScore(engine));
     const level = engine.backupLevel();
     return {
         obs: levelToObservation(level),
@@ -166,6 +171,7 @@ process.on('message', (message) => {
             }
             maxEpisodeSteps = Number(message.maxEpisodeSteps);
             autoReset = message.autoReset !== false;
+            reuseScore = message.reuseScore !== false;
             const initial = resetEnv();
             process.send({
                 ok: true,

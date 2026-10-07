@@ -1,0 +1,42 @@
+title ExIt closed-root and unresolved-frontier proof fixtures
+
+OBJECTS
+
+Background
+black
+
+Player
+blue
+
+Target
+yellow
+
+Wall
+gray
+
+LEGEND
+
+. = Background
+P = Player
+T = Target
+# = Wall
+
+SOUNDS
+
+COLLISIONLAYERS
+
+Background
+Target
+Player, Wall
+
+RULES
+
+WINCONDITIONS
+
+all Player on Target
+
+LEVELS
+
+P.#T
+
+P..T

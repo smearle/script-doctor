@@ -26,16 +26,21 @@ double Engine::getScore() const {
             continue;
         }
 
+        // Match target cells once per condition, instead of once per source cell.
+        std::vector<int> targets;
+        for (int j = 0; j < level_.n_tiles; ++j) {
+            if (cellMatchesWinMask(wc, wc.mask2, wc.aggr2, wc.mask2_is_all, j)) {
+                targets.push_back(j);
+            }
+        }
+
         if (wc.num == 0) {
             int globalMinDistance = maxDistance;
             for (int i = 0; i < level_.n_tiles; ++i) {
                 if (!cellMatchesWinMask(wc, wc.mask1, wc.aggr1, false, i)) {
                     continue;
                 }
-                for (int j = 0; j < level_.n_tiles; ++j) {
-                    if (!cellMatchesWinMask(wc, wc.mask2, wc.aggr2, wc.mask2_is_all, j)) {
-                        continue;
-                    }
+                for (const int j : targets) {
                     globalMinDistance = std::min(globalMinDistance, manhattanDistance(i, j));
                 }
             }
@@ -48,10 +53,7 @@ double Engine::getScore() const {
                 continue;
             }
             int minDistance = maxDistance;
-            for (int j = 0; j < level_.n_tiles; ++j) {
-                if (!cellMatchesWinMask(wc, wc.mask2, wc.aggr2, wc.mask2_is_all, j)) {
-                    continue;
-                }
+            for (const int j : targets) {
                 minDistance = std::min(minDistance, manhattanDistance(i, j));
             }
             score += minDistance;
@@ -79,16 +81,21 @@ double Engine::getScoreNormalized() const {
             continue;
         }
 
+        // Match target cells once per condition, instead of once per source cell.
+        std::vector<int> targets;
+        for (int j = 0; j < level_.n_tiles; ++j) {
+            if (cellMatchesWinMask(wc, wc.mask2, wc.aggr2, wc.mask2_is_all, j)) {
+                targets.push_back(j);
+            }
+        }
+
         if (wc.num == 0) {
             int globalMinDistance = maxDistance;
             for (int i = 0; i < level_.n_tiles; ++i) {
                 if (!cellMatchesWinMask(wc, wc.mask1, wc.aggr1, false, i)) {
                     continue;
                 }
-                for (int j = 0; j < level_.n_tiles; ++j) {
-                    if (!cellMatchesWinMask(wc, wc.mask2, wc.aggr2, wc.mask2_is_all, j)) {
-                        continue;
-                    }
+                for (const int j : targets) {
                     globalMinDistance = std::min(globalMinDistance, manhattanDistance(i, j));
                 }
             }
@@ -102,10 +109,7 @@ double Engine::getScoreNormalized() const {
                 continue;
             }
             int minDistance = maxDistance;
-            for (int j = 0; j < level_.n_tiles; ++j) {
-                if (!cellMatchesWinMask(wc, wc.mask2, wc.aggr2, wc.mask2_is_all, j)) {
-                    continue;
-                }
+            for (const int j : targets) {
                 minDistance = std::min(minDistance, manhattanDistance(i, j));
             }
             score += minDistance;

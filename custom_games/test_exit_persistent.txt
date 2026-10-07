@@ -1,0 +1,36 @@
+title ExIt persistent graph smoke
+
+OBJECTS
+
+Background
+black
+
+Player
+blue
+
+Target
+yellow
+
+LEGEND
+
+. = Background
+P = Player
+T = Target
+
+SOUNDS
+
+COLLISIONLAYERS
+
+Background
+Target
+Player
+
+RULES
+
+WINCONDITIONS
+
+all Player on Target
+
+LEVELS
+
+P.....T

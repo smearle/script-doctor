@@ -329,6 +329,10 @@ SolverResult solveRandom(Engine& engine, int maxLength, int maxIters, int timeou
         const int action = actions[actionDist(rng)];
         solution.push_back(action);
         const bool changed = processInputSearch(engine, action);
+        if (engine.isWinning()) {
+            return makeSolverResult(engine, true, solution, i, start,
+                                    engine.getScore(), engine.backupLevel(), false);
+        }
         if (!changed) {
             continue;
         }
@@ -337,9 +341,6 @@ SolverResult solveRandom(Engine& engine, int maxLength, int maxIters, int timeou
         if (score <= bestScore) {
             bestScore = score;
             bestState = engine.backupLevel();
-        }
-        if (engine.isWinning()) {
-            return makeSolverResult(engine, true, solution, i, start, score, engine.backupLevel(), false);
         }
     }
 
@@ -370,6 +371,14 @@ SolverResult solveBFS(Engine& engine, int maxIters, int timeoutMs) {
         for (int action : actionsForEngine(engine)) {
             engine.restoreLevel(parentState);
             const bool changed = processInputSearch(engine, action);
+            // A rule can win without changing the board, including revisiting
+            // an existing board. Check before no-op and duplicate pruning.
+            if (engine.isWinning()) {
+                auto actions = reconstructSolution(parentState.dat, parents);
+                actions.push_back(action);
+                return makeSolverResult(engine, true, std::move(actions), iterations,
+                                        start, engine.getScore(), engine.backupLevel(), false);
+            }
             if (!changed) {
                 continue;
             }
@@ -382,10 +391,6 @@ SolverResult solveBFS(Engine& engine, int maxIters, int timeoutMs) {
             parents.emplace(nextState.dat, ParentInfo{parentState.dat, action});
             const std::vector<int> currentActions = reconstructSolution(nextState.dat, parents);
             const double score = engine.getScore();
-
-            if (engine.isWinning()) {
-                return makeSolverResult(engine, true, currentActions, iterations, start, score, nextState, false);
-            }
 
             if (score < bestScore || (score == bestScore && currentActions.size() > bestActions.size())) {
                 bestScore = score;
@@ -531,7 +536,7 @@ TransitionData collectTransitionsAStar(Engine& engine, int maxIters, int timeout
     return result;
 }
 
-SolverResult solveAStar(Engine& engine, int maxIters, int timeoutMs) {
+SolverResult solveAStar(Engine& engine, int maxIters, int timeoutMs, std::optional<uint32_t> seed) {
     const auto start = Clock::now();
     const LevelBackup initialState = engine.backupLevel();
     std::priority_queue<PriorityNode, std::vector<PriorityNode>, AStarComparator> frontier;
@@ -542,7 +547,7 @@ SolverResult solveAStar(Engine& engine, int maxIters, int timeoutMs) {
     LevelBackup bestState = initialState;
     double bestScore = engine.getScore();
     int totalIters = 0;
-    std::mt19937 rng(std::random_device{}());
+    std::mt19937 rng(seed ? *seed : std::random_device{}());
 
     while (!frontier.empty() && totalIters < maxIters) {
         if (totalIters % 1000 == 0 && timedOut(start, timeoutMs)) {
@@ -566,6 +571,14 @@ SolverResult solveAStar(Engine& engine, int maxIters, int timeoutMs) {
         for (int action : actions) {
             engine.restoreLevel(current.state);
             const bool changed = processInputSearch(engine, action);
+            // A rule can win without changing the board, including revisiting
+            // an existing board. Check before no-op and duplicate pruning.
+            if (engine.isWinning()) {
+                auto actions = reconstructSolution(current.state.dat, parents);
+                actions.push_back(action);
+                return makeSolverResult(engine, true, std::move(actions), totalIters,
+                                        start, engine.getScore(), engine.backupLevel(), false);
+            }
             if (!changed) {
                 continue;
             }
@@ -582,19 +595,6 @@ SolverResult solveAStar(Engine& engine, int maxIters, int timeoutMs) {
             }
 
             parents.emplace(nextState.dat, ParentInfo{current.state.dat, action});
-            if (engine.isWinning()) {
-                return makeSolverResult(
-                    engine,
-                    true,
-                    reconstructSolution(nextState.dat, parents),
-                    totalIters,
-                    start,
-                    score,
-                    nextState,
-                    false
-                );
-            }
-
             frontier.push(PriorityNode{score + current.numSteps + 1.0, nextState, current.numSteps + 1, score});
         }
 
@@ -613,7 +613,7 @@ SolverResult solveAStar(Engine& engine, int maxIters, int timeoutMs) {
     );
 }
 
-SolverResult solveGBFS(Engine& engine, int maxIters, int timeoutMs) {
+SolverResult solveGBFS(Engine& engine, int maxIters, int timeoutMs, std::optional<uint32_t> seed) {
     const auto start = Clock::now();
     const LevelBackup initialState = engine.backupLevel();
     std::priority_queue<PriorityNode, std::vector<PriorityNode>, GBFSComparator> frontier;
@@ -624,7 +624,7 @@ SolverResult solveGBFS(Engine& engine, int maxIters, int timeoutMs) {
     LevelBackup bestState = initialState;
     double bestScore = engine.getScore();
     int totalIters = 0;
-    std::mt19937 rng(std::random_device{}());
+    std::mt19937 rng(seed ? *seed : std::random_device{}());
 
     while (!frontier.empty() && totalIters < maxIters) {
         if (totalIters % 1000 == 0 && timedOut(start, timeoutMs)) {
@@ -648,6 +648,14 @@ SolverResult solveGBFS(Engine& engine, int maxIters, int timeoutMs) {
         for (int action : actions) {
             engine.restoreLevel(current.state);
             const bool changed = processInputSearch(engine, action);
+            // A rule can win without changing the board, including revisiting
+            // an existing board. Check before no-op and duplicate pruning.
+            if (engine.isWinning()) {
+                auto actions = reconstructSolution(current.state.dat, parents);
+                actions.push_back(action);
+                return makeSolverResult(engine, true, std::move(actions), totalIters,
+                                        start, engine.getScore(), engine.backupLevel(), false);
+            }
             if (!changed) {
                 continue;
             }
@@ -664,19 +672,6 @@ SolverResult solveGBFS(Engine& engine, int maxIters, int timeoutMs) {
             }
 
             parents.emplace(nextState.dat, ParentInfo{current.state.dat, action});
-            if (engine.isWinning()) {
-                return makeSolverResult(
-                    engine,
-                    true,
-                    reconstructSolution(nextState.dat, parents),
-                    totalIters,
-                    start,
-                    score,
-                    nextState,
-                    false
-                );
-            }
-
             frontier.push(PriorityNode{score, nextState, current.numSteps + 1, score});
         }
 

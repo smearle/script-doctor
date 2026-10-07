@@ -102,10 +102,22 @@ def resolve_js_gif_path(level_sol_json_path: str, sol_dir: str, level_i: int) ->
 def multihot_level_from_js_state(level_state, obj_list, target_obj_names=None):
     if isinstance(level_state, (list, tuple, np.ndarray)):
         level_state = np.array(level_state).T
+        multihot_level_js = to_binary_vectors(level_state, len(obj_list))
+        multihot_level_js = rearrange(multihot_level_js, 'h w c -> c h w')[::-1]
     else:
-        level_state = level_to_int_arr(level_state, len(obj_list)).T
-    multihot_level_js = to_binary_vectors(level_state, len(obj_list))
-    multihot_level_js = rearrange(multihot_level_js, 'h w c -> c h w')[::-1]
+        # JS stores consecutive signed 32-bit words for each column-major cell.
+        # Decode those words directly: a single uint64 cannot hold larger games.
+        width, height = level_state['width'], level_state['height']
+        stride = math.ceil(len(obj_list) / 32)
+        data = level_state['dat']
+        words = np.fromiter(
+            (int(data[str(i)] if isinstance(data, dict) else data[i]) & 0xFFFFFFFF
+             for i in range(width * height * stride)), dtype=np.uint32,
+        ).reshape(width, height, stride)
+        channels = np.arange(len(obj_list))
+        multihot_level_js = (
+            (words[:, :, channels // 32] >> (channels % 32).astype(np.uint32)) & 1
+        ).transpose(2, 1, 0).astype(bool)
 
     # Remove duplicate channels from the multihot level.
     new_multihot_level_js = []

@@ -1,0 +1,38 @@
+title Encoded tick must advance without player input
+realtime_interval 0.1
+
+OBJECTS
+
+Background
+black
+
+Player
+blue
+
+Target
+yellow
+
+LEGEND
+
+P = Player
+T = Target
+
+SOUNDS
+
+COLLISIONLAYERS
+
+Background
+Target
+Player
+
+RULES
+
+[ stationary Player ] -> [ right Player ]
+
+WINCONDITIONS
+
+all Player on Target
+
+LEVELS
+
+PT

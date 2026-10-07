@@ -84,6 +84,7 @@ Engine::Engine(Engine&& other) noexcept
       level_(std::move(other.level_)),
       winning_(other.winning_),
       againing_(other.againing_),
+      preserveStartupAgain_(other.preserveStartupAgain_),
       rng_(other.rng_),
       curLevel_(other.curLevel_),
       _o1(std::move(other._o1)), _o2(std::move(other._o2)),
@@ -133,6 +134,7 @@ Engine& Engine::operator=(Engine&& other) noexcept {
         level_ = std::move(other.level_);
         winning_ = other.winning_;
         againing_ = other.againing_;
+        preserveStartupAgain_ = other.preserveStartupAgain_;
         rng_ = other.rng_;
         curLevel_ = other.curLevel_;
         _o1 = std::move(other._o1); _o2 = std::move(other._o2);
@@ -463,9 +465,9 @@ void Engine::loadLevel(int levelIndex, const std::string& randomSeed) {
     // Match JS behavior: run rules once on level start if metadata flag is set.
     // JS calls processInput(-1, dontDoWin=true) here, suppressing win detection.
     if (metadata_.count("run_rules_on_level_start")) {
-        processInput(-1);
+        processInput(-1, preserveStartupAgain_);
         winning_ = false;
-        againing_ = false;
+        if (!preserveStartupAgain_) againing_ = false;
     }
 }
 
@@ -832,8 +834,6 @@ void Engine::matchCellRowEllipsis2(const std::vector<CellPattern*>& cellRow, int
 
 // Find all matches for a rule
 std::vector<std::vector<std::vector<int>>> Engine::ruleFindMatches(Rule& rule) {
-    if (!rule.ruleMask.bitsSetInArray(level_.mapCellContents.data.data()))
-        return {};
 
     int d = level_.delta_index(rule.direction);
     std::vector<std::vector<std::vector<int>>> allRowMatches;
@@ -1076,7 +1076,7 @@ bool Engine::cellPatternReplace(CellPattern& cp, Rule& rule, int currentIndex) {
     return true;
 }
 
-bool Engine::ruleApplyAt(Rule& rule, const std::vector<std::vector<int>>& tuple, bool check, int delta) {
+bool Engine::ruleApplyAt(Rule& rule, const std::vector<int>* tuple, bool check, int delta) {
     // Double check matches if check is true (for multi-tuple rules)
     if (check) {
         for (int rowIdx = 0; rowIdx < static_cast<int>(rule.patterns.size()); ++rowIdx) {
@@ -1173,6 +1173,9 @@ void Engine::ruleQueueCommands(Rule& rule) {
 }
 
 bool Engine::ruleTryApply(Rule& rule) {
+    // Reject impossible rules before constructing a match-list return value.
+    if (!rule.ruleMask.bitsSetInArray(level_.mapCellContents.data.data()))
+        return false;
     int delta = level_.delta_index(rule.direction);
 
     auto matches = ruleFindMatches(rule);
@@ -1180,11 +1183,36 @@ bool Engine::ruleTryApply(Rule& rule) {
 
     bool result = false;
     if (rule.hasReplacements) {
-        auto tuples = generateTuples(matches);
-        for (int ti = 0; ti < static_cast<int>(tuples.size()); ++ti) {
-            bool shouldCheck = (ti > 0);
-            bool success = ruleApplyAt(rule, tuples[ti], shouldCheck, delta);
-            result = success || result;
+        if (matches.size() == 1) {
+            // A one-row tuple already lives in the match list. Borrow it;
+            // re-check later matches against the board after earlier updates.
+            bool shouldCheck = false;
+            for (const auto& match : matches.front()) {
+                result = ruleApplyAt(rule, &match, shouldCheck, delta) || result;
+                shouldCheck = true;
+            }
+        } else {
+            // Enumerate the same Cartesian product without materializing copies
+            // of every tuple. The first pattern row varies fastest, as in generateTuples.
+            std::vector<size_t> indices(matches.size(), 0);
+            std::vector<std::vector<int>> tuple;
+            tuple.reserve(matches.size());
+            for (const auto& row : matches) tuple.push_back(row.front());
+            bool shouldCheck = false;
+            while (true) {
+                result = ruleApplyAt(rule, tuple.data(), shouldCheck, delta) || result;
+                shouldCheck = true;
+                size_t row = 0;
+                for (; row < matches.size(); ++row) {
+                    if (++indices[row] < matches[row].size()) {
+                        tuple[row] = matches[row][indices[row]];
+                        break;
+                    }
+                    indices[row] = 0;
+                    tuple[row] = matches[row].front();
+                }
+                if (row == matches.size()) break;
+            }
         }
     }
 
@@ -1204,6 +1232,8 @@ bool Engine::applyRandomRuleGroup(std::vector<Rule*>& ruleGroup) {
     std::vector<Match> allMatches;
 
     for (int ri = 0; ri < static_cast<int>(ruleGroup.size()); ++ri) {
+        if (!ruleGroup[ri]->ruleMask.bitsSetInArray(level_.mapCellContents.data.data()))
+            continue;
         auto ruleMatches = ruleFindMatches(*ruleGroup[ri]);
         if (!ruleMatches.empty()) {
             auto tuples = generateTuples(ruleMatches);
@@ -1218,7 +1248,7 @@ bool Engine::applyRandomRuleGroup(std::vector<Rule*>& ruleGroup) {
     auto& match = allMatches[chosen];
     Rule& rule = *ruleGroup[match.ruleIndex];
     int delta = level_.delta_index(rule.direction);
-    bool modified = ruleApplyAt(rule, match.tuple, false, delta);
+    bool modified = ruleApplyAt(rule, match.tuple.data(), false, delta);
 
     ruleQueueCommands(rule);
     if (trackRulesFired_ && modified) firedThisCall_.ibitset(rule.globalIndex);
@@ -1314,23 +1344,23 @@ bool Engine::checkWin() {
         bool conditionMet = true;
 
         for (int i = 0; i < level_.n_tiles; ++i) {
-            BitVec cell = level_.getCell(i);
+            const int32_t* cell = level_.objects.data() + i * level_.STRIDE_OBJ;
 
             // Check filter1
             bool f1;
             if (wc.aggr1)
-                f1 = wc.mask1.bitsSetInArray(cell.data.data());
+                f1 = wc.mask1.bitsSetInArray(cell);
             else
-                f1 = wc.mask1.anyBitsInCommon(cell);
+                f1 = !wc.mask1.bitsClearInArray(cell);
 
             // Check filter2
             bool f2;
             if (wc.mask2_is_all) {
                 f2 = true;
             } else if (wc.aggr2) {
-                f2 = wc.mask2.bitsSetInArray(cell.data.data());
+                f2 = wc.mask2.bitsSetInArray(cell);
             } else {
-                f2 = wc.mask2.anyBitsInCommon(cell);
+                f2 = !wc.mask2.bitsClearInArray(cell);
             }
 
             switch (wc.num) {
@@ -1364,18 +1394,17 @@ bool Engine::cellMatchesWinMask(const WinCondition& wc, const BitVec& mask, bool
     if (mask_is_all) {
         return true;
     }
-    BitVec cell(level_.STRIDE_OBJ);
-    level_.getCellInto(tileIndex, cell);
+    const int32_t* cell = level_.objects.data() + tileIndex * level_.STRIDE_OBJ;
     if (aggregate) {
-        return mask.bitsSetInArray(cell.data.data());
+        return mask.bitsSetInArray(cell);
     }
-    return mask.anyBitsInCommon(cell);
+    return !mask.bitsClearInArray(cell);
 }
 
 // ============================================================
 // processInput
 // ============================================================
-bool Engine::processInput(int dir) {
+bool Engine::processInput(int dir, bool dontDoWin, bool probeOnly) {
     againing_ = false;
 
     LevelBackup bak = backupLevel();
@@ -1489,6 +1518,9 @@ bool Engine::processInput(int dir) {
     // CANCEL
     for (const auto& cmd : level_.commandQueue) {
         if (cmd == "cancel") {
+            // JS dry-run processing reports whether CANCEL accompanies
+            // another output command; no result state is committed.
+            if (probeOnly) return level_.commandQueue.size() > 1;
             restoreLevel(bak);
             return false;
         }
@@ -1497,6 +1529,7 @@ bool Engine::processInput(int dir) {
     // RESTART
     for (const auto& cmd : level_.commandQueue) {
         if (cmd == "restart") {
+            if (probeOnly) return true;
             restart();
             return true;
         }
@@ -1504,6 +1537,11 @@ bool Engine::processInput(int dir) {
 
     // Check if anything changed
     bool modified = (level_.objects != bak.dat);
+    if (probeOnly) {
+        if (modified) return true;
+        return std::find(level_.commandQueue.begin(), level_.commandQueue.end(), "win")
+            != level_.commandQueue.end();
+    }
 
     // AGAIN - only if state actually changed
     if (modified) {
@@ -1516,12 +1554,38 @@ bool Engine::processInput(int dir) {
     }
 
     // In-level "message" commands are omitted: nothing is shown or recorded and
-    // play does not pause, so the win check always runs. (The NodeJS wrapper
-    // also dismisses each message as it is raised, but queues its text for
-    // takeMessages(); use it for players that read messages.)
-    checkWin();
+    // play does not pause, so they never suppress the win check. (The NodeJS
+    // wrapper also dismisses each message as it is raised, but queues its text
+    // for takeMessages(); use it for players that read messages.)
+    if (!dontDoWin) {
+        checkWin();
+    }
 
     if (winning_) againing_ = false;
+
+    if (preserveStartupAgain_ && againing_) {
+        // Original JS schedules AGAIN only if a dry-run next tick changes
+        // the board or emits a terminal/restart command. Preserve the full
+        // executor state around this probe, including command queues, RNG
+        // and telemetry; never accept a simulated board as a real successor.
+        auto savedLevel = level_;
+        const auto savedRng = rng_;
+        const bool savedWinning = winning_, savedAgain = againing_;
+        const int savedCurLevel = curLevel_;
+        const auto savedCreate = sfxCreateMask_, savedDestroy = sfxDestroyMask_;
+        const auto savedFired = firedThisCall_, savedAccumulated = firedAccumulated_;
+        auto restore = [&]() {
+            level_ = std::move(savedLevel); rng_ = savedRng;
+            winning_ = savedWinning; againing_ = savedAgain;
+            curLevel_ = savedCurLevel; sfxCreateMask_ = savedCreate; sfxDestroyMask_ = savedDestroy;
+            firedThisCall_ = savedFired; firedAccumulated_ = savedAccumulated;
+        };
+        bool wouldChange;
+        try { wouldChange = processInput(-1, true, true); }
+        catch (...) { restore(); throw; }
+        restore();
+        againing_ = wouldChange;
+    }
 
     // Commit this call's rule-firings into the accumulator. Cancel /
     // require_player_movement rollback paths return earlier without committing,

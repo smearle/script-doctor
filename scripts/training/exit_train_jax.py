@@ -1,6 +1,6 @@
 """Expert Iteration (ExIt) training loop for PuzzleScript games via JAXtar.
 
-This implements a MuZero-esque alternating search-and-train loop for learning
+This implements an alternating search-and-train loop for learning
 neural heuristics on PuzzleScript games where the goal state is **unknown**
 (win conditions are defined by rules, not a target state).
 
@@ -9,11 +9,17 @@ The loop:
     2. Extract training data from the search graph:
        For each expanded node s, compute the *minimum f-value* among all of
        its descendants in the search tree:  min_desc_f(s).
-       The NN target is  min_desc_f(s) - g(s),  which equals h*(s) on the
-       optimal path but is *higher* for states on suboptimal/dead-end branches,
-       teaching the network which states lie on promising paths.
+       The NN target is min_desc_f(s) - g(s). Because the node itself is a
+       candidate descendant, this target never exceeds its built-in heuristic.
+       It is a heuristic-refinement target, not an optimal-distance label or a
+       dead-end certificate, even when the search finds a solution.
     3. Train the neural heuristic on this data (+ replay buffer)
     4. Repeat — improved heuristic → better search → better training data
+
+``exit_train_bellman.py --solution-supervision`` provides an experimental
+common trainer that explicitly backs up replay-verified solution costs with
+either these legacy targets or Bellman targets. Those witnessed costs are
+achievable upper bounds, not shortest-path certificates.
 
 Usage:
     python exit_train_jax.py game=blocks level=0 iterations=50
@@ -57,6 +63,7 @@ from neural_util.param_manager import save_params_with_metadata, load_params_wit
 from train_util.optimizer import setup_optimizer, get_eval_params, get_learning_rate
 from helpers.visualization import PathStep, build_path_steps_from_actions
 from puzzlejax.exit_training_config import EXIT_TRAINING_RELATIVE_DIR, build_run_config, run_subdir_name
+from puzzlejax.exit_targets import compute_targets_and_weights as _compute_targets_and_weights_jit
 
 
 EXIT_TRAINING_DIR = os.path.join(SCRIPT_DIR, EXIT_TRAINING_RELATIVE_DIR)
@@ -346,12 +353,14 @@ class NeuralHeuristicWrapper(Heuristic):
 
     def distance(self, solve_config, current) -> float:
         nn_h = self.neural.distance(solve_config, current)
-        rule_h = float(current.heuristic)
+        # The environment stores negative distance; search minimizes a cost.
+        # Match PuzzleJaxHeuristic and the positive regression targets.
+        rule_h = -float(current.heuristic)
         return self.blend_alpha * nn_h + (1.0 - self.blend_alpha) * rule_h
 
     def batched_distance(self, solve_config, current):
         nn_h = self.neural.batched_distance(solve_config, current)
-        rule_h = current.heuristic.astype(jnp.float32)
+        rule_h = -current.heuristic.astype(jnp.float32)
         return self.blend_alpha * nn_h + (1.0 - self.blend_alpha) * rule_h
 
     def batched_param_distance(self, params, solve_config, current):
@@ -372,58 +381,8 @@ class NeuralHeuristicWrapper(Heuristic):
             blend_alpha = jnp.asarray(self.blend_alpha, dtype=jnp.float32)
 
         nn_h = self.neural.batched_param_distance(nn_params, solve_config, current)
-        rule_h = current.heuristic.astype(jnp.float32)
+        rule_h = -current.heuristic.astype(jnp.float32)
         return blend_alpha * nn_h + (1.0 - blend_alpha) * rule_h
-
-
-@jax.jit
-def _compute_targets_and_weights_jit(g_all, expanded_mask, env_h_all, parent_indices, solved_flag):
-    """Compute min-descendant-f targets and weights on device.
-
-    This is module-scoped (not nested) so JAX can compile once and reuse.
-    """
-    finite_mask = jnp.logical_and(jnp.isfinite(g_all), expanded_mask)
-    f_all = jnp.where(finite_mask, g_all + env_h_all, jnp.inf)
-    min_desc_f = f_all
-
-    n = g_all.shape[0]
-    idx_all = jnp.arange(n, dtype=jnp.int32)
-    sort_key = jnp.where(finite_mask, -g_all, jnp.inf)
-    sorted_idx = idx_all[jnp.argsort(sort_key)]
-
-    def body_fun(i, md):
-        idx = sorted_idx[i]
-        pidx = parent_indices[idx]
-
-        active = finite_mask[idx]
-        parent_ok = jnp.logical_and(pidx >= 0, pidx < n)
-        parent_finite = jnp.where(parent_ok, finite_mask[pidx], False)
-        update_ok = jnp.logical_and(active, parent_finite)
-
-        def do_update(arr):
-            child_v = arr[idx]
-            parent_v = arr[pidx]
-            new_parent_v = jnp.minimum(parent_v, child_v)
-            return arr.at[pidx].set(new_parent_v)
-
-        return jax.lax.cond(update_ok, do_update, lambda arr: arr, md)
-
-    min_desc_f = jax.lax.fori_loop(0, n, body_fun, min_desc_f)
-
-    h_targets_all = jnp.where(finite_mask, min_desc_f - g_all, 0.0)
-    h_targets_all = jnp.maximum(h_targets_all, 0.0)
-
-    expanded_indices = jnp.where(finite_mask, size=n, fill_value=-1)[0]
-    n_expanded_local = jnp.sum(finite_mask)
-
-    global_min_f = jnp.min(jnp.where(finite_mask, min_desc_f, jnp.inf))
-    path_quality_all = min_desc_f - global_min_f
-
-    solved_weights = jnp.where(path_quality_all < 1.0, 3.0, 1.0)
-    unsolved_weights = jnp.where(path_quality_all < 1.0, 1.5, 0.5)
-    weights_all = jnp.where(solved_flag, solved_weights, unsolved_weights).astype(jnp.float32)
-
-    return expanded_indices, n_expanded_local, h_targets_all, weights_all
 
 
 # ---------------------------------------------------------------------------
@@ -445,11 +404,11 @@ def extract_training_data(
     The training target is then:
         target(s) = min_desc_f(s) - g(s)
 
-    This teaches the NN to assign low values to states on promising paths
-    (descendants lead to low-f nodes) and high values to states on dead-end
-    or suboptimal branches.  On the optimal path, target(s) = h*(s) = optimal_cost - g(s),
-    i.e. equivalent to the old target.  Off the optimal path, targets are
-    *higher* than h*, penalizing the NN for recommending those states.
+    Including s itself bounds this target above by h_env(s), so the backup
+    can lower an estimate but cannot teach a detour whose cost exceeds that
+    heuristic. Finding a goal does not remove this ceiling. These targets
+    therefore neither certify optimal distances nor identify dead ends.
+    Verified solution-cost supervision is available in exit_train_bellman.py.
 
     Returns dict with:
         - "multihot_levels": [N, *multihot_shape] bool array
@@ -743,6 +702,8 @@ def run_exit_training(
     initial_dim: int = 512,
     hidden_dim: int = 256,
     res_n: int = 2,
+    render_gifs: bool = True,
+    snapshot_interval: int = 0,
 ):
     """Run the ExIt training loop.
 
@@ -752,7 +713,7 @@ def run_exit_training(
         n_iterations: Number of search-train iterations
         max_nodes: Maximum A* search nodes
         batch_size: A* batch size
-        cost_weight: A* cost weight (f = g + w*h)
+        cost_weight: A* cost weight (f = w*g + h)
         train_steps_per_iter: Gradient steps per search iteration
         train_batch_size: Minibatch size for training
         lr: Learning rate
@@ -764,6 +725,8 @@ def run_exit_training(
         initial_dim: Neural net initial dimension
         hidden_dim: Neural net hidden dimension
         res_n: Number of residual blocks
+        render_gifs: Render diagnostic GIFs; disabling does not change training.
+        snapshot_interval: Save the model before each Nth search (0 disables).
     """
     run_config = build_run_config(
         game=game,
@@ -879,6 +842,14 @@ def run_exit_training(
     # ---- Main ExIt loop ----
     for iteration in range(start_iter, n_iterations):
         iter_start = time.time()
+        if snapshot_interval > 0 and iteration % snapshot_interval == 0:
+            snapshot_dir = os.path.join(save_dir, "snapshots")
+            os.makedirs(snapshot_dir, exist_ok=True)
+            neural_heuristic.save_model(
+                os.path.join(snapshot_dir, f"before_search_{iteration:04d}.pkl"),
+                metadata={**_model_metadata(run_config), "before_search_iteration": iteration,
+                          "blend_alpha": float(combined_heuristic.blend_alpha)},
+            )
         print(f"\n{'─'*70}")
         print(f"Iteration {iteration}/{n_iterations}")
         print(f"{'─'*70}")
@@ -900,8 +871,9 @@ def run_exit_training(
         generated = int(search_result.generated_size)
         states_per_sec = generated / search_time if search_time > 0 else 0
 
+        sol_cost = float(search_result.get_cost(search_result.solved_idx)) if solved else None
         status = "SOLVED" if solved else "UNSOLVED"
-        cost_str = f"cost={float(search_result.get_cost(search_result.solved_idx)):.1f}" if solved else ""
+        cost_str = f"cost={sol_cost:.1f}" if solved else ""
         print(f"{status} {cost_str} | {generated:,} states | {search_time:.2f}s | {states_per_sec:,.0f} st/s")
 
         # ==================================================================
@@ -918,7 +890,6 @@ def run_exit_training(
 
         # Track solution quality
         if solved:
-            sol_cost = float(search_result.get_cost(search_result.solved_idx))
             if sol_cost < best_cost:
                 best_cost = sol_cost
                 best_iter = iteration
@@ -934,7 +905,7 @@ def run_exit_training(
         print("  [Best-f] Extracting best env-f path ...", end=" ", flush=True)
         best_f_info = extract_best_env_f_path(
             puzzle, search_result, solve_config, init_state,
-            rule_heuristic=rule_heuristic, render=True,
+            rule_heuristic=rule_heuristic, render=render_gifs,
         )
         if best_f_info is not None:
             print(f"g={best_f_info['best_g']:.1f}  h_env={best_f_info['best_env_h']:.1f}  "
@@ -960,6 +931,12 @@ def run_exit_training(
                     print(f"           GIF render failed: {e}")
         else:
             print("No expanded nodes")
+
+        # Targets and diagnostics are now independent of the search table.
+        # Drop it before training and the next search: assignment evaluates
+        # its RHS first, so retaining this variable would keep two full
+        # search tables alive while the next search allocates its result.
+        del search_result
 
         # ==================================================================
         # Phase 3: TRAIN neural heuristic
@@ -1002,14 +979,14 @@ def run_exit_training(
         record = {
             "iteration": iteration,
             "solved": solved,
-            "cost": float(search_result.get_cost(search_result.solved_idx)) if solved else None,
+            "cost": sol_cost,
             "generated_states": generated,
             "search_time": search_time,
             "states_per_sec": states_per_sec,
             "buffer_size": replay.size,
             "loss": float(mean_loss) if replay.size >= train_batch_size else None,
             "iter_time": iter_time,
-            "blend_alpha": blend_alpha,
+            "blend_alpha": float(search_params["blend_alpha"]),
             "best_cost": best_cost if best_cost < float("inf") else None,
             # Best-f diagnostics (environment heuristic)
             "best_env_h": best_f_info["best_env_h"] if best_f_info else None,
@@ -1054,6 +1031,12 @@ def run_exit_training(
 
     # Save final model and history
     neural_heuristic.save_model(model_path, metadata=_model_metadata(run_config))
+    if snapshot_interval > 0:
+        neural_heuristic.save_model(
+            os.path.join(save_dir, "snapshots", f"after_training_{n_iterations:04d}.pkl"),
+            metadata={**_model_metadata(run_config), "completed_iterations": n_iterations,
+                      "blend_alpha": float(combined_heuristic.blend_alpha)},
+        )
     replay.save(replay_path)
     _write_run_config(save_dir, run_config)
     with open(os.path.join(save_dir, "history.json"), "w") as f:
