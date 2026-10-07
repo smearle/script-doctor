@@ -1,0 +1,440 @@
+<title>Same Level, New Rules</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&family=Silkscreen&display=swap">
+<style>
+/* Layout: masthead, a scrolling rail of level cards, then a bench: the level's games on the
+   left, the cabinet (screen, controls, facts, rules) on the right; one column on phones. */
+:root {
+  --bg: #eef0ec; --panel: #fafbf8; --ink: #17191c; --muted: #59616a; --line: #d4d8d1;
+  --hover: #e3e7e0; --chip: #e2e6df; --accent: #0b6b66; --accent-ink: #ffffff;
+  --warm: #8f4f00; --warm-soft: #f5e3c6; --violet: #5a40a3; --violet-soft: #e6e0f5;
+  --blue: #23559f; --blue-soft: #dbe5f6; --screen: #050607; --swatch-edge: rgba(0, 0, 0, 0.28);
+  --font-display: "Silkscreen", ui-monospace, "Courier New", monospace;
+  --font-body: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0f1113; --panel: #171a1d; --ink: #e4e7e9; --muted: #9aa3ab; --line: #2b3036;
+    --hover: #20252a; --chip: #252a30; --accent: #4cc9bf; --accent-ink: #062321;
+    --warm: #f2a541; --warm-soft: #3a2a12; --violet: #b8a5f2; --violet-soft: #2a2342;
+    --blue: #8fb5f3; --blue-soft: #1c2a40; --screen: #000000; --swatch-edge: rgba(255, 255, 255, 0.32);
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0f1113; --panel: #171a1d; --ink: #e4e7e9; --muted: #9aa3ab; --line: #2b3036;
+  --hover: #20252a; --chip: #252a30; --accent: #4cc9bf; --accent-ink: #062321;
+  --warm: #f2a541; --warm-soft: #3a2a12; --violet: #b8a5f2; --violet-soft: #2a2342;
+  --blue: #8fb5f3; --blue-soft: #1c2a40; --screen: #000000; --swatch-edge: rgba(255, 255, 255, 0.32);
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--ink); font-family: var(--font-body); font-size: 15px; line-height: 1.5; }
+.wrap { max-width: 1320px; margin: 0 auto; padding-inline: 20px; padding-block: 28px 48px; display: grid; gap: 22px; }
+@media (max-width: 600px) { .wrap { padding-inline: 16px; padding-block: 18px 36px; } }
+h1, h2, h3, p { margin: 0; }
+button { font: inherit; color: inherit; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+.masthead { display: grid; gap: 10px; }
+.masthead h1 { font-family: var(--font-display); font-weight: 400; font-size: clamp(28px, 4.4vw, 44px); line-height: 1.05; letter-spacing: 0.01em; text-wrap: balance; }
+.lede { max-width: 74ch; }
+.tally { display: flex; flex-wrap: wrap; gap: 8px 26px; margin: 4px 0 0; font-variant-numeric: tabular-nums; }
+.tally div { display: grid; }
+.tally dt { font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); }
+.tally dd { margin: 0; font-family: var(--font-mono); font-size: 20px; }
+.notice { padding: 10px 14px; border-radius: 6px; background: var(--warm-soft); border: 1px solid var(--warm); max-width: 90ch; }
+
+.rail { display: flex; gap: 10px; overflow-x: auto; padding: 2px 2px 8px; scroll-snap-type: x proximity; }
+.lvl { flex: 0 0 auto; width: 128px; display: grid; gap: 4px; padding: 7px; border: 1px solid var(--line); border-radius: 6px; background: var(--panel); text-align: left; cursor: pointer; scroll-snap-align: start; }
+.lvl:hover { background: var(--hover); }
+.lvl[aria-pressed="true"] { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
+.lvl canvas { width: 112px; height: 112px; object-fit: contain; background: var(--screen); border-radius: 3px; image-rendering: pixelated; }
+.lvl .lid { font-family: var(--font-mono); font-size: 12px; }
+.lvl .n { font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
+
+.bench { display: grid; grid-template-columns: minmax(250px, 310px) minmax(0, 1fr); gap: 22px; align-items: start; }
+@media (max-width: 880px) { .bench { grid-template-columns: minmax(0, 1fr); } }
+.roster { display: grid; gap: 10px; min-width: 0; }
+.level-head { display: grid; gap: 4px; font-size: 13px; color: var(--muted); }
+.level-head h2 { font-family: var(--font-mono); font-weight: 500; font-size: 16px; color: var(--ink); }
+.game-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; max-height: 72vh; overflow-y: auto; }
+@media (max-width: 880px) { .game-list { max-height: 38vh; } }
+.game { width: 100%; display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 2px 8px; align-items: center; padding: 7px 10px; border: 1px solid transparent; border-radius: 5px; background: transparent; text-align: left; cursor: pointer; }
+.game:hover { background: var(--hover); }
+.game[aria-current="true"] { background: var(--panel); border-color: var(--line); }
+.game .name { font-family: var(--font-mono); font-size: 13px; }
+.game[aria-current="true"] .name { font-weight: 500; color: var(--accent); }
+.game .badges { display: flex; gap: 4px; justify-content: flex-end; flex-wrap: wrap; }
+.game .meta { grid-column: 1 / -1; font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.omitted { font-size: 12px; color: var(--muted); }
+
+.chip { display: inline-flex; align-items: center; font-size: 11.5px; line-height: 1; padding: 4px 7px; border-radius: 999px; background: var(--chip); white-space: nowrap; }
+.chip.puzzle { background: var(--warm-soft); color: var(--warm); font-weight: 500; }
+.chip.random { background: var(--violet-soft); color: var(--violet); }
+.chip.realtime { background: var(--blue-soft); color: var(--blue); }
+.chip.orig { background: transparent; box-shadow: inset 0 0 0 1px var(--ink); }
+.chip.muted { color: var(--muted); }
+
+.cabinet { min-width: 0; display: grid; gap: 14px; padding: 18px; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; }
+@media (max-width: 600px) { .cabinet { padding: 12px; } }
+.cab-head { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; }
+.cab-head h2 { font-family: var(--font-mono); font-weight: 500; font-size: 18px; margin-right: 4px; }
+.tags { display: flex; flex-wrap: wrap; gap: 6px; }
+.screen { position: relative; width: 100%; aspect-ratio: var(--ar, 1); max-height: 64vh; min-height: 220px; background: var(--screen); border-radius: 6px; overflow: hidden; }
+.screen iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; display: block; }
+.screen:focus-within { outline: 2px solid var(--accent); outline-offset: 2px; }
+.screen canvas.still { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; image-rendering: pixelated; }
+.console { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 10px 16px; }
+.keys { font-size: 13px; color: var(--muted); }
+kbd { font-family: var(--font-mono); font-size: 12px; padding: 1px 5px; border: 1px solid var(--line); border-bottom-width: 2px; border-radius: 3px; background: var(--bg); color: var(--ink); }
+.actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.actions button, .actions a { font-size: 13px; padding: 6px 12px; border-radius: 5px; border: 1px solid var(--line); background: var(--bg); color: var(--ink); cursor: pointer; text-decoration: none; }
+.actions button:hover, .actions a:hover { background: var(--hover); }
+.actions .primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+.actions .primary:hover { background: var(--accent); filter: brightness(1.08); }
+.status { min-height: 1.3em; font-size: 13px; color: var(--accent); }
+.status.error { color: var(--warm); }
+#copyFallback { width: 100%; height: 170px; font-family: var(--font-mono); font-size: 12px; background: var(--bg); color: var(--ink); border: 1px solid var(--line); border-radius: 5px; padding: 8px; }
+.facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 10px 20px; margin: 0; }
+.facts dt { font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); }
+.facts dd { margin: 2px 0 0; font-size: 14px; font-variant-numeric: tabular-nums; }
+.source { display: grid; grid-template-columns: minmax(0, 1fr) minmax(170px, 230px); gap: 18px; }
+@media (max-width: 700px) { .source { grid-template-columns: minmax(0, 1fr); } }
+.source > section { min-width: 0; }
+h3 { font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); font-weight: 600; margin-bottom: 6px; }
+.code { margin: 0 0 14px; font-family: var(--font-mono); font-size: 12.5px; line-height: 1.65; background: var(--bg); border: 1px solid var(--line); border-radius: 5px; padding: 10px 12px; overflow-x: auto; white-space: pre; }
+.code .kw { color: var(--accent); }
+.code .pu { color: var(--muted); }
+.code .cmd { color: var(--warm); font-weight: 500; }
+.code .none { color: var(--muted); font-style: italic; font-family: var(--font-body); }
+.nm { white-space: nowrap; }
+.nm::before { content: ""; display: inline-block; width: 0.8em; height: 0.8em; margin-right: 0.25em; vertical-align: -0.06em; background: var(--sw); border-radius: 2px; box-shadow: inset 0 0 0 1px var(--swatch-edge); }
+.nm.prop { text-decoration: underline dotted; text-underline-offset: 3px; cursor: help; }
+.key { list-style: none; margin: 0; padding: 0; display: grid; gap: 3px; font-family: var(--font-mono); font-size: 12.5px; }
+.key li { display: flex; gap: 8px; align-items: baseline; min-width: 0; }
+.key .what { color: var(--muted); font-size: 11.5px; margin-left: auto; text-align: right; overflow-wrap: anywhere; }
+.orig summary { cursor: pointer; font-size: 13.5px; color: var(--accent); }
+.orig[open] summary { margin-bottom: 10px; }
+.colophon { display: grid; gap: 8px; font-size: 12.5px; color: var(--muted); max-width: 96ch; }
+.colophon code { font-family: var(--font-mono); font-size: 12px; overflow-wrap: anywhere; }
+.colophon pre { white-space: pre-wrap; font-size: 11.5px; }
+@media (prefers-reduced-motion: reduce) { * { scroll-behavior: auto !important; transition: none !important; } }
+</style>
+
+<div class="wrap">
+  <header class="masthead">
+    <h1>Same Level, New Rules</h1>
+    <p class="lede">Each level below comes from a held-out human PuzzleScript game. A small transformer saw the level with its objects, legend and collision layers, and wrote only the rules and win conditions. Every game listed compiles in the reference engine and changes the level under random play. Samples that behaved identically under 16 shared random action sequences are listed once.</p>
+    <dl class="tally" id="tally"></dl>
+  </header>
+
+  <p class="notice" id="evalNotice" hidden>This viewer blocks the code that PuzzleScript generates while it runs, so the games cannot play here. Each game shows a still of its level instead. Use <strong>Copy source</strong>, paste it into the PuzzleScript editor, and press Run.</p>
+
+  <nav class="rail" id="rail" aria-label="Levels"></nav>
+
+  <section class="bench">
+    <aside class="roster" aria-label="Games for this level">
+      <div class="level-head" id="levelHead"></div>
+      <ul class="game-list" id="gameList"></ul>
+      <p class="omitted" id="omitted"></p>
+    </aside>
+
+    <article class="cabinet">
+      <header class="cab-head">
+        <h2 id="gameTitle"></h2>
+        <div class="tags" id="gameTags"></div>
+      </header>
+      <div class="screen" id="screen"></div>
+      <div class="console">
+        <p class="keys" id="keys"></p>
+        <div class="actions">
+          <button type="button" id="restartBtn">Restart</button>
+          <button type="button" id="copyBtn" class="primary">Copy source</button>
+          <a href="https://www.puzzlescript.net/editor.html" target="_blank" rel="noopener">PuzzleScript editor ↗</a>
+        </div>
+      </div>
+      <p class="status" id="status" role="status"></p>
+      <textarea id="copyFallback" readonly hidden aria-label="Game source"></textarea>
+      <dl class="facts" id="facts"></dl>
+      <div class="source">
+        <section>
+          <h3 id="rulesHeading">Rules</h3>
+          <pre class="code" id="rules"></pre>
+          <h3>Win conditions</h3>
+          <pre class="code" id="wins"></pre>
+        </section>
+        <section>
+          <h3>Objects</h3>
+          <ul class="key" id="key"></ul>
+        </section>
+      </div>
+      <details class="orig" id="origBox">
+        <summary>Rules of the original game for this level</summary>
+        <pre class="code" id="origRules"></pre>
+        <pre class="code" id="origWins"></pre>
+      </details>
+    </article>
+  </section>
+
+  <footer class="colophon" id="colophon"></footer>
+</div>
+
+<script type="application/json" id="psPlayer">__PLAYER_JSON__</script>
+<script type="application/json" id="galleryData">__GALLERY_JSON__</script>
+<script>
+(() => {
+  'use strict';
+  const $ = (id) => document.getElementById(id);
+  const PLAYER = JSON.parse($('psPlayer').textContent);
+  const DATA = JSON.parse($('galleryData').textContent);
+  const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  const fmt = (n) => Number(n).toLocaleString('en-US');
+
+  // PuzzleScript compiles each game's rules into JavaScript functions at run time.
+  let canRun = true;
+  try { canRun = new Function('return 1')() === 1; } catch (e) { canRun = false; }
+  $('evalNotice').hidden = canRun;
+
+  const t = DATA.totals;
+  $('tally').innerHTML = [
+    ['Samples', fmt(t.samples)], ['Playable', fmt(t.playable)], ['Change the level', fmt(t.dynamic)],
+    ['Listed (distinct behaviour)', fmt(t.listed)], ['Puzzles', fmt(t.puzzles)],
+  ].map(([k, v]) => `<div><dt>${esc(k)}</dt><dd>${esc(v)}</dd></div>`).join('');
+  $('colophon').innerHTML = DATA.colophon;
+
+  const games = new Map();
+  DATA.levels.forEach((lv) => lv.games.forEach((g) => games.set(g.id, { lv, g })));
+  let cur = null;
+  let frame = null;
+
+  const label = (g) => (g.kind === 'human' ? 'Original game' : `T${g.temp} · #${String(g.num).padStart(3, '0')}`);
+  const noWin = (g) => !g.wins.length && !g.rules.some((r) => /(^|\s)win(\s|$)/i.test(r));
+
+  function drawLevel(canvas, lv, px) {
+    const cell = Math.max(1, Math.floor(px / Math.max(lv.width, lv.height)));
+    canvas.width = lv.width * cell;
+    canvas.height = lv.height * cell;
+    const ctx = canvas.getContext('2d');
+    lv.cells.forEach((row, y) => row.forEach((c, x) => {
+      ctx.fillStyle = lv.pal[c];
+      ctx.fillRect(x * cell, y * cell, cell, cell);
+    }));
+  }
+
+  // Swatch for an object, or stripes of up to four member colours for a property.
+  function swatch(lv, name) {
+    if (lv.objects[name]) return lv.objects[name];
+    const ent = lv.legend[name];
+    if (!ent) return null;
+    const cols = ent.members.map((m) => lv.objects[m]).filter(Boolean).slice(0, 4);
+    if (!cols.length) return null;
+    if (cols.length === 1) return cols[0];
+    const w = 100 / cols.length;
+    return `linear-gradient(90deg, ${cols.map((c, i) => `${c} ${i * w}% ${(i + 1) * w}%`).join(', ')})`;
+  }
+  function nameSpan(lv, raw) {
+    const name = raw.toLowerCase();
+    const ent = lv.objects[name] ? null : lv.legend[name];
+    const title = ent ? ` title="${esc(`${name} = ${ent.members.join(` ${ent.op} `)}`)}"` : '';
+    return `<span class="nm${ent ? ' prop' : ''}" style="--sw:${esc(swatch(lv, name))}"${title}>${esc(raw)}</span>`;
+  }
+  const KW = new Set(['up', 'down', 'left', 'right', '^', 'v', '>', '<', 'moving', 'stationary', 'action', 'no',
+    'randomdir', 'random', 'horizontal', 'vertical', 'orthogonal', 'perpendicular', 'parallel', 'late', 'rigid',
+    '+', 'startloop', 'endloop', 'all', 'some', 'any', 'on']);
+  const CMD = new Set(['again', 'cancel', 'checkpoint', 'restart', 'win', 'message'].concat(
+    Array.from({ length: 11 }, (_, i) => `sfx${i}`)));
+  function highlight(lv, line) {
+    return line.split(/(\s+|\[|\]|\||->)/).filter((s) => s !== '').map((s) => {
+      if (/^\s+$/.test(s)) return s;
+      if (s === '[' || s === ']' || s === '|' || s === '->' || s === '...') return `<span class="pu">${esc(s)}</span>`;
+      const low = s.toLowerCase();
+      if (swatch(lv, low)) return nameSpan(lv, s);
+      if (KW.has(low)) return `<span class="kw">${esc(s)}</span>`;
+      if (CMD.has(low)) return `<span class="cmd">${esc(s)}</span>`;
+      return esc(s);
+    }).join('');
+  }
+  function codeBlock(el, lv, lines, empty) {
+    el.innerHTML = lines.length ? lines.map((l) => highlight(lv, l)).join('\n') : `<span class="none">${esc(empty)}</span>`;
+  }
+
+  function tagList(lv, g, compact) {
+    const out = [];
+    if (g.kind === 'human' && !compact) out.push(['orig', 'Original']);
+    if (g.puzzle) out.push(['puzzle', compact ? `${g.bfs.sol_len} moves` : `Puzzle · ${g.bfs.sol_len} moves`]);
+    else if (g.bfs.solved && !g.rollout.won) out.push(['muted', `solved in ${g.bfs.sol_len}`]);
+    if (g.rollout.won) out.push(['muted', compact ? 'random wins' : 'Random play wins']);
+    if (noWin(g)) out.push(['muted', compact ? 'no win' : 'No win condition']);
+    if (g.stochastic) out.push(['random', compact ? 'random' : 'Random rules']);
+    if (lv.realtime && !compact) out.push(['realtime', 'Real-time']);
+    return out.map(([c, s]) => `<span class="chip ${c}">${esc(s)}</span>`).join('');
+  }
+
+  function searchText(b) {
+    if (b.solved) return `solved in ${b.sol_len} moves (${fmt(b.iters)} search steps)`;
+    if (b.timeout) return `no solution within 10 s (${fmt(b.iters)} search steps)`;
+    if (b.iters >= 20000) return 'no solution within 20,000 search steps';
+    return `no solution; search ended after ${fmt(b.iters)} steps`;
+  }
+
+  function renderRail() {
+    $('rail').innerHTML = '';
+    DATA.levels.forEach((lv) => {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'lvl';
+      b.dataset.level = lv.id;
+      b.setAttribute('aria-pressed', 'false');
+      const c = document.createElement('canvas');
+      drawLevel(c, lv, 112);
+      c.setAttribute('aria-hidden', 'true');
+      const n = lv.games.length - 1;
+      b.append(c);
+      b.insertAdjacentHTML('beforeend', `<span class="lid">${esc(lv.short)}</span><span class="n">${n} game${n === 1 ? '' : 's'}${lv.stats.puzzles ? ` · ${lv.stats.puzzles} puzzle${lv.stats.puzzles === 1 ? '' : 's'}` : ''}</span>`);
+      b.setAttribute('aria-label', `Level ${lv.short}, ${n} generated games`);
+      b.addEventListener('click', () => select(lv.games[1] ? lv.games[1].id : lv.games[0].id, false));
+      $('rail').append(b);
+    });
+  }
+
+  function renderRoster(lv) {
+    const s = lv.stats;
+    $('levelHead').innerHTML = `<h2>Level ${esc(lv.short)}</h2>
+      <p>${lv.width} × ${lv.height} cells, ${lv.orig.inLevel} objects in the level · original game: ${lv.orig.objects} objects, ${lv.orig.rules} rules${lv.realtime ? ', real-time' : ''}</p>
+      <p>Generated: ${s.playable} of ${s.samples} samples playable, ${s.dynamic} change the level, ${s.puzzles} puzzle${s.puzzles === 1 ? '' : 's'}.</p>`;
+    $('gameList').innerHTML = lv.games.map((g) => `<li><button type="button" class="game" data-id="${esc(g.id)}">
+      <span class="name">${esc(label(g))}</span><span class="badges">${tagList(lv, g, true)}</span>
+      <span class="meta">${g.rules.length} rule line${g.rules.length === 1 ? '' : 's'} · ${g.states} probe states${g.class_size > 1 ? ` · ${g.class_size} alike` : ''}</span>
+    </button></li>`).join('');
+    $('gameList').querySelectorAll('.game').forEach((b) => b.addEventListener('click', (e) => select(b.dataset.id, e.detail > 0)));
+    const hidden = s.playable - s.dynamic;
+    const dup = s.dynamic - (lv.games.length - 1);
+    const parts = [];
+    if (hidden) parts.push(`${hidden} playable sample${hidden === 1 ? '' : 's'} that never change the level`);
+    if (dup) parts.push(`${dup} duplicate behaviour${dup === 1 ? '' : 's'}`);
+    $('omitted').textContent = parts.length ? `Not listed: ${parts.join(' and ')}.` : '';
+  }
+
+  function keysText(lv) {
+    const f = new Set(lv.flags);
+    const k = ['<kbd>←</kbd><kbd>↑</kbd><kbd>→</kbd><kbd>↓</kbd> or <kbd>WASD</kbd> move'];
+    if (!f.has('noaction')) k.push('<kbd>X</kbd> acts');
+    if (!f.has('noundo')) k.push('<kbd>Z</kbd> undoes');
+    if (!f.has('norestart')) k.push('<kbd>R</kbd> restarts');
+    return `${k.join(' · ')}. On a phone, swipe and tap.`;
+  }
+
+  function play(lv, g, focus) {
+    const screen = $('screen');
+    screen.style.setProperty('--ar', `${lv.width} / ${lv.height}`);
+    screen.replaceChildren();
+    frame = null;
+    if (!canRun) {
+      const c = document.createElement('canvas');
+      c.className = 'still';
+      drawLevel(c, lv, 480);
+      screen.append(c);
+      return;
+    }
+    const title = `${lv.short} · ${label(g)}`;
+    const src = `title ${title}\n` + g.src;
+    const f = document.createElement('iframe');
+    f.title = `Game ${title}`;
+    f.srcdoc = PLAYER.split('__GAMETITLE__').join(esc(title))
+      .replace('"__GAMEDAT__"', () => JSON.stringify(src).replace(/</g, '\\u003c'));
+    if (focus) f.addEventListener('load', () => { try { f.contentWindow.focus(); } catch (e) { /* the frame keeps its own focus */ } });
+    screen.append(f);
+    frame = f;
+  }
+
+  function setStatus(text, isError) {
+    $('status').textContent = text || '';
+    $('status').classList.toggle('error', !!isError);
+  }
+
+  function renderCabinet(lv, g) {
+    $('gameTitle').textContent = label(g);
+    $('gameTags').innerHTML = tagList(lv, g, false);
+    $('keys').innerHTML = keysText(lv);
+    const r = g.rollout;
+    const facts = [
+      ['Written by', g.kind === 'human' ? 'the original author' : `the model at temperature ${g.temp}`],
+      ['Rules', `${g.rules.length} line${g.rules.length === 1 ? '' : 's'}`],
+      ['Random play, 200 moves', `changed the level on ${r.changed} moves, ${r.distinct} distinct states${r.won ? ', won' : ''}`],
+      ['Breadth-first search', searchText(g.bfs)],
+    ];
+    if (g.kind !== 'human') facts.push(['Behaviour', g.class_size > 1 ? `${g.class_size} samples behaved identically` : 'unique among the samples']);
+    $('facts').innerHTML = facts.map(([k, v]) => `<div><dt>${esc(k)}</dt><dd>${esc(v)}</dd></div>`).join('');
+    $('rulesHeading').textContent = g.kind === 'human' ? 'Rules (original)' : 'Rules written by the model';
+    codeBlock($('rules'), lv, g.rules, 'No rules');
+    codeBlock($('wins'), lv, g.wins, 'None. The level can only be won by a rule that fires win.');
+    const used = new Set(lv.inLevel);
+    const props = [];
+    g.rules.concat(g.wins).forEach((line) => line.toLowerCase().split(/[\s[\]|]+/).forEach((w) => {
+      if (lv.objects[w]) used.add(w);
+      else if (lv.legend[w] && w.length > 1 && !props.includes(w)) props.push(w);
+    }));
+    const objs = [...used].sort((a, b) => (lv.layers[a] ?? 99) - (lv.layers[b] ?? 99) || a.localeCompare(b, 'en', { numeric: true }));
+    $('key').innerHTML = objs.map((o) => `<li>${nameSpan(lv, o)}<span class="what">${lv.inLevel.includes(o) ? 'in level · ' : ''}layer ${(lv.layers[o] ?? 0) + 1}</span></li>`).join('')
+      + props.map((p) => `<li>${nameSpan(lv, p)}<span class="what">${esc(lv.legend[p].members.join(` ${lv.legend[p].op} `))}</span></li>`).join('');
+    const orig = lv.games[0];
+    $('origBox').hidden = g.kind === 'human';
+    codeBlock($('origRules'), lv, orig.rules, 'No rules');
+    codeBlock($('origWins'), lv, orig.wins, 'No win conditions');
+  }
+
+  function select(id, focus) {
+    const hit = games.get(id);
+    if (!hit) return;
+    const { lv, g } = hit;
+    const newLevel = !cur || cur.lv !== lv;
+    cur = { lv, g };
+    if (newLevel) renderRoster(lv);
+    document.querySelectorAll('.lvl').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.level === lv.id)));
+    document.querySelectorAll('.game').forEach((b) => {
+      const on = b.dataset.id === id;
+      b.setAttribute('aria-current', String(on));
+      if (on && newLevel) b.scrollIntoView({ block: 'nearest' });
+    });
+    $('copyFallback').hidden = true;
+    setStatus('');
+    renderCabinet(lv, g);
+    play(lv, g, focus);
+    try { history.replaceState(null, '', `#${id}`); } catch (e) { /* the address bar is optional */ }
+  }
+
+  window.addEventListener('message', (e) => {
+    if (!frame || e.source !== frame.contentWindow || !e.data) return;
+    if (e.data.psGalleryError) setStatus(`The engine stopped with an error: ${e.data.psGalleryError}`, true);
+    if (e.data.psGalleryWon) setStatus('Solved. Press X in the game to play again.');
+  });
+
+  $('restartBtn').addEventListener('click', () => { if (cur) { setStatus(''); play(cur.lv, cur.g, true); } });
+  $('copyBtn').addEventListener('click', () => {
+    if (!cur) return;
+    const text = cur.g.src;
+    const fallback = () => {
+      const ta = $('copyFallback');
+      ta.value = text;
+      ta.hidden = false;
+      ta.focus();
+      ta.select();
+      setStatus('Copy the selected source with Ctrl+C or ⌘C, then paste it into the editor and press Run.');
+    };
+    try {
+      navigator.clipboard.writeText(text).then(() => setStatus('Source copied. Paste it into the PuzzleScript editor and press Run.'), fallback);
+    } catch (e) { fallback(); }
+  });
+
+  renderRail();
+  let start = decodeURIComponent((location.hash || '').slice(1));
+  if (!games.has(start)) {
+    const lv = DATA.levels.find((l) => l.id === start) || DATA.levels[0];
+    start = (lv.games[1] || lv.games[0]).id;
+  }
+  select(start, false);
+})();
+</script>
