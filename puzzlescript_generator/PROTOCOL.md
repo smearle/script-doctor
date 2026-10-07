@@ -143,3 +143,76 @@ checked for a win again. `ps_check.js` now makes message output a no-op. Stage 1
 
 **Operations.** Same pod and board job. Pipeline `run_canon.sh` (outputs in `/workspace/psgen/canon`), follow-up
 `controller.py watch canon`. Results go to `results/puzzlescript_generator_20261006/canonical-01/`.
+
+## Stage 3: mechanics written for a given level (written 2026-10-07, before its prep or training)
+
+User design (2026-10-07): "fix a few busy/rich levels. Then have our pretrained model be such that it can suggest
+mechanics for specific levels/object sets, or is statically trained to generate the mechanics for a given level...
+Then train a DT agent on the resultant distributions of games. Reward the generator for DT learning progress
+(perhaps as measured by the progress of the policy according to the fixed WM after this training round)." This
+stage builds the generator and picks the levels; DT and the teacher come later.
+
+**Level-first format** (`level_first.py`). A document is one canonical game restricted to one of its levels, written
+level first.
+- **Prompt:** the grid, one glyph line per distinct cell, and the definitions of `background` and `player` when they
+  are legend entries. A line `MECHANICS` ends it.
+- **Mechanics:** flags, all objects (also those absent from the level), the other legend entries, collision layers,
+  rules and win conditions.
+- **Numbering:** objects in the level are o1..oK by first appearance (row-major; ties within a cell by occupancy in
+  the level, then canonical number), absent objects follow. So an observation channel means the same cells in every
+  game written for the level.
+- **Back to PuzzleScript:** `to_standard` writes the engine's section order and rejects malformed text rather than
+  guessing.
+
+**Corpus** (`prepare_level_first.py`).
+- Stage 2's extraction, canonicalization and equivalence check, on the current engine (`dfdeabcd`).
+- One document per (distinct mechanics, level), at most 8 levels per mechanics (stage 2 kept 32 per document). This
+  caps how much a many-level game outweighs a one-level game.
+- Every document's standard text must compile with a playable level. Every document is checked by `ps_equiv.js`
+  against the canonical game restricted to that level. Failures are dropped and counted.
+- Stage 2's split rule, per mechanics. Documents over 8,192 tokens are dropped, since training would cut their
+  mechanics.
+
+**Model.** Stage 2's selected recipe (8x512, dropout 0.1, lr 1e-3, new BPE 8192) at two horizons: 2,808 optimizer
+steps (as stages 1-2) and 5,616. The run with the lower best val loss is evaluated.
+
+**Readouts** (`level_eval.py`).
+- **Candidate levels:** held-out (val and test) levels with:
+  - sides 5-12;
+  - at least 5 objects that the level's own rules use, at most 16 objects in the level;
+  - an own game of at most 64 rules.
+
+  One level per mechanics, and the 24 with the most such objects.
+- **Samples:** 64 mechanics per candidate at T=0.8 and at T=1.0.
+- **Scores per sample:**
+  - format, compile, playable;
+  - dynamic, won by a random rollout, BFS-solved in >= 5 moves;
+  - canonical mechanics key: distinct, copied from train, equal to the level's own mechanics;
+  - rule and object counts;
+  - behaviour classes under 16 shared random action sequences of 48 steps (`ps_probe.js`, names shared through
+    level-first numbering);
+  - stochastic games flagged.
+- **Reference:** each candidate's own human mechanics, scored the same way.
+
+**Bug fixes carried in.**
+- `canonicalize.render` listed `background` and `player` within a glyph line in hash-seed order. This was cosmetic in
+  stage 2's texts: both orders occur, and the keys are unaffected. It is now fixed.
+- Cache stamps now include the engine's JavaScript and the shared loader, so caches never mix engine versions.
+
+**What this decides.** The user picks the fixed levels for DT from the candidates' contact sheet and table. My
+proposal ranks them by:
+- behaviour classes at T=1.0 (how much there is to discover);
+- dynamic and puzzle shares;
+- a channel count DT can take.
+
+**Expectations** (written before results):
+- the playable share is well above stage 2's unconditional 13% at T=0.8, since the prompt fixes the objects and
+  the layout;
+- most playable samples are unseen mechanics, and the level's own held-out mechanics is rarely reproduced;
+- behaviour classes are many fewer than samples, since many samples leave most objects inert;
+- puzzles stay a minority.
+
+**Operations.** New pod `se-psgen-20261007-lf1` (one H100, <= $3.50/h) and board job
+`puzzlescript-generator-20261007-lf1`. Pipeline `run_level_first.sh` (outputs in `/workspace/psgen/lf`), follow-up
+`controller.py watch lf`. Results go to `results/puzzlescript_generator_20261006/level-first-01/`. Archive to Torch,
+then release.

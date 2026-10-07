@@ -23,12 +23,18 @@ a copy of the protocol.
 | engine-rendered contact sheets | `gallery.py`, `ps_render.js` |
 | sampling-path audit (KV cache vs full forward) | `check_generation.py` |
 | regression of a new engine version against the current one | `engine_regress.js`, `regress_engines.py` |
-| the exact pod pipelines used (stage 1, stage 2) | `run_pod.sh`, `run_canon.sh`, `smoke.sh` |
+| level-first corpus (stage 3): one document per (mechanics, level), the level first and objects numbered by it, so a model can be prompted with a level | `level_first.py`, `prepare_level_first.py`, `test_level_first.py` |
+| mechanics sampled for held-out levels, scored by the engine, by canonical mechanics and by behaviour under shared random action sequences | `level_eval.py`, `ps_probe.js` |
+| the exact pod pipelines used (stages 1-3) | `run_pod.sh`, `run_canon.sh`, `run_level_first.sh`, `smoke.sh` |
 
-The JS scripts load the engine through `ps_engine.js`. Inside the engine's VM realm, it sets `IDE = false` (the
-committed wrapper otherwise throws on editor hooks) and makes message and sound output no-ops. Otherwise, an in-level
-message leaves the headless engine in text mode, and it never checks for a win again. Pass the repository root as
-`ENGINE_DIR`.
+The JS scripts load the engine through `ps_engine.js`. Inside the engine's VM realm, it does three things:
+- sets `IDE = false`: the committed wrapper otherwise throws on editor hooks;
+- makes message and sound output no-ops: otherwise an in-level message leaves the headless engine in text mode, and it
+  never checks for a win again;
+- provides `engine.clearLog()`: loop guards log warnings on some turns, and at 100 logged messages the engine throws
+  "Too many errors/warnings". The dynamics loops, the BFS solver included, clear the log before every turn.
+
+Pass the repository root as `ENGINE_DIR`.
 
 ```bash
 cd puzzlescript_generator
@@ -68,6 +74,21 @@ compiled levels).
 - Canonical, mechanics-deduplicated training removes the collapse.
 - Validity is not interest: real puzzles stay rare. Choosing samples worth exploring needs a teacher signal (engine
   dynamics, solvability, or an agent's learning progress).
+
+## Stage 3: mechanics for a given level
+
+Level-first documents put one level first, with its objects numbered by their order in the level, so an observation
+channel means the same cells in every game written for that level. The corpus has 66,293 documents from 16,221 mechanics.
+
+| 24 rich held-out levels, 64 samples each per temperature | playable | distinct behaviours |
+|---|---:|---:|
+| whole mechanics, T=0.8 / 1.0 | 0.2% / 0.3% | 3 / 5 |
+| rules only (the level's own flags, objects, legend and layers given), T=0.6 / 0.8 | 9.0% / 6.9% | 121 / 96 |
+
+- **Whole mechanics fail** on global consistency at the size of these games: objects in no layer, undefined names,
+  malformed rules.
+- **Rules only works:** writing the rules and win conditions for a given level and object inventory gives varied,
+  mostly dynamic games, none copied from training.
 
 ## Engine notes
 
