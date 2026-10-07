@@ -1,0 +1,18 @@
+name, driver_version, memory.total [MiB]
+NVIDIA H200, 610.43.02, 143771 MiB
+Writing pretty tree to /scratch/se2161/puzzlejax-perf-20261002/complex-reset-20261007/data/pretty_trees/atlas shrank
+Parsed atlas shrank successfully
+Object playerl appears multiple times in collision layers.
+Object playerr appears multiple times in collision layers.
+Object players appears multiple times in collision layers.
+Object playerrh appears multiple times in collision layers.
+Object playerlh appears multiple times in collision layers.
+Writing pretty tree to /scratch/se2161/puzzlejax-perf-20261002/complex-reset-20261007/data/pretty_trees/atlas shrank
+Parsed atlas shrank successfully
+Object playerl appears multiple times in collision layers.
+Object playerr appears multiple times in collision layers.
+Object players appears multiple times in collision layers.
+Object playerrh appears multiple times in collision layers.
+Object playerlh appears multiple times in collision layers.
+{"game": "atlas shrank", "batch": 256, "steps": 64, "seed": 42, "samples_s": [[2.148369285976514, 2.0704843681305647, 2.0565160559490323, 2.0041190271731466, 2.044423804152757, 2.155452096834779, 2.1494694971479475], [0.973815233912319, 0.9503160330932587, 0.9572748970240355, 0.9505982738919556, 0.9940448100678623, 0.9874395860824734, 0.9918451809789985]], "speedup": 2.1261572996885243, "compilation": [{"compile_s": 173.19643852696754, "temporary_bytes": 60047456, "output_bytes": 94618080}, {"compile_s": 130.96611279109493, "temporary_bytes": 13066848, "output_bytes": 94618080}], "exact_full_outputs": true, "automatic_resets": 778}
+{"game": "atlas shrank", "batch": 256, "steps": 64, "seed": 1042, "samples_s": [[2.1360458149574697, 2.1338433399796486, 2.1360038339626044, 2.1347542949952185, 2.139351194957271, 2.132055878872052, 2.132115093059838], [0.9659116319380701, 0.9701878412161022, 0.9677000320516527, 0.9742712769657373, 0.9679101009387523, 0.9652958959341049, 0.9639394429977983]], "speedup": 2.2060082921246327, "compilation": [{"compile_s": 173.19643852696754, "temporary_bytes": 60047456, "output_bytes": 94618080}, {"compile_s": 130.96611279109493, "temporary_bytes": 13066848, "output_bytes": 94618080}], "exact_full_outputs": true, "automatic_resets": 778}

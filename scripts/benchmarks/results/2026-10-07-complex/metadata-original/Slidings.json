@@ -1,0 +1,25 @@
+{
+  "game": "Slidings",
+  "objects": 12,
+  "layers": 4,
+  "level_shape": [
+    12,
+    4,
+    6
+  ],
+  "compiled_sha256": "0a3f5e38de70922b89d6902879f25d6812fe2266386fabf1e5a2ef5b4228c8f1",
+  "source_sha256": "538c249ff40bfc5d15d1642ea1da3220d0fa9e1a4c72d9146b5da71d94cdd29b",
+  "compiled_rules": 23,
+  "compiled_groups": 10,
+  "loop_points": 0,
+  "source_rules": 10,
+  "multirow_rules": 8,
+  "max_pattern_rows": 4,
+  "ellipsis_rules": 0,
+  "max_pattern_span": 3,
+  "board_cells": 24,
+  "force_channels": 20,
+  "jax_rule_functions": 25,
+  "jax_rule_groups": 10,
+  "run_rules_on_level_start": false
+}

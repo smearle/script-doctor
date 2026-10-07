@@ -1,0 +1,390 @@
+{
+  "checks": "All input hashes match; positive timings, five calls per point, exact median/IQR recomputation, unique increasing batches.",
+  "curves": [
+    {
+      "path": "scripts/benchmarks/results/2026-10-05-adaptive/adaptive-throughput-h200/sokoban_basic.json",
+      "points": 12,
+      "timed_calls": 60
+    },
+    {
+      "path": "scripts/benchmarks/results/2026-10-05-adaptive/adaptive-throughput-h200/notsnake.json",
+      "points": 12,
+      "timed_calls": 60
+    },
+    {
+      "path": "scripts/benchmarks/results/2026-10-05-adaptive/adaptive-throughput-h200/Zen_Puzzle_Garden.json",
+      "points": 10,
+      "timed_calls": 50
+    },
+    {
+      "path": "scripts/benchmarks/results/2026-10-05-adaptive/adaptive-throughput-h200/Slidings.json",
+      "points": 12,
+      "timed_calls": 60
+    },
+    {
+      "path": "scripts/benchmarks/results/2026-10-05-adaptive/adaptive-throughput-h200/limerick.json",
+      "points": 7,
+      "timed_calls": 35
+    },
+    {
+      "path": "scripts/benchmarks/results/2026-10-05-adaptive/adaptive-throughput-h200/kettle.json",
+      "points": 10,
+      "timed_calls": 50
+    },
+    {
+      "path": "scripts/benchmarks/results/2026-10-05-adaptive/adaptive-throughput-h200/Take_Heart_Lass.json",
+      "points": 12,
+      "timed_calls": 60
+    },
+    {
+      "path": "scripts/benchmarks/results/2026-10-05-adaptive/adaptive-throughput-h200/atlas shrank.json",
+      "points": 6,
+      "timed_calls": 30
+    },
+    {
+      "path": "scripts/benchmarks/results/2026-10-05-adaptive/adaptive-throughput-h200/blocks.json",
+      "points": 10,
+      "timed_calls": 50
+    },
+    {
+      "path": "scripts/benchmarks/results/2026-10-05-adaptive/adaptive-throughput-h200/nekopuzzle.json",
+      "points": 11,
+      "timed_calls": 55
+    },
+    {
+      "path": "scripts/benchmarks/results/2026-10-05-adaptive/adaptive-throughput-h200/sokoban_match3.json",
+      "points": 11,
+      "timed_calls": 55
+    },
+    {
+      "path": "scripts/benchmarks/results/2026-10-05-adaptive/adaptive-throughput-h200/Travelling_salesman.json",
+      "points": 12,
+      "timed_calls": 60
+    },
+    {
+      "path": "scripts/benchmarks/results/2026-10-05-adaptive/adaptive-throughput-h200/Multi-word_Dictionary_Game.json",
+      "points": 11,
+      "timed_calls": 55
+    },
+    {
+      "path": "scripts/benchmarks/results/2026-10-05-adaptive/adaptive-throughput-h200/Microban.json",
+      "points": 12,
+      "timed_calls": 60
+    },
+    {
+      "path": "scripts/benchmarks/results/2026-10-05-adaptive/adaptive-throughput-h200/Magnet_Jack.json",
+      "points": 8,
+      "timed_calls": 40
+    },
+    {
+      "path": "scripts/benchmarks/results/2026-10-05-adaptive/adaptive-throughput-h200/HyperMaze.json",
+      "points": 7,
+      "timed_calls": 35
+    },
+    {
+      "path": "scripts/benchmarks/results/2026-10-07-complex/torch/complex-throughput-h200/Beam_Islands.json",
+      "points": 7,
+      "timed_calls": 35
+    },
+    {
+      "path": "scripts/benchmarks/results/2026-10-07-complex/torch/complex-throughput-h200/Boxes_&_Balloons.json",
+      "points": 9,
+      "timed_calls": 45
+    },
+    {
+      "path": "scripts/benchmarks/results/2026-10-07-complex/torch/complex-throughput-h200/Caramelban.json",
+      "points": 5,
+      "timed_calls": 25
+    },
+    {
+      "path": "scripts/benchmarks/results/2026-10-07-complex/torch/complex-throughput-h200/Heroes_of_Sokoban_III__The_Bard_and_The_Druid.json",
+      "points": 5,
+      "timed_calls": 25
+    },
+    {
+      "path": "scripts/benchmarks/results/2026-10-07-complex/torch/complex-throughput-h200/IceCrates.json",
+      "points": 11,
+      "timed_calls": 55
+    },
+    {
+      "path": "scripts/benchmarks/results/2026-10-07-complex/torch/complex-throughput-h200/SwapBot.json",
+      "points": 7,
+      "timed_calls": 35
+    },
+    {
+      "path": "scripts/benchmarks/results/2026-10-07-complex/torch/complex-throughput-h200/Transition.json",
+      "points": 3,
+      "timed_calls": 15
+    },
+    {
+      "path": "scripts/benchmarks/results/2026-10-07-complex/torch/complex-throughput-h200/castlecloset.json",
+      "points": 6,
+      "timed_calls": 30
+    },
+    {
+      "path": "scripts/benchmarks/results/2026-10-07-complex/torch-wide/complex-throughput-h200/ParaLands.json",
+      "points": 1,
+      "timed_calls": 5
+    },
+    {
+      "path": "scripts/benchmarks/results/2026-10-07-complex/torch-wide/complex-throughput-h200/Sokoboros.json",
+      "points": 4,
+      "timed_calls": 20
+    },
+    {
+      "path": "scripts/benchmarks/results/2026-10-07-complex/torch-wide/complex-throughput-h200/Symbolism.json",
+      "points": 1,
+      "timed_calls": 5
+    },
+    {
+      "path": "scripts/benchmarks/results/2026-10-07-complex/torch-wide/complex-throughput-h200/Unconventional_Guns.json",
+      "points": 6,
+      "timed_calls": 30
+    },
+    {
+      "path": "scripts/benchmarks/results/2026-10-07-complex/torch-wide/complex-throughput-h200/Vacuum.json",
+      "points": 2,
+      "timed_calls": 10
+    },
+    {
+      "path": "scripts/benchmarks/results/2026-10-07-complex/torch-terminal/complex-throughput-h200/Indigestion.json",
+      "points": 3,
+      "timed_calls": 15
+    },
+    {
+      "path": "scripts/benchmarks/results/2026-10-07-complex/torch-prepared/prepared-throughput-h200/atlas shrank.json",
+      "points": 6,
+      "timed_calls": 30
+    },
+    {
+      "path": "scripts/benchmarks/results/2026-10-07-complex/torch-prepared/prepared-throughput-h200/Magnet_Jack.json",
+      "points": 6,
+      "timed_calls": 30
+    },
+    {
+      "path": "scripts/benchmarks/results/2026-10-07-complex/torch-prepared/prepared-throughput-h200/Beam_Islands.json",
+      "points": 6,
+      "timed_calls": 30
+    },
+    {
+      "path": "scripts/benchmarks/results/2026-10-07-complex/torch-prepared/prepared-throughput-h200/Caramelban.json",
+      "points": 5,
+      "timed_calls": 25
+    },
+    {
+      "path": "scripts/benchmarks/results/2026-10-07-complex/torch-prepared/prepared-throughput-h200/Heroes_of_Sokoban_III__The_Bard_and_The_Druid.json",
+      "points": 5,
+      "timed_calls": 25
+    },
+    {
+      "path": "scripts/benchmarks/results/2026-10-07-complex/torch-prepared/prepared-throughput-h200/IceCrates.json",
+      "points": 7,
+      "timed_calls": 35
+    },
+    {
+      "path": "scripts/benchmarks/results/2026-10-07-complex/torch-prepared/prepared-throughput-h200/Indigestion.json",
+      "points": 3,
+      "timed_calls": 15
+    },
+    {
+      "path": "scripts/benchmarks/results/2026-10-07-complex/torch-prepared/prepared-throughput-h200/ParaLands.json",
+      "points": 1,
+      "timed_calls": 5
+    },
+    {
+      "path": "scripts/benchmarks/results/2026-10-07-complex/torch-prepared/prepared-throughput-h200/SwapBot.json",
+      "points": 7,
+      "timed_calls": 35
+    },
+    {
+      "path": "scripts/benchmarks/results/2026-10-07-complex/torch-prepared/prepared-throughput-h200/Symbolism.json",
+      "points": 1,
+      "timed_calls": 5
+    },
+    {
+      "path": "scripts/benchmarks/results/2026-10-07-complex/torch-prepared/prepared-throughput-h200/Transition.json",
+      "points": 3,
+      "timed_calls": 15
+    },
+    {
+      "path": "scripts/benchmarks/results/2026-10-07-complex/cpp-throughput/sokoban_basic.json",
+      "points": 13,
+      "timed_calls": 65
+    },
+    {
+      "path": "scripts/benchmarks/results/2026-10-07-complex/cpp-throughput/notsnake.json",
+      "points": 13,
+      "timed_calls": 65
+    },
+    {
+      "path": "scripts/benchmarks/results/2026-10-07-complex/cpp-throughput/Zen_Puzzle_Garden.json",
+      "points": 13,
+      "timed_calls": 65
+    },
+    {
+      "path": "scripts/benchmarks/results/2026-10-07-complex/cpp-throughput/Slidings.json",
+      "points": 13,
+      "timed_calls": 65
+    },
+    {
+      "path": "scripts/benchmarks/results/2026-10-07-complex/cpp-throughput/limerick.json",
+      "points": 13,
+      "timed_calls": 65
+    },
+    {
+      "path": "scripts/benchmarks/results/2026-10-07-complex/cpp-throughput/kettle.json",
+      "points": 15,
+      "timed_calls": 75
+    },
+    {
+      "path": "scripts/benchmarks/results/2026-10-07-complex/cpp-throughput/Take_Heart_Lass.json",
+      "points": 13,
+      "timed_calls": 65
+    },
+    {
+      "path": "scripts/benchmarks/results/2026-10-07-complex/cpp-throughput/atlas shrank.json",
+      "points": 14,
+      "timed_calls": 70
+    },
+    {
+      "path": "scripts/benchmarks/results/2026-10-07-complex/cpp-throughput/blocks.json",
+      "points": 13,
+      "timed_calls": 65
+    },
+    {
+      "path": "scripts/benchmarks/results/2026-10-07-complex/cpp-throughput/nekopuzzle.json",
+      "points": 14,
+      "timed_calls": 70
+    },
+    {
+      "path": "scripts/benchmarks/results/2026-10-07-complex/cpp-throughput/sokoban_match3.json",
+      "points": 13,
+      "timed_calls": 65
+    },
+    {
+      "path": "scripts/benchmarks/results/2026-10-07-complex/cpp-throughput/Travelling_salesman.json",
+      "points": 13,
+      "timed_calls": 65
+    },
+    {
+      "path": "scripts/benchmarks/results/2026-10-07-complex/cpp-throughput/Multi-word_Dictionary_Game.json",
+      "points": 13,
+      "timed_calls": 65
+    },
+    {
+      "path": "scripts/benchmarks/results/2026-10-07-complex/cpp-throughput/Microban.json",
+      "points": 14,
+      "timed_calls": 70
+    },
+    {
+      "path": "scripts/benchmarks/results/2026-10-07-complex/cpp-throughput/Magnet_Jack.json",
+      "points": 13,
+      "timed_calls": 65
+    },
+    {
+      "path": "scripts/benchmarks/results/2026-10-07-complex/cpp-throughput/HyperMaze.json",
+      "points": 13,
+      "timed_calls": 65
+    },
+    {
+      "path": "scripts/benchmarks/results/2026-10-07-complex/cpp-throughput/Beam_Islands.json",
+      "points": 14,
+      "timed_calls": 70
+    },
+    {
+      "path": "scripts/benchmarks/results/2026-10-07-complex/cpp-throughput/Boxes_&_Balloons.json",
+      "points": 13,
+      "timed_calls": 65
+    },
+    {
+      "path": "scripts/benchmarks/results/2026-10-07-complex/cpp-throughput/Caramelban.json",
+      "points": 13,
+      "timed_calls": 65
+    },
+    {
+      "path": "scripts/benchmarks/results/2026-10-07-complex/cpp-throughput/Crate_Assembler.json",
+      "points": 11,
+      "timed_calls": 55
+    },
+    {
+      "path": "scripts/benchmarks/results/2026-10-07-complex/cpp-throughput/Heroes_of_Sokoban_III__The_Bard_and_The_Druid.json",
+      "points": 14,
+      "timed_calls": 70
+    },
+    {
+      "path": "scripts/benchmarks/results/2026-10-07-complex/cpp-throughput/IceCrates.json",
+      "points": 13,
+      "timed_calls": 65
+    },
+    {
+      "path": "scripts/benchmarks/results/2026-10-07-complex/cpp-throughput/Indigestion.json",
+      "points": 14,
+      "timed_calls": 70
+    },
+    {
+      "path": "scripts/benchmarks/results/2026-10-07-complex/cpp-throughput/Memories_Of_Castlemouse.json",
+      "points": 13,
+      "timed_calls": 65
+    },
+    {
+      "path": "scripts/benchmarks/results/2026-10-07-complex/cpp-throughput/ParaLands.json",
+      "points": 13,
+      "timed_calls": 65
+    },
+    {
+      "path": "scripts/benchmarks/results/2026-10-07-complex/cpp-throughput/Sokoboros.json",
+      "points": 13,
+      "timed_calls": 65
+    },
+    {
+      "path": "scripts/benchmarks/results/2026-10-07-complex/cpp-throughput/SwapBot.json",
+      "points": 14,
+      "timed_calls": 70
+    },
+    {
+      "path": "scripts/benchmarks/results/2026-10-07-complex/cpp-throughput/Symbolism.json",
+      "points": 14,
+      "timed_calls": 70
+    },
+    {
+      "path": "scripts/benchmarks/results/2026-10-07-complex/cpp-throughput/Transition.json",
+      "points": 12,
+      "timed_calls": 60
+    },
+    {
+      "path": "scripts/benchmarks/results/2026-10-07-complex/cpp-throughput/Unconventional_Guns.json",
+      "points": 13,
+      "timed_calls": 65
+    },
+    {
+      "path": "scripts/benchmarks/results/2026-10-07-complex/cpp-throughput/Vacuum.json",
+      "points": 14,
+      "timed_calls": 70
+    },
+    {
+      "path": "scripts/benchmarks/results/2026-10-07-complex/cpp-throughput/castlecloset.json",
+      "points": 15,
+      "timed_calls": 75
+    },
+    {
+      "path": "scripts/benchmarks/results/2026-10-07-complex/torch-reachable-v2/reachable-crate.json",
+      "points": 3,
+      "timed_calls": 15
+    }
+  ],
+  "total_points": 712,
+  "total_timed_calls": 3560,
+  "selected_cpp_statuses": {
+    "plateau": 16,
+    "regression": 15,
+    "timeout": 1
+  },
+  "selected_jax_statuses": {
+    "plateau": 16,
+    "regression": 7,
+    "timeout": 8,
+    "failed": 1
+  },
+  "selected_jax_games_with_timing": 30,
+  "selected_both_saturated": 23
+}

@@ -1,0 +1,123 @@
+{
+  "host": "Yalda24",
+  "cpu_affinity": [
+    0,
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7
+  ],
+  "source_hashes": {
+    "scripts/benchmarks/benchmark_cpp_scoring.py": "99c6ab153d0aec49d37d6114603cb2473baeb88c7f65a57356a61ba4545adfd7",
+    "puzzlescript_cpp/__init__.py": "158fa886867977335394dc41755006d7461ab280607d7448027dd720615da078",
+    "scripts/benchmarks/profile_rand_nodejs.py": "1e5e43a879f58e326f16d897c970dd479ed21da7466057e23cc727081420102e",
+    "puzzlescript_nodejs/puzzlescript/engine.js": "b301f87a3647406a7db23c5398629eb7061c75bb31b5bc002271e89cea5c53af"
+  },
+  "idle_workers": "SIGSTOP between requests; only the measured build runs",
+  "thread_environment": {
+    "OMP_WAIT_POLICY": "ACTIVE",
+    "OMP_PROC_BIND": "close",
+    "OMP_PLACES": "cores",
+    "OPENBLAS_NUM_THREADS": "1"
+  },
+  "trials": 9,
+  "seeds": [
+    42,
+    1042
+  ],
+  "steps": 300,
+  "games": [
+    "atlas shrank"
+  ],
+  "levels": [
+    0
+  ],
+  "batches": [
+    16
+  ],
+  "threads": [
+    8
+  ],
+  "library_hashes": {
+    "baseline": "355f88636be05074d9286c171f0c9ee69b4ae630f7670f3acb9282341c5fde0f",
+    "candidate": "c88b36964b09a31b0b220957184cdfc11a304399bc066ab0b9fa2193753afb2d"
+  },
+  "timing": "full Python wrapper outputs; alternating warmed calls; reset/actions/IPC excluded",
+  "results": [
+    {
+      "game": "atlas shrank",
+      "level": 0,
+      "batch": 16,
+      "threads": 8,
+      "seed": 42,
+      "compiled_sha256": "dbcfee2b210df5fd24c740df723007451763b65c3aa963f5b4d77598d4437f13",
+      "output_sha256": "2d03809ebbd5d62b49c804a99e45dfaf56cd865f18d33030810ec88b59c98d77",
+      "samples_s": [
+        [
+          0.12241463921964169,
+          0.12264788523316383,
+          0.12226475775241852,
+          0.1224333867430687,
+          0.12230488285422325,
+          0.12347620166838169,
+          0.1222454160451889,
+          0.12382631376385689,
+          0.12228509597480297
+        ],
+        [
+          0.1141576524823904,
+          0.11424455605447292,
+          0.11427563056349754,
+          0.11415247246623039,
+          0.11429281905293465,
+          0.11412888951599598,
+          0.11416625790297985,
+          0.11428310163319111,
+          0.114252470433712
+        ]
+      ],
+      "baseline_fps": 39210.99658177018,
+      "candidate_fps": 42015.131099212405,
+      "speedup": 1.0715139823491737
+    },
+    {
+      "game": "atlas shrank",
+      "level": 0,
+      "batch": 16,
+      "threads": 8,
+      "seed": 1042,
+      "compiled_sha256": "dbcfee2b210df5fd24c740df723007451763b65c3aa963f5b4d77598d4437f13",
+      "output_sha256": "8391ff159e0c7cf25ca06f6510f64affa56d32f02c9a265155678bcd4df305b1",
+      "samples_s": [
+        [
+          0.12433889508247375,
+          0.12436828948557377,
+          0.12572166696190834,
+          0.12604016065597534,
+          0.12606124579906464,
+          0.12559221126139164,
+          0.12433142401278019,
+          0.12436090037226677,
+          0.1241168100386858
+        ],
+        [
+          0.11569657176733017,
+          0.11574828624725342,
+          0.11729267239570618,
+          0.11734162084758282,
+          0.11748522520065308,
+          0.11784161627292633,
+          0.11590156890451908,
+          0.11810295656323433,
+          0.11565769277513027
+        ]
+      ],
+      "baseline_fps": 38595.04717685115,
+      "candidate_fps": 40923.272545162996,
+      "speedup": 1.0603244597070551
+    }
+  ]
+}

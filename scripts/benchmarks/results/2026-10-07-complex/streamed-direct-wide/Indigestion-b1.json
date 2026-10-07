@@ -1,0 +1,123 @@
+{
+  "host": "Yalda24",
+  "cpu_affinity": [
+    0,
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7
+  ],
+  "source_hashes": {
+    "scripts/benchmarks/benchmark_cpp_scoring.py": "99c6ab153d0aec49d37d6114603cb2473baeb88c7f65a57356a61ba4545adfd7",
+    "puzzlescript_cpp/__init__.py": "158fa886867977335394dc41755006d7461ab280607d7448027dd720615da078",
+    "scripts/benchmarks/profile_rand_nodejs.py": "1e5e43a879f58e326f16d897c970dd479ed21da7466057e23cc727081420102e",
+    "puzzlescript_nodejs/puzzlescript/engine.js": "b301f87a3647406a7db23c5398629eb7061c75bb31b5bc002271e89cea5c53af"
+  },
+  "idle_workers": "SIGSTOP between requests; only the measured build runs",
+  "thread_environment": {
+    "OMP_WAIT_POLICY": "ACTIVE",
+    "OMP_PROC_BIND": "close",
+    "OMP_PLACES": "cores",
+    "OPENBLAS_NUM_THREADS": "1"
+  },
+  "trials": 9,
+  "seeds": [
+    42,
+    1042
+  ],
+  "steps": 300,
+  "games": [
+    "Indigestion"
+  ],
+  "levels": [
+    0
+  ],
+  "batches": [
+    1
+  ],
+  "threads": [
+    1
+  ],
+  "library_hashes": {
+    "baseline": "355f88636be05074d9286c171f0c9ee69b4ae630f7670f3acb9282341c5fde0f",
+    "candidate": "e4e6773b968b38c2f679e0f489b967e6f7b99dd18e4beae273d71ff47b8f518b"
+  },
+  "timing": "full Python wrapper outputs; alternating warmed calls; reset/actions/IPC excluded",
+  "results": [
+    {
+      "game": "Indigestion",
+      "level": 0,
+      "batch": 1,
+      "threads": 1,
+      "seed": 42,
+      "compiled_sha256": "e0f69b33c6cbb4655ea586492df26f3fc97024c1446b9a861d7282978ece8dab",
+      "output_sha256": "2f6e78c0ac184c95fbee847c47e1370b6c3122b2ddcb3916913c8036d4d6455f",
+      "samples_s": [
+        [
+          0.058488862589001656,
+          0.05584417283535004,
+          0.05574931763112545,
+          0.05581609718501568,
+          0.05583970621228218,
+          0.05580951273441315,
+          0.055758507922291756,
+          0.056009093299508095,
+          0.0560342650860548
+        ],
+        [
+          0.05585617944598198,
+          0.05403894931077957,
+          0.05177897587418556,
+          0.051710329949855804,
+          0.05181625671684742,
+          0.05185198038816452,
+          0.051824189722537994,
+          0.05183856748044491,
+          0.0520260576158762
+        ]
+      ],
+      "baseline_fps": 5372.521102806478,
+      "candidate_fps": 5787.196957423045,
+      "speedup": 1.0771845929837205
+    },
+    {
+      "game": "Indigestion",
+      "level": 0,
+      "batch": 1,
+      "threads": 1,
+      "seed": 1042,
+      "compiled_sha256": "e0f69b33c6cbb4655ea586492df26f3fc97024c1446b9a861d7282978ece8dab",
+      "output_sha256": "89f199bc506f8317ee4f10598ab47ae24ac48359e920a192c5735872d1758bcb",
+      "samples_s": [
+        [
+          0.05391594581305981,
+          0.06030456721782684,
+          0.060114575549960136,
+          0.06007351540029049,
+          0.05986761301755905,
+          0.05998326651751995,
+          0.05994301848113537,
+          0.05995378643274307,
+          0.060044292360544205
+        ],
+        [
+          0.05383427441120148,
+          0.05607478693127632,
+          0.05626050941646099,
+          0.056032875552773476,
+          0.05594269186258316,
+          0.055848563089966774,
+          0.05609668418765068,
+          0.055921513587236404,
+          0.05541616678237915
+        ]
+      ],
+      "baseline_fps": 5001.394845883823,
+      "candidate_fps": 5362.6307567915355,
+      "speedup": 1.072227033065588
+    }
+  ]
+}

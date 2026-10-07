@@ -1,0 +1,82 @@
+{
+  "status": "Finished: all launched jobs have terminal states; timeouts and the pre-existing JAX correctness exclusion remain explicit.",
+  "baseline_revision": "1f3ecd84dc94621e6ae525d8fb47dd0fe9cb0506",
+  "original_engine_revision": "4176d350a9a4c7480fe3be0a58a072a7c8fef429",
+  "baseline_jax_engine_sha256": "ab92c0a647c6efe9809c98cfecc7110a89b23b6dfdea2e7205603429041654fe",
+  "worktree": "/tmp/script-doctor-gpu-throughput",
+  "execution_snapshot": "/tmp/puzzlejax-complex-20261007",
+  "torch_snapshots": {
+    "baseline": "/scratch/se2161/puzzlejax-perf-20261002/complex-20261007",
+    "wide_validation": "/scratch/se2161/puzzlejax-perf-20261002/complex-wide-20261007",
+    "reset_cache": "/scratch/se2161/puzzlejax-perf-20261002/complex-reset-20261007",
+    "terminal": "/scratch/se2161/puzzlejax-perf-20261002/complex-terminal-20261007",
+    "prepared_curves": "/scratch/se2161/puzzlejax-perf-20261002/complex-prepared-20261007",
+    "reachability_v1": "/scratch/se2161/puzzlejax-perf-20261002/complex-reachable-20261007",
+    "reachability_v2": "/scratch/se2161/puzzlejax-perf-20261002/complex-reachable-v2-20261007"
+  },
+  "slurm": {
+    "baseline_array": "19323485",
+    "wide_array": "19325515",
+    "cache_benchmark_array": "19328200",
+    "terminal_retry": "19328507",
+    "prepared_curves": "19328743",
+    "ordinary_tail_resumes": "19328876",
+    "reachability_v1": "19329513",
+    "reachability_v2": "19330434",
+    "chunking_diagnostic": "19330363",
+    "cpp_validation": "19327912 (completed on Torch)",
+    "cache_tests_step": "19323485_3.0 (completed overlap CPU step; array task has Slurm job alias 19323713)"
+  },
+  "cancelled_jobs": {
+    "19325443": "Restarted because upload and submission overlapped; no accepted measurements",
+    "19325468": "Replaced with wider retry array",
+    "19323485_8": "Old validation decoder cannot handle more than64 objects; replaced with repaired validation",
+    "19323485_11": "Same wide-object decoder limit",
+    "19327717": "Superseded by safe reset-cache API benchmark 19328200; no accepted H200 timings from this attempt.",
+    "19327643": "Queued cache tests replaced by the overlap CPU step.",
+    "19329513": "First pruning prototype kept compound property tokens; replaced with corrected conservative parsing. No accepted timing."
+  },
+  "test_setup": {
+    "19327476": "pytest absent from shared Torch venv; installed pytest9.0.2 into snapshot/test-support without modifying that venv",
+    "cpu_partition": "CPU-short submissions are routed to all and unavailable nodes; using spare CPUs in our own Crate allocation for tests"
+  },
+  "compiler_provenance": "Initial local metadata/A-B trials used concurrently updated upstream dfdeabcd. Pinned snapshot restored to4176 before CPU curves; the3 differing compiled games have extra original-compiler A/B checks. All H200 snapshots use4176.",
+  "workloads": "Paper JAX final carry continues across calls; C++ full RL outputs resets before each timed call. Optimization A/B workloads are separate, full-output controlled traces. No claimed language-only comparison.",
+  "resource_limits": {
+    "cpu_game_wall_s": 900,
+    "cpu_game_address_space_gib": 32,
+    "h200_game_wall_s": 7200,
+    "h200_game_host_memory_gib": 96
+  },
+  "candidate_cpp": "Guarded streaming retained after 138 configurations / 600600 exact paired transitions, 58 focused tests, and an independent 32-game original-JS trace check.",
+  "candidate_jax": "Opt-in prepare_params retained. Safe API tested with exact full outputs and automatic resets on H200 batch256 and RTX4090 batch4096; 29 final cache/switch/wide tests pass. Separate paper-protocol sweeps retain measured curves.",
+  "production_engine_commit": "869cc784",
+  "measured_prepared_jax_sha256": "d06ceb53b0c4c615bc5a541c96ef3631b5640c53767a5942e0ba2d33b513ffeb",
+  "final_prepared_jax_sha256": "c8ef56324231e7cb2d68096b635c39c002dbbe0a31d888e300c6c83f1ad8308d",
+  "final_source_difference": "Defensive copy during untimed prepare_params for mutable NumPy inputs. Reset/step unchanged; exact patches archived.",
+  "cpu_extensions": "Castlecloset and Vacuum: 1800-second extensions; Kettle: 900 seconds. Same frozen library and rollout driver. All three reach plateau/regression.",
+  "prototype_limits": "Chunking and reachability v2 each have a 75-minute H200 limit (command-line override of Slurm script defaults). Reachability v2 is an experimental fixed-level benchmark, not a production environment feature.",
+  "workspace_isolation": "Core patch applied to shared workspace without rebuilding its extension or overwriting concurrent engine edits. Results use frozen benchmark snapshots, not the shared dirty working tree.",
+  "diff_check": "Implementation, plotting, report and reproduction scripts pass. Raw archives are intentionally byte-preserved: PuzzleScript section separators trigger Git conflict-marker checks, and compiler logs/upstream sources contain trailing whitespace.",
+  "reachability_final_source": "Added alias-aware object-index guard after timing. Crate has no reachable aliases beyond closure names; all 7913 pruning decisions and 399 functions are identical to the measured prototype. Four direct alias/negation/property guard checks pass; exact measured source and audit are archived.",
+  "archived_at_utc": "2026-10-07T10:22:33.155807+00:00",
+  "coverage": {
+    "total_points": 712,
+    "total_timed_calls": 3560,
+    "selected_cpp_statuses": {
+      "plateau": 16,
+      "regression": 15,
+      "timeout": 1
+    },
+    "selected_jax_statuses": {
+      "plateau": 16,
+      "regression": 7,
+      "timeout": 8,
+      "failed": 1
+    },
+    "selected_jax_games_with_timing": 30,
+    "selected_both_saturated": 23
+  },
+  "prototype_reachability": "Completed all three fixed pilot batches; 129 original-JS states match. 7964 -> 399 JAX functions; 113861 steps/s at batch4096. No ordinary JAX timing or saturation claim.",
+  "prototype_chunking": "Both complete, exact full outputs: Sokoboros 0.639x, Vacuum 0.739x. Rejected."
+}

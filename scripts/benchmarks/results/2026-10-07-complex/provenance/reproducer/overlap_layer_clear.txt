@@ -1,0 +1,40 @@
+title Overlapping row layer clearing
+
+OBJECTS
+
+Background
+black
+
+Mouse
+red
+
+Marker
+white
+
+MMarker
+blue
+
+Target
+green
+
+LEGEND
+. = Background
+p = Mouse and MMarker
+Player = Mouse
+
+SOUNDS
+
+COLLISIONLAYERS
+Background
+Target
+Mouse
+Marker, MMarker
+
+RULES
+late [ Mouse ] [ MMarker ] -> [ Mouse Marker ] []
+
+WINCONDITIONS
+All Mouse on Target
+
+LEVELS
+p.

@@ -1,0 +1,123 @@
+{
+  "host": "Yalda24",
+  "cpu_affinity": [
+    0,
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7
+  ],
+  "source_hashes": {
+    "scripts/benchmarks/benchmark_cpp_scoring.py": "99c6ab153d0aec49d37d6114603cb2473baeb88c7f65a57356a61ba4545adfd7",
+    "puzzlescript_cpp/__init__.py": "158fa886867977335394dc41755006d7461ab280607d7448027dd720615da078",
+    "scripts/benchmarks/profile_rand_nodejs.py": "1e5e43a879f58e326f16d897c970dd479ed21da7466057e23cc727081420102e",
+    "puzzlescript_nodejs/puzzlescript/engine.js": "b301f87a3647406a7db23c5398629eb7061c75bb31b5bc002271e89cea5c53af"
+  },
+  "idle_workers": "SIGSTOP between requests; only the measured build runs",
+  "thread_environment": {
+    "OMP_WAIT_POLICY": "ACTIVE",
+    "OMP_PROC_BIND": "close",
+    "OMP_PLACES": "cores",
+    "OPENBLAS_NUM_THREADS": "1"
+  },
+  "trials": 9,
+  "seeds": [
+    42,
+    1042
+  ],
+  "steps": 300,
+  "games": [
+    "Caramelban"
+  ],
+  "levels": [
+    0
+  ],
+  "batches": [
+    1
+  ],
+  "threads": [
+    1
+  ],
+  "library_hashes": {
+    "baseline": "355f88636be05074d9286c171f0c9ee69b4ae630f7670f3acb9282341c5fde0f",
+    "candidate": "e4e6773b968b38c2f679e0f489b967e6f7b99dd18e4beae273d71ff47b8f518b"
+  },
+  "timing": "full Python wrapper outputs; alternating warmed calls; reset/actions/IPC excluded",
+  "results": [
+    {
+      "game": "Caramelban",
+      "level": 0,
+      "batch": 1,
+      "threads": 1,
+      "seed": 42,
+      "compiled_sha256": "83144bd3b90c9be9f72f0b466fca58d4c035379440626417bebf410c7b77256f",
+      "output_sha256": "0cc1b2eb587f660f7280580701de4ddf9d723b2ab471097b054277ab1527c921",
+      "samples_s": [
+        [
+          0.1722446233034134,
+          0.1720965001732111,
+          0.17196445353329182,
+          0.1735717300325632,
+          0.17221160605549812,
+          0.17334659583866596,
+          0.17219821363687515,
+          0.17288869619369507,
+          0.17558028735220432
+        ],
+        [
+          0.13993696309626102,
+          0.14407681487500668,
+          0.1396215818822384,
+          0.13966666907072067,
+          0.139997910708189,
+          0.13986982218921185,
+          0.13994458690285683,
+          0.13978114537894726,
+          0.13994618132710457
+        ]
+      ],
+      "baseline_fps": 1741.7089384064093,
+      "candidate_fps": 2143.8224280573636,
+      "speedup": 1.2308729551671655
+    },
+    {
+      "game": "Caramelban",
+      "level": 0,
+      "batch": 1,
+      "threads": 1,
+      "seed": 1042,
+      "compiled_sha256": "83144bd3b90c9be9f72f0b466fca58d4c035379440626417bebf410c7b77256f",
+      "output_sha256": "16e093dd0a7b4c903cb60df58da8e975778c3654e317186ab0c8b626b705a7c3",
+      "samples_s": [
+        [
+          0.1717001050710678,
+          0.17221463471651077,
+          0.1725215446203947,
+          0.1717301458120346,
+          0.1718652155250311,
+          0.17198029160499573,
+          0.17199507914483547,
+          0.17180487513542175,
+          0.1717022992670536
+        ],
+        [
+          0.1392301470041275,
+          0.14247581735253334,
+          0.1393289864063263,
+          0.13924335688352585,
+          0.1394211258739233,
+          0.13937843404710293,
+          0.1394194271415472,
+          0.13923723064363003,
+          0.13939367048442364
+        ]
+      ],
+      "baseline_fps": 1745.5539160936664,
+      "candidate_fps": 2152.4133346096787,
+      "speedup": 1.2330832721721443
+    }
+  ]
+}

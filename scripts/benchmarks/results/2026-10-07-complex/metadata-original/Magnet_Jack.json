@@ -1,0 +1,25 @@
+{
+  "game": "Magnet_Jack",
+  "objects": 34,
+  "layers": 5,
+  "level_shape": [
+    34,
+    10,
+    16
+  ],
+  "compiled_sha256": "515cbc7bc76356b793368b7f4a1a65013572c5375d04c66a602cf0baa87eea18",
+  "source_sha256": "2b776392ae6faa708ed835e1ff4e8feb6c8874d849469015a751920b75b51e28",
+  "compiled_rules": 27,
+  "compiled_groups": 6,
+  "loop_points": 0,
+  "source_rules": 6,
+  "multirow_rules": 0,
+  "max_pattern_rows": 1,
+  "ellipsis_rules": 0,
+  "max_pattern_span": 2,
+  "board_cells": 160,
+  "force_channels": 25,
+  "jax_rule_functions": 15,
+  "jax_rule_groups": 6,
+  "run_rules_on_level_start": true
+}

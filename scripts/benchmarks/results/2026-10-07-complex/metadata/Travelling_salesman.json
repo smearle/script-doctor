@@ -1,0 +1,25 @@
+{
+  "game": "Travelling_salesman",
+  "objects": 9,
+  "layers": 3,
+  "level_shape": [
+    9,
+    5,
+    5
+  ],
+  "compiled_sha256": "92bc53076247ebae68fafb2c233b8819356a04c975ee974d00fd4d358dc33c3b",
+  "source_sha256": "f1f966cf1cfe7757e5936b263dc41d7d5338f3937b58e588103e9866635cc8b4",
+  "compiled_rules": 16,
+  "compiled_groups": 4,
+  "loop_points": 0,
+  "source_rules": 4,
+  "multirow_rules": 0,
+  "max_pattern_rows": 1,
+  "ellipsis_rules": 0,
+  "max_pattern_span": 3,
+  "board_cells": 25,
+  "force_channels": 15,
+  "jax_rule_functions": 16,
+  "jax_rule_groups": 4,
+  "run_rules_on_level_start": false
+}

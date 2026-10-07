@@ -1,0 +1,123 @@
+{
+  "host": "Yalda24",
+  "cpu_affinity": [
+    0,
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7
+  ],
+  "source_hashes": {
+    "scripts/benchmarks/benchmark_cpp_scoring.py": "99c6ab153d0aec49d37d6114603cb2473baeb88c7f65a57356a61ba4545adfd7",
+    "puzzlescript_cpp/__init__.py": "158fa886867977335394dc41755006d7461ab280607d7448027dd720615da078",
+    "scripts/benchmarks/profile_rand_nodejs.py": "1e5e43a879f58e326f16d897c970dd479ed21da7466057e23cc727081420102e",
+    "puzzlescript_nodejs/puzzlescript/engine.js": "b301f87a3647406a7db23c5398629eb7061c75bb31b5bc002271e89cea5c53af"
+  },
+  "idle_workers": "SIGSTOP between requests; only the measured build runs",
+  "thread_environment": {
+    "OMP_WAIT_POLICY": "ACTIVE",
+    "OMP_PROC_BIND": "close",
+    "OMP_PLACES": "cores",
+    "OPENBLAS_NUM_THREADS": "1"
+  },
+  "trials": 9,
+  "seeds": [
+    42,
+    1042
+  ],
+  "steps": 300,
+  "games": [
+    "Vacuum"
+  ],
+  "levels": [
+    0
+  ],
+  "batches": [
+    1
+  ],
+  "threads": [
+    1
+  ],
+  "library_hashes": {
+    "baseline": "355f88636be05074d9286c171f0c9ee69b4ae630f7670f3acb9282341c5fde0f",
+    "candidate": "e4e6773b968b38c2f679e0f489b967e6f7b99dd18e4beae273d71ff47b8f518b"
+  },
+  "timing": "full Python wrapper outputs; alternating warmed calls; reset/actions/IPC excluded",
+  "results": [
+    {
+      "game": "Vacuum",
+      "level": 0,
+      "batch": 1,
+      "threads": 1,
+      "seed": 42,
+      "compiled_sha256": "d64313f8b37a378d3a0aecbb887b4b5f6ba395d40702a18742eccf306f7840b3",
+      "output_sha256": "ada13f2a06753898bbbbc21b29662ea312ca957c07c9fc5ecaa3264ad9e95e8c",
+      "samples_s": [
+        [
+          0.8552264124155045,
+          0.7446770947426558,
+          0.8564668912440538,
+          0.8564409781247377,
+          0.8565423041582108,
+          0.8570710234344006,
+          0.8565357979387045,
+          0.8569198101758957,
+          0.8572064284235239
+        ],
+        [
+          0.8187315370887518,
+          0.8183061964809895,
+          0.8184406999498606,
+          0.8182905111461878,
+          0.8181576784700155,
+          0.8189506307244301,
+          0.8185874354094267,
+          0.8180518597364426,
+          0.8183451369404793
+        ]
+      ],
+      "baseline_fps": 350.2480581920391,
+      "candidate_fps": 366.59349027428743,
+      "speedup": 1.046668159037405
+    },
+    {
+      "game": "Vacuum",
+      "level": 0,
+      "batch": 1,
+      "threads": 1,
+      "seed": 1042,
+      "compiled_sha256": "d64313f8b37a378d3a0aecbb887b4b5f6ba395d40702a18742eccf306f7840b3",
+      "output_sha256": "41345e4447765a8dca48168961a3b0a0b9487bbe722a75ab92f918a3454ec13d",
+      "samples_s": [
+        [
+          0.8412088267505169,
+          0.8413357473909855,
+          0.8407132159918547,
+          0.8414026312530041,
+          0.8413742799311876,
+          0.8416745271533728,
+          0.8410757407546043,
+          0.840318450704217,
+          0.8407482299953699
+        ],
+        [
+          0.8005111031234264,
+          0.800861869007349,
+          0.8010218199342489,
+          0.8008384369313717,
+          0.7981992084532976,
+          0.7992004230618477,
+          0.8002536799758673,
+          0.8004460837692022,
+          0.801162350922823
+        ]
+      ],
+      "baseline_fps": 356.6296387531524,
+      "candidate_fps": 374.7605733755134,
+      "speedup": 1.0508396741385555
+    }
+  ]
+}

@@ -1,0 +1,14 @@
+Writing pretty tree to /tmp/puzzlejax-complex-20261007/data/pretty_trees/Symbolism
+Parsed Symbolism successfully
+ERROR:2026-10-07 01:37:11,176:jax._src.xla_bridge:491: Jax plugin configuration error: Exception when calling jax_plugins.xla_cuda12.initialize()
+Traceback (most recent call last):
+  File "/tmp/puzzlejax-complex-20261007/.venv/lib/python3.13/site-packages/jax/_src/xla_bridge.py", line 489, in discover_pjrt_plugins
+    plugin_module.initialize()
+    ~~~~~~~~~~~~~~~~~~~~~~~~^^
+  File "/tmp/puzzlejax-complex-20261007/.venv/lib/python3.13/site-packages/jax_plugins/xla_cuda12/__init__.py", line 328, in initialize
+    _check_cuda_versions(raise_on_first_error=True)
+    ~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/tmp/puzzlejax-complex-20261007/.venv/lib/python3.13/site-packages/jax_plugins/xla_cuda12/__init__.py", line 285, in _check_cuda_versions
+    local_device_count = cuda_versions.cuda_device_count()
+RuntimeError: jaxlib/cuda/versions_helpers.cc:113: operation cuInit(0) failed: CUDA_ERROR_NO_DEVICE
+{"game": "Symbolism", "objects": 87, "layers": 20, "level_shape": [87, 7, 10], "compiled_sha256": "bfdb339e8facb52746ea0e73149a9a70ca8302981b00a7b87e0274b1a7bc892d", "source_sha256": "b42f36f2804cbe46cbea3fd562e564ca6923779a10a2b084da87cf3c24851bdc", "compiled_rules": 330, "compiled_groups": 159, "loop_points": 0, "source_rules": 165, "multirow_rules": 264, "max_pattern_rows": 3, "ellipsis_rules": 0, "max_pattern_span": 4, "board_cells": 70, "force_channels": 100, "jax_rule_functions": 317, "jax_rule_groups": 159}

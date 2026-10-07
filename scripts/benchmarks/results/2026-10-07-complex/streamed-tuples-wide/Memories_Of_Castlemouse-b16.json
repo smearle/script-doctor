@@ -1,0 +1,123 @@
+{
+  "host": "Yalda24",
+  "cpu_affinity": [
+    0,
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7
+  ],
+  "source_hashes": {
+    "scripts/benchmarks/benchmark_cpp_scoring.py": "99c6ab153d0aec49d37d6114603cb2473baeb88c7f65a57356a61ba4545adfd7",
+    "puzzlescript_cpp/__init__.py": "158fa886867977335394dc41755006d7461ab280607d7448027dd720615da078",
+    "scripts/benchmarks/profile_rand_nodejs.py": "1e5e43a879f58e326f16d897c970dd479ed21da7466057e23cc727081420102e",
+    "puzzlescript_nodejs/puzzlescript/engine.js": "b301f87a3647406a7db23c5398629eb7061c75bb31b5bc002271e89cea5c53af"
+  },
+  "idle_workers": "SIGSTOP between requests; only the measured build runs",
+  "thread_environment": {
+    "OMP_WAIT_POLICY": "ACTIVE",
+    "OMP_PROC_BIND": "close",
+    "OMP_PLACES": "cores",
+    "OPENBLAS_NUM_THREADS": "1"
+  },
+  "trials": 9,
+  "seeds": [
+    42,
+    1042
+  ],
+  "steps": 100,
+  "games": [
+    "Memories_Of_Castlemouse"
+  ],
+  "levels": [
+    0
+  ],
+  "batches": [
+    16
+  ],
+  "threads": [
+    8
+  ],
+  "library_hashes": {
+    "baseline": "355f88636be05074d9286c171f0c9ee69b4ae630f7670f3acb9282341c5fde0f",
+    "candidate": "2145bd86d490fe609e9cf43eeb828c47a6a9a79a151c4774bd62942ca2aa194d"
+  },
+  "timing": "full Python wrapper outputs; alternating warmed calls; reset/actions/IPC excluded",
+  "results": [
+    {
+      "game": "Memories_Of_Castlemouse",
+      "level": 0,
+      "batch": 16,
+      "threads": 8,
+      "seed": 42,
+      "compiled_sha256": "2fd30a03c93cf36057c933b370f443475c911970daf549172832c81aeabde1fd",
+      "output_sha256": "7c03eb30d70464ace939c5871e79b091791459632c66f820924d8be5e1a56cf6",
+      "samples_s": [
+        [
+          0.04309852607548237,
+          0.04315629228949547,
+          0.042946917936205864,
+          0.04304707236588001,
+          0.043110352009534836,
+          0.042940063402056694,
+          0.04307211749255657,
+          0.043088141828775406,
+          0.0430469810962677
+        ],
+        [
+          0.042832210659980774,
+          0.04286912642419338,
+          0.042785562574863434,
+          0.04286658763885498,
+          0.04281465709209442,
+          0.04275205545127392,
+          0.04290822148323059,
+          0.0428336076438427,
+          0.04274502210319042
+        ]
+      ],
+      "baseline_fps": 37147.00119576199,
+      "candidate_fps": 37355.064689549654,
+      "speedup": 1.0056010845314587
+    },
+    {
+      "game": "Memories_Of_Castlemouse",
+      "level": 0,
+      "batch": 16,
+      "threads": 8,
+      "seed": 1042,
+      "compiled_sha256": "2fd30a03c93cf36057c933b370f443475c911970daf549172832c81aeabde1fd",
+      "output_sha256": "6442239e7b5906e3dc09526117954460d9e3ec482a6a93a227c855ad3391508b",
+      "samples_s": [
+        [
+          0.03596922568976879,
+          0.03593343123793602,
+          0.03603747300803661,
+          0.036001596599817276,
+          0.03595470264554024,
+          0.03597617149353027,
+          0.03597400337457657,
+          0.03594406880438328,
+          0.03590782359242439
+        ],
+        [
+          0.035780319944024086,
+          0.03575574606657028,
+          0.035840775817632675,
+          0.035758260637521744,
+          0.03577915206551552,
+          0.035795096307992935,
+          0.03576594404876232,
+          0.035732436925172806,
+          0.035831328481435776
+        ]
+      ],
+      "baseline_fps": 44482.46992581521,
+      "candidate_fps": 44718.779166991604,
+      "speedup": 1.0053124127677824
+    }
+  ]
+}

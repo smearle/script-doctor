@@ -1,0 +1,14 @@
+Writing pretty tree to /tmp/puzzlejax-complex-20261007/data/pretty_trees/Crate_Assembler
+Parsed Crate_Assembler successfully
+ERROR:2026-10-07 01:36:14,700:jax._src.xla_bridge:491: Jax plugin configuration error: Exception when calling jax_plugins.xla_cuda12.initialize()
+Traceback (most recent call last):
+  File "/tmp/puzzlejax-complex-20261007/.venv/lib/python3.13/site-packages/jax/_src/xla_bridge.py", line 489, in discover_pjrt_plugins
+    plugin_module.initialize()
+    ~~~~~~~~~~~~~~~~~~~~~~~~^^
+  File "/tmp/puzzlejax-complex-20261007/.venv/lib/python3.13/site-packages/jax_plugins/xla_cuda12/__init__.py", line 328, in initialize
+    _check_cuda_versions(raise_on_first_error=True)
+    ~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/tmp/puzzlejax-complex-20261007/.venv/lib/python3.13/site-packages/jax_plugins/xla_cuda12/__init__.py", line 285, in _check_cuda_versions
+    local_device_count = cuda_versions.cuda_device_count()
+RuntimeError: jaxlib/cuda/versions_helpers.cc:113: operation cuInit(0) failed: CUDA_ERROR_NO_DEVICE
+{"game": "Crate_Assembler", "objects": 56, "layers": 11, "level_shape": [56, 6, 6], "compiled_sha256": "b3ba88b6b1615818ba8103b5724bc35de4975ef16e3f577283ea54febf4009d8", "source_sha256": "c770e35f29c319557e9a44eb6e3e31b41beaacebbf197c0808e9575169d2639c", "compiled_rules": 7716, "compiled_groups": 90, "loop_points": 0, "source_rules": 90, "multirow_rules": 0, "max_pattern_rows": 1, "ellipsis_rules": 0, "max_pattern_span": 2, "board_cells": 36, "force_channels": 55, "jax_rule_functions": 7964, "jax_rule_groups": 90}

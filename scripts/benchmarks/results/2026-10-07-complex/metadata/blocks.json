@@ -1,0 +1,25 @@
+{
+  "game": "blocks",
+  "objects": 4,
+  "layers": 3,
+  "level_shape": [
+    4,
+    11,
+    13
+  ],
+  "compiled_sha256": "7721ba972e0c260c75756e6f7be33e1615c72c586abc6961408919cfd5034266",
+  "source_sha256": "87780e08ee3c8b46cb84c99770d0805d082d6c3e1335ccd0fc7aadd01910aba4",
+  "compiled_rules": 0,
+  "compiled_groups": 0,
+  "loop_points": 0,
+  "source_rules": 0,
+  "multirow_rules": 0,
+  "max_pattern_rows": 0,
+  "ellipsis_rules": 0,
+  "max_pattern_span": 0,
+  "board_cells": 143,
+  "force_channels": 15,
+  "jax_rule_functions": 0,
+  "jax_rule_groups": 0,
+  "run_rules_on_level_start": false
+}

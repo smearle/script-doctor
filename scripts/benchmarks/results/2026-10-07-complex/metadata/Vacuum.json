@@ -1,0 +1,25 @@
+{
+  "game": "Vacuum",
+  "objects": 96,
+  "layers": 7,
+  "level_shape": [
+    96,
+    54,
+    63
+  ],
+  "compiled_sha256": "d64313f8b37a378d3a0aecbb887b4b5f6ba395d40702a18742eccf306f7840b3",
+  "source_sha256": "1dc4ab625ea4e244143f2dfa690a5b38eb6b65d94f94ca8838ba90a4b7521340",
+  "compiled_rules": 542,
+  "compiled_groups": 116,
+  "loop_points": 0,
+  "source_rules": 106,
+  "multirow_rules": 57,
+  "max_pattern_rows": 3,
+  "ellipsis_rules": 0,
+  "max_pattern_span": 4,
+  "board_cells": 3402,
+  "force_channels": 35,
+  "jax_rule_functions": 312,
+  "jax_rule_groups": 106,
+  "run_rules_on_level_start": false
+}

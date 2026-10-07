@@ -1,0 +1,25 @@
+{
+  "game": "notsnake",
+  "objects": 3,
+  "layers": 3,
+  "level_shape": [
+    3,
+    5,
+    8
+  ],
+  "compiled_sha256": "4b72a87b06f9b6f9b107fce33dafe9648a3559f17e5e16ef3a07438edb79f0f3",
+  "source_sha256": "48fedc0da65f8cf9d16c3a103b052f4844fe45f1ec8c695a4b9cd0de9926c9e7",
+  "compiled_rules": 8,
+  "compiled_groups": 2,
+  "loop_points": 0,
+  "source_rules": 2,
+  "multirow_rules": 0,
+  "max_pattern_rows": 1,
+  "ellipsis_rules": 0,
+  "max_pattern_span": 2,
+  "board_cells": 40,
+  "force_channels": 15,
+  "jax_rule_functions": 8,
+  "jax_rule_groups": 2,
+  "run_rules_on_level_start": false
+}

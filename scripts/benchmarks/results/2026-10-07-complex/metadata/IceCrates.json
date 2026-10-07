@@ -1,0 +1,25 @@
+{
+  "game": "IceCrates",
+  "objects": 32,
+  "layers": 4,
+  "level_shape": [
+    32,
+    7,
+    7
+  ],
+  "compiled_sha256": "060ed340434cacaeb7e075bbfcf7b1558ec401a4c5a233a22d8136f3be1c5b15",
+  "source_sha256": "debc1bcd30c60053afcdc9e78bfe7d5e54909db9c08647e08dc145dcf6393e15",
+  "compiled_rules": 50,
+  "compiled_groups": 50,
+  "loop_points": 0,
+  "source_rules": 50,
+  "multirow_rules": 0,
+  "max_pattern_rows": 1,
+  "ellipsis_rules": 0,
+  "max_pattern_span": 3,
+  "board_cells": 49,
+  "force_channels": 20,
+  "jax_rule_functions": 50,
+  "jax_rule_groups": 50,
+  "run_rules_on_level_start": true
+}

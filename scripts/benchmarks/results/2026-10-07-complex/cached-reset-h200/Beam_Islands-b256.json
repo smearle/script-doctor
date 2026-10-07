@@ -1,0 +1,99 @@
+{
+  "devices": [
+    "NVIDIA H200"
+  ],
+  "jax_version": "0.9.0.1",
+  "trials": 7,
+  "safe_api": true,
+  "max_episode_steps": 17,
+  "scope": "immutable fixed level, deterministic games only",
+  "timing": "alternating warmed full-output calls; same initial states and actions; exact comparisons outside timer",
+  "source_hashes": {
+    "puzzlescript_jax/env.py": "d06ceb53b0c4c615bc5a541c96ef3631b5640c53767a5942e0ba2d33b513ffeb",
+    "scripts/benchmarks/benchmark_cached_reset.py": "2448ab093149dd5249f9dc32c6877ea62e9306a63387290692ccfab60ec1277f"
+  },
+  "results": [
+    {
+      "game": "Beam_Islands",
+      "batch": 256,
+      "steps": 64,
+      "seed": 42,
+      "samples_s": [
+        [
+          5.2721115129534155,
+          5.278572908136994,
+          5.259090474806726,
+          5.252565419999883,
+          5.2697176351211965,
+          5.291940195020288,
+          5.25971038104035
+        ],
+        [
+          1.5348295900039375,
+          1.5317675729747862,
+          1.5356451151892543,
+          1.5265484501142055,
+          1.5307371909730136,
+          1.5207813549786806,
+          1.52275631390512
+        ]
+      ],
+      "speedup": 3.44260116380363,
+      "compilation": [
+        {
+          "compile_s": 544.5721397900488,
+          "temporary_bytes": 53696136,
+          "output_bytes": 140488416
+        },
+        {
+          "compile_s": 338.878152300138,
+          "temporary_bytes": 37818248,
+          "output_bytes": 140488416
+        }
+      ],
+      "exact_full_outputs": true,
+      "automatic_resets": 790
+    },
+    {
+      "game": "Beam_Islands",
+      "batch": 256,
+      "steps": 64,
+      "seed": 1042,
+      "samples_s": [
+        [
+          5.298804226098582,
+          5.297387683065608,
+          5.248922414146364,
+          5.258125527994707,
+          5.236652461113408,
+          5.2406475860625505,
+          5.279650442069396
+        ],
+        [
+          1.521994134876877,
+          1.5215750660281628,
+          1.5245454229880124,
+          1.5193072541151196,
+          1.5250485728029162,
+          1.5154210180044174,
+          1.5278640468604863
+        ]
+      ],
+      "speedup": 3.4547607034110337,
+      "compilation": [
+        {
+          "compile_s": 544.5721397900488,
+          "temporary_bytes": 53696136,
+          "output_bytes": 140488416
+        },
+        {
+          "compile_s": 338.878152300138,
+          "temporary_bytes": 37818248,
+          "output_bytes": 140488416
+        }
+      ],
+      "exact_full_outputs": true,
+      "automatic_resets": 786
+    }
+  ]
+}

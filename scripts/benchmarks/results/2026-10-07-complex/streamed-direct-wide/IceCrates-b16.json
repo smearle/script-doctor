@@ -1,0 +1,123 @@
+{
+  "host": "Yalda24",
+  "cpu_affinity": [
+    0,
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7
+  ],
+  "source_hashes": {
+    "scripts/benchmarks/benchmark_cpp_scoring.py": "99c6ab153d0aec49d37d6114603cb2473baeb88c7f65a57356a61ba4545adfd7",
+    "puzzlescript_cpp/__init__.py": "158fa886867977335394dc41755006d7461ab280607d7448027dd720615da078",
+    "scripts/benchmarks/profile_rand_nodejs.py": "1e5e43a879f58e326f16d897c970dd479ed21da7466057e23cc727081420102e",
+    "puzzlescript_nodejs/puzzlescript/engine.js": "b301f87a3647406a7db23c5398629eb7061c75bb31b5bc002271e89cea5c53af"
+  },
+  "idle_workers": "SIGSTOP between requests; only the measured build runs",
+  "thread_environment": {
+    "OMP_WAIT_POLICY": "ACTIVE",
+    "OMP_PROC_BIND": "close",
+    "OMP_PLACES": "cores",
+    "OPENBLAS_NUM_THREADS": "1"
+  },
+  "trials": 9,
+  "seeds": [
+    42,
+    1042
+  ],
+  "steps": 300,
+  "games": [
+    "IceCrates"
+  ],
+  "levels": [
+    0
+  ],
+  "batches": [
+    16
+  ],
+  "threads": [
+    8
+  ],
+  "library_hashes": {
+    "baseline": "355f88636be05074d9286c171f0c9ee69b4ae630f7670f3acb9282341c5fde0f",
+    "candidate": "e4e6773b968b38c2f679e0f489b967e6f7b99dd18e4beae273d71ff47b8f518b"
+  },
+  "timing": "full Python wrapper outputs; alternating warmed calls; reset/actions/IPC excluded",
+  "results": [
+    {
+      "game": "IceCrates",
+      "level": 0,
+      "batch": 16,
+      "threads": 8,
+      "seed": 42,
+      "compiled_sha256": "060ed340434cacaeb7e075bbfcf7b1558ec401a4c5a233a22d8136f3be1c5b15",
+      "output_sha256": "1d638c72efeeae3223c2c8cd734d66b18386be8f25b6b4db21996b1859766dd7",
+      "samples_s": [
+        [
+          0.07485467754304409,
+          0.07484419271349907,
+          0.07470224238932133,
+          0.07480581477284431,
+          0.0747125931084156,
+          0.07478867098689079,
+          0.07479065470397472,
+          0.0748792476952076,
+          0.07471286132931709
+        ],
+        [
+          0.07116903178393841,
+          0.07108387537300587,
+          0.07109968923032284,
+          0.0711631327867508,
+          0.07116427272558212,
+          0.07113626971840858,
+          0.07116080448031425,
+          0.07114532589912415,
+          0.07104991935193539
+        ]
+      ],
+      "baseline_fps": 64179.14135126438,
+      "candidate_fps": 67467.53830048998,
+      "speedup": 1.0512377834914866
+    },
+    {
+      "game": "IceCrates",
+      "level": 0,
+      "batch": 16,
+      "threads": 8,
+      "seed": 1042,
+      "compiled_sha256": "060ed340434cacaeb7e075bbfcf7b1558ec401a4c5a233a22d8136f3be1c5b15",
+      "output_sha256": "8f5629a9c91a3955a2ec266250539d37faab7ae4cadd1ba4d2af09b9f948b3ae",
+      "samples_s": [
+        [
+          0.07321677729487419,
+          0.07323039509356022,
+          0.07309700362384319,
+          0.07319252751767635,
+          0.073064049705863,
+          0.07331955060362816,
+          0.07318409346044064,
+          0.07317015901207924,
+          0.07318799942731857
+        ],
+        [
+          0.06962906755506992,
+          0.06859691999852657,
+          0.06956868432462215,
+          0.06961160711944103,
+          0.06967262737452984,
+          0.0696579609066248,
+          0.06963871791958809,
+          0.06965915858745575,
+          0.0696744304150343
+        ]
+      ],
+      "baseline_fps": 65584.52256598129,
+      "candidate_fps": 68927.17360969463,
+      "speedup": 1.050967071390212
+    }
+  ]
+}

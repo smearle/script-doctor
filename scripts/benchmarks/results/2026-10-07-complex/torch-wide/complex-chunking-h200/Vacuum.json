@@ -1,0 +1,41 @@
+{
+  "jax_version": "0.9.0.1",
+  "devices": [
+    "NVIDIA H200"
+  ],
+  "engine_sha256": "ab92c0a647c6efe9809c98cfecc7110a89b23b6dfdea2e7205603429041654fe",
+  "trials": 5,
+  "seed": 42,
+  "max_episode_steps": 100,
+  "timing": "alternating synchronized calls after compilation and warmup",
+  "rng": "fold_in(master step key, global environment index)",
+  "actions": "identical precomputed runtime inputs in both variants",
+  "results": [
+    {
+      "game": "Vacuum",
+      "batch": 256,
+      "chunk_size": 16,
+      "steps": 16,
+      "mode": "full",
+      "monolithic": {
+        "compile_s": 1119.0409933640622,
+        "temporary_bytes": 1442471864,
+        "output_bytes": 1453436640,
+        "median_s": 21.79208368109539,
+        "min_s": 21.774647864047438,
+        "max_s": 21.799101579003036,
+        "env_steps_per_s": 187.95816223637556
+      },
+      "chunked": {
+        "compile_s": 1073.382099661976,
+        "temporary_bytes": 1456344808,
+        "output_bytes": 1453436640,
+        "median_s": 29.472233219072223,
+        "min_s": 29.440343560185283,
+        "max_s": 29.769427699036896,
+        "env_steps_per_s": 138.97827048102263
+      },
+      "speedup": 0.7394106689883679
+    }
+  ]
+}

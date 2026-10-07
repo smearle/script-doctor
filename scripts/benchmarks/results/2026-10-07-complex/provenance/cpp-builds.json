@@ -1,0 +1,56 @@
+{
+  "streamed": {
+    "library_sha256": "2145bd86d490fe609e9cf43eeb828c47a6a9a79a151c4774bd62942ca2aa194d",
+    "source_hashes": {
+      "puzzlescript_cpp/src/engine.cpp": "81e8b6658b078731fb3c52092e815bc3757a27ec27e5cd314b182dda4384de46",
+      "puzzlescript_cpp/src/engine.h": "2af49ec82443085282d2c5f815368c10c69190028122fa96470c428fa6149085",
+      "puzzlescript_cpp/src/bindings.cpp": "af2007541fa47093b7a1e4d00fd011626a8ee99e563635c90ae5aa6ea6b7ac91"
+    },
+    "setup_sha256": "08448baf4cf0fb1163c30d50e9e58a1cdfa1bc0c5de4ff41a5ea038bfbfa946c"
+  },
+  "streamed-direct": {
+    "library_sha256": "e4e6773b968b38c2f679e0f489b967e6f7b99dd18e4beae273d71ff47b8f518b",
+    "source_hashes": {
+      "puzzlescript_cpp/src/engine.cpp": "1a2b38470fbd0245c3dfaccbcfba1637d5312ab725a1e200defa5b78a99d6ccf",
+      "puzzlescript_cpp/src/engine.h": "0ba61cd300cdccc28b98017ecbe29048cfdd79e795899031a13e48d7c2f83e37",
+      "puzzlescript_cpp/src/bindings.cpp": "af2007541fa47093b7a1e4d00fd011626a8ee99e563635c90ae5aa6ea6b7ac91"
+    },
+    "setup_sha256": "08448baf4cf0fb1163c30d50e9e58a1cdfa1bc0c5de4ff41a5ea038bfbfa946c"
+  },
+  "guarded": {
+    "library_sha256": "c88b36964b09a31b0b220957184cdfc11a304399bc066ab0b9fa2193753afb2d",
+    "source_hashes": {
+      "puzzlescript_cpp/src/engine.cpp": "cdaeba1c939c8be0d8132b478e65abcec5f42c19579a6ec8130de43026ba6c8d",
+      "puzzlescript_cpp/src/engine.h": "0ba61cd300cdccc28b98017ecbe29048cfdd79e795899031a13e48d7c2f83e37",
+      "puzzlescript_cpp/src/bindings.cpp": "af2007541fa47093b7a1e4d00fd011626a8ee99e563635c90ae5aa6ea6b7ac91"
+    },
+    "setup_sha256": "08448baf4cf0fb1163c30d50e9e58a1cdfa1bc0c5de4ff41a5ea038bfbfa946c"
+  },
+  "profiled": {
+    "library_sha256": "6838e55a4a2c360cfb5c15fa56fb1276b62f44cb800d8a66c705a5e24687220f",
+    "source_hashes": {
+      "puzzlescript_cpp/src/engine.cpp": "dc66cbc6b3a15fe5036a340ada96aa292b709ce8854f89fd62b33c95e5a8ce88",
+      "puzzlescript_cpp/src/engine.h": "ca5668ad179e3ec9c7d9a1ea992ea32d3aa0367307b2349f84f2dbc11e852ff1",
+      "puzzlescript_cpp/src/bindings.cpp": "43386cb2d744c2c7b976f3d1195a2e1803152f51d82054f51d12167c1bf7edac"
+    },
+    "setup_sha256": "08448baf4cf0fb1163c30d50e9e58a1cdfa1bc0c5de4ff41a5ea038bfbfa946c"
+  },
+  "rebuilt": {
+    "library_sha256": "2d60f34174e8d6c3785826c95d0d16667bb8b95607a0ce5db723b9c1fc892483",
+    "source_hashes": {
+      "puzzlescript_cpp/src/engine.cpp": "2c4b86e392075f5c91b7d0182ae26c8dd1dcab947fa9e32bcf4b10c13719d20a",
+      "puzzlescript_cpp/src/engine.h": "2af49ec82443085282d2c5f815368c10c69190028122fa96470c428fa6149085",
+      "puzzlescript_cpp/src/bindings.cpp": "af2007541fa47093b7a1e4d00fd011626a8ee99e563635c90ae5aa6ea6b7ac91"
+    },
+    "setup_sha256": "08448baf4cf0fb1163c30d50e9e58a1cdfa1bc0c5de4ff41a5ea038bfbfa946c"
+  },
+  "o3": {
+    "library_sha256": "1198f61aa8d2e6f77e94c1dac3a7268a5e333ef5ad4d3a7a82af2809f17173ae",
+    "source_hashes": {
+      "puzzlescript_cpp/src/engine.cpp": "2c4b86e392075f5c91b7d0182ae26c8dd1dcab947fa9e32bcf4b10c13719d20a",
+      "puzzlescript_cpp/src/engine.h": "2af49ec82443085282d2c5f815368c10c69190028122fa96470c428fa6149085",
+      "puzzlescript_cpp/src/bindings.cpp": "af2007541fa47093b7a1e4d00fd011626a8ee99e563635c90ae5aa6ea6b7ac91"
+    },
+    "setup_sha256": "f779fea0ce5da486663a98ae5862ef27b98c59234df658dd2f02d12e10b42ae5"
+  }
+}

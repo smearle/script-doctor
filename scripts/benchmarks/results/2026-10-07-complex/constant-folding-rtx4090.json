@@ -1,0 +1,288 @@
+{
+  "devices": [
+    "NVIDIA GeForce RTX 4090"
+  ],
+  "jax_version": "0.9.1",
+  "variants": [
+    "default",
+    "disable_constant_folding"
+  ],
+  "trials": 7,
+  "seeds": [
+    42,
+    1042
+  ],
+  "steps": 20,
+  "timing": "alternating warmed continuing final-carry rollouts; same actions and state; equality outside timer",
+  "source_hashes": {
+    "puzzlescript_jax/env.py": "ab92c0a647c6efe9809c98cfecc7110a89b23b6dfdea2e7205603429041654fe",
+    "scripts/benchmarks/benchmark_paper_throughput.py": "464e20595d17e46ef563f8878f7d398af33f7f712604734bd108220a5f8b2e3d",
+    "scripts/benchmarks/benchmark_constant_folding.py": "8702d582b3d9af5141e395827b7f6813e1965e1b2b5fd53e080abf3333c883ff"
+  },
+  "results": [
+    {
+      "game": "sokoban_basic",
+      "batch": 256,
+      "steps": 20,
+      "seed": 42,
+      "samples_s": [
+        [
+          0.017019102349877357,
+          0.01609105058014393,
+          0.01643935777246952,
+          0.01577834039926529,
+          0.01612301543354988,
+          0.015342680737376213,
+          0.015717605128884315
+        ],
+        [
+          0.016659613698720932,
+          0.017327891662716866,
+          0.016243834048509598,
+          0.017040982842445374,
+          0.015965793281793594,
+          0.016434364020824432,
+          0.015466010197997093
+        ]
+      ],
+      "speedup": 0.9791100257822279,
+      "compilation": [
+        {
+          "compile_s": 6.225931145250797,
+          "alias_bytes": 0,
+          "temporary_bytes": 2184032,
+          "argument_bytes": 65544,
+          "output_bytes": 65632
+        },
+        {
+          "compile_s": 4.93106734752655,
+          "alias_bytes": 0,
+          "temporary_bytes": 2183520,
+          "argument_bytes": 65544,
+          "output_bytes": 65632
+        }
+      ],
+      "exact_final_carries": true
+    },
+    {
+      "game": "sokoban_basic",
+      "batch": 256,
+      "steps": 20,
+      "seed": 1042,
+      "samples_s": [
+        [
+          0.016650114208459854,
+          0.016097594052553177,
+          0.01659415289759636,
+          0.01571044512093067,
+          0.01583709567785263,
+          0.014599859714508057,
+          0.015503372997045517
+        ],
+        [
+          0.016499435529112816,
+          0.017315175384283066,
+          0.016499212011694908,
+          0.016685159876942635,
+          0.015359999611973763,
+          0.01569613628089428,
+          0.0153995081782341
+        ]
+      ],
+      "speedup": 0.9598698208512649,
+      "compilation": [
+        {
+          "compile_s": 6.225931145250797,
+          "alias_bytes": 0,
+          "temporary_bytes": 2184032,
+          "argument_bytes": 65544,
+          "output_bytes": 65632
+        },
+        {
+          "compile_s": 4.93106734752655,
+          "alias_bytes": 0,
+          "temporary_bytes": 2183520,
+          "argument_bytes": 65544,
+          "output_bytes": 65632
+        }
+      ],
+      "exact_final_carries": true
+    },
+    {
+      "game": "atlas shrank",
+      "batch": 256,
+      "steps": 20,
+      "seed": 42,
+      "samples_s": [
+        [
+          0.6369317919015884,
+          0.6348635703325272,
+          0.6377031430602074,
+          0.6356270555406809,
+          0.6358223985880613,
+          0.632421912625432,
+          0.6409241557121277
+        ],
+        [
+          0.6379567161202431,
+          0.6475179940462112,
+          0.6382563598453999,
+          0.6442216411232948,
+          0.642476599663496,
+          0.6448626257479191,
+          0.6374088861048222
+        ]
+      ],
+      "speedup": 0.9896428895948586,
+      "compilation": [
+        {
+          "compile_s": 88.67745117284358,
+          "alias_bytes": 0,
+          "temporary_bytes": 14025568,
+          "argument_bytes": 737544,
+          "output_bytes": 737632
+        },
+        {
+          "compile_s": 107.44122820720077,
+          "alias_bytes": 0,
+          "temporary_bytes": 13668960,
+          "argument_bytes": 737544,
+          "output_bytes": 737632
+        }
+      ],
+      "exact_final_carries": true
+    },
+    {
+      "game": "atlas shrank",
+      "batch": 256,
+      "steps": 20,
+      "seed": 1042,
+      "samples_s": [
+        [
+          0.6346375048160553,
+          0.6331897806376219,
+          0.6410641986876726,
+          0.6323878951370716,
+          0.6392347253859043,
+          0.6341708265244961,
+          0.6372519694268703
+        ],
+        [
+          0.6417922582477331,
+          0.6470315046608448,
+          0.6389023456722498,
+          0.6418625321239233,
+          0.6401039958000183,
+          0.6427231281995773,
+          0.6411493383347988
+        ]
+      ],
+      "speedup": 0.9888519168940862,
+      "compilation": [
+        {
+          "compile_s": 88.67745117284358,
+          "alias_bytes": 0,
+          "temporary_bytes": 14025568,
+          "argument_bytes": 737544,
+          "output_bytes": 737632
+        },
+        {
+          "compile_s": 107.44122820720077,
+          "alias_bytes": 0,
+          "temporary_bytes": 13668960,
+          "argument_bytes": 737544,
+          "output_bytes": 737632
+        }
+      ],
+      "exact_final_carries": true
+    },
+    {
+      "game": "Beam_Islands",
+      "batch": 256,
+      "steps": 20,
+      "seed": 42,
+      "samples_s": [
+        [
+          1.3520279414951801,
+          1.349430851638317,
+          1.3551827315241098,
+          1.3493746183812618,
+          1.3521418198943138,
+          1.3477849531918764,
+          1.3559970818459988
+        ],
+        [
+          1.380425751209259,
+          1.3775716349482536,
+          1.3712553158402443,
+          1.3823948483914137,
+          1.3768192678689957,
+          1.3861192613840103,
+          1.376202154904604
+        ]
+      ],
+      "speedup": 0.9814574481609205,
+      "compilation": [
+        {
+          "compile_s": 252.4909052401781,
+          "alias_bytes": 0,
+          "temporary_bytes": 44925576,
+          "argument_bytes": 1093128,
+          "output_bytes": 1093216
+        },
+        {
+          "compile_s": 218.0453599933535,
+          "alias_bytes": 0,
+          "temporary_bytes": 44924040,
+          "argument_bytes": 1093128,
+          "output_bytes": 1093216
+        }
+      ],
+      "exact_final_carries": true
+    },
+    {
+      "game": "Beam_Islands",
+      "batch": 256,
+      "steps": 20,
+      "seed": 1042,
+      "samples_s": [
+        [
+          1.3548410199582577,
+          1.360155837610364,
+          1.3541343864053488,
+          1.3485376797616482,
+          1.3521966803818941,
+          1.3493029419332743,
+          1.358264060690999
+        ],
+        [
+          1.3811516240239143,
+          1.3917784579098225,
+          1.378106839954853,
+          1.3832221385091543,
+          1.3761056158691645,
+          1.3816415965557098,
+          1.3807356227189302
+        ]
+      ],
+      "speedup": 0.9804386157546902,
+      "compilation": [
+        {
+          "compile_s": 252.4909052401781,
+          "alias_bytes": 0,
+          "temporary_bytes": 44925576,
+          "argument_bytes": 1093128,
+          "output_bytes": 1093216
+        },
+        {
+          "compile_s": 218.0453599933535,
+          "alias_bytes": 0,
+          "temporary_bytes": 44924040,
+          "argument_bytes": 1093128,
+          "output_bytes": 1093216
+        }
+      ],
+      "exact_final_carries": true
+    }
+  ]
+}

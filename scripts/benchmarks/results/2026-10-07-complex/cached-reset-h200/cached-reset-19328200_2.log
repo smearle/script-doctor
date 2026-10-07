@@ -1,0 +1,8 @@
+name, driver_version, memory.total [MiB]
+NVIDIA H200, 610.43.02, 143771 MiB
+Writing pretty tree to /scratch/se2161/puzzlejax-perf-20261002/complex-reset-20261007/data/pretty_trees/Beam_Islands
+Parsed Beam_Islands successfully
+Writing pretty tree to /scratch/se2161/puzzlejax-perf-20261002/complex-reset-20261007/data/pretty_trees/Beam_Islands
+Parsed Beam_Islands successfully
+{"game": "Beam_Islands", "batch": 256, "steps": 64, "seed": 42, "samples_s": [[5.2721115129534155, 5.278572908136994, 5.259090474806726, 5.252565419999883, 5.2697176351211965, 5.291940195020288, 5.25971038104035], [1.5348295900039375, 1.5317675729747862, 1.5356451151892543, 1.5265484501142055, 1.5307371909730136, 1.5207813549786806, 1.52275631390512]], "speedup": 3.44260116380363, "compilation": [{"compile_s": 544.5721397900488, "temporary_bytes": 53696136, "output_bytes": 140488416}, {"compile_s": 338.878152300138, "temporary_bytes": 37818248, "output_bytes": 140488416}], "exact_full_outputs": true, "automatic_resets": 790}
+{"game": "Beam_Islands", "batch": 256, "steps": 64, "seed": 1042, "samples_s": [[5.298804226098582, 5.297387683065608, 5.248922414146364, 5.258125527994707, 5.236652461113408, 5.2406475860625505, 5.279650442069396], [1.521994134876877, 1.5215750660281628, 1.5245454229880124, 1.5193072541151196, 1.5250485728029162, 1.5154210180044174, 1.5278640468604863]], "speedup": 3.4547607034110337, "compilation": [{"compile_s": 544.5721397900488, "temporary_bytes": 53696136, "output_bytes": 140488416}, {"compile_s": 338.878152300138, "temporary_bytes": 37818248, "output_bytes": 140488416}], "exact_full_outputs": true, "automatic_resets": 786}

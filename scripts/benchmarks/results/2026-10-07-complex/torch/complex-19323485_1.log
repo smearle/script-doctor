@@ -1,0 +1,41 @@
+name, driver_version, memory.total [MiB]
+NVIDIA H200, 610.43.02, 143771 MiB
+/scratch/se2161/script-doctor/.venv/lib/python3.13/site-packages/pydantic/_internal/_generate_schema.py:2249: UnsupportedFieldAttributeWarning: The 'repr' attribute with value False was provided to the `Field()` function, which has no effect in the context it was used. 'repr' is field-specific metadata, and can only be attached to a model field using `Annotated` metadata or by assignment. This may have happened because an `Annotated` type alias using the `type` statement was used, or if the `Field()` function was attached to a single member of a union type.
+  warnings.warn(
+/scratch/se2161/script-doctor/.venv/lib/python3.13/site-packages/pydantic/_internal/_generate_schema.py:2249: UnsupportedFieldAttributeWarning: The 'frozen' attribute with value True was provided to the `Field()` function, which has no effect in the context it was used. 'frozen' is field-specific metadata, and can only be attached to a model field using `Annotated` metadata or by assignment. This may have happened because an `Annotated` type alias using the `type` statement was used, or if the `Field()` function was attached to a single member of a union type.
+  warnings.warn(
+Writing pretty tree to /scratch/se2161/puzzlejax-perf-20261002/complex-20261007/data/pretty_trees/Boxes_&_Balloons
+Parsed Boxes_&_Balloons successfully
+Writing pretty tree to /scratch/se2161/puzzlejax-perf-20261002/complex-20261007/data/pretty_trees/Boxes_&_Balloons
+Parsed Boxes_&_Balloons successfully
+{"game": "Boxes_&_Balloons", "level": 0, "passed": true, "message": "all steps match", "actions": [0, 1, 2, 3, 4, 0, 1, 2, 3, 4, 0, 1, 2, 3, 4, 0, 1, 2, 3, 4, 0, 1, 2, 3, 4, 0, 1, 2, 3, 4, 0, 1, 2, 3, 4, 0, 1, 2, 3, 4, 0, 3, 3, 2, 2, 4, 0, 3, 1, 0, 2, 4, 3, 3, 3, 3, 2, 0, 4, 2, 2, 1, 0, 4, 3, 3, 2, 4, 2, 2, 2, 1, 0, 2, 4, 0, 4, 4, 1, 3, 0, 3, 3, 1, 0, 4, 2, 4, 3, 3, 3, 0, 1, 2, 2, 0, 2, 0, 3, 3, 4, 3, 1, 4, 2, 1, 4, 1, 0, 2, 3, 0, 2, 0, 3, 2, 1, 1, 2, 3, 4, 2, 0, 4, 3, 3, 0, 1], "comparison": "Original JS versus JAX: board, heuristic and winning flag after every replayed step", "source_hashes": {"puzzlejax/validate_actions.py": "18c597d30a390a68f4f894556b38629ae6c41abd53510572074b2b5b6e17cdc4", "puzzlescript_jax/env.py": "ab92c0a647c6efe9809c98cfecc7110a89b23b6dfdea2e7205603429041654fe", "puzzlescript_nodejs/puzzlescript/engine.js": "b301f87a3647406a7db23c5398629eb7061c75bb31b5bc002271e89cea5c53af", "scripts/benchmarks/validate_complex_game.py": "8dd84e4547f91e7ca54b172a31c0bc4f975efa78f5a00ff1d1d7ebf9d81cbc9e"}}
+Writing pretty tree to /scratch/se2161/puzzlejax-perf-20261002/complex-20261007/data/pretty_trees/Boxes_&_Balloons
+Parsed Boxes_&_Balloons successfully
+Compiling batch=16, steps=312
+Compiled in 143.77s; warming up
+{"batch": 16, "steps": 312, "compile_s": 143.766677522799, "host": "gh108.hpc.nyu.edu", "argument_bytes": 42504, "output_bytes": 42592, "temporary_bytes": 1502744, "samples_s": [1.1878101341426373, 1.1987396869808435, 1.2165053579956293, 1.1959590690676123, 1.2119136869441718], "fps_samples": [4202.6918751650755, 4164.373678636515, 4103.5577584508555, 4174.055892976202, 4119.10522488386], "median_fps": 4164.373678636515, "q25_fps": 4119.10522488386, "q75_fps": 4174.055892976202}
+Compiling batch=256, steps=100
+Compiled in 147.83s; warming up
+{"batch": 256, "steps": 100, "compile_s": 147.82725489418954, "host": "gh108.hpc.nyu.edu", "argument_bytes": 679944, "output_bytes": 680032, "temporary_bytes": 19932184, "samples_s": [0.595461546909064, 0.5819125168491155, 0.5725608689244837, 0.5673882339615375, 0.5708264398854226], "fps_samples": [42991.86090669513, 43992.867069807064, 44711.40343224616, 45119.01810381107, 44847.25690901508], "median_fps": 44711.40343224616, "q25_fps": 43992.867069807064, "q75_fps": 44847.25690901508}
+Compiling batch=1024, steps=100
+Compiled in 147.73s; warming up
+{"batch": 1024, "steps": 100, "compile_s": 147.73240766394883, "host": "gh108.hpc.nyu.edu", "argument_bytes": 2719752, "output_bytes": 2719840, "temporary_bytes": 79055896, "samples_s": [0.8824731409549713, 0.8770019952207804, 0.8685341540258378, 0.8617516818922013, 0.8550824800040573], "fps_samples": [116037.52595709314, 116761.4219329357, 117899.79648509451, 118827.73442942867, 119754.52941044251], "median_fps": 117899.79648509451, "q25_fps": 116761.4219329357, "q75_fps": 118827.73442942867}
+Compiling batch=4096, steps=100
+Compiled in 188.39s; warming up
+{"batch": 4096, "steps": 100, "compile_s": 188.3878995659761, "host": "gh108.hpc.nyu.edu", "argument_bytes": 10878984, "output_bytes": 10879072, "temporary_bytes": 335723600, "samples_s": [1.992515258025378, 1.9919684370979667, 1.9928610539063811, 1.98682506615296, 1.9855577668640763], "fps_samples": [205569.3166464992, 205625.74806493058, 205533.64681250972, 206158.05939729675, 206289.64154838395], "median_fps": 205625.74806493058, "q25_fps": 205569.3166464992, "q75_fps": 206158.05939729675}
+Compiling batch=8192, steps=100
+Compiled in 159.97s; warming up
+{"batch": 8192, "steps": 100, "compile_s": 159.96860069804825, "host": "gh108.hpc.nyu.edu", "argument_bytes": 21757960, "output_bytes": 21758048, "temporary_bytes": 671204944, "samples_s": [3.425218158168718, 3.4256354758981615, 3.427051953971386, 3.4258304580580443, 3.431415535043925], "fps_samples": [239167.24779889133, 239138.11196890858, 239039.2707792722, 239124.50135210986, 238735.29499233718], "median_fps": 239124.50135210986, "q25_fps": 239039.2707792722, "q75_fps": 239138.11196890858}
+Compiling batch=16384, steps=100
+Compiled in 185.46s; warming up
+{"batch": 16384, "steps": 100, "compile_s": 185.46004942199215, "host": "gh108.hpc.nyu.edu", "argument_bytes": 43515912, "output_bytes": 43516000, "temporary_bytes": 1261247056, "samples_s": [6.296336937928572, 6.303944955114275, 6.293036101851612, 6.290262717055157, 6.290721909841523], "fps_samples": [260214.79094144795, 259900.74654297164, 260351.27933207477, 260466.06854077976, 260447.0557563202], "median_fps": 260351.27933207477, "q25_fps": 260214.79094144795, "q75_fps": 260447.0557563202}
+Compiling batch=32768, steps=100
+Compiled in 243.15s; warming up
+{"batch": 32768, "steps": 100, "compile_s": 243.1463323419448, "host": "gh108.hpc.nyu.edu", "argument_bytes": 87031816, "output_bytes": 87031904, "temporary_bytes": 2522376272, "samples_s": [11.9518287058454, 11.949071111856028, 11.96863996097818, 11.97758272709325, 11.981263962807134], "fps_samples": [274167.24926766916, 274230.521295393, 273782.1515797516, 273577.7389028497, 273493.6823169921], "median_fps": 273782.1515797516, "q25_fps": 273577.7389028497, "q75_fps": 274167.24926766916}
+Compiling batch=65536, steps=100
+Compiled in 154.35s; warming up
+{"batch": 65536, "steps": 100, "compile_s": 154.34962548897602, "host": "gh108.hpc.nyu.edu", "argument_bytes": 174063624, "output_bytes": 174063712, "temporary_bytes": 5044243536, "samples_s": [23.248434585053474, 23.269293462857604, 23.245816689217463, 23.24272466590628, 23.245417608879507], "fps_samples": [281894.24866538495, 281641.55523075256, 281925.99501311034, 281963.50015767233, 281930.8351550799], "median_fps": 281925.99501311034, "q25_fps": 281894.24866538495, "q75_fps": 281930.8351550799}
+Compiling batch=131072, steps=100
+Compiled in 184.62s; warming up
+{"batch": 131072, "steps": 100, "compile_s": 184.62043436686508, "host": "gh108.hpc.nyu.edu", "argument_bytes": 348127240, "output_bytes": 348127328, "temporary_bytes": 10088234064, "samples_s": [46.15170147805475, 46.15632856008597, 46.1490181540139, 46.1590837710537, 46.14817183301784], "fps_samples": [284002.5303559503, 283974.0596554846, 284019.04361772374, 283957.1093960818, 284024.25230249605], "median_fps": 284002.5303559503, "q25_fps": 283974.0596554846, "q75_fps": 284019.04361772374}
+Stopped: plateau

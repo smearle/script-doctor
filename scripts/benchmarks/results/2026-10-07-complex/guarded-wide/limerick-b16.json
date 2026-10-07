@@ -1,0 +1,123 @@
+{
+  "host": "Yalda24",
+  "cpu_affinity": [
+    0,
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7
+  ],
+  "source_hashes": {
+    "scripts/benchmarks/benchmark_cpp_scoring.py": "99c6ab153d0aec49d37d6114603cb2473baeb88c7f65a57356a61ba4545adfd7",
+    "puzzlescript_cpp/__init__.py": "158fa886867977335394dc41755006d7461ab280607d7448027dd720615da078",
+    "scripts/benchmarks/profile_rand_nodejs.py": "1e5e43a879f58e326f16d897c970dd479ed21da7466057e23cc727081420102e",
+    "puzzlescript_nodejs/puzzlescript/engine.js": "b301f87a3647406a7db23c5398629eb7061c75bb31b5bc002271e89cea5c53af"
+  },
+  "idle_workers": "SIGSTOP between requests; only the measured build runs",
+  "thread_environment": {
+    "OMP_WAIT_POLICY": "ACTIVE",
+    "OMP_PROC_BIND": "close",
+    "OMP_PLACES": "cores",
+    "OPENBLAS_NUM_THREADS": "1"
+  },
+  "trials": 9,
+  "seeds": [
+    42,
+    1042
+  ],
+  "steps": 300,
+  "games": [
+    "limerick"
+  ],
+  "levels": [
+    0
+  ],
+  "batches": [
+    16
+  ],
+  "threads": [
+    8
+  ],
+  "library_hashes": {
+    "baseline": "355f88636be05074d9286c171f0c9ee69b4ae630f7670f3acb9282341c5fde0f",
+    "candidate": "c88b36964b09a31b0b220957184cdfc11a304399bc066ab0b9fa2193753afb2d"
+  },
+  "timing": "full Python wrapper outputs; alternating warmed calls; reset/actions/IPC excluded",
+  "results": [
+    {
+      "game": "limerick",
+      "level": 0,
+      "batch": 16,
+      "threads": 8,
+      "seed": 42,
+      "compiled_sha256": "d5893223c98a1571e3729a03f5084e65a506a4fbd24785b2968205b8154e4aa5",
+      "output_sha256": "3131d31c9a0820241180c6aaf4633bb1c3c6d61ff21739ec702280ea2fa06693",
+      "samples_s": [
+        [
+          0.0882989764213562,
+          0.08813845738768578,
+          0.08814367279410362,
+          0.08795743435621262,
+          0.08799785375595093,
+          0.08792221359908581,
+          0.08801348321139812,
+          0.08798038028180599,
+          0.08802669495344162
+        ],
+        [
+          0.08727791532874107,
+          0.08714349381625652,
+          0.08694808557629585,
+          0.08702294528484344,
+          0.08690532296895981,
+          0.08681979030370712,
+          0.08685948140919209,
+          0.08686392568051815,
+          0.0868934653699398
+        ]
+      ],
+      "baseline_fps": 54537.09846332249,
+      "candidate_fps": 55232.52012669498,
+      "speedup": 1.0127513506029329
+    },
+    {
+      "game": "limerick",
+      "level": 0,
+      "batch": 16,
+      "threads": 8,
+      "seed": 1042,
+      "compiled_sha256": "d5893223c98a1571e3729a03f5084e65a506a4fbd24785b2968205b8154e4aa5",
+      "output_sha256": "7c6cd372b09cc7cbe101e06c953c1c2c9da6de568ef5750583dcbbf86a03266f",
+      "samples_s": [
+        [
+          0.08830182999372482,
+          0.088429419323802,
+          0.0883458498865366,
+          0.08850154094398022,
+          0.08843087404966354,
+          0.08839480765163898,
+          0.08847592584788799,
+          0.08882199786603451,
+          0.0886648166924715
+        ],
+        [
+          0.08729405514895916,
+          0.0872439444065094,
+          0.08728035166859627,
+          0.08725135773420334,
+          0.08732955157756805,
+          0.0873568095266819,
+          0.08743499219417572,
+          0.08740859664976597,
+          0.08758255653083324
+        ]
+      ],
+      "baseline_fps": 54279.68513920012,
+      "candidate_fps": 54964.212151444895,
+      "speedup": 1.0126111087507106
+    }
+  ]
+}

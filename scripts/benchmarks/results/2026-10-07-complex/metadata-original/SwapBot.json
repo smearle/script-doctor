@@ -1,0 +1,25 @@
+{
+  "game": "SwapBot",
+  "objects": 59,
+  "layers": 13,
+  "level_shape": [
+    59,
+    6,
+    6
+  ],
+  "compiled_sha256": "6bc9ea73464851152188bdebbeec54d98cd171d665fed24b9d77275281064758",
+  "source_sha256": "51301b9ff551ea1f8b075ca723e7342c1b024b37ac4ed504ab9639cd1f65ce6c",
+  "compiled_rules": 174,
+  "compiled_groups": 72,
+  "loop_points": 0,
+  "source_rules": 72,
+  "multirow_rules": 101,
+  "max_pattern_rows": 3,
+  "ellipsis_rules": 0,
+  "max_pattern_span": 2,
+  "board_cells": 36,
+  "force_channels": 65,
+  "jax_rule_functions": 117,
+  "jax_rule_groups": 72,
+  "run_rules_on_level_start": true
+}

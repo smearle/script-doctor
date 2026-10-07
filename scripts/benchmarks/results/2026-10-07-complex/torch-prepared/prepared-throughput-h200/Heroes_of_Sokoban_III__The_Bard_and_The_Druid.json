@@ -1,0 +1,169 @@
+{
+  "game": "Heroes_of_Sokoban_III__The_Bard_and_The_Druid",
+  "level": 0,
+  "jax_version": "0.9.0.1",
+  "devices": [
+    "NVIDIA H200"
+  ],
+  "host": "gh131.hpc.nyu.edu",
+  "engine_sha256": "d06ceb53b0c4c615bc5a541c96ef3631b5640c53767a5942e0ba2d33b513ffeb",
+  "requested_batches": [
+    16,
+    256,
+    1024,
+    4096,
+    8192
+  ],
+  "trials": 5,
+  "seed": 42,
+  "base_steps": 5000,
+  "min_steps": 100,
+  "max_episode_steps": 2147483647,
+  "timing": "median/IQR of synchronized warmed calls; carry continues across trials",
+  "output_mode": "final_carry",
+  "action_generation": "inside timed scan",
+  "results": [
+    {
+      "batch": 16,
+      "steps": 312,
+      "compile_s": 376.5201994329691,
+      "host": "gh131.hpc.nyu.edu",
+      "argument_bytes": 113832,
+      "output_bytes": 113920,
+      "temporary_bytes": 3362008,
+      "samples_s": [
+        4.827174182981253,
+        4.833532250951976,
+        4.823200125014409,
+        4.841949952067807,
+        4.8433212919626385
+      ],
+      "fps_samples": [
+        1034.1454049037343,
+        1032.7850815553809,
+        1034.9974851987063,
+        1030.9895908502963,
+        1030.6976760521936
+      ],
+      "median_fps": 1032.7850815553809,
+      "q25_fps": 1030.9895908502963,
+      "q75_fps": 1034.1454049037343
+    },
+    {
+      "batch": 256,
+      "steps": 100,
+      "compile_s": 405.56717588217,
+      "host": "gh131.hpc.nyu.edu",
+      "argument_bytes": 1821192,
+      "output_bytes": 1821280,
+      "temporary_bytes": 46618840,
+      "samples_s": [
+        1.9613263178616762,
+        1.9513788910117,
+        1.9327012898866087,
+        1.91531288693659,
+        2.0105424411594868
+      ],
+      "fps_samples": [
+        13052.392030261562,
+        13118.928424365387,
+        13245.709584796701,
+        13365.962383799037,
+        12732.882169468849
+      ],
+      "median_fps": 13118.928424365387,
+      "q25_fps": 13052.392030261562,
+      "q75_fps": 13245.709584796701
+    },
+    {
+      "batch": 1024,
+      "steps": 100,
+      "compile_s": 454.15695308102295,
+      "host": "gh131.hpc.nyu.edu",
+      "argument_bytes": 7284744,
+      "output_bytes": 7284832,
+      "temporary_bytes": 184660184,
+      "samples_s": [
+        3.0680975650902838,
+        3.057733227033168,
+        3.0240715860854834,
+        3.076489679981023,
+        2.9781703411135823
+      ],
+      "fps_samples": [
+        33375.731321303894,
+        33488.86001391162,
+        33861.63226795564,
+        33284.68828168851,
+        34383.52688775724
+      ],
+      "median_fps": 33488.86001391162,
+      "q25_fps": 33375.731321303894,
+      "q75_fps": 33861.63226795564
+    },
+    {
+      "batch": 4096,
+      "steps": 100,
+      "compile_s": 533.3764577379916,
+      "host": "gh131.hpc.nyu.edu",
+      "argument_bytes": 29138952,
+      "output_bytes": 29139040,
+      "temporary_bytes": 736727512,
+      "samples_s": [
+        9.084658809937537,
+        9.092117507010698,
+        9.031097118044272,
+        8.94987931009382,
+        8.94285678002052
+      ],
+      "fps_samples": [
+        45086.99870510781,
+        45050.01169245425,
+        45354.40098209251,
+        45765.980278420786,
+        45801.91879121876
+      ],
+      "median_fps": 45354.40098209251,
+      "q25_fps": 45086.99870510781,
+      "q75_fps": 45765.980278420786
+    },
+    {
+      "batch": 8192,
+      "steps": 100,
+      "compile_s": 624.5295328970533,
+      "host": "gh131.hpc.nyu.edu",
+      "argument_bytes": 58277896,
+      "output_bytes": 58277984,
+      "temporary_bytes": 1473336536,
+      "samples_s": [
+        26.355365928960964,
+        26.313071874901652,
+        26.27164811384864,
+        26.21774086402729,
+        26.145018032984808
+      ],
+      "fps_samples": [
+        31082.854330617,
+        31132.815047010237,
+        31181.90364190258,
+        31246.017887223985,
+        31332.929239769095
+      ],
+      "median_fps": 31181.90364190258,
+      "q25_fps": 31132.815047010237,
+      "q75_fps": 31246.017887223985
+    }
+  ],
+  "benchmark_sha256": "4690332c3bf9ff220b6c0f8f71a6bcefd90d44f58f4ddbb2cf7e5e3a6b682729",
+  "prepare_params": true,
+  "adaptive": {
+    "factor": 2,
+    "max_batch": 262144,
+    "min_gain": 0.03,
+    "patience": 2,
+    "regression": 0.1
+  },
+  "reset_preparation_s": 603.4377446570434,
+  "reset_cache_used": true,
+  "stop_reason": "regression"
+}

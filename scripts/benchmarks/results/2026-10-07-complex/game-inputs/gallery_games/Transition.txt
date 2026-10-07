@@ -1,0 +1,911 @@
+title Transition
+author NinaBirb
+flickscreen 13x13
+require_player_movement
+run_rules_on_level_start
+========
+OBJECTS
+========
+
+Background
+brown
+
+
+flag
+yellow
+.0000
+.0000
+.0000
+....0
+....0
+
+nflag
+red yellow
+.0001
+.0001
+.0001
+....1
+....1
+
+Target
+darkblue
+.....
+.000.
+.0.0.
+.000.
+.....
+
+reset1
+white
+.....
+.....
+.....
+.....
+.....
+
+reset2
+white
+.....
+.....
+.....
+.....
+.....
+
+Wall1
+yellow darkbrown
+00010
+11111
+01000
+11111
+00010
+
+wallspawn1
+white
+.....
+.....
+.....
+.....
+.....
+
+
+wall2
+yellow darkbrown
+00010
+11111
+01000
+11111
+00010
+
+gwall
+lightgreen green
+00010
+11111
+01000
+11111
+00010
+
+wallspawn2
+white
+.....
+.....
+.....
+.....
+.....
+
+lock1
+yellow darkbrown
+.000.
+00000
+01000
+00000
+00000
+
+glock
+lightgreen green
+.000.
+00000
+01000
+00000
+00000
+
+lock2
+yellow darkbrown
+.000.
+00000
+01000
+00000
+00000
+
+key1
+yellow
+.....
+00000
+0.0.0
+000..
+.....
+
+key2
+yellow
+.....
+00000
+0.0.0
+000..
+.....
+
+pkey1
+purple
+.....
+00000
+0.0.0
+000..
+.....
+
+pikey1
+purple
+.....
+.....
+.....
+.....
+.....
+
+pkey2
+purple
+.....
+00000
+0.0.0
+000..
+.....
+
+pikey2
+purple
+.....
+.....
+.....
+.....
+.....
+
+gkey
+lightgreen
+.....
+00000
+0.0.0
+000..
+.....
+
+
+keyspawn1
+white
+.....
+.....
+.....
+.....
+.....
+
+keyspawn2
+white
+.....
+.....
+.....
+.....
+.....
+
+lockspawn1
+white
+.....
+.....
+.....
+.....
+.....
+
+lockspawn2
+white
+.....
+.....
+.....
+.....
+.....
+
+
+Player1
+black orange white blue
+.000.
+.111.
+22222
+.333.
+.3.3.
+
+Player2
+black orange white blue
+.000.
+.111.
+22222
+.333.
+.3.3.
+
+
+Deadplayer1
+gray lightgray white gray
+.000.
+.111.
+22222
+.333.
+.3.3.
+
+deadplayer1reset
+white
+.....
+.....
+.....
+.....
+.....
+
+Deadplayer2
+gray lightgray white gray
+.000.
+.111.
+22222
+.333.
+.3.3.
+
+deadplayer2reset
+white
+.....
+.....
+.....
+.....
+.....
+
+
+playerreset
+white
+.....
+.....
+.....
+.....
+.....
+
+player2reset
+white
+.....
+.....
+.....
+.....
+.....
+
+gplayer
+lightgreen
+.000.
+.000.
+00000
+.000.
+.0.0.
+
+gdeadplayer
+gray
+.000.
+.000.
+00000
+.000.
+.0.0.
+
+Crate1
+yellow
+00000
+0...0
+0...0
+0...0
+00000
+
+pplayer1
+purple
+.000.
+.000.
+00000
+.000.
+.0.0.
+
+pplayer2
+purple
+.000.
+.000.
+00000
+.000.
+.0.0.
+
+piplayer1
+purple
+.....
+.....
+.....
+.....
+.....
+
+piplayer2
+purple
+.....
+.....
+.....
+.....
+.....
+
+pcrate1
+purple
+00000
+0...0
+0...0
+0...0
+00000
+
+picrate1
+purple
+00000
+0...0
+0...0
+0...0
+00000
+pcrate2
+purple
+00000
+0...0
+0...0
+0...0
+00000
+
+picrate2
+purple
+00000
+0...0
+0...0
+0...0
+00000
+
+crate2
+yellow
+00000
+0...0
+0...0
+0...0
+00000
+
+gcrate
+lightgreen
+00000
+0...0
+0...0
+0...0
+00000
+
+cratespawn1
+white
+.....
+.....
+.....
+.....
+.....
+
+cratespawn2
+white
+.....
+.....
+.....
+.....
+.....
+
+death
+orange
+.000.
+00000
+0.0.0
+00000
+.0.0.
+
+
+=======
+LEGEND
+=======
+key = key1 or key2 or gkey or pkey1 or pkey2
+lock = lock1 or lock2 or glock
+crate = Crate1 or crate2 or gcrate or pcrate1 or pcrate2
+pushable = key1 or key2 or Crate1 or crate2 or gcrate or gkey or pcrate1 or pcrate2 or pkey1 or pkey2 or Deadplayer1 or Deadplayer2 or gdeadplayer
+player = player1 or gplayer or player2 or pplayer1 or pplayer2
+gobject = gcrate or gkey or gdeadplayer
+. = Background
+# = Wall1 and wallspawn1
+z = wall2 and wallspawn2
+r = gwall
+g = gplayer
+P = Player1 and playerreset
+* = Crate1 and cratespawn1
+$ =  crate2 and cratespawn2
+h = gcrate
+& = gcrate and target
+O = Target
+1 = reset1
+2 = reset2
+l = lock1 and lockspawn1
+m = lock2 and lockspawn2
+j = key1 and keyspawn1
+q = key2 and keyspawn2
+b = gkey
+x = glock
+f = pcrate1
+n = picrate2
+c = pkey1
+s = pikey2
+a = flag
+% = nflag
+d = death
+3 = Deadplayer1 and deadplayer1reset
+4 = deadplayer2 and  deadplayer2reset
+5 = gdeadplayer
+6 = pplayer1
+7 = piplayer2
+8 = player2 and player2reset
+9 = crate2 and cratespawn2 and target
+0 = cratespawn1 and crate1 and target
+
+=======
+SOUNDS
+=======
+
+pushable move 36772507
+
+================
+COLLISIONLAYERS
+================
+
+Background
+playerreset
+player2reset
+reset1, reset2, cratespawn1, cratespawn2, lockspawn1, lockspawn2, keyspawn1, keyspawn2, wallspawn1, wallspawn2, deadplayer1reset, deadplayer2reset
+Target, flag, nflag, death
+gPlayer, player1, Wall1, Wall2, Crate1, crate2, gcrate, lock1, lock2, key1, key2, gkey, glock, gwall, pcrate1, pcrate2, pkey1, pkey2, Player2, deadplayer2, gdeadplayer, pplayer1, pplayer2, deadplayer1
+picrate1, picrate2
+pikey1, pikey2
+piplayer2, piplayer1
+======
+RULES
+======
+
+late [player1 death] [deadplayer1] [playerreset] -> [death] [player1 playerreset] []
+
+late down [pplayer1 | ...| wall2] [piplayer2] -> [| ...| wall2] []
+late down[pplayer2 | ...| wall1] [piplayer1] -> [|...| wall1] []
+
+late down [ deadplayer1 | ... | wall2] [playerreset] [player1 death] -> [player2 player2reset | ... | wall2] [] [death]
+late down [deadplayer2 | ... | wall1] [player2reset] [player2 death] -> [deadplayer1 playerreset | ...| wall1] [] [death]
+late down[playerreset gobject|...| wall1] [player1| ...| Wall2] [deadplayer1 | ... | wall2] -> [gobject| ... | wall1] [| ...| wall2] [player2 player2reset| ... | wall2]
+late down [player1 | ... | wall2] [gobject playerreset] [deadplayer1] -> [ | ...| wall2] [gobject] [player1 playerreset]
+late down[player2reset gobject|...| wall2] [player2| ...| Wall1] [deadplayer2 | ... | wall1] -> [gobject| ... | wall2] [| ...| wall1] [player1 playerreset| ... | wall1]
+late down[player2reset gobject | ... | wall2] [player2 | ... | wall1 ] [deadplayer1 | ... | wall1] -> [gobject | ... | wall2] [ | ... | wall1] [player1 playerreset | ... | wall1]
+late down [player2 | ... | wall1] [gobject player2reset] [deadplayer2] -> [ | ...| wall1] [gobject] [player2 player2reset]
+
+late down [death player] [deadplayer1 | ... | wall2] -> [death] [player2 player2reset | ... | wall2]
+
+late[player1 death] [deadplayer1] -> [death] [player1 playerreset]
+late[player1 death] [deadplayer2] -> [death] [player2 player2reset]
+late[player1 death] [gdeadplayer] -> [death] [gplayer]
+late[player2 death] [deadplayer1] -> [death] [player1 playerreset]
+late[player2 death] [deadplayer2] -> [death] [player2 player2reset]
+late[player2 death] [gdeadplayer] -> [death] [gplayer]
+late[gplayer death] [deadplayer1] -> [death] [player1 playerreset]
+late[gplayer death] [Deadplayer2] -> [death] [player2 player2reset]
+late[gplayer death] [gdeadplayer] -> [death] [gplayer]
+late[pplayer1 death] [piplayer2] -> [piplayer1 death] [pplayer2]
+late[pplayer2 death] [piplayer1] -> [piplayer2 death] [pplayer1]
+late[player death] -> [death]
+late[player1 death] [playerreset] -> [death] []
+late[player2 death] [player2reset] -> [death] []
+[ > Player | pushable ] -> [ > Player | > pushable]
+
+[ > pushable | pushable] -> [ > pushable | > pushable]
+
+[ > key | lock] ->  [|]
+
+[> pplayer1] [piplayer2] -> [> pplayer1 ] [> piplayer2]
+[ > pplayer2] [piplayer1] -> [ > pplayer2] [> piplayer1]
+
+late down[ pkey1 | ... | wall2] [pikey2] -> [ | ...| wall2] []
+late down [pkey2  | ...| wall1] [pikey1] -> [|...|wall1] []
+[ > pkey1] [pikey2] -> [ > pkey1] [> pikey2]
+[ > pkey2] [pikey1] -> [ > pkey2] [> pikey1]
+
+late down [ wall2| ... | player] [pkey1] [pikey2] -> [wall2 | ... |player] [pikey1] [pkey2]
+late  down [ wall1 | ... | player] [pikey1] [pkey2] -> [wall1 | ... | player] [pkey1] [pikey2]
+
+late down[pcrate1| ... | wall2] [picrate2] -> [ | ...| wall2] []
+late down [pcrate2| ... | wall1] [picrate1] -> [|...| wall1] []
+[ > pcrate1] [picrate2] -> [ > pcrate1] [> picrate2]
+[ > pcrate2] [picrate1] -> [ > pcrate2] [> picrate1]
+
+late down [ wall2| ... | player] [pcrate1] [picrate2] -> [wall2 | ... |player] [picrate1] [pcrate2]
+late  down [ wall1 | ... | player] [picrate1] [pcrate2] -> [wall1 | ... | player] [pcrate1] [picrate2]
+
+
+late down[player | ... | wall2] [crate1]  -> [ player | ... | wall2] []
+late down[ player | ...| wall2] [cratespawn1 no crate1 no gobject]  -> [player | ...| wall2] [cratespawn1 crate1]
+
+late down [ player | ... | wall1] [crate2]  -> [player | ... | wall1] []
+late down [ player | ...| wall1] [cratespawn2 no crate2 no gobject]  -> [player | ... |wall1] [cratespawn2 crate2]
+
+late down[ player | ...| wall2] [key1]  -> [player | ...| wall2] []
+late down [ player | ... | wall2] [keyspawn1 no key1 no gobject]  -> [player | ... | wall2] [keyspawn1 key1]
+
+late down[ player | ... | wall1] [key2]  -> [player | ... | wall1] []
+late down[ player |...| wall1] [keyspawn2 no key2 no gobject]  -> [player |...| wall1 ] [keyspawn2 key2]
+
+late down[ player | ...| wall2] [lock1]  -> [player | ...| wall2] []
+late down[ player | ...| wall2] [lockspawn1 no lock1 no gobject]  -> [player | ...| wall2] [lockspawn1 lock1]
+
+late down[ player | ... | wall1] [lock2]  -> [player | ...| wall1] []
+late down[ player | ...| wall1] [lockspawn2 no lock2 no gobject]  -> [player | ...| wall1] [lockspawn2 lock2]
+
+late down[ player| ...| wall2] [wall1]  -> [player | ...| wall2] []
+late down[ player| ...| wall2] [wallspawn1 no wall1 no gobject]  -> [player| ...| wall2] [wallspawn1 wall1]
+
+late down[ player| ...| wall1] [wall2]  -> [player | ... | wall1] []
+late down[ player | ...| wall1] [wallspawn2 no wall2 no gobject]  -> [player| ...| wall1] [wallspawn2 wall2]
+
+late down[ player | ...| wall2] [deadplayer1]  -> [player |...| wall2] []
+late down[ player | ...| wall2] [deadplayer1reset no deadplayer1 no gobject]  -> [player | ...| wall2] [deadplayer1reset deadplayer1]
+
+late down[ player | ...| wall1] [deadplayer2]  -> [player|...| wall1] []
+late down[ player | ...| wall1] [deadplayer2reset no deadplayer2 no gobject]  -> [player | ...| wall1] [deadplayer2reset deadplayer2]
+
+
+
+late down[player1 | ...| wall2] [playerreset no gobject] -> [|...| wall2] [playerreset player1]
+late down[player1 | ...| wall2] [playerreset gobject] -> [|...|wall2] [playerreset gobject]
+late  down[player2 | ...| wall1] [player2reset] -> [|...| wall1] [player2reset player2]
+
+late[ target crate] [nflag] -> [target crate] [flag]
+late[target no crate] [flag] ->[target] [nflag]
+
+late [player flag] -> win
+
+==============
+WINCONDITIONS
+==============
+
+=======
+LEVELS
+=======
+
+message Room
+
+#############zzzzzzzzzzzzz
+#...........#z...........z
+#...........#z...........z
+#.....%.....#z...........z
+#...........#z...........z
+#..........##z...........z
+#..g..*.o..#.............z
+#..........##z...........z
+#...........#z...........z
+#...........#z...........z
+#...........#z...........z
+#...........#z...........z
+#############zzzzzzzzzzzzz
+
+message Door and Key
+
+#############zzzzzzzzzzzzz
+#...........#z...........z
+#...........#z...........z
+#...........#z...........z
+#####.......#z...........z
+#...#......##z...........z
+#.a.l...j.g#.............z
+#...#......##z...........z
+#####.......#z...........z
+#...........#z...........z
+#...........#z...........z
+#...........#z...........z
+#############zzzzzzzzzzzzz
+
+message Reset
+
+#############zzzzzzzzzzzzz
+#############z...........z
+#############z...........z
+#############z.....z.....z
+#############z....z......z
+#####.......#zz..z.......z
+#####...o..*..z.zzzzzzzz.z
+#####.#.....#zz..z.......z
+#####.#....##z....z......z
+#####*#.....#z.....z.....z
+#####g#..%..#z...........z
+#####o#.....#z...........z
+#############zzzzzzzzzzzzz
+
+message Not Allowed
+
+#############zzzzzzzzzzzzz
+#...........#z...........z
+#...........#z...........z
+#.....%.....#z...........z
+#...........#zzzzzz......z
+#...*.*.*...#z...zz......z
+#..............o.zz......z
+#.....g.....#z...zz......z
+#...........#zzzzzz......z
+#...........#z...........z
+#...........#z...........z
+#...........#z...........z
+#############zzzzzzzzzzzzz
+
+message Immune
+
+#############zzzzzzzzzzzzz
+##....o#....#z...........z
+##.....#....#z.....z.....z
+###.####..%.#z.....z.....z
+###.#.......#z.....z.....z
+###.#.......#zz....z.....z
+###.#.........z....z.....z
+###.#.......#zz....z.....z
+###h........#z...........z
+###*...g....#z.....z.....z
+###.........#z...........z
+###o........#z...........z
+#############zzzzzzzzzzzzz
+
+message Entanglement
+
+#############zzzzzzzzzzzzz
+#o...o#.....#z...........z
+#.....#.....#z...........z
+###*###..%..#z....z..z...z
+###h###.....#z...........z
+#...........#zz.z......z.z
+#.............z..z....z..z
+#..g........#zz...zzzz...z
+#...........#z...........z
+#...........#z...........z
+#...........#z...........z
+#...........#z...........z
+#############zzzzzzzzzzzzz
+
+message Luggage
+
+#############zzzzzzzzzzzzz
+#...........#z...........z
+#...........#z...........z
+#.....%.....#z#####......z
+#...........#z....#......z
+#...&...*...#z....#......z
+#...............o.#......z
+#...........#z....#......z
+#.....g.....#z....#......z
+#...........#z#####......z
+#...........#z...........z
+#...........#z...........z
+#############zzzzzzzzzzzzz
+
+message One Key
+
+#############zzzzzzzzzzzzz
+#######.....#z...........z
+#######.....#z....zzz....z
+#######.....#z....z......z
+####..#.....#z....zzz....z
+#..#..#.....#zz...z......z
+#a.l..x.j.g...z...z......z
+#..#..#.....#zz...zzzz...z
+####..#.....#z....z..z...z
+#######.....#z....z..z...z
+#######.....#z....zzzz...z
+#######.....#z...........z
+#############zzzzzzzzzzzzz
+
+message Doorlemma
+
+#############zzzzzzzzzzzzz
+####...#....#z...........z
+####...#....#z...........z
+####...#....#z....zzzz...z
+####...#....#z....z..z...z
+#..#...#.j..#zz......z...z
+#a.l...l...g..z....zzz...z
+#..#...#.h..#zz....z.....z
+####...#....#z.....z.....z
+####...#....#z...........z
+####...#....#z.....z.....z
+####...#....#z...........z
+#############zzzzzzzzzzzzz
+
+message Two Keys
+
+#############zzzzzzzzzzzzz
+#.a.#..#....#z...........z
+#...#..#....#z...........z
+##l##..#....#z....zzzz...z
+#...#..#..j.#z...zzzzzz..z
+##l##..#....#zz.zzzzzzzz.z
+#...#..#..g...z.zzzzzzzz.z
+#...x..l....#zz.z.zzzzzz.z
+#...#..#..b.#z..zzzzzzzz.z
+#####..#....#z..zzzzzzzz.z
+#####..#....#z..zzzzzzzz.z
+#####..#....#z...........z
+#############zzzzzzzzzzzzz
+
+message Deadly
+
+#############zzzzzzzzzzzzz
+#...........#z...........z
+#...........#z...........z
+#......ddddd#z...........z
+#......d....#z...........z
+#......d.hg%#zz..........z
+#.....od.o....z..........z
+#......d.*..#zz..........z
+#......d....#z...........z
+#......ddddd#z...........z
+#...........#z...........z
+#...........#z...........z
+#############zzzzzzzzzzzzz
+
+message Swap
+
+#############zzzzzzzzzzzzz
+#...........#z...........z
+#...........#z...........z
+#....5...a..#z...........z
+#...........#z...........z
+#..........##z...........z
+#.#######..#.............z
+#.#ddddd#..##z...........z
+#.#.....#...#z...........z
+#.#.....#...#z...........z
+#.#..g..#...#z...........z
+#.#.....#...#z...........z
+#############zzzzzzzzzzzzz
+
+message Access
+
+#############zzzzzzzzzzzzz
+#..#.....#..#z...........z
+#..#..a..#..#z...........z
+#..#.....#..#z...........z
+#..###d###..#z...........z
+#..........##z...........z
+#..........#.............z
+#..........##z...........z
+#....g.5....#z...........z
+#...........#z...........z
+#...........#z...........z
+#...........#z...........z
+#############zzzzzzzzzzzzz
+
+
+message Warp
+
+#############zzzzzzzzzzzzz
+#...........#zzz......zzzz
+#...........#zzz..a...zzzz
+#...........#zzz......zzzz
+#...g..5....#zzz......zzzz
+#...........#zzzzz.zzzzzzz
+#.............9....zzzzzzz
+#...........#zzzz..zzzzzzz
+#ddddddddddd#zzzz..zzzzzzz
+#ddddddddddd#zzzzzzzzzzzzz
+#ddddddddddd#zzzzzzzzzzzzz
+#ddddddddddd#zzzzzzzzzzzzz
+#############zzzzzzzzzzzzz
+
+message No Escape
+
+#############zzzzzzzzzzzzz
+#...........#z...........z
+###.........#z...........z
+#o..........#z...........z
+#.#.........#z...........z
+#.#.........#z...........z
+#.#....h.................z
+#.#.........#z...........z
+#.###.......#z...........z
+#...#.......#z...........z
+#p.a#.......#z...........z
+#...#.......#z...........z
+#############zzzzzzzzzzzzz
+
+message Blockade
+
+#############zzzzzzzzzzzzz
+#...........#z...........z
+#..3.....a..#z...........z
+#...........#z...........z
+#############z...........z
+##..........#z...........z
+##.......................z
+##....h.....#z...........z
+##..........#z...........z
+##....p.....#z...........z
+##..........#z...........z
+##..........#z...........z
+#############zzzzzzzzzzzzz
+
+message Where's The Flag?
+
+#############zzzzzzzzzzzzz
+#...........#z...........z
+#...........#z...........z
+#...........#z...........z
+#.....3.....#z...........z
+#...........#z...........z
+#....p.h...........a.....z
+#...........#z...........z
+#...........#z...........z
+#...........#z...........z
+#...........#z...........z
+#...........#z...........z
+#############zzzzzzzzzzzzz
+
+message Over There
+
+#############zzzzzzzzzzzzz
+#dd.......dd#z..zzzzzzzzzz
+#d....g....d#z..zzzzzzzzzz
+#...........#z..o..zzzzzzz
+#.....h.....#z..zz.zzzzzzz
+#...........#z..z..zzzzzzz
+#....0.03.......d..zzzzzzz
+#...........#z..z..zzzzzzz
+#.....0.....#z..z..zzzzzzz
+#...........#z..z..zzzzzzz
+#d.........d#z..z..zzzzzzz
+#dd.......dd#z..z.%zzzzzzz
+#############zzzzzzzzzzzzz
+
+message Spawnpoint
+
+#############zzzzzzzzzzzzz
+#...........#z...........z
+#.o.h.......#z...........z
+#...........#z...........z
+######d###..#z...........z
+#........#..#zz..........z
+#.%......#....z..........z
+#........#..#zz..........z
+#...p..3.#..#z...........z
+#........####z...........z
+#........####z...........z
+#........####z...........z
+#############zzzzzzzzzzzzz
+
+message Where's The Target?
+
+#############zzzzzzzzzzzzz
+#...........#z...........z
+#...........#z...........z
+#...........#z...........z
+#...........#z.....h.....z
+#...h.%.*...#z...........z
+#..................o.....z
+#...........#z...........z
+#...p...3...#z.....h.....z
+#...........#z...........z
+#...........#z...........z
+#...........#z...........z
+#############zzzzzzzzzzzzz
+
+message Thanks For Playing
+
+#############zzzzzzzzzzzzz
+#...........#z.##........z
+#..d..d..d..#z.#.#...#...z
+#..dd.d.....#z.##....#...z
+#..d.dd..d..#z.#.#...#...z
+#..d..d..d..#z.##....#...z
+#g..........#z5.........az
+#..d..d..d..#z.####..##..z
+#..dd.d.d.d.#z.#..#..#.#.z
+#..d.dd.ddd.#z.###...##..z
+#..d..d.d.d.#z.#..#..#.#.z
+#...........#z.#..#..##..z
+#############zzzzzzzzzzzzz
+
+

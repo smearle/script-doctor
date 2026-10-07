@@ -1,0 +1,25 @@
+{
+  "game": "kettle",
+  "objects": 8,
+  "layers": 3,
+  "level_shape": [
+    8,
+    13,
+    15
+  ],
+  "compiled_sha256": "ac39171ba8a3e1a5786a5566d558b3b6bce9172855f9138e507b0f3f080e93bb",
+  "source_sha256": "348004a6e6fef557b139ab09c558995615bd56811e037cb7a78aa156a56939dd",
+  "compiled_rules": 20,
+  "compiled_groups": 14,
+  "loop_points": 0,
+  "source_rules": 14,
+  "multirow_rules": 0,
+  "max_pattern_rows": 1,
+  "ellipsis_rules": 0,
+  "max_pattern_span": 2,
+  "board_cells": 195,
+  "force_channels": 15,
+  "jax_rule_functions": 20,
+  "jax_rule_groups": 14,
+  "run_rules_on_level_start": false
+}

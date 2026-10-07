@@ -1,0 +1,87 @@
+{
+  "game": "Vacuum",
+  "level": 0,
+  "jax_version": "0.9.0.1",
+  "devices": [
+    "NVIDIA H200"
+  ],
+  "host": "gh109.hpc.nyu.edu",
+  "engine_sha256": "ab92c0a647c6efe9809c98cfecc7110a89b23b6dfdea2e7205603429041654fe",
+  "requested_batches": [
+    16,
+    256,
+    1024,
+    4096
+  ],
+  "trials": 5,
+  "seed": 42,
+  "base_steps": 5000,
+  "min_steps": 100,
+  "max_episode_steps": 2147483647,
+  "timing": "median/IQR of synchronized warmed calls; carry continues across trials",
+  "output_mode": "final_carry",
+  "action_generation": "inside timed scan",
+  "results": [
+    {
+      "batch": 16,
+      "steps": 312,
+      "compile_s": 1165.28799862694,
+      "host": "gh109.hpc.nyu.edu",
+      "argument_bytes": 5226216,
+      "output_bytes": 5226304,
+      "temporary_bytes": 91385576,
+      "samples_s": [
+        33.93914130097255,
+        22.676858657039702,
+        17.369007823057473,
+        17.5786317801103,
+        13.849180188030005
+      ],
+      "fps_samples": [
+        147.08680917206797,
+        220.13631056655663,
+        287.40847208169754,
+        283.98114611219626,
+        360.45454909415065
+      ],
+      "median_fps": 283.98114611219626,
+      "q25_fps": 220.13631056655663,
+      "q75_fps": 287.40847208169754
+    },
+    {
+      "batch": 256,
+      "steps": 100,
+      "compile_s": 1267.6592145280447,
+      "host": "gh109.hpc.nyu.edu",
+      "argument_bytes": 83619336,
+      "output_bytes": 83619424,
+      "temporary_bytes": 1442470328,
+      "samples_s": [
+        316.4945968259126,
+        331.3784246412106,
+        307.1860980819911,
+        296.1052562240511,
+        232.05534286797047
+      ],
+      "fps_samples": [
+        80.88605700299283,
+        77.25306808286503,
+        83.33710464061137,
+        86.45574322608273,
+        110.31851145338766
+      ],
+      "median_fps": 83.33710464061137,
+      "q25_fps": 80.88605700299283,
+      "q75_fps": 86.45574322608273
+    }
+  ],
+  "benchmark_sha256": "464e20595d17e46ef563f8878f7d398af33f7f712604734bd108220a5f8b2e3d",
+  "adaptive": {
+    "factor": 2,
+    "max_batch": 262144,
+    "min_gain": 0.03,
+    "patience": 2,
+    "regression": 0.1
+  },
+  "pending_batch": 1024
+}

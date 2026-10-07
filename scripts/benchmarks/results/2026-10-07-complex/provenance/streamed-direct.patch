@@ -1,0 +1,73 @@
+--- a/puzzlescript_cpp/src/engine.cpp
++++ b/puzzlescript_cpp/src/engine.cpp
+@@ -1079,7 +1079,7 @@
+     return true;
+ }
+ 
+-bool Engine::ruleApplyAt(Rule& rule, const std::vector<std::vector<int>>& tuple, bool check, int delta) {
++bool Engine::ruleApplyAt(Rule& rule, const std::vector<int>* tuple, bool check, int delta) {
+     // Double check matches if check is true (for multi-tuple rules)
+     if (check) {
+         for (int rowIdx = 0; rowIdx < static_cast<int>(rule.patterns.size()); ++rowIdx) {
+@@ -1183,11 +1183,36 @@
+ 
+     bool result = false;
+     if (rule.hasReplacements) {
+-        auto tuples = generateTuples(matches);
+-        for (int ti = 0; ti < static_cast<int>(tuples.size()); ++ti) {
+-            bool shouldCheck = (ti > 0);
+-            bool success = ruleApplyAt(rule, tuples[ti], shouldCheck, delta);
+-            result = success || result;
++        if (matches.size() == 1) {
++            // A one-row tuple already lives in the match list. Borrow it;
++            // re-check later matches against the board after earlier updates.
++            bool shouldCheck = false;
++            for (const auto& match : matches.front()) {
++                result = ruleApplyAt(rule, &match, shouldCheck, delta) || result;
++                shouldCheck = true;
++            }
++        } else {
++            // Enumerate the same Cartesian product without materializing copies
++            // of every tuple. The first pattern row varies fastest, as in generateTuples.
++            std::vector<size_t> indices(matches.size(), 0);
++            std::vector<std::vector<int>> tuple;
++            tuple.reserve(matches.size());
++            for (const auto& row : matches) tuple.push_back(row.front());
++            bool shouldCheck = false;
++            while (true) {
++                result = ruleApplyAt(rule, tuple.data(), shouldCheck, delta) || result;
++                shouldCheck = true;
++                size_t row = 0;
++                for (; row < matches.size(); ++row) {
++                    if (++indices[row] < matches[row].size()) {
++                        tuple[row] = matches[row][indices[row]];
++                        break;
++                    }
++                    indices[row] = 0;
++                    tuple[row] = matches[row].front();
++                }
++                if (row == matches.size()) break;
++            }
+         }
+     }
+ 
+@@ -1221,7 +1246,7 @@
+     auto& match = allMatches[chosen];
+     Rule& rule = *ruleGroup[match.ruleIndex];
+     int delta = level_.delta_index(rule.direction);
+-    bool modified = ruleApplyAt(rule, match.tuple, false, delta);
++    bool modified = ruleApplyAt(rule, match.tuple.data(), false, delta);
+ 
+     ruleQueueCommands(rule);
+     if (trackRulesFired_ && modified) firedThisCall_.ibitset(rule.globalIndex);
+--- a/puzzlescript_cpp/src/engine.h
++++ b/puzzlescript_cpp/src/engine.h
+@@ -234,7 +234,7 @@
+     bool ruleTryApply(Rule& rule);
+     // Each row returns a list of matches, where each match is {startIdx} or {startIdx, k} or {startIdx, k1, k2}
+     std::vector<std::vector<std::vector<int>>> ruleFindMatches(Rule& rule);
+-    bool ruleApplyAt(Rule& rule, const std::vector<std::vector<int>>& tuple, bool check, int delta);
++    bool ruleApplyAt(Rule& rule, const std::vector<int>* tuple, bool check, int delta);
+     void ruleQueueCommands(Rule& rule);
+     bool cellPatternReplace(CellPattern& cp, Rule& rule, int currentIndex);
+ 

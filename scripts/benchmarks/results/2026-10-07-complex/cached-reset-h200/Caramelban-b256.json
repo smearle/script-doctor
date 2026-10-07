@@ -1,0 +1,99 @@
+{
+  "devices": [
+    "NVIDIA H200"
+  ],
+  "jax_version": "0.9.0.1",
+  "trials": 7,
+  "safe_api": true,
+  "max_episode_steps": 17,
+  "scope": "immutable fixed level, deterministic games only",
+  "timing": "alternating warmed full-output calls; same initial states and actions; exact comparisons outside timer",
+  "source_hashes": {
+    "puzzlescript_jax/env.py": "d06ceb53b0c4c615bc5a541c96ef3631b5640c53767a5942e0ba2d33b513ffeb",
+    "scripts/benchmarks/benchmark_cached_reset.py": "2448ab093149dd5249f9dc32c6877ea62e9306a63387290692ccfab60ec1277f"
+  },
+  "results": [
+    {
+      "game": "Caramelban",
+      "batch": 256,
+      "steps": 64,
+      "seed": 42,
+      "samples_s": [
+        [
+          3.0591763388365507,
+          2.9785704789683223,
+          3.0371882021427155,
+          3.0985704448539764,
+          3.1005832590162754,
+          3.1020615769084543,
+          3.09528687200509
+        ],
+        [
+          0.8654254900757223,
+          0.8538406889420003,
+          0.8798098149709404,
+          0.8761000670492649,
+          0.8589985461439937,
+          0.8552185748703778,
+          0.8630839919205755
+        ]
+      ],
+      "speedup": 3.5863101401258883,
+      "compilation": [
+        {
+          "compile_s": 351.09095754497685,
+          "temporary_bytes": 62967040,
+          "output_bytes": 150791904
+        },
+        {
+          "compile_s": 282.72752229496837,
+          "temporary_bytes": 56941568,
+          "output_bytes": 150791904
+        }
+      ],
+      "exact_full_outputs": true,
+      "automatic_resets": 768
+    },
+    {
+      "game": "Caramelban",
+      "batch": 256,
+      "steps": 64,
+      "seed": 1042,
+      "samples_s": [
+        [
+          3.0935942239593714,
+          3.10350513109006,
+          3.0921626810450107,
+          3.091242690104991,
+          3.092241887934506,
+          3.0953914490528405,
+          3.092663801042363
+        ],
+        [
+          0.8634380861185491,
+          0.8581960878800601,
+          0.8582674390636384,
+          0.8567940020002425,
+          0.8587098920252174,
+          0.8582694940268993,
+          0.8624700279906392
+        ]
+      ],
+      "speedup": 3.603371461488103,
+      "compilation": [
+        {
+          "compile_s": 351.09095754497685,
+          "temporary_bytes": 62967040,
+          "output_bytes": 150791904
+        },
+        {
+          "compile_s": 282.72752229496837,
+          "temporary_bytes": 56941568,
+          "output_bytes": 150791904
+        }
+      ],
+      "exact_full_outputs": true,
+      "automatic_resets": 768
+    }
+  ]
+}

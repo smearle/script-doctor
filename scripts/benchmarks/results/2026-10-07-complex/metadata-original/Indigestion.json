@@ -1,0 +1,25 @@
+{
+  "game": "Indigestion",
+  "objects": 52,
+  "layers": 39,
+  "level_shape": [
+    52,
+    8,
+    9
+  ],
+  "compiled_sha256": "e0f69b33c6cbb4655ea586492df26f3fc97024c1446b9a861d7282978ece8dab",
+  "source_sha256": "34b6bf82a94db5b47bd3f04467d088f7d0a6609a7b52ef1bfd5d72204337f529",
+  "compiled_rules": 529,
+  "compiled_groups": 73,
+  "loop_points": 3,
+  "source_rules": 73,
+  "multirow_rules": 50,
+  "max_pattern_rows": 2,
+  "ellipsis_rules": 0,
+  "max_pattern_span": 2,
+  "board_cells": 72,
+  "force_channels": 195,
+  "jax_rule_functions": 277,
+  "jax_rule_groups": 73,
+  "run_rules_on_level_start": true
+}

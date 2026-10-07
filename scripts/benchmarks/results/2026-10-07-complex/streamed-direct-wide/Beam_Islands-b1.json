@@ -1,0 +1,123 @@
+{
+  "host": "Yalda24",
+  "cpu_affinity": [
+    0,
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7
+  ],
+  "source_hashes": {
+    "scripts/benchmarks/benchmark_cpp_scoring.py": "99c6ab153d0aec49d37d6114603cb2473baeb88c7f65a57356a61ba4545adfd7",
+    "puzzlescript_cpp/__init__.py": "158fa886867977335394dc41755006d7461ab280607d7448027dd720615da078",
+    "scripts/benchmarks/profile_rand_nodejs.py": "1e5e43a879f58e326f16d897c970dd479ed21da7466057e23cc727081420102e",
+    "puzzlescript_nodejs/puzzlescript/engine.js": "b301f87a3647406a7db23c5398629eb7061c75bb31b5bc002271e89cea5c53af"
+  },
+  "idle_workers": "SIGSTOP between requests; only the measured build runs",
+  "thread_environment": {
+    "OMP_WAIT_POLICY": "ACTIVE",
+    "OMP_PROC_BIND": "close",
+    "OMP_PLACES": "cores",
+    "OPENBLAS_NUM_THREADS": "1"
+  },
+  "trials": 9,
+  "seeds": [
+    42,
+    1042
+  ],
+  "steps": 300,
+  "games": [
+    "Beam_Islands"
+  ],
+  "levels": [
+    0
+  ],
+  "batches": [
+    1
+  ],
+  "threads": [
+    1
+  ],
+  "library_hashes": {
+    "baseline": "355f88636be05074d9286c171f0c9ee69b4ae630f7670f3acb9282341c5fde0f",
+    "candidate": "e4e6773b968b38c2f679e0f489b967e6f7b99dd18e4beae273d71ff47b8f518b"
+  },
+  "timing": "full Python wrapper outputs; alternating warmed calls; reset/actions/IPC excluded",
+  "results": [
+    {
+      "game": "Beam_Islands",
+      "level": 0,
+      "batch": 1,
+      "threads": 1,
+      "seed": 42,
+      "compiled_sha256": "24275cadbd7da2d6ad7d8d811150f1177a7ae19f19f57aea2d511383f0d11429",
+      "output_sha256": "d9674362649dc25373d6014e7efe183d862b50ecbb466c0549db294a34cd674f",
+      "samples_s": [
+        [
+          0.10177479684352875,
+          0.10161450132727623,
+          0.10270355641841888,
+          0.10169071890413761,
+          0.10246609151363373,
+          0.10172373428940773,
+          0.10395227745175362,
+          0.10163435339927673,
+          0.10170761309564114
+        ],
+        [
+          0.0824042297899723,
+          0.08233141340315342,
+          0.08240323700010777,
+          0.08235331997275352,
+          0.08238986879587173,
+          0.0823863334953785,
+          0.0823620967566967,
+          0.08233712241053581,
+          0.08240217715501785
+        ]
+      ],
+      "baseline_fps": 2949.164244663778,
+      "candidate_fps": 3641.380642541019,
+      "speedup": 1.2347161230947847
+    },
+    {
+      "game": "Beam_Islands",
+      "level": 0,
+      "batch": 1,
+      "threads": 1,
+      "seed": 1042,
+      "compiled_sha256": "24275cadbd7da2d6ad7d8d811150f1177a7ae19f19f57aea2d511383f0d11429",
+      "output_sha256": "5007fd6c89abfae920dcb48f9b99795446cfe49f8d5635c6ff32222f1e154b67",
+      "samples_s": [
+        [
+          0.10285285115242004,
+          0.10249422118067741,
+          0.1023775227367878,
+          0.10244091041386127,
+          0.10235550813376904,
+          0.10241956450045109,
+          0.10239103995263577,
+          0.10246404260396957,
+          0.10228447429835796
+        ],
+        [
+          0.08316735737025738,
+          0.08298551104962826,
+          0.08298208750784397,
+          0.08292712271213531,
+          0.0830281414091587,
+          0.08296978287398815,
+          0.08302980288863182,
+          0.08303077332675457,
+          0.08309070952236652
+        ]
+      ],
+      "baseline_fps": 2929.1278620763783,
+      "candidate_fps": 3613.232753478298,
+      "speedup": 1.2335524168333767
+    }
+  ]
+}

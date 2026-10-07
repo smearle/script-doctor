@@ -1,0 +1,25 @@
+{
+  "game": "Zen_Puzzle_Garden",
+  "objects": 6,
+  "layers": 3,
+  "level_shape": [
+    6,
+    12,
+    12
+  ],
+  "compiled_sha256": "20202d57cd862cbbbba78feeb8d780eb07c4197ca69e6d0967d0931bea4cd3d8",
+  "source_sha256": "cf0744dc42e0f3a6295aa7f0cb636e9443b9611fb61c8e1c5d02570673dbd61b",
+  "compiled_rules": 5,
+  "compiled_groups": 3,
+  "loop_points": 0,
+  "source_rules": 3,
+  "multirow_rules": 0,
+  "max_pattern_rows": 1,
+  "ellipsis_rules": 0,
+  "max_pattern_span": 1,
+  "board_cells": 144,
+  "force_channels": 15,
+  "jax_rule_functions": 5,
+  "jax_rule_groups": 3,
+  "run_rules_on_level_start": false
+}

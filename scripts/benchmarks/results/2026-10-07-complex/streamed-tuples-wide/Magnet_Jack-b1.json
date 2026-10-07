@@ -1,0 +1,123 @@
+{
+  "host": "Yalda24",
+  "cpu_affinity": [
+    0,
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7
+  ],
+  "source_hashes": {
+    "scripts/benchmarks/benchmark_cpp_scoring.py": "99c6ab153d0aec49d37d6114603cb2473baeb88c7f65a57356a61ba4545adfd7",
+    "puzzlescript_cpp/__init__.py": "158fa886867977335394dc41755006d7461ab280607d7448027dd720615da078",
+    "scripts/benchmarks/profile_rand_nodejs.py": "1e5e43a879f58e326f16d897c970dd479ed21da7466057e23cc727081420102e",
+    "puzzlescript_nodejs/puzzlescript/engine.js": "b301f87a3647406a7db23c5398629eb7061c75bb31b5bc002271e89cea5c53af"
+  },
+  "idle_workers": "SIGSTOP between requests; only the measured build runs",
+  "thread_environment": {
+    "OMP_WAIT_POLICY": "ACTIVE",
+    "OMP_PROC_BIND": "close",
+    "OMP_PLACES": "cores",
+    "OPENBLAS_NUM_THREADS": "1"
+  },
+  "trials": 9,
+  "seeds": [
+    42,
+    1042
+  ],
+  "steps": 100,
+  "games": [
+    "Magnet_Jack"
+  ],
+  "levels": [
+    0
+  ],
+  "batches": [
+    1
+  ],
+  "threads": [
+    1
+  ],
+  "library_hashes": {
+    "baseline": "355f88636be05074d9286c171f0c9ee69b4ae630f7670f3acb9282341c5fde0f",
+    "candidate": "2145bd86d490fe609e9cf43eeb828c47a6a9a79a151c4774bd62942ca2aa194d"
+  },
+  "timing": "full Python wrapper outputs; alternating warmed calls; reset/actions/IPC excluded",
+  "results": [
+    {
+      "game": "Magnet_Jack",
+      "level": 0,
+      "batch": 1,
+      "threads": 1,
+      "seed": 42,
+      "compiled_sha256": "515cbc7bc76356b793368b7f4a1a65013572c5375d04c66a602cf0baa87eea18",
+      "output_sha256": "51d746422945a80c1ea8e2e4df75c58688aea8f007a085f6a98d1f73a247ebf9",
+      "samples_s": [
+        [
+          0.014565490186214447,
+          0.014570275321602821,
+          0.014529459178447723,
+          0.014594195410609245,
+          0.014562439173460007,
+          0.014727190136909485,
+          0.014536278322339058,
+          0.014542387798428535,
+          0.014510683715343475
+        ],
+        [
+          0.013791263103485107,
+          0.013788532465696335,
+          0.013811416923999786,
+          0.01379692554473877,
+          0.013825386762619019,
+          0.013818906620144844,
+          0.01380675658583641,
+          0.013785701245069504,
+          0.013813897967338562
+        ]
+      ],
+      "baseline_fps": 6866.981472599016,
+      "candidate_fps": 7242.830666152577,
+      "speedup": 1.0547328101951772
+    },
+    {
+      "game": "Magnet_Jack",
+      "level": 0,
+      "batch": 1,
+      "threads": 1,
+      "seed": 1042,
+      "compiled_sha256": "515cbc7bc76356b793368b7f4a1a65013572c5375d04c66a602cf0baa87eea18",
+      "output_sha256": "2d3cb535d1ee0c7dca7fbae8379401e93e41fbb0fa187dc0f46590fa719c5ebb",
+      "samples_s": [
+        [
+          0.012862786650657654,
+          0.012896327301859856,
+          0.012835770845413208,
+          0.012866603210568428,
+          0.012902852147817612,
+          0.012842237949371338,
+          0.012859424576163292,
+          0.012844312936067581,
+          0.012857899069786072
+        ],
+        [
+          0.012241687625646591,
+          0.012225780636072159,
+          0.012252213433384895,
+          0.012261440977454185,
+          0.012251362204551697,
+          0.012235615402460098,
+          0.012266810983419418,
+          0.012233810499310493,
+          0.012260407209396362
+        ]
+      ],
+      "baseline_fps": 7776.397723531403,
+      "candidate_fps": 8162.357648919025,
+      "speedup": 1.0496322254994375
+    }
+  ]
+}

@@ -1,0 +1,123 @@
+{
+  "host": "Yalda24",
+  "cpu_affinity": [
+    0,
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7
+  ],
+  "source_hashes": {
+    "scripts/benchmarks/benchmark_cpp_scoring.py": "99c6ab153d0aec49d37d6114603cb2473baeb88c7f65a57356a61ba4545adfd7",
+    "puzzlescript_cpp/__init__.py": "158fa886867977335394dc41755006d7461ab280607d7448027dd720615da078",
+    "scripts/benchmarks/profile_rand_nodejs.py": "1e5e43a879f58e326f16d897c970dd479ed21da7466057e23cc727081420102e",
+    "puzzlescript_nodejs/puzzlescript/engine.js": "b301f87a3647406a7db23c5398629eb7061c75bb31b5bc002271e89cea5c53af"
+  },
+  "idle_workers": "SIGSTOP between requests; only the measured build runs",
+  "thread_environment": {
+    "OMP_WAIT_POLICY": "ACTIVE",
+    "OMP_PROC_BIND": "close",
+    "OMP_PLACES": "cores",
+    "OPENBLAS_NUM_THREADS": "1"
+  },
+  "trials": 9,
+  "seeds": [
+    42,
+    1042
+  ],
+  "steps": 300,
+  "games": [
+    "ParaLands"
+  ],
+  "levels": [
+    0
+  ],
+  "batches": [
+    1
+  ],
+  "threads": [
+    1
+  ],
+  "library_hashes": {
+    "baseline": "355f88636be05074d9286c171f0c9ee69b4ae630f7670f3acb9282341c5fde0f",
+    "candidate": "c88b36964b09a31b0b220957184cdfc11a304399bc066ab0b9fa2193753afb2d"
+  },
+  "timing": "full Python wrapper outputs; alternating warmed calls; reset/actions/IPC excluded",
+  "results": [
+    {
+      "game": "ParaLands",
+      "level": 0,
+      "batch": 1,
+      "threads": 1,
+      "seed": 42,
+      "compiled_sha256": "3325f28e495c6682e44b4f68983b3336c7d1f29dd6724e5d9aea3ccd65d94da0",
+      "output_sha256": "367cd5464b66e5e215cb623d9c02abdc582ead7b05de17c1b1385ff51b108667",
+      "samples_s": [
+        [
+          0.19582673162221909,
+          0.1958951111882925,
+          0.19603794999420643,
+          0.1963940542191267,
+          0.1961519718170166,
+          0.19645881094038486,
+          0.19635420106351376,
+          0.19689656049013138,
+          0.19956846348941326
+        ],
+        [
+          0.18120397999882698,
+          0.18110649846494198,
+          0.18111060373485088,
+          0.18116998858749866,
+          0.18185976520180702,
+          0.18117681331932545,
+          0.18135005049407482,
+          0.1809840276837349,
+          0.18127304129302502
+        ]
+      ],
+      "baseline_fps": 1527.8511912406725,
+      "candidate_fps": 1655.8410234937062,
+      "speedup": 1.083771137520992
+    },
+    {
+      "game": "ParaLands",
+      "level": 0,
+      "batch": 1,
+      "threads": 1,
+      "seed": 1042,
+      "compiled_sha256": "3325f28e495c6682e44b4f68983b3336c7d1f29dd6724e5d9aea3ccd65d94da0",
+      "output_sha256": "1118562825231dc406ba224befa63c268a58a9fbc9bf32265a405ffc55896ded",
+      "samples_s": [
+        [
+          0.20204555243253708,
+          0.2021590005606413,
+          0.20242981612682343,
+          0.20207926630973816,
+          0.20194010809063911,
+          0.20218732953071594,
+          0.20196441933512688,
+          0.20216186717152596,
+          0.2015074286609888
+        ],
+        [
+          0.18702438659965992,
+          0.18702117539942265,
+          0.18708210065960884,
+          0.1868574097752571,
+          0.18679028190672398,
+          0.18687011487782001,
+          0.18706061504781246,
+          0.18689541891217232,
+          0.18689342215657234
+        ]
+      ],
+      "baseline_fps": 1484.5659600731788,
+      "candidate_fps": 1605.1757809054639,
+      "speedup": 1.0812424803451237
+    }
+  ]
+}

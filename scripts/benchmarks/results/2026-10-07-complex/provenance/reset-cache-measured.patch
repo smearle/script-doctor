@@ -1,0 +1,66 @@
+--- a/puzzlescript_jax/env.py
++++ b/puzzlescript_jax/env.py
+@@ -829,9 +829,17 @@
+     valid_mask: chex.Array
+ 
+ @flax.struct.dataclass
++class PJResetCache:
++    level: chex.Array
++    state: PJState
++    owner: object = flax.struct.field(pytree_node=False)
++
++
++@flax.struct.dataclass
+ class PJParams:
+     level: chex.Array
+     level_i: int = 0
++    reset_cache: Optional[PJResetCache] = None
+ 
+ @flax.struct.dataclass
+ class PSObs:
+@@ -957,6 +965,7 @@
+         self.vmap = vmap
+         self.title = tree.prelude.title
+         self._has_randomness = tree_has_randomness(tree)
++        self._reset_cache_owner = object()
+         self.tree = tree
+         self.levels = tree.levels
+         self.level_i = level_i
+@@ -1389,7 +1398,37 @@
+ 
+         return im
+ 
++    def prepare_params(self, params: PJParams) -> PJParams:
++        """Precompute deterministic fixed-level reset work outside a rollout.
++
++        Call on concrete parameters before JIT-compiling the rollout. Random
++        games and multi-level environments retain the normal reset path. A
++        changed level or a different environment invalidates the cached state.
++        """
++        params = params.replace(reset_cache=None)
++        if not self.jit or self._is_multi_level or self.has_randomness():
++            return params
++        _, state = self.reset(jax.random.PRNGKey(0), params)
++        return params.replace(reset_cache=PJResetCache(
++            level=params.level, state=state, owner=self._reset_cache_owner))
++
+     def reset(self, rng, params: PJParams) -> Tuple[chex.Array, PJState]:
++        cache = params.reset_cache
++        if (cache is not None and cache.owner is self._reset_cache_owner and self.jit
++                and not self._is_multi_level and not self.has_randomness()
++                and params.level.shape == cache.level.shape):
++            def cached(_):
++                state = cache.state.replace(rng=rng)
++                return self.get_obs(state), state
++
++            return jax.lax.cond(
++                jnp.array_equal(params.level, cache.level), cached,
++                lambda _: self._reset_uncached(rng, params.replace(reset_cache=None)),
++                operand=None,
++            )
++        return self._reset_uncached(rng, params)
++
++    def _reset_uncached(self, rng, params: PJParams) -> Tuple[chex.Array, PJState]:
+         requested_level_i = jnp.asarray(params.level_i, dtype=jnp.int32)
+         if self._is_multi_level:
+             rng, level_rng = jax.random.split(rng)

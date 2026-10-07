@@ -1,0 +1,38 @@
+name, driver_version, memory.total [MiB]
+NVIDIA H200, 610.43.02, 143771 MiB
+Writing pretty tree to /scratch/se2161/puzzlejax-perf-20261002/complex-reset-20261007/data/pretty_trees/Caramelban
+Parsed Caramelban successfully
+E1007 03:26:49.743651 2745532 slow_operation_alarm.cc:73] Constant folding an instruction is taking > 1s:
+
+  %reduce.2742 = pred[256,9,21,115]{3,2,1,0} reduce(%broadcast.9494, %constant.17676), dimensions={3}, to_apply=%region_5925.6257, metadata={op_name="jit(reset)/vmap(jit(reset))/jit(tick_fn)/cond/branch_1_fun/while/body/while/body/vmap(vmap())/reduce_or" stack_frame_id=290}
+
+This isn't necessarily a bug; constant-folding is inherently a trade-off between compilation time and speed at runtime. XLA has some guards that attempt to keep constant folding from taking too long, but fundamentally you'll always be able to come up with an input program that takes a long time.
+
+If you'd like to file a bug, run with envvar XLA_FLAGS=--xla_dump_to=/tmp/foo and attach the results.
+E1007 03:26:51.772124 2745391 slow_operation_alarm.cc:140] The operation took 3.028972941s
+Constant folding an instruction is taking > 1s:
+
+  %reduce.2742 = pred[256,9,21,115]{3,2,1,0} reduce(%broadcast.9494, %constant.17676), dimensions={3}, to_apply=%region_5925.6257, metadata={op_name="jit(reset)/vmap(jit(reset))/jit(tick_fn)/cond/branch_1_fun/while/body/while/body/vmap(vmap())/reduce_or" stack_frame_id=290}
+
+This isn't necessarily a bug; constant-folding is inherently a trade-off between compilation time and speed at runtime. XLA has some guards that attempt to keep constant folding from taking too long, but fundamentally you'll always be able to come up with an input program that takes a long time.
+
+If you'd like to file a bug, run with envvar XLA_FLAGS=--xla_dump_to=/tmp/foo and attach the results.
+E1007 03:26:53.773649 2745532 slow_operation_alarm.cc:73] Constant folding an instruction is taking > 2s:
+
+  %reduce.2748 = pred[256,9,21,115]{3,2,1,0} reduce(%broadcast.9494, %constant.17676), dimensions={3}, to_apply=%region_5944.6276, metadata={op_name="jit(reset)/vmap(jit(reset))/jit(tick_fn)/cond/branch_1_fun/while/body/while/body/vmap(vmap())/reduce_or" stack_frame_id=290}
+
+This isn't necessarily a bug; constant-folding is inherently a trade-off between compilation time and speed at runtime. XLA has some guards that attempt to keep constant folding from taking too long, but fundamentally you'll always be able to come up with an input program that takes a long time.
+
+If you'd like to file a bug, run with envvar XLA_FLAGS=--xla_dump_to=/tmp/foo and attach the results.
+E1007 03:26:54.802256 2745391 slow_operation_alarm.cc:140] The operation took 3.029216703s
+Constant folding an instruction is taking > 2s:
+
+  %reduce.2748 = pred[256,9,21,115]{3,2,1,0} reduce(%broadcast.9494, %constant.17676), dimensions={3}, to_apply=%region_5944.6276, metadata={op_name="jit(reset)/vmap(jit(reset))/jit(tick_fn)/cond/branch_1_fun/while/body/while/body/vmap(vmap())/reduce_or" stack_frame_id=290}
+
+This isn't necessarily a bug; constant-folding is inherently a trade-off between compilation time and speed at runtime. XLA has some guards that attempt to keep constant folding from taking too long, but fundamentally you'll always be able to come up with an input program that takes a long time.
+
+If you'd like to file a bug, run with envvar XLA_FLAGS=--xla_dump_to=/tmp/foo and attach the results.
+Writing pretty tree to /scratch/se2161/puzzlejax-perf-20261002/complex-reset-20261007/data/pretty_trees/Caramelban
+Parsed Caramelban successfully
+{"game": "Caramelban", "batch": 256, "steps": 64, "seed": 42, "samples_s": [[3.0591763388365507, 2.9785704789683223, 3.0371882021427155, 3.0985704448539764, 3.1005832590162754, 3.1020615769084543, 3.09528687200509], [0.8654254900757223, 0.8538406889420003, 0.8798098149709404, 0.8761000670492649, 0.8589985461439937, 0.8552185748703778, 0.8630839919205755]], "speedup": 3.5863101401258883, "compilation": [{"compile_s": 351.09095754497685, "temporary_bytes": 62967040, "output_bytes": 150791904}, {"compile_s": 282.72752229496837, "temporary_bytes": 56941568, "output_bytes": 150791904}], "exact_full_outputs": true, "automatic_resets": 768}
+{"game": "Caramelban", "batch": 256, "steps": 64, "seed": 1042, "samples_s": [[3.0935942239593714, 3.10350513109006, 3.0921626810450107, 3.091242690104991, 3.092241887934506, 3.0953914490528405, 3.092663801042363], [0.8634380861185491, 0.8581960878800601, 0.8582674390636384, 0.8567940020002425, 0.8587098920252174, 0.8582694940268993, 0.8624700279906392]], "speedup": 3.603371461488103, "compilation": [{"compile_s": 351.09095754497685, "temporary_bytes": 62967040, "output_bytes": 150791904}, {"compile_s": 282.72752229496837, "temporary_bytes": 56941568, "output_bytes": 150791904}], "exact_full_outputs": true, "automatic_resets": 768}

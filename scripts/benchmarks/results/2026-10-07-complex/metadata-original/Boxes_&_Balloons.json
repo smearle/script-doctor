@@ -1,0 +1,25 @@
+{
+  "game": "Boxes_&_Balloons",
+  "objects": 29,
+  "layers": 8,
+  "level_shape": [
+    29,
+    9,
+    10
+  ],
+  "compiled_sha256": "97ed1f5f22d2899d0e45b9bd1c39a7b6db7ae248e54d6c4ae1a4d9ec9b3cd655",
+  "source_sha256": "56312d31674e7a5474e3ddd92ef78c789b7ce1208d97e1248a41a83508b403a4",
+  "compiled_rules": 67,
+  "compiled_groups": 35,
+  "loop_points": 0,
+  "source_rules": 50,
+  "multirow_rules": 22,
+  "max_pattern_rows": 2,
+  "ellipsis_rules": 0,
+  "max_pattern_span": 2,
+  "board_cells": 90,
+  "force_channels": 40,
+  "jax_rule_functions": 59,
+  "jax_rule_groups": 35,
+  "run_rules_on_level_start": false
+}

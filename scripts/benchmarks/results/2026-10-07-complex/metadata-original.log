@@ -1,0 +1,34 @@
+/home/jupyter-smearle/.config/matplotlib is not a writable directory
+Matplotlib created a temporary cache directory at /tmp/matplotlib-2pzpd05j because there was an issue with the default path (/home/jupyter-smearle/.config/matplotlib); it is highly recommended to set the MPLCONFIGDIR environment variable to a writable directory, in particular to speed up the import of Matplotlib and to better support multiprocessing.
+sokoban_basic 0
+notsnake 0
+Zen_Puzzle_Garden 0
+Slidings 0
+limerick 0
+kettle 0
+Take_Heart_Lass 0
+atlas shrank 0
+blocks 0
+nekopuzzle 0
+sokoban_match3 0
+Travelling_salesman 0
+Multi-word_Dictionary_Game 0
+Microban 0
+Magnet_Jack 0
+HyperMaze 0
+Beam_Islands 0
+Boxes_&_Balloons 0
+Caramelban 0
+Crate_Assembler 0
+Heroes_of_Sokoban_III__The_Bard_and_The_Druid 0
+IceCrates 0
+Indigestion 0
+Memories_Of_Castlemouse 0
+ParaLands 0
+Sokoboros 0
+SwapBot 0
+Symbolism 0
+Transition 0
+Unconventional_Guns 0
+Vacuum 0
+castlecloset 0

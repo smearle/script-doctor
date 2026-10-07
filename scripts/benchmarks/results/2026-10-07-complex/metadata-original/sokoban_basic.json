@@ -1,0 +1,25 @@
+{
+  "game": "sokoban_basic",
+  "objects": 5,
+  "layers": 3,
+  "level_shape": [
+    5,
+    7,
+    6
+  ],
+  "compiled_sha256": "3012b8f11e46e65eda7d38436677f235a2f2fb9adc2ee92309cc12a993ac08f3",
+  "source_sha256": "629417944b16e3de6e469a5b34e21f74d693f253da9a276ee8b7aeb850e5e70a",
+  "compiled_rules": 4,
+  "compiled_groups": 1,
+  "loop_points": 0,
+  "source_rules": 1,
+  "multirow_rules": 0,
+  "max_pattern_rows": 1,
+  "ellipsis_rules": 0,
+  "max_pattern_span": 2,
+  "board_cells": 42,
+  "force_channels": 15,
+  "jax_rule_functions": 4,
+  "jax_rule_groups": 1,
+  "run_rules_on_level_start": false
+}

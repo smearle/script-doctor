@@ -1,0 +1,123 @@
+{
+  "host": "Yalda24",
+  "cpu_affinity": [
+    0,
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7
+  ],
+  "source_hashes": {
+    "scripts/benchmarks/benchmark_cpp_scoring.py": "99c6ab153d0aec49d37d6114603cb2473baeb88c7f65a57356a61ba4545adfd7",
+    "puzzlescript_cpp/__init__.py": "158fa886867977335394dc41755006d7461ab280607d7448027dd720615da078",
+    "scripts/benchmarks/profile_rand_nodejs.py": "1e5e43a879f58e326f16d897c970dd479ed21da7466057e23cc727081420102e",
+    "puzzlescript_nodejs/puzzlescript/engine.js": "b301f87a3647406a7db23c5398629eb7061c75bb31b5bc002271e89cea5c53af"
+  },
+  "idle_workers": "SIGSTOP between requests; only the measured build runs",
+  "thread_environment": {
+    "OMP_WAIT_POLICY": "ACTIVE",
+    "OMP_PROC_BIND": "close",
+    "OMP_PLACES": "cores",
+    "OPENBLAS_NUM_THREADS": "1"
+  },
+  "trials": 9,
+  "seeds": [
+    42,
+    1042
+  ],
+  "steps": 300,
+  "games": [
+    "HyperMaze"
+  ],
+  "levels": [
+    0
+  ],
+  "batches": [
+    1
+  ],
+  "threads": [
+    1
+  ],
+  "library_hashes": {
+    "baseline": "355f88636be05074d9286c171f0c9ee69b4ae630f7670f3acb9282341c5fde0f",
+    "candidate": "c88b36964b09a31b0b220957184cdfc11a304399bc066ab0b9fa2193753afb2d"
+  },
+  "timing": "full Python wrapper outputs; alternating warmed calls; reset/actions/IPC excluded",
+  "results": [
+    {
+      "game": "HyperMaze",
+      "level": 0,
+      "batch": 1,
+      "threads": 1,
+      "seed": 42,
+      "compiled_sha256": "4942d931e16ead8883df7e666df89520961be8150039b535322af759594d521d",
+      "output_sha256": "d6245e9b833edaf535bd4e9c8711ade73973342a319f360dbe703afc7190e72d",
+      "samples_s": [
+        [
+          0.13477172143757343,
+          0.13490593619644642,
+          0.13492855615913868,
+          0.13478217273950577,
+          0.1347422394901514,
+          0.13450959138572216,
+          0.13478543050587177,
+          0.1347596850246191,
+          0.13482201844453812
+        ],
+        [
+          0.13414853066205978,
+          0.13398107513785362,
+          0.1340001579374075,
+          0.1340995505452156,
+          0.13343161903321743,
+          0.1342427395284176,
+          0.1341321710497141,
+          0.13424722105264664,
+          0.1338010411709547
+        ]
+      ],
+      "baseline_fps": 2225.8136510368595,
+      "candidate_fps": 2237.1439634232493,
+      "speedup": 1.0050904137375165
+    },
+    {
+      "game": "HyperMaze",
+      "level": 0,
+      "batch": 1,
+      "threads": 1,
+      "seed": 1042,
+      "compiled_sha256": "4942d931e16ead8883df7e666df89520961be8150039b535322af759594d521d",
+      "output_sha256": "cf3de5f47323ecfd7e41569234b9987a35469d5c6acf78e4417b397447b61a7f",
+      "samples_s": [
+        [
+          0.12101814150810242,
+          0.12100326456129551,
+          0.12106537446379662,
+          0.12116223014891148,
+          0.12114538997411728,
+          0.121069997549057,
+          0.12103328481316566,
+          0.12120386771857738,
+          0.12113863974809647
+        ],
+        [
+          0.12033083476126194,
+          0.1201956644654274,
+          0.11982320062816143,
+          0.12015241384506226,
+          0.12031101621687412,
+          0.12033666297793388,
+          0.12049944140017033,
+          0.1202884390950203,
+          0.12042515724897385
+        ]
+      ],
+      "baseline_fps": 2477.9053941786146,
+      "candidate_fps": 2493.537245660167,
+      "speedup": 1.0063084940685294
+    }
+  ]
+}

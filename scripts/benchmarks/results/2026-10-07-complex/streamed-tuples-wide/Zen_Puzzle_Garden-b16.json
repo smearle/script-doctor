@@ -1,0 +1,123 @@
+{
+  "host": "Yalda24",
+  "cpu_affinity": [
+    0,
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7
+  ],
+  "source_hashes": {
+    "scripts/benchmarks/benchmark_cpp_scoring.py": "99c6ab153d0aec49d37d6114603cb2473baeb88c7f65a57356a61ba4545adfd7",
+    "puzzlescript_cpp/__init__.py": "158fa886867977335394dc41755006d7461ab280607d7448027dd720615da078",
+    "scripts/benchmarks/profile_rand_nodejs.py": "1e5e43a879f58e326f16d897c970dd479ed21da7466057e23cc727081420102e",
+    "puzzlescript_nodejs/puzzlescript/engine.js": "b301f87a3647406a7db23c5398629eb7061c75bb31b5bc002271e89cea5c53af"
+  },
+  "idle_workers": "SIGSTOP between requests; only the measured build runs",
+  "thread_environment": {
+    "OMP_WAIT_POLICY": "ACTIVE",
+    "OMP_PROC_BIND": "close",
+    "OMP_PLACES": "cores",
+    "OPENBLAS_NUM_THREADS": "1"
+  },
+  "trials": 9,
+  "seeds": [
+    42,
+    1042
+  ],
+  "steps": 100,
+  "games": [
+    "Zen_Puzzle_Garden"
+  ],
+  "levels": [
+    0
+  ],
+  "batches": [
+    16
+  ],
+  "threads": [
+    8
+  ],
+  "library_hashes": {
+    "baseline": "355f88636be05074d9286c171f0c9ee69b4ae630f7670f3acb9282341c5fde0f",
+    "candidate": "2145bd86d490fe609e9cf43eeb828c47a6a9a79a151c4774bd62942ca2aa194d"
+  },
+  "timing": "full Python wrapper outputs; alternating warmed calls; reset/actions/IPC excluded",
+  "results": [
+    {
+      "game": "Zen_Puzzle_Garden",
+      "level": 0,
+      "batch": 16,
+      "threads": 8,
+      "seed": 42,
+      "compiled_sha256": "20202d57cd862cbbbba78feeb8d780eb07c4197ca69e6d0967d0931bea4cd3d8",
+      "output_sha256": "1878b61b4c6cb5fea7bc0310f1b1fd6f496c83050148d884ac2c97802ec98422",
+      "samples_s": [
+        [
+          0.02678927779197693,
+          0.017466485500335693,
+          0.017308901995420456,
+          0.017393246293067932,
+          0.017379799857735634,
+          0.01732684299349785,
+          0.017370862886309624,
+          0.01737176440656185,
+          0.017241917550563812
+        ],
+        [
+          0.01908116787672043,
+          0.017651693895459175,
+          0.017270054668188095,
+          0.01731713116168976,
+          0.017223959788680077,
+          0.01725933887064457,
+          0.017200421541929245,
+          0.017216701060533524,
+          0.017228705808520317
+        ]
+      ],
+      "baseline_fps": 92103.48255676497,
+      "candidate_fps": 92703.43504995717,
+      "speedup": 1.0065138958542903
+    },
+    {
+      "game": "Zen_Puzzle_Garden",
+      "level": 0,
+      "batch": 16,
+      "threads": 8,
+      "seed": 1042,
+      "compiled_sha256": "20202d57cd862cbbbba78feeb8d780eb07c4197ca69e6d0967d0931bea4cd3d8",
+      "output_sha256": "08d2626e6414e490d8c34ff6a96be61b9b3b800445e8cd5d1316277f016815a4",
+      "samples_s": [
+        [
+          0.01692252792418003,
+          0.016927121207118034,
+          0.016955433413386345,
+          0.01819215714931488,
+          0.016944214701652527,
+          0.016926564276218414,
+          0.016912443563342094,
+          0.016972551122307777,
+          0.01694362796843052
+        ],
+        [
+          0.01683671399950981,
+          0.016866927966475487,
+          0.016888588666915894,
+          0.01695014163851738,
+          0.016893986612558365,
+          0.01686991937458515,
+          0.016860876232385635,
+          0.016860555857419968,
+          0.016889935359358788
+        ]
+      ],
+      "baseline_fps": 94430.77969966826,
+      "candidate_fps": 94843.36969685995,
+      "speedup": 1.004369232134945
+    }
+  ]
+}

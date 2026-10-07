@@ -1,0 +1,50 @@
+name, driver_version, memory.total [MiB]
+NVIDIA H200, 610.43.02, 143771 MiB
+/scratch/se2161/script-doctor/.venv/lib/python3.13/site-packages/pydantic/_internal/_generate_schema.py:2249: UnsupportedFieldAttributeWarning: The 'repr' attribute with value False was provided to the `Field()` function, which has no effect in the context it was used. 'repr' is field-specific metadata, and can only be attached to a model field using `Annotated` metadata or by assignment. This may have happened because an `Annotated` type alias using the `type` statement was used, or if the `Field()` function was attached to a single member of a union type.
+  warnings.warn(
+/scratch/se2161/script-doctor/.venv/lib/python3.13/site-packages/pydantic/_internal/_generate_schema.py:2249: UnsupportedFieldAttributeWarning: The 'frozen' attribute with value True was provided to the `Field()` function, which has no effect in the context it was used. 'frozen' is field-specific metadata, and can only be attached to a model field using `Annotated` metadata or by assignment. This may have happened because an `Annotated` type alias using the `type` statement was used, or if the `Field()` function was attached to a single member of a union type.
+  warnings.warn(
+Writing pretty tree to /scratch/se2161/puzzlejax-perf-20261002/complex-20261007/data/pretty_trees/SwapBot
+Parsed SwapBot successfully
+Writing pretty tree to /scratch/se2161/puzzlejax-perf-20261002/complex-20261007/data/pretty_trees/SwapBot
+Parsed SwapBot successfully
+{"game": "SwapBot", "level": 0, "passed": true, "message": "all steps match", "actions": [0, 1, 2, 3, 4, 0, 1, 2, 3, 4, 0, 1, 2, 3, 4, 0, 1, 2, 3, 4, 0, 1, 2, 3, 4, 0, 1, 2, 3, 4, 0, 1, 2, 3, 4, 0, 1, 2, 3, 4, 0, 3, 3, 2, 2, 4, 0, 3, 1, 0, 2, 4, 3, 3, 3, 3, 2, 0, 4, 2, 2, 1, 0, 4, 3, 3, 2, 4, 2, 2, 2, 1, 0, 2, 4, 0, 4, 4, 1, 3, 0, 3, 3, 1, 0, 4, 2, 4, 3, 3, 3, 0, 1, 2, 2, 0, 2, 0, 3, 3, 4, 3, 1, 4, 2, 1, 4, 1, 0, 2, 3, 0, 2, 0, 3, 2, 1, 1, 2, 3, 4, 2, 0, 4, 3, 3, 0, 1], "comparison": "Original JS versus JAX: board, heuristic and winning flag after every replayed step", "source_hashes": {"puzzlejax/validate_actions.py": "18c597d30a390a68f4f894556b38629ae6c41abd53510572074b2b5b6e17cdc4", "puzzlescript_jax/env.py": "ab92c0a647c6efe9809c98cfecc7110a89b23b6dfdea2e7205603429041654fe", "puzzlescript_nodejs/puzzlescript/engine.js": "b301f87a3647406a7db23c5398629eb7061c75bb31b5bc002271e89cea5c53af", "scripts/benchmarks/validate_complex_game.py": "8dd84e4547f91e7ca54b172a31c0bc4f975efa78f5a00ff1d1d7ebf9d81cbc9e"}}
+Writing pretty tree to /scratch/se2161/puzzlejax-perf-20261002/complex-20261007/data/pretty_trees/SwapBot
+Parsed SwapBot successfully
+Compiling batch=16, steps=312
+Compiled in 275.01s; warming up
+{"batch": 16, "steps": 312, "compile_s": 275.0110331850592, "host": "gh108.hpc.nyu.edu", "argument_bytes": 34728, "output_bytes": 34816, "temporary_bytes": 1751872, "samples_s": [8.858990689041093, 8.718142403988168, 8.751571255968884, 8.92918067984283, 9.242966645862907], "fps_samples": [563.4953433437167, 572.5990433141329, 570.4118556533808, 559.0658515029476, 540.0863371322872], "median_fps": 563.4953433437167, "q25_fps": 559.0658515029476, "q75_fps": 570.4118556533808}
+Compiling batch=256, steps=100
+Compiled in 292.73s; warming up
+{"batch": 256, "steps": 100, "compile_s": 292.7326716359239, "host": "gh108.hpc.nyu.edu", "argument_bytes": 555528, "output_bytes": 555616, "temporary_bytes": 16233024, "samples_s": [7.257609800901264, 7.2055667489767075, 7.376889305887744, 7.373763856943697, 7.3746981979347765], "fps_samples": [3527.3320972451484, 3552.808667498023, 3470.297430051957, 3471.7683528599973, 3471.328495472407], "median_fps": 3471.7683528599973, "q25_fps": 3471.328495472407, "q75_fps": 3527.3320972451484}
+Compiling batch=1024, steps=100
+Compiled in 370.23s; warming up
+{"batch": 1024, "steps": 100, "compile_s": 370.2315734329168, "host": "gh108.hpc.nyu.edu", "argument_bytes": 2222088, "output_bytes": 2222176, "temporary_bytes": 62573888, "samples_s": [9.881371408002451, 9.895905443001539, 9.908094102051109, 9.993937772000208, 9.899146192939952], "fps_samples": [10362.934027261756, 10347.714071219028, 10334.984604032154, 10246.211487016837, 10344.326470603237], "median_fps": 10344.326470603237, "q25_fps": 10334.984604032154, "q75_fps": 10347.714071219028}
+Compiling batch=4096, steps=100
+Compiled in 633.10s; warming up
+{"batch": 4096, "steps": 100, "compile_s": 633.1046403939836, "host": "gh108.hpc.nyu.edu", "argument_bytes": 8888328, "output_bytes": 8888416, "temporary_bytes": 247686552, "samples_s": [22.126647950150073, 22.235782279865816, 22.18966781697236, 22.21932323812507, 22.10614855401218], "fps_samples": [18511.61553809699, 18420.75960470646, 18459.041540347283, 18434.404847092148, 18528.781664486698], "median_fps": 18459.041540347283, "q25_fps": 18434.404847092148, "q75_fps": 18511.61553809699}
+E1007 03:16:11.538845  798288 slow_operation_alarm.cc:73] Constant folding an instruction is taking > 1s:
+
+  %transpose.15504 = pred[125,8192,6,6]{0,3,2,1} transpose(%constant.124223), dimensions={0,1,2,3}, metadata={op_name="jit(reset)/vmap(jit(reset))/jit(tick_fn)/while/body/vmap(vmap())/scatter" stack_frame_id=27}
+
+This isn't necessarily a bug; constant-folding is inherently a trade-off between compilation time and speed at runtime. XLA has some guards that attempt to keep constant folding from taking too long, but fundamentally you'll always be able to come up with an input program that takes a long time.
+
+If you'd like to file a bug, run with envvar XLA_FLAGS=--xla_dump_to=/tmp/foo and attach the results.
+E1007 03:16:11.704708  798166 slow_operation_alarm.cc:140] The operation took 1.165954419s
+Constant folding an instruction is taking > 1s:
+
+  %transpose.15504 = pred[125,8192,6,6]{0,3,2,1} transpose(%constant.124223), dimensions={0,1,2,3}, metadata={op_name="jit(reset)/vmap(jit(reset))/jit(tick_fn)/while/body/vmap(vmap())/scatter" stack_frame_id=27}
+
+This isn't necessarily a bug; constant-folding is inherently a trade-off between compilation time and speed at runtime. XLA has some guards that attempt to keep constant folding from taking too long, but fundamentally you'll always be able to come up with an input program that takes a long time.
+
+If you'd like to file a bug, run with envvar XLA_FLAGS=--xla_dump_to=/tmp/foo and attach the results.
+Compiling batch=8192, steps=100
+Compiled in 1024.60s; warming up
+{"batch": 8192, "steps": 100, "compile_s": 1024.6049022271764, "host": "gh108.hpc.nyu.edu", "argument_bytes": 17776648, "output_bytes": 17776736, "temporary_bytes": 495647136, "samples_s": [38.35172034497373, 38.36464073206298, 38.32720703189261, 38.32812738395296, 38.32327141100541], "fps_samples": [21360.189129230603, 21352.99547625789, 21373.85067788352, 21373.337439464336, 21376.04567246699], "median_fps": 21373.337439464336, "q25_fps": 21360.189129230603, "q75_fps": 21373.85067788352}
+Compiling batch=16384, steps=100
+Compiled in 288.99s; warming up
+{"batch": 16384, "steps": 100, "compile_s": 288.9850890019443, "host": "gh108.hpc.nyu.edu", "argument_bytes": 35553288, "output_bytes": 35553376, "temporary_bytes": 990436768, "samples_s": [69.47334078280255, 69.52292248583399, 69.48166797705926, 69.47875275206752, 69.5045616501011], "fps_samples": [23583.146881077726, 23566.32807451155, 23580.32050325778, 23581.309898388256, 23572.553528903765], "median_fps": 23580.32050325778, "q25_fps": 23572.553528903765, "q75_fps": 23581.309898388256}
+Compiling batch=32768, steps=100
+Compiled in 305.54s; warming up
+{"batch": 32768, "steps": 100, "compile_s": 305.54369623889215, "host": "gh108.hpc.nyu.edu", "argument_bytes": 71106568, "output_bytes": 71106656, "temporary_bytes": 1984651680, "samples_s": [129.88840222381987, 129.97097997693345, 129.91473191301338, 129.92649398208596, 129.90355549310334], "fps_samples": [25227.810519629882, 25211.781896093642, 25222.697624423665, 25220.414247857712, 25224.86769173895], "median_fps": 25222.697624423665, "q25_fps": 25220.414247857712, "q75_fps": 25224.86769173895}
+[2026-10-07T04:19:12.075] error: *** JOB 19324991 ON gh108 CANCELLED AT 2026-10-07T04:19:12 DUE TO TIME LIMIT ***

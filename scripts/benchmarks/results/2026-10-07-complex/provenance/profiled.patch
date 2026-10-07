@@ -1,0 +1,128 @@
+--- a/puzzlescript_cpp/src/engine.cpp
++++ b/puzzlescript_cpp/src/engine.cpp
+@@ -728,6 +728,7 @@
+ // Returns true and sets result = [startIdx] if a match is found at startIdx
+ bool Engine::matchCellRowNoEllipsis(const std::vector<CellPattern*>& cellRow, int startIdx, int delta,
+                                      std::vector<std::vector<int>>& result) {
++    ++benchmarkCounters[4];
+     if (!cellRow[0]->matches(startIdx, level_.objects.data(), level_.movements.data(),
+                               STRIDE_OBJ_, STRIDE_MOV_))
+         return false;
+@@ -744,6 +745,7 @@
+ void Engine::matchCellRowEllipsis1(const std::vector<CellPattern*>& cellRow, int startIdx,
+                                     int kmax, int kmin, int delta,
+                                     std::vector<std::vector<int>>& result) {
++    ++benchmarkCounters[4];
+     // Find ellipsis position
+     int ellipsisIdx = -1;
+     for (int i = 0; i < static_cast<int>(cellRow.size()); ++i) {
+@@ -783,6 +785,7 @@
+                                     int k2max, int k2min,
+                                     int delta,
+                                     std::vector<std::vector<int>>& result) {
++    ++benchmarkCounters[4];
+     // Find two ellipsis positions
+     int e1 = -1, e2 = -1;
+     for (int i = 0; i < static_cast<int>(cellRow.size()); ++i) {
+@@ -835,8 +838,11 @@
+ 
+ // Find all matches for a rule
+ std::vector<std::vector<std::vector<int>>> Engine::ruleFindMatches(Rule& rule) {
+-    if (!rule.ruleMask.bitsSetInArray(level_.mapCellContents.data.data()))
++    ++benchmarkCounters[0];
++    if (!rule.ruleMask.bitsSetInArray(level_.mapCellContents.data.data())) {
++        ++benchmarkCounters[1];
+         return {};
++    }
+ 
+     int d = level_.delta_index(rule.direction);
+     std::vector<std::vector<std::vector<int>>> allRowMatches;
+@@ -849,6 +855,7 @@
+         // Quick check: does the board contain what this row needs?
+         if (!cellRowMask.bitsSetInArray(level_.mapCellContents.data.data()) ||
+             !cellRowMask_Mov.bitsSetInArray(level_.mapCellContents_Movements.data.data())) {
++            ++benchmarkCounters[2];
+             return {};
+         }
+ 
+@@ -879,7 +886,7 @@
+                 for (int y = ymin; y < ymax; ++y) {
+                     if (!cellRowMask.bitsSetInArray(level_.rowCellContents[y].data.data()) ||
+                         !cellRowMask_Mov.bitsSetInArray(level_.rowCellContents_Movements[y].data.data()))
+-                        continue;
++                        { ++benchmarkCounters[3]; continue; }
+                     for (int x = xmin; x < xmax; ++x) {
+                         int idx = x * level_.height + y;
+                         matchCellRowNoEllipsis(cellRow, idx, d, rowMatches);
+@@ -889,7 +896,7 @@
+                 for (int x = xmin; x < xmax; ++x) {
+                     if (!cellRowMask.bitsSetInArray(level_.colCellContents[x].data.data()) ||
+                         !cellRowMask_Mov.bitsSetInArray(level_.colCellContents_Movements[x].data.data()))
+-                        continue;
++                        { ++benchmarkCounters[3]; continue; }
+                     for (int y = ymin; y < ymax; ++y) {
+                         int idx = x * level_.height + y;
+                         matchCellRowNoEllipsis(cellRow, idx, d, rowMatches);
+@@ -902,7 +909,7 @@
+                 for (int y = ymin; y < ymax; ++y) {
+                     if (!cellRowMask.bitsSetInArray(level_.rowCellContents[y].data.data()) ||
+                         !cellRowMask_Mov.bitsSetInArray(level_.rowCellContents_Movements[y].data.data()))
+-                        continue;
++                        { ++benchmarkCounters[3]; continue; }
+                     for (int x = xmin; x < xmax; ++x) {
+                         int idx = x * level_.height + y;
+                         int kmax_val;
+@@ -923,7 +930,7 @@
+                 for (int x = xmin; x < xmax; ++x) {
+                     if (!cellRowMask.bitsSetInArray(level_.colCellContents[x].data.data()) ||
+                         !cellRowMask_Mov.bitsSetInArray(level_.colCellContents_Movements[x].data.data()))
+-                        continue;
++                        { ++benchmarkCounters[3]; continue; }
+                     for (int y = ymin; y < ymax; ++y) {
+                         int idx = x * level_.height + y;
+                         int kmax_val;
+@@ -1080,6 +1087,7 @@
+ }
+ 
+ bool Engine::ruleApplyAt(Rule& rule, const std::vector<std::vector<int>>& tuple, bool check, int delta) {
++    ++benchmarkCounters[5];
+     // Double check matches if check is true (for multi-tuple rules)
+     if (check) {
+         for (int rowIdx = 0; rowIdx < static_cast<int>(rule.patterns.size()); ++rowIdx) {
+@@ -1195,6 +1203,7 @@
+         ruleQueueCommands(rule);
+     }
+ 
++    if (result) ++benchmarkCounters[6];
+     if (trackRulesFired_ && result) firedThisCall_.ibitset(rule.globalIndex);
+     return result;
+ }
+@@ -1240,6 +1249,7 @@
+     int loopcount = 0;
+ 
+     while (madeChangeThisLoop && loopcount++ < MAX_LOOP_COUNT) {
++        ++benchmarkCounters[7];
+         madeChangeThisLoop = false;
+         int consecutiveFailures = 0;
+ 
+--- a/puzzlescript_cpp/src/engine.h
++++ b/puzzlescript_cpp/src/engine.h
+@@ -85,6 +85,7 @@
+ // ---- Engine ----
+ class Engine {
+ public:
++    uint64_t benchmarkCounters[8] = {};
+     Engine();
+     ~Engine();
+ 
+--- a/puzzlescript_cpp/src/bindings.cpp
++++ b/puzzlescript_cpp/src/bindings.cpp
+@@ -39,6 +39,8 @@
+ 
+     py::class_<Engine>(m, "Engine")
+         .def(py::init<>())
++        .def("benchmark_counters", [](const Engine& e) { return std::vector<uint64_t>(e.benchmarkCounters, e.benchmarkCounters + 8); })
++        .def("clear_benchmark_counters", [](Engine& e) { for (auto& value : e.benchmarkCounters) value = 0; })
+         .def("load_from_json", &Engine::loadFromJSON,
+              py::arg("json_str"),
+              "Load a compiled game state from JSON string")

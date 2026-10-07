@@ -1,0 +1,123 @@
+{
+  "host": "Yalda24",
+  "cpu_affinity": [
+    0,
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7
+  ],
+  "source_hashes": {
+    "scripts/benchmarks/benchmark_cpp_scoring.py": "99c6ab153d0aec49d37d6114603cb2473baeb88c7f65a57356a61ba4545adfd7",
+    "puzzlescript_cpp/__init__.py": "158fa886867977335394dc41755006d7461ab280607d7448027dd720615da078",
+    "scripts/benchmarks/profile_rand_nodejs.py": "1e5e43a879f58e326f16d897c970dd479ed21da7466057e23cc727081420102e",
+    "puzzlescript_nodejs/puzzlescript/engine.js": "b301f87a3647406a7db23c5398629eb7061c75bb31b5bc002271e89cea5c53af"
+  },
+  "idle_workers": "SIGSTOP between requests; only the measured build runs",
+  "thread_environment": {
+    "OMP_WAIT_POLICY": "ACTIVE",
+    "OMP_PROC_BIND": "close",
+    "OMP_PLACES": "cores",
+    "OPENBLAS_NUM_THREADS": "1"
+  },
+  "trials": 9,
+  "seeds": [
+    42,
+    1042
+  ],
+  "steps": 300,
+  "games": [
+    "Take_Heart_Lass"
+  ],
+  "levels": [
+    0
+  ],
+  "batches": [
+    1
+  ],
+  "threads": [
+    1
+  ],
+  "library_hashes": {
+    "baseline": "355f88636be05074d9286c171f0c9ee69b4ae630f7670f3acb9282341c5fde0f",
+    "candidate": "c88b36964b09a31b0b220957184cdfc11a304399bc066ab0b9fa2193753afb2d"
+  },
+  "timing": "full Python wrapper outputs; alternating warmed calls; reset/actions/IPC excluded",
+  "results": [
+    {
+      "game": "Take_Heart_Lass",
+      "level": 0,
+      "batch": 1,
+      "threads": 1,
+      "seed": 42,
+      "compiled_sha256": "3544524044e5bcde8c34596fe530b20cdcea9f649b2935818b16637a5080fa3f",
+      "output_sha256": "6166bfda7772801c3dee116bf6f60d8d78ce7bd00a8752b40432a2cf72b2c113",
+      "samples_s": [
+        [
+          0.024644553661346436,
+          0.024627815932035446,
+          0.024642756208777428,
+          0.024670440703630447,
+          0.02464577741920948,
+          0.024651218205690384,
+          0.024627920240163803,
+          0.024656279012560844,
+          0.024597318843007088
+        ],
+        [
+          0.023440076038241386,
+          0.023412249982357025,
+          0.023430991917848587,
+          0.023383378982543945,
+          0.02344399131834507,
+          0.023458028212189674,
+          0.02339550293982029,
+          0.02347412146627903,
+          0.02342993952333927
+        ]
+      ],
+      "baseline_fps": 12173.074997520964,
+      "candidate_fps": 12803.555267819227,
+      "speedup": 1.0517930161792859
+    },
+    {
+      "game": "Take_Heart_Lass",
+      "level": 0,
+      "batch": 1,
+      "threads": 1,
+      "seed": 1042,
+      "compiled_sha256": "3544524044e5bcde8c34596fe530b20cdcea9f649b2935818b16637a5080fa3f",
+      "output_sha256": "6b3e1519ba9f0746f46608cf7412854739c9e970a4c2cc5a29b6935ca4dbfb1b",
+      "samples_s": [
+        [
+          0.025218963623046875,
+          0.025134505704045296,
+          0.025154422968626022,
+          0.025161627680063248,
+          0.02503771334886551,
+          0.025110295042395592,
+          0.025083160027861595,
+          0.025089452043175697,
+          0.02513624168932438
+        ],
+        [
+          0.02396179921925068,
+          0.023938318714499474,
+          0.0238901749253273,
+          0.02386554144322872,
+          0.023994332179427147,
+          0.02385011501610279,
+          0.023975234478712082,
+          0.02392168715596199,
+          0.02393481135368347
+        ]
+      ],
+      "baseline_fps": 11935.782765432154,
+      "candidate_fps": 12534.044892475462,
+      "speedup": 1.0501234094822811
+    }
+  ]
+}

@@ -1,0 +1,326 @@
+{
+  "scope": "Static conservative analysis of fixed level zero; no engine pruning or timing performed",
+  "script_sha256": "533fd0fa39733a6927bcfe40e6d17b79e37ca16682da247332937df284206358",
+  "results": [
+    {
+      "game": "Beam_Islands",
+      "compiled_sha256": "d47ee2387eee1c647b33cbb43b9b0577e742f0d4e791b8d13733a39509fe2ee7",
+      "initial_object_types": 4,
+      "reachable_object_types": 47,
+      "compiled_rules": 239,
+      "potentially_reachable_rules": 234,
+      "unreachable_rules": 5,
+      "closure_passes": 3
+    },
+    {
+      "game": "Boxes_&_Balloons",
+      "compiled_sha256": "97ed1f5f22d2899d0e45b9bd1c39a7b6db7ae248e54d6c4ae1a4d9ec9b3cd655",
+      "initial_object_types": 7,
+      "reachable_object_types": 17,
+      "compiled_rules": 67,
+      "potentially_reachable_rules": 39,
+      "unreachable_rules": 28,
+      "closure_passes": 2
+    },
+    {
+      "game": "Caramelban",
+      "compiled_sha256": "83144bd3b90c9be9f72f0b466fca58d4c035379440626417bebf410c7b77256f",
+      "initial_object_types": 5,
+      "reachable_object_types": 22,
+      "compiled_rules": 131,
+      "potentially_reachable_rules": 131,
+      "unreachable_rules": 0,
+      "closure_passes": 3
+    },
+    {
+      "game": "Crate_Assembler",
+      "compiled_sha256": "b3ba88b6b1615818ba8103b5724bc35de4975ef16e3f577283ea54febf4009d8",
+      "initial_object_types": 11,
+      "reachable_object_types": 12,
+      "compiled_rules": 7716,
+      "potentially_reachable_rules": 369,
+      "unreachable_rules": 7347,
+      "closure_passes": 2
+    },
+    {
+      "game": "Heroes_of_Sokoban_III__The_Bard_and_The_Druid",
+      "compiled_sha256": "722f3a60d5e7af147ff3e76bb9a88c92b07e3101d1a6d635082ddfee7c314f6e",
+      "initial_object_types": 9,
+      "reachable_object_types": 18,
+      "compiled_rules": 210,
+      "potentially_reachable_rules": 87,
+      "unreachable_rules": 123,
+      "closure_passes": 3
+    },
+    {
+      "game": "HyperMaze",
+      "compiled_sha256": "4942d931e16ead8883df7e666df89520961be8150039b535322af759594d521d",
+      "initial_object_types": 33,
+      "reachable_object_types": 33,
+      "compiled_rules": 32,
+      "potentially_reachable_rules": 32,
+      "unreachable_rules": 0,
+      "closure_passes": 1
+    },
+    {
+      "game": "IceCrates",
+      "compiled_sha256": "060ed340434cacaeb7e075bbfcf7b1558ec401a4c5a233a22d8136f3be1c5b15",
+      "initial_object_types": 4,
+      "reachable_object_types": 23,
+      "compiled_rules": 50,
+      "potentially_reachable_rules": 27,
+      "unreachable_rules": 23,
+      "closure_passes": 2
+    },
+    {
+      "game": "Indigestion",
+      "compiled_sha256": "e0f69b33c6cbb4655ea586492df26f3fc97024c1446b9a861d7282978ece8dab",
+      "initial_object_types": 6,
+      "reachable_object_types": 33,
+      "compiled_rules": 529,
+      "potentially_reachable_rules": 147,
+      "unreachable_rules": 382,
+      "closure_passes": 3
+    },
+    {
+      "game": "Magnet_Jack",
+      "compiled_sha256": "515cbc7bc76356b793368b7f4a1a65013572c5375d04c66a602cf0baa87eea18",
+      "initial_object_types": 18,
+      "reachable_object_types": 20,
+      "compiled_rules": 27,
+      "potentially_reachable_rules": 27,
+      "unreachable_rules": 0,
+      "closure_passes": 2
+    },
+    {
+      "game": "Memories_Of_Castlemouse",
+      "compiled_sha256": "2fd30a03c93cf36057c933b370f443475c911970daf549172832c81aeabde1fd",
+      "initial_object_types": 6,
+      "reachable_object_types": 11,
+      "compiled_rules": 188,
+      "potentially_reachable_rules": 21,
+      "unreachable_rules": 167,
+      "closure_passes": 2
+    },
+    {
+      "game": "Microban",
+      "compiled_sha256": "a7700ddc6e206bf4c9993fc9d767cd76b78016c81586a7f37a81ea7abc79d0df",
+      "initial_object_types": 5,
+      "reachable_object_types": 5,
+      "compiled_rules": 4,
+      "potentially_reachable_rules": 4,
+      "unreachable_rules": 0,
+      "closure_passes": 1
+    },
+    {
+      "game": "Multi-word_Dictionary_Game",
+      "compiled_sha256": "1ca7752d3e0bad6bbb7413ca1c208b42a302fed2d535e86281b27b2cd3f23127",
+      "initial_object_types": 6,
+      "reachable_object_types": 7,
+      "compiled_rules": 10,
+      "potentially_reachable_rules": 10,
+      "unreachable_rules": 0,
+      "closure_passes": 2
+    },
+    {
+      "game": "ParaLands",
+      "compiled_sha256": "3325f28e495c6682e44b4f68983b3336c7d1f29dd6724e5d9aea3ccd65d94da0",
+      "initial_object_types": 12,
+      "reachable_object_types": 44,
+      "compiled_rules": 516,
+      "potentially_reachable_rules": 207,
+      "unreachable_rules": 309,
+      "closure_passes": 6
+    },
+    {
+      "game": "Slidings",
+      "compiled_sha256": "0a3f5e38de70922b89d6902879f25d6812fe2266386fabf1e5a2ef5b4228c8f1",
+      "initial_object_types": 10,
+      "reachable_object_types": 12,
+      "compiled_rules": 23,
+      "potentially_reachable_rules": 23,
+      "unreachable_rules": 0,
+      "closure_passes": 2
+    },
+    {
+      "game": "Sokoboros",
+      "compiled_sha256": "f9a781a672514e600c916a8f3b2f0107118739c8d132db02d156c7f10450a100",
+      "initial_object_types": 36,
+      "reachable_object_types": 74,
+      "compiled_rules": 90,
+      "potentially_reachable_rules": 90,
+      "unreachable_rules": 0,
+      "closure_passes": 11
+    },
+    {
+      "game": "SwapBot",
+      "compiled_sha256": "6bc9ea73464851152188bdebbeec54d98cd171d665fed24b9d77275281064758",
+      "initial_object_types": 10,
+      "reachable_object_types": 28,
+      "compiled_rules": 174,
+      "potentially_reachable_rules": 55,
+      "unreachable_rules": 119,
+      "closure_passes": 5
+    },
+    {
+      "game": "Symbolism",
+      "compiled_sha256": "bfdb339e8facb52746ea0e73149a9a70ca8302981b00a7b87e0274b1a7bc892d",
+      "initial_object_types": 29,
+      "reachable_object_types": 72,
+      "compiled_rules": 330,
+      "potentially_reachable_rules": 270,
+      "unreachable_rules": 60,
+      "closure_passes": 5
+    },
+    {
+      "game": "Take_Heart_Lass",
+      "compiled_sha256": "3544524044e5bcde8c34596fe530b20cdcea9f649b2935818b16637a5080fa3f",
+      "initial_object_types": 6,
+      "reachable_object_types": 11,
+      "compiled_rules": 94,
+      "potentially_reachable_rules": 24,
+      "unreachable_rules": 70,
+      "closure_passes": 3
+    },
+    {
+      "game": "Transition",
+      "compiled_sha256": "3668f0f497dfd8592fedb2201be56bc4b2f28160d797ca42a64e7c858b34da76",
+      "initial_object_types": 10,
+      "reachable_object_types": 11,
+      "compiled_rules": 95,
+      "potentially_reachable_rules": 17,
+      "unreachable_rules": 78,
+      "closure_passes": 2
+    },
+    {
+      "game": "Travelling_salesman",
+      "compiled_sha256": "92bc53076247ebae68fafb2c233b8819356a04c975ee974d00fd4d358dc33c3b",
+      "initial_object_types": 5,
+      "reachable_object_types": 8,
+      "compiled_rules": 16,
+      "potentially_reachable_rules": 16,
+      "unreachable_rules": 0,
+      "closure_passes": 2
+    },
+    {
+      "game": "Unconventional_Guns",
+      "compiled_sha256": "84d6ed93e7851e6da726eaaee6e373613941e055fa4eadb6c8348844521ac4c9",
+      "initial_object_types": 10,
+      "reachable_object_types": 20,
+      "compiled_rules": 248,
+      "potentially_reachable_rules": 30,
+      "unreachable_rules": 218,
+      "closure_passes": 2
+    },
+    {
+      "game": "Vacuum",
+      "compiled_sha256": "d64313f8b37a378d3a0aecbb887b4b5f6ba395d40702a18742eccf306f7840b3",
+      "initial_object_types": 69,
+      "reachable_object_types": 96,
+      "compiled_rules": 542,
+      "potentially_reachable_rules": 542,
+      "unreachable_rules": 0,
+      "closure_passes": 11
+    },
+    {
+      "game": "Zen_Puzzle_Garden",
+      "compiled_sha256": "20202d57cd862cbbbba78feeb8d780eb07c4197ca69e6d0967d0931bea4cd3d8",
+      "initial_object_types": 4,
+      "reachable_object_types": 6,
+      "compiled_rules": 5,
+      "potentially_reachable_rules": 5,
+      "unreachable_rules": 0,
+      "closure_passes": 2
+    },
+    {
+      "game": "atlas shrank",
+      "compiled_sha256": "d404eb3169c0e30331f1db6ec7ee13d9a092b0cb84a7ec415f4bceab06217f05",
+      "initial_object_types": 5,
+      "reachable_object_types": 22,
+      "compiled_rules": 61,
+      "potentially_reachable_rules": 54,
+      "unreachable_rules": 7,
+      "closure_passes": 3
+    },
+    {
+      "game": "blocks",
+      "compiled_sha256": "7721ba972e0c260c75756e6f7be33e1615c72c586abc6961408919cfd5034266",
+      "initial_object_types": 4,
+      "reachable_object_types": 4,
+      "compiled_rules": 0,
+      "potentially_reachable_rules": 0,
+      "unreachable_rules": 0,
+      "closure_passes": 1
+    },
+    {
+      "game": "castlecloset",
+      "compiled_sha256": "fc4826fb8bb75df99f45ee28ab09843a2879bd4a08f1b4f16e01abbad693dce0",
+      "initial_object_types": 25,
+      "reachable_object_types": 36,
+      "compiled_rules": 176,
+      "potentially_reachable_rules": 176,
+      "unreachable_rules": 0,
+      "closure_passes": 2
+    },
+    {
+      "game": "kettle",
+      "compiled_sha256": "ac39171ba8a3e1a5786a5566d558b3b6bce9172855f9138e507b0f3f080e93bb",
+      "initial_object_types": 8,
+      "reachable_object_types": 8,
+      "compiled_rules": 20,
+      "potentially_reachable_rules": 20,
+      "unreachable_rules": 0,
+      "closure_passes": 1
+    },
+    {
+      "game": "limerick",
+      "compiled_sha256": "d5893223c98a1571e3729a03f5084e65a506a4fbd24785b2968205b8154e4aa5",
+      "initial_object_types": 4,
+      "reachable_object_types": 9,
+      "compiled_rules": 16,
+      "potentially_reachable_rules": 11,
+      "unreachable_rules": 5,
+      "closure_passes": 4
+    },
+    {
+      "game": "nekopuzzle",
+      "compiled_sha256": "c498e4a79583ccfe86976a83ad07ac383e723c37af947f66814b47471078446f",
+      "initial_object_types": 3,
+      "reachable_object_types": 3,
+      "compiled_rules": 8,
+      "potentially_reachable_rules": 8,
+      "unreachable_rules": 0,
+      "closure_passes": 1
+    },
+    {
+      "game": "notsnake",
+      "compiled_sha256": "4b72a87b06f9b6f9b107fce33dafe9648a3559f17e5e16ef3a07438edb79f0f3",
+      "initial_object_types": 3,
+      "reachable_object_types": 3,
+      "compiled_rules": 8,
+      "potentially_reachable_rules": 8,
+      "unreachable_rules": 0,
+      "closure_passes": 1
+    },
+    {
+      "game": "sokoban_basic",
+      "compiled_sha256": "3012b8f11e46e65eda7d38436677f235a2f2fb9adc2ee92309cc12a993ac08f3",
+      "initial_object_types": 5,
+      "reachable_object_types": 5,
+      "compiled_rules": 4,
+      "potentially_reachable_rules": 4,
+      "unreachable_rules": 0,
+      "closure_passes": 1
+    },
+    {
+      "game": "sokoban_match3",
+      "compiled_sha256": "268da2f5cc9fcd02276a523700ed86ad2304564ae88a116ea90cf0c7a6dc01f6",
+      "initial_object_types": 5,
+      "reachable_object_types": 5,
+      "compiled_rules": 6,
+      "potentially_reachable_rules": 6,
+      "unreachable_rules": 0,
+      "closure_passes": 1
+    }
+  ]
+}

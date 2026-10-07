@@ -1,0 +1,14 @@
+Writing pretty tree to /tmp/puzzlejax-complex-20261007/data/pretty_trees/IceCrates
+Parsed IceCrates successfully
+ERROR:2026-10-07 02:17:09,793:jax._src.xla_bridge:491: Jax plugin configuration error: Exception when calling jax_plugins.xla_cuda12.initialize()
+Traceback (most recent call last):
+  File "/home/jupyter-smearle/script-doctor/.venv/lib/python3.13/site-packages/jax/_src/xla_bridge.py", line 489, in discover_pjrt_plugins
+    plugin_module.initialize()
+    ~~~~~~~~~~~~~~~~~~~~~~~~^^
+  File "/home/jupyter-smearle/script-doctor/.venv/lib/python3.13/site-packages/jax_plugins/xla_cuda12/__init__.py", line 328, in initialize
+    _check_cuda_versions(raise_on_first_error=True)
+    ~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/jupyter-smearle/script-doctor/.venv/lib/python3.13/site-packages/jax_plugins/xla_cuda12/__init__.py", line 285, in _check_cuda_versions
+    local_device_count = cuda_versions.cuda_device_count()
+RuntimeError: jaxlib/cuda/versions_helpers.cc:113: operation cuInit(0) failed: CUDA_ERROR_NO_DEVICE
+{"game": "IceCrates", "objects": 32, "layers": 4, "level_shape": [32, 7, 7], "compiled_sha256": "060ed340434cacaeb7e075bbfcf7b1558ec401a4c5a233a22d8136f3be1c5b15", "source_sha256": "debc1bcd30c60053afcdc9e78bfe7d5e54909db9c08647e08dc145dcf6393e15", "compiled_rules": 50, "compiled_groups": 50, "loop_points": 0, "source_rules": 50, "multirow_rules": 0, "max_pattern_rows": 1, "ellipsis_rules": 0, "max_pattern_span": 3, "board_cells": 49, "force_channels": 20, "jax_rule_functions": 50, "jax_rule_groups": 50}

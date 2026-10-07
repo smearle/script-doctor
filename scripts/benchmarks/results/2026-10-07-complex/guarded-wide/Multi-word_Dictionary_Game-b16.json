@@ -1,0 +1,123 @@
+{
+  "host": "Yalda24",
+  "cpu_affinity": [
+    0,
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7
+  ],
+  "source_hashes": {
+    "scripts/benchmarks/benchmark_cpp_scoring.py": "99c6ab153d0aec49d37d6114603cb2473baeb88c7f65a57356a61ba4545adfd7",
+    "puzzlescript_cpp/__init__.py": "158fa886867977335394dc41755006d7461ab280607d7448027dd720615da078",
+    "scripts/benchmarks/profile_rand_nodejs.py": "1e5e43a879f58e326f16d897c970dd479ed21da7466057e23cc727081420102e",
+    "puzzlescript_nodejs/puzzlescript/engine.js": "b301f87a3647406a7db23c5398629eb7061c75bb31b5bc002271e89cea5c53af"
+  },
+  "idle_workers": "SIGSTOP between requests; only the measured build runs",
+  "thread_environment": {
+    "OMP_WAIT_POLICY": "ACTIVE",
+    "OMP_PROC_BIND": "close",
+    "OMP_PLACES": "cores",
+    "OPENBLAS_NUM_THREADS": "1"
+  },
+  "trials": 9,
+  "seeds": [
+    42,
+    1042
+  ],
+  "steps": 300,
+  "games": [
+    "Multi-word_Dictionary_Game"
+  ],
+  "levels": [
+    0
+  ],
+  "batches": [
+    16
+  ],
+  "threads": [
+    8
+  ],
+  "library_hashes": {
+    "baseline": "355f88636be05074d9286c171f0c9ee69b4ae630f7670f3acb9282341c5fde0f",
+    "candidate": "c88b36964b09a31b0b220957184cdfc11a304399bc066ab0b9fa2193753afb2d"
+  },
+  "timing": "full Python wrapper outputs; alternating warmed calls; reset/actions/IPC excluded",
+  "results": [
+    {
+      "game": "Multi-word_Dictionary_Game",
+      "level": 0,
+      "batch": 16,
+      "threads": 8,
+      "seed": 42,
+      "compiled_sha256": "1ca7752d3e0bad6bbb7413ca1c208b42a302fed2d535e86281b27b2cd3f23127",
+      "output_sha256": "40cb919958fc9fc3e1e4a755f08b7c6cb59b2f2cb7bcf2c55c92fdf078ef2847",
+      "samples_s": [
+        [
+          0.03133136220276356,
+          0.031398871913552284,
+          0.03131568804383278,
+          0.031299490481615067,
+          0.031321775168180466,
+          0.031312838196754456,
+          0.03126128949224949,
+          0.03126484714448452,
+          0.031232649460434914
+        ],
+        [
+          0.03090309165418148,
+          0.03094477951526642,
+          0.030915750190615654,
+          0.030944786965847015,
+          0.030932705849409103,
+          0.0308360755443573,
+          0.030858956277370453,
+          0.030872751027345657,
+          0.03096393309533596
+        ]
+      ],
+      "baseline_fps": 153291.7575161716,
+      "candidate_fps": 155260.6671487797,
+      "speedup": 1.0128441976562268
+    },
+    {
+      "game": "Multi-word_Dictionary_Game",
+      "level": 0,
+      "batch": 16,
+      "threads": 8,
+      "seed": 1042,
+      "compiled_sha256": "1ca7752d3e0bad6bbb7413ca1c208b42a302fed2d535e86281b27b2cd3f23127",
+      "output_sha256": "eb6bb15fbeaed9ea434ba9d6ed657993fe3337a1d9f38c2ada2a3b9072249214",
+      "samples_s": [
+        [
+          0.03171749226748943,
+          0.03175827115774155,
+          0.0316972341388464,
+          0.03175966255366802,
+          0.03170287609100342,
+          0.031707972288131714,
+          0.034880733117461205,
+          0.031668590381741524,
+          0.031705522909760475
+        ],
+        [
+          0.031254036352038383,
+          0.031162885949015617,
+          0.03129090555012226,
+          0.031201457604765892,
+          0.031203672289848328,
+          0.03128076530992985,
+          0.03125251457095146,
+          0.031188558787107468,
+          0.03129544481635094
+        ]
+      ],
+      "baseline_fps": 151381.48716613578,
+      "candidate_fps": 153587.64137531182,
+      "speedup": 1.0145734742766457
+    }
+  ]
+}

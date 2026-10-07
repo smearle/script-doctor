@@ -1,0 +1,25 @@
+{
+  "game": "castlecloset",
+  "objects": 39,
+  "layers": 2,
+  "level_shape": [
+    39,
+    16,
+    24
+  ],
+  "compiled_sha256": "fc4826fb8bb75df99f45ee28ab09843a2879bd4a08f1b4f16e01abbad693dce0",
+  "source_sha256": "9c4941f436f68aa55a75f3c7eff88a22cd7478e3eafdbe9be3679007c6de1ed4",
+  "compiled_rules": 176,
+  "compiled_groups": 44,
+  "loop_points": 0,
+  "source_rules": 44,
+  "multirow_rules": 0,
+  "max_pattern_rows": 1,
+  "ellipsis_rules": 0,
+  "max_pattern_span": 2,
+  "board_cells": 384,
+  "force_channels": 10,
+  "jax_rule_functions": 176,
+  "jax_rule_groups": 44,
+  "run_rules_on_level_start": false
+}

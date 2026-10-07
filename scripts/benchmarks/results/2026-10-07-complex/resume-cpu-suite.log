@@ -1,0 +1,5 @@
+{'game': 'Travelling_salesman', 'status': 'complete', 'exit_code': 0, 'elapsed_s': 8.285814439877868}
+{'game': 'Multi-word_Dictionary_Game', 'status': 'complete', 'exit_code': 0, 'elapsed_s': 15.396944211795926}
+{'game': 'Microban', 'status': 'complete', 'exit_code': 0, 'elapsed_s': 17.27234041132033}
+{'game': 'Magnet_Jack', 'status': 'complete', 'exit_code': 0, 'elapsed_s': 56.6717815361917}
+{'game': 'HyperMaze', 'status': 'complete', 'exit_code': 0, 'elapsed_s': 124.99292824044824}

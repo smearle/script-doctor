@@ -1,0 +1,130 @@
+[
+  {
+    "game": "Beam_Islands",
+    "exit_code": 0
+  },
+  {
+    "game": "Boxes_&_Balloons",
+    "exit_code": 0
+  },
+  {
+    "game": "Caramelban",
+    "exit_code": 0
+  },
+  {
+    "game": "Crate_Assembler",
+    "exit_code": 0
+  },
+  {
+    "game": "Heroes_of_Sokoban_III__The_Bard_and_The_Druid",
+    "exit_code": 0
+  },
+  {
+    "game": "IceCrates",
+    "exit_code": 0
+  },
+  {
+    "game": "Indigestion",
+    "exit_code": 0
+  },
+  {
+    "game": "Memories_Of_Castlemouse",
+    "exit_code": 0
+  },
+  {
+    "game": "ParaLands",
+    "exit_code": 0
+  },
+  {
+    "game": "Sokoboros",
+    "exit_code": 0
+  },
+  {
+    "game": "SwapBot",
+    "exit_code": 0
+  },
+  {
+    "game": "Symbolism",
+    "exit_code": 0
+  },
+  {
+    "game": "Transition",
+    "exit_code": 0
+  },
+  {
+    "game": "Unconventional_Guns",
+    "exit_code": 0
+  },
+  {
+    "game": "Vacuum",
+    "exit_code": 0
+  },
+  {
+    "game": "castlecloset",
+    "exit_code": 0
+  },
+  {
+    "game": "sokoban_basic",
+    "exit_code": 0
+  },
+  {
+    "game": "notsnake",
+    "exit_code": 0
+  },
+  {
+    "game": "Zen_Puzzle_Garden",
+    "exit_code": 0
+  },
+  {
+    "game": "Slidings",
+    "exit_code": 0
+  },
+  {
+    "game": "limerick",
+    "exit_code": 0
+  },
+  {
+    "game": "kettle",
+    "exit_code": 0
+  },
+  {
+    "game": "Take_Heart_Lass",
+    "exit_code": 0
+  },
+  {
+    "game": "atlas shrank",
+    "exit_code": 0
+  },
+  {
+    "game": "blocks",
+    "exit_code": 0
+  },
+  {
+    "game": "nekopuzzle",
+    "exit_code": 0
+  },
+  {
+    "game": "sokoban_match3",
+    "exit_code": 0
+  },
+  {
+    "game": "Travelling_salesman",
+    "exit_code": 0
+  },
+  {
+    "game": "Multi-word_Dictionary_Game",
+    "exit_code": 0
+  },
+  {
+    "game": "Microban",
+    "exit_code": 0
+  },
+  {
+    "game": "Magnet_Jack",
+    "exit_code": 0
+  },
+  {
+    "game": "HyperMaze",
+    "exit_code": 0
+  }
+]

@@ -1,0 +1,25 @@
+name, driver_version, memory.total [MiB]
+NVIDIA H200, 610.43.02, 143771 MiB
+/scratch/se2161/script-doctor/.venv/lib/python3.13/site-packages/pydantic/_internal/_generate_schema.py:2249: UnsupportedFieldAttributeWarning: The 'repr' attribute with value False was provided to the `Field()` function, which has no effect in the context it was used. 'repr' is field-specific metadata, and can only be attached to a model field using `Annotated` metadata or by assignment. This may have happened because an `Annotated` type alias using the `type` statement was used, or if the `Field()` function was attached to a single member of a union type.
+  warnings.warn(
+/scratch/se2161/script-doctor/.venv/lib/python3.13/site-packages/pydantic/_internal/_generate_schema.py:2249: UnsupportedFieldAttributeWarning: The 'frozen' attribute with value True was provided to the `Field()` function, which has no effect in the context it was used. 'frozen' is field-specific metadata, and can only be attached to a model field using `Annotated` metadata or by assignment. This may have happened because an `Annotated` type alias using the `type` statement was used, or if the `Field()` function was attached to a single member of a union type.
+  warnings.warn(
+Writing pretty tree to /scratch/se2161/puzzlejax-perf-20261002/complex-wide-20261007/data/pretty_trees/Unconventional_Guns
+Parsed Unconventional_Guns successfully
+Writing pretty tree to /scratch/se2161/puzzlejax-perf-20261002/complex-wide-20261007/data/pretty_trees/Unconventional_Guns
+Parsed Unconventional_Guns successfully
+WARNING:puzzlescript_jax.env:Object zombieplayeru appears multiple times in collision layers.
+WARNING:puzzlescript_jax.env:Object zombieplayerd appears multiple times in collision layers.
+WARNING:puzzlescript_jax.env:Object zombieplayerl appears multiple times in collision layers.
+WARNING:puzzlescript_jax.env:Object zombieplayerr appears multiple times in collision layers.
+Name zombieplayer, referred to in a rule, does not exist.
+Name zombieplayer, referred to in a rule, does not exist.
+Name zombieplayer, referred to in a rule, does not exist.
+Name zombieplayer, referred to in a rule, does not exist.
+Name zombieplayer, referred to in a rule, does not exist.
+Name zombieplayer, referred to in a rule, does not exist.
+Name zombieplayer, referred to in a rule, does not exist.
+Name zombieplayer, referred to in a rule, does not exist.
+Name zombieplayer, referred to in a rule, does not exist.
+Name zombieplayer, referred to in a rule, does not exist.
+[2026-10-07T02:33:27.763] error: *** JOB 19325443 ON gh119 CANCELLED AT 2026-10-07T02:33:27 DUE to SIGNAL Terminated ***

@@ -1,0 +1,25 @@
+{
+  "game": "Symbolism",
+  "objects": 87,
+  "layers": 20,
+  "level_shape": [
+    87,
+    7,
+    10
+  ],
+  "compiled_sha256": "bfdb339e8facb52746ea0e73149a9a70ca8302981b00a7b87e0274b1a7bc892d",
+  "source_sha256": "b42f36f2804cbe46cbea3fd562e564ca6923779a10a2b084da87cf3c24851bdc",
+  "compiled_rules": 330,
+  "compiled_groups": 159,
+  "loop_points": 0,
+  "source_rules": 165,
+  "multirow_rules": 264,
+  "max_pattern_rows": 3,
+  "ellipsis_rules": 0,
+  "max_pattern_span": 4,
+  "board_cells": 70,
+  "force_channels": 100,
+  "jax_rule_functions": 317,
+  "jax_rule_groups": 159,
+  "run_rules_on_level_start": true
+}

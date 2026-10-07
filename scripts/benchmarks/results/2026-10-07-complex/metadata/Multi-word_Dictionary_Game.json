@@ -1,0 +1,25 @@
+{
+  "game": "Multi-word_Dictionary_Game",
+  "objects": 7,
+  "layers": 3,
+  "level_shape": [
+    7,
+    7,
+    9
+  ],
+  "compiled_sha256": "1ca7752d3e0bad6bbb7413ca1c208b42a302fed2d535e86281b27b2cd3f23127",
+  "source_sha256": "97508602f88301f1a97156c0be41cb419e6074e35b06c44f9ce916e1415e890c",
+  "compiled_rules": 10,
+  "compiled_groups": 4,
+  "loop_points": 0,
+  "source_rules": 4,
+  "multirow_rules": 0,
+  "max_pattern_rows": 1,
+  "ellipsis_rules": 0,
+  "max_pattern_span": 3,
+  "board_cells": 63,
+  "force_channels": 15,
+  "jax_rule_functions": 10,
+  "jax_rule_groups": 4,
+  "run_rules_on_level_start": false
+}

@@ -1,0 +1,23 @@
+[
+  {
+    "game": "castlecloset",
+    "status": "complete",
+    "exit_code": 0,
+    "elapsed_s": 261.1120517421514,
+    "time_limit_s": 1800
+  },
+  {
+    "game": "Vacuum",
+    "status": "complete",
+    "exit_code": 0,
+    "elapsed_s": 802.7583540566266,
+    "time_limit_s": 1800
+  },
+  {
+    "game": "kettle",
+    "status": "complete",
+    "exit_code": 0,
+    "elapsed_s": 70.62910830974579,
+    "time_limit_s": 900
+  }
+]

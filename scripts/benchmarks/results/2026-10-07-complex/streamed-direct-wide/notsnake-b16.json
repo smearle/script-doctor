@@ -1,0 +1,123 @@
+{
+  "host": "Yalda24",
+  "cpu_affinity": [
+    0,
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7
+  ],
+  "source_hashes": {
+    "scripts/benchmarks/benchmark_cpp_scoring.py": "99c6ab153d0aec49d37d6114603cb2473baeb88c7f65a57356a61ba4545adfd7",
+    "puzzlescript_cpp/__init__.py": "158fa886867977335394dc41755006d7461ab280607d7448027dd720615da078",
+    "scripts/benchmarks/profile_rand_nodejs.py": "1e5e43a879f58e326f16d897c970dd479ed21da7466057e23cc727081420102e",
+    "puzzlescript_nodejs/puzzlescript/engine.js": "b301f87a3647406a7db23c5398629eb7061c75bb31b5bc002271e89cea5c53af"
+  },
+  "idle_workers": "SIGSTOP between requests; only the measured build runs",
+  "thread_environment": {
+    "OMP_WAIT_POLICY": "ACTIVE",
+    "OMP_PROC_BIND": "close",
+    "OMP_PLACES": "cores",
+    "OPENBLAS_NUM_THREADS": "1"
+  },
+  "trials": 9,
+  "seeds": [
+    42,
+    1042
+  ],
+  "steps": 300,
+  "games": [
+    "notsnake"
+  ],
+  "levels": [
+    0
+  ],
+  "batches": [
+    16
+  ],
+  "threads": [
+    8
+  ],
+  "library_hashes": {
+    "baseline": "355f88636be05074d9286c171f0c9ee69b4ae630f7670f3acb9282341c5fde0f",
+    "candidate": "e4e6773b968b38c2f679e0f489b967e6f7b99dd18e4beae273d71ff47b8f518b"
+  },
+  "timing": "full Python wrapper outputs; alternating warmed calls; reset/actions/IPC excluded",
+  "results": [
+    {
+      "game": "notsnake",
+      "level": 0,
+      "batch": 16,
+      "threads": 8,
+      "seed": 42,
+      "compiled_sha256": "4b72a87b06f9b6f9b107fce33dafe9648a3559f17e5e16ef3a07438edb79f0f3",
+      "output_sha256": "5f186c3151b5236f9ae8cf7132a0625a29213c293f7ea5b6f0cfd85d855fadfe",
+      "samples_s": [
+        [
+          0.02358360029757023,
+          0.022937169298529625,
+          0.022974923253059387,
+          0.022975649684667587,
+          0.023011038079857826,
+          0.022922581061720848,
+          0.022923476994037628,
+          0.022944733500480652,
+          0.022954775020480156
+        ],
+        [
+          0.022671625018119812,
+          0.022568201646208763,
+          0.02253296971321106,
+          0.02253735437989235,
+          0.0225505530834198,
+          0.02251569554209709,
+          0.022562652826309204,
+          0.02252485230565071,
+          0.022602299228310585
+        ]
+      ],
+      "baseline_fps": 209106.81963632663,
+      "candidate_fps": 212855.08972856103,
+      "speedup": 1.0179251451423406
+    },
+    {
+      "game": "notsnake",
+      "level": 0,
+      "batch": 16,
+      "threads": 8,
+      "seed": 1042,
+      "compiled_sha256": "4b72a87b06f9b6f9b107fce33dafe9648a3559f17e5e16ef3a07438edb79f0f3",
+      "output_sha256": "6ef7c8eeef152e0bd3d44cce272ac3ef277682524d66b5d41d36e592d6389625",
+      "samples_s": [
+        [
+          0.022942112758755684,
+          0.022997001186013222,
+          0.022940518334507942,
+          0.022939829155802727,
+          0.02294265478849411,
+          0.022929007187485695,
+          0.02292601764202118,
+          0.022986702620983124,
+          0.02297864481806755
+        ],
+        [
+          0.022524766623973846,
+          0.02256176620721817,
+          0.022567611187696457,
+          0.022616609930992126,
+          0.022571736946702003,
+          0.022572191432118416,
+          0.02254810743033886,
+          0.022551221773028374,
+          0.022665873169898987
+        ]
+      ],
+      "baseline_fps": 209222.23033570073,
+      "candidate_fps": 212694.1996686336,
+      "speedup": 1.0165946483189765
+    }
+  ]
+}

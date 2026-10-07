@@ -1,0 +1,38 @@
+name, driver_version, memory.total [MiB]
+NVIDIA H200, 610.43.02, 143771 MiB
+/scratch/se2161/script-doctor/.venv/lib/python3.13/site-packages/pydantic/_internal/_generate_schema.py:2249: UnsupportedFieldAttributeWarning: The 'repr' attribute with value False was provided to the `Field()` function, which has no effect in the context it was used. 'repr' is field-specific metadata, and can only be attached to a model field using `Annotated` metadata or by assignment. This may have happened because an `Annotated` type alias using the `type` statement was used, or if the `Field()` function was attached to a single member of a union type.
+  warnings.warn(
+/scratch/se2161/script-doctor/.venv/lib/python3.13/site-packages/pydantic/_internal/_generate_schema.py:2249: UnsupportedFieldAttributeWarning: The 'frozen' attribute with value True was provided to the `Field()` function, which has no effect in the context it was used. 'frozen' is field-specific metadata, and can only be attached to a model field using `Annotated` metadata or by assignment. This may have happened because an `Annotated` type alias using the `type` statement was used, or if the `Field()` function was attached to a single member of a union type.
+  warnings.warn(
+Writing pretty tree to /scratch/se2161/puzzlejax-perf-20261002/complex-20261007/data/pretty_trees/Vacuum
+Parsed Vacuum successfully
+Writing pretty tree to /scratch/se2161/puzzlejax-perf-20261002/complex-20261007/data/pretty_trees/Vacuum
+Parsed Vacuum successfully
+Traceback (most recent call last):
+  File [35m"<frozen runpy>"[0m, line [35m198[0m, in [35m_run_module_as_main[0m
+  File [35m"<frozen runpy>"[0m, line [35m88[0m, in [35m_run_code[0m
+  File [35m"/scratch/se2161/puzzlejax-perf-20261002/complex-20261007/scripts/benchmarks/validate_complex_game.py"[0m, line [35m36[0m, in [35m<module>[0m
+    [31mmain[0m[1;31m()[0m
+    [31m~~~~[0m[1;31m^^[0m
+  File [35m"/scratch/se2161/puzzlejax-perf-20261002/complex-20261007/scripts/benchmarks/validate_complex_game.py"[0m, line [35m22[0m, in [35mmain[0m
+    ok, message = [31mrun_test_case[0m[1;31m(args.game, 0, actions, NodeJSPuzzleScriptBackend(), init_ps_lark_parser())[0m
+                  [31m~~~~~~~~~~~~~[0m[1;31m^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^[0m
+  File [35m"/scratch/se2161/puzzlejax-perf-20261002/complex-20261007/puzzlejax/validate_actions.py"[0m, line [35m319[0m, in [35mrun_test_case[0m
+    ok, err = [31mcompare_states_at_step[0m[1;31m([0m
+              [31m~~~~~~~~~~~~~~~~~~~~~~[0m[1;31m^[0m
+        [1;31mstep, js_state_step, js_scores[step], js_winning[step],[0m
+        [1;31m^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^[0m
+        [1;31mjax_state_step, env, obj_list,[0m
+        [1;31m^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^[0m
+    [1;31m)[0m
+    [1;31m^[0m
+  File [35m"/scratch/se2161/puzzlejax-perf-20261002/complex-20261007/puzzlejax/validate_actions.py"[0m, line [35m199[0m, in [35mcompare_states_at_step[0m
+    multihot_js = multihot_level_from_js_state(
+        js_state, obj_list, target_obj_names=env.atomic_obj_names,
+    )
+  File [35m"/scratch/se2161/puzzlejax-perf-20261002/complex-20261007/puzzlejax/validate_sols_jax.py"[0m, line [35m106[0m, in [35mmultihot_level_from_js_state[0m
+    level_state = [31mlevel_to_int_arr[0m[1;31m(level_state, len(obj_list))[0m.T
+                  [31m~~~~~~~~~~~~~~~~[0m[1;31m^^^^^^^^^^^^^^^^^^^^^^^^^^^^[0m
+  File [35m"/scratch/se2161/puzzlejax-perf-20261002/complex-20261007/puzzlescript_jax/utils.py"[0m, line [35m909[0m, in [35mlevel_to_int_arr[0m
+    raise ValueError(f"Number of objects {n_objs} exceeds 64, cannot convert to int array.")
+[1;35mValueError[0m: [35mNumber of objects 96 exceeds 64, cannot convert to int array.[0m

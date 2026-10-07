@@ -1,0 +1,6 @@
+Writing pretty tree to /scratch/se2161/puzzlejax-perf-20261002/complex-20261007/data/pretty_trees/IceCrates
+Parsed IceCrates successfully
+Compiling batch=524288, steps=100
+Compiled in 261.74s; warming up
+{"batch": 524288, "steps": 100, "compile_s": 261.73619120405056, "host": "gh111.hpc.nyu.edu", "argument_bytes": 846200840, "output_bytes": 846200928, "temporary_bytes": 8213984200, "samples_s": [409.31877394695766, 409.3653159548994, 409.0776480960194, 408.9986394192092, 409.0470733239781], "fps_samples": [128087.94352245881, 128073.3808082954, 128163.44340498853, 128188.20149243168, 128173.02315343727], "median_fps": 128163.44340498853, "q25_fps": 128087.94352245881, "q75_fps": 128173.02315343727}
+Stopped: plateau

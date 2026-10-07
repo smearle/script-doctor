@@ -1,0 +1,14 @@
+Writing pretty tree to /tmp/puzzlejax-complex-20261007/data/pretty_trees/Indigestion
+Parsed Indigestion successfully
+ERROR:2026-10-07 02:17:16,002:jax._src.xla_bridge:491: Jax plugin configuration error: Exception when calling jax_plugins.xla_cuda12.initialize()
+Traceback (most recent call last):
+  File "/home/jupyter-smearle/script-doctor/.venv/lib/python3.13/site-packages/jax/_src/xla_bridge.py", line 489, in discover_pjrt_plugins
+    plugin_module.initialize()
+    ~~~~~~~~~~~~~~~~~~~~~~~~^^
+  File "/home/jupyter-smearle/script-doctor/.venv/lib/python3.13/site-packages/jax_plugins/xla_cuda12/__init__.py", line 328, in initialize
+    _check_cuda_versions(raise_on_first_error=True)
+    ~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/jupyter-smearle/script-doctor/.venv/lib/python3.13/site-packages/jax_plugins/xla_cuda12/__init__.py", line 285, in _check_cuda_versions
+    local_device_count = cuda_versions.cuda_device_count()
+RuntimeError: jaxlib/cuda/versions_helpers.cc:113: operation cuInit(0) failed: CUDA_ERROR_NO_DEVICE
+{"game": "Indigestion", "objects": 52, "layers": 39, "level_shape": [52, 8, 9], "compiled_sha256": "e0f69b33c6cbb4655ea586492df26f3fc97024c1446b9a861d7282978ece8dab", "source_sha256": "34b6bf82a94db5b47bd3f04467d088f7d0a6609a7b52ef1bfd5d72204337f529", "compiled_rules": 529, "compiled_groups": 73, "loop_points": 3, "source_rules": 73, "multirow_rules": 50, "max_pattern_rows": 2, "ellipsis_rules": 0, "max_pattern_span": 2, "board_cells": 72, "force_channels": 195, "jax_rule_functions": 277, "jax_rule_groups": 73}

@@ -1,0 +1,123 @@
+{
+  "host": "Yalda24",
+  "cpu_affinity": [
+    0,
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7
+  ],
+  "source_hashes": {
+    "scripts/benchmarks/benchmark_cpp_scoring.py": "99c6ab153d0aec49d37d6114603cb2473baeb88c7f65a57356a61ba4545adfd7",
+    "puzzlescript_cpp/__init__.py": "158fa886867977335394dc41755006d7461ab280607d7448027dd720615da078",
+    "scripts/benchmarks/profile_rand_nodejs.py": "1e5e43a879f58e326f16d897c970dd479ed21da7466057e23cc727081420102e",
+    "puzzlescript_nodejs/puzzlescript/engine.js": "b301f87a3647406a7db23c5398629eb7061c75bb31b5bc002271e89cea5c53af"
+  },
+  "idle_workers": "SIGSTOP between requests; only the measured build runs",
+  "thread_environment": {
+    "OMP_WAIT_POLICY": "ACTIVE",
+    "OMP_PROC_BIND": "close",
+    "OMP_PLACES": "cores",
+    "OPENBLAS_NUM_THREADS": "1"
+  },
+  "trials": 9,
+  "seeds": [
+    42,
+    1042
+  ],
+  "steps": 300,
+  "games": [
+    "Microban"
+  ],
+  "levels": [
+    0
+  ],
+  "batches": [
+    16
+  ],
+  "threads": [
+    8
+  ],
+  "library_hashes": {
+    "baseline": "355f88636be05074d9286c171f0c9ee69b4ae630f7670f3acb9282341c5fde0f",
+    "candidate": "e4e6773b968b38c2f679e0f489b967e6f7b99dd18e4beae273d71ff47b8f518b"
+  },
+  "timing": "full Python wrapper outputs; alternating warmed calls; reset/actions/IPC excluded",
+  "results": [
+    {
+      "game": "Microban",
+      "level": 0,
+      "batch": 16,
+      "threads": 8,
+      "seed": 42,
+      "compiled_sha256": "a7700ddc6e206bf4c9993fc9d767cd76b78016c81586a7f37a81ea7abc79d0df",
+      "output_sha256": "d5f106684529c5eed251a6d9c7f31f1a7a8e1750fecea89a3e2b5cbb3857fcff",
+      "samples_s": [
+        [
+          0.024026978760957718,
+          0.023441754281520844,
+          0.023531852290034294,
+          0.023428339511156082,
+          0.023431692272424698,
+          0.02343972958624363,
+          0.023437390103936195,
+          0.02344287931919098,
+          0.02344963140785694
+        ],
+        [
+          0.02334764413535595,
+          0.023273827508091927,
+          0.02326277270913124,
+          0.023214178159832954,
+          0.0232835840433836,
+          0.023247379809617996,
+          0.023279700428247452,
+          0.023271778598427773,
+          0.023232311010360718
+        ]
+      ],
+      "baseline_fps": 204762.8322673719,
+      "candidate_fps": 206258.4077834208,
+      "speedup": 1.0073039403659743
+    },
+    {
+      "game": "Microban",
+      "level": 0,
+      "batch": 16,
+      "threads": 8,
+      "seed": 1042,
+      "compiled_sha256": "a7700ddc6e206bf4c9993fc9d767cd76b78016c81586a7f37a81ea7abc79d0df",
+      "output_sha256": "04e93bf176e0b57931357462b284f10c29ec05e3a57b9bc9a95df96ff9111f91",
+      "samples_s": [
+        [
+          0.02328011952340603,
+          0.02334681898355484,
+          0.02329622022807598,
+          0.023364970460534096,
+          0.02330649271607399,
+          0.023386135697364807,
+          0.023302806541323662,
+          0.023328466340899467,
+          0.023316504433751106
+        ],
+        [
+          0.02321356162428856,
+          0.023268671706318855,
+          0.023214910179376602,
+          0.023263050243258476,
+          0.023191876709461212,
+          0.023198392242193222,
+          0.026852017268538475,
+          0.02348903752863407,
+          0.02320995181798935
+        ]
+      ],
+      "baseline_fps": 205862.7618748848,
+      "candidate_fps": 206763.66881936806,
+      "speedup": 1.0043762501594669
+    }
+  ]
+}

@@ -1,0 +1,25 @@
+{
+  "game": "Memories_Of_Castlemouse",
+  "objects": 29,
+  "layers": 5,
+  "level_shape": [
+    29,
+    13,
+    21
+  ],
+  "compiled_sha256": "2fd30a03c93cf36057c933b370f443475c911970daf549172832c81aeabde1fd",
+  "source_sha256": "7e4fe0a3f44899b64cb97b6fd9a8a550b33acb450cc34ae447b8c1786cd7249f",
+  "compiled_rules": 188,
+  "compiled_groups": 93,
+  "loop_points": 1,
+  "source_rules": 93,
+  "multirow_rules": 4,
+  "max_pattern_rows": 2,
+  "ellipsis_rules": 0,
+  "max_pattern_span": 4,
+  "board_cells": 273,
+  "force_channels": 25,
+  "jax_rule_functions": 188,
+  "jax_rule_groups": 93,
+  "run_rules_on_level_start": false
+}

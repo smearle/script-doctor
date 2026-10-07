@@ -1,0 +1,123 @@
+{
+  "host": "Yalda24",
+  "cpu_affinity": [
+    0,
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7
+  ],
+  "source_hashes": {
+    "scripts/benchmarks/benchmark_cpp_scoring.py": "99c6ab153d0aec49d37d6114603cb2473baeb88c7f65a57356a61ba4545adfd7",
+    "puzzlescript_cpp/__init__.py": "158fa886867977335394dc41755006d7461ab280607d7448027dd720615da078",
+    "scripts/benchmarks/profile_rand_nodejs.py": "1e5e43a879f58e326f16d897c970dd479ed21da7466057e23cc727081420102e",
+    "puzzlescript_nodejs/puzzlescript/engine.js": "b301f87a3647406a7db23c5398629eb7061c75bb31b5bc002271e89cea5c53af"
+  },
+  "idle_workers": "SIGSTOP between requests; only the measured build runs",
+  "thread_environment": {
+    "OMP_WAIT_POLICY": "ACTIVE",
+    "OMP_PROC_BIND": "close",
+    "OMP_PLACES": "cores",
+    "OPENBLAS_NUM_THREADS": "1"
+  },
+  "trials": 9,
+  "seeds": [
+    42,
+    1042
+  ],
+  "steps": 300,
+  "games": [
+    "Slidings"
+  ],
+  "levels": [
+    0
+  ],
+  "batches": [
+    1
+  ],
+  "threads": [
+    1
+  ],
+  "library_hashes": {
+    "baseline": "355f88636be05074d9286c171f0c9ee69b4ae630f7670f3acb9282341c5fde0f",
+    "candidate": "e4e6773b968b38c2f679e0f489b967e6f7b99dd18e4beae273d71ff47b8f518b"
+  },
+  "timing": "full Python wrapper outputs; alternating warmed calls; reset/actions/IPC excluded",
+  "results": [
+    {
+      "game": "Slidings",
+      "level": 0,
+      "batch": 1,
+      "threads": 1,
+      "seed": 42,
+      "compiled_sha256": "0a3f5e38de70922b89d6902879f25d6812fe2266386fabf1e5a2ef5b4228c8f1",
+      "output_sha256": "1e89ad1c6963b303d98a18f6aa0e74e2e4c28aaee16f1f23d76ef26c22856289",
+      "samples_s": [
+        [
+          0.016187401488423347,
+          0.01622593030333519,
+          0.016147809103131294,
+          0.016239207237958908,
+          0.016155466437339783,
+          0.016178268939256668,
+          0.01616719178855419,
+          0.016222186386585236,
+          0.01620088517665863
+        ],
+        [
+          0.015768015757203102,
+          0.01578426919877529,
+          0.01579628884792328,
+          0.015761706978082657,
+          0.01578403078019619,
+          0.015740348026156425,
+          0.015748633071780205,
+          0.015724007040262222,
+          0.015778888016939163
+        ]
+      ],
+      "baseline_fps": 18532.931317886276,
+      "candidate_fps": 19025.85617743024,
+      "speedup": 1.026597242016876
+    },
+    {
+      "game": "Slidings",
+      "level": 0,
+      "batch": 1,
+      "threads": 1,
+      "seed": 1042,
+      "compiled_sha256": "0a3f5e38de70922b89d6902879f25d6812fe2266386fabf1e5a2ef5b4228c8f1",
+      "output_sha256": "9152bdf1a5f121de1ef9c9fe2cc99def48c26af06a14c299c99050cec8096917",
+      "samples_s": [
+        [
+          0.016365157440304756,
+          0.016378073021769524,
+          0.016391942277550697,
+          0.01634807512164116,
+          0.01634567603468895,
+          0.01635001413524151,
+          0.016338076442480087,
+          0.016386134549975395,
+          0.01634150929749012
+        ],
+        [
+          0.015959477052092552,
+          0.015867548063397408,
+          0.015891587361693382,
+          0.015856288373470306,
+          0.01588430441915989,
+          0.01585753820836544,
+          0.01592213660478592,
+          0.015836896374821663,
+          0.01587788388133049
+        ]
+      ],
+      "baseline_fps": 18348.60799009142,
+      "candidate_fps": 18894.20543960178,
+      "speedup": 1.029735086705487
+    }
+  ]
+}

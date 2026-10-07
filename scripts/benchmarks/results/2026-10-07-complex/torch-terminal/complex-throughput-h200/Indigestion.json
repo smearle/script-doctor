@@ -1,0 +1,113 @@
+{
+  "game": "Indigestion",
+  "level": 0,
+  "jax_version": "0.9.0.1",
+  "devices": [
+    "NVIDIA H200"
+  ],
+  "host": "gh109.hpc.nyu.edu",
+  "engine_sha256": "ab92c0a647c6efe9809c98cfecc7110a89b23b6dfdea2e7205603429041654fe",
+  "requested_batches": [
+    16,
+    256,
+    1024,
+    4096
+  ],
+  "trials": 5,
+  "seed": 42,
+  "base_steps": 5000,
+  "min_steps": 100,
+  "max_episode_steps": 2147483647,
+  "timing": "median/IQR of synchronized warmed calls; carry continues across trials",
+  "output_mode": "final_carry",
+  "action_generation": "inside timed scan",
+  "results": [
+    {
+      "batch": 16,
+      "steps": 312,
+      "compile_s": 772.2605369798839,
+      "host": "gh109.hpc.nyu.edu",
+      "argument_bytes": 60648,
+      "output_bytes": 60736,
+      "temporary_bytes": 5306336,
+      "samples_s": [
+        19.157329597044736,
+        19.653763119131327,
+        19.67774008307606,
+        19.595845823874697,
+        19.549714240944013
+      ],
+      "fps_samples": [
+        260.57911540917894,
+        253.99715920767852,
+        253.68766834629525,
+        254.7478707919804,
+        255.34900093552199
+      ],
+      "median_fps": 254.7478707919804,
+      "q25_fps": 253.99715920767852,
+      "q75_fps": 255.34900093552199
+    },
+    {
+      "batch": 256,
+      "steps": 100,
+      "compile_s": 955.8294870781247,
+      "host": "gh109.hpc.nyu.edu",
+      "argument_bytes": 970248,
+      "output_bytes": 970336,
+      "temporary_bytes": 66368992,
+      "samples_s": [
+        8.774152996949852,
+        8.674840237013996,
+        8.86733968113549,
+        8.88231234694831,
+        8.869744574883953
+      ],
+      "fps_samples": [
+        2917.6605432911074,
+        2951.0629937332296,
+        2886.998910672365,
+        2882.132377251445,
+        2886.216145670118
+      ],
+      "median_fps": 2886.998910672365,
+      "q25_fps": 2886.216145670118,
+      "q75_fps": 2917.6605432911074
+    },
+    {
+      "batch": 1024,
+      "steps": 100,
+      "compile_s": 1286.8383950621355,
+      "host": "gh109.hpc.nyu.edu",
+      "argument_bytes": 3880968,
+      "output_bytes": 3881056,
+      "temporary_bytes": 261862632,
+      "samples_s": [
+        15.066292447037995,
+        15.08410437288694,
+        15.117353986948729,
+        15.054108191980049,
+        15.013219462009147
+      ],
+      "fps_samples": [
+        6796.628988847993,
+        6788.603252047222,
+        6773.672170963585,
+        6802.129936501503,
+        6820.655640125859
+      ],
+      "median_fps": 6796.628988847993,
+      "q25_fps": 6788.603252047222,
+      "q75_fps": 6802.129936501503
+    }
+  ],
+  "benchmark_sha256": "464e20595d17e46ef563f8878f7d398af33f7f712604734bd108220a5f8b2e3d",
+  "adaptive": {
+    "factor": 2,
+    "max_batch": 262144,
+    "min_gain": 0.03,
+    "patience": 2,
+    "regression": 0.1
+  },
+  "pending_batch": 4096
+}

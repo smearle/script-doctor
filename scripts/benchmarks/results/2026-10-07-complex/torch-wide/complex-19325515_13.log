@@ -1,0 +1,125 @@
+name, driver_version, memory.total [MiB]
+NVIDIA H200, 610.43.02, 143771 MiB
+/scratch/se2161/script-doctor/.venv/lib/python3.13/site-packages/pydantic/_internal/_generate_schema.py:2249: UnsupportedFieldAttributeWarning: The 'repr' attribute with value False was provided to the `Field()` function, which has no effect in the context it was used. 'repr' is field-specific metadata, and can only be attached to a model field using `Annotated` metadata or by assignment. This may have happened because an `Annotated` type alias using the `type` statement was used, or if the `Field()` function was attached to a single member of a union type.
+  warnings.warn(
+/scratch/se2161/script-doctor/.venv/lib/python3.13/site-packages/pydantic/_internal/_generate_schema.py:2249: UnsupportedFieldAttributeWarning: The 'frozen' attribute with value True was provided to the `Field()` function, which has no effect in the context it was used. 'frozen' is field-specific metadata, and can only be attached to a model field using `Annotated` metadata or by assignment. This may have happened because an `Annotated` type alias using the `type` statement was used, or if the `Field()` function was attached to a single member of a union type.
+  warnings.warn(
+Writing pretty tree to /scratch/se2161/puzzlejax-perf-20261002/complex-wide-20261007/data/pretty_trees/Unconventional_Guns
+Parsed Unconventional_Guns successfully
+Writing pretty tree to /scratch/se2161/puzzlejax-perf-20261002/complex-wide-20261007/data/pretty_trees/Unconventional_Guns
+Parsed Unconventional_Guns successfully
+WARNING:puzzlescript_jax.env:Object zombieplayeru appears multiple times in collision layers.
+WARNING:puzzlescript_jax.env:Object zombieplayerd appears multiple times in collision layers.
+WARNING:puzzlescript_jax.env:Object zombieplayerl appears multiple times in collision layers.
+WARNING:puzzlescript_jax.env:Object zombieplayerr appears multiple times in collision layers.
+Name zombieplayer, referred to in a rule, does not exist.
+Name zombieplayer, referred to in a rule, does not exist.
+Name zombieplayer, referred to in a rule, does not exist.
+Name zombieplayer, referred to in a rule, does not exist.
+Name zombieplayer, referred to in a rule, does not exist.
+Name zombieplayer, referred to in a rule, does not exist.
+Name zombieplayer, referred to in a rule, does not exist.
+Name zombieplayer, referred to in a rule, does not exist.
+Name zombieplayer, referred to in a rule, does not exist.
+Name zombieplayer, referred to in a rule, does not exist.
+{"game": "Unconventional_Guns", "level": 0, "passed": true, "status": "passed", "message": "all steps match", "actions": [0, 1, 2, 3, 4, 0, 1, 2, 3, 4, 0, 1, 2, 3, 4, 0, 1, 2, 3, 4, 0, 1, 2, 3, 4, 0, 1, 2, 3, 4, 0, 1, 2, 3, 4, 0, 1, 2, 3, 4, 0, 3, 3, 2, 2, 4, 0, 3, 1, 0, 2, 4, 3, 3, 3, 3, 2, 0, 4, 2, 2, 1, 0, 4, 3, 3, 2, 4, 2, 2, 2, 1, 0, 2, 4, 0, 4, 4, 1, 3, 0, 3, 3, 1, 0, 4, 2, 4, 3, 3, 3, 0, 1, 2, 2, 0, 2, 0, 3, 3, 4, 3, 1, 4, 2, 1, 4, 1, 0, 2, 3, 0, 2, 0, 3, 2, 1, 1, 2, 3, 4, 2, 0, 4, 3, 3, 0, 1], "comparison": "Original JS versus JAX: board, heuristic and winning flag after every replayed step", "source_hashes": {"puzzlejax/validate_actions.py": "18c597d30a390a68f4f894556b38629ae6c41abd53510572074b2b5b6e17cdc4", "puzzlejax/validate_sols_jax.py": "67c746e254c07c0eccc04764e2a45da61db0dde8f23c66acbdd327b9c2935689", "puzzlescript_jax/env.py": "ab92c0a647c6efe9809c98cfecc7110a89b23b6dfdea2e7205603429041654fe", "PuzzleScript/src/js/compiler.js": "40e2996456a6ca642c89a769ea1a75ae074ccbcb0bcfc0d5fd8d27a88ad26cd7", "PuzzleScript/src/js/engine.js": "2dec5c52816d29f9578f43c939662410a280f54e6b8d464b2d6d734b23e21085", "puzzlescript_nodejs/puzzlescript/engine.js": "b301f87a3647406a7db23c5398629eb7061c75bb31b5bc002271e89cea5c53af", "scripts/benchmarks/validate_complex_game.py": "b28289fa1d48dbfb6a4c251f901158a8b2fc7c69197af4c1193bd4d8f41e8435"}}
+Writing pretty tree to /scratch/se2161/puzzlejax-perf-20261002/complex-wide-20261007/data/pretty_trees/Unconventional_Guns
+Parsed Unconventional_Guns successfully
+Object zombieplayeru appears multiple times in collision layers.
+Object zombieplayerd appears multiple times in collision layers.
+Object zombieplayerl appears multiple times in collision layers.
+Object zombieplayerr appears multiple times in collision layers.
+Name zombieplayer, referred to in a rule, does not exist.
+Name zombieplayer, referred to in a rule, does not exist.
+Name zombieplayer, referred to in a rule, does not exist.
+Name zombieplayer, referred to in a rule, does not exist.
+Name zombieplayer, referred to in a rule, does not exist.
+Name zombieplayer, referred to in a rule, does not exist.
+Name zombieplayer, referred to in a rule, does not exist.
+Name zombieplayer, referred to in a rule, does not exist.
+Name zombieplayer, referred to in a rule, does not exist.
+Name zombieplayer, referred to in a rule, does not exist.
+Compiling batch=16, steps=312
+Compiled in 442.82s; warming up
+{"batch": 16, "steps": 312, "compile_s": 442.82092959503643, "host": "gh124.hpc.nyu.edu", "argument_bytes": 67944, "output_bytes": 68032, "temporary_bytes": 2385640, "samples_s": [3.2363443919457495, 3.2329370761290193, 3.2269923300482333, 3.2145724589936435, 3.2092481038998812], "fps_samples": [1542.481082181343, 1544.1067618851423, 1546.9513061797038, 1552.9281307794192, 1555.5045413702098], "median_fps": 1546.9513061797038, "q25_fps": 1544.1067618851423, "q75_fps": 1552.9281307794192}
+Name zombieplayer, referred to in a rule, does not exist.
+Name zombieplayer, referred to in a rule, does not exist.
+Name zombieplayer, referred to in a rule, does not exist.
+Name zombieplayer, referred to in a rule, does not exist.
+Name zombieplayer, referred to in a rule, does not exist.
+Name zombieplayer, referred to in a rule, does not exist.
+Name zombieplayer, referred to in a rule, does not exist.
+Name zombieplayer, referred to in a rule, does not exist.
+Name zombieplayer, referred to in a rule, does not exist.
+Name zombieplayer, referred to in a rule, does not exist.
+Compiling batch=256, steps=100
+Compiled in 500.01s; warming up
+{"batch": 256, "steps": 100, "compile_s": 500.0094484910369, "host": "gh124.hpc.nyu.edu", "argument_bytes": 1086984, "output_bytes": 1087072, "temporary_bytes": 26689768, "samples_s": [3.615968325175345, 1.9372703281696886, 1.3074695658870041, 1.3079988651443273, 1.3072800680529326], "fps_samples": [7079.708033327037, 13214.469672999428, 19579.805655080494, 19571.882424512074, 19582.643861562676], "median_fps": 19571.882424512074, "q25_fps": 13214.469672999428, "q75_fps": 19579.805655080494}
+Name zombieplayer, referred to in a rule, does not exist.
+Name zombieplayer, referred to in a rule, does not exist.
+Name zombieplayer, referred to in a rule, does not exist.
+Name zombieplayer, referred to in a rule, does not exist.
+Name zombieplayer, referred to in a rule, does not exist.
+Name zombieplayer, referred to in a rule, does not exist.
+Name zombieplayer, referred to in a rule, does not exist.
+Name zombieplayer, referred to in a rule, does not exist.
+Name zombieplayer, referred to in a rule, does not exist.
+Name zombieplayer, referred to in a rule, does not exist.
+Compiling batch=1024, steps=100
+Compiled in 550.54s; warming up
+{"batch": 1024, "steps": 100, "compile_s": 550.5410313329194, "host": "gh124.hpc.nyu.edu", "argument_bytes": 4347912, "output_bytes": 4348000, "temporary_bytes": 105082344, "samples_s": [6.510227427817881, 3.637930026045069, 1.9109383278992027, 1.9189316949341446, 1.917568874079734], "fps_samples": [15729.097199039445, 28147.87510119399, 53586.240071166416, 53363.02499475587, 53400.95022617796], "median_fps": 53363.02499475587, "q25_fps": 28147.87510119399, "q75_fps": 53400.95022617796}
+Name zombieplayer, referred to in a rule, does not exist.
+Name zombieplayer, referred to in a rule, does not exist.
+Name zombieplayer, referred to in a rule, does not exist.
+Name zombieplayer, referred to in a rule, does not exist.
+Name zombieplayer, referred to in a rule, does not exist.
+Name zombieplayer, referred to in a rule, does not exist.
+Name zombieplayer, referred to in a rule, does not exist.
+Name zombieplayer, referred to in a rule, does not exist.
+Name zombieplayer, referred to in a rule, does not exist.
+Name zombieplayer, referred to in a rule, does not exist.
+Compiling batch=4096, steps=100
+E1007 03:19:19.252888 3734064 slow_operation_alarm.cc:73] Constant folding an instruction is taking > 1s:
+
+  %transpose.20427 = pred[141,4096,8,7]{0,3,2,1} transpose(%constant.264954), dimensions={0,1,2,3}, metadata={op_name="jit(rollout)/while/body/closed_call/vmap(jit(step))/jit(step_env)/jit(tick_fn)/cond/jit(rollout)/while/body/closed_call/vmap(jit(step))/jit(step_env)/jit(tick_fn)/cond/branch_1_fun/while/body/while/body/vmap(vmap())/scatter" stack_frame_id=285}
+
+This isn't necessarily a bug; constant-folding is inherently a trade-off between compilation time and speed at runtime. XLA has some guards that attempt to keep constant folding from taking too long, but fundamentally you'll always be able to come up with an input program that takes a long time.
+
+If you'd like to file a bug, run with envvar XLA_FLAGS=--xla_dump_to=/tmp/foo and attach the results.
+E1007 03:19:19.278674 3732515 slow_operation_alarm.cc:140] The operation took 1.025889085s
+Constant folding an instruction is taking > 1s:
+
+  %transpose.20427 = pred[141,4096,8,7]{0,3,2,1} transpose(%constant.264954), dimensions={0,1,2,3}, metadata={op_name="jit(rollout)/while/body/closed_call/vmap(jit(step))/jit(step_env)/jit(tick_fn)/cond/jit(rollout)/while/body/closed_call/vmap(jit(step))/jit(step_env)/jit(tick_fn)/cond/branch_1_fun/while/body/while/body/vmap(vmap())/scatter" stack_frame_id=285}
+
+This isn't necessarily a bug; constant-folding is inherently a trade-off between compilation time and speed at runtime. XLA has some guards that attempt to keep constant folding from taking too long, but fundamentally you'll always be able to come up with an input program that takes a long time.
+
+If you'd like to file a bug, run with envvar XLA_FLAGS=--xla_dump_to=/tmp/foo and attach the results.
+Compiled in 838.00s; warming up
+{"batch": 4096, "steps": 100, "compile_s": 838.001026095124, "host": "gh124.hpc.nyu.edu", "argument_bytes": 17391624, "output_bytes": 17391712, "temporary_bytes": 417904344, "samples_s": [18.099600681103766, 11.610965725034475, 4.5844174639787525, 4.592752960044891, 4.590969562996179], "fps_samples": [22630.333520431093, 35276.996737391004, 89346.13900639708, 89183.9825837261, 89218.6267801534], "median_fps": 89183.9825837261, "q25_fps": 35276.996737391004, "q75_fps": 89218.6267801534}
+Name zombieplayer, referred to in a rule, does not exist.
+Name zombieplayer, referred to in a rule, does not exist.
+Name zombieplayer, referred to in a rule, does not exist.
+Name zombieplayer, referred to in a rule, does not exist.
+Name zombieplayer, referred to in a rule, does not exist.
+Name zombieplayer, referred to in a rule, does not exist.
+Name zombieplayer, referred to in a rule, does not exist.
+Name zombieplayer, referred to in a rule, does not exist.
+Name zombieplayer, referred to in a rule, does not exist.
+Name zombieplayer, referred to in a rule, does not exist.
+Compiling batch=8192, steps=100
+Compiled in 453.36s; warming up
+{"batch": 8192, "steps": 100, "compile_s": 453.3567017209716, "host": "gh124.hpc.nyu.edu", "argument_bytes": 34783240, "output_bytes": 34783328, "temporary_bytes": 836276440, "samples_s": [32.83661992801353, 25.438989102840424, 9.300385760841891, 7.858813705854118, 7.8447282570414245], "fps_samples": [24947.756553381587, 32202.537478524693, 88082.3678786679, 104239.65125802242, 104426.81673067342], "median_fps": 88082.3678786679, "q25_fps": 32202.537478524693, "q75_fps": 104239.65125802242}
+Name zombieplayer, referred to in a rule, does not exist.
+Name zombieplayer, referred to in a rule, does not exist.
+Name zombieplayer, referred to in a rule, does not exist.
+Name zombieplayer, referred to in a rule, does not exist.
+Name zombieplayer, referred to in a rule, does not exist.
+Name zombieplayer, referred to in a rule, does not exist.
+Name zombieplayer, referred to in a rule, does not exist.
+Name zombieplayer, referred to in a rule, does not exist.
+Name zombieplayer, referred to in a rule, does not exist.
+Name zombieplayer, referred to in a rule, does not exist.
+Compiling batch=16384, steps=100
+Compiled in 502.41s; warming up
+{"batch": 16384, "steps": 100, "compile_s": 502.40921457787044, "host": "gh124.hpc.nyu.edu", "argument_bytes": 69566472, "output_bytes": 69566560, "temporary_bytes": 1668650712, "samples_s": [100.87599507416598, 85.99320521391928, 45.947421034099534, 24.37471643090248, 24.347543547162786], "fps_samples": [16241.723303898183, 19052.668125630007, 35658.14931776201, 67217.19223460676, 67292.20945128662], "median_fps": 35658.14931776201, "q25_fps": 19052.668125630007, "q75_fps": 67217.19223460676}
+Stopped: regression

@@ -1,0 +1,25 @@
+{
+  "game": "ParaLands",
+  "objects": 78,
+  "layers": 31,
+  "level_shape": [
+    78,
+    13,
+    12
+  ],
+  "compiled_sha256": "3325f28e495c6682e44b4f68983b3336c7d1f29dd6724e5d9aea3ccd65d94da0",
+  "source_sha256": "9feaebd333141fb0e4d255a96969f035578bd353707b15503ffebc02f8f7dbc6",
+  "compiled_rules": 516,
+  "compiled_groups": 125,
+  "loop_points": 0,
+  "source_rules": 131,
+  "multirow_rules": 61,
+  "max_pattern_rows": 2,
+  "ellipsis_rules": 12,
+  "max_pattern_span": 3,
+  "board_cells": 156,
+  "force_channels": 155,
+  "jax_rule_functions": 350,
+  "jax_rule_groups": 125,
+  "run_rules_on_level_start": true
+}

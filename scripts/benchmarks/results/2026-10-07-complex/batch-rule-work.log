@@ -1,0 +1,2 @@
+Sokoboros {"env_total_percentiles": {"min": 20.0, "p50": 28.0, "p90": 36.0, "p99": 44.0, "max": 55.0}, "mean_env_total": 29.640625, "mean_per_step_max_over_mean": 2.7301367804713377}
+Vacuum {"env_total_percentiles": {"min": 4706.0, "p50": 5137.5, "p90": 6021.0, "p99": 6612.45, "max": 6908.0}, "mean_env_total": 5296.875, "mean_per_step_max_over_mean": 2.3073104782753835}

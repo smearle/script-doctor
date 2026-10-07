@@ -1,0 +1,25 @@
+{
+  "game": "Take_Heart_Lass",
+  "objects": 14,
+  "layers": 3,
+  "level_shape": [
+    14,
+    6,
+    6
+  ],
+  "compiled_sha256": "3544524044e5bcde8c34596fe530b20cdcea9f649b2935818b16637a5080fa3f",
+  "source_sha256": "95cdd04a65681c281d96531357871c061b80623dd89fa58179d1d016788064ff",
+  "compiled_rules": 94,
+  "compiled_groups": 17,
+  "loop_points": 0,
+  "source_rules": 17,
+  "multirow_rules": 0,
+  "max_pattern_rows": 1,
+  "ellipsis_rules": 0,
+  "max_pattern_span": 2,
+  "board_cells": 36,
+  "force_channels": 15,
+  "jax_rule_functions": 78,
+  "jax_rule_groups": 17,
+  "run_rules_on_level_start": false
+}

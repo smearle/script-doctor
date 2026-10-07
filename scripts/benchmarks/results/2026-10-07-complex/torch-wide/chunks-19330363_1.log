@@ -1,0 +1,16 @@
+Initializing Vacuum, batch=256
+Writing pretty tree to /scratch/se2161/puzzlejax-perf-20261002/complex-wide-20261007/data/pretty_trees/Vacuum
+Parsed Vacuum successfully
+Compiling monolithic rollout
+E1007 05:19:30.470906  849374 slow_operation_alarm.cc:73] 
+********************************
+[Compiling module jit_rollout for GPU] Very slow compile? If you want to file a bug, run with envvar XLA_FLAGS=--xla_dump_to=/tmp/foo and attach the results.
+********************************
+E1007 05:20:39.125506  839317 slow_operation_alarm.cc:140] The operation took 3m8.65469149s
+
+********************************
+[Compiling module jit_rollout for GPU] Very slow compile? If you want to file a bug, run with envvar XLA_FLAGS=--xla_dump_to=/tmp/foo and attach the results.
+********************************
+Compiling chunk_size=16
+Exact outputs match; timing
+{"game": "Vacuum", "batch": 256, "chunk_size": 16, "steps": 16, "mode": "full", "monolithic": {"compile_s": 1119.0409933640622, "temporary_bytes": 1442471864, "output_bytes": 1453436640, "median_s": 21.79208368109539, "min_s": 21.774647864047438, "max_s": 21.799101579003036, "env_steps_per_s": 187.95816223637556}, "chunked": {"compile_s": 1073.382099661976, "temporary_bytes": 1456344808, "output_bytes": 1453436640, "median_s": 29.472233219072223, "min_s": 29.440343560185283, "max_s": 29.769427699036896, "env_steps_per_s": 138.97827048102263}, "speedup": 0.7394106689883679}

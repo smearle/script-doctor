@@ -1,0 +1,32 @@
+name, driver_version, memory.total [MiB]
+NVIDIA H200, 610.43.02, 143771 MiB
+/scratch/se2161/script-doctor/.venv/lib/python3.13/site-packages/pydantic/_internal/_generate_schema.py:2249: UnsupportedFieldAttributeWarning: The 'repr' attribute with value False was provided to the `Field()` function, which has no effect in the context it was used. 'repr' is field-specific metadata, and can only be attached to a model field using `Annotated` metadata or by assignment. This may have happened because an `Annotated` type alias using the `type` statement was used, or if the `Field()` function was attached to a single member of a union type.
+  warnings.warn(
+/scratch/se2161/script-doctor/.venv/lib/python3.13/site-packages/pydantic/_internal/_generate_schema.py:2249: UnsupportedFieldAttributeWarning: The 'frozen' attribute with value True was provided to the `Field()` function, which has no effect in the context it was used. 'frozen' is field-specific metadata, and can only be attached to a model field using `Annotated` metadata or by assignment. This may have happened because an `Annotated` type alias using the `type` statement was used, or if the `Field()` function was attached to a single member of a union type.
+  warnings.warn(
+Writing pretty tree to /scratch/se2161/puzzlejax-perf-20261002/complex-20261007/data/pretty_trees/castlecloset
+Parsed castlecloset successfully
+Writing pretty tree to /scratch/se2161/puzzlejax-perf-20261002/complex-20261007/data/pretty_trees/castlecloset
+Parsed castlecloset successfully
+{"game": "castlecloset", "level": 0, "passed": true, "message": "all steps match", "actions": [0, 1, 2, 3, 4, 0, 1, 2, 3, 4, 0, 1, 2, 3, 4, 0, 1, 2, 3, 4, 0, 1, 2, 3, 4, 0, 1, 2, 3, 4, 0, 1, 2, 3, 4, 0, 1, 2, 3, 4, 0, 3, 3, 2, 2, 4, 0, 3, 1, 0, 2, 4, 3, 3, 3, 3, 2, 0, 4, 2, 2, 1, 0, 4, 3, 3, 2, 4, 2, 2, 2, 1, 0, 2, 4, 0, 4, 4, 1, 3, 0, 3, 3, 1, 0, 4, 2, 4, 3, 3, 3, 0, 1, 2, 2, 0, 2, 0, 3, 3, 4, 3, 1, 4, 2, 1, 4, 1, 0, 2, 3, 0, 2, 0, 3, 2, 1, 1, 2, 3, 4, 2, 0, 4, 3, 3, 0, 1], "comparison": "Original JS versus JAX: board, heuristic and winning flag after every replayed step", "source_hashes": {"puzzlejax/validate_actions.py": "18c597d30a390a68f4f894556b38629ae6c41abd53510572074b2b5b6e17cdc4", "puzzlescript_jax/env.py": "ab92c0a647c6efe9809c98cfecc7110a89b23b6dfdea2e7205603429041654fe", "puzzlescript_nodejs/puzzlescript/engine.js": "b301f87a3647406a7db23c5398629eb7061c75bb31b5bc002271e89cea5c53af", "scripts/benchmarks/validate_complex_game.py": "8dd84e4547f91e7ca54b172a31c0bc4f975efa78f5a00ff1d1d7ebf9d81cbc9e"}}
+Writing pretty tree to /scratch/se2161/puzzlejax-perf-20261002/complex-20261007/data/pretty_trees/castlecloset
+Parsed castlecloset successfully
+Compiling batch=16, steps=312
+Compiled in 314.00s; warming up
+{"batch": 16, "steps": 312, "compile_s": 314.0012709470466, "host": "gh120.hpc.nyu.edu", "argument_bytes": 240360, "output_bytes": 240448, "temporary_bytes": 2779232, "samples_s": [2.753646651050076, 2.7667163440492004, 2.7607365450821817, 2.782893531024456, 2.7492566278669983], "fps_samples": [1812.8687637160529, 1804.3049518744692, 1808.2131049021912, 1793.8163800906584, 1815.7635592836696], "median_fps": 1808.2131049021912, "q25_fps": 1804.3049518744692, "q75_fps": 1812.8687637160529}
+Compiling batch=256, steps=100
+Compiled in 267.34s; warming up
+{"batch": 256, "steps": 100, "compile_s": 267.3397422230337, "host": "gh120.hpc.nyu.edu", "argument_bytes": 3845640, "output_bytes": 3845728, "temporary_bytes": 35023712, "samples_s": [1.5217425799928606, 1.5129199288785458, 1.5321013221982867, 1.5488104231189936, 1.580666309921071], "fps_samples": [16822.81900800864, 16920.921928086464, 16709.077675925935, 16528.814384168938, 16195.701672972527], "median_fps": 16709.077675925935, "q25_fps": 16528.814384168938, "q75_fps": 16822.81900800864}
+Compiling batch=1024, steps=100
+Compiled in 269.97s; warming up
+{"batch": 1024, "steps": 100, "compile_s": 269.96881042490713, "host": "gh120.hpc.nyu.edu", "argument_bytes": 15382536, "output_bytes": 15382624, "temporary_bytes": 138265048, "samples_s": [2.629467570921406, 2.7279789650347084, 2.8450724170543253, 2.9488914471585304, 3.0337175980675966], "fps_samples": [38943.24506315073, 37536.94633004516, 35992.05397591281, 34724.91335639696, 33753.965782848834], "median_fps": 35992.05397591281, "q25_fps": 34724.91335639696, "q75_fps": 37536.94633004516}
+Compiling batch=4096, steps=100
+Compiled in 342.37s; warming up
+{"batch": 4096, "steps": 100, "compile_s": 342.3734072020743, "host": "gh120.hpc.nyu.edu", "argument_bytes": 61530120, "output_bytes": 61530208, "temporary_bytes": 551694280, "samples_s": [7.03188833897002, 7.725883384002373, 8.38597914413549, 8.794639013940468, 9.099342040950432], "fps_samples": [58248.934035263024, 53016.59106687264, 48843.43175196695, 46573.827459062166, 45014.24368450458], "median_fps": 48843.43175196695, "q25_fps": 46573.827459062166, "q75_fps": 53016.59106687264}
+Compiling batch=8192, steps=100
+Compiled in 439.59s; warming up
+{"batch": 8192, "steps": 100, "compile_s": 439.59022748610005, "host": "gh120.hpc.nyu.edu", "argument_bytes": 123060232, "output_bytes": 123060320, "temporary_bytes": 1103175624, "samples_s": [13.392481701914221, 14.994865790009499, 16.478138140868396, 17.253208711044863, 17.58444988890551], "fps_samples": [61168.64806937983, 54632.03282191438, 49714.3544371833, 47481.023021275956, 46586.615172809856], "median_fps": 49714.3544371833, "q25_fps": 47481.023021275956, "q75_fps": 54632.03282191438}
+Compiling batch=16384, steps=100
+Compiled in 622.71s; warming up
+{"batch": 16384, "steps": 100, "compile_s": 622.7073612699751, "host": "gh120.hpc.nyu.edu", "argument_bytes": 246120456, "output_bytes": 246120544, "temporary_bytes": 2205295560, "samples_s": [27.53299596090801, 31.352298555895686, 33.80168159492314, 34.912773268064484, 35.479173665866256], "fps_samples": [59506.78241940102, 52257.73150504478, 48470.961286318976, 46928.38312843747, 46179.20404319532], "median_fps": 48470.961286318976, "q25_fps": 46928.38312843747, "q75_fps": 52257.73150504478}
+Stopped: plateau

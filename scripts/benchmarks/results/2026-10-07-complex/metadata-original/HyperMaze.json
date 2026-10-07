@@ -1,0 +1,25 @@
+{
+  "game": "HyperMaze",
+  "objects": 42,
+  "layers": 3,
+  "level_shape": [
+    42,
+    20,
+    50
+  ],
+  "compiled_sha256": "4942d931e16ead8883df7e666df89520961be8150039b535322af759594d521d",
+  "source_sha256": "2c91497a3337622755a69cd443fc02c1a7fac273ca340a879d614e89bce9dd0d",
+  "compiled_rules": 32,
+  "compiled_groups": 8,
+  "loop_points": 0,
+  "source_rules": 8,
+  "multirow_rules": 0,
+  "max_pattern_rows": 1,
+  "ellipsis_rules": 0,
+  "max_pattern_span": 19,
+  "board_cells": 1000,
+  "force_channels": 15,
+  "jax_rule_functions": 32,
+  "jax_rule_groups": 8,
+  "run_rules_on_level_start": false
+}

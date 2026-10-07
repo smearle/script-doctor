@@ -1,0 +1,37 @@
+{
+  "configurations": 138,
+  "paired_transitions": 600600,
+  "speedup_min": 0.9897804863469806,
+  "speedup_max": 1.7088352936882527,
+  "original_js_fixture_tests": 7,
+  "cpp_focused_tests": 58,
+  "compiler_versions": "Wide sweep uses dfdeabcd; three games whose compiled output differs are also checked with pinned 4176d350 at batch64. All performance curves use 4176d350.",
+  "main_sample_configurations": 128,
+  "main_sample_paired_transitions": 445400,
+  "blocks_long_recheck": {
+    "steps": 10000,
+    "trials": 21,
+    "seeds": [
+      42,
+      1042
+    ],
+    "speedups": [
+      1.0037500627189613,
+      1.0057600516380427
+    ]
+  },
+  "cache_switch_wide_tests": 29,
+  "reporting_tests": 16,
+  "notsnake_long_recheck": {
+    "steps": 10000,
+    "trials": 21,
+    "seeds": [
+      42,
+      1042
+    ],
+    "speedups": [
+      1.0138143881765134,
+      1.0124994588608007
+    ]
+  }
+}

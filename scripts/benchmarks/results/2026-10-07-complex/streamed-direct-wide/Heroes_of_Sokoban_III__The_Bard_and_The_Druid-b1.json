@@ -1,0 +1,123 @@
+{
+  "host": "Yalda24",
+  "cpu_affinity": [
+    0,
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7
+  ],
+  "source_hashes": {
+    "scripts/benchmarks/benchmark_cpp_scoring.py": "99c6ab153d0aec49d37d6114603cb2473baeb88c7f65a57356a61ba4545adfd7",
+    "puzzlescript_cpp/__init__.py": "158fa886867977335394dc41755006d7461ab280607d7448027dd720615da078",
+    "scripts/benchmarks/profile_rand_nodejs.py": "1e5e43a879f58e326f16d897c970dd479ed21da7466057e23cc727081420102e",
+    "puzzlescript_nodejs/puzzlescript/engine.js": "b301f87a3647406a7db23c5398629eb7061c75bb31b5bc002271e89cea5c53af"
+  },
+  "idle_workers": "SIGSTOP between requests; only the measured build runs",
+  "thread_environment": {
+    "OMP_WAIT_POLICY": "ACTIVE",
+    "OMP_PROC_BIND": "close",
+    "OMP_PLACES": "cores",
+    "OPENBLAS_NUM_THREADS": "1"
+  },
+  "trials": 9,
+  "seeds": [
+    42,
+    1042
+  ],
+  "steps": 300,
+  "games": [
+    "Heroes_of_Sokoban_III__The_Bard_and_The_Druid"
+  ],
+  "levels": [
+    0
+  ],
+  "batches": [
+    1
+  ],
+  "threads": [
+    1
+  ],
+  "library_hashes": {
+    "baseline": "355f88636be05074d9286c171f0c9ee69b4ae630f7670f3acb9282341c5fde0f",
+    "candidate": "e4e6773b968b38c2f679e0f489b967e6f7b99dd18e4beae273d71ff47b8f518b"
+  },
+  "timing": "full Python wrapper outputs; alternating warmed calls; reset/actions/IPC excluded",
+  "results": [
+    {
+      "game": "Heroes_of_Sokoban_III__The_Bard_and_The_Druid",
+      "level": 0,
+      "batch": 1,
+      "threads": 1,
+      "seed": 42,
+      "compiled_sha256": "722f3a60d5e7af147ff3e76bb9a88c92b07e3101d1a6d635082ddfee7c314f6e",
+      "output_sha256": "1b5cd163ac05c6e92de312cb679fe75833fe91a2d585fa2eeef8d83a744a7125",
+      "samples_s": [
+        [
+          0.05400143191218376,
+          0.053998302668333054,
+          0.0539128165692091,
+          0.053983597084879875,
+          0.05395801179111004,
+          0.05396091938018799,
+          0.053939180448651314,
+          0.05415448732674122,
+          0.0540420226752758
+        ],
+        [
+          0.053139545023441315,
+          0.053117845207452774,
+          0.05318908393383026,
+          0.05313021317124367,
+          0.05315122939646244,
+          0.0530612263828516,
+          0.053225113078951836,
+          0.053167203441262245,
+          0.05016486160457134
+        ]
+      ],
+      "baseline_fps": 5557.243611023212,
+      "candidate_fps": 5645.513145956777,
+      "speedup": 1.0158836900290777
+    },
+    {
+      "game": "Heroes_of_Sokoban_III__The_Bard_and_The_Druid",
+      "level": 0,
+      "batch": 1,
+      "threads": 1,
+      "seed": 1042,
+      "compiled_sha256": "722f3a60d5e7af147ff3e76bb9a88c92b07e3101d1a6d635082ddfee7c314f6e",
+      "output_sha256": "1e020b398854a9d5768d03f1e85470b6c0e0efb52fa8187e88d66f43c712c8bb",
+      "samples_s": [
+        [
+          0.0474143922328949,
+          0.04741075076162815,
+          0.04737582989037037,
+          0.04742265306413174,
+          0.047278186306357384,
+          0.04732893593609333,
+          0.04725782759487629,
+          0.047332366928458214,
+          0.04727307893335819
+        ],
+        [
+          0.0467708557844162,
+          0.046815963461995125,
+          0.046871207654476166,
+          0.046806370839476585,
+          0.04677207954227924,
+          0.0467201117426157,
+          0.0467798188328743,
+          0.046708764508366585,
+          0.046792808920145035
+        ]
+      ],
+      "baseline_fps": 6338.15757520521,
+      "candidate_fps": 6413.021843282052,
+      "speedup": 1.011811676688145
+    }
+  ]
+}

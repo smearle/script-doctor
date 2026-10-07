@@ -1,0 +1,123 @@
+{
+  "host": "Yalda24",
+  "cpu_affinity": [
+    0,
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7
+  ],
+  "source_hashes": {
+    "scripts/benchmarks/benchmark_cpp_scoring.py": "99c6ab153d0aec49d37d6114603cb2473baeb88c7f65a57356a61ba4545adfd7",
+    "puzzlescript_cpp/__init__.py": "158fa886867977335394dc41755006d7461ab280607d7448027dd720615da078",
+    "scripts/benchmarks/profile_rand_nodejs.py": "1e5e43a879f58e326f16d897c970dd479ed21da7466057e23cc727081420102e",
+    "puzzlescript_nodejs/puzzlescript/engine.js": "b301f87a3647406a7db23c5398629eb7061c75bb31b5bc002271e89cea5c53af"
+  },
+  "idle_workers": "SIGSTOP between requests; only the measured build runs",
+  "thread_environment": {
+    "OMP_WAIT_POLICY": "ACTIVE",
+    "OMP_PROC_BIND": "close",
+    "OMP_PLACES": "cores",
+    "OPENBLAS_NUM_THREADS": "1"
+  },
+  "trials": 9,
+  "seeds": [
+    42,
+    1042
+  ],
+  "steps": 300,
+  "games": [
+    "Sokoboros"
+  ],
+  "levels": [
+    0
+  ],
+  "batches": [
+    16
+  ],
+  "threads": [
+    8
+  ],
+  "library_hashes": {
+    "baseline": "355f88636be05074d9286c171f0c9ee69b4ae630f7670f3acb9282341c5fde0f",
+    "candidate": "e4e6773b968b38c2f679e0f489b967e6f7b99dd18e4beae273d71ff47b8f518b"
+  },
+  "timing": "full Python wrapper outputs; alternating warmed calls; reset/actions/IPC excluded",
+  "results": [
+    {
+      "game": "Sokoboros",
+      "level": 0,
+      "batch": 16,
+      "threads": 8,
+      "seed": 42,
+      "compiled_sha256": "f9a781a672514e600c916a8f3b2f0107118739c8d132db02d156c7f10450a100",
+      "output_sha256": "fc69dc35011d1c6ade2aef7c8a83b06e36f9fef4658fdcee35f8cdc04d614c40",
+      "samples_s": [
+        [
+          0.6449569333344698,
+          0.6369699332863092,
+          0.6383019629865885,
+          0.6412708330899477,
+          0.6415534447878599,
+          0.6367977801710367,
+          0.6380137354135513,
+          0.6373712662607431,
+          0.644118569791317
+        ],
+        [
+          0.6414257176220417,
+          0.6408306732773781,
+          0.6401686053723097,
+          0.6405925266444683,
+          0.6392236091196537,
+          0.6393982898443937,
+          0.6395523305982351,
+          0.639821495860815,
+          0.6396999470889568
+        ]
+      ],
+      "baseline_fps": 7519.9518070428585,
+      "candidate_fps": 7502.092428986129,
+      "speedup": 0.9976250674851396
+    },
+    {
+      "game": "Sokoboros",
+      "level": 0,
+      "batch": 16,
+      "threads": 8,
+      "seed": 1042,
+      "compiled_sha256": "f9a781a672514e600c916a8f3b2f0107118739c8d132db02d156c7f10450a100",
+      "output_sha256": "0b951554c71028619f4c7c8de57e91f5285e0f5755d9d4c04dd0458ce274654e",
+      "samples_s": [
+        [
+          0.6397863999009132,
+          0.6356559805572033,
+          0.6376140173524618,
+          0.6388507001101971,
+          0.6379319112747908,
+          0.6351801101118326,
+          0.6380313467234373,
+          0.6359482817351818,
+          0.6382809542119503
+        ],
+        [
+          0.639109555631876,
+          0.6385719552636147,
+          0.6399551276117563,
+          0.6414310466498137,
+          0.6388020012527704,
+          0.6377688050270081,
+          0.6396253947168589,
+          0.6395267825573683,
+          0.6388208661228418
+        ]
+      ],
+      "baseline_fps": 7524.313982675791,
+      "candidate_fps": 7510.449433437632,
+      "speedup": 0.9981573670011538
+    }
+  ]
+}

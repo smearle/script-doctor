@@ -1,0 +1,25 @@
+{
+  "game": "Transition",
+  "objects": 49,
+  "layers": 9,
+  "level_shape": [
+    49,
+    13,
+    26
+  ],
+  "compiled_sha256": "3668f0f497dfd8592fedb2201be56bc4b2f28160d797ca42a64e7c858b34da76",
+  "source_sha256": "5ef0ff70518b763b15cbd6392cd28c3f8621ca60417f835d71a9082e2fd80fea",
+  "compiled_rules": 95,
+  "compiled_groups": 68,
+  "loop_points": 0,
+  "source_rules": 68,
+  "multirow_rules": 81,
+  "max_pattern_rows": 3,
+  "ellipsis_rules": 41,
+  "max_pattern_span": 3,
+  "board_cells": 338,
+  "force_channels": 45,
+  "jax_rule_functions": 95,
+  "jax_rule_groups": 68,
+  "run_rules_on_level_start": true
+}

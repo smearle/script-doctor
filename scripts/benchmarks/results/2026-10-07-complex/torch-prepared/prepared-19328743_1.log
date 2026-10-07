@@ -1,0 +1,77 @@
+name, driver_version, memory.total [MiB]
+NVIDIA H200, 610.43.02, 143771 MiB
+/scratch/se2161/script-doctor/.venv/lib/python3.13/site-packages/pydantic/_internal/_generate_schema.py:2249: UnsupportedFieldAttributeWarning: The 'repr' attribute with value False was provided to the `Field()` function, which has no effect in the context it was used. 'repr' is field-specific metadata, and can only be attached to a model field using `Annotated` metadata or by assignment. This may have happened because an `Annotated` type alias using the `type` statement was used, or if the `Field()` function was attached to a single member of a union type.
+  warnings.warn(
+/scratch/se2161/script-doctor/.venv/lib/python3.13/site-packages/pydantic/_internal/_generate_schema.py:2249: UnsupportedFieldAttributeWarning: The 'frozen' attribute with value True was provided to the `Field()` function, which has no effect in the context it was used. 'frozen' is field-specific metadata, and can only be attached to a model field using `Annotated` metadata or by assignment. This may have happened because an `Annotated` type alias using the `type` statement was used, or if the `Field()` function was attached to a single member of a union type.
+  warnings.warn(
+Writing pretty tree to /scratch/se2161/puzzlejax-perf-20261002/complex-prepared-20261007/data/pretty_trees/Magnet_Jack
+Parsed Magnet_Jack successfully
+Writing pretty tree to /scratch/se2161/puzzlejax-perf-20261002/complex-prepared-20261007/data/pretty_trees/Magnet_Jack
+Parsed Magnet_Jack successfully
+{"game": "Magnet_Jack", "level": 0, "passed": true, "status": "passed", "message": "all 129 states match through the first win or action limit", "actions": [0, 1, 2, 3, 4, 0, 1, 2, 3, 4, 0, 1, 2, 3, 4, 0, 1, 2, 3, 4, 0, 1, 2, 3, 4, 0, 1, 2, 3, 4, 0, 1, 2, 3, 4, 0, 1, 2, 3, 4, 0, 3, 3, 2, 2, 4, 0, 3, 1, 0, 2, 4, 3, 3, 3, 3, 2, 0, 4, 2, 2, 1, 0, 4, 3, 3, 2, 4, 2, 2, 2, 1, 0, 2, 4, 0, 4, 4, 1, 3, 0, 3, 3, 1, 0, 4, 2, 4, 3, 3, 3, 0, 1, 2, 2, 0, 2, 0, 3, 3, 4, 3, 1, 4, 2, 1, 4, 1, 0, 2, 3, 0, 2, 0, 3, 2, 1, 1, 2, 3, 4, 2, 0, 4, 3, 3, 0, 1], "stop_on_win": true, "prepare_params": true, "comparison": "Original JS versus JAX: board, heuristic and winning flag after every replayed step", "source_hashes": {"puzzlejax/validate_actions.py": "0367788d2cb3eb9c75c0f4d56328adccf8ba88576f6b7300d7d0da17d722ae25", "puzzlejax/validate_sols_jax.py": "67c746e254c07c0eccc04764e2a45da61db0dde8f23c66acbdd327b9c2935689", "puzzlescript_jax/env.py": "d06ceb53b0c4c615bc5a541c96ef3631b5640c53767a5942e0ba2d33b513ffeb", "PuzzleScript/src/js/compiler.js": "40e2996456a6ca642c89a769ea1a75ae074ccbcb0bcfc0d5fd8d27a88ad26cd7", "PuzzleScript/src/js/engine.js": "2dec5c52816d29f9578f43c939662410a280f54e6b8d464b2d6d734b23e21085", "puzzlescript_nodejs/puzzlescript/engine.js": "b301f87a3647406a7db23c5398629eb7061c75bb31b5bc002271e89cea5c53af", "scripts/benchmarks/validate_complex_game.py": "b026cb7056de2a04bb698c5872a407d59d21e43e06eaded1eb9d4d40773c4bdd"}}
+Writing pretty tree to /scratch/se2161/puzzlejax-perf-20261002/complex-prepared-20261007/data/pretty_trees/Magnet_Jack
+Parsed Magnet_Jack successfully
+Compiling batch=16, steps=312
+Compiled in 15.48s; warming up
+{"batch": 16, "steps": 312, "compile_s": 15.477770801167935, "host": "gh131.hpc.nyu.edu", "argument_bytes": 87784, "output_bytes": 87872, "temporary_bytes": 1312608, "samples_s": [0.5155347969848663, 0.5073302399832755, 0.524002811871469, 0.5392957350704819, 0.5364889609627426], "fps_samples": [9683.14850752265, 9839.744621106292, 9526.66643556957, 9256.516740944711, 9304.944487658671], "median_fps": 9526.66643556957, "q25_fps": 9304.944487658671, "q75_fps": 9683.14850752265}
+Compiling batch=256, steps=100
+Compiled in 18.31s; warming up
+{"batch": 256, "steps": 100, "compile_s": 18.314437369117513, "host": "gh131.hpc.nyu.edu", "argument_bytes": 1404424, "output_bytes": 1404512, "temporary_bytes": 19691104, "samples_s": [0.2523818099871278, 0.25314012612216175, 0.24631198309361935, 0.24778229114599526, 0.24744070717133582], "fps_samples": [101433.61758640877, 101129.75920556275, 103933.23003806047, 103316.50370008194, 103459.12882585543], "median_fps": 103316.50370008194, "q25_fps": 101433.61758640877, "q75_fps": 103459.12882585543}
+Compiling batch=1024, steps=100
+E1007 03:42:49.426548 1844708 slow_operation_alarm.cc:73] Constant folding an instruction is taking > 1s:
+
+  %reduce_and.8 = pred[1024]{0} reduce(%broadcast.10912, %constant.14336), dimensions={1,2,3}, to_apply=%region_819.1005, metadata={op_name="jit(rollout)/while/body/closed_call/vmap(jit(step))/jit(step_env)/jit(reset)/reduce_and" stack_frame_id=307}
+
+This isn't necessarily a bug; constant-folding is inherently a trade-off between compilation time and speed at runtime. XLA has some guards that attempt to keep constant folding from taking too long, but fundamentally you'll always be able to come up with an input program that takes a long time.
+
+If you'd like to file a bug, run with envvar XLA_FLAGS=--xla_dump_to=/tmp/foo and attach the results.
+E1007 03:42:51.304865 1840999 slow_operation_alarm.cc:140] The operation took 2.879301263s
+Constant folding an instruction is taking > 1s:
+
+  %reduce_and.8 = pred[1024]{0} reduce(%broadcast.10912, %constant.14336), dimensions={1,2,3}, to_apply=%region_819.1005, metadata={op_name="jit(rollout)/while/body/closed_call/vmap(jit(step))/jit(step_env)/jit(reset)/reduce_and" stack_frame_id=307}
+
+This isn't necessarily a bug; constant-folding is inherently a trade-off between compilation time and speed at runtime. XLA has some guards that attempt to keep constant folding from taking too long, but fundamentally you'll always be able to come up with an input program that takes a long time.
+
+If you'd like to file a bug, run with envvar XLA_FLAGS=--xla_dump_to=/tmp/foo and attach the results.
+Compiled in 20.82s; warming up
+{"batch": 1024, "steps": 100, "compile_s": 20.81522700493224, "host": "gh131.hpc.nyu.edu", "argument_bytes": 5617672, "output_bytes": 5617760, "temporary_bytes": 72160352, "samples_s": [0.38644373300485313, 0.38438339019194245, 0.37802924308925867, 0.3794268860947341, 0.3819083431735635], "fps_samples": [264980.3613161816, 266400.6890330677, 270878.5150143047, 269880.71681992797, 268127.16147827887], "median_fps": 268127.16147827887, "q25_fps": 266400.6890330677, "q75_fps": 269880.71681992797}
+Compiling batch=4096, steps=100
+E1007 03:43:39.390534 1844708 slow_operation_alarm.cc:73] Constant folding an instruction is taking > 2s:
+
+  %reduce_and.8 = pred[4096]{0} reduce(%broadcast.10912, %constant.14336), dimensions={1,2,3}, to_apply=%region_819.1005, metadata={op_name="jit(rollout)/while/body/closed_call/vmap(jit(step))/jit(step_env)/jit(reset)/reduce_and" stack_frame_id=307}
+
+This isn't necessarily a bug; constant-folding is inherently a trade-off between compilation time and speed at runtime. XLA has some guards that attempt to keep constant folding from taking too long, but fundamentally you'll always be able to come up with an input program that takes a long time.
+
+If you'd like to file a bug, run with envvar XLA_FLAGS=--xla_dump_to=/tmp/foo and attach the results.
+E1007 03:43:49.085042 1840999 slow_operation_alarm.cc:140] The operation took 11.694779864s
+Constant folding an instruction is taking > 2s:
+
+  %reduce_and.8 = pred[4096]{0} reduce(%broadcast.10912, %constant.14336), dimensions={1,2,3}, to_apply=%region_819.1005, metadata={op_name="jit(rollout)/while/body/closed_call/vmap(jit(step))/jit(step_env)/jit(reset)/reduce_and" stack_frame_id=307}
+
+This isn't necessarily a bug; constant-folding is inherently a trade-off between compilation time and speed at runtime. XLA has some guards that attempt to keep constant folding from taking too long, but fundamentally you'll always be able to come up with an input program that takes a long time.
+
+If you'd like to file a bug, run with envvar XLA_FLAGS=--xla_dump_to=/tmp/foo and attach the results.
+Compiled in 34.17s; warming up
+{"batch": 4096, "steps": 100, "compile_s": 34.171004462987185, "host": "gh131.hpc.nyu.edu", "argument_bytes": 22470664, "output_bytes": 22470752, "temporary_bytes": 288547680, "samples_s": [0.893497081939131, 0.8933770768344402, 0.8930449630133808, 0.893066945951432, 0.8936811431776732], "fps_samples": [458423.43336036074, 458485.0122317462, 458655.51787884935, 458644.2280243965, 458329.0171521133], "median_fps": 458485.0122317462, "q25_fps": 458423.43336036074, "q75_fps": 458644.2280243965}
+Compiling batch=8192, steps=100
+E1007 03:44:49.306544 1844708 slow_operation_alarm.cc:73] Constant folding an instruction is taking > 4s:
+
+  %reduce_and.8 = pred[8192]{0} reduce(%broadcast.10912, %constant.14336), dimensions={1,2,3}, to_apply=%region_819.1005, metadata={op_name="jit(rollout)/while/body/closed_call/vmap(jit(step))/jit(step_env)/jit(reset)/reduce_and" stack_frame_id=307}
+
+This isn't necessarily a bug; constant-folding is inherently a trade-off between compilation time and speed at runtime. XLA has some guards that attempt to keep constant folding from taking too long, but fundamentally you'll always be able to come up with an input program that takes a long time.
+
+If you'd like to file a bug, run with envvar XLA_FLAGS=--xla_dump_to=/tmp/foo and attach the results.
+E1007 03:45:08.398799 1840999 slow_operation_alarm.cc:140] The operation took 23.093010583s
+Constant folding an instruction is taking > 4s:
+
+  %reduce_and.8 = pred[8192]{0} reduce(%broadcast.10912, %constant.14336), dimensions={1,2,3}, to_apply=%region_819.1005, metadata={op_name="jit(rollout)/while/body/closed_call/vmap(jit(step))/jit(step_env)/jit(reset)/reduce_and" stack_frame_id=307}
+
+This isn't necessarily a bug; constant-folding is inherently a trade-off between compilation time and speed at runtime. XLA has some guards that attempt to keep constant folding from taking too long, but fundamentally you'll always be able to come up with an input program that takes a long time.
+
+If you'd like to file a bug, run with envvar XLA_FLAGS=--xla_dump_to=/tmp/foo and attach the results.
+Compiled in 56.30s; warming up
+{"batch": 8192, "steps": 100, "compile_s": 56.30001269187778, "host": "gh131.hpc.nyu.edu", "argument_bytes": 44941320, "output_bytes": 44941408, "temporary_bytes": 577038688, "samples_s": [1.5950886029750109, 1.592901690164581, 1.5925902661401778, 1.5931753169279546, 1.5931417050305754], "fps_samples": [513576.48626672174, 514281.5812539938, 514382.14675606653, 514193.2537466279, 514204.1021293068], "median_fps": 514204.1021293068, "q25_fps": 514193.2537466279, "q75_fps": 514281.5812539938}
+Compiling batch=16384, steps=100
+Compiled in 53.09s; warming up
+{"batch": 16384, "steps": 100, "compile_s": 53.088963344926015, "host": "gh131.hpc.nyu.edu", "argument_bytes": 89882632, "output_bytes": 89882720, "temporary_bytes": 1154125920, "samples_s": [5.2590042690280825, 5.25826240517199, 5.256579918088391, 5.258164318976924, 5.255046664969996], "fps_samples": [311541.86537726334, 311585.8193741874, 311685.54945052956, 311591.63171963824, 311776.489240625], "median_fps": 311591.63171963824, "q25_fps": 311585.8193741874, "q75_fps": 311685.54945052956}
+Stopped: regression

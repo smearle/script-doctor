@@ -1,0 +1,10 @@
+{
+  "game": "Crate_Assembler",
+  "functions": 399,
+  "identical_pruning_decisions": 7913,
+  "decisions_sha256": "5bf41d5fcf1756d460beb168f937a538b3ccdf4bf75a1996e379a33d54304305",
+  "measured_sha256": "e7b6938187561b2b4e480936cf9f373f66f42cd441bf60d4f5d39f810a7a4d25",
+  "final_sha256": "9c1078796dc4e51ad149f15f1acd8be2fd7a0cc88347abb0f1bcb4788b2e54b4",
+  "alias_guard_checks": 4,
+  "result": "passed"
+}

@@ -1,0 +1,123 @@
+{
+  "host": "Yalda24",
+  "cpu_affinity": [
+    0,
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7
+  ],
+  "source_hashes": {
+    "scripts/benchmarks/benchmark_cpp_scoring.py": "99c6ab153d0aec49d37d6114603cb2473baeb88c7f65a57356a61ba4545adfd7",
+    "puzzlescript_cpp/__init__.py": "158fa886867977335394dc41755006d7461ab280607d7448027dd720615da078",
+    "scripts/benchmarks/profile_rand_nodejs.py": "1e5e43a879f58e326f16d897c970dd479ed21da7466057e23cc727081420102e",
+    "puzzlescript_nodejs/puzzlescript/engine.js": "b301f87a3647406a7db23c5398629eb7061c75bb31b5bc002271e89cea5c53af"
+  },
+  "idle_workers": "SIGSTOP between requests; only the measured build runs",
+  "thread_environment": {
+    "OMP_WAIT_POLICY": "ACTIVE",
+    "OMP_PROC_BIND": "close",
+    "OMP_PLACES": "cores",
+    "OPENBLAS_NUM_THREADS": "1"
+  },
+  "trials": 9,
+  "seeds": [
+    42,
+    1042
+  ],
+  "steps": 1000,
+  "games": [
+    "sokoban_match3"
+  ],
+  "levels": [
+    0
+  ],
+  "batches": [
+    16
+  ],
+  "threads": [
+    8
+  ],
+  "library_hashes": {
+    "baseline": "355f88636be05074d9286c171f0c9ee69b4ae630f7670f3acb9282341c5fde0f",
+    "candidate": "c88b36964b09a31b0b220957184cdfc11a304399bc066ab0b9fa2193753afb2d"
+  },
+  "timing": "full Python wrapper outputs; alternating warmed calls; reset/actions/IPC excluded",
+  "results": [
+    {
+      "game": "sokoban_match3",
+      "level": 0,
+      "batch": 16,
+      "threads": 8,
+      "seed": 42,
+      "compiled_sha256": "268da2f5cc9fcd02276a523700ed86ad2304564ae88a116ea90cf0c7a6dc01f6",
+      "output_sha256": "844fbad515571579c6415685a1113836aa4c07e01cb60b3ed40531a54535b4f8",
+      "samples_s": [
+        [
+          0.10174806602299213,
+          0.10228455998003483,
+          0.10197328962385654,
+          0.10196528024971485,
+          0.10196322202682495,
+          0.10200877487659454,
+          0.10203597508370876,
+          0.10184798762202263,
+          0.10194146633148193
+        ],
+        [
+          0.10089997388422489,
+          0.1009379681199789,
+          0.10114390403032303,
+          0.10096194036304951,
+          0.10103229060769081,
+          0.10087553225457668,
+          0.1010272279381752,
+          0.10091252438724041,
+          0.10083900764584541
+        ]
+      ],
+      "baseline_fps": 156916.1577432603,
+      "candidate_fps": 158513.19674853925,
+      "speedup": 1.0101776581089372
+    },
+    {
+      "game": "sokoban_match3",
+      "level": 0,
+      "batch": 16,
+      "threads": 8,
+      "seed": 1042,
+      "compiled_sha256": "268da2f5cc9fcd02276a523700ed86ad2304564ae88a116ea90cf0c7a6dc01f6",
+      "output_sha256": "ac8f18cab08b7b2160540f680893d625fa88be01d62dc06fdd984c0331c656fb",
+      "samples_s": [
+        [
+          0.09522654488682747,
+          0.1017379928380251,
+          0.10167583636939526,
+          0.1018184032291174,
+          0.10173415392637253,
+          0.10198173113167286,
+          0.10183461755514145,
+          0.10177936032414436,
+          0.10180683992803097
+        ],
+        [
+          0.10075769945979118,
+          0.1006606537848711,
+          0.10083301551640034,
+          0.10052487440407276,
+          0.10061805509030819,
+          0.1006566509604454,
+          0.10074739530682564,
+          0.1007082611322403,
+          0.10091039165854454
+        ]
+      ],
+      "baseline_fps": 157202.79582268547,
+      "candidate_fps": 158874.7518834662,
+      "speedup": 1.0106356636472713
+    }
+  ]
+}

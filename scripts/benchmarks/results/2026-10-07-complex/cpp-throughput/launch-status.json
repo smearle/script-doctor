@@ -1,0 +1,204 @@
+{
+  "memory_limit_gb": 32,
+  "game_timeout_s": 900,
+  "library_sha256": "c88b36964b09a31b0b220957184cdfc11a304399bc066ab0b9fa2193753afb2d",
+  "games": [
+    {
+      "game": "Beam_Islands",
+      "status": "complete",
+      "exit_code": 0,
+      "elapsed_s": 357.803548052907
+    },
+    {
+      "game": "Boxes_&_Balloons",
+      "status": "complete",
+      "exit_code": 0,
+      "elapsed_s": 48.47371316514909
+    },
+    {
+      "game": "Caramelban",
+      "status": "complete",
+      "exit_code": 0,
+      "elapsed_s": 165.4853354729712
+    },
+    {
+      "game": "Crate_Assembler",
+      "status": "timeout",
+      "exit_code": -9,
+      "elapsed_s": 900.0068606361747
+    },
+    {
+      "game": "Heroes_of_Sokoban_III__The_Bard_and_The_Druid",
+      "status": "complete",
+      "exit_code": 0,
+      "elapsed_s": 243.68354637548327
+    },
+    {
+      "game": "IceCrates",
+      "status": "complete",
+      "exit_code": 0,
+      "elapsed_s": 37.35211514309049
+    },
+    {
+      "game": "Indigestion",
+      "status": "complete",
+      "exit_code": 0,
+      "elapsed_s": 537.8518970180303
+    },
+    {
+      "game": "Memories_Of_Castlemouse",
+      "status": "complete",
+      "exit_code": 0,
+      "elapsed_s": 113.42949133738875
+    },
+    {
+      "game": "ParaLands",
+      "status": "complete",
+      "exit_code": 0,
+      "elapsed_s": 453.9525032006204
+    },
+    {
+      "game": "Sokoboros",
+      "status": "complete",
+      "exit_code": 0,
+      "elapsed_s": 329.76652692072093
+    },
+    {
+      "game": "SwapBot",
+      "status": "complete",
+      "exit_code": 0,
+      "elapsed_s": 188.8575062043965
+    },
+    {
+      "game": "Symbolism",
+      "status": "complete",
+      "exit_code": 0,
+      "elapsed_s": 516.5119976159185
+    },
+    {
+      "game": "Transition",
+      "status": "complete",
+      "exit_code": 0,
+      "elapsed_s": 102.5698326677084
+    },
+    {
+      "game": "Unconventional_Guns",
+      "status": "complete",
+      "exit_code": 0,
+      "elapsed_s": 135.22604980319738
+    },
+    {
+      "game": "Vacuum",
+      "status": "timeout",
+      "exit_code": -9,
+      "elapsed_s": 900.0036840606481
+    },
+    {
+      "game": "castlecloset",
+      "status": "complete",
+      "exit_code": 0,
+      "elapsed_s": 195.4302834328264
+    },
+    {
+      "game": "sokoban_basic",
+      "status": "complete",
+      "exit_code": 0,
+      "elapsed_s": 10.887555830180645
+    },
+    {
+      "game": "notsnake",
+      "status": "complete",
+      "exit_code": 0,
+      "elapsed_s": 11.440434554591775
+    },
+    {
+      "game": "Zen_Puzzle_Garden",
+      "status": "complete",
+      "exit_code": 0,
+      "elapsed_s": 24.871959635987878
+    },
+    {
+      "game": "Slidings",
+      "status": "complete",
+      "exit_code": 0,
+      "elapsed_s": 19.203079590573907
+    },
+    {
+      "game": "limerick",
+      "status": "complete",
+      "exit_code": 0,
+      "elapsed_s": 46.66515791602433
+    },
+    {
+      "game": "kettle",
+      "status": "complete",
+      "exit_code": 0,
+      "elapsed_s": 76.14140964113176
+    },
+    {
+      "game": "Take_Heart_Lass",
+      "status": "complete",
+      "exit_code": 0,
+      "elapsed_s": 44.20709063299
+    },
+    {
+      "game": "atlas shrank",
+      "status": "complete",
+      "exit_code": 0,
+      "elapsed_s": 124.61857970245183
+    },
+    {
+      "game": "blocks",
+      "status": "complete",
+      "exit_code": 0,
+      "elapsed_s": 21.705123526975513
+    },
+    {
+      "game": "nekopuzzle",
+      "status": "complete",
+      "exit_code": 0,
+      "elapsed_s": 21.811867240816355
+    },
+    {
+      "game": "sokoban_match3",
+      "status": "complete",
+      "exit_code": 0,
+      "elapsed_s": 14.438761074095964
+    },
+    {
+      "game": "Travelling_salesman",
+      "status": "complete",
+      "exit_code": 0,
+      "elapsed_s": 8.285814439877868
+    },
+    {
+      "game": "Multi-word_Dictionary_Game",
+      "status": "complete",
+      "exit_code": 0,
+      "elapsed_s": 15.396944211795926
+    },
+    {
+      "game": "Microban",
+      "status": "complete",
+      "exit_code": 0,
+      "elapsed_s": 17.27234041132033
+    },
+    {
+      "game": "Magnet_Jack",
+      "status": "complete",
+      "exit_code": 0,
+      "elapsed_s": 56.6717815361917
+    },
+    {
+      "game": "HyperMaze",
+      "status": "complete",
+      "exit_code": 0,
+      "elapsed_s": 124.99292824044824
+    }
+  ],
+  "interruption": {
+    "outer_session_exit_code": 143,
+    "partial_game": "Travelling_salesman",
+    "action": "Resume completed checkpoints; original driver and library unchanged"
+  }
+}

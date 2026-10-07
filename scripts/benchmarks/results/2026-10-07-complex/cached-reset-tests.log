@@ -1,0 +1,38 @@
+............................                                             [100%]
+=============================== warnings summary ===============================
+../../script-doctor/.venv/lib/python3.13/site-packages/matplotlib/_fontconfig_pattern.py:64
+  /scratch/se2161/script-doctor/.venv/lib/python3.13/site-packages/matplotlib/_fontconfig_pattern.py:64: PyparsingDeprecationWarning: 'oneOf' deprecated - use 'one_of'
+    prop = Group((name + Suppress("=") + comma_separated(value)) | oneOf(_CONSTANTS))
+
+../../script-doctor/.venv/lib/python3.13/site-packages/matplotlib/_fontconfig_pattern.py:85
+../../script-doctor/.venv/lib/python3.13/site-packages/matplotlib/_fontconfig_pattern.py:85
+../../script-doctor/.venv/lib/python3.13/site-packages/matplotlib/_fontconfig_pattern.py:85
+../../script-doctor/.venv/lib/python3.13/site-packages/matplotlib/_fontconfig_pattern.py:85
+../../script-doctor/.venv/lib/python3.13/site-packages/matplotlib/_fontconfig_pattern.py:85
+../../script-doctor/.venv/lib/python3.13/site-packages/matplotlib/_fontconfig_pattern.py:85
+  /scratch/se2161/script-doctor/.venv/lib/python3.13/site-packages/matplotlib/_fontconfig_pattern.py:85: PyparsingDeprecationWarning: 'parseString' deprecated - use 'parse_string'
+    parse = parser.parseString(pattern)
+
+../../script-doctor/.venv/lib/python3.13/site-packages/matplotlib/_fontconfig_pattern.py:89
+../../script-doctor/.venv/lib/python3.13/site-packages/matplotlib/_fontconfig_pattern.py:89
+../../script-doctor/.venv/lib/python3.13/site-packages/matplotlib/_fontconfig_pattern.py:89
+../../script-doctor/.venv/lib/python3.13/site-packages/matplotlib/_fontconfig_pattern.py:89
+../../script-doctor/.venv/lib/python3.13/site-packages/matplotlib/_fontconfig_pattern.py:89
+../../script-doctor/.venv/lib/python3.13/site-packages/matplotlib/_fontconfig_pattern.py:89
+  /scratch/se2161/script-doctor/.venv/lib/python3.13/site-packages/matplotlib/_fontconfig_pattern.py:89: PyparsingDeprecationWarning: 'resetCache' deprecated - use 'reset_cache'
+    parser.resetCache()
+
+../../script-doctor/.venv/lib/python3.13/site-packages/matplotlib/_mathtext.py:45
+  /scratch/se2161/script-doctor/.venv/lib/python3.13/site-packages/matplotlib/_mathtext.py:45: PyparsingDeprecationWarning: 'enablePackrat' deprecated - use 'enable_packrat'
+    ParserElement.enablePackrat()
+
+../../script-doctor/.venv/lib/python3.13/site-packages/pydantic/_internal/_generate_schema.py:2249
+  /scratch/se2161/script-doctor/.venv/lib/python3.13/site-packages/pydantic/_internal/_generate_schema.py:2249: UnsupportedFieldAttributeWarning: The 'repr' attribute with value False was provided to the `Field()` function, which has no effect in the context it was used. 'repr' is field-specific metadata, and can only be attached to a model field using `Annotated` metadata or by assignment. This may have happened because an `Annotated` type alias using the `type` statement was used, or if the `Field()` function was attached to a single member of a union type.
+    warnings.warn(
+
+../../script-doctor/.venv/lib/python3.13/site-packages/pydantic/_internal/_generate_schema.py:2249
+  /scratch/se2161/script-doctor/.venv/lib/python3.13/site-packages/pydantic/_internal/_generate_schema.py:2249: UnsupportedFieldAttributeWarning: The 'frozen' attribute with value True was provided to the `Field()` function, which has no effect in the context it was used. 'frozen' is field-specific metadata, and can only be attached to a model field using `Annotated` metadata or by assignment. This may have happened because an `Annotated` type alias using the `type` statement was used, or if the `Field()` function was attached to a single member of a union type.
+    warnings.warn(
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+28 passed, 16 warnings in 270.44s (0:04:30)

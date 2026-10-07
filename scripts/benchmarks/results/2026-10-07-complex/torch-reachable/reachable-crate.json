@@ -1,0 +1,40 @@
+{
+  "game": "Crate_Assembler",
+  "level": 0,
+  "experiment": "fixed-level reachability pruning",
+  "scope": "Immutable level-zero parameters and ordinary engine transitions only; no external state edits",
+  "devices": [
+    "NVIDIA H200"
+  ],
+  "jax_version": "0.9.0.1",
+  "compiled_sha256": "b3ba88b6b1615818ba8103b5724bc35de4975ef16e3f577283ea54febf4009d8",
+  "reachability": {
+    "initial_object_types": 11,
+    "reachable_object_types": 12,
+    "compiled_rules": 7716,
+    "potentially_reachable_rules": 369,
+    "reachable_names": [
+      "background",
+      "crate11",
+      "crate34",
+      "crate4",
+      "player",
+      "target",
+      "wall2a",
+      "wall2b",
+      "wall2c",
+      "wall2d",
+      "wall2ho",
+      "wall2ve"
+    ]
+  },
+  "trials": 5,
+  "seed": 42,
+  "results": [],
+  "source_hashes": {
+    "puzzlescript_jax/env.py": "ab92c0a647c6efe9809c98cfecc7110a89b23b6dfdea2e7205603429041654fe",
+    "puzzlejax/validate_actions.py": "0367788d2cb3eb9c75c0f4d56328adccf8ba88576f6b7300d7d0da17d722ae25",
+    "scripts/benchmarks/benchmark_paper_throughput.py": "464e20595d17e46ef563f8878f7d398af33f7f712604734bd108220a5f8b2e3d",
+    "scripts/benchmarks/benchmark_reachable_rules.py": "fc28bc195d2d4b7f087e046bfe423af92dc22910613d614329a905dce8b106d1"
+  }
+}

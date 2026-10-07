@@ -1,0 +1,123 @@
+{
+  "host": "Yalda24",
+  "cpu_affinity": [
+    0,
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7
+  ],
+  "source_hashes": {
+    "scripts/benchmarks/benchmark_cpp_scoring.py": "99c6ab153d0aec49d37d6114603cb2473baeb88c7f65a57356a61ba4545adfd7",
+    "puzzlescript_cpp/__init__.py": "158fa886867977335394dc41755006d7461ab280607d7448027dd720615da078",
+    "scripts/benchmarks/profile_rand_nodejs.py": "1e5e43a879f58e326f16d897c970dd479ed21da7466057e23cc727081420102e",
+    "puzzlescript_nodejs/puzzlescript/engine.js": "b301f87a3647406a7db23c5398629eb7061c75bb31b5bc002271e89cea5c53af"
+  },
+  "idle_workers": "SIGSTOP between requests; only the measured build runs",
+  "thread_environment": {
+    "OMP_WAIT_POLICY": "ACTIVE",
+    "OMP_PROC_BIND": "close",
+    "OMP_PLACES": "cores",
+    "OPENBLAS_NUM_THREADS": "1"
+  },
+  "trials": 9,
+  "seeds": [
+    42,
+    1042
+  ],
+  "steps": 300,
+  "games": [
+    "castlecloset"
+  ],
+  "levels": [
+    0
+  ],
+  "batches": [
+    1
+  ],
+  "threads": [
+    1
+  ],
+  "library_hashes": {
+    "baseline": "355f88636be05074d9286c171f0c9ee69b4ae630f7670f3acb9282341c5fde0f",
+    "candidate": "e4e6773b968b38c2f679e0f489b967e6f7b99dd18e4beae273d71ff47b8f518b"
+  },
+  "timing": "full Python wrapper outputs; alternating warmed calls; reset/actions/IPC excluded",
+  "results": [
+    {
+      "game": "castlecloset",
+      "level": 0,
+      "batch": 1,
+      "threads": 1,
+      "seed": 42,
+      "compiled_sha256": "fc4826fb8bb75df99f45ee28ab09843a2879bd4a08f1b4f16e01abbad693dce0",
+      "output_sha256": "8180967ca576ad3de8af81c2c842a500ec5f1ee2275ac2310931bce5e1387ab9",
+      "samples_s": [
+        [
+          0.06448016874492168,
+          0.06070679798722267,
+          0.06063739024102688,
+          0.06065383180975914,
+          0.06062866933643818,
+          0.0607001967728138,
+          0.06059880182147026,
+          0.060683777555823326,
+          0.06057456322014332
+        ],
+        [
+          0.06052139215171337,
+          0.06051201373338699,
+          0.060460468754172325,
+          0.06059812009334564,
+          0.06052251718938351,
+          0.06048143096268177,
+          0.06027359701693058,
+          0.060494691133499146,
+          0.06053202040493488
+        ]
+      ],
+      "baseline_fps": 4946.10135994294,
+      "candidate_fps": 4957.693216454265,
+      "speedup": 1.0023436350506694
+    },
+    {
+      "game": "castlecloset",
+      "level": 0,
+      "batch": 1,
+      "threads": 1,
+      "seed": 1042,
+      "compiled_sha256": "fc4826fb8bb75df99f45ee28ab09843a2879bd4a08f1b4f16e01abbad693dce0",
+      "output_sha256": "b330300305b6e72975cb82bc144e31a9d5409980d636ee71962e54c1e5685c1f",
+      "samples_s": [
+        [
+          0.05477078631520271,
+          0.05471966229379177,
+          0.054581066593527794,
+          0.054796235635876656,
+          0.0546861607581377,
+          0.054704608395695686,
+          0.05470476299524307,
+          0.054702404886484146,
+          0.05470263585448265
+        ],
+        [
+          0.05455479212105274,
+          0.05462985299527645,
+          0.05458944849669933,
+          0.0547204315662384,
+          0.05468731187283993,
+          0.05457378178834915,
+          0.054599013179540634,
+          0.05463361367583275,
+          0.054632196202874184
+        ]
+      ],
+      "baseline_fps": 5483.998675760648,
+      "candidate_fps": 5491.502970471829,
+      "speedup": 1.00136839834487
+    }
+  ]
+}

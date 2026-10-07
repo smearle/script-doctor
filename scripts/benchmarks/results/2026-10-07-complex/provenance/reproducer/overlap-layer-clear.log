@@ -1,0 +1,9 @@
+/tmp/puzzlejax-complex-20261007/.venv/lib/python3.13/site-packages/pydantic/_internal/_generate_schema.py:2249: UnsupportedFieldAttributeWarning: The 'repr' attribute with value False was provided to the `Field()` function, which has no effect in the context it was used. 'repr' is field-specific metadata, and can only be attached to a model field using `Annotated` metadata or by assignment. This may have happened because an `Annotated` type alias using the `type` statement was used, or if the `Field()` function was attached to a single member of a union type.
+  warnings.warn(
+/tmp/puzzlejax-complex-20261007/.venv/lib/python3.13/site-packages/pydantic/_internal/_generate_schema.py:2249: UnsupportedFieldAttributeWarning: The 'frozen' attribute with value True was provided to the `Field()` function, which has no effect in the context it was used. 'frozen' is field-specific metadata, and can only be attached to a model field using `Annotated` metadata or by assignment. This may have happened because an `Annotated` type alias using the `type` statement was used, or if the `Field()` function was attached to a single member of a union type.
+  warnings.warn(
+Writing pretty tree to /tmp/puzzlejax-complex-20261007/data/pretty_trees/overlap_layer_clear
+Parsed overlap_layer_clear successfully
+Writing pretty tree to /tmp/puzzlejax-complex-20261007/data/pretty_trees/overlap_layer_clear
+Parsed overlap_layer_clear successfully
+{"passed": false, "message": "1 step(s) with mismatches:\n  [step 1] level state mismatch on channels: ['marker'];   marker: JS=[] JAX=[(np.int64(0), np.int64(0))]", "actions": [4]}

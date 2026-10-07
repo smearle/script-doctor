@@ -1,0 +1,60 @@
+name, driver_version, memory.total [MiB]
+NVIDIA H200, 610.43.02, 143771 MiB
+/scratch/se2161/script-doctor/.venv/lib/python3.13/site-packages/pydantic/_internal/_generate_schema.py:2249: UnsupportedFieldAttributeWarning: The 'repr' attribute with value False was provided to the `Field()` function, which has no effect in the context it was used. 'repr' is field-specific metadata, and can only be attached to a model field using `Annotated` metadata or by assignment. This may have happened because an `Annotated` type alias using the `type` statement was used, or if the `Field()` function was attached to a single member of a union type.
+  warnings.warn(
+/scratch/se2161/script-doctor/.venv/lib/python3.13/site-packages/pydantic/_internal/_generate_schema.py:2249: UnsupportedFieldAttributeWarning: The 'frozen' attribute with value True was provided to the `Field()` function, which has no effect in the context it was used. 'frozen' is field-specific metadata, and can only be attached to a model field using `Annotated` metadata or by assignment. This may have happened because an `Annotated` type alias using the `type` statement was used, or if the `Field()` function was attached to a single member of a union type.
+  warnings.warn(
+Writing pretty tree to /scratch/se2161/puzzlejax-perf-20261002/complex-prepared-20261007/data/pretty_trees/ParaLands
+Parsed ParaLands successfully
+Writing pretty tree to /scratch/se2161/puzzlejax-perf-20261002/complex-prepared-20261007/data/pretty_trees/ParaLands
+Parsed ParaLands successfully
+E1007 03:58:02.077395 2824918 slow_operation_alarm.cc:73] 
+********************************
+[Compiling module jit_reset for GPU] Very slow compile? If you want to file a bug, run with envvar XLA_FLAGS=--xla_dump_to=/tmp/foo and attach the results.
+********************************
+E1007 03:58:49.981450 2823544 slow_operation_alarm.cc:140] The operation took 2m47.904163269s
+
+********************************
+[Compiling module jit_reset for GPU] Very slow compile? If you want to file a bug, run with envvar XLA_FLAGS=--xla_dump_to=/tmp/foo and attach the results.
+********************************
+{"game": "ParaLands", "level": 0, "passed": true, "status": "passed", "message": "all 129 states match through the first win or action limit", "actions": [0, 1, 2, 3, 4, 0, 1, 2, 3, 4, 0, 1, 2, 3, 4, 0, 1, 2, 3, 4, 0, 1, 2, 3, 4, 0, 1, 2, 3, 4, 0, 1, 2, 3, 4, 0, 1, 2, 3, 4, 0, 3, 3, 2, 2, 4, 0, 3, 1, 0, 2, 4, 3, 3, 3, 3, 2, 0, 4, 2, 2, 1, 0, 4, 3, 3, 2, 4, 2, 2, 2, 1, 0, 2, 4, 0, 4, 4, 1, 3, 0, 3, 3, 1, 0, 4, 2, 4, 3, 3, 3, 0, 1, 2, 2, 0, 2, 0, 3, 3, 4, 3, 1, 4, 2, 1, 4, 1, 0, 2, 3, 0, 2, 0, 3, 2, 1, 1, 2, 3, 4, 2, 0, 4, 3, 3, 0, 1], "stop_on_win": true, "prepare_params": true, "comparison": "Original JS versus JAX: board, heuristic and winning flag after every replayed step", "source_hashes": {"puzzlejax/validate_actions.py": "0367788d2cb3eb9c75c0f4d56328adccf8ba88576f6b7300d7d0da17d722ae25", "puzzlejax/validate_sols_jax.py": "67c746e254c07c0eccc04764e2a45da61db0dde8f23c66acbdd327b9c2935689", "puzzlescript_jax/env.py": "d06ceb53b0c4c615bc5a541c96ef3631b5640c53767a5942e0ba2d33b513ffeb", "PuzzleScript/src/js/compiler.js": "40e2996456a6ca642c89a769ea1a75ae074ccbcb0bcfc0d5fd8d27a88ad26cd7", "PuzzleScript/src/js/engine.js": "2dec5c52816d29f9578f43c939662410a280f54e6b8d464b2d6d734b23e21085", "puzzlescript_nodejs/puzzlescript/engine.js": "b301f87a3647406a7db23c5398629eb7061c75bb31b5bc002271e89cea5c53af", "scripts/benchmarks/validate_complex_game.py": "b026cb7056de2a04bb698c5872a407d59d21e43e06eaded1eb9d4d40773c4bdd"}}
+Writing pretty tree to /scratch/se2161/puzzlejax-perf-20261002/complex-prepared-20261007/data/pretty_trees/ParaLands
+Parsed ParaLands successfully
+E1007 04:28:16.598303 2915374 slow_operation_alarm.cc:73] 
+********************************
+[Compiling module jit_reset for GPU] Very slow compile? If you want to file a bug, run with envvar XLA_FLAGS=--xla_dump_to=/tmp/foo and attach the results.
+********************************
+E1007 04:29:05.095376 2914259 slow_operation_alarm.cc:140] The operation took 2m48.497175276s
+
+********************************
+[Compiling module jit_reset for GPU] Very slow compile? If you want to file a bug, run with envvar XLA_FLAGS=--xla_dump_to=/tmp/foo and attach the results.
+********************************
+Compiling batch=16, steps=312
+Compiled in 1140.44s; warming up
+{"batch": 16, "steps": 312, "compile_s": 1140.4361092809122, "host": "gh117.hpc.nyu.edu", "argument_bytes": 195432, "output_bytes": 195520, "temporary_bytes": 10909672, "samples_s": [61.20679902820848, 60.77361747389659, 60.31827801512554, 60.22884553205222, 61.16257669706829], "fps_samples": [81.55956657199683, 82.14090599665484, 82.76098330837951, 82.88387326540051, 81.61853652315602], "median_fps": 82.14090599665484, "q25_fps": 81.61853652315602, "q75_fps": 82.76098330837951}
+E1007 05:27:31.116779 2915374 slow_operation_alarm.cc:73] 
+********************************
+[Compiling module jit_reset for GPU] Very slow compile? If you want to file a bug, run with envvar XLA_FLAGS=--xla_dump_to=/tmp/foo and attach the results.
+********************************
+E1007 05:27:51.506272 2914259 slow_operation_alarm.cc:140] The operation took 2m20.389585801s
+
+********************************
+[Compiling module jit_reset for GPU] Very slow compile? If you want to file a bug, run with envvar XLA_FLAGS=--xla_dump_to=/tmp/foo and attach the results.
+********************************
+Compiling batch=256, steps=100
+E1007 05:39:42.830648 2915374 slow_operation_alarm.cc:73] Constant folding an instruction is taking > 1s:
+
+  %reduce_and.8 = pred[256]{0} reduce(%broadcast.443139, %constant.557931), dimensions={1,2,3}, to_apply=%region_32327.33007, metadata={op_name="jit(rollout)/while/body/closed_call/vmap(jit(step))/jit(step_env)/jit(reset)/reduce_and" stack_frame_id=383}
+
+This isn't necessarily a bug; constant-folding is inherently a trade-off between compilation time and speed at runtime. XLA has some guards that attempt to keep constant folding from taking too long, but fundamentally you'll always be able to come up with an input program that takes a long time.
+
+If you'd like to file a bug, run with envvar XLA_FLAGS=--xla_dump_to=/tmp/foo and attach the results.
+E1007 05:39:43.479453 2914259 slow_operation_alarm.cc:140] The operation took 1.649421122s
+Constant folding an instruction is taking > 1s:
+
+  %reduce_and.8 = pred[256]{0} reduce(%broadcast.443139, %constant.557931), dimensions={1,2,3}, to_apply=%region_32327.33007, metadata={op_name="jit(rollout)/while/body/closed_call/vmap(jit(step))/jit(step_env)/jit(reset)/reduce_and" stack_frame_id=383}
+
+This isn't necessarily a bug; constant-folding is inherently a trade-off between compilation time and speed at runtime. XLA has some guards that attempt to keep constant folding from taking too long, but fundamentally you'll always be able to come up with an input program that takes a long time.
+
+If you'd like to file a bug, run with envvar XLA_FLAGS=--xla_dump_to=/tmp/foo and attach the results.
+[2026-10-07T05:48:52.028] error: *** JOB 19328997 ON gh117 CANCELLED AT 2026-10-07T05:48:52 DUE TO TIME LIMIT ***

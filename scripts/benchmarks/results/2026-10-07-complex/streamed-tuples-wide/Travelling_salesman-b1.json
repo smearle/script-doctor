@@ -1,0 +1,123 @@
+{
+  "host": "Yalda24",
+  "cpu_affinity": [
+    0,
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7
+  ],
+  "source_hashes": {
+    "scripts/benchmarks/benchmark_cpp_scoring.py": "99c6ab153d0aec49d37d6114603cb2473baeb88c7f65a57356a61ba4545adfd7",
+    "puzzlescript_cpp/__init__.py": "158fa886867977335394dc41755006d7461ab280607d7448027dd720615da078",
+    "scripts/benchmarks/profile_rand_nodejs.py": "1e5e43a879f58e326f16d897c970dd479ed21da7466057e23cc727081420102e",
+    "puzzlescript_nodejs/puzzlescript/engine.js": "b301f87a3647406a7db23c5398629eb7061c75bb31b5bc002271e89cea5c53af"
+  },
+  "idle_workers": "SIGSTOP between requests; only the measured build runs",
+  "thread_environment": {
+    "OMP_WAIT_POLICY": "ACTIVE",
+    "OMP_PROC_BIND": "close",
+    "OMP_PLACES": "cores",
+    "OPENBLAS_NUM_THREADS": "1"
+  },
+  "trials": 9,
+  "seeds": [
+    42,
+    1042
+  ],
+  "steps": 100,
+  "games": [
+    "Travelling_salesman"
+  ],
+  "levels": [
+    0
+  ],
+  "batches": [
+    1
+  ],
+  "threads": [
+    1
+  ],
+  "library_hashes": {
+    "baseline": "355f88636be05074d9286c171f0c9ee69b4ae630f7670f3acb9282341c5fde0f",
+    "candidate": "2145bd86d490fe609e9cf43eeb828c47a6a9a79a151c4774bd62942ca2aa194d"
+  },
+  "timing": "full Python wrapper outputs; alternating warmed calls; reset/actions/IPC excluded",
+  "results": [
+    {
+      "game": "Travelling_salesman",
+      "level": 0,
+      "batch": 1,
+      "threads": 1,
+      "seed": 42,
+      "compiled_sha256": "92bc53076247ebae68fafb2c233b8819356a04c975ee974d00fd4d358dc33c3b",
+      "output_sha256": "b97c5d6780d8b1561fed56e925515dcba45dc8ae568d28833c1aa38803a673b8",
+      "samples_s": [
+        [
+          0.004917478188872337,
+          0.004923196509480476,
+          0.004897966980934143,
+          0.004922095686197281,
+          0.0049126725643873215,
+          0.0060614049434661865,
+          0.005038293078541756,
+          0.004822894930839539,
+          0.004881294444203377
+        ],
+        [
+          0.0049030352383852005,
+          0.0048945508897304535,
+          0.004909900948405266,
+          0.004891358315944672,
+          0.004904858767986298,
+          0.004884829744696617,
+          0.004898451268672943,
+          0.004895338788628578,
+          0.004903806373476982
+        ]
+      ],
+      "baseline_fps": 20335.62654660838,
+      "candidate_fps": 20414.615664246743,
+      "speedup": 1.0038842726314492
+    },
+    {
+      "game": "Travelling_salesman",
+      "level": 0,
+      "batch": 1,
+      "threads": 1,
+      "seed": 1042,
+      "compiled_sha256": "92bc53076247ebae68fafb2c233b8819356a04c975ee974d00fd4d358dc33c3b",
+      "output_sha256": "46b44b07c3df5d6575d9ad7ff39d50dee4f4b1a32225dbb8814dfb3aa5048089",
+      "samples_s": [
+        [
+          0.004345681518316269,
+          0.00436059758067131,
+          0.004337688907980919,
+          0.00435747392475605,
+          0.004343366250395775,
+          0.004344834014773369,
+          0.004343891516327858,
+          0.0043668244034051895,
+          0.004365596920251846
+        ],
+        [
+          0.004341434687376022,
+          0.004342040047049522,
+          0.004349494352936745,
+          0.004343487322330475,
+          0.004349013790488243,
+          0.004347760230302811,
+          0.004352593794465065,
+          0.004342386499047279,
+          0.0043386612087488174
+        ]
+      ],
+      "baseline_fps": 23011.35036668424,
+      "candidate_fps": 23022.974991980762,
+      "speedup": 1.0005051691930844
+    }
+  ]
+}

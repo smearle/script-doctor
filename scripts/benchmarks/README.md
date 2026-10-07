@@ -2,6 +2,37 @@
 
 Run benchmarks from the repository root with the project environment activated.
 
+## Thirty-two games and complex-rule workloads (2026-10-07)
+
+The [expanded curves](../../paper/figures/complex_throughput_20261007/complex_game_throughput.pdf),
+[32-game comparison](../../paper/figures/complex_throughput_20261007/engine_crossover.pdf), and
+[complexity plots](../../paper/figures/complex_throughput_20261007/complexity_factors.pdf)
+add sixteen games with larger rule sets, many object channels or large boards.
+All 32 C++ curves use a fresh build with guarded, streamed rule matching.
+JAX runs on H200; games with startup rules also have opt-in prepared-reset
+measurements. Both ordinary and prepared curves remain visible. Resource limits
+and failed validation are explicit; missing timings are never extrapolated.
+
+C++ wins on several games beyond Atlas Shrank, including Caramelban, IceCrates,
+Unconventional Guns and Castlecloset. Rule-processing work predicts the sampled
+relative throughput much better than board area alone. Batch size remains a
+major determinant: simple games strongly favor JAX once enough environments
+run together. The [round report](results/2026-10-07-complex/README.md) gives
+numbers, validation limits, source hashes, rejected experiments and the
+fixed-level reachability-pruning prototype.
+
+The retained C++ optimization is checked across 32 games, 138 paired
+configurations and 600,600 exact transitions, with 58 focused tests and a separate
+original-JS trace comparison. The prepared-reset API has 29 passing cache,
+environment-switching and wide-object validation tests, plus controlled
+full-output H200/RTX 4090 comparisons with automatic resets. Its default is
+off; callers opt in with `env.prepare_params(params)` before compiling a rollout.
+
+```bash
+MPLCONFIGDIR=/tmp/puzzlejax-mpl python \
+  scripts/benchmarks/results/2026-10-07-complex/provenance/reproduce_figures.py
+```
+
 ## Refreshed C++ curves and sixteen-game regression check (2026-10-06)
 
 The [updated eight-game paper figure](../../paper/figures/throughput_cpp_20261006/random_rollout_profile_h200_updated.pdf)

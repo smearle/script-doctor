@@ -1,0 +1,16 @@
+--- a/puzzlescript_jax/env.py
++++ b/puzzlescript_jax/env.py
+@@ -1408,9 +1408,11 @@
+         params = params.replace(reset_cache=None)
+         if not self.jit or self._is_multi_level or self.has_randomness():
+             return params
+-        _, state = self.reset(jax.random.PRNGKey(0), params)
++        # Own the snapshot even if callers supplied a mutable NumPy array.
++        level = jnp.array(params.level, copy=True)
++        _, state = self.reset(jax.random.PRNGKey(0), params.replace(level=level))
+         return params.replace(reset_cache=PJResetCache(
+-            level=params.level, state=state, owner=self._reset_cache_owner))
++            level=level, state=state, owner=self._reset_cache_owner))
+ 
+     def reset(self, rng, params: PJParams) -> Tuple[chex.Array, PJState]:
+         cache = params.reset_cache

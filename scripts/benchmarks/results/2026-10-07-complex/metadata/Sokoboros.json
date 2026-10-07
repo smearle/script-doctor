@@ -1,0 +1,25 @@
+{
+  "game": "Sokoboros",
+  "objects": 74,
+  "layers": 9,
+  "level_shape": [
+    74,
+    52,
+    52
+  ],
+  "compiled_sha256": "f9a781a672514e600c916a8f3b2f0107118739c8d132db02d156c7f10450a100",
+  "source_sha256": "bfc892533439ee1263015cb76dddd05e780242ea64709bdfcab558c0997325d4",
+  "compiled_rules": 90,
+  "compiled_groups": 90,
+  "loop_points": 3,
+  "source_rules": 90,
+  "multirow_rules": 23,
+  "max_pattern_rows": 3,
+  "ellipsis_rules": 0,
+  "max_pattern_span": 3,
+  "board_cells": 2704,
+  "force_channels": 45,
+  "jax_rule_functions": 90,
+  "jax_rule_groups": 90,
+  "run_rules_on_level_start": false
+}

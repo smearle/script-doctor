@@ -1,0 +1,25 @@
+{
+  "game": "sokoban_match3",
+  "objects": 5,
+  "layers": 3,
+  "level_shape": [
+    5,
+    7,
+    9
+  ],
+  "compiled_sha256": "268da2f5cc9fcd02276a523700ed86ad2304564ae88a116ea90cf0c7a6dc01f6",
+  "source_sha256": "4d9a73ac12abfa2c67a6a45e5313ab85fb1b89c579675eec65b800838d6ef042",
+  "compiled_rules": 6,
+  "compiled_groups": 2,
+  "loop_points": 0,
+  "source_rules": 2,
+  "multirow_rules": 0,
+  "max_pattern_rows": 1,
+  "ellipsis_rules": 0,
+  "max_pattern_span": 3,
+  "board_cells": 63,
+  "force_channels": 15,
+  "jax_rule_functions": 8,
+  "jax_rule_groups": 2,
+  "run_rules_on_level_start": false
+}

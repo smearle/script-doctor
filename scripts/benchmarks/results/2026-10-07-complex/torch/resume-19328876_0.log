@@ -1,0 +1,26 @@
+Writing pretty tree to /scratch/se2161/puzzlejax-perf-20261002/complex-20261007/data/pretty_trees/Beam_Islands
+Parsed Beam_Islands successfully
+Compiling batch=16384, steps=100
+E1007 04:32:55.239340 3584131 slow_operation_alarm.cc:73] Constant folding an instruction is taking > 1s:
+
+  %get-tuple-element.128140 = pred[16384,48,48]{2,1,0} get-tuple-element(%tuple.3605), index=1
+
+This isn't necessarily a bug; constant-folding is inherently a trade-off between compilation time and speed at runtime. XLA has some guards that attempt to keep constant folding from taking too long, but fundamentally you'll always be able to come up with an input program that takes a long time.
+
+If you'd like to file a bug, run with envvar XLA_FLAGS=--xla_dump_to=/tmp/foo and attach the results.
+E1007 04:32:55.250361 3583320 slow_operation_alarm.cc:140] The operation took 1.011138689s
+Constant folding an instruction is taking > 1s:
+
+  %get-tuple-element.128140 = pred[16384,48,48]{2,1,0} get-tuple-element(%tuple.3605), index=1
+
+This isn't necessarily a bug; constant-folding is inherently a trade-off between compilation time and speed at runtime. XLA has some guards that attempt to keep constant folding from taking too long, but fundamentally you'll always be able to come up with an input program that takes a long time.
+
+If you'd like to file a bug, run with envvar XLA_FLAGS=--xla_dump_to=/tmp/foo and attach the results.
+Compiled in 1229.33s; warming up
+{"batch": 16384, "steps": 100, "compile_s": 1229.3334091340657, "host": "gh105.hpc.nyu.edu", "argument_bytes": 69959688, "output_bytes": 69959776, "temporary_bytes": 2823090376, "samples_s": [122.4455949421972, 122.47868577810004, 122.51622653799132, 122.5201581348665, 122.45673570898362], "fps_samples": [13380.636524927158, 13377.02139430497, 13372.922479716963, 13372.493350820676, 13379.419192535315], "median_fps": 13377.02139430497, "q25_fps": 13372.922479716963, "q75_fps": 13379.419192535315}
+Compiling batch=32768, steps=100
+Compiled in 363.73s; warming up
+{"batch": 32768, "steps": 100, "compile_s": 363.72581237298436, "host": "gh105.hpc.nyu.edu", "argument_bytes": 139919368, "output_bytes": 139919456, "temporary_bytes": 5645268168, "samples_s": [235.45219809794798, 235.4755029459484, 235.49039167398587, 235.51355249714106, 235.4795602709055], "fps_samples": [13917.049942497682, 13915.672581670478, 13914.792772252122, 13913.424366692348, 13915.432813914858], "median_fps": 13915.432813914858, "q25_fps": 13914.792772252122, "q75_fps": 13915.672581670478}
+Compiling batch=65536, steps=100
+Compiled in 446.11s; warming up
+[2026-10-07T06:19:43.032] error: *** JOB 19329637 ON gh105 CANCELLED AT 2026-10-07T06:19:43 DUE TO TIME LIMIT ***

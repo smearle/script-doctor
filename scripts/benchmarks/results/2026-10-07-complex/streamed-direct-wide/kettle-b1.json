@@ -1,0 +1,123 @@
+{
+  "host": "Yalda24",
+  "cpu_affinity": [
+    0,
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7
+  ],
+  "source_hashes": {
+    "scripts/benchmarks/benchmark_cpp_scoring.py": "99c6ab153d0aec49d37d6114603cb2473baeb88c7f65a57356a61ba4545adfd7",
+    "puzzlescript_cpp/__init__.py": "158fa886867977335394dc41755006d7461ab280607d7448027dd720615da078",
+    "scripts/benchmarks/profile_rand_nodejs.py": "1e5e43a879f58e326f16d897c970dd479ed21da7466057e23cc727081420102e",
+    "puzzlescript_nodejs/puzzlescript/engine.js": "b301f87a3647406a7db23c5398629eb7061c75bb31b5bc002271e89cea5c53af"
+  },
+  "idle_workers": "SIGSTOP between requests; only the measured build runs",
+  "thread_environment": {
+    "OMP_WAIT_POLICY": "ACTIVE",
+    "OMP_PROC_BIND": "close",
+    "OMP_PLACES": "cores",
+    "OPENBLAS_NUM_THREADS": "1"
+  },
+  "trials": 9,
+  "seeds": [
+    42,
+    1042
+  ],
+  "steps": 300,
+  "games": [
+    "kettle"
+  ],
+  "levels": [
+    0
+  ],
+  "batches": [
+    1
+  ],
+  "threads": [
+    1
+  ],
+  "library_hashes": {
+    "baseline": "355f88636be05074d9286c171f0c9ee69b4ae630f7670f3acb9282341c5fde0f",
+    "candidate": "e4e6773b968b38c2f679e0f489b967e6f7b99dd18e4beae273d71ff47b8f518b"
+  },
+  "timing": "full Python wrapper outputs; alternating warmed calls; reset/actions/IPC excluded",
+  "results": [
+    {
+      "game": "kettle",
+      "level": 0,
+      "batch": 1,
+      "threads": 1,
+      "seed": 42,
+      "compiled_sha256": "ac39171ba8a3e1a5786a5566d558b3b6bce9172855f9138e507b0f3f080e93bb",
+      "output_sha256": "aea3b91157cfa2ea3d4631339b96551eaa0cd824bf0ad22e8b8aabcadf08a65e",
+      "samples_s": [
+        [
+          0.04383610561490059,
+          0.048866020515561104,
+          0.04878228344023228,
+          0.04883029870688915,
+          0.04879646748304367,
+          0.04882471263408661,
+          0.048775890842080116,
+          0.048788370564579964,
+          0.0487812552601099
+        ],
+        [
+          0.0415519829839468,
+          0.04123958759009838,
+          0.044518014416098595,
+          0.046235451474785805,
+          0.046165378764271736,
+          0.04616012051701546,
+          0.04622999206185341,
+          0.04625002481043339,
+          0.04626462236046791
+        ]
+      ],
+      "baseline_fps": 6149.006341642367,
+      "candidate_fps": 6498.376229768436,
+      "speedup": 1.0568172918866683
+    },
+    {
+      "game": "kettle",
+      "level": 0,
+      "batch": 1,
+      "threads": 1,
+      "seed": 1042,
+      "compiled_sha256": "ac39171ba8a3e1a5786a5566d558b3b6bce9172855f9138e507b0f3f080e93bb",
+      "output_sha256": "6be61f3113d523ca5549155097aa45349e6a2feff6afff01ddc1ca8f9c13e7d6",
+      "samples_s": [
+        [
+          0.04836307093501091,
+          0.04844796098768711,
+          0.04838150180876255,
+          0.048388998955488205,
+          0.048492247238755226,
+          0.04846487380564213,
+          0.047894494608044624,
+          0.04844195581972599,
+          0.04835532605648041
+        ],
+        [
+          0.04607545956969261,
+          0.04599398374557495,
+          0.0460764616727829,
+          0.04604655131697655,
+          0.04611613228917122,
+          0.04607737623155117,
+          0.04607079736888409,
+          0.04602222703397274,
+          0.0460790004581213
+        ]
+      ],
+      "baseline_fps": 6199.756276751298,
+      "candidate_fps": 6511.058224958719,
+      "speedup": 1.0502119654888344
+    }
+  ]
+}

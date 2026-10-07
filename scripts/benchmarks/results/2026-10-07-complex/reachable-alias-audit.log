@@ -1,0 +1,16 @@
+ERROR:2026-10-07 06:09:31,857:jax._src.xla_bridge:491: Jax plugin configuration error: Exception when calling jax_plugins.xla_cuda12.initialize()
+Traceback (most recent call last):
+  File "/home/jupyter-smearle/script-doctor/.venv/lib/python3.13/site-packages/jax/_src/xla_bridge.py", line 489, in discover_pjrt_plugins
+    plugin_module.initialize()
+    ~~~~~~~~~~~~~~~~~~~~~~~~^^
+  File "/home/jupyter-smearle/script-doctor/.venv/lib/python3.13/site-packages/jax_plugins/xla_cuda12/__init__.py", line 328, in initialize
+    _check_cuda_versions(raise_on_first_error=True)
+    ~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/jupyter-smearle/script-doctor/.venv/lib/python3.13/site-packages/jax_plugins/xla_cuda12/__init__.py", line 285, in _check_cuda_versions
+    local_device_count = cuda_versions.cuda_device_count()
+RuntimeError: jaxlib/cuda/versions_helpers.cc:113: operation cuInit(0) failed: CUDA_ERROR_NO_DEVICE
+Writing pretty tree to /tmp/puzzlejax-complex-20261007/data/pretty_trees/Crate_Assembler
+Parsed Crate_Assembler successfully
+Writing pretty tree to /tmp/puzzlejax-complex-20261007/data/pretty_trees/Crate_Assembler
+Parsed Crate_Assembler successfully
+{"game": "Crate_Assembler", "functions": 399, "identical_pruning_decisions": 7913, "decisions_sha256": "5bf41d5fcf1756d460beb168f937a538b3ccdf4bf75a1996e379a33d54304305", "measured_sha256": "e7b6938187561b2b4e480936cf9f373f66f42cd441bf60d4f5d39f810a7a4d25", "final_sha256": "9c1078796dc4e51ad149f15f1acd8be2fd7a0cc88347abb0f1bcb4788b2e54b4", "alias_guard_checks": 4, "result": "passed"}

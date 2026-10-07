@@ -1,0 +1,123 @@
+{
+  "host": "Yalda24",
+  "cpu_affinity": [
+    0,
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7
+  ],
+  "source_hashes": {
+    "scripts/benchmarks/benchmark_cpp_scoring.py": "99c6ab153d0aec49d37d6114603cb2473baeb88c7f65a57356a61ba4545adfd7",
+    "puzzlescript_cpp/__init__.py": "158fa886867977335394dc41755006d7461ab280607d7448027dd720615da078",
+    "scripts/benchmarks/profile_rand_nodejs.py": "1e5e43a879f58e326f16d897c970dd479ed21da7466057e23cc727081420102e",
+    "puzzlescript_nodejs/puzzlescript/engine.js": "b301f87a3647406a7db23c5398629eb7061c75bb31b5bc002271e89cea5c53af"
+  },
+  "idle_workers": "SIGSTOP between requests; only the measured build runs",
+  "thread_environment": {
+    "OMP_WAIT_POLICY": "ACTIVE",
+    "OMP_PROC_BIND": "close",
+    "OMP_PLACES": "cores",
+    "OPENBLAS_NUM_THREADS": "1"
+  },
+  "trials": 9,
+  "seeds": [
+    42,
+    1042
+  ],
+  "steps": 100,
+  "games": [
+    "Unconventional_Guns"
+  ],
+  "levels": [
+    0
+  ],
+  "batches": [
+    16
+  ],
+  "threads": [
+    8
+  ],
+  "library_hashes": {
+    "baseline": "355f88636be05074d9286c171f0c9ee69b4ae630f7670f3acb9282341c5fde0f",
+    "candidate": "2145bd86d490fe609e9cf43eeb828c47a6a9a79a151c4774bd62942ca2aa194d"
+  },
+  "timing": "full Python wrapper outputs; alternating warmed calls; reset/actions/IPC excluded",
+  "results": [
+    {
+      "game": "Unconventional_Guns",
+      "level": 0,
+      "batch": 16,
+      "threads": 8,
+      "seed": 42,
+      "compiled_sha256": "84d6ed93e7851e6da726eaaee6e373613941e055fa4eadb6c8348844521ac4c9",
+      "output_sha256": "6b23051cbfc3ecd96f8ddcc191e96a6b22fbb21a2a15f5e9961e7a0ae788a23b",
+      "samples_s": [
+        [
+          0.03254195116460323,
+          0.03261571004986763,
+          0.03250741958618164,
+          0.03255913779139519,
+          0.032464342191815376,
+          0.03255247510969639,
+          0.03244832158088684,
+          0.03259113058447838,
+          0.03309258818626404
+        ],
+        [
+          0.026243431493639946,
+          0.02613154798746109,
+          0.02625824138522148,
+          0.026176994666457176,
+          0.026258865371346474,
+          0.02618323266506195,
+          0.02621024288237095,
+          0.026153502985835075,
+          0.026752209290862083
+        ]
+      ],
+      "baseline_fps": 49151.408444619585,
+      "candidate_fps": 61044.83682889343,
+      "speedup": 1.2419753321550193
+    },
+    {
+      "game": "Unconventional_Guns",
+      "level": 0,
+      "batch": 16,
+      "threads": 8,
+      "seed": 1042,
+      "compiled_sha256": "84d6ed93e7851e6da726eaaee6e373613941e055fa4eadb6c8348844521ac4c9",
+      "output_sha256": "cc2f944ef27ddd14387f125b6240267616beb42bc8c961a40792518f15e9b216",
+      "samples_s": [
+        [
+          0.03438132815063,
+          0.034466011449694633,
+          0.03455182723701,
+          0.034399546682834625,
+          0.03438873402774334,
+          0.03445509448647499,
+          0.034341033548116684,
+          0.03443622961640358,
+          0.03433608263731003
+        ],
+        [
+          0.02779504656791687,
+          0.02769882045686245,
+          0.027735888957977295,
+          0.027616988867521286,
+          0.030238155275583267,
+          0.027759777382016182,
+          0.027754075825214386,
+          0.027701135724782944,
+          0.027769535779953003
+        ]
+      ],
+      "baseline_fps": 46512.24083712708,
+      "candidate_fps": 57649.19034149251,
+      "speedup": 1.2394412589873691
+    }
+  ]
+}

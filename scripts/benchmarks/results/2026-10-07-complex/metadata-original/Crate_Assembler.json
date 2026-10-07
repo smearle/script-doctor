@@ -1,0 +1,25 @@
+{
+  "game": "Crate_Assembler",
+  "objects": 56,
+  "layers": 11,
+  "level_shape": [
+    56,
+    6,
+    6
+  ],
+  "compiled_sha256": "b3ba88b6b1615818ba8103b5724bc35de4975ef16e3f577283ea54febf4009d8",
+  "source_sha256": "c770e35f29c319557e9a44eb6e3e31b41beaacebbf197c0808e9575169d2639c",
+  "compiled_rules": 7716,
+  "compiled_groups": 90,
+  "loop_points": 0,
+  "source_rules": 90,
+  "multirow_rules": 0,
+  "max_pattern_rows": 1,
+  "ellipsis_rules": 0,
+  "max_pattern_span": 2,
+  "board_cells": 36,
+  "force_channels": 55,
+  "jax_rule_functions": 7964,
+  "jax_rule_groups": 90,
+  "run_rules_on_level_start": false
+}

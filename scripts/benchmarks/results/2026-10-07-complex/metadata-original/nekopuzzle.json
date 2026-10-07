@@ -1,0 +1,25 @@
+{
+  "game": "nekopuzzle",
+  "objects": 3,
+  "layers": 2,
+  "level_shape": [
+    3,
+    7,
+    8
+  ],
+  "compiled_sha256": "c498e4a79583ccfe86976a83ad07ac383e723c37af947f66814b47471078446f",
+  "source_sha256": "8734244f354ba84cac618481afde5a19e887d1298471d4e11492c1a660ad52ae",
+  "compiled_rules": 8,
+  "compiled_groups": 2,
+  "loop_points": 0,
+  "source_rules": 2,
+  "multirow_rules": 0,
+  "max_pattern_rows": 1,
+  "ellipsis_rules": 4,
+  "max_pattern_span": 3,
+  "board_cells": 56,
+  "force_channels": 10,
+  "jax_rule_functions": 8,
+  "jax_rule_groups": 2,
+  "run_rules_on_level_start": false
+}

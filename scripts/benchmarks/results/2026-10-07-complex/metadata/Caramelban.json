@@ -1,0 +1,25 @@
+{
+  "game": "Caramelban",
+  "objects": 24,
+  "layers": 18,
+  "level_shape": [
+    24,
+    9,
+    21
+  ],
+  "compiled_sha256": "83144bd3b90c9be9f72f0b466fca58d4c035379440626417bebf410c7b77256f",
+  "source_sha256": "c6c1bed7f04f0881fad43bef127a01014568371149fb568a2f6538997c1c341f",
+  "compiled_rules": 131,
+  "compiled_groups": 64,
+  "loop_points": 0,
+  "source_rules": 71,
+  "multirow_rules": 13,
+  "max_pattern_rows": 2,
+  "ellipsis_rules": 0,
+  "max_pattern_span": 2,
+  "board_cells": 189,
+  "force_channels": 90,
+  "jax_rule_functions": 99,
+  "jax_rule_groups": 64,
+  "run_rules_on_level_start": true
+}

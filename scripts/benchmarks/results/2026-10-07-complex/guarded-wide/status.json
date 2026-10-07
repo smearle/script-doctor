@@ -1,0 +1,386 @@
+[
+  {
+    "game": "sokoban_basic",
+    "batch": 1,
+    "steps": 1000,
+    "exit_code": 0
+  },
+  {
+    "game": "sokoban_basic",
+    "batch": 16,
+    "steps": 1000,
+    "exit_code": 0
+  },
+  {
+    "game": "notsnake",
+    "batch": 1,
+    "steps": 300,
+    "exit_code": 0
+  },
+  {
+    "game": "notsnake",
+    "batch": 16,
+    "steps": 300,
+    "exit_code": 0
+  },
+  {
+    "game": "Zen_Puzzle_Garden",
+    "batch": 1,
+    "steps": 300,
+    "exit_code": 0
+  },
+  {
+    "game": "Zen_Puzzle_Garden",
+    "batch": 16,
+    "steps": 300,
+    "exit_code": 0
+  },
+  {
+    "game": "Slidings",
+    "batch": 1,
+    "steps": 300,
+    "exit_code": 0
+  },
+  {
+    "game": "Slidings",
+    "batch": 16,
+    "steps": 300,
+    "exit_code": 0
+  },
+  {
+    "game": "limerick",
+    "batch": 1,
+    "steps": 300,
+    "exit_code": 0
+  },
+  {
+    "game": "limerick",
+    "batch": 16,
+    "steps": 300,
+    "exit_code": 0
+  },
+  {
+    "game": "kettle",
+    "batch": 1,
+    "steps": 300,
+    "exit_code": 0
+  },
+  {
+    "game": "kettle",
+    "batch": 16,
+    "steps": 300,
+    "exit_code": 0
+  },
+  {
+    "game": "Take_Heart_Lass",
+    "batch": 1,
+    "steps": 300,
+    "exit_code": 0
+  },
+  {
+    "game": "Take_Heart_Lass",
+    "batch": 16,
+    "steps": 300,
+    "exit_code": 0
+  },
+  {
+    "game": "atlas shrank",
+    "batch": 1,
+    "steps": 300,
+    "exit_code": 0
+  },
+  {
+    "game": "atlas shrank",
+    "batch": 16,
+    "steps": 300,
+    "exit_code": 0
+  },
+  {
+    "game": "blocks",
+    "batch": 1,
+    "steps": 1000,
+    "exit_code": 0
+  },
+  {
+    "game": "blocks",
+    "batch": 16,
+    "steps": 1000,
+    "exit_code": 0
+  },
+  {
+    "game": "nekopuzzle",
+    "batch": 1,
+    "steps": 1000,
+    "exit_code": 0
+  },
+  {
+    "game": "nekopuzzle",
+    "batch": 16,
+    "steps": 1000,
+    "exit_code": 0
+  },
+  {
+    "game": "sokoban_match3",
+    "batch": 1,
+    "steps": 1000,
+    "exit_code": 0
+  },
+  {
+    "game": "sokoban_match3",
+    "batch": 16,
+    "steps": 1000,
+    "exit_code": 0
+  },
+  {
+    "game": "Travelling_salesman",
+    "batch": 1,
+    "steps": 300,
+    "exit_code": 0
+  },
+  {
+    "game": "Travelling_salesman",
+    "batch": 16,
+    "steps": 300,
+    "exit_code": 0
+  },
+  {
+    "game": "Multi-word_Dictionary_Game",
+    "batch": 1,
+    "steps": 300,
+    "exit_code": 0
+  },
+  {
+    "game": "Multi-word_Dictionary_Game",
+    "batch": 16,
+    "steps": 300,
+    "exit_code": 0
+  },
+  {
+    "game": "Microban",
+    "batch": 1,
+    "steps": 300,
+    "exit_code": 0
+  },
+  {
+    "game": "Microban",
+    "batch": 16,
+    "steps": 300,
+    "exit_code": 0
+  },
+  {
+    "game": "Magnet_Jack",
+    "batch": 1,
+    "steps": 300,
+    "exit_code": 0
+  },
+  {
+    "game": "Magnet_Jack",
+    "batch": 16,
+    "steps": 300,
+    "exit_code": 0
+  },
+  {
+    "game": "HyperMaze",
+    "batch": 1,
+    "steps": 300,
+    "exit_code": 0
+  },
+  {
+    "game": "HyperMaze",
+    "batch": 16,
+    "steps": 300,
+    "exit_code": 0
+  },
+  {
+    "game": "Beam_Islands",
+    "batch": 1,
+    "steps": 300,
+    "exit_code": 0
+  },
+  {
+    "game": "Beam_Islands",
+    "batch": 16,
+    "steps": 300,
+    "exit_code": 0
+  },
+  {
+    "game": "Boxes_&_Balloons",
+    "batch": 1,
+    "steps": 300,
+    "exit_code": 0
+  },
+  {
+    "game": "Boxes_&_Balloons",
+    "batch": 16,
+    "steps": 300,
+    "exit_code": 0
+  },
+  {
+    "game": "Caramelban",
+    "batch": 1,
+    "steps": 300,
+    "exit_code": 0
+  },
+  {
+    "game": "Caramelban",
+    "batch": 16,
+    "steps": 300,
+    "exit_code": 0
+  },
+  {
+    "game": "Crate_Assembler",
+    "batch": 1,
+    "steps": 1000,
+    "exit_code": 0
+  },
+  {
+    "game": "Crate_Assembler",
+    "batch": 16,
+    "steps": 1000,
+    "exit_code": 0
+  },
+  {
+    "game": "Heroes_of_Sokoban_III__The_Bard_and_The_Druid",
+    "batch": 1,
+    "steps": 300,
+    "exit_code": 0
+  },
+  {
+    "game": "Heroes_of_Sokoban_III__The_Bard_and_The_Druid",
+    "batch": 16,
+    "steps": 300,
+    "exit_code": 0
+  },
+  {
+    "game": "IceCrates",
+    "batch": 1,
+    "steps": 300,
+    "exit_code": 0
+  },
+  {
+    "game": "IceCrates",
+    "batch": 16,
+    "steps": 300,
+    "exit_code": 0
+  },
+  {
+    "game": "Indigestion",
+    "batch": 1,
+    "steps": 300,
+    "exit_code": 0
+  },
+  {
+    "game": "Indigestion",
+    "batch": 16,
+    "steps": 300,
+    "exit_code": 0
+  },
+  {
+    "game": "Memories_Of_Castlemouse",
+    "batch": 1,
+    "steps": 300,
+    "exit_code": 0
+  },
+  {
+    "game": "Memories_Of_Castlemouse",
+    "batch": 16,
+    "steps": 300,
+    "exit_code": 0
+  },
+  {
+    "game": "ParaLands",
+    "batch": 1,
+    "steps": 300,
+    "exit_code": 0
+  },
+  {
+    "game": "ParaLands",
+    "batch": 16,
+    "steps": 300,
+    "exit_code": 0
+  },
+  {
+    "game": "Sokoboros",
+    "batch": 1,
+    "steps": 300,
+    "exit_code": 0
+  },
+  {
+    "game": "Sokoboros",
+    "batch": 16,
+    "steps": 300,
+    "exit_code": 0
+  },
+  {
+    "game": "SwapBot",
+    "batch": 1,
+    "steps": 300,
+    "exit_code": 0
+  },
+  {
+    "game": "SwapBot",
+    "batch": 16,
+    "steps": 300,
+    "exit_code": 0
+  },
+  {
+    "game": "Symbolism",
+    "batch": 1,
+    "steps": 300,
+    "exit_code": 0
+  },
+  {
+    "game": "Symbolism",
+    "batch": 16,
+    "steps": 300,
+    "exit_code": 0
+  },
+  {
+    "game": "Transition",
+    "batch": 1,
+    "steps": 300,
+    "exit_code": 0
+  },
+  {
+    "game": "Transition",
+    "batch": 16,
+    "steps": 300,
+    "exit_code": 0
+  },
+  {
+    "game": "Unconventional_Guns",
+    "batch": 1,
+    "steps": 300,
+    "exit_code": 0
+  },
+  {
+    "game": "Unconventional_Guns",
+    "batch": 16,
+    "steps": 300,
+    "exit_code": 0
+  },
+  {
+    "game": "Vacuum",
+    "batch": 1,
+    "steps": 300,
+    "exit_code": 0
+  },
+  {
+    "game": "Vacuum",
+    "batch": 16,
+    "steps": 300,
+    "exit_code": 0
+  },
+  {
+    "game": "castlecloset",
+    "batch": 1,
+    "steps": 300,
+    "exit_code": 0
+  },
+  {
+    "game": "castlecloset",
+    "batch": 16,
+    "steps": 300,
+    "exit_code": 0
+  }
+]

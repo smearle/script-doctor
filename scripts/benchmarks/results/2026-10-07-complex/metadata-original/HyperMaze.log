@@ -1,0 +1,14 @@
+Writing pretty tree to /tmp/puzzlejax-complex-20261007/data/pretty_trees/HyperMaze
+Parsed HyperMaze successfully
+ERROR:2026-10-07 02:16:28,852:jax._src.xla_bridge:491: Jax plugin configuration error: Exception when calling jax_plugins.xla_cuda12.initialize()
+Traceback (most recent call last):
+  File "/home/jupyter-smearle/script-doctor/.venv/lib/python3.13/site-packages/jax/_src/xla_bridge.py", line 489, in discover_pjrt_plugins
+    plugin_module.initialize()
+    ~~~~~~~~~~~~~~~~~~~~~~~~^^
+  File "/home/jupyter-smearle/script-doctor/.venv/lib/python3.13/site-packages/jax_plugins/xla_cuda12/__init__.py", line 328, in initialize
+    _check_cuda_versions(raise_on_first_error=True)
+    ~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/jupyter-smearle/script-doctor/.venv/lib/python3.13/site-packages/jax_plugins/xla_cuda12/__init__.py", line 285, in _check_cuda_versions
+    local_device_count = cuda_versions.cuda_device_count()
+RuntimeError: jaxlib/cuda/versions_helpers.cc:113: operation cuInit(0) failed: CUDA_ERROR_NO_DEVICE
+{"game": "HyperMaze", "objects": 42, "layers": 3, "level_shape": [42, 20, 50], "compiled_sha256": "4942d931e16ead8883df7e666df89520961be8150039b535322af759594d521d", "source_sha256": "2c91497a3337622755a69cd443fc02c1a7fac273ca340a879d614e89bce9dd0d", "compiled_rules": 32, "compiled_groups": 8, "loop_points": 0, "source_rules": 8, "multirow_rules": 0, "max_pattern_rows": 1, "ellipsis_rules": 0, "max_pattern_span": 19, "board_cells": 1000, "force_channels": 15, "jax_rule_functions": 32, "jax_rule_groups": 8}

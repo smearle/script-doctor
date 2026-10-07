@@ -1,0 +1,45 @@
+name, driver_version, memory.total [MiB]
+NVIDIA H200, 610.43.02, 143771 MiB
+/scratch/se2161/script-doctor/.venv/lib/python3.13/site-packages/pydantic/_internal/_generate_schema.py:2249: UnsupportedFieldAttributeWarning: The 'repr' attribute with value False was provided to the `Field()` function, which has no effect in the context it was used. 'repr' is field-specific metadata, and can only be attached to a model field using `Annotated` metadata or by assignment. This may have happened because an `Annotated` type alias using the `type` statement was used, or if the `Field()` function was attached to a single member of a union type.
+  warnings.warn(
+/scratch/se2161/script-doctor/.venv/lib/python3.13/site-packages/pydantic/_internal/_generate_schema.py:2249: UnsupportedFieldAttributeWarning: The 'frozen' attribute with value True was provided to the `Field()` function, which has no effect in the context it was used. 'frozen' is field-specific metadata, and can only be attached to a model field using `Annotated` metadata or by assignment. This may have happened because an `Annotated` type alias using the `type` statement was used, or if the `Field()` function was attached to a single member of a union type.
+  warnings.warn(
+Writing pretty tree to /scratch/se2161/puzzlejax-perf-20261002/complex-wide-20261007/data/pretty_trees/Sokoboros
+Parsed Sokoboros successfully
+Writing pretty tree to /scratch/se2161/puzzlejax-perf-20261002/complex-wide-20261007/data/pretty_trees/Sokoboros
+Parsed Sokoboros successfully
+WARNING:puzzlescript_jax.env:Object egg appears multiple times in collision layers.
+{"game": "Sokoboros", "level": 0, "passed": true, "status": "passed", "message": "all steps match", "actions": [0, 1, 2, 3, 4, 0, 1, 2, 3, 4, 0, 1, 2, 3, 4, 0, 1, 2, 3, 4, 0, 1, 2, 3, 4, 0, 1, 2, 3, 4, 0, 1, 2, 3, 4, 0, 1, 2, 3, 4, 0, 3, 3, 2, 2, 4, 0, 3, 1, 0, 2, 4, 3, 3, 3, 3, 2, 0, 4, 2, 2, 1, 0, 4, 3, 3, 2, 4, 2, 2, 2, 1, 0, 2, 4, 0, 4, 4, 1, 3, 0, 3, 3, 1, 0, 4, 2, 4, 3, 3, 3, 0, 1, 2, 2, 0, 2, 0, 3, 3, 4, 3, 1, 4, 2, 1, 4, 1, 0, 2, 3, 0, 2, 0, 3, 2, 1, 1, 2, 3, 4, 2, 0, 4, 3, 3, 0, 1], "comparison": "Original JS versus JAX: board, heuristic and winning flag after every replayed step", "source_hashes": {"puzzlejax/validate_actions.py": "18c597d30a390a68f4f894556b38629ae6c41abd53510572074b2b5b6e17cdc4", "puzzlejax/validate_sols_jax.py": "67c746e254c07c0eccc04764e2a45da61db0dde8f23c66acbdd327b9c2935689", "puzzlescript_jax/env.py": "ab92c0a647c6efe9809c98cfecc7110a89b23b6dfdea2e7205603429041654fe", "PuzzleScript/src/js/compiler.js": "40e2996456a6ca642c89a769ea1a75ae074ccbcb0bcfc0d5fd8d27a88ad26cd7", "PuzzleScript/src/js/engine.js": "2dec5c52816d29f9578f43c939662410a280f54e6b8d464b2d6d734b23e21085", "puzzlescript_nodejs/puzzlescript/engine.js": "b301f87a3647406a7db23c5398629eb7061c75bb31b5bc002271e89cea5c53af", "scripts/benchmarks/validate_complex_game.py": "b28289fa1d48dbfb6a4c251f901158a8b2fc7c69197af4c1193bd4d8f41e8435"}}
+Writing pretty tree to /scratch/se2161/puzzlejax-perf-20261002/complex-wide-20261007/data/pretty_trees/Sokoboros
+Parsed Sokoboros successfully
+Object egg appears multiple times in collision layers.
+Compiling batch=16, steps=312
+Compiled in 270.63s; warming up
+{"batch": 16, "steps": 312, "compile_s": 270.6328777601011, "host": "gh117.hpc.nyu.edu", "argument_bytes": 3202280, "output_bytes": 3202368, "temporary_bytes": 32650176, "samples_s": [5.142917443066835, 5.33080748305656, 5.297257486032322, 5.150139216799289, 5.093782858923078], "fps_samples": [970.6552856938648, 936.4434967622774, 942.3744292518879, 969.2941860127871, 980.0182179448858], "median_fps": 969.2941860127871, "q25_fps": 942.3744292518879, "q75_fps": 970.6552856938648}
+Compiling batch=256, steps=100
+Compiled in 277.05s; warming up
+{"batch": 256, "steps": 100, "compile_s": 277.0467543650884, "host": "gh117.hpc.nyu.edu", "argument_bytes": 51236360, "output_bytes": 51236448, "temporary_bytes": 515487176, "samples_s": [17.71517642796971, 19.250354385003448, 19.35943999304436, 19.56807615305297, 19.815587299875915], "fps_samples": [1445.0886280523457, 1329.845647929635, 1322.352299921785, 1308.2532896830505, 1291.9122513295533], "median_fps": 1322.352299921785, "q25_fps": 1308.2532896830505, "q75_fps": 1329.845647929635}
+Compiling batch=1024, steps=100
+Compiled in 308.13s; warming up
+{"batch": 1024, "steps": 100, "compile_s": 308.1345332930796, "host": "gh117.hpc.nyu.edu", "argument_bytes": 204945416, "output_bytes": 204945504, "temporary_bytes": 2060790216, "samples_s": [69.21029412304051, 72.36997355311178, 72.68516601994634, 74.57963874796405, 75.43137707700953], "fps_samples": [1479.5486899384587, 1414.9514636045765, 1408.8156580931422, 1373.0289086818004, 1357.5252629347813], "median_fps": 1408.8156580931422, "q25_fps": 1373.0289086818004, "q75_fps": 1414.9514636045765}
+Compiling batch=4096, steps=100
+Compiled in 468.08s; warming up
+{"batch": 4096, "steps": 100, "compile_s": 468.0751467139926, "host": "gh117.hpc.nyu.edu", "argument_bytes": 819781640, "output_bytes": 819781728, "temporary_bytes": 8241930696, "samples_s": [278.06030916795135, 285.6292578759603, 290.91715759714134, 301.4005651290063, 306.64615950896405], "fps_samples": [1473.061729758048, 1434.0267626850616, 1407.9609583124322, 1358.988825467802, 1335.7414965049525], "median_fps": 1407.9609583124322, "q25_fps": 1358.988825467802, "q75_fps": 1434.0267626850616}
+Compiling batch=8192, steps=100
+E1007 03:47:22.319472 2648512 slow_operation_alarm.cc:73] Constant folding an instruction is taking > 1s:
+
+  %get-tuple-element.30370 = pred[8192,74,74]{2,1,0} get-tuple-element(%tuple.977), index=1
+
+This isn't necessarily a bug; constant-folding is inherently a trade-off between compilation time and speed at runtime. XLA has some guards that attempt to keep constant folding from taking too long, but fundamentally you'll always be able to come up with an input program that takes a long time.
+
+If you'd like to file a bug, run with envvar XLA_FLAGS=--xla_dump_to=/tmp/foo and attach the results.
+E1007 03:47:22.367775 2648293 slow_operation_alarm.cc:140] The operation took 1.048414661s
+Constant folding an instruction is taking > 1s:
+
+  %get-tuple-element.30370 = pred[8192,74,74]{2,1,0} get-tuple-element(%tuple.977), index=1
+
+This isn't necessarily a bug; constant-folding is inherently a trade-off between compilation time and speed at runtime. XLA has some guards that attempt to keep constant folding from taking too long, but fundamentally you'll always be able to come up with an input program that takes a long time.
+
+If you'd like to file a bug, run with envvar XLA_FLAGS=--xla_dump_to=/tmp/foo and attach the results.
+Compiled in 708.61s; warming up
+[2026-10-07T04:36:24.900] error: *** JOB 19325547 ON gh117 CANCELLED AT 2026-10-07T04:36:24 DUE TO TIME LIMIT ***

@@ -1,0 +1,123 @@
+{
+  "host": "Yalda24",
+  "cpu_affinity": [
+    0,
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7
+  ],
+  "source_hashes": {
+    "scripts/benchmarks/benchmark_cpp_scoring.py": "99c6ab153d0aec49d37d6114603cb2473baeb88c7f65a57356a61ba4545adfd7",
+    "puzzlescript_cpp/__init__.py": "158fa886867977335394dc41755006d7461ab280607d7448027dd720615da078",
+    "scripts/benchmarks/profile_rand_nodejs.py": "1e5e43a879f58e326f16d897c970dd479ed21da7466057e23cc727081420102e",
+    "puzzlescript_nodejs/puzzlescript/engine.js": "b301f87a3647406a7db23c5398629eb7061c75bb31b5bc002271e89cea5c53af"
+  },
+  "idle_workers": "SIGSTOP between requests; only the measured build runs",
+  "thread_environment": {
+    "OMP_WAIT_POLICY": "ACTIVE",
+    "OMP_PROC_BIND": "close",
+    "OMP_PLACES": "cores",
+    "OPENBLAS_NUM_THREADS": "1"
+  },
+  "trials": 9,
+  "seeds": [
+    42,
+    1042
+  ],
+  "steps": 1000,
+  "games": [
+    "Crate_Assembler"
+  ],
+  "levels": [
+    0
+  ],
+  "batches": [
+    16
+  ],
+  "threads": [
+    8
+  ],
+  "library_hashes": {
+    "baseline": "355f88636be05074d9286c171f0c9ee69b4ae630f7670f3acb9282341c5fde0f",
+    "candidate": "e4e6773b968b38c2f679e0f489b967e6f7b99dd18e4beae273d71ff47b8f518b"
+  },
+  "timing": "full Python wrapper outputs; alternating warmed calls; reset/actions/IPC excluded",
+  "results": [
+    {
+      "game": "Crate_Assembler",
+      "level": 0,
+      "batch": 16,
+      "threads": 8,
+      "seed": 42,
+      "compiled_sha256": "b3ba88b6b1615818ba8103b5724bc35de4975ef16e3f577283ea54febf4009d8",
+      "output_sha256": "15be4135be331f54a6d6bd6c97226cabd5265ecc5bb8e5c6cc1bc56ea0fe3d0e",
+      "samples_s": [
+        [
+          0.8175920452922583,
+          0.8053915239870548,
+          0.8056889213621616,
+          0.8114674650132656,
+          0.8049212507903576,
+          0.8345716800540686,
+          0.9017221722751856,
+          0.8243413418531418,
+          0.8052131906151772
+        ],
+        [
+          0.9077334944158792,
+          0.9010743722319603,
+          0.9096655286848545,
+          0.8880427293479443,
+          0.90550696849823,
+          0.9026358500123024,
+          0.8986468780785799,
+          0.9045774023979902,
+          0.9175217729061842
+        ]
+      ],
+      "baseline_fps": 19717.364761800323,
+      "candidate_fps": 17687.81749089109,
+      "speedup": 0.8970680263094184
+    },
+    {
+      "game": "Crate_Assembler",
+      "level": 0,
+      "batch": 16,
+      "threads": 8,
+      "seed": 1042,
+      "compiled_sha256": "b3ba88b6b1615818ba8103b5724bc35de4975ef16e3f577283ea54febf4009d8",
+      "output_sha256": "e5f7ded4b2bc5e2d1a1a2ef1d5eae562299e326deb0c0ab163db862323c2b57c",
+      "samples_s": [
+        [
+          0.9228866323828697,
+          0.9500276818871498,
+          0.9346580989658833,
+          0.808085709810257,
+          0.8221315518021584,
+          0.8284171279519796,
+          0.8684966340661049,
+          0.7826632522046566,
+          0.785367239266634
+        ],
+        [
+          1.0435538049787283,
+          1.0542954355478287,
+          0.96843914501369,
+          0.9235937651246786,
+          0.9171548839658499,
+          0.9096692875027657,
+          0.9917884450405836,
+          0.8938886895775795,
+          0.8820942342281342
+        ]
+      ],
+      "baseline_fps": 19313.94156414335,
+      "candidate_fps": 17323.633619202825,
+      "speedup": 0.8969496755320226
+    }
+  ]
+}

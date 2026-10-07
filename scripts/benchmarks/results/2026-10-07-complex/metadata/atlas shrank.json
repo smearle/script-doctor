@@ -1,0 +1,25 @@
+{
+  "game": "atlas shrank",
+  "objects": 27,
+  "layers": 5,
+  "level_shape": [
+    27,
+    7,
+    15
+  ],
+  "compiled_sha256": "dbcfee2b210df5fd24c740df723007451763b65c3aa963f5b4d77598d4437f13",
+  "source_sha256": "ef21b04a8d49f00f2607b1487d138cd1847dd22d41feb6e456ffb1e801ddcf93",
+  "compiled_rules": 60,
+  "compiled_groups": 43,
+  "loop_points": 0,
+  "source_rules": 44,
+  "multirow_rules": 33,
+  "max_pattern_rows": 2,
+  "ellipsis_rules": 0,
+  "max_pattern_span": 3,
+  "board_cells": 105,
+  "force_channels": 25,
+  "jax_rule_functions": 61,
+  "jax_rule_groups": 44,
+  "run_rules_on_level_start": true
+}

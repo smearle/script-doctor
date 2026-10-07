@@ -1,0 +1,123 @@
+{
+  "host": "Yalda24",
+  "cpu_affinity": [
+    0,
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7
+  ],
+  "source_hashes": {
+    "scripts/benchmarks/benchmark_cpp_scoring.py": "99c6ab153d0aec49d37d6114603cb2473baeb88c7f65a57356a61ba4545adfd7",
+    "puzzlescript_cpp/__init__.py": "158fa886867977335394dc41755006d7461ab280607d7448027dd720615da078",
+    "scripts/benchmarks/profile_rand_nodejs.py": "1e5e43a879f58e326f16d897c970dd479ed21da7466057e23cc727081420102e",
+    "puzzlescript_nodejs/puzzlescript/engine.js": "b301f87a3647406a7db23c5398629eb7061c75bb31b5bc002271e89cea5c53af"
+  },
+  "idle_workers": "SIGSTOP between requests; only the measured build runs",
+  "thread_environment": {
+    "OMP_WAIT_POLICY": "ACTIVE",
+    "OMP_PROC_BIND": "close",
+    "OMP_PLACES": "cores",
+    "OPENBLAS_NUM_THREADS": "1"
+  },
+  "trials": 9,
+  "seeds": [
+    42,
+    1042
+  ],
+  "steps": 300,
+  "games": [
+    "Boxes_&_Balloons"
+  ],
+  "levels": [
+    0
+  ],
+  "batches": [
+    16
+  ],
+  "threads": [
+    8
+  ],
+  "library_hashes": {
+    "baseline": "355f88636be05074d9286c171f0c9ee69b4ae630f7670f3acb9282341c5fde0f",
+    "candidate": "c88b36964b09a31b0b220957184cdfc11a304399bc066ab0b9fa2193753afb2d"
+  },
+  "timing": "full Python wrapper outputs; alternating warmed calls; reset/actions/IPC excluded",
+  "results": [
+    {
+      "game": "Boxes_&_Balloons",
+      "level": 0,
+      "batch": 16,
+      "threads": 8,
+      "seed": 42,
+      "compiled_sha256": "97ed1f5f22d2899d0e45b9bd1c39a7b6db7ae248e54d6c4ae1a4d9ec9b3cd655",
+      "output_sha256": "2ba8059c5fa3b4aba63be16a17baaeaf7f67a85273b0f979a429d21fc52fcc0f",
+      "samples_s": [
+        [
+          0.054234299808740616,
+          0.054079098626971245,
+          0.053972793743014336,
+          0.054049015045166016,
+          0.05405162088572979,
+          0.054189492017030716,
+          0.05412677675485611,
+          0.054185112938284874,
+          0.05410919524729252
+        ],
+        [
+          0.05220990255475044,
+          0.05214993096888065,
+          0.05213508941233158,
+          0.05213262885808945,
+          0.052253520116209984,
+          0.052172426134347916,
+          0.05234328657388687,
+          0.05242649093270302,
+          0.05232980102300644
+        ]
+      ],
+      "baseline_fps": 88709.50636140129,
+      "candidate_fps": 91936.58224062822,
+      "speedup": 1.0363780164222747
+    },
+    {
+      "game": "Boxes_&_Balloons",
+      "level": 0,
+      "batch": 16,
+      "threads": 8,
+      "seed": 1042,
+      "compiled_sha256": "97ed1f5f22d2899d0e45b9bd1c39a7b6db7ae248e54d6c4ae1a4d9ec9b3cd655",
+      "output_sha256": "9eac22c03e3d3fa9daf42216fd99c098a169530d7b9fa5b82eac8a2025ae9071",
+      "samples_s": [
+        [
+          0.05456032045185566,
+          0.05414552427828312,
+          0.05460784398019314,
+          0.0545205008238554,
+          0.05446869134902954,
+          0.05479663237929344,
+          0.05471549555659294,
+          0.05477292090654373,
+          0.054710349068045616
+        ],
+        [
+          0.05265584588050842,
+          0.05268128775060177,
+          0.05263981409370899,
+          0.05263722501695156,
+          0.052720341831445694,
+          0.05272448807954788,
+          0.05275438725948334,
+          0.05277583934366703,
+          0.05281326547265053
+        ]
+      ],
+      "baseline_fps": 87899.46004352438,
+      "candidate_fps": 91046.45063467667,
+      "speedup": 1.035802160668496
+    }
+  ]
+}

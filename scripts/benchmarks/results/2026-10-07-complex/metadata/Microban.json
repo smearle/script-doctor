@@ -1,0 +1,25 @@
+{
+  "game": "Microban",
+  "objects": 5,
+  "layers": 3,
+  "level_shape": [
+    5,
+    7,
+    6
+  ],
+  "compiled_sha256": "a7700ddc6e206bf4c9993fc9d767cd76b78016c81586a7f37a81ea7abc79d0df",
+  "source_sha256": "a82b28479c121b6d21eada4a3915107908424daf4c203cd5ae930d291dffe6e3",
+  "compiled_rules": 4,
+  "compiled_groups": 1,
+  "loop_points": 0,
+  "source_rules": 1,
+  "multirow_rules": 0,
+  "max_pattern_rows": 1,
+  "ellipsis_rules": 0,
+  "max_pattern_span": 2,
+  "board_cells": 42,
+  "force_channels": 15,
+  "jax_rule_functions": 4,
+  "jax_rule_groups": 1,
+  "run_rules_on_level_start": false
+}

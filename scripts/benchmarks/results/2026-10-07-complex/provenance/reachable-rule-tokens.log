@@ -1,0 +1,4 @@
+Writing pretty tree to /tmp/puzzlejax-complex-20261007/data/pretty_trees/Crate_Assembler
+Parsed Crate_Assembler successfully
+UNKNOWNS [('> crate4', 138), ('> crate31', 138), ('> crate32', 138), ('> crate33', 138), ('> crate2c', 138), ('> crate34', 136), ('> crate2s', 136), ('> crate22', 114), ('> crate21', 112), ('> crate23', 112), ('> crate24', 110), ('> crate11', 88), ('> crate12', 88), ('> crate13', 86), ('> crate14', 84), ('walls', 64), ('> player', 36)]
+EXAMPLES [(1, [[['> player'], ['crate4']]]), (1, [[['> player'], ['crate11']]]), (1, [[['> crate4'], ['crate4']]]), (1, [[['> crate4'], ['crate11']]]), (1, [[['> crate31'], ['crate4']]]), (1, [[['> crate31'], ['crate11']]]), (1, [[['> crate32'], ['crate4']]]), (1, [[['> crate32'], ['crate11']]]), (1, [[['> crate33'], ['crate4']]]), (1, [[['> crate33'], ['crate11']]])]

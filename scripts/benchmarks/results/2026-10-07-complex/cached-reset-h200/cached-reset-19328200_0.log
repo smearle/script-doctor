@@ -1,0 +1,8 @@
+name, driver_version, memory.total [MiB]
+NVIDIA H200, 610.43.02, 143771 MiB
+Writing pretty tree to /scratch/se2161/puzzlejax-perf-20261002/complex-reset-20261007/data/pretty_trees/sokoban_basic
+Parsed sokoban_basic successfully
+Writing pretty tree to /scratch/se2161/puzzlejax-perf-20261002/complex-reset-20261007/data/pretty_trees/sokoban_basic
+Parsed sokoban_basic successfully
+{"game": "sokoban_basic", "batch": 256, "steps": 64, "seed": 42, "samples_s": [[0.06154026207514107, 0.06174378399737179, 0.061274030013009906, 0.06140850414521992, 0.061422301921993494, 0.061367091024294496, 0.061178323114290833], [0.0616324779111892, 0.06153434794396162, 0.06145626795478165, 0.06123031792230904, 0.06137643614783883, 0.06113133206963539, 0.06129799201153219]], "speedup": 1.000522480603205, "compilation": [{"compile_s": 13.14941031485796, "temporary_bytes": 1446368, "output_bytes": 7930080}, {"compile_s": 9.513877281919122, "temporary_bytes": 1446368, "output_bytes": 7930080}], "exact_full_outputs": true, "automatic_resets": 768}
+{"game": "sokoban_basic", "batch": 256, "steps": 64, "seed": 1042, "samples_s": [[0.06147486297413707, 0.06149702100083232, 0.06139343301765621, 0.061474609188735485, 0.061244022101163864, 0.061430736910551786, 0.06125082401558757], [0.06160262692719698, 0.06119571696035564, 0.06159576610662043, 0.06124547007493675, 0.06132869189605117, 0.06138406996615231, 0.06148475292138755]], "speedup": 1.0007602451975766, "compilation": [{"compile_s": 13.14941031485796, "temporary_bytes": 1446368, "output_bytes": 7930080}, {"compile_s": 9.513877281919122, "temporary_bytes": 1446368, "output_bytes": 7930080}], "exact_full_outputs": true, "automatic_resets": 768}

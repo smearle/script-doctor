@@ -1,0 +1,61 @@
+{
+  "game": "ParaLands",
+  "level": 0,
+  "jax_version": "0.9.0.1",
+  "devices": [
+    "NVIDIA H200"
+  ],
+  "host": "gh119.hpc.nyu.edu",
+  "engine_sha256": "ab92c0a647c6efe9809c98cfecc7110a89b23b6dfdea2e7205603429041654fe",
+  "requested_batches": [
+    16,
+    256,
+    1024,
+    4096
+  ],
+  "trials": 5,
+  "seed": 42,
+  "base_steps": 5000,
+  "min_steps": 100,
+  "max_episode_steps": 2147483647,
+  "timing": "median/IQR of synchronized warmed calls; carry continues across trials",
+  "output_mode": "final_carry",
+  "action_generation": "inside timed scan",
+  "results": [
+    {
+      "batch": 16,
+      "steps": 312,
+      "compile_s": 1454.2984318470117,
+      "host": "gh119.hpc.nyu.edu",
+      "argument_bytes": 195432,
+      "output_bytes": 195520,
+      "temporary_bytes": 12877800,
+      "samples_s": [
+        88.80752336187288,
+        88.10645410208963,
+        87.82667061197571,
+        87.25805156701244,
+        88.77270128508098
+      ],
+      "fps_samples": [
+        56.211453838866774,
+        56.65873233549645,
+        56.839226230662895,
+        57.209620319865195,
+        56.233503405161656
+      ],
+      "median_fps": 56.65873233549645,
+      "q25_fps": 56.233503405161656,
+      "q75_fps": 56.839226230662895
+    }
+  ],
+  "benchmark_sha256": "464e20595d17e46ef563f8878f7d398af33f7f712604734bd108220a5f8b2e3d",
+  "adaptive": {
+    "factor": 2,
+    "max_batch": 262144,
+    "min_gain": 0.03,
+    "patience": 2,
+    "regression": 0.1
+  },
+  "pending_batch": 256
+}

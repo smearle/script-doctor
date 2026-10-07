@@ -1,0 +1,25 @@
+{
+  "game": "Unconventional_Guns",
+  "objects": 75,
+  "layers": 13,
+  "level_shape": [
+    75,
+    8,
+    7
+  ],
+  "compiled_sha256": "84d6ed93e7851e6da726eaaee6e373613941e055fa4eadb6c8348844521ac4c9",
+  "source_sha256": "4185bdaadd079d1248b00d903112050a75640ff03aab328b9d3f7e377da77ff2",
+  "compiled_rules": 248,
+  "compiled_groups": 112,
+  "loop_points": 0,
+  "source_rules": 112,
+  "multirow_rules": 70,
+  "max_pattern_rows": 3,
+  "ellipsis_rules": 4,
+  "max_pattern_span": 4,
+  "board_cells": 56,
+  "force_channels": 65,
+  "jax_rule_functions": 201,
+  "jax_rule_groups": 102,
+  "run_rules_on_level_start": false
+}

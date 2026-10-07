@@ -1,0 +1,62 @@
+{
+  "Beam_Islands": {
+    "path": "torch/validation/Beam_Islands.json",
+    "sha256": "4e6b72d88d27c49635db7c55fe4898676712df9eca52d7842c8ee57dfc108ed6"
+  },
+  "Boxes_&_Balloons": {
+    "path": "torch/validation/Boxes_&_Balloons.json",
+    "sha256": "56e3df986198a30314c6cd7167d350231c5c3d2e04f2daf969e1b8f78a158788"
+  },
+  "Caramelban": {
+    "path": "torch/validation/Caramelban.json",
+    "sha256": "e1c87f1e7246dd30848c89196d5f8f54392dd3131301e36a418a027d91269e5a"
+  },
+  "Heroes_of_Sokoban_III__The_Bard_and_The_Druid": {
+    "path": "torch/validation/Heroes_of_Sokoban_III__The_Bard_and_The_Druid.json",
+    "sha256": "70d0be118a0b3e9feb23cab19fec8879a548cea24f3a39f737aeac90a7e3e104"
+  },
+  "IceCrates": {
+    "path": "torch/validation/IceCrates.json",
+    "sha256": "64d2b697b0d96ce150a56b0cf43ea4b9590e6344bbff87b324c070cf7149eb4a"
+  },
+  "Indigestion": {
+    "path": "torch-terminal/validation/Indigestion.json",
+    "sha256": "a3566b38ed62bf4303392eec37672cff17118037c9f9699232ef8eb83f15e850"
+  },
+  "Memories_Of_Castlemouse": {
+    "path": "torch/validation/Memories_Of_Castlemouse.json",
+    "sha256": "744b686a3ec618321a7720c538d0d7702c12b89b017ee4d1981b8a58ea03b023"
+  },
+  "SwapBot": {
+    "path": "torch/validation/SwapBot.json",
+    "sha256": "463d41d285405ba04164fd242b294841ab1c07519ebf0a871e94e5f8180eb5d4"
+  },
+  "Transition": {
+    "path": "torch/validation/Transition.json",
+    "sha256": "5bd494aa0deed8a6b5b569e39f01807501d8c5780d447591adbb03d679508bef"
+  },
+  "castlecloset": {
+    "path": "torch/validation/castlecloset.json",
+    "sha256": "18d91a6bd48be4de97a414933add795e79daf3321f6c3dffaf14bfd9cf92e4e9"
+  },
+  "ParaLands": {
+    "path": "torch-wide/validation/ParaLands.json",
+    "sha256": "086b5527beb67e4a0af99b76a23f81ae641059dc89dfe5510891187e73784087"
+  },
+  "Sokoboros": {
+    "path": "torch-wide/validation/Sokoboros.json",
+    "sha256": "ee0bd2b1b527bd3b655ff7929a2260b274e28f84e98e7447d0925281abb6a591"
+  },
+  "Symbolism": {
+    "path": "torch-wide/validation/Symbolism.json",
+    "sha256": "92f4dc28eb086b6a5d2f8077165a26bcb705a2633e00d2243690fd2888e4bf94"
+  },
+  "Unconventional_Guns": {
+    "path": "torch-wide/validation/Unconventional_Guns.json",
+    "sha256": "f56c0b0c7fc2dc3d6afc3b344453676069ca6aa7f32216680dd4d83facb828a6"
+  },
+  "Vacuum": {
+    "path": "torch-wide/validation/Vacuum.json",
+    "sha256": "1b1af6a3a311a8377f42213d02b8835c1703136df7795d2acffebdaea76ce8a0"
+  }
+}

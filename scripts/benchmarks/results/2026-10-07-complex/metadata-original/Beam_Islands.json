@@ -1,0 +1,25 @@
+{
+  "game": "Beam_Islands",
+  "objects": 48,
+  "layers": 19,
+  "level_shape": [
+    48,
+    8,
+    11
+  ],
+  "compiled_sha256": "d47ee2387eee1c647b33cbb43b9b0577e742f0d4e791b8d13733a39509fe2ee7",
+  "source_sha256": "cb85adc9e9ae806feede1032262f167641a59c4aab6f374d1fd86a2f943cc66b",
+  "compiled_rules": 239,
+  "compiled_groups": 81,
+  "loop_points": 0,
+  "source_rules": 84,
+  "multirow_rules": 89,
+  "max_pattern_rows": 2,
+  "ellipsis_rules": 0,
+  "max_pattern_span": 2,
+  "board_cells": 88,
+  "force_channels": 95,
+  "jax_rule_functions": 182,
+  "jax_rule_groups": 81,
+  "run_rules_on_level_start": true
+}

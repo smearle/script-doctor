@@ -1,0 +1,123 @@
+{
+  "host": "Yalda24",
+  "cpu_affinity": [
+    0,
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7
+  ],
+  "source_hashes": {
+    "scripts/benchmarks/benchmark_cpp_scoring.py": "99c6ab153d0aec49d37d6114603cb2473baeb88c7f65a57356a61ba4545adfd7",
+    "puzzlescript_cpp/__init__.py": "158fa886867977335394dc41755006d7461ab280607d7448027dd720615da078",
+    "scripts/benchmarks/profile_rand_nodejs.py": "1e5e43a879f58e326f16d897c970dd479ed21da7466057e23cc727081420102e",
+    "puzzlescript_nodejs/puzzlescript/engine.js": "b301f87a3647406a7db23c5398629eb7061c75bb31b5bc002271e89cea5c53af"
+  },
+  "idle_workers": "SIGSTOP between requests; only the measured build runs",
+  "thread_environment": {
+    "OMP_WAIT_POLICY": "ACTIVE",
+    "OMP_PROC_BIND": "close",
+    "OMP_PLACES": "cores",
+    "OPENBLAS_NUM_THREADS": "1"
+  },
+  "trials": 9,
+  "seeds": [
+    42,
+    1042
+  ],
+  "steps": 300,
+  "games": [
+    "Transition"
+  ],
+  "levels": [
+    0
+  ],
+  "batches": [
+    1
+  ],
+  "threads": [
+    1
+  ],
+  "library_hashes": {
+    "baseline": "355f88636be05074d9286c171f0c9ee69b4ae630f7670f3acb9282341c5fde0f",
+    "candidate": "c88b36964b09a31b0b220957184cdfc11a304399bc066ab0b9fa2193753afb2d"
+  },
+  "timing": "full Python wrapper outputs; alternating warmed calls; reset/actions/IPC excluded",
+  "results": [
+    {
+      "game": "Transition",
+      "level": 0,
+      "batch": 1,
+      "threads": 1,
+      "seed": 42,
+      "compiled_sha256": "3668f0f497dfd8592fedb2201be56bc4b2f28160d797ca42a64e7c858b34da76",
+      "output_sha256": "98bc92ecd84a5314324136df44133b22f1c4c3ac5d7d63fda02123043d7618dd",
+      "samples_s": [
+        [
+          0.15167546644806862,
+          0.151291998103261,
+          0.1513804141432047,
+          0.15144481882452965,
+          0.14978112280368805,
+          0.15149784833192825,
+          0.1512867994606495,
+          0.15136529691517353,
+          0.15103882923722267
+        ],
+        [
+          0.1322877835482359,
+          0.13207121193408966,
+          0.13220210932195187,
+          0.13216221891343594,
+          0.13095281831920147,
+          0.13160057552158833,
+          0.13214465230703354,
+          0.13199245743453503,
+          0.13201788999140263
+        ]
+      ],
+      "baseline_fps": 1981.9602386676695,
+      "candidate_fps": 2271.5018330392504,
+      "speedup": 1.1460884980044903
+    },
+    {
+      "game": "Transition",
+      "level": 0,
+      "batch": 1,
+      "threads": 1,
+      "seed": 1042,
+      "compiled_sha256": "3668f0f497dfd8592fedb2201be56bc4b2f28160d797ca42a64e7c858b34da76",
+      "output_sha256": "cb4318ab9bd6d896a2437294562cae873810dbced9a9b5de898e05a22d683045",
+      "samples_s": [
+        [
+          0.14373749122023582,
+          0.1368532944470644,
+          0.13698759861290455,
+          0.13667297922074795,
+          0.1509485151618719,
+          0.15070052444934845,
+          0.13655743561685085,
+          0.14209755137562752,
+          0.1445030216127634
+        ],
+        [
+          0.1188941691070795,
+          0.1187592651695013,
+          0.11874259263277054,
+          0.11867019347846508,
+          0.132387425750494,
+          0.13248011469841003,
+          0.11873958073556423,
+          0.1185552328824997,
+          0.11876239813864231
+        ]
+      ],
+      "baseline_fps": 2111.2256833122024,
+      "candidate_fps": 2526.118695428265,
+      "speedup": 1.1965176036818368
+    }
+  ]
+}

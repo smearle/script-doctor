@@ -1,0 +1,25 @@
+{
+  "game": "Heroes_of_Sokoban_III__The_Bard_and_The_Druid",
+  "objects": 31,
+  "layers": 6,
+  "level_shape": [
+    31,
+    12,
+    19
+  ],
+  "compiled_sha256": "722f3a60d5e7af147ff3e76bb9a88c92b07e3101d1a6d635082ddfee7c314f6e",
+  "source_sha256": "4462e725080bde820887693472f0969b4a32883361bd1fc0fbef0c22ab959db7",
+  "compiled_rules": 210,
+  "compiled_groups": 78,
+  "loop_points": 0,
+  "source_rules": 79,
+  "multirow_rules": 88,
+  "max_pattern_rows": 2,
+  "ellipsis_rules": 0,
+  "max_pattern_span": 3,
+  "board_cells": 228,
+  "force_channels": 30,
+  "jax_rule_functions": 170,
+  "jax_rule_groups": 78,
+  "run_rules_on_level_start": true
+}

@@ -1,0 +1,46 @@
+name, driver_version, memory.total [MiB]
+NVIDIA H200, 610.43.02, 143771 MiB
+/scratch/se2161/script-doctor/.venv/lib/python3.13/site-packages/pydantic/_internal/_generate_schema.py:2249: UnsupportedFieldAttributeWarning: The 'repr' attribute with value False was provided to the `Field()` function, which has no effect in the context it was used. 'repr' is field-specific metadata, and can only be attached to a model field using `Annotated` metadata or by assignment. This may have happened because an `Annotated` type alias using the `type` statement was used, or if the `Field()` function was attached to a single member of a union type.
+  warnings.warn(
+/scratch/se2161/script-doctor/.venv/lib/python3.13/site-packages/pydantic/_internal/_generate_schema.py:2249: UnsupportedFieldAttributeWarning: The 'frozen' attribute with value True was provided to the `Field()` function, which has no effect in the context it was used. 'frozen' is field-specific metadata, and can only be attached to a model field using `Annotated` metadata or by assignment. This may have happened because an `Annotated` type alias using the `type` statement was used, or if the `Field()` function was attached to a single member of a union type.
+  warnings.warn(
+Writing pretty tree to /scratch/se2161/puzzlejax-perf-20261002/complex-wide-20261007/data/pretty_trees/ParaLands
+Parsed ParaLands successfully
+Writing pretty tree to /scratch/se2161/puzzlejax-perf-20261002/complex-wide-20261007/data/pretty_trees/ParaLands
+Parsed ParaLands successfully
+E1007 02:44:33.808061 3291666 slow_operation_alarm.cc:73] 
+********************************
+[Compiling module jit_reset for GPU] Very slow compile? If you want to file a bug, run with envvar XLA_FLAGS=--xla_dump_to=/tmp/foo and attach the results.
+********************************
+E1007 02:45:28.560620 3291487 slow_operation_alarm.cc:140] The operation took 2m54.752654076s
+
+********************************
+[Compiling module jit_reset for GPU] Very slow compile? If you want to file a bug, run with envvar XLA_FLAGS=--xla_dump_to=/tmp/foo and attach the results.
+********************************
+{"game": "ParaLands", "level": 0, "passed": true, "status": "passed", "message": "all steps match", "actions": [0, 1, 2, 3, 4, 0, 1, 2, 3, 4, 0, 1, 2, 3, 4, 0, 1, 2, 3, 4, 0, 1, 2, 3, 4, 0, 1, 2, 3, 4, 0, 1, 2, 3, 4, 0, 1, 2, 3, 4, 0, 3, 3, 2, 2, 4, 0, 3, 1, 0, 2, 4, 3, 3, 3, 3, 2, 0, 4, 2, 2, 1, 0, 4, 3, 3, 2, 4, 2, 2, 2, 1, 0, 2, 4, 0, 4, 4, 1, 3, 0, 3, 3, 1, 0, 4, 2, 4, 3, 3, 3, 0, 1, 2, 2, 0, 2, 0, 3, 3, 4, 3, 1, 4, 2, 1, 4, 1, 0, 2, 3, 0, 2, 0, 3, 2, 1, 1, 2, 3, 4, 2, 0, 4, 3, 3, 0, 1], "comparison": "Original JS versus JAX: board, heuristic and winning flag after every replayed step", "source_hashes": {"puzzlejax/validate_actions.py": "18c597d30a390a68f4f894556b38629ae6c41abd53510572074b2b5b6e17cdc4", "puzzlejax/validate_sols_jax.py": "67c746e254c07c0eccc04764e2a45da61db0dde8f23c66acbdd327b9c2935689", "puzzlescript_jax/env.py": "ab92c0a647c6efe9809c98cfecc7110a89b23b6dfdea2e7205603429041654fe", "PuzzleScript/src/js/compiler.js": "40e2996456a6ca642c89a769ea1a75ae074ccbcb0bcfc0d5fd8d27a88ad26cd7", "PuzzleScript/src/js/engine.js": "2dec5c52816d29f9578f43c939662410a280f54e6b8d464b2d6d734b23e21085", "puzzlescript_nodejs/puzzlescript/engine.js": "b301f87a3647406a7db23c5398629eb7061c75bb31b5bc002271e89cea5c53af", "scripts/benchmarks/validate_complex_game.py": "b28289fa1d48dbfb6a4c251f901158a8b2fc7c69197af4c1193bd4d8f41e8435"}}
+Writing pretty tree to /scratch/se2161/puzzlejax-perf-20261002/complex-wide-20261007/data/pretty_trees/ParaLands
+Parsed ParaLands successfully
+E1007 03:13:12.121703 3336386 slow_operation_alarm.cc:73] 
+********************************
+[Compiling module jit_reset for GPU] Very slow compile? If you want to file a bug, run with envvar XLA_FLAGS=--xla_dump_to=/tmp/foo and attach the results.
+********************************
+E1007 03:13:29.390590 3335897 slow_operation_alarm.cc:140] The operation took 2m17.268988235s
+
+********************************
+[Compiling module jit_reset for GPU] Very slow compile? If you want to file a bug, run with envvar XLA_FLAGS=--xla_dump_to=/tmp/foo and attach the results.
+********************************
+Compiling batch=16, steps=312
+Compiled in 1454.30s; warming up
+{"batch": 16, "steps": 312, "compile_s": 1454.2984318470117, "host": "gh119.hpc.nyu.edu", "argument_bytes": 195432, "output_bytes": 195520, "temporary_bytes": 12877800, "samples_s": [88.80752336187288, 88.10645410208963, 87.82667061197571, 87.25805156701244, 88.77270128508098], "fps_samples": [56.211453838866774, 56.65873233549645, 56.839226230662895, 57.209620319865195, 56.233503405161656], "median_fps": 56.65873233549645, "q25_fps": 56.233503405161656, "q75_fps": 56.839226230662895}
+Compiling batch=256, steps=100
+E1007 04:30:17.690859 3336386 slow_operation_alarm.cc:73] 
+********************************
+[Compiling module jit_rollout for GPU] Very slow compile? If you want to file a bug, run with envvar XLA_FLAGS=--xla_dump_to=/tmp/foo and attach the results.
+********************************
+E1007 04:33:41.591125 3335897 slow_operation_alarm.cc:140] The operation took 5m23.900374163s
+
+********************************
+[Compiling module jit_rollout for GPU] Very slow compile? If you want to file a bug, run with envvar XLA_FLAGS=--xla_dump_to=/tmp/foo and attach the results.
+********************************
+Compiled in 1748.08s; warming up
+[2026-10-07T04:35:24.050] error: *** JOB 19325520 ON gh119 CANCELLED AT 2026-10-07T04:35:24 DUE TO TIME LIMIT ***
