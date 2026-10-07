@@ -27,9 +27,19 @@ before=$(find "$MASTER" -maxdepth 1 -name '*.txt' | wc -l)
 # 1. Discovery: recent-gist marker search (early-stops once it hits seen pages).
 ( cd puzzlescript-analysis && "$P" -u trawl_gists_html.py --max-pages 100 ) || echo "trawl failed"
 
-# 2. Author-enum closure — the heavy step, so weekly (Sundays). Catches new
-#    authors' full repertoire + existing authors' newly-published games.
-if [ "$(date +%u)" = "7" ]; then
+# 2. Weekly (Sundays), or on every run with FULL=1: the slow-moving discovery sources
+#    (PuzzleScript Google Group, Internet Archive play links, newest itch.io
+#    PuzzleScript games), then the author-enum closure — the heavy step. Catches new
+#    authors' full repertoire + existing authors' newly-published games. Consolidate
+#    first so owners found by those sources seed the enumeration. (The pedrosworks.com
+#    game list stopped being served in Oct 2026; its last copy, from 2026-06-17, is
+#    already in the staging dir.)
+if [ "$(date +%u)" = "7" ] || [ "${FULL:-0}" = "1" ]; then
+  "$P" scripts/data/build_ps_dataset.py forum || echo "forum failed"
+  "$P" scripts/data/build_ps_dataset.py wayback || echo "wayback failed"
+  "$P" scripts/data/scrape_itch.py --listing https://itch.io/games/newest/made-with-puzzlescript \
+    --pages 5 --skip-known || echo "itch failed"
+  "$P" scripts/data/build_ps_dataset.py consolidate || echo "consolidate failed"
   "$P" scripts/data/build_ps_dataset.py authors || echo "authors failed"
 fi
 
@@ -48,13 +58,18 @@ if [ "$after" -gt "$before" ]; then
   "$P" -m nca_wm.scripts.dedup_master --master-dir "$MASTER" --workers 16
   rm -rf /tmp/hf_puzzlescript
   "$P" nca_wm/scripts/build_hf_dataset.py
-  "$P" - <<PY
+  if "$P" - <<PY
 from huggingface_hub import HfApi
 HfApi().upload_folder(folder_path="/tmp/hf_puzzlescript", repo_id="smearle/puzzlescript-gists",
                       repo_type="dataset", commit_message="Daily refresh: ${after} games")
 print("HF refreshed")
 PY
-  echo "HF refreshed ($after games)"
+  then
+    echo "HF refreshed ($after games)"
+    rm -rf /tmp/hf_puzzlescript  # staging copy is rebuilt every run; 209's disk is tight
+  else
+    echo "HF push FAILED; staging kept at /tmp/hf_puzzlescript"
+  fi
 else
   echo "no new games; HF push skipped"
 fi

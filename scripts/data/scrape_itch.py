@@ -500,11 +500,22 @@ def scrape_one_game(game_url: str, out_dir: Path, used: Dict[str, int], delay: f
     sleep_polite(delay)
     return True
 
-def scrape_listing(base_listing_url: str, pages: int, delay: float, save_html_on_fail: bool):
+def scrape_listing(base_listing_url: str, pages: int, delay: float, save_html_on_fail: bool,
+                   skip_known: bool = False):
     OUT_DIR.mkdir(parents=True, exist_ok=True)
     used: Dict[str, int] = {}
 
     seen_game_urls = set()
+    if skip_known and ITCH_MANIFEST.is_file():
+        # Incremental mode: games whose source an earlier run already saved.
+        for line in ITCH_MANIFEST.read_text(encoding="utf-8").splitlines():
+            try:
+                rec = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            if rec.get("saved_file"):
+                seen_game_urls.add(rec["itch_url"])
+        print(f"[listing] skipping {len(seen_game_urls)} game URLs already saved")
     total = 0
     ok = 0
 
@@ -558,9 +569,11 @@ def main():
     ap.add_argument("--pages", type=int, default=5, help="How many listing pages to scrape (default: 5)")
     ap.add_argument("--delay", type=float, default=0.7, help="Delay between requests in seconds (default: 0.7)")
     ap.add_argument("--save-html-on-fail", action="store_true", help="Save iframe HTML when source extraction fails")
+    ap.add_argument("--skip-known", action="store_true",
+                    help="Skip game URLs whose source an earlier run already saved (incremental mode)")
     args = ap.parse_args()
 
-    scrape_listing(args.listing, args.pages, args.delay, args.save_html_on_fail)
+    scrape_listing(args.listing, args.pages, args.delay, args.save_html_on_fail, args.skip_known)
 
 if __name__ == "__main__":
     main()
