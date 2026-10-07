@@ -216,3 +216,49 @@ proposal ranks them by:
 `puzzlescript-generator-20261007-lf1`. Pipeline `run_level_first.sh` (outputs in `/workspace/psgen/lf`), follow-up
 `controller.py watch lf`. Results go to `results/puzzlescript_generator_20261006/level-first-01/`. Archive to Torch,
 then release.
+
+## Stage 3b: masked rules-only sampling (written 2026-10-07, before any masked sample)
+
+**Why.** The user asked whether constrained decoding (an outlines-style grammar, masking names that were never
+defined) could stop the compile failures, and at what cost (2026-10-07). In stage 3's rules-only diagnostic, the
+first fatal error of a failed sample is an undefined name in 60%, two objects of one collision layer in a cell in
+13%, left and right patterns of different lengths in 10%, and a malformed win condition in 4.5%; plain syntax errors
+are about 2%. So a grammar alone would change little; masks that know the prompt's names and layers might.
+
+**Masks** (`constrained.py`). A checker follows the text the model writes, and a token is allowed only if it can
+extend the text legally. Sampling is exact for the masked distribution: a rejected token is removed and the row draws
+again from the renormalised remainder. Two arms:
+- `names`: every word in RULES and WINCONDITIONS is a name the prompt defines or a PuzzleScript keyword, and the
+  completion ends as the format does (a blank line, the WINCONDITIONS header, win conditions, end of document);
+- `full`: also rule and win-condition syntax, and the engine's checks that a line can be held to while it is
+  written (dfdeabcd `compiler.js`):
+  - one direction per object, and no movements in late rules;
+  - no object twice in a cell;
+  - ellipses only as whole inner cells, matched on both sides;
+  - as many bracketed patterns and cells on the right as on the left, or commands alone;
+  - no two objects of one collision layer in a cell, and no `no` before an `and` aggregate;
+  - no right-hand cell that excludes an object it also sets;
+  - right-hand properties the engine can infer.
+
+**Validation before sampling** (`test_constrained.py`, on 209 with 200 corpus documents): every engine-accepted text
+passes in `names` mode except one sample that ends mid-line. In `full` mode, 16 of 468 are refused. All 16 are rules
+the engine itself drops with a warning (patterns of unequal count), plus that sample. Of the 2,828 rules-only samples
+the engine rejected, `full` mode refuses 2,735. The pod repeats this check on every val and test document.
+
+**Design.** The same 24 rich candidate levels and rules-only prompts as stage 3's diagnostic `diag-rules`, the same
+model (`m30-s2808-d01`), 64 samples per level at T=0.6 and 0.8, seed 0, and the same scoring. The unmasked control
+is `diag-rules` on file; it is not rerun.
+
+**Expectations.**
+- `full` raises the playable share well above `diag-rules` (9.0% / 6.9%), to at least twice that.
+- `names` raises it less than `full`.
+- Distinct behaviours stay near the playable count, with no collapse onto a few mechanics. Train copies stay near 0.
+- Rejections per generated token stay small (under 0.2), and fallbacks and dead ends are rare.
+
+**What this decides.** If `full` raises the yield, it becomes the sampler for the DT loop's game pools, with
+`--deterministic` (also masking `random` and `randomdir`) because the first DT pass uses deterministic games only. If
+it does not, the loop samples unmasked and filters by engine.
+
+**Operations.** New pod `se-psgen-20261007-ab1` (one H100, <= $3.50/h), board job `puzzlescript-generator-20261007-ab1`,
+pipeline `run_masked_ab.sh`, follow-up `controller.py watch ab`. Results go to
+`results/puzzlescript_generator_20261006/masked-ab-01/`.

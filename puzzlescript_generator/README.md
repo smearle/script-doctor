@@ -26,7 +26,9 @@ a copy of the protocol.
 | level-first corpus (stage 3): one document per (mechanics, level), the level first and objects numbered by it, so a model can be prompted with a level | `level_first.py`, `prepare_level_first.py`, `test_level_first.py` |
 | mechanics sampled for held-out levels, scored by the engine, by canonical mechanics and by behaviour under shared random action sequences | `level_eval.py`, `ps_probe.js` |
 | playable HTML gallery of games generated for fixed levels: PuzzleScript's own export page at the checker's engine commit, one fresh frame per game, beside each level's original | `play_gallery.py`, `play_gallery.template.html` |
-| the exact pod pipelines used (stages 1-3) | `run_pod.sh`, `run_canon.sh`, `run_level_first.sh`, `smoke.sh` |
+| masked rules-only sampling (stage 3b): a checker follows the text and allows only tokens that can extend it legally (names the prompt defines, rule and win-condition syntax, the reference engine's line-level checks); sampling is exact for the masked distribution. Validated against the engine on the corpus; revisions are checked for unchanged decisions | `constrained.py`, `test_constrained.py`, `diff_checker.py`, `level_eval.py --constrain`, `compare_masked_ab.py` |
+| the DT loop's generator side (stage 4): export to script-doctor's C++ engine (`puzzlescript_cpp`), admission (deterministic, no message or checkpoint), seeded rollouts and version-space replay in that engine, and the per-round sampling and REINFORCE service. The DT student and round driver live in the infogain-world-models repo | `ps_export.js`, `dtloop/engine.py`, `dtloop/generator.py` |
+| the exact pod pipelines used (stages 1-3b) | `run_pod.sh`, `run_canon.sh`, `run_level_first.sh`, `smoke.sh`, `run_masked_ab.sh` |
 
 The JS scripts load the engine through `ps_engine.js`. Inside the engine's VM realm, it does three things:
 - sets `IDE = false`: the committed wrapper otherwise throws on editor hooks;

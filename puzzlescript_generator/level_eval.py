@@ -25,7 +25,10 @@ Post-hoc diagnostic options (not pre-registered): --select random draws the cand
 seeded sample of held-out levels (one per mechanics) instead of the richest ones, and
 --prompt-until RULES extends each prompt with the level's own flags, objects, legend and
 collision layers, so only the rules and win conditions are sampled. --rescore recomputes the
-scores of the samples already in --out with the current checkers. Outputs:
+scores of the samples already in --out with the current checkers. With --prompt-until RULES,
+--constrain names|full samples under constrained.py's masks (exact sampling of the masked
+distribution; per-sample rejection counts are recorded), and --deterministic also masks the
+words random and randomdir. Outputs:
 level_eval_report.json, samples.jsonl, candidates.jsonl and candidates.png (each candidate
 level drawn under its human mechanics).
 
@@ -174,9 +177,16 @@ def main():
     ap.add_argument("--workers", type=int, default=24)
     ap.add_argument("--device", default="cuda", help="cpu only for smoke tests")
     ap.add_argument("--seed", type=int, default=0)
+    ap.add_argument("--constrain", choices=["none", "names", "full"], default="none",
+                    help="masks for rules-only sampling (constrained.py); needs --prompt-until RULES")
+    ap.add_argument("--deterministic", action="store_true", help="with --constrain: also mask random and randomdir")
     ap.add_argument("--rescore", action="store_true",
                     help="re-score the samples already in --out with the current checkers (no sampling)")
     args = ap.parse_args()
+    if (args.constrain != "none" or args.deterministic) and args.prompt_until != "RULES":
+        ap.error("--constrain and --deterministic apply to rules-only sampling (--prompt-until RULES)")
+    if args.deterministic and args.constrain == "none":
+        ap.error("--deterministic needs --constrain")
     args.out.mkdir(parents=True, exist_ok=True)
     train_keys = {json.loads(line)["mechanics_key"] for line in open(args.data / "train_docs.jsonl")}
     if args.rescore:
@@ -205,6 +215,13 @@ def main():
         for t in temps}
     report["format_errors"] = Counter(it["format_error"].split(":")[0][:60] for it in items
                                       if "format_error" in it).most_common(10)
+    if any("constrain" in it for it in items):
+        report["constrain_stats"] = {t: {
+            "rejections_per_token": sum(it["constrain"]["rejections"] for it in items if it["temp"] == t)
+            / max(1, sum(it["n_new_tokens"] for it in items if it["temp"] == t)),
+            "fallbacks": sum(it["constrain"]["fallbacks"] for it in items if it["temp"] == t),
+            "dead_ends": sum(it["constrain"]["dead_end"] for it in items if it["temp"] == t),
+            "hit_eos": sum(it["hit_eos"] for it in items if it["temp"] == t)} for t in temps}
     with open(args.out / "samples.jsonl", "w") as f:
         for it in items + list(human.values()):
             f.write(json.dumps(it) + "\n")
@@ -270,17 +287,31 @@ def sample(args):
             f.write(json.dumps({k: v for k, v in c.items() if k != "prompt"}) + "\n")
     print(f"{len(cands)} candidate levels", flush=True)
 
+    if args.constrain != "none":
+        from constrained import RulesChecker, generate_constrained, token_texts
+        texts_of_tokens = token_texts(args.data / "tokenizer.json")
+        report["constrain"] = {"mode": args.constrain, "deterministic": args.deterministic}
     items, t0 = [], time.time()
     for c in cands:
-        ids = tok.encode(prompt_until(texts[c["id"]], args.prompt_until)).ids
+        prompt_text = prompt_until(texts[c["id"]], args.prompt_until)
+        ids = tok.encode(prompt_text).ids
         max_new = min(args.max_new, cfg.max_seq_len - 1 - len(ids))
         for temp in args.temps:
             prompt = torch.tensor([[bos] + ids] * args.samples, dtype=torch.long, device=args.device)
-            outs, done = model.generate(prompt, max_new, eos, temperature=temp, generator=gen)
+            stats = [None] * args.samples
+            if args.constrain == "none":
+                outs, done = model.generate(prompt, max_new, eos, temperature=temp, generator=gen)
+            else:
+                checkers = [RulesChecker(prompt_text, args.constrain, texts_of_tokens, eos, args.deterministic)
+                            for _ in range(args.samples)]
+                outs, done, stats = generate_constrained(model, prompt, max_new, eos, checkers,
+                                                         temperature=temp, generator=gen)
             for k, (o, d) in enumerate(zip(outs, done)):
                 text = tok.decode(ids + o)
                 it = {"id": f"{c['id']}-t{temp:g}-{k:03d}", "level": c["id"], "temp": f"{temp:g}", "text": text,
                       "n_new_tokens": len(o), "hit_eos": bool(d), "standard": None}
+                if stats[k] is not None:
+                    it["constrain"] = stats[k]
                 try:
                     it["standard"] = to_standard(text)
                 except (FormatError, CanonError) as ex:
