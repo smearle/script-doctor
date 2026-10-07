@@ -543,6 +543,8 @@ def _iter_sources(staging: Path):
                    (staging / "forum", "forum")):
         if d.is_dir():
             for p in d.glob("*.txt"):
+                if p.name.startswith("_"):  # negative caches (_rejected.txt), not games
+                    continue
                 gid = p.stem.lower()
                 yield (gid, p, tag, None) if GIST_ID_RE.match(gid) else (None, p, tag, None)
     # search: map saved path -> gist id via log
@@ -628,9 +630,9 @@ def cmd_consolidate(master: Path, staging: Path):
     print(f"  {len(records)} unique gist ids written")
     print(f"  per-source contributions: {dict(src_counts)}")
     print(f"  {len(misfits)} files with unparseable gist id (skipped)")
-    if misfits:
-        (master / "_misfits.txt").write_text("\n".join(misfits))
-        print(f"  -> listed in {master / '_misfits.txt'}")
+    if misfits:  # not *.txt: the dataset builder reads every master/*.txt as a game
+        (master / "_misfits.list").write_text("\n".join(misfits))
+        print(f"  -> listed in {master / '_misfits.list'}")
 
 
 # --------------------------------------------------------------------------- #
