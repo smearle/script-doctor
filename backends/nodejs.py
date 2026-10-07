@@ -169,14 +169,16 @@ class NodeJSPuzzleScriptBackend(PuzzleScriptSearchBackend):
         else:
             method_name = self.SEARCH_ALGOS[algo]
             method = getattr(self.solver, method_name)
+            if algo == "mcts":
+                # solveMCTS takes its limits in an options object.
+                args = ({"max_iterations": n_steps, "timeout_ms": timeout_ms},)
+            else:
+                args = (n_steps, timeout_ms)
             raw_result = None
             for _ in range(loops):
-                raw_result = method(
-                    self.engine,
-                    n_steps,
-                    timeout_ms,
-                    timeout=timeout_ms * 1.5 if timeout_ms > 0 else None,
-                )
+                # The solvers enforce timeout_ms themselves. The bridge's own call
+                # timeout cannot stop a running JS call, so it is disabled.
+                raw_result = method(self.engine, *args, timeout=None)
 
         return self._normalize_result(raw_result)
 

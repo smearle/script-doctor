@@ -11,6 +11,9 @@ def extract_documentation(html_content):
     body_tag = soup.find('body')
     container_tag = body_tag.find('div', {'class': 'container'}, recursive=False)
     if container_tag is not None:
+        # Inline lists (e.g. the colour names) have no whitespace between items.
+        for li in container_tag.find_all('li'):
+            li.append(' ')
         return container_tag.text
 
 docs_dir = os.path.join('src', 'Documentation')

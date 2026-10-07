@@ -382,7 +382,7 @@ PINK WHITE BLACK
 
 	The available colour names are:
 	
-blackwhitelightgray/greygray/greydarkgray/greyreddarkredlightredbrowndarkbrownlightbrownorangeyellowgreendarkgreenlightgreenbluelightbluedarkbluepurplepinktransparent
+black white lightgray/grey gray/grey darkgray/grey red darkred lightred brown darkbrown lightbrown orange yellow green darkgreen lightgreen blue lightblue darkblue purple pink transparent
 
 	You can use hex-codes instead of these names, if you prefer:
     Player 

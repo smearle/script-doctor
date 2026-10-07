@@ -9,16 +9,16 @@ search (BFS) is run on each level (max 5 levels per game) to evaluate solvabilit
 Usage examples
 --------------
 # Local (assumes vLLM server already running on localhost:8000):
-    python evolve_games_agentic.py
+    python -m puzzlejax.evolve_games_agentic
 
 # Specify model and base URL:
-    python evolve_games_agentic.py --model vllm-qwen3.5-9b --vllm_base_url http://localhost:8000/v1
+    python -m puzzlejax.evolve_games_agentic --model vllm-qwen3.5-9b --vllm_base_url http://localhost:8000/v1
 
 # Full evolution with custom params:
-    python evolve_games_agentic.py --pop_size 4 --n_gens 10 --max_repair_attempts 10
+    python -m puzzlejax.evolve_games_agentic --pop_size 4 --n_gens 10 --max_repair_attempts 10
 
 # Single-shot generation (no evolution, just generate one game):
-    python evolve_games_agentic.py --mode single --n_games 5
+    python -m puzzlejax.evolve_games_agentic --mode single --n_games 5
 """
 from __future__ import annotations
 
@@ -39,11 +39,11 @@ from typing import Optional
 # ---------------------------------------------------------------------------
 # Paths
 # ---------------------------------------------------------------------------
-SCRIPT_DIR = Path(__file__).resolve().parent
-DATA_DIR = SCRIPT_DIR / "data"
+REPO_ROOT = Path(__file__).resolve().parents[1]
+DATA_DIR = REPO_ROOT / "data"
 GAMES_DIR = DATA_DIR / "scraped_games_increpare"
-DOCS_PATH = SCRIPT_DIR / "script_doctor" / "all_documentation.txt"
-LOGS_ROOT = SCRIPT_DIR / "evo_agentic_logs"
+DOCS_PATH = REPO_ROOT / "script_doctor" / "all_documentation.txt"
+LOGS_ROOT = REPO_ROOT / "evo_agentic_logs"
 
 logger = logging.getLogger("evo_agentic")
 logging.basicConfig(
@@ -278,38 +278,50 @@ class CompileResult:
     success: bool
     error: str = ""
     game_text: str = ""
-    n_levels: int = 0
+    # Engine level indices (into state.levels) of the playable levels; message
+    # entries in LEVELS are excluded.
+    level_indices: list[int] = field(default_factory=list)
+    # Engine console lines from a successful compile other than the success
+    # message itself (e.g. line-numbered warnings). Informational only.
+    warnings: list[str] = field(default_factory=list)
+
+    @property
+    def n_levels(self) -> int:
+        return len(self.level_indices)
 
 
 def compile_game_text(code: str) -> CompileResult:
-    """Compile a PuzzleScript game from raw text using the Node.js backend.
+    """Compile a PuzzleScript game from raw text using the Node.js engine.
 
-    The PuzzleScript engine silently falls back to an empty game on parse/compile
-    errors rather than throwing, so we also inspect captured ``consoleError`` /
-    error-class ``consolePrint`` output and treat ``n_levels == 0`` as failure.
+    The verdict is the engine's own (see ``check_compile``); only playable games
+    count as success. A successful compile's remaining engine messages are
+    warnings.
     """
+    from puzzlescript_nodejs.utils import check_compile
     try:
-        backend = _fresh_nodejs_backend()
-        try:
-            backend.engine.clearCapturedErrors()
-        except Exception:
-            pass
-        backend.engine.compile(["restart"], code)
-        n_levels = int(backend.get_num_levels())
-        try:
-            captured = [str(e) for e in list(backend.engine.getCapturedErrors())]
-        except Exception:
-            captured = []
-        real_errors = [e for e in captured if "Errors detected during compilation" not in e]
-        if n_levels == 0 or real_errors:
-            err_text = "\n".join(real_errors) if real_errors else (
-                "Compilation produced no playable levels (empty game)."
+        engine = _fresh_nodejs_backend().engine
+        compiled, playable, messages = check_compile(engine, code)
+        if not compiled:
+            # Drop the engine's generic "Errors detected during compilation"
+            # banner; the specific diagnostics are what the repair prompt needs.
+            errors = [m for m in messages if "Errors detected" not in m]
+            return CompileResult(
+                success=False,
+                error="\n".join(errors) or "The engine did not report a successful compilation.",
             )
-            return CompileResult(success=False, error=err_text, n_levels=n_levels)
-        return CompileResult(success=True, game_text=code, n_levels=n_levels)
+        if not playable:
+            return CompileResult(
+                success=False,
+                error="The game compiled, but its LEVELS section has no playable levels "
+                      "(only message entries).",
+                warnings=messages,
+            )
+        level_indices = [int(lv.index) for lv in engine.getLevelInfo() if lv.type == "level"]
     except Exception as e:
-        error_msg = f"{type(e).__name__}: {e}"
-        return CompileResult(success=False, error=error_msg)
+        return CompileResult(success=False, error=f"{type(e).__name__}: {e}")
+    return CompileResult(
+        success=True, game_text=code, level_indices=level_indices, warnings=messages,
+    )
 
 
 @dataclass
@@ -372,16 +384,17 @@ def evaluate_game(code: str, search_algo: str = "bfs",
         gif_dir = Path(gif_dir)
         gif_dir.mkdir(parents=True, exist_ok=True)
 
-    levels_to_search = min(n_levels, MAX_LEVELS_TO_SEARCH)
     all_solvable = True
 
-    for level_i in range(levels_to_search):
+    # level_i numbers the playable levels; engine_i is the engine's index for the
+    # same level, which also counts message entries.
+    for level_i, engine_i in enumerate(cr.level_indices[:MAX_LEVELS_TO_SEARCH]):
         try:
             backend = _fresh_nodejs_backend()
             sr = backend.run_search(
                 search_algo,
                 game_text=code,
-                level_i=level_i,
+                level_i=engine_i,
                 n_steps=search_n_steps,
                 timeout_ms=search_timeout_ms,
             )
@@ -406,7 +419,7 @@ def evaluate_game(code: str, search_algo: str = "bfs",
                     gif_path = str(gif_dir / f"search_level_{level_i}.gif")
                     gif_backend.render_gif(
                         game_text=code,
-                        level_i=level_i,
+                        level_i=engine_i,
                         actions=list(sr.actions),
                         gif_path=gif_path,
                         frame_duration_s=0.1,
@@ -604,6 +617,7 @@ def generate_and_evaluate(
             "attempt": attempt,
             "compile_success": eval_result.compile_result.success,
             "compile_error": eval_result.compile_result.error,
+            "compile_warnings": eval_result.compile_result.warnings,
             "n_levels": eval_result.compile_result.n_levels,
             "all_solvable": eval_result.all_solvable,
             "max_search_iters": eval_result.max_search_iters,

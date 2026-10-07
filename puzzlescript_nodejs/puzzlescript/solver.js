@@ -375,7 +375,7 @@ function getScoreNormalized(engine) {
 			if (wincondition[0] == -1) {
 				// "no" conditions
 				for (var i = 0; i < engine.getLevel().n_tiles; i++) {
-					var cell = engine.getLevel().getCellInto(i, _o10);
+					var cell = engine.getLevel().getCellInto(i, engine.get_o10());
 					if ((!filter1.bitsClearInArray(cell.data)) && (!filter2.bitsClearInArray(cell.data))) {
 						score += 1.0; // penalization for each case
 						normal_value += maxDistance;
@@ -420,6 +420,10 @@ function getScoreNormalized(engine) {
 		}
 	}
 	// console.log(score);
+	// Nothing to measure (e.g. no winconditions): 0/0 would be NaN and poison every MCTS value.
+	if (normal_value <= 0) {
+		return 0.0;
+	}
 	return 1 - score / normal_value;
 }
 
@@ -492,11 +496,10 @@ function randomRolloutRaw(engine, maxIters=100_000, timeoutMS=-1) {
   };
 }
 
-function randomRollout(engine, maxIters=100_000) {
+function randomRollout(engine, maxIters=100_000, timeoutMs=-1) {
   precalcDistances(engine);
   let i = 0;
   let start_time = Date.now();
-  const timeout_ms = 60 * 1000;
   let actions = [0, 1, 2, 3, 4];
   if ('noaction' in engine.getState().metadata) {
     actions = [0, 1, 2, 3];
@@ -507,7 +510,7 @@ function randomRollout(engine, maxIters=100_000) {
   while (i < maxIters) {
     // if (i % 1000 == 0) {
     elapsed_time = Date.now() - start_time;
-    if (elapsed_time > timeout_ms) {
+    if (timeoutMs > 0 && elapsed_time > timeoutMs) {
       console.log(`Timeout after ${elapsed_time / 1000} seconds. Returning.`);
       return [false, [], i, ((Date.now() - start_time) / 1000), score, new_level, true, Array.from(engine.getState().idDict)];
     }
@@ -736,7 +739,7 @@ function DoRestartSearch(engine, force) {
   engine.setRestarting(false);
 }
 
-function solveAStar(engine, maxIters=100_000) {
+function solveAStar(engine, maxIters=100_000, timeoutMs=-1) {
   function MakeSolution(state) {
     var sol = [];
     while (true) {
@@ -795,10 +798,16 @@ function solveAStar(engine, maxIters=100_000) {
 	var size = 1;
 
 	var start_time = Date.now();
+	var timedOut = false;
 
 	while (!queue.isEmpty() && totalIters < maxIters) {
     if (totalIters > maxIters) {
       // console.log('Exceeded max iterations. Exiting.');
+      break;
+    }
+    if (timeoutMs > 0 && (Date.now() - start_time) > timeoutMs) {
+      console.log(`Timeout after ${(Date.now() - start_time) / 1000} seconds. Returning best result found so far.`);
+      timedOut = true;
       break;
     }
 		iters++;
@@ -879,10 +888,10 @@ function solveAStar(engine, maxIters=100_000) {
 	deltatime = oldDT;
 	// redraw();
 	// cancelLink.hidden = true;
-  return [false, sol, totalIters, ((Date.now() - start_time) / 1000), bestScore, bestState, false, engine.getState().idDict];
+  return [false, sol, totalIters, ((Date.now() - start_time) / 1000), bestScore, bestState, timedOut, engine.getState().idDict];
 }
 
-function solveGBFS(engine, maxIters=100_000) {
+function solveGBFS(engine, maxIters=100_000, timeoutMs=-1) {
   function MakeSolution(state) {
     var sol = [];
     while (true) {
@@ -936,9 +945,15 @@ function solveGBFS(engine, maxIters=100_000) {
 	var size = 1;
 
 	var start_time = Date.now();
+	var timedOut = false;
 
 	while (!queue.isEmpty() && totalIters < maxIters) {
     if (totalIters > maxIters) {
+      break;
+    }
+    if (timeoutMs > 0 && (Date.now() - start_time) > timeoutMs) {
+      console.log(`Timeout after ${(Date.now() - start_time) / 1000} seconds. Returning best result found so far.`);
+      timedOut = true;
       break;
     }
 		iters++;
@@ -1001,7 +1016,7 @@ function solveGBFS(engine, maxIters=100_000) {
 	solving = false;
 	DoRestartSearch(engine);
 	deltatime = oldDT;
-  return [false, sol, totalIters, ((Date.now() - start_time) / 1000), bestScore, bestState, false, engine.getState().idDict];
+  return [false, sol, totalIters, ((Date.now() - start_time) / 1000), bestScore, bestState, timedOut, engine.getState().idDict];
 }
 
 class MCTSNode{
@@ -1134,6 +1149,7 @@ class MCTSNode{
 // win_bonus: bonus when you find a winning node
 // c: is the MCTS constant that balance between exploitation and exploration
 // max_iterations: max number of iterations before you consider the solution is not available
+// timeout_ms: wall-clock budget in milliseconds (<= 0 for none); on timeout, return the best path so far
 function solveMCTS(engine, options = {}) {
   // Load the level
   if(options == null){
@@ -1147,7 +1163,8 @@ function solveMCTS(engine, options = {}) {
     "win_bonus": 100,
     "most_visited": true,
     "c": Math.sqrt(2), 
-    "max_iterations": 100_000
+    "max_iterations": 100_000,
+    "timeout_ms": -1
   };
 
   // for(let key in defaultOptions){
@@ -1173,7 +1190,13 @@ function solveMCTS(engine, options = {}) {
   let i = 0;
   let deadend_nodes = 1;
   let start_time = Date.now();
+  let timedOut = false;
   while(options.max_iterations <= 0 || (options.max_iterations > 0 && i < options.max_iterations)){
+    if (options.timeout_ms > 0 && (Date.now() - start_time) > options.timeout_ms) {
+      console.log(`Timeout after ${(Date.now() - start_time) / 1000} seconds. Returning best result found so far.`);
+      timedOut = true;
+      break;
+    }
     // start from th root
     currentNode = rootNode;
     engine.restoreLevel(init_level);
@@ -1262,8 +1285,8 @@ function solveMCTS(engine, options = {}) {
     actions.push(action);
     currentNode = currentNode.children[action];
   }
-  return [false, actions, options.max_iterations,
-    ((Date.now() - start_time) / 1000), bestScore, bestState, false, engine.getState().idDict];
+  return [false, actions, i,
+    ((Date.now() - start_time) / 1000), bestScore, bestState, timedOut, engine.getState().idDict];
 }
 
 function getNLevels(engine) {
