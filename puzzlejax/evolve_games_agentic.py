@@ -512,6 +512,7 @@ def generate_and_evaluate(
     fewshot_n: int = 3,
     temperature: float = 0.7,
     enable_thinking: bool | None = None,
+    search_timeout_ms: int = 30_000,
 ) -> GameIndividual:
     """Generate a game via LLM, compile, search, repair iteratively.
 
@@ -609,7 +610,8 @@ def generate_and_evaluate(
 
         # Evaluate (compile + search), rendering GIFs for solved levels
         t0 = time.time()
-        eval_result = evaluate_game(code, gif_dir=save_dir / f"{attempt:02d}_gifs")
+        eval_result = evaluate_game(code, search_timeout_ms=search_timeout_ms,
+                                    gif_dir=save_dir / f"{attempt:02d}_gifs")
         eval_time = time.time() - t0
 
         # Save eval result
@@ -720,6 +722,7 @@ def run_single_mode(args) -> None:
             fewshot_n=args.fewshot_n,
             temperature=args.temperature,
             enable_thinking=args.enable_thinking,
+            search_timeout_ms=args.search_timeout_ms,
         )
         results.append({
             "uid": ind.uid,
@@ -766,6 +769,7 @@ def run_evolution_mode(args) -> None:
             fewshot_n=args.fewshot_n,
             temperature=args.temperature,
             enable_thinking=args.enable_thinking,
+            search_timeout_ms=args.search_timeout_ms,
         )
         ind.generation = 0
         pop.append(ind)
@@ -816,6 +820,7 @@ def run_evolution_mode(args) -> None:
                 fewshot_n=args.fewshot_n,
                 temperature=args.temperature,
                 enable_thinking=args.enable_thinking,
+                search_timeout_ms=args.search_timeout_ms,
             )
             ind.generation = gen
             new_pop.append(ind)
