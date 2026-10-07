@@ -70,3 +70,11 @@ caches. `kettle` is the long pole (~14 min).
 - For `data/scraped_games/` to contain the games you need, `git lfs` is
   not required — they're plain `.txt` files committed to the repo (~952
   scraped + ~100 custom).
+- In-level `message` commands are omitted from automated play. The NodeJS
+  wrapper dismisses each message as soon as it is raised (play and win
+  checks continue) and queues its text for `engine.takeMessages()`. The C++
+  engine ignores them, PuzzleJAX drops them while parsing, and
+  `preprocess_ps` strips most of them from the simplified text that search,
+  RL and the C++/JAX backends compile. An LLM player that should read
+  messages needs the NodeJS backend on the raw game text plus
+  `takeMessages()`; the LLM agent loops do not read it yet.
