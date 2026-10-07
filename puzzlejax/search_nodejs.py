@@ -4,7 +4,7 @@ import json
 import re
 import shutil
 import traceback
-from typing import List, Optional
+from typing import Optional
 
 import cpuinfo
 import dotenv
@@ -102,13 +102,28 @@ def should_skip_existing_level_result(path: str) -> bool:
     return True
 
 
+def get_levels_per_game(cfg: SearchNodeJSConfig) -> dict:
+    """Map each game to search to its levels to search (None = every level)."""
+    if cfg.games_file is not None:
+        with open(cfg.games_file, 'r') as f:
+            spec = json.load(f)
+        if isinstance(spec, dict):
+            return spec
+        games = spec
+    elif cfg.game is not None:
+        games = [cfg.game]
+    else:
+        games = get_list_of_games_for_testing(
+            dataset=cfg.dataset, include_random=cfg.include_randomness, random_order=cfg.random_order)
+    return {game: None if cfg.level is None else [cfg.level] for game in games}
+
+
 @hydra.main(version_base="1.3", config_path='../conf', config_name='search_nodejs_config')
 def main_launch(cfg: SearchNodeJSConfig):
     if cfg.slurm:
-        games = get_list_of_games_for_testing(
-            dataset=cfg.dataset, include_random=cfg.include_randomness, random_order=cfg.random_order)
+        levels_per_game = get_levels_per_game(cfg)
         # Get sub-lists of batches of games to distribute across nodes.
-        game_sublists = distribute_slurm_jobs(games, cfg.n_games_per_job)
+        game_sublists = distribute_slurm_jobs(list(levels_per_game), cfg.n_games_per_job)
         n_jobs = len(game_sublists)
         executor = submitit.AutoExecutor(folder=os.path.join("submitit_logs", "search_nodejs"))
         executor.update_parameters(
@@ -120,12 +135,13 @@ def main_launch(cfg: SearchNodeJSConfig):
             slurm_array_parallelism=n_jobs,
             slurm_account=os.environ.get("SLURM_ACCOUNT")
         )
-        executor.map_array(main, [cfg] * n_jobs, game_sublists)
+        executor.map_array(main, [cfg] * n_jobs,
+                           [{game: levels_per_game[game] for game in games} for games in game_sublists])
     else:
         main(cfg)
 
 
-def main(cfg: SearchNodeJSConfig, games: Optional[List[str]] = None):
+def main(cfg: SearchNodeJSConfig, levels_per_game: Optional[dict] = None):
 
     backend = NodeJSPuzzleScriptBackend()
     if cfg.timeout > 0:
@@ -156,13 +172,8 @@ def main(cfg: SearchNodeJSConfig, games: Optional[List[str]] = None):
         raise ValueError(f"Invalid search algorithm: {cfg.algo}")
     cpu_name = cpuinfo.get_cpu_info()['brand_raw']
 
-    if games is not None:
-        games_to_test = games
-    elif cfg.game is None:
-        games_to_test = get_list_of_games_for_testing(
-            dataset=cfg.dataset, include_random=cfg.include_randomness, random_order=cfg.random_order)
-    else:
-        games_to_test = [cfg.game]
+    if levels_per_game is None:
+        levels_per_game = get_levels_per_game(cfg)
     results = {algo: {} for algo in algos}
     if os.path.isfile(STANDALONE_NODEJS_RESULTS_PATH) and not cfg.overwrite:
         shutil.copyfile(STANDALONE_NODEJS_RESULTS_PATH, STANDALONE_NODEJS_RESULTS_PATH[:-5] + '_bkp.json')
@@ -171,7 +182,7 @@ def main(cfg: SearchNodeJSConfig, games: Optional[List[str]] = None):
     else:
         results = {}
 
-    for game in games_to_test:
+    for game, game_levels in levels_per_game.items():
 
         print(f'\nGame: {game}')
         # TODO: How to get the available number of levels from nodejs?
@@ -194,7 +205,7 @@ def main(cfg: SearchNodeJSConfig, games: Optional[List[str]] = None):
             game_js_sols_dir = os.path.join(JS_SOLS_DIR, game)
             os.makedirs(game_js_sols_dir, exist_ok=True)
 
-            levels_to_test = range(n_levels) if cfg.level is None else [cfg.level]
+            levels_to_test = range(n_levels) if game_levels is None else game_levels
 
             for level_i in levels_to_test:
                 algo_prefix = f'{algo}_'

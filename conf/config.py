@@ -99,6 +99,9 @@ class SearchNodeJSConfig(NodeJSConfig):
     algo: str = "bfs"  # 'bfs', 'astar', 'gbfs', 'mcts', 'random'
     n_steps: int = 100_000
     render: bool = True
+    # JSON file listing the games to search (overrides game/dataset): a list of
+    # names, or a {game: [level, ...]} dict that also restricts the levels.
+    games_file: Optional[str] = None
 
 
 @dataclass
