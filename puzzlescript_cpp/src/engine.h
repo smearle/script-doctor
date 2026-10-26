@@ -3,6 +3,10 @@
 #include "level.h"
 #include "rng.h"
 
+#ifndef PUZZLESCRIPT_CPP_HISTORY
+#define PUZZLESCRIPT_CPP_HISTORY 0
+#endif
+
 #include <cstdint>
 #include <cmath>
 #include <map>
@@ -108,7 +112,7 @@ public:
     // Any other value (-1, or the world model's no-op action id 5) is a
     // no-force tick: the rule pipeline runs with no player input.
     // Returns true if anything changed.
-    bool processInput(int dir);
+    bool processInput(int dir, bool dontDoWin = false, bool probeOnly = false);
 
     // Check win conditions. Returns true if won.
     bool checkWin();
@@ -135,7 +139,18 @@ public:
     // Reset to current level's initial state
     void restart();
 
-    // Backup/restore for undo
+#if PUZZLESCRIPT_CPP_HISTORY
+    // Native player operations. Undo intentionally does not rewind the RNG.
+    bool undo(bool force = false, bool ignoreDuplicates = false);
+    void restartGame(bool force = false);
+    size_t undoDepth() const { return undoHistory_.size(); }
+    // Complete runtime snapshots, including RNG, history, checkpoint and flags.
+    // Restore requires the same compiled game; validation precedes any mutation.
+    std::string serializeState() const;
+    void restoreState(const std::string& state);
+#endif
+
+    // Board-only backup/restore (not a complete runtime snapshot)
     LevelBackup backupLevel() const;
     void restoreLevel(const LevelBackup& bak);
 
@@ -193,9 +208,15 @@ private:
     Level level_;
     bool winning_ = false;
     bool againing_ = false;
-    bool textMode_ = false;  // Persistent flag: set when a "message" command fires, suppresses checkWin
     RNG rng_;
     int curLevel_ = 0;
+    bool restarting_ = false;
+    bool runRulesOnLevelStart_ = false;
+#if PUZZLESCRIPT_CPP_HISTORY
+    std::vector<LevelBackup> undoHistory_;
+    LevelBackup restartTarget_;
+    std::string compiledGame_;
+#endif
 
     // Scratch BitVecs (to avoid repeated allocation in hot paths)
     BitVec _o1, _o2, _o2_5, _o3, _o4, _o5, _o6, _o7, _o8;

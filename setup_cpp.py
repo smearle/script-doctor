@@ -36,8 +36,20 @@ def _get_pybind11_include() -> str:
     )
 
 
+history_flag = os.environ.get('PUZZLESCRIPT_CPP_HISTORY', '0')
+if history_flag not in ('0', '1'):
+    raise ValueError('PUZZLESCRIPT_CPP_HISTORY must be 0 or 1')
+
+
 class BuildExt(build_ext):
     def build_extensions(self):
+        # Compiler flags are not dependencies in setuptools. Rebuild on a flag
+        # change so a cached extension cannot silently have the wrong ABI.
+        marker = Path(self.build_temp) / 'puzzlescript-history-config'
+        if not marker.exists() or marker.read_text() != history_flag:
+            self.force = True
+            self.compiler.force = True
+        marker.parent.mkdir(parents=True, exist_ok=True)
         if sys.platform == 'darwin':
             for ext in self.extensions:
                 ext.extra_compile_args.append('-mmacosx-version-min=10.14')
@@ -49,6 +61,7 @@ class BuildExt(build_ext):
                     ext.extra_compile_args.append('-fopenmp')
                     ext.extra_link_args.append('-fopenmp')
         build_ext.build_extensions(self)
+        marker.write_text(history_flag)
 
 
 ext_modules = [
@@ -56,12 +69,14 @@ ext_modules = [
         'puzzlescript_cpp._puzzlescript_cpp',
         sources=[
             'puzzlescript_cpp/src/engine.cpp',
+            'puzzlescript_cpp/src/history.cpp',
             'puzzlescript_cpp/src/heuristic.cpp',
             'puzzlescript_cpp/src/batched_engine.cpp',
             'puzzlescript_cpp/src/renderer.cpp',
             'puzzlescript_cpp/src/solver.cpp',
             'puzzlescript_cpp/src/bindings.cpp',
         ],
+        define_macros=[('PUZZLESCRIPT_CPP_HISTORY', history_flag)],
         include_dirs=[
             _get_pybind11_include(),
             'puzzlescript_cpp/src',

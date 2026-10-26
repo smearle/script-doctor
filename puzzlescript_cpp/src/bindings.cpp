@@ -9,6 +9,7 @@
 namespace py = pybind11;
 
 PYBIND11_MODULE(_puzzlescript_cpp, m) {
+    m.attr("HISTORY_ENABLED") = bool(PUZZLESCRIPT_CPP_HISTORY);
     m.doc() = "C++ PuzzleScript engine with pybind11 bindings";
 
     py::class_<RandomRolloutResult>(m, "RandomRolloutResult")
@@ -51,7 +52,7 @@ PYBIND11_MODULE(_puzzlescript_cpp, m) {
         .def("seed_rng", &Engine::seedRNG,
              py::arg("seed"),
              "Seed the RNG (RC4-based, matching JS PuzzleScript)")
-        .def("process_input", &Engine::processInput,
+        .def("process_input", [](Engine& e, int dir) { return e.processInput(dir); },
              py::arg("direction"),
              "Process input. dir: 0=up, 1=left, 2=down, 3=right, 4=action. Any other value (-1 or no-op id 5) is a no-force tick. Returns True if anything changed.")
         .def("check_win", &Engine::checkWin,
@@ -90,6 +91,18 @@ PYBIND11_MODULE(_puzzlescript_cpp, m) {
              "Get the object ID → name mapping")
         .def("restart", &Engine::restart,
              "Restart the current level")
+#if PUZZLESCRIPT_CPP_HISTORY
+        .def("undo", &Engine::undo, py::arg("force") = false,
+             py::arg("ignore_duplicates") = false,
+             "Native Undo. Respects noundo; does not rewind the RNG.")
+        .def("restart_game", &Engine::restartGame, py::arg("force") = false,
+             "Native Restart, including checkpoint and norestart semantics.")
+        .def_property_readonly("undo_depth", &Engine::undoDepth)
+        .def("serialize_state", &Engine::serializeState,
+             "Serialize the complete runtime, including RNG and Undo history.")
+        .def("restore_state", &Engine::restoreState, py::arg("state"),
+             "Restore a complete snapshot after loading the same compiled game.")
+#endif
         .def("backup_level", &Engine::backupLevel,
              "Create a backup of the current level state")
         .def("restore_level", &Engine::restoreLevel,

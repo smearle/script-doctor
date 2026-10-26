@@ -84,9 +84,15 @@ Engine::Engine(Engine&& other) noexcept
       level_(std::move(other.level_)),
       winning_(other.winning_),
       againing_(other.againing_),
-      textMode_(other.textMode_),
       rng_(other.rng_),
       curLevel_(other.curLevel_),
+      restarting_(other.restarting_),
+      runRulesOnLevelStart_(other.runRulesOnLevelStart_),
+#if PUZZLESCRIPT_CPP_HISTORY
+      undoHistory_(std::move(other.undoHistory_)),
+      restartTarget_(std::move(other.restartTarget_)),
+      compiledGame_(std::move(other.compiledGame_)),
+#endif
       _o1(std::move(other._o1)), _o2(std::move(other._o2)),
       _o2_5(std::move(other._o2_5)), _o3(std::move(other._o3)),
       _o4(std::move(other._o4)), _o5(std::move(other._o5)),
@@ -96,6 +102,9 @@ Engine::Engine(Engine&& other) noexcept
       _m3(std::move(other._m3)),
       sfxCreateMask_(std::move(other.sfxCreateMask_)),
       sfxDestroyMask_(std::move(other.sfxDestroyMask_)),
+      trackRulesFired_(other.trackRulesFired_),
+      firedThisCall_(std::move(other.firedThisCall_)),
+      firedAccumulated_(std::move(other.firedAccumulated_)),
       allCellPatterns_(std::move(other.allCellPatterns_)),
       allCellReplacements_(std::move(other.allCellReplacements_)),
       allRules_(std::move(other.allRules_))
@@ -134,9 +143,18 @@ Engine& Engine::operator=(Engine&& other) noexcept {
         level_ = std::move(other.level_);
         winning_ = other.winning_;
         againing_ = other.againing_;
-        textMode_ = other.textMode_;
         rng_ = other.rng_;
         curLevel_ = other.curLevel_;
+        restarting_ = other.restarting_;
+        runRulesOnLevelStart_ = other.runRulesOnLevelStart_;
+#if PUZZLESCRIPT_CPP_HISTORY
+        undoHistory_ = std::move(other.undoHistory_);
+        restartTarget_ = std::move(other.restartTarget_);
+        compiledGame_ = std::move(other.compiledGame_);
+#endif
+        trackRulesFired_ = other.trackRulesFired_;
+        firedThisCall_ = std::move(other.firedThisCall_);
+        firedAccumulated_ = std::move(other.firedAccumulated_);
         _o1 = std::move(other._o1); _o2 = std::move(other._o2);
         _o2_5 = std::move(other._o2_5); _o3 = std::move(other._o3);
         _o4 = std::move(other._o4); _o5 = std::move(other._o5);
@@ -158,6 +176,15 @@ Engine& Engine::operator=(Engine&& other) noexcept {
 }
 
 void Engine::clearEngine() {
+#if PUZZLESCRIPT_CPP_HISTORY
+    undoHistory_.clear();
+    restartTarget_ = LevelBackup{};
+    compiledGame_.clear();
+#endif
+    level_ = Level{};
+    winning_ = againing_ = restarting_ = runRulesOnLevelStart_ = false;
+    firedThisCall_ = BitVec{};
+    firedAccumulated_ = BitVec{};
     for (auto* cp : allCellPatterns_) delete cp;
     allCellPatterns_.clear();
     for (auto* cr : allCellReplacements_) delete cr;
@@ -419,6 +446,10 @@ bool Engine::loadFromJSON(const std::string& json_str) {
     }
 
     initScratchVecs();
+    if (trackRulesFired_) setTrackRulesFired(true);
+#if PUZZLESCRIPT_CPP_HISTORY
+    compiledGame_ = j.dump();
+#endif
     return true;
 }
 
@@ -454,8 +485,12 @@ void Engine::loadLevel(int levelIndex, const std::string& randomSeed) {
 
     winning_ = false;
     againing_ = false;
-    textMode_ = false;
     curLevel_ = levelIndex;
+    restarting_ = runRulesOnLevelStart_ = false;
+#if PUZZLESCRIPT_CPP_HISTORY
+    undoHistory_.clear();
+    restartTarget_ = backupLevel();
+#endif
 
     // Seed the RNG for this level load (matches JS behavior).
     // JS seeds with (Math.random() + Date.now()).toString() on each level load.
@@ -466,9 +501,10 @@ void Engine::loadLevel(int levelIndex, const std::string& randomSeed) {
     // Match JS behavior: run rules once on level start if metadata flag is set.
     // JS calls processInput(-1, dontDoWin=true) here, suppressing win detection.
     if (metadata_.count("run_rules_on_level_start")) {
-        processInput(-1);
-        winning_ = false;
-        againing_ = false;
+        runRulesOnLevelStart_ = true;
+        try { processInput(-1, true); }
+        catch (...) { runRulesOnLevelStart_ = false; throw; }
+        runRulesOnLevelStart_ = false;
     }
 }
 
@@ -488,7 +524,15 @@ LevelBackup Engine::backupLevel() const {
 }
 
 void Engine::restoreLevel(const LevelBackup& bak) {
+    if (bak.width != level_.width || bak.height != level_.height ||
+        bak.dat.size() != level_.objects.size())
+        throw std::invalid_argument("Board backup has incompatible dimensions");
     level_.objects = bak.dat;
+    std::fill(level_.movements.begin(), level_.movements.end(), 0);
+    for (auto& mask : level_.rigidGroupIndexMask) mask.setZero();
+    for (auto& mask : level_.rigidMovementAppliedMask) mask.setZero();
+    level_.commandQueue.clear();
+    level_.commandQueueSourceRules.clear();
     level_.calculateRowColMasks();
     winning_ = false;
     againing_ = false;
@@ -1356,8 +1400,8 @@ bool Engine::checkWin() {
         if (!conditionMet) { won = false; break; }
     }
 
-    if (!winconditions_.empty()) {
-        winning_ = won;
+    if (!winconditions_.empty() && won) {
+        winning_ = true;
     }
     return winning_;
 }
@@ -1378,7 +1422,8 @@ bool Engine::cellMatchesWinMask(const WinCondition& wc, const BitVec& mask, bool
 // ============================================================
 // processInput
 // ============================================================
-bool Engine::processInput(int dir) {
+bool Engine::processInput(int dir, bool dontDoWin, bool probeOnly) {
+    const bool wasWinning = winning_;
     againing_ = false;
 
     LevelBackup bak = backupLevel();
@@ -1484,53 +1529,78 @@ bool Engine::processInput(int dir) {
         }
         if (!someMoved) {
             restoreLevel(bak);
+            winning_ = wasWinning;
             return false;
         }
     }
 
-    // Process command queue
-    // CANCEL
-    for (const auto& cmd : level_.commandQueue) {
-        if (cmd == "cancel") {
-            restoreLevel(bak);
-            return false;
+    auto hasCommand = [&](const char* name) {
+        return std::find(level_.commandQueue.begin(), level_.commandQueue.end(), name)
+            != level_.commandQueue.end();
+    };
+    if (hasCommand("cancel")) {
+        const bool commandsLeft = level_.commandQueue.size() > 1;
+        restoreLevel(bak);
+        winning_ = wasWinning;
+        return commandsLeft;
+    }
+
+    // Probes must not create history or apply Restart/checkpoint side effects.
+    const bool requestedRestart = hasCommand("restart");
+    if (probeOnly)
+        return level_.objects != bak.dat || requestedRestart || hasCommand("win");
+
+    if (requestedRestart) {
+#if PUZZLESCRIPT_CPP_HISTORY
+        undoHistory_.push_back(bak);
+        restartGame(true);
+#else
+        // Prevent recursive startup/restart rules in the history-free executor.
+        if (!restarting_ && !runRulesOnLevelStart_) {
+            restarting_ = true;
+            try { restart(); }
+            catch (...) { restarting_ = false; throw; }
+            restarting_ = false;
         }
+#endif
     }
 
-    // RESTART
-    for (const auto& cmd : level_.commandQueue) {
-        if (cmd == "restart") {
-            restart();
-            return true;
-        }
-    }
+    const bool modified = (level_.objects != bak.dat);
+#if PUZZLESCRIPT_CPP_HISTORY
+    // Automatic ticks belong to the preceding player turn. Full boards need
+    // no diff unconsolidation (unlike the JS history compression scheme).
+    if (modified && isForce) undoHistory_.push_back(bak);
+#endif
 
-    // Check if anything changed
-    bool modified = (level_.objects != bak.dat);
+    // Headless play omits in-level message popups, so they cannot suppress wins.
+    if (!dontDoWin) checkWin();
 
-    // AGAIN - only if state actually changed
-    if (modified) {
-        for (const auto& cmd : level_.commandQueue) {
-            if (cmd == "again") {
-                againing_ = true;
-                break;
-            }
-        }
+#if PUZZLESCRIPT_CPP_HISTORY
+    if (!winning_ && hasCommand("checkpoint")) restartTarget_ = backupLevel();
+#endif
+    if (!winning_ && modified && hasCommand("again")) {
+        // JS probes the next tick before scheduling AGAIN. The probe consumes
+        // randomness, just as native Undo does; restore executor scratch/state
+        // but deliberately do not rewind rng_.
+        auto savedLevel = level_;
+        const bool savedWinning = winning_;
+        const auto savedCreate = sfxCreateMask_, savedDestroy = sfxDestroyMask_;
+        const auto savedFired = firedThisCall_, savedAccumulated = firedAccumulated_;
+        auto restoreProbe = [&]() {
+            level_ = std::move(savedLevel);
+            winning_ = savedWinning;
+            sfxCreateMask_ = savedCreate; sfxDestroyMask_ = savedDestroy;
+            firedThisCall_ = savedFired; firedAccumulated_ = savedAccumulated;
+        };
+        bool wouldChange;
+        try { wouldChange = processInput(-1, true, true); }
+        catch (...) { restoreProbe(); throw; }
+        restoreProbe();
+        againing_ = wouldChange;
     }
-
-    // Mirror JS textMode: once a "message" command fires, textMode_ stays true
-    // and suppresses checkWin until explicitly cleared (e.g. by level load).
-    for (const auto& cmd : level_.commandQueue) {
-        if (cmd == "message") {
-            textMode_ = true;
-            break;
-        }
-    }
-    if (!textMode_) {
-        checkWin();
-    }
-
     if (winning_) againing_ = false;
+    level_.commandQueue.clear();
+    level_.commandQueueSourceRules.clear();
 
     // Commit this call's rule-firings into the accumulator. Cancel /
     // require_player_movement rollback paths return earlier without committing,

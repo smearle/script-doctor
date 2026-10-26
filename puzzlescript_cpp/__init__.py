@@ -49,6 +49,7 @@ def _load_cpp_module():
 
 _cpp = _load_cpp_module()
 
+HISTORY_ENABLED = _cpp.HISTORY_ENABLED
 _CppEngine = _cpp.Engine
 LevelBackup = _cpp.LevelBackup
 _BatchedEngine = _cpp.BatchedEngine
@@ -133,6 +134,27 @@ class CppPuzzleScriptEngine:
 
     def restart(self) -> None:
         self._engine.restart()
+
+    if HISTORY_ENABLED:
+        def undo(self, force: bool = False, ignore_duplicates: bool = False) -> bool:
+            """Native player Undo; the RNG is not rewound."""
+            return self._engine.undo(force, ignore_duplicates)
+
+        def restart_game(self, force: bool = False) -> None:
+            """Native player Restart, respecting checkpoints and norestart."""
+            self._engine.restart_game(force)
+
+        @property
+        def undo_depth(self) -> int:
+            return self._engine.undo_depth
+
+        def serialize_state(self) -> str:
+            """Complete native runtime, including RNG, checkpoint and history."""
+            return self._engine.serialize_state()
+
+        def restore_state(self, state: str) -> None:
+            """Restore after loading the same compiled game."""
+            self._engine.restore_state(state)
 
     def backup_level(self) -> LevelBackup:
         return self._engine.backup_level()
