@@ -7,6 +7,7 @@ const fixtures = JSON.parse(fs.readFileSync(0, 'utf8'));
 const result = [];
 for (const f of fixtures) {
     const e = api.createFreshApi();
+    e.processInput.constructor('IDE = false; processOutputCommands = function () {};')();
     e.compile(['loadLevel', 0], f.text, f.seed);
     const errors = e.getCapturedErrors();
     if (e.processInput.constructor('return errorCount;')() > 0) throw new Error(f.name + ': ' + errors.join('\n'));

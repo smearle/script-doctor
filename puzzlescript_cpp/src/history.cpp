@@ -8,6 +8,7 @@ using json = nlohmann::json;
 
 bool Engine::undo(bool force, bool ignoreDuplicates) {
     if (!force && hasMetadata("noundo")) return false;
+    preserveUndoHistory();
     if (ignoreDuplicates) {
         while (!undoHistory_.empty() && undoHistory_.back().dat == level_.objects)
             undoHistory_.pop_back();
@@ -21,6 +22,7 @@ bool Engine::undo(bool force, bool ignoreDuplicates) {
 }
 
 void Engine::restartGame(bool force) {
+    ExecutionScope execution(*this);
     if (restarting_ || (!force && hasMetadata("norestart"))) return;
     if (restartTarget_.dat.empty())
         throw std::logic_error("Load a level before restarting");
@@ -98,7 +100,8 @@ std::string Engine::serializeState() const {
     for (const auto& b : undoHistory_) history.push_back(boardJSON(b));
     std::vector<int> permutation(rng_.rc4.s, rng_.rc4.s + 256);
     return json{
-        {"format", "puzzlescript-cpp-runtime"}, {"version", 1},
+        {"format", "puzzlescript-cpp-runtime"}, {"version", 2},
+        {"execution_budget", executionBudget_},
         // Exact identity, not a collision-prone hash. This also preserves the
         // compiler output needed to construct a fresh engine in another process.
         {"compiled_game", compiledGame_},
@@ -123,10 +126,12 @@ void Engine::restoreState(const std::string& state) {
     // Parse and validate everything in temporaries. A rejected snapshot must
     // leave the live engine (including its RNG and history) unchanged.
     const auto j = json::parse(state);
-    require(j.at("format") == "puzzlescript-cpp-runtime" && j.at("version") == 1,
+    require(j.at("format") == "puzzlescript-cpp-runtime" && (j.at("version") == 1 || j.at("version") == 2),
             "Unsupported PuzzleScript runtime snapshot");
     require(!compiledGame_.empty() && j.at("compiled_game") == compiledGame_,
             "Load the same compiled game before restoring this snapshot");
+    const uint64_t budget = j.at("version") == 1 ? DEFAULT_EXECUTION_BUDGET
+        : static_cast<uint64_t>(integer(j.at("execution_budget"), 1, INT64_MAX));
     const int index = static_cast<int>(integer(j.at("level_index"), 0, INT32_MAX));
     const LevelDef* definition = nullptr;
     int playable = 0;
@@ -181,6 +186,8 @@ void Engine::restoreState(const std::string& state) {
     auto create = bits(j.at("sfx_create"), STRIDE_OBJ_);
     auto destroy = bits(j.at("sfx_destroy"), STRIDE_OBJ_);
 
+    executionBudget_ = budget;
+    executionWork_ = 0;
     level_ = std::move(next); curLevel_ = index;
     restartTarget_ = std::move(restart); undoHistory_ = std::move(history);
     rng_ = nextRng; winning_ = win; againing_ = again;

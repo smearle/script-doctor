@@ -50,6 +50,8 @@ def _load_cpp_module():
 _cpp = _load_cpp_module()
 
 HISTORY_ENABLED = _cpp.HISTORY_ENABLED
+ExecutionBudgetExceeded = _cpp.ExecutionBudgetExceeded
+DEFAULT_EXECUTION_BUDGET = _cpp.DEFAULT_EXECUTION_BUDGET
 _CppEngine = _cpp.Engine
 LevelBackup = _cpp.LevelBackup
 _BatchedEngine = _cpp.BatchedEngine
@@ -71,6 +73,18 @@ class CppPuzzleScriptEngine:
     def __init__(self):
         self._engine = _CppEngine()
         self._json_state = None
+
+    @property
+    def execution_budget(self):
+        return self._engine.execution_budget
+
+    @execution_budget.setter
+    def execution_budget(self, units):
+        self._engine.execution_budget = units
+
+    @property
+    def execution_work(self):
+        return self._engine.execution_work
 
     def load_from_json_file(self, path: str) -> None:
         with open(path, 'r') as f:

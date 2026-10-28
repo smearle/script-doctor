@@ -18,6 +18,7 @@
  */
 class BatchedEngine {
 public:
+    void setExecutionBudget(uint64_t units);
     explicit BatchedEngine(int batch_size);
     ~BatchedEngine() = default;
 

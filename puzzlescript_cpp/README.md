@@ -97,3 +97,83 @@ The test compares native JavaScript traces for pushing, metadata, cancellation,
 checkpoints, Restart commands, random rules, startup rules and AGAIN; it also
 checks complete restoration at every action boundary, fresh-process continuation,
 and rejection of invalid snapshots. Run the two builds in separate processes.
+
+## Execution-work budget
+
+Native rule execution has a default allowance of **100,000,000 logical work
+units per outer engine call**. It applies in both builds; the history compile
+option still controls Undo/Restart storage only. The limit is configurable,
+positive and finite, and independent of elapsed time.
+
+```python
+from puzzlescript_cpp import CppPuzzleScriptEngine, ExecutionBudgetExceeded
+
+engine = CppPuzzleScriptEngine()
+engine.execution_budget = 100_000_000  # default; increase for a justified workload
+engine.load_from_json(compiled_game_json)
+engine.load_level(0)
+try:
+    engine.process_input(3)
+except ExecutionBudgetExceeded as error:
+    # No valid transition. The complete engine runtime has been restored.
+    record_rejected_execution(str(error))
+print(engine.execution_work)  # includes reserved tuple work
+```
+
+Native `Engine` exposes the same properties. Native `BatchedEngine` exposes
+`set_execution_budget(units)`, independently per engine. Limits range from 1
+through `INT64_MAX`; zero does not disable protection. A v2 complete snapshot
+includes the configured allowance. Older v1 snapshots load with the default;
+label that engine/admission change explicitly in experiments. Work telemetry
+is diagnostic, not part of game state.
+
+One unit is charged for a rule visit, pattern-row visit, board row/column scan,
+cell predicate, wildcard-gap trial, replacement-cell visit or movement-resolution
+tile visit. A Cartesian match product reserves one unit per tuple-row binding
+before enumeration; revalidation/replacement is charged additionally. Random
+groups reserve the same logical candidate work even though they select directly.
+These units bound matching work, not CPU instructions, bytes, JSON parsing,
+compilation, rendering or a whole episode. Retain process memory limits and an
+outer watchdog for untrusted games.
+
+Products are checked by division before multiplication, so even `2**88` fails
+without integer overflow or a Cartesian allocation. Deterministic rules enumerate
+lazily in original order (first row fastest), retaining the original matches for
+revalidation. Random groups count, select and unrank with one RC4 draw, preserving
+selection order/distribution. Their index range is additionally bounded by
+JavaScript's exact integer range.
+
+`process_input`, `load_level` and native `restart_game` restore their entry
+runtime on exceptions, including RNG, Undo history, checkpoint, flags and rule
+telemetry. Nested startup/Restart/AGAIN-probe calls share the outer allowance;
+explicit later `process_input(-1)` calls get a new allowance. Ordinary steps
+snapshot the Undo stack size only, copying old entries lazily if a nested call
+would destroy them. There is no growing-history copy on ordinary actions.
+Errors identify the stage, source rule line, used work and limit.
+
+OpenMP workers capture exceptions and rethrow on the calling thread rather than
+terminating the process. A batch is **not transactional across lanes**: discard
+a failed batch and reset or restore it; successful lanes or earlier automatic
+ticks may already have advanced. Never use partial observations/rewards.
+
+In generated-environment training, exhaustion is an execution rejection, not
+an agent loss, no-op, terminal reward or silently truncated game. Record source,
+seed, action prefix, limit and error. Rejection/resampling or candidate fitness
+policies belong in a declared admission recipe: changing them changes the
+distribution. Do not silently alter an ongoing experiment or repeatedly retry
+an identical unexecutable game.
+
+Verification (separate interpreters for each extension build):
+
+```sh
+python tests/test_cpp_execution_budget.py --extension path/to/_puzzlescript_cpp.so
+python tests/test_cpp_history.py --extension path/to/history/_puzzlescript_cpp.so
+python tests/test_cpp_history.py --extension path/to/default/_puzzlescript_cpp.so --expect-off
+```
+
+The suite checks reference matching order (random groups and ellipsis included),
+exact boundaries, full rollback/replay, nested calls, overflowing products,
+a substantial finite product, invalid limits and batch exception propagation.
+Windows builds use MSVC C++17; set `PUZZLESCRIPT_CPP_OPENMP=1` explicitly to test
+OpenMP there. Linux retains its existing OpenMP default. The build cache tracks
+both history and OpenMP options.

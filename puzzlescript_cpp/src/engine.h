@@ -8,6 +8,8 @@
 #endif
 
 #include <cstdint>
+#include <memory>
+#include <stdexcept>
 #include <cmath>
 #include <map>
 #include <string>
@@ -86,9 +88,20 @@ struct ObjectInfo {
     int layer = 0;
 };
 
+// A resource rejection, never a valid (possibly truncated) game transition.
+class ExecutionBudgetExceeded : public std::runtime_error {
+public:
+    using std::runtime_error::runtime_error;
+};
+
 // ---- Engine ----
 class Engine {
 public:
+    static constexpr uint64_t DEFAULT_EXECUTION_BUDGET = 100000000;
+    void setExecutionBudget(uint64_t units);
+    uint64_t getExecutionBudget() const { return executionBudget_; }
+    uint64_t getExecutionWork() const { return executionWork_; }
+    // Accounting is deterministic and shared by nested execution calls.
     Engine();
     ~Engine();
 
@@ -176,6 +189,31 @@ public:
     int getRuleCount() const { return static_cast<int>(allRules_.size()); }
 
 private:
+    struct ExecutionSnapshot;
+    class ExecutionScope {
+    public:
+        explicit ExecutionScope(Engine& engine);
+        ~ExecutionScope() noexcept;
+        ExecutionScope(const ExecutionScope&) = delete;
+        ExecutionScope& operator=(const ExecutionScope&) = delete;
+    private:
+        Engine& engine_;
+        int exceptions_;
+        std::unique_ptr<ExecutionSnapshot> snapshot_;
+        friend class Engine;
+    };
+    ExecutionScope* activeExecution_ = nullptr;
+    uint64_t executionBudget_ = DEFAULT_EXECUTION_BUDGET;
+    uint64_t executionWork_ = 0;
+    int executionRuleLine_ = -1;
+    void spendWork(uint64_t units, const char* stage);
+    [[noreturn]] void budgetExceeded(const char* stage) const;
+    void preserveUndoHistory();
+    bool matchCell(const CellPattern& cell, int index);
+    using MatchLists = std::vector<std::vector<std::vector<int>>>;
+    uint64_t reserveTupleWork(const MatchLists& lists);
+    static std::vector<std::vector<int>> tupleAt(const MatchLists& lists, uint64_t index);
+
     // ---- State from compilation ----
     int objectCount_ = 0;
     int layerCount_ = 0;
@@ -272,8 +310,6 @@ private:
                                int delta,
                                std::vector<std::vector<int>>& result);
 
-    // Cartesian product of match lists
-    std::vector<std::vector<std::vector<int>>> generateTuples(const std::vector<std::vector<std::vector<int>>>& lists);
 
     void initScratchVecs();
     void clearEngine();
