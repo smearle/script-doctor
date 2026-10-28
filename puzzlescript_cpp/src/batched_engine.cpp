@@ -3,11 +3,35 @@
 #include "json.hpp"
 #include <stdexcept>
 #include <cstring>
+#include <exception>
 #ifdef _OPENMP
 #include <omp.h>
 #endif
 
 using json = nlohmann::json;
+
+// Exceptions must never escape an OpenMP worker. Finish the parallel region,
+// then rethrow the lowest-index failure on the calling thread. The caller must
+// discard a failed batch; successful lanes may already have advanced.
+template<class Function>
+static void checkedParallelFor(int count, int threads, Function function) {
+    std::vector<std::exception_ptr> errors(count);
+#ifdef _OPENMP
+#pragma omp parallel for schedule(static) if (count > 1) num_threads(threads)
+#endif
+    for (int i = 0; i < count; ++i) {
+        try { function(i); }
+        catch (...) { errors[i] = std::current_exception(); }
+    }
+    for (const auto& error : errors)
+        if (error) std::rethrow_exception(error);
+}
+
+void BatchedEngine::setExecutionBudget(uint64_t units) {
+    if (!units || units > static_cast<uint64_t>(INT64_MAX))
+        throw std::invalid_argument("Execution budget must be in [1, INT64_MAX]");
+    for (auto& engine : engines_) engine.setExecutionBudget(units);
+}
 
 // ============================================================
 // Construction
@@ -130,12 +154,9 @@ void BatchedEngine::resetEnv(int env_idx) {
 }
 
 void BatchedEngine::resetAll() {
-#ifdef _OPENMP
-#pragma omp parallel for schedule(static) if (batch_size_ > 1) num_threads(numThreads())
-#endif
-    for (int i = 0; i < batch_size_; ++i) {
+    checkedParallelFor(batch_size_, numThreads(), [&](int i) {
         resetEnv(i);
-    }
+    });
     refreshObsGeometry();
     fillObsAll();
 }
@@ -153,12 +174,9 @@ void BatchedEngine::reset(const std::vector<int>& env_indices) {
         }
     }
 
-#ifdef _OPENMP
-#pragma omp parallel for schedule(static) if (num_indices > 1) num_threads(numThreads())
-#endif
-    for (int i = 0; i < num_indices; ++i) {
+    checkedParallelFor(num_indices, numThreads(), [&](int i) {
         resetEnv(env_indices[i]);
-    }
+    });
 
     // Resetting selected environments can change the required padding size
     // when level assignments vary across the batch.
@@ -167,12 +185,9 @@ void BatchedEngine::reset(const std::vector<int>& env_indices) {
         return;
     }
 
-    #ifdef _OPENMP
-#pragma omp parallel for schedule(static) if (num_indices > 1) num_threads(numThreads())
-    #endif
-    for (int i = 0; i < num_indices; ++i) {
+    checkedParallelFor(num_indices, numThreads(), [&](int i) {
         fillObs(env_indices[i]);
-    }
+    });
 }
 
 // ============================================================
@@ -185,10 +200,7 @@ void BatchedEngine::step(const std::vector<int>& actions) {
         throw std::runtime_error("actions size must equal batch_size");
     }
 
-#ifdef _OPENMP
-#pragma omp parallel for schedule(static) if (batch_size_ > 1) num_threads(numThreads())
-#endif
-    for (int i = 0; i < batch_size_; ++i) {
+    checkedParallelFor(batch_size_, numThreads(), [&](int i) {
         Engine& eng = engines_[i];
         eng.processInput(actions[i]);
 
@@ -219,7 +231,7 @@ void BatchedEngine::step(const std::vector<int>& actions) {
 
         // Fill this env's observation slice
         fillObs(i);
-    }
+    });
 }
 
 // ============================================================
@@ -278,12 +290,9 @@ void BatchedEngine::fillObs(int env_idx) {
 }
 
 void BatchedEngine::fillObsAll() {
-#ifdef _OPENMP
-#pragma omp parallel for schedule(static) if (batch_size_ > 1) num_threads(numThreads())
-#endif
-    for (int i = 0; i < batch_size_; ++i) {
+    checkedParallelFor(batch_size_, numThreads(), [&](int i) {
         fillObs(i);
-    }
+    });
 }
 
 bool BatchedEngine::refreshObsGeometry() {

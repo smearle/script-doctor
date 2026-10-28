@@ -60,7 +60,8 @@ Engine::~Engine() {
 }
 
 Engine::Engine(Engine&& other) noexcept
-    : objectCount_(other.objectCount_),
+    : executionBudget_(other.executionBudget_), executionWork_(other.executionWork_),
+      executionRuleLine_(other.executionRuleLine_), objectCount_(other.objectCount_),
       layerCount_(other.layerCount_),
       STRIDE_OBJ_(other.STRIDE_OBJ_),
       STRIDE_MOV_(other.STRIDE_MOV_),
@@ -119,6 +120,9 @@ Engine& Engine::operator=(Engine&& other) noexcept {
     if (this != &other) {
         clearEngine();
 
+        executionBudget_ = other.executionBudget_;
+        executionWork_ = other.executionWork_;
+        executionRuleLine_ = other.executionRuleLine_;
         objectCount_ = other.objectCount_;
         layerCount_ = other.layerCount_;
         STRIDE_OBJ_ = other.STRIDE_OBJ_;
@@ -461,6 +465,7 @@ void Engine::loadLevel(int levelIndex) {
 }
 
 void Engine::loadLevel(int levelIndex, const std::string& randomSeed) {
+    ExecutionScope execution(*this);
     // Find the actual level (skipping messages)
     int actualIdx = -1;
     int countPlayable = 0;
@@ -488,6 +493,7 @@ void Engine::loadLevel(int levelIndex, const std::string& randomSeed) {
     curLevel_ = levelIndex;
     restarting_ = runRulesOnLevelStart_ = false;
 #if PUZZLESCRIPT_CPP_HISTORY
+    preserveUndoHistory();
     undoHistory_.clear();
     restartTarget_ = backupLevel();
 #endif
@@ -712,6 +718,7 @@ bool Engine::resolveMovements(std::vector<bool>& bannedGroup) {
     while (moved) {
         moved = false;
         for (int i = 0; i < level_.n_tiles; ++i) {
+            spendWork(1, "movement resolution");
             moved = repositionEntitiesAtCell(i) || moved;
         }
     }
@@ -772,13 +779,11 @@ bool Engine::resolveMovements(std::vector<bool>& bannedGroup) {
 // Returns true and sets result = [startIdx] if a match is found at startIdx
 bool Engine::matchCellRowNoEllipsis(const std::vector<CellPattern*>& cellRow, int startIdx, int delta,
                                      std::vector<std::vector<int>>& result) {
-    if (!cellRow[0]->matches(startIdx, level_.objects.data(), level_.movements.data(),
-                              STRIDE_OBJ_, STRIDE_MOV_))
+    if (!matchCell(*cellRow[0], startIdx))
         return false;
 
     for (int k = 1; k < static_cast<int>(cellRow.size()); ++k) {
-        if (!cellRow[k]->matches(startIdx + k * delta, level_.objects.data(), level_.movements.data(),
-                                  STRIDE_OBJ_, STRIDE_MOV_))
+        if (!matchCell(*cellRow[k], startIdx + k * delta))
             return false;
     }
     result.push_back({startIdx});
@@ -797,20 +802,18 @@ void Engine::matchCellRowEllipsis1(const std::vector<CellPattern*>& cellRow, int
     // Match cells before the ellipsis
     int idx = startIdx;
     for (int i = 0; i < ellipsisIdx; ++i) {
-        if (!cellRow[i]->matches(idx, level_.objects.data(), level_.movements.data(),
-                                  STRIDE_OBJ_, STRIDE_MOV_))
+        if (!matchCell(*cellRow[i], idx))
             return;
         idx += delta;
     }
 
     // Try varying gap sizes
     for (int k = kmin; k < kmax; ++k) {
+        spendWork(1, "wildcard gaps");
         bool match = true;
         for (int i = ellipsisIdx + 1; i < static_cast<int>(cellRow.size()); ++i) {
             int offset = i - 1;  // adjusted for the ellipsis
-            if (!cellRow[i]->matches(startIdx + delta * (k + offset),
-                                      level_.objects.data(), level_.movements.data(),
-                                      STRIDE_OBJ_, STRIDE_MOV_)) {
+            if (!matchCell(*cellRow[i], startIdx + delta * (k + offset))) {
                 match = false;
                 break;
             }
@@ -838,20 +841,18 @@ void Engine::matchCellRowEllipsis2(const std::vector<CellPattern*>& cellRow, int
 
     // Match cells before first ellipsis
     for (int i = 0; i < e1; ++i) {
-        if (!cellRow[i]->matches(startIdx + i * delta, level_.objects.data(), level_.movements.data(),
-                                  STRIDE_OBJ_, STRIDE_MOV_))
+        if (!matchCell(*cellRow[i], startIdx + i * delta))
             return;
     }
 
     // Try varying first gap
     for (int k1 = k1min; k1 < k1max; ++k1) {
+        spendWork(1, "wildcard gaps");
         // Check cells between first and second ellipsis
         bool matchMiddle = true;
         for (int i = e1 + 1; i < e2; ++i) {
             int offset = i - 1;
-            if (!cellRow[i]->matches(startIdx + delta * (k1 + offset),
-                                      level_.objects.data(), level_.movements.data(),
-                                      STRIDE_OBJ_, STRIDE_MOV_)) {
+            if (!matchCell(*cellRow[i], startIdx + delta * (k1 + offset))) {
                 matchMiddle = false;
                 break;
             }
@@ -860,12 +861,11 @@ void Engine::matchCellRowEllipsis2(const std::vector<CellPattern*>& cellRow, int
 
         // Try varying second gap
         for (int k2 = k2min; k1 + k2 < kmax && k2 < k2max; ++k2) {
+            spendWork(1, "wildcard gaps");
             bool matchEnd = true;
             for (int i = e2 + 1; i < static_cast<int>(cellRow.size()); ++i) {
                 int offset = i - 2;  // adjusted for two ellipses
-                if (!cellRow[i]->matches(startIdx + delta * (k1 + k2 + offset),
-                                          level_.objects.data(), level_.movements.data(),
-                                          STRIDE_OBJ_, STRIDE_MOV_)) {
+                if (!matchCell(*cellRow[i], startIdx + delta * (k1 + k2 + offset))) {
                     matchEnd = false;
                     break;
                 }
@@ -879,6 +879,8 @@ void Engine::matchCellRowEllipsis2(const std::vector<CellPattern*>& cellRow, int
 
 // Find all matches for a rule
 std::vector<std::vector<std::vector<int>>> Engine::ruleFindMatches(Rule& rule) {
+    executionRuleLine_ = rule.lineNumber;
+    spendWork(1, "rule matching");
     if (!rule.ruleMask.bitsSetInArray(level_.mapCellContents.data.data()))
         return {};
 
@@ -886,6 +888,7 @@ std::vector<std::vector<std::vector<int>>> Engine::ruleFindMatches(Rule& rule) {
     std::vector<std::vector<std::vector<int>>> allRowMatches;
 
     for (int rowIdx = 0; rowIdx < static_cast<int>(rule.patterns.size()); ++rowIdx) {
+        spendWork(1, "pattern rows");
         auto& cellRow = rule.patterns[rowIdx];
         const BitVec& cellRowMask = rule.cellRowMasks[rowIdx];
         const BitVec& cellRowMask_Mov = rule.cellRowMasks_Movements[rowIdx];
@@ -921,6 +924,7 @@ std::vector<std::vector<std::vector<int>>> Engine::ruleFindMatches(Rule& rule) {
         if (wildcardCount == 0) {
             if (horizontal) {
                 for (int y = ymin; y < ymax; ++y) {
+                    spendWork(1, "board scan");
                     if (!cellRowMask.bitsSetInArray(level_.rowCellContents[y].data.data()) ||
                         !cellRowMask_Mov.bitsSetInArray(level_.rowCellContents_Movements[y].data.data()))
                         continue;
@@ -931,6 +935,7 @@ std::vector<std::vector<std::vector<int>>> Engine::ruleFindMatches(Rule& rule) {
                 }
             } else {
                 for (int x = xmin; x < xmax; ++x) {
+                    spendWork(1, "board scan");
                     if (!cellRowMask.bitsSetInArray(level_.colCellContents[x].data.data()) ||
                         !cellRowMask_Mov.bitsSetInArray(level_.colCellContents_Movements[x].data.data()))
                         continue;
@@ -944,6 +949,7 @@ std::vector<std::vector<std::vector<int>>> Engine::ruleFindMatches(Rule& rule) {
             // With ellipsis — rowMatches will contain {startIdx, k} or {startIdx, k1, k2}
             if (horizontal) {
                 for (int y = ymin; y < ymax; ++y) {
+                    spendWork(1, "board scan");
                     if (!cellRowMask.bitsSetInArray(level_.rowCellContents[y].data.data()) ||
                         !cellRowMask_Mov.bitsSetInArray(level_.rowCellContents_Movements[y].data.data()))
                         continue;
@@ -965,6 +971,7 @@ std::vector<std::vector<std::vector<int>>> Engine::ruleFindMatches(Rule& rule) {
                 }
             } else {
                 for (int x = xmin; x < xmax; ++x) {
+                    spendWork(1, "board scan");
                     if (!cellRowMask.bitsSetInArray(level_.colCellContents[x].data.data()) ||
                         !cellRowMask_Mov.bitsSetInArray(level_.colCellContents_Movements[x].data.data()))
                         continue;
@@ -994,27 +1001,8 @@ std::vector<std::vector<std::vector<int>>> Engine::ruleFindMatches(Rule& rule) {
     return allRowMatches;
 }
 
-// Generate all cartesian product tuples from per-row match lists
-// Each row's matches are vectors: {startIdx} or {startIdx, k} or {startIdx, k1, k2}
-// Tuples are vectors of such vectors (one per row)
-std::vector<std::vector<std::vector<int>>> Engine::generateTuples(const std::vector<std::vector<std::vector<int>>>& lists) {
-    std::vector<std::vector<std::vector<int>>> tuples = {{}};
-
-    for (const auto& row : lists) {
-        std::vector<std::vector<std::vector<int>>> newTuples;
-        for (const auto& match : row) {
-            for (const auto& tuple : tuples) {
-                auto newtuple = tuple;
-                newtuple.push_back(match);
-                newTuples.push_back(newtuple);
-            }
-        }
-        tuples = std::move(newTuples);
-    }
-    return tuples;
-}
-
 bool Engine::cellPatternReplace(CellPattern& cp, Rule& rule, int currentIndex) {
+    spendWork(1, "cell replacement");
     if (!cp.replacement) return false;
 
     auto& rep = *cp.replacement;
@@ -1127,13 +1115,12 @@ bool Engine::ruleApplyAt(Rule& rule, const std::vector<std::vector<int>>& tuple,
     // Double check matches if check is true (for multi-tuple rules)
     if (check) {
         for (int rowIdx = 0; rowIdx < static_cast<int>(rule.patterns.size()); ++rowIdx) {
+            spendWork(1, "pattern rows");
             auto& cellRow = rule.patterns[rowIdx];
             int startIdx = tuple[rowIdx][0];
             if (rule.ellipsisCount[rowIdx] == 0) {
                 for (int k = 0; k < static_cast<int>(cellRow.size()); ++k) {
-                    if (!cellRow[k]->matches(startIdx + k * delta,
-                                              level_.objects.data(), level_.movements.data(),
-                                              STRIDE_OBJ_, STRIDE_MOV_))
+                    if (!matchCell(*cellRow[k], startIdx + k * delta))
                         return false;
                 }
             } else if (rule.ellipsisCount[rowIdx] == 1) {
@@ -1146,8 +1133,7 @@ bool Engine::ruleApplyAt(Rule& rule, const std::vector<std::vector<int>>& tuple,
                         pos += delta * gapK;
                         continue;
                     }
-                    if (!cellRow[i]->matches(pos, level_.objects.data(), level_.movements.data(),
-                                              STRIDE_OBJ_, STRIDE_MOV_))
+                    if (!matchCell(*cellRow[i], pos))
                         return false;
                     pos += delta;
                     cellIdx++;
@@ -1160,6 +1146,7 @@ bool Engine::ruleApplyAt(Rule& rule, const std::vector<std::vector<int>>& tuple,
 
     // Apply the rule
     for (int rowIdx = 0; rowIdx < static_cast<int>(rule.patterns.size()); ++rowIdx) {
+        spendWork(1, "pattern rows");
         auto& cellRow = rule.patterns[rowIdx];
         int currentIndex = tuple[rowIdx][0];
         int ellipseIdx = 0;
@@ -1227,11 +1214,22 @@ bool Engine::ruleTryApply(Rule& rule) {
 
     bool result = false;
     if (rule.hasReplacements) {
-        auto tuples = generateTuples(matches);
-        for (int ti = 0; ti < static_cast<int>(tuples.size()); ++ti) {
-            bool shouldCheck = (ti > 0);
-            bool success = ruleApplyAt(rule, tuples[ti], shouldCheck, delta);
+        const uint64_t count = reserveTupleWork(matches);
+        auto tuple = tupleAt(matches, 0);
+        std::vector<size_t> indices(matches.size(), 0);
+        for (uint64_t ti = 0; ti < count; ++ti) {
+            bool success = ruleApplyAt(rule, tuple, ti > 0, delta);
             result = success || result;
+            // Original row zero varies fastest. Keep initial match lists;
+            // subsequent tuples revalidate against the modified board.
+            for (size_t row = 0; row < matches.size(); ++row) {
+                if (++indices[row] < matches[row].size()) {
+                    tuple[row] = matches[row][indices[row]];
+                    break;
+                }
+                indices[row] = 0;
+                tuple[row] = matches[row][0];
+            }
         }
     }
 
@@ -1244,32 +1242,37 @@ bool Engine::ruleTryApply(Rule& rule) {
 }
 
 bool Engine::applyRandomRuleGroup(std::vector<Rule*>& ruleGroup) {
-    struct Match {
-        int ruleIndex;
-        std::vector<std::vector<int>> tuple;
-    };
-    std::vector<Match> allMatches;
-
+    struct Matches { int ruleIndex; uint64_t count; MatchLists rows; };
+    std::vector<Matches> groups;
+    uint64_t total = 0;
     for (int ri = 0; ri < static_cast<int>(ruleGroup.size()); ++ri) {
-        auto ruleMatches = ruleFindMatches(*ruleGroup[ri]);
-        if (!ruleMatches.empty()) {
-            auto tuples = generateTuples(ruleMatches);
-            for (auto& tuple : tuples)
-                allMatches.push_back({ri, std::move(tuple)});
+        auto rows = ruleFindMatches(*ruleGroup[ri]);
+        if (!rows.empty()) {
+            const uint64_t count = reserveTupleWork(rows);
+            // Reference JS uses double-precision indices.
+            constexpr uint64_t MAX_EXACT_INDEX = 9007199254740991ULL;
+            if (count > MAX_EXACT_INDEX - total)
+                budgetExceeded("random tuple index capacity");
+            total += count;
+            groups.push_back({ri, count, std::move(rows)});
         }
     }
-
-    if (allMatches.empty()) return false;
-
-    int chosen = rng_.random_int(static_cast<int>(allMatches.size()));
-    auto& match = allMatches[chosen];
-    Rule& rule = *ruleGroup[match.ruleIndex];
-    int delta = level_.delta_index(rule.direction);
-    bool modified = ruleApplyAt(rule, match.tuple, false, delta);
-
-    ruleQueueCommands(rule);
-    if (trackRulesFired_ && modified) firedThisCall_.ibitset(rule.globalIndex);
-    return modified;
+    if (!total) return false;
+    // One RC4 uniform draw, same concatenation and tuple ordering as the
+    // eager engine. No Cartesian product is allocated.
+    uint64_t chosen = static_cast<uint64_t>(std::floor(rng_.uniform() * total));
+    if (chosen >= total) chosen = total - 1;
+    for (auto& group : groups) {
+        if (chosen >= group.count) { chosen -= group.count; continue; }
+        Rule& rule = *ruleGroup[group.ruleIndex];
+        executionRuleLine_ = rule.lineNumber;
+        auto tuple = tupleAt(group.rows, chosen);
+        bool modified = ruleApplyAt(rule, tuple, false, level_.delta_index(rule.direction));
+        ruleQueueCommands(rule);
+        if (trackRulesFired_ && modified) firedThisCall_.ibitset(rule.globalIndex);
+        return modified;
+    }
+    throw std::logic_error("Random tuple selection out of range");
 }
 
 bool Engine::applyRuleGroup(std::vector<Rule*>& ruleGroup) {
@@ -1423,6 +1426,7 @@ bool Engine::cellMatchesWinMask(const WinCondition& wc, const BitVec& mask, bool
 // processInput
 // ============================================================
 bool Engine::processInput(int dir, bool dontDoWin, bool probeOnly) {
+    ExecutionScope execution(*this);
     const bool wasWinning = winning_;
     againing_ = false;
 

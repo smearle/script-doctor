@@ -46,7 +46,10 @@ class BuildExt(build_ext):
         # Compiler flags are not dependencies in setuptools. Rebuild on a flag
         # change so a cached extension cannot silently have the wrong ABI.
         marker = Path(self.build_temp) / 'puzzlescript-history-config'
-        if not marker.exists() or marker.read_text() != history_flag:
+        use_openmp = os.environ.get('PUZZLESCRIPT_CPP_OPENMP',
+                                    '1' if sys.platform.startswith('linux') else '0') != '0'
+        configuration = history_flag + ':openmp=' + str(use_openmp)
+        if not marker.exists() or marker.read_text() != configuration:
             self.force = True
             self.compiler.force = True
         marker.parent.mkdir(parents=True, exist_ok=True)
@@ -55,13 +58,15 @@ class BuildExt(build_ext):
                 ext.extra_compile_args.append('-mmacosx-version-min=10.14')
                 ext.extra_link_args.append('-mmacosx-version-min=10.14')
         if sys.platform.startswith('linux'):
-            use_openmp = os.environ.get('PUZZLESCRIPT_CPP_OPENMP', '1') != '0'
             if use_openmp:
                 for ext in self.extensions:
                     ext.extra_compile_args.append('-fopenmp')
                     ext.extra_link_args.append('-fopenmp')
+        if sys.platform == 'win32' and use_openmp:
+            for ext in self.extensions:
+                ext.extra_compile_args.append('/openmp')
         build_ext.build_extensions(self)
-        marker.write_text(history_flag)
+        marker.write_text(configuration)
 
 
 ext_modules = [
@@ -69,6 +74,7 @@ ext_modules = [
         'puzzlescript_cpp._puzzlescript_cpp',
         sources=[
             'puzzlescript_cpp/src/engine.cpp',
+            'puzzlescript_cpp/src/execution_budget.cpp',
             'puzzlescript_cpp/src/history.cpp',
             'puzzlescript_cpp/src/heuristic.cpp',
             'puzzlescript_cpp/src/batched_engine.cpp',
@@ -82,7 +88,8 @@ ext_modules = [
             'puzzlescript_cpp/src',
         ],
         language='c++',
-        extra_compile_args=['-std=c++17', '-O2', '-Wall'],
+        extra_compile_args=(['/std:c++17', '/O2', '/EHsc', '/utf-8'] if sys.platform == 'win32'
+                            else ['-std=c++17', '-O2', '-Wall']),
     ),
 ]
 

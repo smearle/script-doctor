@@ -9,6 +9,8 @@
 namespace py = pybind11;
 
 PYBIND11_MODULE(_puzzlescript_cpp, m) {
+    py::register_exception<ExecutionBudgetExceeded>(m, "ExecutionBudgetExceeded", PyExc_RuntimeError);
+    m.attr("DEFAULT_EXECUTION_BUDGET") = Engine::DEFAULT_EXECUTION_BUDGET;
     m.attr("HISTORY_ENABLED") = bool(PUZZLESCRIPT_CPP_HISTORY);
     m.doc() = "C++ PuzzleScript engine with pybind11 bindings";
 
@@ -40,6 +42,8 @@ PYBIND11_MODULE(_puzzlescript_cpp, m) {
 
     py::class_<Engine>(m, "Engine")
         .def(py::init<>())
+        .def_property("execution_budget", &Engine::getExecutionBudget, &Engine::setExecutionBudget)
+        .def_property_readonly("execution_work", &Engine::getExecutionWork)
         .def("load_from_json", &Engine::loadFromJSON,
              py::arg("json_str"),
              "Load a compiled game state from JSON string")
@@ -133,6 +137,7 @@ PYBIND11_MODULE(_puzzlescript_cpp, m) {
 
     // ---- BatchedEngine (vectorized gym-style interface) ---------------
     py::class_<BatchedEngine>(m, "BatchedEngine")
+        .def("set_execution_budget", &BatchedEngine::setExecutionBudget, py::arg("units"))
         .def(py::init<int>(), py::arg("batch_size"))
         .def("load_from_json", &BatchedEngine::loadFromJSON,
              py::arg("json_str"),
